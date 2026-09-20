@@ -1,0 +1,58 @@
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+body {
+	font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+	color: #1a1a1a;
+}
+
+.app {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+}
+
+.topbar {
+	display: flex;
+	align-items: center;
+	flex-shrink: 0;
+	padding: 8px 14px;
+	border-bottom: 1px solid #e5e5e5;
+}
+
+.brand {
+	font-weight: 600;
+	letter-spacing: 0.5px;
+}
+
+/* CopilotChat is `height: 100%`; the parent must have a definite height.
+   At @3xl it also zeros its own horizontal padding, so the full-width
+   Electron window needs an inset here or text sits on the window edge. */
+.chat {
+	box-sizing: border-box;
+	flex: 1;
+	min-height: 0;
+	height: 100%;
+	padding: 0 32px;
+}
+
+/*
+  Tailwind prose (used by assistant markdown) sets
+  `padding-inline-start: 0` on the first table column — text hugs the border.
+  Restore cell inset; unlayered so it beats CopilotKit's @layer utilities.
+*/
+.chat .copilotKitAssistantMessage table :is(th, td) {
+	padding: 8px 16px;
+}
+
+.loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	color: #888;
+}
