@@ -1,0 +1,30 @@
+{
+  "name": "@loom/agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "imports": {
+    "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "try:agent": "node --experimental-strip-types --env-file=../../.env scripts/try-agent.ts",
+    "vendor:sync": "./vendor-pi-agent/sync.sh"
+  },
+  "dependencies": {
+    "@earendil-works/chord": "0.85.1",
+    "@earendil-works/pi-ai": "0.85.1",
+    "@earendil-works/pi-telemetry": "0.85.1",
+    "diff": "8.0.4",
+    "ignore": "7.0.8",
+    "typebox": "1.3.27",
+    "yaml": "2.9.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
+  }
+}

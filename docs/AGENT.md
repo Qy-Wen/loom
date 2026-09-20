@@ -43,95 +43,108 @@ const agent = new Agent({
 
 ## 3. Vendor 策略（脚本同步 + pristine 分支）
 
-> 用同步脚本把上游源码拷进 `vendor/`，用一条 pristine 分支隔离上游，靠 git 三方合并吃更新。
+> 用同步脚本把上游源码拷进 `vendor-pi-agent/`，用一条 pristine 分支隔离上游，靠 git 三方合并吃更新。
 > （不用 submodule / subtree：它们对「只取一个子目录 + 随时魔改」都别扭。）
 
 ### 3.1 目录布局
 
+vendor 目录直接放在 `@loom/agent` 包内（隶属该包，复用它的 `node_modules` 解析 pi 的外部依赖）：
+
 ```
-loom/
-├── vendor/
-│   └── pi-agent/
-│       ├── UPSTREAM          # 记录同步自哪个上游 commit / tag
-│       ├── src/              # 从 pi 拷来的源码（可魔改）
-│       └── sync.sh           # 同步脚本
-└── packages/core/src/agent/
-    ├── types.ts              # Loom 自己的 Agent 接口（稳定，业务只依赖这里）
-    └── pi-adapter.ts         # 唯一 import vendor/pi-agent 的地方
+packages/agent/                 # @loom/agent
+├── package.json                # imports: "#vendor/pi-agent" → ./vendor-pi-agent/src/index.ts
+├── tsconfig.json
+├── src/
+│   ├── index.ts
+│   ├── types.ts                # LoomAgent 接口（稳定，业务只依赖这里）
+│   └── pi-adapter.ts           # 唯一 import #vendor/pi-agent 的地方
+├── scripts/try-agent.ts        # 冒烟测试
+└── vendor-pi-agent/
+    ├── UPSTREAM                # 记录同步自哪个上游 commit / tag
+    ├── src/                    # 从 pi 拷来的源码（可魔改）
+    └── sync.sh                 # 同步脚本
 ```
 
-### 3.2 同步脚本 `vendor/pi-agent/sync.sh`
+### 3.2 同步脚本 `vendor-pi-agent/sync.sh`
+
+按 ref 从 GitHub **浅克隆**到临时目录，拷 `packages/agent/src/` 到本目录 `src/`（剔除 test / testing / benchmark），把上游 commit 记进 `UPSTREAM`，再清理临时目录。默认 ref 为 `v0.85.1`。
+
+**为什么从远程拉而非本地 pi 仓库：** 自包含——不依赖本机恰好有一份 pi clone，任何人 clone Loom 后都能直接跑；也不会改动你现有 pi 仓库的分支状态。
 
 ```bash
-#!/usr/bin/env bash
 set -euo pipefail
-PI_REPO="${1:?usage: sync.sh /path/to/pi [ref]}"
-REF="${2:-main}"
+REF="${1:-v0.85.1}"
+REPO="https://github.com/earendil-works/pi.git"
+HERE="$(cd "$(dirname "$0")" && pwd)"
+TMP="$(mktemp -d)"
+trap 'rm -rf "$TMP"' EXIT
 
-cd "$PI_REPO" && git fetch && git checkout "$REF"
-UPSTREAM_SHA=$(git rev-parse HEAD)
-cd - >/dev/null
+git clone --depth 1 --branch "$REF" --quiet "$REPO" "$TMP"
+UPSTREAM_SHA="$(git -C "$TMP" rev-parse HEAD)"
 
-# 拷源码，剔除 test / testing / benchmark，保持精简
 rsync -a --delete \
   --exclude='**/*.test.ts' \
   --exclude='**/testing/**' \
   --exclude='benchmark/**' \
-  "$PI_REPO/packages/agent/src/" "$(dirname "$0")/src/"
+  "$TMP/packages/agent/src/" "$HERE/src/"
 
-echo "$UPSTREAM_SHA" > "$(dirname "$0")/UPSTREAM"
-echo "synced to $UPSTREAM_SHA"
+# UPSTREAM 记录 repo / directory / ref / commit
 ```
 
-### 3.3 合并上游更新的工作流（核心）
+运行：`pnpm --filter @loom/agent vendor:sync [ref]`（根目录也有 `pnpm vendor:sync` 转发）。无需传 pi 路径。
 
-用一条 `vendor-clean` 分支只放**未魔改的上游**，让 git 帮你做三方合并：
+### 3.3 引入与升级的统一工作流（核心）
+
+**唯一心智模型：`vendor-clean` 分支始终是上游唯一真相（只放未魔改的 pi 源码），`main` 永远通过 `git merge` 从它获得 vendor。** 无论首次引入还是后续升级、无论你有没有魔改，都走同一条路——不用再判断「我改没改过」。
 
 ```bash
-# 首次：建一条只放"纯净上游"的分支
-git checkout --orphan vendor-clean
-./vendor/pi-agent/sync.sh /path/to/pi v0.85.1
-git add vendor/pi-agent && git commit -m "vendor: pi-agent v0.85.1 (pristine)"
-git checkout main
-git merge vendor-clean            # 并入主线，之后在 main 上魔改
+VENDOR=packages/agent/vendor-pi-agent
 
-# 上游发新版时：
-git checkout vendor-clean
-./vendor/pi-agent/sync.sh /path/to/pi v0.86.0
+# 首次：从已含 vendor 的提交分出一条普通分支（非 orphan，与 main 有共同祖先）
+git branch vendor-clean            # 此时 main 与 vendor-clean 同指一个含纯净 vendor 的提交
+
+# 以后每次升级上游（固定四步）：
+git checkout vendor-clean          # 1. 回到纯净分支
+$VENDOR/sync.sh v0.86.0            # 2. 拉新版覆盖（见下：rsync 镜像语义）
 git commit -am "vendor: pi-agent v0.86.0 (pristine)"
-git checkout main
-git merge vendor-clean            # ← git 三方合并：上游改动 vs 你的魔改，只在真冲突处停下
+git checkout main                  # 3. 回主线
+git merge vendor-clean             # 4. 三方合并：上游改动 vs 你的魔改，只在真冲突处停下
 ```
 
-`vendor-clean` 始终是干净上游，`main` 承载魔改；不冲突的上游改动自动合入，冲突只在你确实改过的地方出现。
+为什么统一走这条路：`vendor-clean` 始终是干净上游，`main` 承载魔改；升级时不冲突的上游改动自动合入，冲突只在你确实改过的地方出现。即使当前还没魔改，也从一开始就把轨道铺好，将来改了不用改流程。（早期用 orphan 孤儿分支也可，但需 `--allow-unrelated-histories`、且 git 图割裂，不如普通分支自然。）
+
+**两条关键约束（否则会丢魔改）：**
+
+1. **sync = rsync `--delete` 镜像覆盖，不做合并**。它把 `vendor/src` 变成与上游完全一致的镜像：新增拷入、变更覆盖、相同跳过、**上游已删的本地也删**。它不知道也不关心你的魔改——真正的三方合并交给 `git merge`。所以必须**只在 `vendor-clean` 上跑 sync**（该分支本就只有纯净上游，覆盖不会丢东西）。
+2. **魔改只在 `main` 做，`vendor-clean` 永远保持纯上游**。你自己新增的代码应放在 `packages/agent/src/`（业务层），而非塞进 `vendor-pi-agent/src/`——后者下次 sync 会被 `--delete` 删掉。
 
 ### 3.4 外部依赖对齐
 
-vendor 进来的 agent 仍需要 chord / pi-ai / pi-telemetry。把它们作为 npm 依赖装上，**版本对齐 `UPSTREAM` 记录的 pi 版本**（pi 是同版本号发布，如 0.85.1）。升级 vendor 时一并对齐这三个包的版本。
+vendor 进来的 agent 仍需要 chord / pi-ai / pi-telemetry（及 diff / ignore / typebox / yaml）。把它们作为 `@loom/agent` 的 npm 依赖装上，**版本对齐 `UPSTREAM` 记录的 pi 版本**（pi 是同版本号发布，如 0.85.1）。升级 vendor 时一并对齐这些包的版本。
 
 ---
 
 ## 4. 解耦：单一 adapter 入口
 
-> 核心原则：**Loom 的其余代码永远不 import `vendor/pi-agent`，只 import 自己的 adapter。**
+> 核心原则：**Loom 的其余代码永远不 import `#vendor/pi-agent`，只 import 自己的 adapter。**
 
 ```
 Loom 业务代码
-      │  只依赖 Loom 自己的接口（packages/core/src/agent/types.ts）
+      │  只依赖 Loom 自己的接口（packages/agent/src/types.ts）
       ↓
-packages/core/src/agent/
-  ├── types.ts        # LoomAgent 接口：prompt / subscribe / registerTool …（你拥有）
-  └── pi-adapter.ts   # 唯一 import vendor/pi-agent 的文件，做 pi ↔ Loom 翻译
+packages/agent/src/
+  ├── types.ts        # LoomAgent 接口：prompt / subscribe …（你拥有）
+  └── pi-adapter.ts   # 唯一 import #vendor/pi-agent 的文件，做 pi ↔ Loom 翻译
         │
         ↓
-   vendor/pi-agent/   # 上游源码 + 魔改
+   vendor-pi-agent/   # 上游源码 + 魔改
 ```
 
 约束落地：
 
-1. **单一入口**：只有 `pi-adapter.ts` 允许 `import ... from vendor/pi-agent`。用 ESLint `no-restricted-imports` 禁止其他文件引用 `vendor/**`。
+1. **单一入口**：只有 `pi-adapter.ts` 允许 `import ... from "#vendor/pi-agent"`。（后续可用 ESLint `no-restricted-imports` 强制。）
 2. **接口归 Loom**：`types.ts` 定义 `LoomAgent`，adapter 把它翻译成 pi 的 `Agent` API。将来换掉 pi，只改 adapter，上层不动。
-3. **TS 路径别名**：`tsconfig` 加 `"paths": { "@vendor/pi-agent": ["./vendor/pi-agent/src/index.ts"] }`，adapter 用别名引用，避免深相对路径。
+3. **引用方式**：用 node 原生的 `imports` 字段（`package.json` 里 `"#vendor/pi-agent": "./vendor-pi-agent/src/index.ts"`）+ tsconfig `paths` 同名映射。选 `#` subpath imports 而非 TS 路径别名，是因为前者 typecheck 与运行时都认，无需打包步骤。
 
 ### 把编码 Agent 改造成创作 Agent（无需改上游源码）
 
@@ -201,6 +214,6 @@ pi Agent (Local Core / main 进程)
 - **vendor 一个包**：`pi-agent`（源码级、可魔改）。
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
-- **解耦**：业务只依赖 `packages/core/src/agent/types.ts`，`pi-adapter.ts` 是唯一 vendor 入口。
+- **解耦**：业务只依赖 `packages/agent/src/types.ts`，`pi-adapter.ts`（通过 `#vendor/pi-agent`）是唯一 vendor 入口。
 - **前端协议**：用 AG-UI，`AgUiTranslator` 消费 `AgentEvent` 翻译，pi 协议不外泄。
 - **v1 范围**：先跑通「问→答→工具」主链路；thinking 映射与工具富输出（`STATE_DELTA`/`CUSTOM`）暂不做，但 translator 均预留占位 `case`。
