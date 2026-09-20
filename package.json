@@ -1,0 +1,13 @@
+{
+  "name": "loom",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22.19.0"
+  },
+  "scripts": {
+    "typecheck": "pnpm -r typecheck",
+    "vendor:sync": "pnpm --filter @loom/core vendor:sync"
+  }
+}
