@@ -334,6 +334,8 @@ POST /graph/query
 
 这样将来把 Local Core 从 Node 替换为 Python / Go / Rust，或部署到云端，都不影响 UI。同时也让项目更容易被讲述为一个「后端 / Agent 系统项目」。
 
+> **agent 通道已先行落地为 localhost 服务**：main 进程起一个 localhost HTTP server 承载 CopilotKit runtime，renderer 走 AG-UI 连它（见 AGENT.md §5）。UI 层暂时用 CopilotKit 现成聊天框，将来可深化为自研工作台（AG-UI 协议不变，后端不改）。
+
 ### 能力分层总览
 
 ```

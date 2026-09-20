@@ -1,7 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "baseUrl": ".",
     "paths": {
       "#vendor/pi-agent": ["./vendor-pi-agent/src/index.ts"]
     }

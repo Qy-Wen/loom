@@ -157,55 +157,85 @@ packages/agent/src/
 
 ---
 
-## 5. 前端协议：用 AG-UI，不暴露 pi 的 AgentEvent
+## 5. 前端协议：CopilotKit + AG-UI，不暴露 pi 的 AgentEvent
 
 pi 的「协议」只是一个**进程内的 TypeScript 事件流**（`session.subscribe()` 暴露的 `AgentEvent` discriminated union），不规定 JSON 格式或传输方式。换协议 = 再写一个消费者：订阅 `AgentEvent`，翻译成 AG-UI，通过 SSE 发给前端。
 
 ### 5.1 接缝位置
 
+前端 **暂时用 CopilotKit**（现成聊天 UI，走 AG-UI 协议）快速起步。CopilotKit 的数据流要求一个 HTTP runtime 端点，因此在 **Electron main 进程里起一个 localhost HTTP server** 承载它——这恰好落地 PRODUCT.md §9「Local Core 可抽成 localhost 服务」。
+
+**为什么暂时用得踏实：把 CopilotKit 拆三层看，不会锁死。**
+
+| 层 | 内容 | 深化成工作台时 |
+|---|---|---|
+| ① 协议 / runtime | AG-UI transport + runtime 端点 | **长期保留**，与 UI 无关 |
+| ② React hooks | `useCopilotAction`（工具→自定义组件/generative UI）、`useCoAgent`（shared state）、`useCopilotReadable`（UI 状态喂给 agent） | **工作台里更有用** |
+| ③ 现成 UI 组件 | `CopilotChat`（`@copilotkit/react-core/v2`）聊天框 | ⭐ 自己写工作台 UI 时替掉，但 ①② 继续用 |
+
+即：深化成重工作台时，只换掉③的聊天框（几十行），后端（① runtime + AgUiAdapter）一行不改；generative UI / shared state 这些工作台核心能力反而能继续复用②。最坏情况完全弃用 CopilotKit，也因 AG-UI 是标准协议而不伤后端。
+
 ```
-pi Agent (Local Core / main 进程)
-   │ subscribe((event: AgentEvent) => …)
+Renderer 进程
+  @copilotkit/react-core/v2 ：CopilotKitProvider + CopilotChat（现成聊天框）
+   │ HTTP / SSE，runtimeUrl = http://127.0.0.1:<port>/api/copilotkit
    ↓
-┌───────────────────────────────────┐
-│ AgUiTranslator（Loom 写，唯一耦合点）│  pi 协议 ↔ AG-UI 协议
-└───────────────────────────────────┘
-   │ AG-UI events (SSE / WebSocket)
+Main 进程（Local Core）
+┌────────────────────────────────────────────┐
+│ localhost HTTP server                        │
+│   └ CopilotKit runtime 端点                  │
+│        └ AgUiAdapter（Loom 写，唯一耦合点）   │  LoomAgentEvent ↔ AG-UI
+│             └ @loom/agent（pi agent loop）    │
+└────────────────────────────────────────────┘
+   │ streamFn
    ↓
-前端（任何 AG-UI 兼容客户端）
+大模型（DeepSeek…）
 ```
 
-`AgentEvent` **永远停留在 Local Core 内部**，对外只暴露 AG-UI。将来 pi 换成自研 agent，只要仍能产出 `AgentEvent`（或直接发 AG-UI），前端零改动。这与 PRODUCT.md §9「Local Core 可抽成 localhost 服务」一致。
+`@loom/agent` 暴露的 `LoomAgentEvent`（进而 pi 的 `AgentEvent`）**永远停留在 main 进程内部**，对外只暴露 AG-UI。将来把 Local Core 从 main 抽成独立 localhost 服务、或把 pi 换成自研 agent，只要仍产出 AG-UI，前端零改动。
+
+**实现要点**（已跑通）：
+
+- 接缝继承 `@ag-ui/client` 的 `AbstractAgent`，实现 `run(input): Observable<BaseEvent>`（RxJS）。
+- `@ag-ui/{client,core}` 用 **0.0.59**，与 `@copilotkit/runtime` 1.73.0 的依赖版本一致。
+- Node 端点用 v2 `createCopilotNodeListener`；不用已 deprecated 的 v1 endpoint。
+- 前端直接用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`，无需 `@copilotkit/react-ui`。
+- runtime 每次 run 会 clone 注册的 agent；需覆盖 `clone()`，把 adapter 的 agent 配置带到实例副本。
+
+**server 落地要点**（都是标准做法，一次写好即忘）：
+
+- `server.listen(0, "127.0.0.1")`：随机空闲端口 + 只绑本机（不绑 `0.0.0.0`），消除端口冲突与外部可达。
+- 实际端口经 preload/IPC 注入 renderer，供 `<CopilotKitProvider runtimeUrl>` 使用。
+- 先 `await listen` 再创建窗口，避免 renderer 早于 server；`app.on("will-quit")` 里 `server.close()`。
 
 ### 5.2 事件映射
 
-| pi `AgentEvent` | AG-UI event |
+`AgUiAdapter` 消费 `@loom/agent` 的 `LoomAgentEvent`（它已是 pi `AgentEvent` 的精简子集），翻译成 AG-UI：
+
+| `LoomAgentEvent` | AG-UI event |
 |---|---|
 | `agent_start` | `RUN_STARTED` |
-| `message_start` (assistant) | `TEXT_MESSAGE_START` |
-| `message_update` (text_delta) | `TEXT_MESSAGE_CONTENT` |
-| `message_end` | `TEXT_MESSAGE_END` |
-| `tool_execution_start` | `TOOL_CALL_START` |
-| `tool_execution_update` | `TOOL_CALL_ARGS` / 自定义 |
-| `tool_execution_end` | `TOOL_CALL_END` |
-| `turn_end` / `agent_end` | `RUN_FINISHED` |
+| `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
+| `tool_start` | `TOOL_CALL_START` (+ `TOOL_CALL_ARGS`) |
+| `tool_end` | `TOOL_CALL_END` |
+| `agent_end` | `RUN_FINISHED` |
 
 ### 5.3 两处 v1 不做、但架构留好位置
 
-两处都不在 v1 实现，但 `AgUiTranslator` 里预留处理入口（占位 `case`），以免后续改动伤筋动骨。
+两处都不在 v1 实现，但 `AgUiAdapter` 里预留处理入口（占位 `case`），以免后续改动伤筋动骨。
 
 **a) thinking / reasoning**
 
 - pi 侧有三段式事件 `thinking_start` / `thinking_delta` / `thinking_end`（含 `redacted`、Google 特有的 `thoughtSignature`）。
 - 未来映射到 AG-UI `THINKING_*`；丢弃 `redacted`；`thoughtSignature` 属 agent↔model 内部机制，**绝不进前端协议**。
-- 留位：translator 里 `case "thinking_start" / "thinking_delta" / "thinking_end": break`。
+- 留位：adapter 里预留 thinking 处理入口（需先在 `LoomAgentEvent` 补上 thinking 事件）。
 
 **b) 工具富输出**
 
 - pi 的 `AgentToolResult` 天然分两条通道：`content`（文字/图，给模型看）与 `details`（结构化数据，供 UI 渲染）。
 - 未来：`hybrid_search` 结果集、`generate_image` 产物等 `details` 走 AG-UI `STATE_DELTA`（前端画廊面板订阅）；工具进度（ffmpeg/ComfyUI）走 `CUSTOM`。
 - `details` 的统一 schema（按 `kind` 分类，如 `asset_list` / `generated`）等第一个工具（`hybrid_search`）落地时再定。
-- 留位：v1 忽略 `details`、仅用 `content` 出纯文本；translator 对 `tool_execution_*` 保留处理入口。
+- 留位：v1 忽略 `details`、仅用 `content` 出纯文本；adapter 对 `tool_start` / `tool_end` 保留处理入口。
 
 ---
 
@@ -215,5 +245,5 @@ pi Agent (Local Core / main 进程)
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务只依赖 `packages/agent/src/types.ts`，`pi-adapter.ts`（通过 `#vendor/pi-agent`）是唯一 vendor 入口。
-- **前端协议**：用 AG-UI，`AgUiTranslator` 消费 `AgentEvent` 翻译，pi 协议不外泄。
-- **v1 范围**：先跑通「问→答→工具」主链路；thinking 映射与工具富输出（`STATE_DELTA`/`CUSTOM`）暂不做，但 translator 均预留占位 `case`。
+- **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`AgUiAdapter` 把 `LoomAgentEvent` 翻成 AG-UI，pi 协议不外泄。
+- **v1 范围**：先跑通「问→答→工具」主链路；thinking 映射与工具富输出（`STATE_DELTA`/`CUSTOM`）暂不做，但 adapter 均预留占位 `case`。
