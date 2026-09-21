@@ -3,7 +3,13 @@ import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
-import { LocalCore, type LibraryChange, type LibrarySnapshot } from "@loom/core";
+import {
+	LocalCore,
+	type LibraryChange,
+	type LibrarySnapshot,
+	type PropertyType,
+	type PropertyValue,
+} from "@loom/core";
 import type { LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
@@ -189,6 +195,29 @@ function registerIpc(): void {
 		const filePath = await localCore.getAssetFilePath(assetId);
 		if (!filePath) throw new Error("Asset not found");
 		shell.showItemInFolder(filePath);
+	});
+
+	ipcMain.handle(IPC.getPropertySnapshot, () => localCore.getPropertySnapshot());
+	ipcMain.handle(IPC.createProperty, (_event, name: string, type: PropertyType) => {
+		return localCore.createProperty(name, type);
+	});
+	ipcMain.handle(
+		IPC.updateProperty,
+		(_event, propertyId: string, name: string, type: PropertyType) => {
+			return localCore.updateProperty(propertyId, name, type);
+		},
+	);
+	ipcMain.handle(IPC.removeProperty, (_event, propertyId: string) => {
+		return localCore.removeProperty(propertyId);
+	});
+	ipcMain.handle(
+		IPC.setAssetProperty,
+		(_event, assetId: string, propertyId: string, value: PropertyValue) => {
+			return localCore.setAssetProperty(assetId, propertyId, value);
+		},
+	);
+	ipcMain.handle(IPC.removeAssetProperty, (_event, assetId: string, propertyId: string) => {
+		return localCore.removeAssetProperty(assetId, propertyId);
 	});
 
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {

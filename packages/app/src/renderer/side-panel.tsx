@@ -1,16 +1,45 @@
 import { CopilotChat } from "@copilotkit/react-core/v2";
-import type { Asset } from "@loom/core";
+import type {
+	Asset,
+	AssetPropertyValue,
+	PropertyDefinition,
+	PropertyType,
+	PropertyValue,
+} from "@loom/core";
 import { formatBytes } from "./asset-utils.ts";
+import { PropertyEditor } from "./property-editor.tsx";
 
 export type SidePanelTab = "agent" | "details";
 
 interface SidePanelProps {
 	activeTab: SidePanelTab;
 	asset: Asset | null;
+	properties: PropertyDefinition[];
+	propertyValues: AssetPropertyValue[];
 	onChangeTab: (tab: SidePanelTab) => void;
+	onCreateProperty: (name: string, type: PropertyType) => Promise<void>;
+	onUpdateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<void>;
+	onRemoveProperty: (propertyId: string) => Promise<void>;
+	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
+	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 }
 
-export function SidePanel({ activeTab, asset, onChangeTab }: SidePanelProps): React.JSX.Element {
+export function SidePanel({
+	activeTab,
+	asset,
+	properties,
+	propertyValues,
+	onChangeTab,
+	onCreateProperty,
+	onUpdateProperty,
+	onRemoveProperty,
+	onSetPropertyValue,
+	onRemovePropertyValue,
+}: SidePanelProps): React.JSX.Element {
+	const selectedValues = asset
+		? propertyValues.filter((value) => value.assetId === asset.assetId)
+		: [];
+
 	return (
 		<aside className="side-panel">
 			<div className="panel-tabs">
@@ -32,7 +61,7 @@ export function SidePanel({ activeTab, asset, onChangeTab }: SidePanelProps): Re
 
 			<div className={`panel-content details-content ${activeTab === "details" ? "active" : ""}`}>
 				<section>
-					<div className="section-label">Properties</div>
+					<div className="section-label">File</div>
 					{asset ? (
 						<dl className="properties">
 							<dt>Type</dt><dd>{asset.type}</dd>
@@ -44,6 +73,22 @@ export function SidePanel({ activeTab, asset, onChangeTab }: SidePanelProps): Re
 						<div className="empty no-padding">Select an asset to see its properties.</div>
 					)}
 				</section>
+				{asset && (
+					<section>
+						<PropertyEditor
+							asset={asset}
+							properties={properties}
+							values={selectedValues}
+							onCreateProperty={onCreateProperty}
+							onUpdateProperty={onUpdateProperty}
+							onRemoveProperty={onRemoveProperty}
+							onSetValue={(propertyId, value) =>
+								onSetPropertyValue(asset.assetId, propertyId, value)}
+							onRemoveValue={(propertyId) =>
+								onRemovePropertyValue(asset.assetId, propertyId)}
+						/>
+					</section>
+				)}
 				<section className="relations-section">
 					<div className="section-label">Relations</div>
 					<div className="empty no-padding">No relations yet.</div>

@@ -59,4 +59,18 @@
 - 默认 LocalCore 切换到 SQLite；`InMemoryMetadataStore` 继续保留用于轻量测试或注入
 - 打开素材库时以文件系统为事实源：已有路径复用 UUID，新文件建档，失效记录移除
 - 保留 watcher、预览和文件右键操作；显式重命名继续保持原 UUID
-- `try:library` 验证数据库创建、跨 LocalCore 重启 UUID 不变，以及离线删除后的索引同步
+- 测试验证数据库创建、跨 LocalCore 重启 UUID 不变，以及离线删除后的索引同步
+
+---
+
+## ✅ 自定义属性 + Table 视图
+
+加入带类型的持久化用户属性与结构化资产表格工作区。
+
+- 支持 `text`、`number`、`boolean`、日期四种属性定义，并进行运行时校验
+- 新增 `properties` 与 `asset_properties` SQLite 表，使用外键清理失效值
+- 扩展 MetadataStore 与 LocalCore，支持属性定义和资产属性值的增删改查
+- 将全库 reconcile 改为原地更新保留资产，移动和路径交换时不丢失属性
+- Details 面板支持创建、编辑、清空和删除自定义属性
+- 启用 Table 视图：动态属性列、按真实类型排序、文本过滤和行选择
+- 测试覆盖内存与 SQLite Store、跨重启持久化、级联清理、非破坏性 reconcile 和 Table 类型排序

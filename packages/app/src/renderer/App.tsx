@@ -1,15 +1,29 @@
 import { useEffect, useMemo, useState } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
-import type { Asset, LibraryChange, LibrarySnapshot } from "@loom/core";
+import type {
+	Asset,
+	AssetPropertyValue,
+	LibraryChange,
+	LibrarySnapshot,
+	PropertyDefinition,
+	PropertyType,
+	PropertyValue,
+} from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { AssetPreview } from "./asset-preview.tsx";
 import { sortAssets } from "./asset-utils.ts";
 import { folderSet } from "./file-tree.tsx";
 import { LibrarySidebar } from "./library-sidebar.tsx";
 import { SidePanel, type SidePanelTab } from "./side-panel.tsx";
+import { TableView } from "./table-view.tsx";
 import { useResizableLayout } from "./use-resizable-layout.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
+type WorkbenchView = "library" | "table";
+
+function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
+	return [...properties].sort((a, b) => a.name.localeCompare(b.name));
+}
 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
@@ -48,6 +62,9 @@ export function App(): React.JSX.Element {
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [sidePanel, setSidePanel] = useState<SidePanelTab>("agent");
+	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
+	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
+	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const {
@@ -62,9 +79,14 @@ export function App(): React.JSX.Element {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		});
-		void window.loom.getLibrarySnapshot().then((snapshot) => {
+		void window.loom.getLibrarySnapshot().then(async (snapshot) => {
 			setLibrary(snapshot);
 			setCollapsedFolders(folderSet(snapshot));
+			if (snapshot.rootPath) {
+				const propertySnapshot = await window.loom.getPropertySnapshot();
+				setProperties(propertySnapshot.properties);
+				setPropertyValues(propertySnapshot.values);
+			}
 		}).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		});
@@ -75,6 +97,9 @@ export function App(): React.JSX.Element {
 				return;
 			}
 			setLibrary((current) => applyLibraryChange(current, change));
+			if (change.type === "remove") {
+				setPropertyValues((current) => current.filter((value) => value.assetId !== change.assetId));
+			}
 			if (change.type === "reset") setCollapsedFolders(folderSet(change.snapshot));
 			if (change.type === "folder_upsert") {
 				setCollapsedFolders((current) => new Set(current).add(change.relativePath));
@@ -130,16 +155,86 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function createProperty(name: string, type: PropertyType): Promise<void> {
+		setError(null);
+		try {
+			const property = await window.loom.createProperty(name, type);
+			setProperties((current) => sortProperties([...current, property]));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function updateProperty(propertyId: string, name: string, type: PropertyType): Promise<void> {
+		setError(null);
+		try {
+			const property = await window.loom.updateProperty(propertyId, name, type);
+			setProperties((current) => sortProperties(
+				current.map((item) => item.propertyId === propertyId ? property : item),
+			));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function removeProperty(propertyId: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.removeProperty(propertyId);
+			setProperties((current) => current.filter((property) => property.propertyId !== propertyId));
+			setPropertyValues((current) => current.filter((value) => value.propertyId !== propertyId));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function setPropertyValue(
+		assetId: string,
+		propertyId: string,
+		value: PropertyValue,
+	): Promise<void> {
+		setError(null);
+		try {
+			const saved = await window.loom.setAssetProperty(assetId, propertyId, value);
+			setPropertyValues((current) => [
+				...current.filter((item) => item.assetId !== assetId || item.propertyId !== propertyId),
+				saved,
+			]);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function removePropertyValue(assetId: string, propertyId: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.removeAssetProperty(assetId, propertyId);
+			setPropertyValues((current) =>
+				current.filter((item) => item.assetId !== assetId || item.propertyId !== propertyId),
+			);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
 	async function openLibrary(): Promise<void> {
 		setOpening(true);
 		setError(null);
 		try {
 			const snapshot = await window.loom.openLibrary();
 			if (snapshot) {
+				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setLibrary(snapshot);
 				setSelectedAssetId(null);
 				setRenamingAssetId(null);
 				setCollapsedFolders(folderSet(snapshot));
+				setProperties(propertySnapshot.properties);
+				setPropertyValues(propertySnapshot.values);
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -158,9 +253,17 @@ export function App(): React.JSX.Element {
 				<header className="topbar">
 					<span className="brand">Loom</span>
 					<nav className="view-switcher" aria-label="Workspace views">
-						<button className="active" type="button">Library</button>
+						<button
+							className={workbenchView === "library" ? "active" : ""}
+							type="button"
+							onClick={() => setWorkbenchView("library")}
+						>Library</button>
 						<button type="button" disabled>Gallery</button>
-						<button type="button" disabled>Table</button>
+						<button
+							className={workbenchView === "table" ? "active" : ""}
+							type="button"
+							onClick={() => setWorkbenchView("table")}
+						>Table</button>
 						<button type="button" disabled>Graph</button>
 					</nav>
 					<div className="topbar-spacer" />
@@ -193,7 +296,20 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{selectedAsset ? (
+						{workbenchView === "table" ? (
+							<TableView
+								assets={library.assets}
+								properties={properties}
+								propertyValues={propertyValues}
+								selectedAssetId={selectedAssetId}
+								canEditProperties={library.rootPath !== null}
+								onCreateProperty={createProperty}
+								onSelectAsset={(assetId) => {
+									setSelectedAssetId(assetId);
+									setSidePanel("details");
+								}}
+							/>
+						) : selectedAsset ? (
 							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} />
 						) : (
 							<div className="welcome">
@@ -222,7 +338,18 @@ export function App(): React.JSX.Element {
 						onDoubleClick={resetSideWidth}
 					/>
 
-					<SidePanel activeTab={sidePanel} asset={selectedAsset} onChangeTab={setSidePanel} />
+					<SidePanel
+						activeTab={sidePanel}
+						asset={selectedAsset}
+						properties={properties}
+						propertyValues={propertyValues}
+						onChangeTab={setSidePanel}
+						onCreateProperty={createProperty}
+						onUpdateProperty={updateProperty}
+						onRemoveProperty={removeProperty}
+						onSetPropertyValue={setPropertyValue}
+						onRemovePropertyValue={removePropertyValue}
+					/>
 				</div>
 			</div>
 		</CopilotKitProvider>

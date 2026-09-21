@@ -1,4 +1,10 @@
 import type { Asset } from "../model/asset.ts";
+import {
+	assertPropertyDefinition,
+	assertPropertyValue,
+	type AssetPropertyValue,
+	type PropertyDefinition,
+} from "../model/property.ts";
 import type { AssetRelation, GraphStore, MetadataStore } from "./types.ts";
 
 /** Volatile MetadataStore used by focused tests and explicit dependency injection. */
@@ -6,12 +12,18 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly assets = new Map<string, Asset>();
 	private readonly assetIdByPath = new Map<string, string>();
 	private readonly assetIdByFileSystemId = new Map<string, string>();
+	private readonly properties = new Map<string, PropertyDefinition>();
+	private readonly propertyIdByName = new Map<string, string>();
+	private readonly assetProperties = new Map<string, Map<string, AssetPropertyValue>>();
 	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
 		this.assets.clear();
 		this.assetIdByPath.clear();
 		this.assetIdByFileSystemId.clear();
+		this.properties.clear();
+		this.propertyIdByName.clear();
+		this.assetProperties.clear();
 		this.volumeId = undefined;
 	}
 
@@ -19,6 +31,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.assets.clear();
 		this.assetIdByPath.clear();
 		this.assetIdByFileSystemId.clear();
+		this.properties.clear();
+		this.propertyIdByName.clear();
+		this.assetProperties.clear();
 		this.volumeId = undefined;
 	}
 
@@ -64,6 +79,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	}
 
 	async replaceAssets(assets: Asset[]): Promise<void> {
+		const nextAssetIds = new Set(assets.map((asset) => asset.assetId));
 		this.assets.clear();
 		this.assetIdByPath.clear();
 		this.assetIdByFileSystemId.clear();
@@ -71,6 +87,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.assets.set(asset.assetId, asset);
 			this.assetIdByPath.set(asset.relativePath, asset.assetId);
 			if (asset.fileSystemId) this.assetIdByFileSystemId.set(asset.fileSystemId, asset.assetId);
+		}
+		for (const assetId of this.assetProperties.keys()) {
+			if (!nextAssetIds.has(assetId)) this.assetProperties.delete(assetId);
 		}
 	}
 
@@ -80,6 +99,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.assets.delete(assetId);
 		this.assetIdByPath.delete(asset.relativePath);
 		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
+		this.assetProperties.delete(assetId);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {
@@ -90,6 +110,86 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.volumeId = volumeId;
 	}
 
+	async createProperty(property: PropertyDefinition): Promise<void> {
+		assertPropertyDefinition(property);
+		if (this.properties.has(property.propertyId)) throw new Error("Property already exists");
+		const nameKey = normalizePropertyName(property.name);
+		if (this.propertyIdByName.has(nameKey)) throw new Error("Property name already exists");
+		this.properties.set(property.propertyId, property);
+		this.propertyIdByName.set(nameKey, property.propertyId);
+	}
+
+	async updateProperty(property: PropertyDefinition): Promise<void> {
+		assertPropertyDefinition(property);
+		const previous = this.properties.get(property.propertyId);
+		if (!previous) throw new Error("Property not found");
+		const nameKey = normalizePropertyName(property.name);
+		const nameOwner = this.propertyIdByName.get(nameKey);
+		if (nameOwner && nameOwner !== property.propertyId) throw new Error("Property name already exists");
+		if (previous.type !== property.type && this.hasValuesForProperty(property.propertyId)) {
+			throw new Error("Cannot change the type of a property that has values");
+		}
+		this.propertyIdByName.delete(normalizePropertyName(previous.name));
+		this.properties.set(property.propertyId, { ...property, createdAt: previous.createdAt });
+		this.propertyIdByName.set(nameKey, property.propertyId);
+	}
+
+	async getProperty(propertyId: string): Promise<PropertyDefinition | undefined> {
+		return this.properties.get(propertyId);
+	}
+
+	async listProperties(): Promise<PropertyDefinition[]> {
+		return [...this.properties.values()].sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	async removeProperty(propertyId: string): Promise<void> {
+		const property = this.properties.get(propertyId);
+		if (!property) return;
+		this.properties.delete(propertyId);
+		this.propertyIdByName.delete(normalizePropertyName(property.name));
+		for (const values of this.assetProperties.values()) values.delete(propertyId);
+	}
+
+	async setAssetProperty(value: AssetPropertyValue): Promise<void> {
+		if (!this.assets.has(value.assetId)) throw new Error("Asset not found");
+		const property = this.properties.get(value.propertyId);
+		if (!property) throw new Error("Property not found");
+		assertPropertyValue(property.type, value.value);
+		let values = this.assetProperties.get(value.assetId);
+		if (!values) {
+			values = new Map();
+			this.assetProperties.set(value.assetId, values);
+		}
+		values.set(value.propertyId, value);
+	}
+
+	async listAssetProperties(assetId: string): Promise<AssetPropertyValue[]> {
+		return [...(this.assetProperties.get(assetId)?.values() ?? [])].sort((a, b) =>
+			a.propertyId.localeCompare(b.propertyId),
+		);
+	}
+
+	async listAllAssetProperties(): Promise<AssetPropertyValue[]> {
+		return [...this.assetProperties.values()]
+			.flatMap((values) => [...values.values()])
+			.sort((a, b) => a.assetId.localeCompare(b.assetId) || a.propertyId.localeCompare(b.propertyId));
+	}
+
+	async removeAssetProperty(assetId: string, propertyId: string): Promise<void> {
+		this.assetProperties.get(assetId)?.delete(propertyId);
+	}
+
+	private hasValuesForProperty(propertyId: string): boolean {
+		for (const values of this.assetProperties.values()) {
+			if (values.has(propertyId)) return true;
+		}
+		return false;
+	}
+
+}
+
+function normalizePropertyName(name: string): string {
+	return name.trim().toLowerCase();
 }
 
 /** Temporary graph implementation until the persistent graph store lands. */

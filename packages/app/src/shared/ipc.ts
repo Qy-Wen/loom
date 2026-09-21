@@ -1,5 +1,14 @@
 /** Typed contract shared by Electron main, preload, and renderer. */
-import type { Asset, LibraryChange, LibrarySnapshot } from "@loom/core";
+import type {
+	Asset,
+	AssetPropertyValue,
+	LibraryChange,
+	LibrarySnapshot,
+	PropertyDefinition,
+	PropertySnapshot,
+	PropertyType,
+	PropertyValue,
+} from "@loom/core";
 
 export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal" | "trash";
 
@@ -19,6 +28,12 @@ export const IPC = {
 	copyAssetPath: "loom:copyAssetPath",
 	revealAsset: "loom:revealAsset",
 	trashAsset: "loom:trashAsset",
+	getPropertySnapshot: "loom:getPropertySnapshot",
+	createProperty: "loom:createProperty",
+	updateProperty: "loom:updateProperty",
+	removeProperty: "loom:removeProperty",
+	setAssetProperty: "loom:setAssetProperty",
+	removeAssetProperty: "loom:removeAssetProperty",
 } as const;
 
 export interface LoomApi {
@@ -32,6 +47,16 @@ export interface LoomApi {
 	copyAssetPath: (assetId: string) => Promise<void>;
 	revealAsset: (assetId: string) => Promise<void>;
 	trashAsset: (assetId: string) => Promise<boolean>;
+	getPropertySnapshot: () => Promise<PropertySnapshot>;
+	createProperty: (name: string, type: PropertyType) => Promise<PropertyDefinition>;
+	updateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<PropertyDefinition>;
+	removeProperty: (propertyId: string) => Promise<void>;
+	setAssetProperty: (
+		assetId: string,
+		propertyId: string,
+		value: PropertyValue,
+	) => Promise<AssetPropertyValue>;
+	removeAssetProperty: (assetId: string, propertyId: string) => Promise<void>;
 }
 
 declare global {
