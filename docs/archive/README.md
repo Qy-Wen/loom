@@ -60,3 +60,17 @@ Replaced the in-memory asset index with persistent SQLite storage inside each li
 - Filesystem reconciliation reuses UUIDs, adds new files, and removes stale records
 - Preserved watcher, preview, and context-menu behavior; explicit rename retains the original UUID
 - Tests verify database creation, UUID persistence across LocalCore restarts, offline reconciliation, filesystem identity, volume relocation, and live edge cases
+
+---
+
+## ✅ Custom properties and Table view
+
+Added typed, persistent user properties and a structured asset-table workspace.
+
+- Added `text`, `number`, `boolean`, and calendar-date property definitions with runtime validation
+- Added `properties` and `asset_properties` SQLite tables with foreign-key cleanup
+- Extended MetadataStore and LocalCore with property-definition and asset-value CRUD
+- Reworked full-library reconciliation to update retained asset rows in place, preserving property values through moves and path swaps
+- Added custom-property creation, editing, clearing, and deletion to the Details panel
+- Enabled the Table view with dynamic property columns, typed sorting, text filtering, and row selection
+- Added tests for both in-memory and SQLite stores, persistence across reopen, cascading cleanup, non-destructive reconciliation, and typed table values

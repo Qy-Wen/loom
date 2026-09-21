@@ -35,7 +35,7 @@
 
 - **Left — Asset Library:** entry point for the library and its real filesystem hierarchy; narrow and stable.
 - **Center — Workbench:** the largest area, switching among Preview, Gallery, Table, and Graph. Preview directly displays images, video, audio, PDFs, and common text files; unsupported formats show basic information.
-- **Right — Agent / Details:** Agent by default, with asset properties and relationships available on demand so secondary information does not permanently consume space.
+- **Right — Agent / Details:** Agent by default, with asset properties and relationships available on demand so secondary information does not permanently consume space. Details supports library-wide text, number, checkbox, and date properties.
 - Dividers between the three columns are draggable. Double-click restores the default width, and preferences are stored locally.
 - Files have a native context menu for rename, duplicate, copy path, reveal in Finder, and move to Trash.
 
@@ -47,6 +47,6 @@ The information hierarchy stays clear: the left answers “what assets do I have
 
 - **Files View:** filesystem tree and directory browsing
 - **Gallery View:** thumbnail grid for images and video
-- **Table / Database View:** Obsidian-style property table with sorting and filtering
+- **Table / Database View:** Obsidian-style table with an `Add field` action, dynamic property columns, draggable persisted column widths, typed sorting, text filtering, and asset selection
 - **Graph View:** visual asset relationship graph
 - **Agent View:** Agent conversation and workflows

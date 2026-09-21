@@ -1,4 +1,5 @@
 import type { Asset } from "../model/asset.ts";
+import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
 
 /**
@@ -17,6 +18,16 @@ export interface MetadataStore {
 	removeAsset(assetId: string): Promise<void>;
 	getLibraryVolumeId(): Promise<string | undefined>;
 	setLibraryVolumeId(volumeId: string): Promise<void>;
+
+	createProperty(property: PropertyDefinition): Promise<void>;
+	updateProperty(property: PropertyDefinition): Promise<void>;
+	getProperty(propertyId: string): Promise<PropertyDefinition | undefined>;
+	listProperties(): Promise<PropertyDefinition[]>;
+	removeProperty(propertyId: string): Promise<void>;
+	setAssetProperty(value: AssetPropertyValue): Promise<void>;
+	listAssetProperties(assetId: string): Promise<AssetPropertyValue[]>;
+	listAllAssetProperties(): Promise<AssetPropertyValue[]>;
+	removeAssetProperty(assetId: string, propertyId: string): Promise<void>;
 }
 
 export interface AssetRelation {

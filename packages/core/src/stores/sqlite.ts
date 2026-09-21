@@ -1,6 +1,13 @@
 import { mkdir } from "node:fs/promises";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
+import {
+	assertPropertyDefinition,
+	assertPropertyValue,
+	type AssetPropertyValue,
+	type PropertyDefinition,
+	type PropertyType,
+} from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
 import type { MetadataStore } from "./types.ts";
 
@@ -14,6 +21,23 @@ interface AssetRow {
 	modified_at: number;
 	/** OS-assigned file identity; see Asset.fileSystemId. */
 	file_system_id: string | null;
+}
+
+interface PropertyRow {
+	property_id: string;
+	name: string;
+	type: PropertyType;
+	created_at: number;
+}
+
+interface AssetPropertyRow {
+	asset_id: string;
+	property_id: string;
+	type: PropertyType;
+	value_text: string | null;
+	value_number: number | null;
+	value_boolean: number | null;
+	value_date: string | null;
 }
 
 const VOLUME_ID_KEY = "volume_id";
@@ -102,16 +126,36 @@ export class SqliteMetadataStore implements MetadataStore {
 	async replaceAssets(assets: Asset[]): Promise<void> {
 		const database = this.requireDatabase();
 		const replace = database.transaction((values: Asset[]) => {
-			database.prepare("DELETE FROM assets").run();
-			const insert = database.prepare(`
+			const nextAssetIds = new Set(values.map((asset) => asset.assetId));
+			const existingAssetIds = database
+				.prepare("SELECT asset_id FROM assets")
+				.all() as Array<{ asset_id: string }>;
+
+			// Stage existing paths in the ignored .loom namespace so two assets can
+			// exchange paths without violating the unique relative_path constraint.
+			// Rows are updated in place, preserving foreign-keyed user properties.
+			database.prepare("UPDATE assets SET relative_path = '.loom/__reconcile__/' || asset_id").run();
+			const upsert = database.prepare(`
 				INSERT INTO assets (
 					asset_id, relative_path, filename, type, size, created_at, modified_at, file_system_id
 				) VALUES (
 					@assetId, @relativePath, @filename, @type, @size, @createdAt, @modifiedAt, @fileSystemId
 				)
+				ON CONFLICT(asset_id) DO UPDATE SET
+					relative_path = excluded.relative_path,
+					filename = excluded.filename,
+					type = excluded.type,
+					size = excluded.size,
+					created_at = excluded.created_at,
+					modified_at = excluded.modified_at,
+					file_system_id = excluded.file_system_id
 			`);
 			for (const value of values) {
-				insert.run({ ...value, fileSystemId: value.fileSystemId ?? null });
+				upsert.run({ ...value, fileSystemId: value.fileSystemId ?? null });
+			}
+			const remove = database.prepare("DELETE FROM assets WHERE asset_id = ?");
+			for (const { asset_id: assetId } of existingAssetIds) {
+				if (!nextAssetIds.has(assetId)) remove.run(assetId);
 			}
 		});
 		replace(assets);
@@ -134,6 +178,95 @@ export class SqliteMetadataStore implements MetadataStore {
 			.run(VOLUME_ID_KEY, volumeId);
 	}
 
+	async createProperty(property: PropertyDefinition): Promise<void> {
+		assertPropertyDefinition(property);
+		this.requireDatabase()
+			.prepare("INSERT INTO properties (property_id, name, type, created_at) VALUES (?, ?, ?, ?)")
+			.run(property.propertyId, property.name, property.type, property.createdAt);
+	}
+
+	async updateProperty(property: PropertyDefinition): Promise<void> {
+		assertPropertyDefinition(property);
+		const database = this.requireDatabase();
+		const previous = await this.getProperty(property.propertyId);
+		if (!previous) throw new Error("Property not found");
+		if (previous.type !== property.type) {
+			const count = database
+				.prepare("SELECT COUNT(*) AS count FROM asset_properties WHERE property_id = ?")
+				.get(property.propertyId) as { count: number };
+			if (count.count > 0) throw new Error("Cannot change the type of a property that has values");
+		}
+		database
+			.prepare("UPDATE properties SET name = ?, type = ? WHERE property_id = ?")
+			.run(property.name, property.type, property.propertyId);
+	}
+
+	async getProperty(propertyId: string): Promise<PropertyDefinition | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM properties WHERE property_id = ?")
+			.get(propertyId) as PropertyRow | undefined;
+		return row ? toProperty(row) : undefined;
+	}
+
+	async listProperties(): Promise<PropertyDefinition[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT * FROM properties ORDER BY name COLLATE NOCASE, name")
+			.all() as PropertyRow[];
+		return rows.map(toProperty);
+	}
+
+	async removeProperty(propertyId: string): Promise<void> {
+		this.requireDatabase().prepare("DELETE FROM properties WHERE property_id = ?").run(propertyId);
+	}
+
+	async setAssetProperty(value: AssetPropertyValue): Promise<void> {
+		const database = this.requireDatabase();
+		const property = await this.getProperty(value.propertyId);
+		if (!property) throw new Error("Property not found");
+		if (!await this.getAsset(value.assetId)) throw new Error("Asset not found");
+		assertPropertyValue(property.type, value.value);
+		const columns = propertyValueColumns(property.type, value.value);
+		database.prepare(`
+			INSERT INTO asset_properties (
+				asset_id, property_id, value_text, value_number, value_boolean, value_date
+			) VALUES (
+				@assetId, @propertyId, @valueText, @valueNumber, @valueBoolean, @valueDate
+			)
+			ON CONFLICT(asset_id, property_id) DO UPDATE SET
+				value_text = excluded.value_text,
+				value_number = excluded.value_number,
+				value_boolean = excluded.value_boolean,
+				value_date = excluded.value_date
+		`).run({ ...value, ...columns });
+	}
+
+	async listAssetProperties(assetId: string): Promise<AssetPropertyValue[]> {
+		const rows = this.requireDatabase().prepare(`
+			SELECT ap.*, p.type
+			FROM asset_properties ap
+			JOIN properties p ON p.property_id = ap.property_id
+			WHERE ap.asset_id = ?
+			ORDER BY p.name COLLATE NOCASE, p.name
+		`).all(assetId) as AssetPropertyRow[];
+		return rows.map(toAssetProperty);
+	}
+
+	async listAllAssetProperties(): Promise<AssetPropertyValue[]> {
+		const rows = this.requireDatabase().prepare(`
+			SELECT ap.*, p.type
+			FROM asset_properties ap
+			JOIN properties p ON p.property_id = ap.property_id
+			ORDER BY ap.asset_id, p.name COLLATE NOCASE, p.name
+		`).all() as AssetPropertyRow[];
+		return rows.map(toAssetProperty);
+	}
+
+	async removeAssetProperty(assetId: string, propertyId: string): Promise<void> {
+		this.requireDatabase()
+			.prepare("DELETE FROM asset_properties WHERE asset_id = ? AND property_id = ?")
+			.run(assetId, propertyId);
+	}
+
 	private ensureSchema(database: Database.Database): void {
 		database.exec(`
 			CREATE TABLE IF NOT EXISTS assets (
@@ -152,6 +285,29 @@ export class SqliteMetadataStore implements MetadataStore {
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL
 			);
+			CREATE TABLE IF NOT EXISTS properties (
+				property_id TEXT PRIMARY KEY,
+				name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+				type TEXT NOT NULL CHECK(type IN ('text', 'number', 'boolean', 'date')),
+				created_at REAL NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS asset_properties (
+				asset_id TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+				property_id TEXT NOT NULL REFERENCES properties(property_id) ON DELETE CASCADE,
+				value_text TEXT,
+				value_number REAL,
+				value_boolean INTEGER CHECK(value_boolean IN (0, 1)),
+				value_date TEXT,
+				PRIMARY KEY (asset_id, property_id),
+				CHECK (
+					(value_text IS NOT NULL) +
+					(value_number IS NOT NULL) +
+					(value_boolean IS NOT NULL) +
+					(value_date IS NOT NULL) = 1
+				)
+			);
+			CREATE INDEX IF NOT EXISTS asset_properties_property_idx
+				ON asset_properties(property_id);
 		`);
 	}
 
@@ -173,4 +329,35 @@ function toAsset(row: AssetRow): Asset {
 		// OS filesystem identity (dev+ino / Windows file index), not Loom's UUID.
 		fileSystemId: row.file_system_id,
 	};
+}
+
+function toProperty(row: PropertyRow): PropertyDefinition {
+	return {
+		propertyId: row.property_id,
+		name: row.name,
+		type: row.type,
+		createdAt: row.created_at,
+	};
+}
+
+function propertyValueColumns(
+	type: PropertyType,
+	value: string | number | boolean,
+): { valueText: string | null; valueNumber: number | null; valueBoolean: number | null; valueDate: string | null } {
+	return {
+		valueText: type === "text" ? value as string : null,
+		valueNumber: type === "number" ? value as number : null,
+		valueBoolean: type === "boolean" ? Number(value) : null,
+		valueDate: type === "date" ? value as string : null,
+	};
+}
+
+function toAssetProperty(row: AssetPropertyRow): AssetPropertyValue {
+	let value: string | number | boolean | null;
+	if (row.type === "text") value = row.value_text;
+	else if (row.type === "number") value = row.value_number;
+	else if (row.type === "boolean") value = row.value_boolean === null ? null : row.value_boolean === 1;
+	else value = row.value_date;
+	if (value === null) throw new Error(`Property ${row.property_id} has no ${row.type} value`);
+	return { assetId: row.asset_id, propertyId: row.property_id, value };
 }

@@ -6,6 +6,7 @@ export * from "./library/reconcile.ts";
 export * from "./library/watcher.ts";
 export * from "./local-core.ts";
 export * from "./model/asset.ts";
+export * from "./model/property.ts";
 export * from "./stores/memory.ts";
 export * from "./stores/sqlite.ts";
 export * from "./stores/types.ts";
