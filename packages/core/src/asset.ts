@@ -11,6 +11,12 @@ export interface Asset {
 	size: number;
 	createdAt: number;
 	modifiedAt: number;
+	/**
+	 * `file_system_id`: identity assigned by the OS filesystem, not Loom.
+	 * Node `stat` `(dev, ino)` — inode on macOS/Linux, volume + file index on Windows.
+	 * Stable across rename/move on the same volume; null if the FS has no usable id.
+	 */
+	fileSystemId?: string | null;
 }
 
 export interface LibrarySnapshot {

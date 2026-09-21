@@ -12,9 +12,11 @@ interface AssetRow {
 	size: number;
 	created_at: number;
 	modified_at: number;
+	/** OS-assigned file identity; see Asset.fileSystemId. */
+	file_system_id: string | null;
 }
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 
 export class SqliteMetadataStore implements MetadataStore {
 	private database: Database.Database | null = null;
@@ -52,9 +54,9 @@ export class SqliteMetadataStore implements MetadataStore {
 				.run(value.relativePath, value.assetId);
 			database.prepare(`
 				INSERT INTO assets (
-					asset_id, relative_path, filename, type, size, created_at, modified_at
+					asset_id, relative_path, filename, type, size, created_at, modified_at, file_system_id
 				) VALUES (
-					@assetId, @relativePath, @filename, @type, @size, @createdAt, @modifiedAt
+					@assetId, @relativePath, @filename, @type, @size, @createdAt, @modifiedAt, @fileSystemId
 				)
 				ON CONFLICT(asset_id) DO UPDATE SET
 					relative_path = excluded.relative_path,
@@ -62,8 +64,9 @@ export class SqliteMetadataStore implements MetadataStore {
 					type = excluded.type,
 					size = excluded.size,
 					created_at = excluded.created_at,
-					modified_at = excluded.modified_at
-			`).run(value);
+					modified_at = excluded.modified_at,
+					file_system_id = excluded.file_system_id
+			`).run({ ...value, fileSystemId: value.fileSystemId ?? null });
 		});
 		upsert(asset);
 	}
@@ -79,6 +82,13 @@ export class SqliteMetadataStore implements MetadataStore {
 		const row = this.requireDatabase()
 			.prepare("SELECT * FROM assets WHERE relative_path = ?")
 			.get(relativePath) as AssetRow | undefined;
+		return row ? toAsset(row) : undefined;
+	}
+
+	async getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM assets WHERE file_system_id = ? LIMIT 1")
+			.get(fileSystemId) as AssetRow | undefined;
 		return row ? toAsset(row) : undefined;
 	}
 
@@ -108,19 +118,39 @@ export class SqliteMetadataStore implements MetadataStore {
 						type TEXT NOT NULL,
 						size INTEGER NOT NULL,
 						created_at REAL NOT NULL,
-						modified_at REAL NOT NULL
+						modified_at REAL NOT NULL,
+						file_system_id TEXT
 					);
 					CREATE INDEX assets_type_idx ON assets(type);
+					CREATE INDEX assets_file_system_id_idx ON assets(file_system_id);
 				`);
-				database.pragma("user_version = 1");
+				database.pragma("user_version = 2");
+			})();
+			return;
+		}
+		if (version < 2) {
+			database.transaction(() => {
+				database.exec("ALTER TABLE assets ADD COLUMN file_system_id TEXT");
+				database.exec("CREATE INDEX IF NOT EXISTS assets_file_system_id_idx ON assets(file_system_id)");
+				database.pragma("user_version = 2");
 			})();
 		}
+		renameLegacyFileIdColumn(database);
 	}
 
 	private requireDatabase(): Database.Database {
 		if (!this.database?.open) throw new Error("Metadata store is not open");
 		return this.database;
 	}
+}
+
+function renameLegacyFileIdColumn(database: Database.Database): void {
+	const columns = database.prepare("PRAGMA table_info(assets)").all() as { name: string }[];
+	const names = new Set(columns.map((column) => column.name));
+	if (!names.has("file_id") || names.has("file_system_id")) return;
+	database.exec("ALTER TABLE assets RENAME COLUMN file_id TO file_system_id");
+	database.exec("DROP INDEX IF EXISTS assets_file_id_idx");
+	database.exec("CREATE INDEX IF NOT EXISTS assets_file_system_id_idx ON assets(file_system_id)");
 }
 
 function toAsset(row: AssetRow): Asset {
@@ -132,5 +162,7 @@ function toAsset(row: AssetRow): Asset {
 		size: row.size,
 		createdAt: row.created_at,
 		modifiedAt: row.modified_at,
+		// OS filesystem identity (dev+ino / Windows file index), not Loom's UUID.
+		fileSystemId: row.file_system_id,
 	};
 }

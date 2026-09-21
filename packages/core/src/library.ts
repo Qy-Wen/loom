@@ -7,11 +7,14 @@ import {
 	type LibraryChange,
 	type LibrarySnapshot,
 } from "./asset.ts";
+import { statAssetFile } from "./file-identity.ts";
 import { LibraryPaths } from "./library-paths.ts";
 import { LibraryWatcher, type LibraryFileEvent } from "./library-watcher.ts";
 import type { MetadataStore } from "./stores.ts";
 
 type LibraryListener = (change: LibraryChange) => void;
+
+const REMOVE_GRACE_MS = 500;
 
 /**
  * Reconciles the filesystem (source of truth) with a MetadataStore and emits
@@ -24,6 +27,7 @@ export class Library {
 	private readonly folders = new Set<string>();
 	private readonly listeners = new Set<LibraryListener>();
 	private updateQueue: Promise<void> = Promise.resolve();
+	private readonly pendingRemovals = new Map<string, { asset: Asset; timer: ReturnType<typeof setTimeout> }>();
 	private readonly metadataStore: MetadataStore;
 
 	constructor(metadataStore: MetadataStore) {
@@ -46,7 +50,7 @@ export class Library {
 		);
 		await this.scanDirectory(this.paths.root, staleAssets);
 		for (const staleAsset of staleAssets.values()) {
-			await this.metadataStore.removeAsset(staleAsset.assetId);
+			await this.commitRemoval(staleAsset, false);
 		}
 
 		const watcher = new LibraryWatcher(this.paths);
@@ -95,10 +99,10 @@ export class Library {
 		const relativePath = parent === "." ? filename : `${parent}/${filename}`;
 		const newPath = paths.toAbsolutePath(relativePath);
 
-		const oldInfo = await stat(oldPath);
+		const oldInfo = await statAssetFile(oldPath);
 		try {
-			const targetInfo = await stat(newPath);
-			if (targetInfo.dev !== oldInfo.dev || targetInfo.ino !== oldInfo.ino) {
+			const targetInfo = await statAssetFile(newPath);
+			if (targetInfo.fileSystemId === null || oldInfo.fileSystemId === null || targetInfo.fileSystemId !== oldInfo.fileSystemId) {
 				throw new Error(`A file named “${filename}” already exists`);
 			}
 		} catch (error) {
@@ -107,7 +111,7 @@ export class Library {
 
 		// Reserve the new path before fs.rename so watcher add/unlink events keep
 		// the same asset id rather than briefly creating a second identity.
-		const reserved: Asset = { ...asset, filename, relativePath };
+		const reserved: Asset = { ...asset, filename, relativePath, fileSystemId: oldInfo.fileSystemId };
 		await this.metadataStore.upsertAsset(reserved);
 		try {
 			await rename(oldPath, newPath);
@@ -116,8 +120,13 @@ export class Library {
 			throw error;
 		}
 
-		const info = await stat(newPath);
-		const renamed: Asset = { ...reserved, size: info.size, modifiedAt: info.mtimeMs };
+		const info = await statAssetFile(newPath);
+		const renamed: Asset = {
+			...reserved,
+			size: info.size,
+			modifiedAt: info.modifiedAt,
+			fileSystemId: info.fileSystemId,
+		};
 		await this.metadataStore.upsertAsset(renamed);
 		this.emit({ type: "upsert", asset: renamed });
 		return renamed;
@@ -164,12 +173,13 @@ export class Library {
 			throw error;
 		}
 
-		const info = await stat(destinationPath);
+		const info = await statAssetFile(destinationPath);
 		const duplicate: Asset = {
 			...reserved,
 			size: info.size,
-			createdAt: info.birthtimeMs || info.ctimeMs,
-			modifiedAt: info.mtimeMs,
+			createdAt: info.createdAt,
+			modifiedAt: info.modifiedAt,
+			fileSystemId: info.fileSystemId,
 		};
 		await this.metadataStore.upsertAsset(duplicate);
 		this.emit({ type: "upsert", asset: duplicate });
@@ -179,8 +189,7 @@ export class Library {
 	async forgetAsset(assetId: string): Promise<void> {
 		const asset = await this.metadataStore.getAsset(assetId);
 		if (!asset) return;
-		await this.metadataStore.removeAsset(assetId);
-		this.emit({ type: "remove", assetId });
+		await this.commitRemoval(asset, true);
 	}
 
 	async close(): Promise<void> {
@@ -194,6 +203,7 @@ export class Library {
 	private async stopWatcher(): Promise<void> {
 		const watcher = this.watcher;
 		this.watcher = null;
+		this.clearPendingRemovals();
 		if (watcher) await watcher.close();
 		await this.updateQueue;
 	}
@@ -212,8 +222,17 @@ export class Library {
 				this.folders.add(paths.toRelativePath(absolutePath));
 				await this.scanDirectory(absolutePath, staleAssets);
 			} else if (entry.isFile()) {
-				staleAssets.delete(paths.toRelativePath(absolutePath));
 				await this.upsertFile(absolutePath, false);
+				const relativePath = paths.toRelativePath(absolutePath);
+				staleAssets.delete(relativePath);
+				const written = await this.metadataStore.getAssetByPath(relativePath);
+				if (written) {
+					for (const [stalePath, staleAsset] of staleAssets) {
+						if (staleAsset.assetId === written.assetId || (written.fileSystemId && staleAsset.fileSystemId === written.fileSystemId)) {
+							staleAssets.delete(stalePath);
+						}
+					}
+				}
 			}
 		}
 	}
@@ -242,23 +261,39 @@ export class Library {
 
 		let info;
 		try {
-			info = await stat(absolutePath);
+			info = await statAssetFile(absolutePath);
 		} catch (error) {
 			if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
 			throw error;
 		}
-		if (!info.isFile()) return;
+		if (!info.isFile) return;
 
 		const relativePath = paths.toRelativePath(absolutePath);
-		const existing = await this.metadataStore.getAssetByPath(relativePath);
+		const byPath = await this.metadataStore.getAssetByPath(relativePath);
+		const byFileId = info.fileSystemId ? await this.metadataStore.getAssetByFileSystemId(info.fileSystemId) : undefined;
+
+		let existing: Asset | undefined;
+		if (byPath && sameFileIdentity(byPath.fileSystemId, info.fileSystemId)) {
+			existing = byPath;
+		} else if (byPath && byPath.fileSystemId && info.fileSystemId && byPath.fileSystemId !== info.fileSystemId) {
+			this.clearPendingRemoval(byPath);
+			await this.commitRemoval(byPath, notify);
+			existing = byFileId && byFileId.assetId !== byPath.assetId ? byFileId : undefined;
+		} else {
+			existing = byFileId ?? byPath;
+		}
+
+		if (existing) this.clearPendingRemoval(existing);
+
 		const asset: Asset = {
 			assetId: existing?.assetId ?? randomUUID(),
 			relativePath,
 			filename: basename(absolutePath),
 			type: assetTypeFromPath(absolutePath),
 			size: info.size,
-			createdAt: info.birthtimeMs || info.ctimeMs,
-			modifiedAt: info.mtimeMs,
+			createdAt: info.createdAt,
+			modifiedAt: info.modifiedAt,
+			fileSystemId: info.fileSystemId,
 		};
 		await this.metadataStore.upsertAsset(asset);
 		if (notify) this.emit({ type: "upsert", asset });
@@ -283,8 +318,7 @@ export class Library {
 		}
 		for (const asset of await this.metadataStore.listAssets()) {
 			if (!asset.relativePath.startsWith(prefix)) continue;
-			await this.metadataStore.removeAsset(asset.assetId);
-			this.emit({ type: "remove", assetId: asset.assetId });
+			await this.commitRemoval(asset, true);
 		}
 		this.emit({ type: "folder_remove", relativePath });
 	}
@@ -295,8 +329,56 @@ export class Library {
 		const relativePath = paths.toRelativePath(absolutePath);
 		const asset = await this.metadataStore.getAssetByPath(relativePath);
 		if (!asset) return;
+		if (!asset.fileSystemId) {
+			await this.commitRemoval(asset, true);
+			return;
+		}
+		this.schedulePendingRemoval(asset);
+	}
+
+	private schedulePendingRemoval(asset: Asset): void {
+		const fileSystemId = asset.fileSystemId;
+		if (!fileSystemId) return;
+		this.clearPendingRemoval(asset);
+		const timer = setTimeout(() => {
+			this.updateQueue = this.updateQueue
+				.then(async () => {
+					const pending = this.pendingRemovals.get(fileSystemId);
+					if (!pending || pending.asset.assetId !== asset.assetId) return;
+					this.pendingRemovals.delete(fileSystemId);
+					const current = await this.metadataStore.getAsset(asset.assetId);
+					if (!current || current.relativePath !== asset.relativePath) return;
+					try {
+						await stat(this.requirePaths().toAbsolutePath(current.relativePath));
+					} catch (error) {
+						if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+						await this.commitRemoval(current, true);
+					}
+				})
+				.catch((error) => {
+					this.emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
+				});
+		}, REMOVE_GRACE_MS);
+		this.pendingRemovals.set(fileSystemId, { asset, timer });
+	}
+
+	private clearPendingRemoval(asset: Asset): void {
+		if (!asset.fileSystemId) return;
+		const pending = this.pendingRemovals.get(asset.fileSystemId);
+		if (!pending || pending.asset.assetId !== asset.assetId) return;
+		clearTimeout(pending.timer);
+		this.pendingRemovals.delete(asset.fileSystemId);
+	}
+
+	private clearPendingRemovals(): void {
+		for (const pending of this.pendingRemovals.values()) clearTimeout(pending.timer);
+		this.pendingRemovals.clear();
+	}
+
+	private async commitRemoval(asset: Asset, notify: boolean): Promise<void> {
+		this.clearPendingRemoval(asset);
 		await this.metadataStore.removeAsset(asset.assetId);
-		this.emit({ type: "remove", assetId: asset.assetId });
+		if (notify) this.emit({ type: "remove", assetId: asset.assetId });
 	}
 
 	private requirePaths(): LibraryPaths {
@@ -313,4 +395,9 @@ export class Library {
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}
+}
+
+function sameFileIdentity(stored: string | null | undefined, next: string | null): boolean {
+	if (!stored || !next) return true;
+	return stored === next;
 }

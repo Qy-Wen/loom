@@ -1,4 +1,5 @@
 export * from "./asset.ts";
+export * from "./file-identity.ts";
 export * from "./library-paths.ts";
 export * from "./library-watcher.ts";
 export * from "./library.ts";

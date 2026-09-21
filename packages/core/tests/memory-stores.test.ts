@@ -33,6 +33,17 @@ describe("InMemoryMetadataStore", () => {
 		assert.equal(await store.getAsset("a"), undefined);
 	});
 
+	it("looks up an asset by portable file id", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		await store.upsertAsset({ ...asset("a", "old.jpg"), fileSystemId: "1:99" });
+		await store.upsertAsset({ ...asset("a", "new.jpg"), fileSystemId: "1:99" });
+
+		assert.equal((await store.getAssetByFileSystemId("1:99"))?.relativePath, "new.jpg");
+		await store.removeAsset("a");
+		assert.equal(await store.getAssetByFileSystemId("1:99"), undefined);
+	});
+
 	it("gives a path to the most recently upserted asset", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();

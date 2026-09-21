@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -68,6 +68,43 @@ test("Library scans, ignores metadata, watches changes, and preserves identity o
 		assert.equal(persistedHero?.assetId, renamed.assetId);
 		assert.equal(reopened.assets.length, 3);
 		assert.equal(reopened.assets.some((asset) => asset.relativePath === "notes/brief.md"), false);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Library keeps the same asset id when a file is moved on disk", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-move-"));
+	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
+
+	try {
+		await writeFile(join(root, "cover.jpg"), "image fixture");
+		const initial = await core.openLibrary(root);
+		const cover = initial.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.ok(cover?.fileSystemId);
+
+		const moved = waitForChange(
+			core,
+			(change) => change.type === "upsert" && change.asset.relativePath === "hero.jpg",
+		);
+		await rename(join(root, "cover.jpg"), join(root, "hero.jpg"));
+		const change = await moved;
+		assert.equal(change.type, "upsert");
+		if (change.type === "upsert") {
+			assert.equal(change.asset.assetId, cover.assetId);
+			assert.equal(change.asset.fileSystemId, cover.fileSystemId);
+		}
+
+		await core.close();
+		await mkdir(join(root, "archive"));
+		await rename(join(root, "hero.jpg"), join(root, "archive", "hero.jpg"));
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		const archived = reopened.assets.find((asset) => asset.relativePath === "archive/hero.jpg");
+		assert.equal(archived?.assetId, cover.assetId);
+		assert.equal(reopened.assets.length, 1);
 	} finally {
 		await Promise.all([core.close(), reopenedCore?.close()]);
 		await rm(root, { recursive: true, force: true });
