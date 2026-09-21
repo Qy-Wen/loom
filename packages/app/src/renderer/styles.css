@@ -152,8 +152,7 @@ body {
 }
 
 .open-button,
-.primary-button,
-.asset-summary button {
+.primary-button {
 	border: 1px solid #cacac6;
 	border-radius: 6px;
 	color: #292a2d;
@@ -167,7 +166,6 @@ body {
 }
 
 .open-button:hover:not(:disabled),
-.asset-summary button:hover,
 .primary-button:hover:not(:disabled) {
 	background: #eeeeeb;
 }
@@ -373,59 +371,6 @@ body.resizing-columns {
 	min-height: 0;
 	flex-direction: column;
 	background: #fff;
-}
-
-.asset-toolbar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 16px;
-	flex: 0 0 52px;
-	padding: 0 16px;
-	border-bottom: 1px solid #e5e5e2;
-}
-
-.asset-title-group {
-	display: flex;
-	min-width: 0;
-	flex-direction: column;
-	gap: 2px;
-}
-
-.asset-title-group strong {
-	overflow: hidden;
-	font-size: 13px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.asset-title-group span {
-	overflow: hidden;
-	color: #8a8d92;
-	font-size: 10px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
-.asset-summary {
-	display: flex;
-	align-items: center;
-	gap: 7px;
-	flex: 0 0 auto;
-	color: #777a80;
-	font-size: 10px;
-	text-transform: capitalize;
-}
-
-.asset-summary span {
-	padding: 3px 6px;
-	border-radius: 4px;
-	background: #f1f1ef;
-}
-
-.asset-summary button {
-	padding: 3px 7px;
-	font-size: 10px;
 }
 
 .preview-placeholder,

@@ -1,4 +1,4 @@
-import { isAbsolute, relative, resolve, sep } from "node:path";
+import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 
 export class LibraryPaths {
 	readonly root: string;
@@ -35,5 +35,9 @@ export class LibraryPaths {
 	isLoomPath(absolutePath: string): boolean {
 		const value = relative(this.root, resolve(absolutePath));
 		return value === ".loom" || value.startsWith(`.loom${sep}`);
+	}
+
+	isIgnoredPath(absolutePath: string): boolean {
+		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store";
 	}
 }
