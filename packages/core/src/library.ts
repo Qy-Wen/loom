@@ -202,7 +202,7 @@ export class Library {
 
 		for (const entry of entries) {
 			const absolutePath = join(directory, entry.name);
-			if (paths.isLoomPath(absolutePath) || entry.isSymbolicLink()) continue;
+			if (paths.isIgnoredPath(absolutePath) || entry.isSymbolicLink()) continue;
 			if (entry.isDirectory()) {
 				this.folders.add(paths.toRelativePath(absolutePath));
 				await this.scanDirectory(absolutePath, staleAssets);
@@ -232,7 +232,7 @@ export class Library {
 
 	private async upsertFile(absolutePath: string, notify: boolean): Promise<void> {
 		const paths = this.requirePaths();
-		if (paths.isLoomPath(absolutePath)) return;
+		if (paths.isIgnoredPath(absolutePath)) return;
 
 		let info;
 		try {
@@ -260,7 +260,7 @@ export class Library {
 
 	private upsertFolder(absolutePath: string): void {
 		const paths = this.requirePaths();
-		if (paths.isLoomPath(absolutePath)) return;
+		if (paths.isIgnoredPath(absolutePath)) return;
 		const relativePath = paths.toRelativePath(absolutePath);
 		if (this.folders.has(relativePath)) return;
 		this.folders.add(relativePath);
@@ -269,7 +269,7 @@ export class Library {
 
 	private async removeFolder(absolutePath: string): Promise<void> {
 		const paths = this.requirePaths();
-		if (paths.isLoomPath(absolutePath)) return;
+		if (paths.isIgnoredPath(absolutePath)) return;
 		const relativePath = paths.toRelativePath(absolutePath);
 		const prefix = `${relativePath}/`;
 		for (const folder of [...this.folders]) {
@@ -285,7 +285,7 @@ export class Library {
 
 	private async removeFile(absolutePath: string): Promise<void> {
 		const paths = this.requirePaths();
-		if (paths.isLoomPath(absolutePath)) return;
+		if (paths.isIgnoredPath(absolutePath)) return;
 		const relativePath = paths.toRelativePath(absolutePath);
 		const asset = await this.metadataStore.getAssetByPath(relativePath);
 		if (!asset) return;

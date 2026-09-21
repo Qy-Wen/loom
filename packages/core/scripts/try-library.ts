@@ -10,6 +10,7 @@ const core = new LocalCore();
 try {
 	await mkdir(join(root, ".loom"));
 	await writeFile(join(root, ".loom", "ignored.txt"), "ignore me");
+	await writeFile(join(root, ".DS_Store"), "Finder metadata");
 	await writeFile(join(root, "cover.jpg"), "image fixture");
 	await mkdir(join(root, "notes"));
 	await mkdir(join(root, "empty"));

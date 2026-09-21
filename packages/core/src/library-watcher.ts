@@ -20,7 +20,7 @@ export class LibraryWatcher {
 		if (this.watcher) throw new Error("Library watcher is already running");
 
 		const watcher = chokidar.watch(this.paths.root, {
-			ignored: (path) => this.paths.isLoomPath(path),
+			ignored: (path) => this.paths.isIgnoredPath(path),
 			ignoreInitial: true,
 			followSymlinks: false,
 			awaitWriteFinish: {
