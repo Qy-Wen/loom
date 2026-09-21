@@ -1,60 +1,62 @@
-# 已归档
+**English** | [简体中文](./README.zh-CN.md)
 
-已完成的步骤存档。当前待办见 [../TODO.md](../TODO.md)。
+# Archive
 
----
-
-## ✅ vendor pi-agent，纯 Node 跑通一轮 agent loop
-
-源码级引入 pi 的 agent 引擎，喂一句话跑通一轮 tool calling（不碰 Electron / UI / DB）。
-
-- pnpm workspace，`@loom/agent` 一个包；`vendor-pi-agent/` + `sync.sh` 同步 pi `packages/agent` @ `v0.85.1`
-- npm 装 `@earendil-works/{pi-ai,chord,pi-telemetry}` + `diff`/`ignore`/`typebox`/`yaml`（对齐 0.85.1）
-- `tsconfig.base.json` 对齐 pi 编译开关；vendor 引用用 node `imports` 字段 `#vendor/pi-agent`
-- `src/{types.ts, pi-adapter.ts}`：`LoomAgent` 接口 + 唯一 vendor 入口；`scripts/try-agent.ts` 冒烟测试
-- 跑通 `agent_start → tool_start → tool_end → text → agent_end`；vendor 同步走 `vendor-clean` 分支 + `git merge`
-- 实测：DeepSeek 模型 id 是 `deepseek-v4-flash`（provider `deepseek`，读 `DEEPSEEK_API_KEY`）
+Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
-## ✅ Electron 外壳 + agent 对话闭环
+## ✅ Vendor pi-agent and run one pure-Node agent loop
 
-跑通「UI 输入 → agent → 大模型 → 流式回显」，暂不引入 DB / library。
+Vendored the source of pi's agent engine and completed one tool-calling run without Electron, UI, or a database.
 
-- 新增 `@loom/app`：Electron main / preload / React renderer
-- main 进程在 `127.0.0.1` 随机端口启动 CopilotKit Runtime，退出时关闭
-- `LoomAgUiAgent` 将 `LoomAgentEvent` 翻译成 AG-UI 事件
-- runtime endpoint 和 agent id 经类型化 IPC 注入 renderer
-- renderer 使用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`
-- 跑通 `RUN_STARTED → TEXT_MESSAGE_* → RUN_FINISHED`，typecheck / build / 启动通过
+- Created a pnpm workspace with `@loom/agent`; `vendor-pi-agent/` and `sync.sh` mirror pi `packages/agent` at `v0.85.1`
+- Installed `@earendil-works/{pi-ai,chord,pi-telemetry}` plus `diff`, `ignore`, `typebox`, and `yaml`, aligned to 0.85.1
+- Aligned `tsconfig.base.json` with pi compiler flags; vendor imports use the native Node `#vendor/pi-agent` imports mapping
+- Added `src/{types.ts, pi-adapter.ts}` for Loom's stable interface and sole vendor boundary, plus `scripts/try-agent.ts`
+- Ran `agent_start → tool_start → tool_end → text → agent_end`; vendor updates use the `vendor-clean` branch and `git merge`
+- Verified DeepSeek model ID `deepseek-v4-flash` with provider `deepseek` and `DEEPSEEK_API_KEY`
 
 ---
 
-## ✅ 三层解耦 + 素材库骨架
+## ✅ Electron shell and Agent conversation loop
 
-用内存 Store 跑通「选择文件夹 → 扫描 → 文件树 → 预览 → watcher 实时更新」。
+Completed “UI input → Agent → model → streamed response” without introducing the database or asset library.
 
-- 新增 `@loom/core`，分离 Renderer / Main / LocalCore；Renderer 不直接访问文件系统或数据库
-- 定义 `MetadataStore` / `GraphStore` 接口及内存实现
-- 实现 Library / LibraryPaths / LibraryWatcher，忽略 `.loom/` 和 `.DS_Store`
-- 原生文件夹选择，扫描素材并使用 UUID 作为 `asset_id`
-- 文件树显示目录层级与素材缩略图，目录默认折叠
-- 中央工作区支持图片、视频、音频、PDF 和常见文本预览
-- 三栏布局：Asset Library / Workbench / Agent 与 Details；分栏可拖动并保存宽度
-- 文件支持原生右键操作：重命名、创建副本、复制路径、Finder 定位、移到废纸篓
-- 组件拆分为 file tree、preview、sidebar、side panel 和 resizable layout
-- `try:library` 覆盖扫描、watcher、重命名、复制与 UUID 保持；typecheck / build 通过
+- Added `@loom/app` with Electron main, preload, and React renderer
+- Main starts CopilotKit Runtime on a random `127.0.0.1` port and closes it on exit
+- `LoomAgUiAgent` translates `LoomAgentEvent` into AG-UI events
+- Typed IPC injects the runtime endpoint and agent ID into the renderer
+- Renderer uses `CopilotKitProvider` and `CopilotChat` from `@copilotkit/react-core/v2`
+- Ran `RUN_STARTED → TEXT_MESSAGE_* → RUN_FINISHED`; typecheck, build, and startup passed
+
+---
+
+## ✅ Three-layer separation and asset-library skeleton
+
+Completed “choose folder → scan → file tree → preview → live watcher updates” with an in-memory Store.
+
+- Added `@loom/core`, separating Renderer, Main, and LocalCore; Renderer never accesses the filesystem or database directly
+- Defined `MetadataStore` and `GraphStore` interfaces with in-memory implementations
+- Implemented Library, LibraryPaths, and LibraryWatcher while ignoring `.loom/` and `.DS_Store`
+- Added native folder selection, asset scanning, and UUID-based `asset_id`
+- File tree shows hierarchy and thumbnails with folders collapsed by default
+- Workbench previews images, video, audio, PDFs, and common text files
+- Added the three-column Asset Library / Workbench / Agent-and-Details layout with draggable persisted widths
+- Added native file actions: rename, duplicate, copy path, reveal in Finder, and move to Trash
+- Split renderer code into file tree, preview, sidebar, side panel, and resizable-layout modules
+- Tests cover scanning, watching, rename, duplication, and UUID preservation; typecheck and build pass
 
 ---
 
 ## ✅ SQLite MetadataStore
 
-将内存资产索引替换为素材库内的 SQLite 持久化存储。
+Replaced the in-memory asset index with persistent SQLite storage inside each library.
 
-- 引入 `better-sqlite3`，数据库自动创建在 `<library>/.loom/metadata.db`
-- 实现 `SqliteMetadataStore`：open / close / upsert / get / getByPath / list / remove
-- 建立 `assets` 表、相对路径唯一约束、类型索引与 `user_version` schema 版本
-- 默认 LocalCore 切换到 SQLite；`InMemoryMetadataStore` 继续保留用于轻量测试或注入
-- 打开素材库时以文件系统为事实源：已有路径复用 UUID，新文件建档，失效记录移除
-- 保留 watcher、预览和文件右键操作；显式重命名继续保持原 UUID
-- `try:library` 验证数据库创建、跨 LocalCore 重启 UUID 不变，以及离线删除后的索引同步
+- Added `better-sqlite3`; the database is created at `<library>/.loom/metadata.db`
+- Implemented `SqliteMetadataStore`: open, close, upsert, get, getByPath, list, and remove
+- Added the `assets` table, unique relative paths, type and filesystem-identity indexes, and library metadata
+- Switched the default LocalCore to SQLite while retaining `InMemoryMetadataStore` for focused tests and dependency injection
+- Filesystem reconciliation reuses UUIDs, adds new files, and removes stale records
+- Preserved watcher, preview, and context-menu behavior; explicit rename retains the original UUID
+- Tests verify database creation, UUID persistence across LocalCore restarts, offline reconciliation, filesystem identity, volume relocation, and live edge cases

@@ -1,47 +1,49 @@
+**English** | [简体中文](./PRODUCT.zh-CN.md)
+
 # Loom — Local-first AI Creative Workspace
 
-> 一个本地优先的 AI 创意智能资产库。
-> 文件系统负责资产本体，SQLite / 图数据库负责理解与索引，Agent 负责检索、组织、加工与创作。
+> A local-first, AI-powered workspace for creative assets.
+> The filesystem owns asset content, SQLite and the graph database provide understanding and indexes, and the Agent retrieves, organizes, transforms, and creates.
 
 ---
 
-## 1. 一句话定位
+## 1. One-line positioning
 
-> **文件系统是事实源，数据库是资产的认知层，Agent 是操作层。**
+> **The filesystem is the source of truth, the database is the cognitive layer, and the Agent is the operational layer.**
 
-Loom 是一个 Electron 桌面客户端，以本地运行为主，云端能力暂不考虑。用户选择一个文件夹作为「素材库」，Loom 自动以该目录作为工作目录，在其中提供实时预览、结构化属性、资产关联、语义检索，并让 Agent 能够调用 FFmpeg、ComfyUI 等工具完成从检索到创作再到发布的完整闭环。
+Loom is an Electron desktop client designed to run locally, without cloud requirements for now. A user selects a folder as an asset library. Loom treats it as the working directory and provides live preview, structured properties, asset relationships, semantic retrieval, and an Agent that can call FFmpeg, ComfyUI, and other tools to complete the loop from retrieval through creation to publishing.
 
 ---
 
-## 2. 核心原则
+## 2. Core principles
 
-1. **文件系统是唯一事实源（Source of Truth）**
-   - 数据库不拥有文件本体。数据库损坏，最多重新索引，绝不能导致资产丢失。
-   - 这是本项目最重要的设计约束。
+1. **The filesystem is the source of truth**
+   - The database never owns asset files. Database loss may require reindexing but must never lose the assets themselves.
+   - This is Loom's most important design constraint.
 
 2. **Local-first**
-   - 所有能力默认本地运行，用户数据不出本地。
-   - 云端 / 付费能力（如 VLM 理解）是可选的增量，而非前提。
+   - All capabilities run locally by default; user data stays on the device.
+   - Cloud and paid capabilities, such as VLM analysis, are optional additions rather than prerequisites.
 
-3. **Progressive Enrichment（渐进式富化）**
-   - 不是所有文件都值得做 AI 理解。用户主动选择是否为某个资产做 embedding / 语义分析。
-   - 避免「一导入就疯狂烧 API 钱」。
-
+3. **Progressive Enrichment**
+   - Not every file deserves AI analysis. Users choose which assets receive embeddings or semantic analysis.
+   - Importing a library must not automatically create uncontrolled API costs.
 
 ---
 
-## 3. 三层数据职责
+## 3. Three data responsibilities
 
-严格分离三层数据职责，避免相互越界。
+The three data layers remain strictly separated.
 
 ```
-本地文件系统
+Local filesystem
     ↓
 Asset Identity / Metadata
     ↓
 ┌────────────────┬─────────────────┐
 │ SQLite         │ LadybugDB       │
-│ 搜索/属性/向量 │ 资产关系图      │
+│ search / props │ asset graph     │
+│ / vectors      │                 │
 └────────────────┴─────────────────┘
         ↓
       Agent
@@ -49,39 +51,39 @@ Asset Identity / Metadata
 FFmpeg / ComfyUI / Publisher / ...
 ```
 
-### 3.1 文件系统 — 素材事实源
+### 3.1 Filesystem — asset source of truth
 
-Loom **不强加任何目录结构**。素材默认平铺在库根目录内，层级关系完全由用户自行组织（就像在 Finder / Obsidian 里一样）。Loom 只在库根目录下额外维护一个隐藏目录（`.loom/`）来存放数据库与缓存等元数据，除此之外不干预用户的文件布局。
+Loom imposes **no directory structure**. Assets may stay flat or follow any hierarchy the user chooses, as in Finder or Obsidian. Loom adds only a hidden `.loom/` directory at the library root for databases, caches, and configuration; it does not otherwise interfere with file organization.
 
 ```
-CreativeAssets/          -- 用户选择的库根目录
-├── product.jpg          -- 素材平铺 / 任意层级
+CreativeAssets/          -- selected library root
+├── product.jpg          -- flat or arbitrarily nested assets
 ├── video.mp4
-├── 我的项目A/          -- 用户自建的任意层级
+├── Campaign-A/          -- user-owned hierarchy
 │   └── ...
 ├── notes.md
 │
-└── .loom/               -- 隐藏元数据目录（用户无需关心）
-     ├── metadata.db      -- SQLite (metadata + vector + FTS)
+└── .loom/               -- hidden Loom metadata
+     ├── metadata.db      -- SQLite: metadata, vector, FTS
      ├── graph.db         -- LadybugDB
      ├── thumbnails/
      ├── cache/
      └── config.json
 ```
 
-- 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
-- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。若 `.loom/` 丢失或损坏，也只需重新索引，素材本体不受影响。符合 Local-first 理念。
+- The user owns asset names, locations, and nesting.
+- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files.
 
-### 3.2 SQLite — Metadata Store + Hybrid Search
+### 3.2 SQLite — Metadata Store and Hybrid Search
 
-SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。
+SQLite stores all asset metadata, not only vectors.
 
-**资产主表：**
+**Primary asset table:**
 
 ```
 assets
 ------
-asset_id          -- UUID（见第 4 节）
+asset_id          -- UUID; see Section 4
 path
 filename
 type
@@ -95,7 +97,7 @@ duration
 embedding_status
 ```
 
-**Obsidian 风格的自定义属性：**
+**Obsidian-style custom properties:**
 
 ```
 properties
@@ -111,36 +113,36 @@ property_id
 value
 ```
 
-用户可以自由创建属性字段，例如：
+Users may define fields such as:
 
 ```
-状态       = 已发布
-品牌       = Apple
-项目       = 秋季 Campaign
-摄影师     = xxx
-评分       = 4
-是否精选   = true
+Status       = Published
+Brand        = Apple
+Project      = Fall Campaign
+Photographer = xxx
+Rating       = 4
+Featured     = true
 ```
 
-这类结构化数据放 SQLite（而非图数据库），因为它们是典型的结构化查询：
+These structured values belong in SQLite rather than the graph database because they support ordinary structured queries:
 
 ```
-品牌 = "Apple"
-AND 状态 = "已发布"
-AND rating >= 4
+Brand = "Apple"
+AND Status = "Published"
+AND Rating >= 4
 ```
 
-再叠加：
+Combined with:
 
-- **FTS**（全文检索）
-- **Vector Search**（向量检索）
-- **Metadata Filter**（属性过滤）
+- **FTS** for full-text search
+- **Vector Search** for semantic retrieval
+- **Metadata Filter** for structured properties
 
-三者结合，正好形成 **Hybrid Search**。
+these form **Hybrid Search**.
 
-### 3.3 LadybugDB — 资产关系图
+### 3.3 LadybugDB — asset relationship graph
 
-图数据库专门负责「关系」，有真实业务语义，而非「为了图数据库而图数据库」。
+The graph database stores relationships with real product meaning rather than existing merely to include a graph database.
 
 ```
 (:Asset)-[:GENERATED_FROM]->(:Asset)
@@ -151,7 +153,7 @@ AND rating >= 4
 (:Asset)-[:PUBLISHED_TO]->(:Post)
 ```
 
-用户可以手动拖一条线建立关联：
+Users can create relationships manually:
 
 ```
 image_A
@@ -161,7 +163,7 @@ image_A
         video_B
 ```
 
-Agent 生成产物后自动建立 provenance（溯源链）：
+Agent-created outputs automatically receive provenance:
 
 ```
 product.png
@@ -173,69 +175,69 @@ image_gen_01.png
 video_01.mp4
 ```
 
-久而久之形成一张 **Creative Asset Graph**。
+Over time this becomes a **Creative Asset Graph**.
 
 ---
 
-## 4. Asset Identity（关键设计）
+## 4. Asset Identity
 
-**绝不使用文件路径作为 asset id。** 一旦用户重命名 / 移动文件，用路径作主键会导致所有属性与关系断裂。
+**A file path is never the asset ID.** Renaming or moving a file must not disconnect its properties and relationships.
 
 ```
-asset_id = UUID（稳定、不随路径变化）
-path     = 当前文件路径（可变，仅作定位）
+asset_id = stable UUID, independent of path
+path     = mutable pointer to the current location
 ```
 
-资产的 metadata、属性、关系图统统挂在 `asset_id` 上，`path` 只是它当前所在位置的一个可变指针。
+Metadata, properties, and graph relationships attach to `asset_id`; `path` only locates the current file.
 
 ### File Watcher
 
-监听文件系统事件并更新数据库：
+The watcher updates the database for:
 
-- `add`
-- `remove`
-- `rename`
-- `modify`
+- add
+- remove
+- rename
+- modify
 
-跨平台用 Node `fs.stat` 的 `(dev, ino)` 作为 `file_system_id`（macOS/Linux 是 inode，Windows 是卷序列号 + 64-bit file index）。这是操作系统给文件的身份，不是 Loom 的 UUID。`asset_id` 仍是 UUID；`file_system_id` 只用来判断「还是不是刚才那个文件」。
+Cross-platform file identity uses Node `fs.stat` `(dev, ino)` as `file_system_id`. On macOS/Linux this represents device and inode; on Windows it maps to volume and a 64-bit file index. It is an OS-assigned identity signal, not Loom's UUID. `asset_id` remains the business identity.
 
-- 打开库时先扫完全盘再对账：先按 `file_system_id` 认人，再按相对路径；换卷则只认路径。避免边扫边删导致挪走的文件丢掉 UUID。
-- 识别到增 / 删 / 移 / 更新后走 `LibraryHandlers`：metadata 与图各有处理函数。图（LadybugDB）尚未接入，目前为空实现。
-- 开着时 watcher 事件停稳后再走同一套全盘对账，避免整夹改名或对调时边跟边删丢掉 UUID。
-- `file_system_id` 拿不到（FAT 等）或 inode 已被回收：退回路径匹配；hash 校验后置。
-- 打开库时对比已存的卷 id（root 的 `stat.dev`）和当前卷。整库换盘导致卷变了：只按相对路径对齐，刷新全部 `file_system_id`，并记下新卷。
-
----
-
-## 5. Progressive Enrichment（渐进式富化）
-
-资产的理解程度分层递进，用户可控、成本可控。**不是所有文件都值得做 AI 理解**——用户主动选择是否为某资产做 embedding / 语义分析，避免「一导入就疯狂烧 API 钱」。
-
-```
-Level 0  Filesystem metadata        免费
-   ↓
-Level 1  FFprobe / EXIF / 文本提取   本地计算
-   ↓
-Level 2  Embedding                  可选
-   ↓
-Level 3  VLM Semantic Understanding 可选、可能收费
-   ↓
-Level 4  Deep Analysis              可选
-```
-
-> 各层的具体处理管线、媒体类型处理流程，以及视频的多粒度（scene / transcript chunk）理解方案，见 [ENRICHMENT.md](./ENRICHMENT.md)。
+- Opening a library first scans the complete filesystem and then reconciles it: match by `file_system_id`, then relative path; after a volume change, trust only relative paths. This prevents incremental deletion from losing UUIDs for moved files.
+- Identified additions, removals, moves, and updates flow through `LibraryHandlers`, which dispatches to metadata and graph handlers. LadybugDB is not connected yet, so graph handlers currently do nothing.
+- While the app is open, watcher events are allowed to settle and then use the same full-library reconciliation. This avoids losing UUIDs when a whole folder is renamed or files exchange paths.
+- If the filesystem does not expose a usable identity, as on some FAT or virtual filesystems, matching falls back to paths. Hash-based verification is deferred.
+- On open, Loom compares the stored volume ID with the current root `stat.dev`. Copying the whole library to another volume causes path-based reconciliation and refreshes all filesystem identities.
 
 ---
 
-## 6. Agent 工具与创作层
+## 5. Progressive Enrichment
 
-Agent 通过工具调用外部能力。第一版聚焦 FFmpeg（媒体处理），随后接入 ComfyUI（创作运行时）；FFmpeg 以封装好的工具集形式提供，而 ComfyUI 初期直接把底层能力暴露给 Agent。
+Asset understanding deepens gradually under user control. **Not every file deserves AI analysis.** Users decide whether an asset receives embeddings or semantic analysis.
 
-### 6.1 FFmpeg — 第一批 Agent Tools
+```
+Level 0  Filesystem metadata         Free
+   ↓
+Level 1  FFprobe / EXIF / text       Local compute
+   ↓
+Level 2  Embedding                   Optional
+   ↓
+Level 3  VLM semantic understanding  Optional, may cost money
+   ↓
+Level 4  Deep analysis               Optional
+```
 
-第一版无需接入任何生成模型，仅凭 FFmpeg 就能支撑大量 Agent Workflow。
+See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific processing, and scene/transcript-level video understanding.
 
-**工具集：**
+---
+
+## 6. Agent tools and creation layer
+
+The Agent calls tools to access external capabilities. The first release focuses on FFmpeg media processing, followed by ComfyUI as a creation runtime. FFmpeg is exposed through a curated toolset, while ComfyUI's lower-level capabilities are initially exposed directly rather than hidden behind an early abstraction.
+
+### 6.1 FFmpeg — first Agent tools
+
+FFmpeg alone supports many useful Agent workflows without requiring a generation model.
+
+**Toolset:**
 
 ```
 get_media_info      extract_frame       extract_clip
@@ -244,9 +246,9 @@ change_speed        extract_audio       convert_format
 generate_thumbnail  add_subtitle
 ```
 
-**示例：**
+Example:
 
-> 把所有横屏视频转成 9:16，并截取前 10 秒。
+> Convert all landscape videos to 9:16 and keep the first 10 seconds.
 
 ```
 search_assets(type=video, aspect_ratio=16:9)
@@ -257,11 +259,11 @@ parallel [
 ]
 ```
 
-非常适合演示 Tool Calling。
+This provides a strong tool-calling demonstration.
 
 ### 6.2 ComfyUI — Creative Runtime
 
-ComfyUI 本身就是一个通用、可编排的创作平台，因此初期直接把它的底层能力暴露给 Agent，让 Agent 直接操作 ComfyUI（而不强行先做一层能力抽象）。
+ComfyUI is already a flexible, programmable creation platform. Initially the Agent interacts directly with its underlying API instead of forcing an abstraction too early.
 
 ```
 Agent
@@ -269,21 +271,21 @@ Agent
 ComfyUI API
 ```
 
-Agent 可以直接：
+The Agent can:
 
-- 提交 / 编排 Workflow JSON
-- 选择 Checkpoint / LoRA / Sampler / VAE 等节点与参数
-- 运行工作流并取回产物（图片 / 视频）
+- submit and compose Workflow JSON
+- choose Checkpoint, LoRA, Sampler, VAE, and other node parameters
+- run workflows and collect image or video outputs
 
-这样能充分利用 ComfyUI 的灵活性，也避免早期过度抽象。
+This preserves ComfyUI's flexibility and avoids premature abstraction.
 
-> 后置：待接入更多创作 provider（GPT Image / Kling / Seedance 等）时，再在上层引入统一能力抽象（`generate_image` / `generate_video`）屏蔽 provider 差异。当前不做。
+> Deferred: after adding more creation providers such as GPT Image, Kling, and Seedance, introduce higher-level `generate_image` and `generate_video` capabilities to hide provider differences. Do not build this abstraction yet.
 
 ---
 
-## 7. 完整 Agent Loop 示例
+## 7. Complete Agent-loop example
 
-> 用去年 AirPods 项目里效果最好的图片，做一个 15 秒竖屏短视频。
+> Use the best-performing images from last year's AirPods project to create a 15-second vertical video.
 
 ```
 1.  understand_intent
@@ -300,21 +302,21 @@ Agent 可以直接：
 11. update_metadata
 ```
 
-至此 Agent 形成从检索 → 创作 → 索引 → 溯源的闭环。
+The Agent closes the loop from retrieval through creation, indexing, and provenance.
 
 ---
 
-## 8. Electron UI 设计
+## 8. Electron UI
 
-整体气质：**Obsidian + Finder + Lightroom + Cursor**。
+Visual direction: **Obsidian + Finder + Lightroom + Cursor**.
 
-采用「左侧素材库 + 中央工作区 + 右侧 Agent / Details」布局，提供 Files / Gallery / Table / Graph 等工作视图。
+The layout uses a left asset library, central workbench, and right Agent/Details panel, with Files, Gallery, Table, and Graph work views.
 
-> 具体界面布局、各栏职责与多视图设计，见 [UI.md](./UI.md)。
+See [UI.md](./UI.md) for layout, panel responsibilities, and view design.
 
-## 9. 架构
+## 9. Architecture
 
-### 进程解耦：Renderer / Main / Local Core
+### Process separation: Renderer / Main / Local Core
 
 ```
 Electron Renderer
@@ -324,8 +326,8 @@ Electron Main
 Local Core
 ```
 
-- Renderer **绝不**直接操作 DB。
-- Local Core 未来可独立为本地服务：
+- Renderer **never** accesses the database directly.
+- Local Core may later become a standalone local service:
 
 ```
 localhost:xxxx
@@ -334,11 +336,11 @@ POST /agent/run
 POST /graph/query
 ```
 
-这样将来把 Local Core 从 Node 替换为 Python / Go / Rust，或部署到云端，都不影响 UI。同时也让项目更容易被讲述为一个「后端 / Agent 系统项目」。
+The UI then remains unchanged if Local Core moves from Node to Python, Go, Rust, or the cloud. It also makes Loom legible as a backend and Agent-systems project.
 
-> **agent 通道已先行落地为 localhost 服务**：main 进程起一个 localhost HTTP server 承载 CopilotKit runtime，renderer 走 AG-UI 连它（见 AGENT.md §5）。UI 层暂时用 CopilotKit 现成聊天框，将来可深化为自研工作台（AG-UI 协议不变，后端不改）。
+> **The Agent channel already runs as a localhost service:** Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see AGENT.md Section 5. CopilotKit is temporary UI infrastructure and can later be replaced by a custom workbench without changing the AG-UI backend boundary.
 
-### 能力分层总览
+### Capability layers
 
 ```
                 Agent
@@ -356,28 +358,28 @@ POST /graph/query
       Filesystem
 ```
 
-未来延伸至发布：
+Future publishing extension:
 
 ```
              Local Creative Agent
                       │
        ┌──────────────┼──────────────┐
        ↓              ↓              ↓
-    ComfyUI        小红书          抖音
+    ComfyUI       Xiaohongshu      Douyin
        ↓              ↓              ↓
      Create         Publish        Publish
 ```
 
 ---
 
-## 10. 需要涵盖到的技术要点
+## 10. Technical areas to cover
 
-后续根据实际场景逐步引入：
+Introduce these progressively when real scenarios require them:
 
-- **多 Agent**：按真实创作角色拆分协作与编排。
-- **沙箱**：隔离执行高风险工具与生成任务。
-- **LangGraph**：用于复杂、可恢复的创作工作流编排。
-- **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
-- **MCP**：接入外部工具与创作服务。
-- **Evals**：评测 Agent、工具调用与检索效果。
-- **可观测性**：记录运行轨迹、工具调用、耗时与 token。
+- **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
+- **Sandboxing:** isolate high-risk tools and generation jobs.
+- **LangGraph:** orchestrate complex and recoverable creative workflows.
+- **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
+- **MCP:** connect external tools and creative services.
+- **Evals:** evaluate Agent behavior, tool calls, and retrieval quality.
+- **Observability:** record run traces, tool calls, latency, and token usage.
