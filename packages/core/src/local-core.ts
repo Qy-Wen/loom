@@ -1,4 +1,5 @@
 import type { Asset, LibraryChange, LibrarySnapshot } from "./asset.ts";
+import { LibraryHandlers, NoopGraphHandlers } from "./library-handlers.ts";
 import { Library } from "./library.ts";
 import { LibraryPaths } from "./library-paths.ts";
 import { InMemoryGraphStore } from "./memory-stores.ts";
@@ -19,7 +20,7 @@ export class LocalCore {
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
 		this.graphStore = options.graphStore ?? new InMemoryGraphStore();
-		this.library = new Library(this.metadataStore);
+		this.library = new Library(new LibraryHandlers(this.metadataStore, new NoopGraphHandlers()));
 	}
 
 	async openLibrary(rootPath: string): Promise<LibrarySnapshot> {

@@ -63,6 +63,17 @@ export class InMemoryMetadataStore implements MetadataStore {
 		);
 	}
 
+	async replaceAssets(assets: Asset[]): Promise<void> {
+		this.assets.clear();
+		this.assetIdByPath.clear();
+		this.assetIdByFileSystemId.clear();
+		for (const asset of assets) {
+			this.assets.set(asset.assetId, asset);
+			this.assetIdByPath.set(asset.relativePath, asset.assetId);
+			if (asset.fileSystemId) this.assetIdByFileSystemId.set(asset.fileSystemId, asset.assetId);
+		}
+	}
+
 	async removeAsset(assetId: string): Promise<void> {
 		const asset = this.assets.get(assetId);
 		if (!asset) return;

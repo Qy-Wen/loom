@@ -99,6 +99,24 @@ export class SqliteMetadataStore implements MetadataStore {
 		return rows.map(toAsset);
 	}
 
+	async replaceAssets(assets: Asset[]): Promise<void> {
+		const database = this.requireDatabase();
+		const replace = database.transaction((values: Asset[]) => {
+			database.prepare("DELETE FROM assets").run();
+			const insert = database.prepare(`
+				INSERT INTO assets (
+					asset_id, relative_path, filename, type, size, created_at, modified_at, file_system_id
+				) VALUES (
+					@assetId, @relativePath, @filename, @type, @size, @createdAt, @modifiedAt, @fileSystemId
+				)
+			`);
+			for (const value of values) {
+				insert.run({ ...value, fileSystemId: value.fileSystemId ?? null });
+			}
+		});
+		replace(assets);
+	}
+
 	async removeAsset(assetId: string): Promise<void> {
 		this.requireDatabase().prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
 	}

@@ -13,6 +13,7 @@ export interface MetadataStore {
 	getAssetByPath(relativePath: string): Promise<Asset | undefined>;
 	getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined>;
 	listAssets(): Promise<Asset[]>;
+	replaceAssets(assets: Asset[]): Promise<void>;
 	removeAsset(assetId: string): Promise<void>;
 	getLibraryVolumeId(): Promise<string | undefined>;
 	setLibraryVolumeId(volumeId: string): Promise<void>;
