@@ -1,13 +1,13 @@
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
 import { stat } from "node:fs/promises";
-import { extname, join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import { LocalCore, type LibraryChange, type LibrarySnapshot } from "@loom/core";
 import type { LoomAgentOptions } from "@loom/agent";
-import { app, BrowserWindow, dialog, ipcMain, protocol } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
-import { type AgentEndpoint, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
 const ASSET_SCHEME = "loom-asset";
 
@@ -160,6 +160,80 @@ function registerIpc(): void {
 			: await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		if (result.canceled || !result.filePaths[0]) return null;
 		return localCore.openLibrary(result.filePaths[0]);
+	});
+
+	ipcMain.handle(
+		IPC.showAssetContextMenu,
+		async (event, assetId: string): Promise<AssetContextAction | null> => {
+			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
+			const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+
+			return new Promise<AssetContextAction | null>((resolveAction) => {
+				let resolved = false;
+				const choose = (action: AssetContextAction) => {
+					if (resolved) return;
+					resolved = true;
+					resolveAction(action);
+				};
+				const menu = Menu.buildFromTemplate([
+					{ label: "Rename", click: () => choose("rename") },
+					{ label: "Duplicate", click: () => choose("duplicate") },
+					{ type: "separator" },
+					{ label: "Copy Path", click: () => choose("copy_path") },
+					{ label: "Show in Finder", click: () => choose("reveal") },
+					{ type: "separator" },
+					{ label: "Move to Trash", click: () => choose("trash") },
+				]);
+				menu.popup({
+					window: owner,
+					callback: () => {
+						if (!resolved) resolveAction(null);
+					},
+				});
+			});
+		},
+	);
+
+	ipcMain.handle(IPC.renameAsset, (_event, assetId: string, stem: string) => {
+		return localCore.renameAsset(assetId, stem);
+	});
+
+	ipcMain.handle(IPC.duplicateAsset, (_event, assetId: string) => {
+		return localCore.duplicateAsset(assetId);
+	});
+
+	ipcMain.handle(IPC.copyAssetPath, async (_event, assetId: string): Promise<void> => {
+		const filePath = await localCore.getAssetFilePath(assetId);
+		if (!filePath) throw new Error("Asset not found");
+		clipboard.writeText(filePath);
+	});
+
+	ipcMain.handle(IPC.revealAsset, async (_event, assetId: string): Promise<void> => {
+		const filePath = await localCore.getAssetFilePath(assetId);
+		if (!filePath) throw new Error("Asset not found");
+		shell.showItemInFolder(filePath);
+	});
+
+	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
+		const filePath = await localCore.getAssetFilePath(assetId);
+		if (!filePath) throw new Error("Asset not found");
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const options = {
+			type: "warning" as const,
+			buttons: ["Cancel", "Move to Trash"],
+			defaultId: 0,
+			cancelId: 0,
+			message: `Move “${basename(filePath)}” to the Trash?`,
+			detail: "The file can be recovered from the system Trash.",
+		};
+		const result = owner
+			? await dialog.showMessageBox(owner, options)
+			: await dialog.showMessageBox(options);
+		if (result.response !== 1) return false;
+
+		await shell.trashItem(filePath);
+		await localCore.forgetAsset(assetId);
+		return true;
 	});
 
 	localCore.subscribeLibrary((change: LibraryChange) => {

@@ -246,6 +246,34 @@ body {
 	background: #dde6f7;
 }
 
+.rename-row {
+	cursor: default;
+}
+
+.rename-editor {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+	flex: 1;
+}
+
+.rename-editor input {
+	min-width: 20px;
+	flex: 1;
+	padding: 2px 4px;
+	border: 1px solid #668bc7;
+	border-radius: 3px;
+	outline: 2px solid rgb(102 139 199 / 16%);
+	font: inherit;
+	font-size: 12px;
+}
+
+.rename-editor span {
+	padding-left: 2px;
+	color: #5f6368;
+	font-size: 12px;
+}
+
 .asset-thumbnail {
 	position: relative;
 	display: inline-flex;

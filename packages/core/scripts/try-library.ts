@@ -22,6 +22,15 @@ try {
 		["cover.jpg", "notes/brief.md"],
 	);
 
+	const cover = initial.assets.find((asset) => asset.relativePath === "cover.jpg");
+	assert.ok(cover);
+	const renamed = await core.renameAsset(cover.assetId, "hero");
+	assert.equal(renamed.assetId, cover.assetId);
+	assert.equal(renamed.relativePath, "hero.jpg");
+	const duplicate = await core.duplicateAsset(renamed.assetId);
+	assert.equal(duplicate.relativePath, "hero copy.jpg");
+	assert.notEqual(duplicate.assetId, renamed.assetId);
+
 	const added = new Promise<void>((resolve, reject) => {
 		const timeout = setTimeout(() => reject(new Error("Watcher did not report the new file")), 3_000);
 		const unsubscribe = core.subscribeLibrary((change) => {
@@ -37,8 +46,8 @@ try {
 	await added;
 
 	const final = await core.getLibrarySnapshot();
-	assert.equal(final.assets.length, 3);
-	console.log("library scan + watcher: ok");
+	assert.equal(final.assets.length, 4);
+	console.log("library scan + watcher + file operations: ok");
 } finally {
 	await core.close();
 	await rm(root, { recursive: true, force: true });

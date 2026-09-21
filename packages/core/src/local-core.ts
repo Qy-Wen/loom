@@ -1,4 +1,4 @@
-import type { LibraryChange, LibrarySnapshot } from "./asset.ts";
+import type { Asset, LibraryChange, LibrarySnapshot } from "./asset.ts";
 import { Library } from "./library.ts";
 import { LibraryPaths } from "./library-paths.ts";
 import { InMemoryGraphStore, InMemoryMetadataStore } from "./memory-stores.ts";
@@ -33,6 +33,18 @@ export class LocalCore {
 
 	getAssetFilePath(assetId: string): Promise<string | undefined> {
 		return this.library.getAssetFilePath(assetId);
+	}
+
+	renameAsset(assetId: string, stem: string): Promise<Asset> {
+		return this.library.renameAsset(assetId, stem);
+	}
+
+	duplicateAsset(assetId: string): Promise<Asset> {
+		return this.library.duplicateAsset(assetId);
+	}
+
+	forgetAsset(assetId: string): Promise<void> {
+		return this.library.forgetAsset(assetId);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {
