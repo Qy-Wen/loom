@@ -1,5 +1,5 @@
-import type { Asset } from "./asset.ts";
-import type { AssetRelation, GraphStore, MetadataStore } from "./stores.ts";
+import type { Asset } from "../model/asset.ts";
+import type { AssetRelation, GraphStore, MetadataStore } from "./types.ts";
 
 /** Volatile MetadataStore used by focused tests and explicit dependency injection. */
 export class InMemoryMetadataStore implements MetadataStore {

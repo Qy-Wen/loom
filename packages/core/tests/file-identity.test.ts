@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { fileSystemIdFromDevIno, statAssetFile, statVolumeId } from "../src/file-identity.ts";
+import { fileSystemIdFromDevIno, statAssetFile, statVolumeId } from "../src/library/file-identity.ts";
 
 describe("file identity", () => {
 	it("treats a zero inode as unknown", () => {

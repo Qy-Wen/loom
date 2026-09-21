@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assetTypeFromPath } from "../src/asset.ts";
+import { assetTypeFromPath } from "../src/model/asset.ts";
 
 describe("assetTypeFromPath", () => {
 	it("classifies supported media extensions case-insensitively", () => {

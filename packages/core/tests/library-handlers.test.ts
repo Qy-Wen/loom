@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Asset } from "../src/asset.ts";
 import {
 	diffLibraryAssets,
 	LibraryHandlers,
 	type GraphHandlers,
-} from "../src/library-handlers.ts";
-import { InMemoryMetadataStore } from "../src/memory-stores.ts";
+} from "../src/library/handlers.ts";
+import type { Asset } from "../src/model/asset.ts";
+import { InMemoryMetadataStore } from "../src/stores/memory.ts";
 
 function asset(assetId: string, relativePath: string, fileSystemId = "1:1"): Asset {
 	return {

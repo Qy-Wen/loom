@@ -1,5 +1,5 @@
-import type { Asset } from "./asset.ts";
-import type { LibraryPaths } from "./library-paths.ts";
+import type { Asset } from "../model/asset.ts";
+import type { LibraryPaths } from "../library/paths.ts";
 
 /**
  * Persistence boundary for derived asset metadata.

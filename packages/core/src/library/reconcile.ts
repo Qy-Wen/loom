@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { assetTypeFromPath, type Asset } from "./asset.ts";
+import { assetTypeFromPath, type Asset } from "../model/asset.ts";
 
 export interface ReconcileDiskFile {
 	relativePath: string;

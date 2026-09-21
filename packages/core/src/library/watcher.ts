@@ -1,5 +1,5 @@
 import chokidar, { type FSWatcher } from "chokidar";
-import type { LibraryPaths } from "./library-paths.ts";
+import type { LibraryPaths } from "./paths.ts";
 
 export type LibraryFileEvent =
 	| { type: "upsert"; absolutePath: string }
