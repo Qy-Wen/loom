@@ -1,10 +1,10 @@
-import type { Asset, LibraryChange, LibrarySnapshot } from "./asset.ts";
-import { LibraryHandlers, NoopGraphHandlers } from "./library-handlers.ts";
-import { Library } from "./library.ts";
-import { LibraryPaths } from "./library-paths.ts";
-import { InMemoryGraphStore } from "./memory-stores.ts";
-import { SqliteMetadataStore } from "./sqlite-metadata-store.ts";
-import type { GraphStore, MetadataStore } from "./stores.ts";
+import { Library } from "./library/library.ts";
+import { LibraryHandlers, NoopGraphHandlers } from "./library/handlers.ts";
+import { LibraryPaths } from "./library/paths.ts";
+import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
+import { InMemoryGraphStore } from "./stores/memory.ts";
+import { SqliteMetadataStore } from "./stores/sqlite.ts";
+import type { GraphStore, MetadataStore } from "./stores/types.ts";
 
 export interface LocalCoreOptions {
 	metadataStore?: MetadataStore;

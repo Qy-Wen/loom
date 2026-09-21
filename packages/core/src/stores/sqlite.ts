@@ -1,8 +1,8 @@
 import { mkdir } from "node:fs/promises";
 import Database from "better-sqlite3";
-import type { Asset, AssetType } from "./asset.ts";
-import type { LibraryPaths } from "./library-paths.ts";
-import type { MetadataStore } from "./stores.ts";
+import type { Asset, AssetType } from "../model/asset.ts";
+import type { LibraryPaths } from "../library/paths.ts";
+import type { MetadataStore } from "./types.ts";
 
 interface AssetRow {
 	asset_id: string;

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { Asset } from "../src/asset.ts";
-import { reconcileOpenAssets, type ReconcileDiskFile } from "../src/library-reconcile.ts";
+import { reconcileOpenAssets, type ReconcileDiskFile } from "../src/library/reconcile.ts";
+import type { Asset } from "../src/model/asset.ts";
 
 function asset(assetId: string, relativePath: string, fileSystemId: string): Asset {
 	return {

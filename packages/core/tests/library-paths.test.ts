@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { join, resolve } from "node:path";
-import { LibraryPaths } from "../src/library-paths.ts";
+import { LibraryPaths } from "../src/library/paths.ts";
 
 describe("LibraryPaths", () => {
 	const root = resolve("/tmp/loom-library-paths");

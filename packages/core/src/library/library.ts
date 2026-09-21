@@ -6,12 +6,12 @@ import {
 	type Asset,
 	type LibraryChange,
 	type LibrarySnapshot,
-} from "./asset.ts";
+} from "../model/asset.ts";
 import { statAssetFile, statVolumeId } from "./file-identity.ts";
-import { LibraryHandlers } from "./library-handlers.ts";
-import { LibraryPaths } from "./library-paths.ts";
-import { reconcileOpenAssets, type ReconcileDiskFile } from "./library-reconcile.ts";
-import { LibraryWatcher, type LibraryFileEvent } from "./library-watcher.ts";
+import { LibraryHandlers } from "./handlers.ts";
+import { LibraryPaths } from "./paths.ts";
+import { reconcileOpenAssets, type ReconcileDiskFile } from "./reconcile.ts";
+import { LibraryWatcher, type LibraryFileEvent } from "./watcher.ts";
 
 type LibraryListener = (change: LibraryChange) => void;
 

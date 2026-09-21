@@ -1,5 +1,5 @@
-import type { Asset } from "./asset.ts";
-import type { MetadataStore } from "./stores.ts";
+import type { Asset } from "../model/asset.ts";
+import type { MetadataStore } from "../stores/types.ts";
 
 export type LibrarySituation =
 	| { type: "added"; asset: Asset }
