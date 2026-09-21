@@ -5,15 +5,18 @@ import type { AssetRelation, GraphStore, MetadataStore } from "./stores.ts";
 export class InMemoryMetadataStore implements MetadataStore {
 	private readonly assets = new Map<string, Asset>();
 	private readonly assetIdByPath = new Map<string, string>();
+	private readonly assetIdByFileSystemId = new Map<string, string>();
 
 	async open(): Promise<void> {
 		this.assets.clear();
 		this.assetIdByPath.clear();
+		this.assetIdByFileSystemId.clear();
 	}
 
 	async close(): Promise<void> {
 		this.assets.clear();
 		this.assetIdByPath.clear();
+		this.assetIdByFileSystemId.clear();
 	}
 
 	async upsertAsset(asset: Asset): Promise<void> {
@@ -21,12 +24,20 @@ export class InMemoryMetadataStore implements MetadataStore {
 		if (previous && previous.relativePath !== asset.relativePath) {
 			this.assetIdByPath.delete(previous.relativePath);
 		}
+		if (previous?.fileSystemId && previous.fileSystemId !== asset.fileSystemId) {
+			this.assetIdByFileSystemId.delete(previous.fileSystemId);
+		}
 
 		const replacedId = this.assetIdByPath.get(asset.relativePath);
-		if (replacedId && replacedId !== asset.assetId) this.assets.delete(replacedId);
+		if (replacedId && replacedId !== asset.assetId) {
+			const replaced = this.assets.get(replacedId);
+			this.assets.delete(replacedId);
+			if (replaced?.fileSystemId) this.assetIdByFileSystemId.delete(replaced.fileSystemId);
+		}
 
 		this.assets.set(asset.assetId, asset);
 		this.assetIdByPath.set(asset.relativePath, asset.assetId);
+		if (asset.fileSystemId) this.assetIdByFileSystemId.set(asset.fileSystemId, asset.assetId);
 	}
 
 	async getAsset(assetId: string): Promise<Asset | undefined> {
@@ -35,6 +46,11 @@ export class InMemoryMetadataStore implements MetadataStore {
 
 	async getAssetByPath(relativePath: string): Promise<Asset | undefined> {
 		const assetId = this.assetIdByPath.get(relativePath);
+		return assetId ? this.assets.get(assetId) : undefined;
+	}
+
+	async getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined> {
+		const assetId = this.assetIdByFileSystemId.get(fileSystemId);
 		return assetId ? this.assets.get(assetId) : undefined;
 	}
 
@@ -49,6 +65,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		if (!asset) return;
 		this.assets.delete(assetId);
 		this.assetIdByPath.delete(asset.relativePath);
+		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
 	}
 
 }

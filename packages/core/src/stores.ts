@@ -11,6 +11,7 @@ export interface MetadataStore {
 	upsertAsset(asset: Asset): Promise<void>;
 	getAsset(assetId: string): Promise<Asset | undefined>;
 	getAssetByPath(relativePath: string): Promise<Asset | undefined>;
+	getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined>;
 	listAssets(): Promise<Asset[]>;
 	removeAsset(assetId: string): Promise<void>;
 }
