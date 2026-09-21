@@ -18,6 +18,12 @@ export function fileSystemIdFromDevIno(dev: bigint, ino: bigint): string | null 
 	return `${dev.toString()}:${ino.toString()}`;
 }
 
+/** Volume / device id of a path. Changes when the library is copied to another disk. */
+export async function statVolumeId(absolutePath: string): Promise<string> {
+	const info = await stat(absolutePath, { bigint: true });
+	return info.dev.toString();
+}
+
 export async function statAssetFile(absolutePath: string): Promise<AssetFileInfo> {
 	const info = await stat(absolutePath, { bigint: true });
 	const created = info.birthtimeMs === 0n ? info.ctimeMs : info.birthtimeMs;

@@ -3,7 +3,7 @@ import { access, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises"
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
-import { LocalCore, type LibraryChange } from "../src/index.ts";
+import { LocalCore, LibraryPaths, SqliteMetadataStore, statVolumeId, type LibraryChange } from "../src/index.ts";
 
 function waitForChange(
 	core: LocalCore,
@@ -105,6 +105,43 @@ test("Library keeps the same asset id when a file is moved on disk", async () =>
 		const archived = reopened.assets.find((asset) => asset.relativePath === "archive/hero.jpg");
 		assert.equal(archived?.assetId, cover.assetId);
 		assert.equal(reopened.assets.length, 1);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Library keeps asset ids and refreshes file system ids when the volume changes", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-volume-"));
+	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
+
+	try {
+		await writeFile(join(root, "cover.jpg"), "image fixture");
+		const initial = await core.openLibrary(root);
+		const cover = initial.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.ok(cover?.fileSystemId);
+		await core.close();
+
+		const store = new SqliteMetadataStore();
+		await store.open(new LibraryPaths(root));
+		await store.setLibraryVolumeId("relocated-volume");
+		const stored = await store.getAsset(cover.assetId);
+		assert.ok(stored);
+		await store.upsertAsset({ ...stored, fileSystemId: "9:9" });
+		await store.close();
+
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		const again = reopened.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.equal(again?.assetId, cover.assetId);
+		assert.equal(again?.fileSystemId, cover.fileSystemId);
+		assert.notEqual(again?.fileSystemId, "9:9");
+
+		const check = new SqliteMetadataStore();
+		await check.open(new LibraryPaths(root));
+		assert.equal(await check.getLibraryVolumeId(), await statVolumeId(root));
+		await check.close();
 	} finally {
 		await Promise.all([core.close(), reopenedCore?.close()]);
 		await rm(root, { recursive: true, force: true });

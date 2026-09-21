@@ -202,6 +202,7 @@ path     = 当前文件路径（可变，仅作定位）
 - 打开库或 watcher 收到 add：路径对上就复用；路径变了但 `file_system_id` 对上，当作移动并保留 UUID。
 - unlink 后短延迟再删除：同卷改名/拖动通常是 unlink + add，对上 `file_system_id` 则不新建资产。
 - `file_system_id` 拿不到（FAT 等）或 inode 已被回收：退回路径匹配；hash 校验后置。
+- 打开库时对比已存的卷 id（root 的 `stat.dev`）和当前卷。整库换盘导致卷变了：只按相对路径对齐，刷新全部 `file_system_id`，并记下新卷。
 
 ---
 
