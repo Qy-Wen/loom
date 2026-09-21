@@ -147,3 +147,61 @@ test("Library keeps asset ids and refreshes file system ids when the volume chan
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Library keeps a moved file's id when the old path is reused while closed", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-replace-"));
+	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
+
+	try {
+		await writeFile(join(root, "cover.jpg"), "original");
+		const initial = await core.openLibrary(root);
+		const cover = initial.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.ok(cover);
+		await core.close();
+
+		await mkdir(join(root, "z-archive"));
+		await rename(join(root, "cover.jpg"), join(root, "z-archive", "cover.jpg"));
+		await writeFile(join(root, "cover.jpg"), "replacement");
+
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		const archived = reopened.assets.find((asset) => asset.relativePath === "z-archive/cover.jpg");
+		const replaced = reopened.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.equal(archived?.assetId, cover.assetId);
+		assert.ok(replaced);
+		assert.notEqual(replaced.assetId, cover.assetId);
+		assert.equal(reopened.assets.length, 2);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Library keeps both asset ids when two files are swapped while closed", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-swap-"));
+	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
+
+	try {
+		await writeFile(join(root, "a.jpg"), "aaa");
+		await writeFile(join(root, "b.jpg"), "bbb");
+		const initial = await core.openLibrary(root);
+		const a = initial.assets.find((asset) => asset.relativePath === "a.jpg");
+		const b = initial.assets.find((asset) => asset.relativePath === "b.jpg");
+		assert.ok(a && b);
+		await core.close();
+
+		await rename(join(root, "a.jpg"), join(root, "_tmp.jpg"));
+		await rename(join(root, "b.jpg"), join(root, "a.jpg"));
+		await rename(join(root, "_tmp.jpg"), join(root, "b.jpg"));
+
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		assert.equal(reopened.assets.find((asset) => asset.relativePath === "a.jpg")?.assetId, b.assetId);
+		assert.equal(reopened.assets.find((asset) => asset.relativePath === "b.jpg")?.assetId, a.assetId);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});

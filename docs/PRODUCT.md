@@ -199,7 +199,9 @@ path     = 当前文件路径（可变，仅作定位）
 
 跨平台用 Node `fs.stat` 的 `(dev, ino)` 作为 `file_system_id`（macOS/Linux 是 inode，Windows 是卷序列号 + 64-bit file index）。这是操作系统给文件的身份，不是 Loom 的 UUID。`asset_id` 仍是 UUID；`file_system_id` 只用来判断「还是不是刚才那个文件」。
 
-- 打开库或 watcher 收到 add：路径对上就复用；路径变了但 `file_system_id` 对上，当作移动并保留 UUID。
+- 打开库时先扫完全盘再对账：先按 `file_system_id` 认人，再按相对路径；换卷则只认路径。避免边扫边删导致挪走的文件丢掉 UUID。
+- 识别到增 / 删 / 移 / 更新后走 `LibraryHandlers`：metadata 与图各有处理函数。图（LadybugDB）尚未接入，目前为空实现。
+- watcher 收到 add：路径对上就复用；路径变了但 `file_system_id` 对上，当作移动并保留 UUID。
 - unlink 后短延迟再删除：同卷改名/拖动通常是 unlink + add，对上 `file_system_id` 则不新建资产。
 - `file_system_id` 拿不到（FAT 等）或 inode 已被回收：退回路径匹配；hash 校验后置。
 - 打开库时对比已存的卷 id（root 的 `stat.dev`）和当前卷。整库换盘导致卷变了：只按相对路径对齐，刷新全部 `file_system_id`，并记下新卷。

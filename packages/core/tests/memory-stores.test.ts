@@ -44,6 +44,20 @@ describe("InMemoryMetadataStore", () => {
 		assert.equal(await store.getAssetByFileSystemId("1:99"), undefined);
 	});
 
+	it("replaces the whole asset set in one write", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		await store.upsertAsset({ ...asset("a", "a.jpg"), fileSystemId: "1:1" });
+		await store.upsertAsset({ ...asset("b", "b.jpg"), fileSystemId: "1:2" });
+		await store.replaceAssets([
+			{ ...asset("a", "b.jpg"), fileSystemId: "1:1" },
+			{ ...asset("b", "a.jpg"), fileSystemId: "1:2" },
+		]);
+		assert.equal((await store.getAssetByPath("a.jpg"))?.assetId, "b");
+		assert.equal((await store.getAssetByPath("b.jpg"))?.assetId, "a");
+		assert.equal((await store.getAssetByFileSystemId("1:1"))?.relativePath, "b.jpg");
+	});
+
 	it("stores the library volume id", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
