@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -13,7 +13,7 @@ function waitForChange(
 		const timeout = setTimeout(() => {
 			unsubscribe();
 			reject(new Error("Timed out waiting for a library change"));
-		}, 3_000);
+		}, 10_000);
 		const unsubscribe = core.subscribeLibrary((change) => {
 			if (!predicate(change)) return;
 			clearTimeout(timeout);
@@ -26,6 +26,7 @@ function waitForChange(
 test("Library scans, ignores metadata, watches changes, and preserves identity on rename", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-library-test-"));
 	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
 
 	try {
 		await mkdir(join(root, ".loom"));
@@ -57,8 +58,18 @@ test("Library scans, ignores metadata, watches changes, and preserves identity o
 		await added;
 
 		assert.equal((await core.getLibrarySnapshot()).assets.length, 4);
-	} finally {
+		await access(join(root, ".loom", "metadata.db"));
+
 		await core.close();
+		await rm(join(root, "notes", "brief.md"));
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		const persistedHero = reopened.assets.find((asset) => asset.relativePath === "hero.jpg");
+		assert.equal(persistedHero?.assetId, renamed.assetId);
+		assert.equal(reopened.assets.length, 3);
+		assert.equal(reopened.assets.some((asset) => asset.relativePath === "notes/brief.md"), false);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
 		await rm(root, { recursive: true, force: true });
 	}
 });

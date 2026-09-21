@@ -1,7 +1,8 @@
 import type { Asset, LibraryChange, LibrarySnapshot } from "./asset.ts";
 import { Library } from "./library.ts";
 import { LibraryPaths } from "./library-paths.ts";
-import { InMemoryGraphStore, InMemoryMetadataStore } from "./memory-stores.ts";
+import { InMemoryGraphStore } from "./memory-stores.ts";
+import { SqliteMetadataStore } from "./sqlite-metadata-store.ts";
 import type { GraphStore, MetadataStore } from "./stores.ts";
 
 export interface LocalCoreOptions {
@@ -16,7 +17,7 @@ export class LocalCore {
 	private readonly library: Library;
 
 	constructor(options: LocalCoreOptions = {}) {
-		this.metadataStore = options.metadataStore ?? new InMemoryMetadataStore();
+		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
 		this.graphStore = options.graphStore ?? new InMemoryGraphStore();
 		this.library = new Library(this.metadataStore);
 	}

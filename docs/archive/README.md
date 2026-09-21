@@ -27,3 +27,34 @@
 - runtime endpoint 和 agent id 经类型化 IPC 注入 renderer
 - renderer 使用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`
 - 跑通 `RUN_STARTED → TEXT_MESSAGE_* → RUN_FINISHED`，typecheck / build / 启动通过
+
+---
+
+## ✅ 三层解耦 + 素材库骨架
+
+用内存 Store 跑通「选择文件夹 → 扫描 → 文件树 → 预览 → watcher 实时更新」。
+
+- 新增 `@loom/core`，分离 Renderer / Main / LocalCore；Renderer 不直接访问文件系统或数据库
+- 定义 `MetadataStore` / `GraphStore` 接口及内存实现
+- 实现 Library / LibraryPaths / LibraryWatcher，忽略 `.loom/` 和 `.DS_Store`
+- 原生文件夹选择，扫描素材并使用 UUID 作为 `asset_id`
+- 文件树显示目录层级与素材缩略图，目录默认折叠
+- 中央工作区支持图片、视频、音频、PDF 和常见文本预览
+- 三栏布局：Asset Library / Workbench / Agent 与 Details；分栏可拖动并保存宽度
+- 文件支持原生右键操作：重命名、创建副本、复制路径、Finder 定位、移到废纸篓
+- 组件拆分为 file tree、preview、sidebar、side panel 和 resizable layout
+- `try:library` 覆盖扫描、watcher、重命名、复制与 UUID 保持；typecheck / build 通过
+
+---
+
+## ✅ SQLite MetadataStore
+
+将内存资产索引替换为素材库内的 SQLite 持久化存储。
+
+- 引入 `better-sqlite3`，数据库自动创建在 `<library>/.loom/metadata.db`
+- 实现 `SqliteMetadataStore`：open / close / upsert / get / getByPath / list / remove
+- 建立 `assets` 表、相对路径唯一约束、类型索引与 `user_version` schema 版本
+- 默认 LocalCore 切换到 SQLite；`InMemoryMetadataStore` 继续保留用于轻量测试或注入
+- 打开素材库时以文件系统为事实源：已有路径复用 UUID，新文件建档，失效记录移除
+- 保留 watcher、预览和文件右键操作；显式重命名继续保持原 UUID
+- `try:library` 验证数据库创建、跨 LocalCore 重启 UUID 不变，以及离线删除后的索引同步
