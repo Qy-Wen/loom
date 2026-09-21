@@ -1,23 +1,25 @@
-# Electron UI 设计（UI Design）
+**English** | [简体中文](./UI.zh-CN.md)
 
-> 本文档是 [PRODUCT.md](./PRODUCT.md) UI 部分的展开，记录 Electron 客户端的界面布局与视图设计。
+# Electron UI Design
+
+> This document expands the UI section of [PRODUCT.md](./PRODUCT.md) and records the Electron client's layout and views.
 >
-> PRODUCT.md 只保留大框架，界面细节在此维护。
+> PRODUCT.md keeps only the high-level framework; UI details live here.
 
 ---
 
-## 1. 整体气质
+## 1. Visual direction
 
-**Obsidian + Finder + Lightroom + Cursor**。
+**Obsidian + Finder + Lightroom + Cursor**.
 
-- Obsidian：本地文件 + 自定义属性 + 关系
-- Finder：文件树 / 目录浏览
-- Lightroom：媒体预览 / Gallery / 评分筛选
-- Cursor：常驻 Agent 对话
+- Obsidian: local files, custom properties, and relationships
+- Finder: file tree and directory browsing
+- Lightroom: media preview, Gallery, ratings, and filters
+- Cursor: a persistent Agent conversation
 
 ---
 
-## 2. 主界面布局
+## 2. Main layout
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -26,25 +28,25 @@
 │ Asset Library│                          │ Agent / Details │
 │ Open Folder  │      Preview / Gallery   │                 │
 │              │                          │ CopilotChat     │
-│ File Tree    │                          │ 或属性 / 关系   │
-│              │                          │                 │
+│ File Tree    │                          │ or properties / │
+│              │                          │ relationships   │
 └──────────────┴──────────────────────────┴─────────────────┘
 ```
 
-- **左：Asset Library** — 素材库入口与真实文件层级，保持窄而稳定。
-- **中：Workbench** — 占据最大空间，在 Preview / Gallery / Table / Graph 间切换。Preview 直接展示图片、视频、音频、PDF 与常见文本文件；不支持的格式显示基础信息。
-- **右：Agent / Details** — 默认显示 Agent；按需切到资产属性与关系，避免次要信息永久占位。
-- 左 / 中 / 右之间的分隔条可拖动调整宽度，双击恢复默认宽度；用户调整结果保存在本地。
-- 文件支持原生右键菜单：重命名、创建副本、复制路径、在 Finder 中显示、移到废纸篓。
+- **Left — Asset Library:** entry point for the library and its real filesystem hierarchy; narrow and stable.
+- **Center — Workbench:** the largest area, switching among Preview, Gallery, Table, and Graph. Preview directly displays images, video, audio, PDFs, and common text files; unsupported formats show basic information.
+- **Right — Agent / Details:** Agent by default, with asset properties and relationships available on demand so secondary information does not permanently consume space.
+- Dividers between the three columns are draggable. Double-click restores the default width, and preferences are stored locally.
+- Files have a native context menu for rename, duplicate, copy path, reveal in Finder, and move to Trash.
 
-信息层级保持清晰：左侧回答「有哪些素材」，中间回答「正在看什么」，右侧回答「让 Agent 做什么 / 查看详细信息」。
+The information hierarchy stays clear: the left answers “what assets do I have,” the center answers “what am I looking at,” and the right answers “what should the Agent do / what are the details.”
 
 ---
 
-## 3. 多视图（Views）
+## 3. Views
 
-- **Files View** — 文件树 / 目录浏览
-- **Gallery View** — 缩略图网格，适合图片/视频浏览
-- **Table / Database View** — Obsidian 风格的属性表格，可排序、过滤
-- **Graph View** — 资产关系图可视化
-- **Agent View** — Agent 对话与工作流
+- **Files View:** filesystem tree and directory browsing
+- **Gallery View:** thumbnail grid for images and video
+- **Table / Database View:** Obsidian-style property table with sorting and filtering
+- **Graph View:** visual asset relationship graph
+- **Agent View:** Agent conversation and workflows
