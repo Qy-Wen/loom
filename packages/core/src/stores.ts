@@ -1,6 +1,10 @@
 import type { Asset } from "./asset.ts";
 import type { LibraryPaths } from "./library-paths.ts";
 
+/**
+ * Persistence boundary for derived asset metadata.
+ * `open` switches the store to one library; paths are always library-relative.
+ */
 export interface MetadataStore {
 	open(paths: LibraryPaths): Promise<void>;
 	close(): Promise<void>;
@@ -18,6 +22,7 @@ export interface AssetRelation {
 	type: string;
 }
 
+/** Persistence boundary for relationships keyed by stable asset UUIDs. */
 export interface GraphStore {
 	open(paths: LibraryPaths): Promise<void>;
 	close(): Promise<void>;

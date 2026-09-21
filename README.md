@@ -10,7 +10,7 @@ Local-first AI creative workspace —— 一个把「文件系统作事实源、
 pnpm install
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
 pnpm --filter @loom/agent try:agent   # 冒烟测试：跑通一轮 agent loop
-pnpm --filter @loom/core try:library  # 冒烟测试：扫描素材库并监听文件变化
+pnpm test                            # 全部单元 / 集成测试
 pnpm -r typecheck
 ```
 

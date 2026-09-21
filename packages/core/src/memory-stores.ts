@@ -1,6 +1,7 @@
 import type { Asset } from "./asset.ts";
 import type { AssetRelation, GraphStore, MetadataStore } from "./stores.ts";
 
+/** Volatile MetadataStore used by focused tests and explicit dependency injection. */
 export class InMemoryMetadataStore implements MetadataStore {
 	private readonly assets = new Map<string, Asset>();
 	private readonly assetIdByPath = new Map<string, string>();
@@ -52,6 +53,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 
 }
 
+/** Temporary graph implementation until the persistent graph store lands. */
 export class InMemoryGraphStore implements GraphStore {
 	private readonly relations = new Map<string, AssetRelation>();
 

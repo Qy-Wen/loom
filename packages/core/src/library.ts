@@ -13,6 +13,11 @@ import type { MetadataStore } from "./stores.ts";
 
 type LibraryListener = (change: LibraryChange) => void;
 
+/**
+ * Reconciles the filesystem (source of truth) with a MetadataStore and emits
+ * incremental changes for the UI. Watcher events are serialized through one
+ * queue so add/remove races cannot mutate the store concurrently.
+ */
 export class Library {
 	private paths: LibraryPaths | null = null;
 	private watcher: LibraryWatcher | null = null;
@@ -214,6 +219,7 @@ export class Library {
 	}
 
 	private enqueueFileEvent(event: LibraryFileEvent): void {
+		// chokidar may emit bursts for one user operation; preserve their order.
 		this.updateQueue = this.updateQueue
 			.then(async () => {
 				if (event.type === "error") {

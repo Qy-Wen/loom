@@ -14,6 +14,8 @@ import {
 } from "@loom/agent";
 import { Observable } from "rxjs";
 
+type LoomAgentFactory = (options: LoomAgentOptions) => LoomAgentInstance;
+
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${Date.now()}-${idCounter++}`;
 
@@ -32,11 +34,14 @@ function latestUserText(input: RunAgentInput): string {
 
 export class LoomAgUiAgent extends AbstractAgent {
 	private agentOptions: LoomAgentOptions;
+	private createAgent: LoomAgentFactory;
+	/** One pi-backed conversation per AG-UI thread; clones share this map. */
 	private sessions = new Map<string, LoomAgentInstance>();
 
-	constructor(options: LoomAgentOptions) {
+	constructor(options: LoomAgentOptions, createAgent: LoomAgentFactory = createLoomAgent) {
 		super({ agentId: "loom" });
 		this.agentOptions = options;
+		this.createAgent = createAgent;
 	}
 
 	// CopilotKit's runner clones the registered agent per run; the base clone()
@@ -45,6 +50,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 	override clone(): this {
 		const cloned = super.clone() as this;
 		cloned.agentOptions = this.agentOptions;
+		cloned.createAgent = this.createAgent;
 		cloned.sessions = this.sessions;
 		return cloned;
 	}
@@ -55,7 +61,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 
 			let loom = this.sessions.get(input.threadId);
 			if (!loom) {
-				loom = createLoomAgent(this.agentOptions);
+				loom = this.createAgent(this.agentOptions);
 				this.sessions.set(input.threadId, loom);
 			}
 

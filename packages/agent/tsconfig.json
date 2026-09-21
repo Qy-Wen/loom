@@ -5,5 +5,5 @@
       "#vendor/pi-agent": ["./vendor-pi-agent/src/index.ts"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "vendor-pi-agent/src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "vendor-pi-agent/src/**/*.ts"]
 }

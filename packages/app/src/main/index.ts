@@ -7,6 +7,7 @@ import { LocalCore, type LibraryChange, type LibrarySnapshot } from "@loom/core"
 import type { LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
+import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
 const ASSET_SCHEME = "loom-asset";
@@ -57,34 +58,10 @@ const MIME_TYPES: Record<string, string> = {
 	".webp": "image/webp",
 };
 
-function parseByteRange(value: string | null, size: number): { start: number; end: number } | null {
-	const match = value?.match(/^bytes=(\d*)-(\d*)$/);
-	if (!match) return null;
-
-	let start: number;
-	let end: number;
-	if (match[1]) {
-		start = Number(match[1]);
-		end = match[2] ? Number(match[2]) : size - 1;
-	} else {
-		const suffixLength = Number(match[2]);
-		if (!suffixLength) return null;
-		start = Math.max(0, size - suffixLength);
-		end = size - 1;
-	}
-
-	if (
-		!Number.isSafeInteger(start) ||
-		!Number.isSafeInteger(end) ||
-		start < 0 ||
-		start >= size ||
-		end < start
-	) {
-		return null;
-	}
-	return { start, end: Math.min(end, size - 1) };
-}
-
+/**
+ * Expose preview bytes by asset UUID rather than leaking absolute paths to the
+ * renderer. Range responses are required for seeking in audio/video elements.
+ */
 function registerAssetProtocol(): void {
 	protocol.handle(ASSET_SCHEME, async (request) => {
 		try {

@@ -13,6 +13,7 @@ export function folderSet(snapshot: LibrarySnapshot): Set<string> {
 	return new Set(snapshot.folders);
 }
 
+/** Build a render-only tree from Core's flat, portable relative paths. */
 function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 	const root: FolderNode = { name: "", relativePath: "", folders: new Map(), assets: [] };
 

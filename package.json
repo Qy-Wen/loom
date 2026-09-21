@@ -8,6 +8,7 @@
   },
   "scripts": {
     "typecheck": "pnpm -r typecheck",
+    "test": "pnpm -r test",
     "dev": "pnpm --filter @loom/app dev",
     "vendor:sync": "pnpm --filter @loom/agent vendor:sync"
   },
