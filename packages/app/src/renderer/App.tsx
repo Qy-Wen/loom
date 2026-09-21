@@ -48,6 +48,11 @@ function assetPreviewUrl(asset: Asset): string {
 	return `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`;
 }
 
+function filenameStem(filename: string): string {
+	const extension = extensionOf(filename);
+	return extension ? filename.slice(0, -extension.length) : filename;
+}
+
 const TEXT_EXTENSIONS = new Set([
 	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log", ".md",
 	".py", ".sh", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
@@ -228,13 +233,88 @@ function AssetThumbnail({ asset }: { asset: Asset }): React.JSX.Element {
 	return <span className={`asset-thumbnail asset-badge type-${asset.type}`}>{label}</span>;
 }
 
+interface AssetTreeRowProps {
+	asset: Asset;
+	depth: number;
+	selected: boolean;
+	renaming: boolean;
+	onSelect: () => void;
+	onContextMenu: () => void;
+	onRename: (stem: string) => Promise<void>;
+	onCancelRename: () => void;
+}
+
+function AssetTreeRow({
+	asset,
+	depth,
+	selected,
+	renaming,
+	onSelect,
+	onContextMenu,
+	onRename,
+	onCancelRename,
+}: AssetTreeRowProps): React.JSX.Element {
+	const [stem, setStem] = useState(() => filenameStem(asset.filename));
+	const cancelled = useRef(false);
+
+	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
+
+	if (renaming) {
+		return (
+			<div className={`asset-row rename-row ${selected ? "selected" : ""}`} style={{ paddingLeft: 7 + depth * 14 }}>
+				<AssetThumbnail asset={asset} />
+				<div className="rename-editor">
+					<input
+						autoFocus
+						value={stem}
+						onChange={(event) => setStem(event.target.value)}
+						onFocus={(event) => event.currentTarget.select()}
+						onKeyDown={(event) => {
+							if (event.key === "Enter") event.currentTarget.blur();
+							if (event.key === "Escape") {
+								cancelled.current = true;
+								onCancelRename();
+								event.currentTarget.blur();
+							}
+						}}
+						onBlur={() => {
+							if (!cancelled.current) void onRename(stem);
+						}}
+					/>
+					<span>{extensionOf(asset.filename)}</span>
+				</div>
+			</div>
+		);
+	}
+
+	return (
+		<button
+			className={`asset-row ${selected ? "selected" : ""}`}
+			style={{ paddingLeft: 7 + depth * 14 }}
+			type="button"
+			onClick={onSelect}
+			onContextMenu={(event) => {
+				event.preventDefault();
+				onContextMenu();
+			}}
+		>
+			<AssetThumbnail asset={asset} />
+			<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
+		</button>
+	);
+}
+
 interface FileTreeRowsProps {
 	node: FolderNode;
 	depth?: number;
 	collapsedFolders: Set<string>;
 	selectedAssetId: string | null;
+	renamingAssetId: string | null;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectAsset: (assetId: string) => void;
+	onAssetContextMenu: (asset: Asset) => void;
+	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
+	onCancelRename: () => void;
 }
 
 function FileTreeRows({
@@ -242,8 +322,12 @@ function FileTreeRows({
 	depth = 0,
 	collapsedFolders,
 	selectedAssetId,
+	renamingAssetId,
 	onToggleFolder,
 	onSelectAsset,
+	onAssetContextMenu,
+	onRenameAsset,
+	onCancelRename,
 }: FileTreeRowsProps): React.JSX.Element {
 	const folders = [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
 	const assets = sortAssets(node.assets);
@@ -270,24 +354,29 @@ function FileTreeRows({
 								depth={depth + 1}
 								collapsedFolders={collapsedFolders}
 								selectedAssetId={selectedAssetId}
+								renamingAssetId={renamingAssetId}
 								onToggleFolder={onToggleFolder}
 								onSelectAsset={onSelectAsset}
+								onAssetContextMenu={onAssetContextMenu}
+								onRenameAsset={onRenameAsset}
+								onCancelRename={onCancelRename}
 							/>
 						)}
 					</div>
 				);
 			})}
 			{assets.map((asset) => (
-				<button
-					className={`asset-row ${asset.assetId === selectedAssetId ? "selected" : ""}`}
+				<AssetTreeRow
 					key={asset.assetId}
-					style={{ paddingLeft: 7 + depth * 14 }}
-					type="button"
-					onClick={() => onSelectAsset(asset.assetId)}
-				>
-					<AssetThumbnail asset={asset} />
-					<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
-				</button>
+					asset={asset}
+					depth={depth}
+					selected={asset.assetId === selectedAssetId}
+					renaming={asset.assetId === renamingAssetId}
+					onSelect={() => onSelectAsset(asset.assetId)}
+					onContextMenu={() => onAssetContextMenu(asset)}
+					onRename={(stem) => onRenameAsset(asset, stem)}
+					onCancelRename={onCancelRename}
+				/>
 			))}
 		</>
 	);
@@ -297,6 +386,7 @@ export function App(): React.JSX.Element {
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [sidePanel, setSidePanel] = useState<SidePanel>("agent");
 	const [libraryWidth, setLibraryWidth] = useState(() =>
@@ -346,6 +436,40 @@ export function App(): React.JSX.Element {
 		});
 	}
 
+	async function showAssetContextMenu(asset: Asset): Promise<void> {
+		setSelectedAssetId(asset.assetId);
+		setError(null);
+		try {
+			const action = await window.loom.showAssetContextMenu(asset.assetId);
+			if (action === "rename") {
+				setRenamingAssetId(asset.assetId);
+			} else if (action === "duplicate") {
+				const duplicate = await window.loom.duplicateAsset(asset.assetId);
+				setSelectedAssetId(duplicate.assetId);
+			} else if (action === "copy_path") {
+				await window.loom.copyAssetPath(asset.assetId);
+			} else if (action === "reveal") {
+				await window.loom.revealAsset(asset.assetId);
+			} else if (action === "trash") {
+				const removed = await window.loom.trashAsset(asset.assetId);
+				if (removed) setSelectedAssetId(null);
+			}
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function renameAsset(asset: Asset, stem: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.renameAsset(asset.assetId, stem);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setRenamingAssetId(null);
+		}
+	}
+
 	function beginResize(side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>): void {
 		if (event.button !== 0 || !shellRef.current) return;
 		event.preventDefault();
@@ -386,6 +510,7 @@ export function App(): React.JSX.Element {
 			if (snapshot) {
 				setLibrary(snapshot);
 				setSelectedAssetId(null);
+				setRenamingAssetId(null);
 				setCollapsedFolders(new Set());
 			}
 		} catch (cause) {
@@ -453,8 +578,12 @@ export function App(): React.JSX.Element {
 									node={fileTree}
 									collapsedFolders={collapsedFolders}
 									selectedAssetId={selectedAssetId}
+									renamingAssetId={renamingAssetId}
 									onToggleFolder={toggleFolder}
 									onSelectAsset={setSelectedAssetId}
+									onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
+									onRenameAsset={renameAsset}
+									onCancelRename={() => setRenamingAssetId(null)}
 								/>
 							</div>
 						)}

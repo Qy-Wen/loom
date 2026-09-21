@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { readdir, stat } from "node:fs/promises";
-import { basename, join } from "node:path";
+import { copyFile, readdir, rename, stat } from "node:fs/promises";
+import { basename, dirname, extname, join } from "node:path";
 import {
 	assetTypeFromPath,
 	type Asset,
@@ -71,6 +71,111 @@ export class Library {
 		if (!this.paths) return undefined;
 		const asset = await this.metadataStore.getAsset(assetId);
 		return asset ? this.paths.toAbsolutePath(asset.relativePath) : undefined;
+	}
+
+	async renameAsset(assetId: string, requestedStem: string): Promise<Asset> {
+		const paths = this.requirePaths();
+		const asset = await this.requireAsset(assetId);
+		const stem = requestedStem.trim();
+		if (!stem || stem === "." || stem === ".." || /[\\/\0]/.test(stem)) {
+			throw new Error("Enter a valid file name");
+		}
+
+		const extension = extname(asset.filename);
+		const filename = `${stem}${extension}`;
+		if (filename === asset.filename) return asset;
+
+		const oldPath = paths.toAbsolutePath(asset.relativePath);
+		const parent = dirname(asset.relativePath);
+		const relativePath = parent === "." ? filename : `${parent}/${filename}`;
+		const newPath = paths.toAbsolutePath(relativePath);
+
+		const oldInfo = await stat(oldPath);
+		try {
+			const targetInfo = await stat(newPath);
+			if (targetInfo.dev !== oldInfo.dev || targetInfo.ino !== oldInfo.ino) {
+				throw new Error(`A file named “${filename}” already exists`);
+			}
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
+
+		// Reserve the new path before fs.rename so watcher add/unlink events keep
+		// the same asset id rather than briefly creating a second identity.
+		const reserved: Asset = { ...asset, filename, relativePath };
+		await this.metadataStore.upsertAsset(reserved);
+		try {
+			await rename(oldPath, newPath);
+		} catch (error) {
+			await this.metadataStore.upsertAsset(asset);
+			throw error;
+		}
+
+		const info = await stat(newPath);
+		const renamed: Asset = { ...reserved, size: info.size, modifiedAt: info.mtimeMs };
+		await this.metadataStore.upsertAsset(renamed);
+		this.emit({ type: "upsert", asset: renamed });
+		return renamed;
+	}
+
+	async duplicateAsset(assetId: string): Promise<Asset> {
+		const paths = this.requirePaths();
+		const source = await this.requireAsset(assetId);
+		const sourcePath = paths.toAbsolutePath(source.relativePath);
+		const extension = extname(source.filename);
+		const stem = basename(source.filename, extension);
+		const parent = dirname(source.relativePath);
+
+		let copyNumber = 1;
+		let filename = "";
+		let relativePath = "";
+		let destinationPath = "";
+		while (true) {
+			filename = `${stem} copy${copyNumber === 1 ? "" : ` ${copyNumber}`}${extension}`;
+			relativePath = parent === "." ? filename : `${parent}/${filename}`;
+			destinationPath = paths.toAbsolutePath(relativePath);
+			try {
+				await stat(destinationPath);
+				copyNumber += 1;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code === "ENOENT") break;
+				throw error;
+			}
+		}
+
+		const reserved: Asset = {
+			...source,
+			assetId: randomUUID(),
+			filename,
+			relativePath,
+			createdAt: Date.now(),
+			modifiedAt: Date.now(),
+		};
+		await this.metadataStore.upsertAsset(reserved);
+		try {
+			await copyFile(sourcePath, destinationPath);
+		} catch (error) {
+			await this.metadataStore.removeAsset(reserved.assetId);
+			throw error;
+		}
+
+		const info = await stat(destinationPath);
+		const duplicate: Asset = {
+			...reserved,
+			size: info.size,
+			createdAt: info.birthtimeMs || info.ctimeMs,
+			modifiedAt: info.mtimeMs,
+		};
+		await this.metadataStore.upsertAsset(duplicate);
+		this.emit({ type: "upsert", asset: duplicate });
+		return duplicate;
+	}
+
+	async forgetAsset(assetId: string): Promise<void> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) return;
+		await this.metadataStore.removeAsset(assetId);
+		this.emit({ type: "remove", assetId });
 	}
 
 	async close(): Promise<void> {
@@ -191,6 +296,12 @@ export class Library {
 	private requirePaths(): LibraryPaths {
 		if (!this.paths) throw new Error("No library is open");
 		return this.paths;
+	}
+
+	private async requireAsset(assetId: string): Promise<Asset> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) throw new Error("Asset not found");
+		return asset;
 	}
 
 	private emit(change: LibraryChange): void {
