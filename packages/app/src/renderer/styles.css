@@ -5,48 +5,658 @@ body,
 	margin: 0;
 }
 
+* {
+	box-sizing: border-box;
+}
+
+button {
+	font: inherit;
+}
+
 body {
 	font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-	color: #1a1a1a;
+	color: #202124;
+	background: #f7f7f6;
 }
 
 .app {
 	display: flex;
 	flex-direction: column;
 	height: 100%;
+	min-height: 0;
 }
 
 .topbar {
 	display: flex;
 	align-items: center;
-	flex-shrink: 0;
-	padding: 8px 14px;
-	border-bottom: 1px solid #e5e5e5;
+	flex: 0 0 46px;
+	padding: 0 14px;
+	border-bottom: 1px solid #dededb;
+	background: #fafaf9;
 }
 
 .brand {
-	font-weight: 600;
+	width: 220px;
+	font-weight: 680;
 	letter-spacing: 0.5px;
 }
 
-/* CopilotChat is `height: 100%`; the parent must have a definite height.
-   At @3xl it also zeros its own horizontal padding, so the full-width
-   Electron window needs an inset here or text sits on the window edge. */
-.chat {
-	box-sizing: border-box;
-	flex: 1;
-	min-height: 0;
+.view-switcher {
+	display: flex;
+	align-items: center;
+	gap: 2px;
 	height: 100%;
-	padding: 0 32px;
 }
 
-/*
-  Tailwind prose (used by assistant markdown) sets
-  `padding-inline-start: 0` on the first table column — text hugs the border.
-  Restore cell inset; unlayered so it beats CopilotKit's @layer utilities.
-*/
-.chat .copilotKitAssistantMessage table :is(th, td) {
-	padding: 8px 16px;
+.view-switcher button,
+.panel-tabs button {
+	border: 0;
+	color: #7a7d82;
+	background: transparent;
+	cursor: pointer;
+}
+
+.view-switcher button {
+	position: relative;
+	height: 100%;
+	padding: 0 12px;
+	font-size: 12px;
+}
+
+.view-switcher button.active {
+	color: #202124;
+	font-weight: 600;
+}
+
+.view-switcher button.active::after {
+	position: absolute;
+	right: 10px;
+	bottom: 0;
+	left: 10px;
+	height: 2px;
+	border-radius: 2px;
+	background: #202124;
+	content: "";
+}
+
+.view-switcher button:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+
+.topbar-spacer {
+	flex: 1;
+}
+
+.error-banner {
+	flex: 0 0 auto;
+	padding: 7px 14px;
+	border-bottom: 1px solid #f1b7b7;
+	color: #8d2020;
+	background: #fff0f0;
+	font-size: 13px;
+}
+
+.shell {
+	display: grid;
+	grid-template-columns:
+		var(--library-width) 10px
+		minmax(320px, 1fr) 10px
+		var(--side-width);
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+}
+
+.library-sidebar {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	background: #f3f3f1;
+}
+
+.library-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 14px 12px 6px;
+}
+
+.section-label,
+.file-heading {
+	color: #85888e;
+	font-size: 10px;
+	font-weight: 680;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+}
+
+.library-name {
+	max-width: 145px;
+	overflow: hidden;
+	font-size: 14px;
+	font-weight: 620;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.library-path {
+	overflow: hidden;
+	padding: 0 12px 12px;
+	color: #8b8e93;
+	font-size: 11px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.open-button,
+.primary-button,
+.asset-summary button {
+	border: 1px solid #cacac6;
+	border-radius: 6px;
+	color: #292a2d;
+	background: #fff;
+	cursor: pointer;
+}
+
+.open-button {
+	padding: 5px 8px;
+	font-size: 11px;
+}
+
+.open-button:hover:not(:disabled),
+.asset-summary button:hover,
+.primary-button:hover:not(:disabled) {
+	background: #eeeeeb;
+}
+
+.open-button:disabled,
+.primary-button:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.file-heading {
+	display: flex;
+	justify-content: space-between;
+	padding: 13px 12px 7px;
+	border-top: 1px solid #e1e1de;
+}
+
+.empty {
+	padding: 12px;
+	color: #92959a;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.no-padding {
+	padding: 7px 0 0;
+}
+
+.asset-list {
+	min-height: 0;
+	flex: 1;
+	padding: 0 6px 12px;
+	overflow-y: auto;
+}
+
+.folder-row,
+.asset-row {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	padding: 6px 7px;
+	border: 0;
+	border-radius: 5px;
+	color: inherit;
+	background: transparent;
+	cursor: pointer;
+	text-align: left;
+}
+
+.folder-row:hover,
+.asset-row:hover {
+	background: #e9e9e6;
+}
+
+.folder-row {
+	font-weight: 520;
+}
+
+.folder-chevron {
+	width: 9px;
+	flex: 0 0 auto;
+	color: #7c7f84;
+	font-size: 15px;
+	line-height: 1;
+}
+
+.folder-symbol {
+	width: 18px;
+	flex: 0 0 auto;
+	color: #787c82;
+	font-size: 13px;
+}
+
+.asset-row.selected {
+	background: #dde6f7;
+}
+
+.asset-thumbnail {
+	position: relative;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 30px;
+	height: 30px;
+	flex: 0 0 auto;
+	overflow: hidden;
+	border: 1px solid rgb(0 0 0 / 7%);
+	border-radius: 5px;
+	background: #e3e3df;
+}
+
+.media-thumbnail :is(img, video) {
+	width: 100%;
+	height: 100%;
+	pointer-events: none;
+	object-fit: cover;
+}
+
+.video-thumbnail::after {
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 6px solid rgb(255 255 255 / 90%);
+	filter: drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
+	content: "";
+	transform: translate(-40%, -50%);
+}
+
+.asset-badge {
+	color: #fff;
+	background: #848991;
+	font-size: 8px;
+	font-weight: 750;
+	letter-spacing: -0.02em;
+}
+
+.type-image { background: #9569c7; }
+.type-video { background: #d25f68; }
+.type-audio { background: #da8a3e; font-size: 15px; }
+.type-text { background: #4d8bbf; }
+.type-other { background: #858991; }
+
+.asset-name {
+	overflow: hidden;
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.resize-handle {
+	position: relative;
+	z-index: 2;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+/* The handle keeps a 10px hit area, but visually continues the adjacent
+   panels instead of exposing the shell's slightly darker background. */
+.library-sidebar + .resize-handle {
+	background: linear-gradient(to right, #f3f3f1 0 50%, #fff 50% 100%);
+}
+
+.workbench + .resize-handle {
+	background: #fff;
+}
+
+.resize-handle::after {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 1px;
+	background: #dededb;
+	content: "";
+	transition: background 120ms ease, width 120ms ease;
+}
+
+.resize-handle:hover::after,
+body.resizing-columns .resize-handle::after {
+	width: 2px;
+	background: #7896c8;
+}
+
+body.resizing-columns {
+	cursor: col-resize;
+	user-select: none;
+}
+
+.workbench {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	background: #fff;
+}
+
+.asset-toolbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	flex: 0 0 52px;
+	padding: 0 16px;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.asset-title-group {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 2px;
+}
+
+.asset-title-group strong {
+	overflow: hidden;
+	font-size: 13px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-title-group span {
+	overflow: hidden;
+	color: #8a8d92;
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-summary {
+	display: flex;
+	align-items: center;
+	gap: 7px;
+	flex: 0 0 auto;
+	color: #777a80;
+	font-size: 10px;
+	text-transform: capitalize;
+}
+
+.asset-summary span {
+	padding: 3px 6px;
+	border-radius: 4px;
+	background: #f1f1ef;
+}
+
+.asset-summary button {
+	padding: 3px 7px;
+	font-size: 10px;
+}
+
+.preview-placeholder,
+.welcome {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	gap: 10px;
+	padding: 28px;
+	text-align: center;
+}
+
+.media-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	padding: 24px;
+	overflow: hidden;
+	background:
+		linear-gradient(45deg, #f4f4f2 25%, transparent 25%),
+		linear-gradient(-45deg, #f4f4f2 25%, transparent 25%),
+		linear-gradient(45deg, transparent 75%, #f4f4f2 75%),
+		linear-gradient(-45deg, transparent 75%, #f4f4f2 75%),
+		#fafaf9;
+	background-position: 0 0, 0 8px, 8px -8px, -8px 0;
+	background-size: 16px 16px;
+}
+
+.image-preview img,
+.video-preview video {
+	display: block;
+	max-width: 100%;
+	max-height: 100%;
+	border-radius: 4px;
+	box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
+	object-fit: contain;
+}
+
+.video-preview video {
+	width: 100%;
+	background: #111;
+}
+
+.audio-preview {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	min-height: 0;
+	flex-direction: column;
+	gap: 18px;
+	padding: 32px;
+	background: linear-gradient(145deg, #f7f5fb, #f2f4f8);
+}
+
+.audio-preview strong {
+	max-width: 80%;
+	overflow: hidden;
+	font-size: 14px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.audio-preview audio {
+	width: min(480px, 90%);
+}
+
+.audio-art {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 112px;
+	height: 112px;
+	border-radius: 22px;
+	color: #fff;
+	background: linear-gradient(145deg, #8a6cc3, #546ea7);
+	box-shadow: 0 14px 32px rgb(74 74 120 / 20%);
+	font-size: 44px;
+}
+
+.pdf-preview {
+	width: 100%;
+	height: 100%;
+	flex: 1;
+	min-height: 0;
+	border: 0;
+	background: #eee;
+}
+
+.text-preview {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
+	margin: 0;
+	padding: 22px 26px;
+	overflow: auto;
+	color: #33363a;
+	background: #fbfbfa;
+	font: 12px/1.65 "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+	white-space: pre-wrap;
+	word-break: break-word;
+	tab-size: 2;
+}
+
+.preview-loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	color: #8a8d92;
+	font-size: 12px;
+}
+
+.preview-placeholder span,
+.welcome p {
+	max-width: 430px;
+	margin: 0;
+	color: #85888e;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.preview-icon,
+.welcome-mark {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border: 1px solid #d8d8d4;
+	color: #777b82;
+	background: #f3f3f0;
+	font-weight: 700;
+}
+
+.preview-icon {
+	width: 96px;
+	height: 96px;
+	border-radius: 14px;
+	font-size: 12px;
+}
+
+.welcome-mark {
+	width: 52px;
+	height: 52px;
+	border-radius: 14px;
+	font-size: 20px;
+}
+
+.welcome h1 {
+	margin: 5px 0 0;
+	font-size: 20px;
+	font-weight: 620;
+}
+
+.primary-button {
+	margin-top: 8px;
+	padding: 8px 13px;
+	font-size: 12px;
+}
+
+.side-panel {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	background: #fff;
+}
+
+.panel-tabs {
+	display: flex;
+	gap: 2px;
+	flex: 0 0 42px;
+	padding: 5px 8px 0;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.panel-tabs button {
+	position: relative;
+	padding: 0 10px;
+	font-size: 12px;
+}
+
+.panel-tabs button.active {
+	color: #202124;
+	font-weight: 620;
+}
+
+.panel-tabs button.active::after {
+	position: absolute;
+	right: 8px;
+	bottom: -1px;
+	left: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: #202124;
+	content: "";
+}
+
+.panel-content {
+	display: none;
+	flex: 1;
+	min-height: 0;
+}
+
+.panel-content.active {
+	display: block;
+}
+
+.agent-content {
+	height: 100%;
+	padding: 0 10px;
+}
+
+.agent-content.active {
+	display: block;
+}
+
+.agent-content > * {
+	height: 100%;
+}
+
+.agent-content .copilotKitAssistantMessage table :is(th, td) {
+	padding: 8px 12px;
+}
+
+.details-content {
+	padding: 18px;
+	overflow-y: auto;
+}
+
+.details-content section + section {
+	margin-top: 24px;
+	padding-top: 18px;
+	border-top: 1px solid #e5e5e2;
+}
+
+.properties {
+	display: grid;
+	grid-template-columns: 70px minmax(0, 1fr);
+	gap: 10px;
+	margin: 14px 0 0;
+	font-size: 12px;
+}
+
+.properties dt {
+	color: #888b91;
+}
+
+.properties dd {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .loading {
@@ -55,4 +665,9 @@ body {
 	justify-content: center;
 	height: 100%;
 	color: #888;
+}
+
+@media (max-width: 1000px) {
+	.brand { width: 190px; }
+	.shell { grid-template-columns: var(--library-width) 10px minmax(240px, 1fr) 10px var(--side-width); }
 }

@@ -5,10 +5,10 @@ import { defineConfig } from "electron-vite";
 export default defineConfig({
 	main: {
 		build: {
-			// @loom/agent is a TS-source workspace package: bundle it instead of
-			// externalizing (node can't require its .ts entry point). Real npm deps
+			// Workspace packages expose TypeScript source: bundle them instead of
+			// externalizing (Node cannot load their .ts entry points). Real npm deps
 			// stay external and are required at runtime.
-			externalizeDeps: { exclude: ["@loom/agent"] },
+			externalizeDeps: { exclude: ["@loom/agent", "@loom/core"] },
 			rollupOptions: {
 				input: { index: resolve(__dirname, "src/main/index.ts") },
 			},
@@ -23,6 +23,12 @@ export default defineConfig({
 	},
 	renderer: {
 		root: resolve(__dirname, "src/renderer"),
+		// Keep this off the default 5173 so a second electron-vite app cannot
+		// steal this dev server (that mix-up shows up as esbuild "Invalid loader").
+		server: {
+			port: 5273,
+			strictPort: true,
+		},
 		build: {
 			rollupOptions: {
 				input: { index: resolve(__dirname, "src/renderer/index.html") },

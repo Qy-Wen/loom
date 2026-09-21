@@ -306,7 +306,7 @@ Agent 可以直接：
 
 整体气质：**Obsidian + Finder + Lightroom + Cursor**。
 
-三栏 + 底部 Agent 的布局，提供 Files / Gallery / Table / Graph / Agent 多种视图。
+采用「左侧素材库 + 中央工作区 + 右侧 Agent / Details」布局，提供 Files / Gallery / Table / Graph 等工作视图。
 
 > 具体界面布局、各栏职责与多视图设计，见 [UI.md](./UI.md)。
 
