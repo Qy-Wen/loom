@@ -8,6 +8,7 @@ export type LibraryFileEvent =
 	| { type: "folder_remove"; absolutePath: string }
 	| { type: "error"; error: Error };
 
+/** Converts chokidar callbacks into Loom's small, filesystem-only event set. */
 export class LibraryWatcher {
 	private watcher: FSWatcher | null = null;
 	private readonly paths: LibraryPaths;

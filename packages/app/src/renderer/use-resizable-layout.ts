@@ -15,6 +15,7 @@ const HANDLE_WIDTH = 10;
 
 type ResizeSide = "library" | "side";
 
+/** Owns column drag state and persists the user's preferred sidebar widths. */
 export function useResizableLayout(): {
 	shellRef: React.RefObject<HTMLDivElement | null>;
 	shellStyle: CSSProperties;

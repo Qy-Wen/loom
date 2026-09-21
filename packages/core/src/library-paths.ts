@@ -1,5 +1,10 @@
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 
+/**
+ * Owns all path conversion and containment checks for one portable library.
+ * Core code stores POSIX-style relative paths and resolves absolute paths only
+ * at the filesystem boundary.
+ */
 export class LibraryPaths {
 	readonly root: string;
 	readonly loom: string;
@@ -37,6 +42,7 @@ export class LibraryPaths {
 		return value === ".loom" || value.startsWith(`.loom${sep}`);
 	}
 
+	/** Files that are implementation/OS metadata rather than user assets. */
 	isIgnoredPath(absolutePath: string): boolean {
 		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store";
 	}

@@ -11,6 +11,7 @@ import { useResizableLayout } from "./use-resizable-layout.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
 
+/** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
 	if (change.type === "error") return current;
