@@ -5,31 +5,34 @@
 
 ---
 
-## 第一步：三层解耦 + 库骨架
-
-立起三层架子与库扫描（内存 stub）。
-
-- [x] 三层解耦：Renderer / Main / LocalCore + 类型化 IPC（Renderer 不碰 DB）
-- [x] `MetadataStore` / `GraphStore` 接口，先用内存 stub
-- [x] Library / LibraryPaths / LibraryWatcher（chokidar，忽略 `.loom/`）
-- [x] 原生文件夹选择 → 扫描写入内存 Store → watcher 实时更新
-- [x] React 三栏 UI 骨架（Asset Library / Workbench / Agent 与 Details）
-
-## 第二步：SQLite MetadataStore + 打通主链路
-
-用 better-sqlite3 实现 `MetadataStore`，打通「选文件夹 → 索引 → 列表/预览」。
-
-- [ ] 建表：`assets`、`properties`、`asset_properties`；增删改查（upsert/get/remove/list）
-- [ ] 数据库文件落在库根目录的 `.loom/metadata.db`
-- [ ] 将现有「选择文件夹 → 扫描 → 列表」链路切换到 SQLite，watcher 实时更新
-
-## 第三步：自定义属性 + Table 视图
+## 第一步：自定义属性 + Table 视图
 
 让用户能够为资产维护结构化属性，并以表格方式浏览和筛选。
 
-- [ ] 自定义属性字段的创建、修改与删除
-- [ ] 为资产设置属性值
+- [ ] 建表：`properties`、`asset_properties`
+- [ ] 扩展 MetadataStore：属性字段与属性值的增删改查
+- [ ] Details 面板支持查看和编辑资产属性
 - [ ] Table 视图支持排序与过滤
+
+## 第二步：Hybrid Search
+
+建立统一的资产搜索入口，组合全文、向量和结构化属性过滤。
+
+- [ ] SQLite FTS 全文检索
+- [ ] sqlite-vec 向量检索
+- [ ] Metadata Filter 属性过滤
+- [ ] 融合为统一的 `search_assets` / `hybrid_search` 接口
+- [ ] 建立最小检索评测集
+
+## 第三步：本地资产富化
+
+补齐不依赖 AI 的本地媒体信息，为搜索和后续语义分析打基础。
+
+- [ ] 富化任务状态与版本记录
+- [ ] 图片 EXIF、尺寸与基础信息提取
+- [ ] 音视频 ffprobe：时长、分辨率、编码等
+- [ ] 常见文本内容提取并写入 FTS
+- [ ] 文件变化后只重算失效的富化结果
 
 ---
 
@@ -39,8 +42,7 @@
 
 ## 后续（概述）
 
-- **检索**：FTS 全文检索 + sqlite-vec 向量检索 + 属性过滤，融合成 Hybrid Search
-- **富化**：ffprobe/exif/文本提取（本地），Embedding 与 VLM 语义分析（可选、按需）
+- **AI 富化**：Embedding 与 VLM 语义分析（可选、按需）
 - **前端协议扩展**：AgUiAdapter 补 thinking / 工具富输出（`STATE_DELTA`/`CUSTOM`），见 AGENT.md
 - **工具**：FFmpeg 媒体处理工具集
 - **创作**：直连 ComfyUI 生成图片/视频

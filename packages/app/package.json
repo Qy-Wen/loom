@@ -18,6 +18,7 @@
     "@copilotkit/runtime": "1.73.0",
     "@loom/agent": "workspace:*",
     "@loom/core": "workspace:*",
+    "better-sqlite3": "13.0.3",
     "react": "19.2.0",
     "react-dom": "19.2.0",
     "rxjs": "7.8.1"
