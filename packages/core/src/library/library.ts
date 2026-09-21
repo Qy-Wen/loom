@@ -2,13 +2,12 @@ import { randomUUID } from "node:crypto";
 import { copyFile, readdir, rename, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import {
-	assetTypeFromPath,
 	type Asset,
 	type LibraryChange,
 	type LibrarySnapshot,
 } from "../model/asset.ts";
 import { statAssetFile, statVolumeId } from "./file-identity.ts";
-import { LibraryHandlers } from "./handlers.ts";
+import { diffLibraryAssets, LibraryHandlers } from "./handlers.ts";
 import { LibraryPaths } from "./paths.ts";
 import { reconcileOpenAssets, type ReconcileDiskFile } from "./reconcile.ts";
 import { LibraryWatcher, type LibraryFileEvent } from "./watcher.ts";
@@ -28,7 +27,7 @@ export class Library {
 	private readonly folders = new Set<string>();
 	private readonly listeners = new Set<LibraryListener>();
 	private updateQueue: Promise<void> = Promise.resolve();
-	private readonly pendingRemovals = new Map<string, { asset: Asset; timer: ReturnType<typeof setTimeout> }>();
+	private liveReconcileTimer: ReturnType<typeof setTimeout> | null = null;
 	private readonly handlers: LibraryHandlers;
 
 	constructor(handlers: LibraryHandlers) {
@@ -49,17 +48,7 @@ export class Library {
 		this.paths = new LibraryPaths(rootPath);
 		this.folders.clear();
 		await this.metadata.open(this.paths);
-
-		const currentVolumeId = await statVolumeId(this.paths.root);
-		const trustPath = await this.volumeWasRelocated(currentVolumeId);
-		const diskFiles: ReconcileDiskFile[] = [];
-		await this.collectLibraryFiles(this.paths.root, diskFiles);
-		const previous = await this.metadata.listAssets();
-		await this.handlers.applyOpenReconcile(
-			previous,
-			reconcileOpenAssets(previous, diskFiles, trustPath),
-		);
-		await this.metadata.setLibraryVolumeId(currentVolumeId);
+		await this.syncFromDisk(false);
 
 		const watcher = new LibraryWatcher(this.paths);
 		this.watcher = watcher;
@@ -211,7 +200,10 @@ export class Library {
 	private async stopWatcher(): Promise<void> {
 		const watcher = this.watcher;
 		this.watcher = null;
-		this.clearPendingRemovals();
+		if (this.liveReconcileTimer) {
+			clearTimeout(this.liveReconcileTimer);
+			this.liveReconcileTimer = null;
+		}
 		if (watcher) await watcher.close();
 		await this.updateQueue;
 	}
@@ -253,147 +245,49 @@ export class Library {
 	}
 
 	private enqueueFileEvent(event: LibraryFileEvent): void {
-		// chokidar may emit bursts for one user operation; preserve their order.
-		this.updateQueue = this.updateQueue
-			.then(async () => {
-				if (event.type === "error") {
-					this.emit({ type: "error", message: event.error.message });
-					return;
-				}
-				if (event.type === "upsert") await this.upsertFile(event.absolutePath, true);
-				else if (event.type === "remove") await this.removeFile(event.absolutePath);
-				else if (event.type === "folder_upsert") this.upsertFolder(event.absolutePath);
-				else await this.removeFolder(event.absolutePath);
-			})
-			.catch((error) => {
-				this.emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
-			});
-	}
-
-	private async upsertFile(absolutePath: string, notify: boolean): Promise<void> {
-		const paths = this.requirePaths();
-		if (paths.isIgnoredPath(absolutePath)) return;
-
-		let info;
-		try {
-			info = await statAssetFile(absolutePath);
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
-			throw error;
-		}
-		if (!info.isFile) return;
-
-		const relativePath = paths.toRelativePath(absolutePath);
-		const byPath = await this.metadata.getAssetByPath(relativePath);
-		const byFileId = info.fileSystemId
-			? await this.metadata.getAssetByFileSystemId(info.fileSystemId)
-			: undefined;
-
-		let existing: Asset | undefined;
-		if (byPath && sameFileIdentity(byPath.fileSystemId, info.fileSystemId)) {
-			existing = byPath;
-		} else if (byPath && byPath.fileSystemId && info.fileSystemId && byPath.fileSystemId !== info.fileSystemId) {
-			this.clearPendingRemoval(byPath);
-			await this.commitRemoval(byPath, notify);
-			existing = byFileId && byFileId.assetId !== byPath.assetId ? byFileId : undefined;
-		} else {
-			existing = byFileId ?? byPath;
-		}
-
-		if (existing) this.clearPendingRemoval(existing);
-
-		const asset: Asset = {
-			assetId: existing?.assetId ?? randomUUID(),
-			relativePath,
-			filename: basename(absolutePath),
-			type: assetTypeFromPath(absolutePath),
-			size: info.size,
-			createdAt: info.createdAt,
-			modifiedAt: info.modifiedAt,
-			fileSystemId: info.fileSystemId,
-		};
-		await this.handlers.upsertAsset(asset);
-		if (notify) this.emit({ type: "upsert", asset });
-	}
-
-	private upsertFolder(absolutePath: string): void {
-		const paths = this.requirePaths();
-		if (paths.isIgnoredPath(absolutePath)) return;
-		const relativePath = paths.toRelativePath(absolutePath);
-		if (this.folders.has(relativePath)) return;
-		this.folders.add(relativePath);
-		this.emit({ type: "folder_upsert", relativePath });
-	}
-
-	private async removeFolder(absolutePath: string): Promise<void> {
-		const paths = this.requirePaths();
-		if (paths.isIgnoredPath(absolutePath)) return;
-		const relativePath = paths.toRelativePath(absolutePath);
-		const prefix = `${relativePath}/`;
-		for (const folder of [...this.folders]) {
-			if (folder === relativePath || folder.startsWith(prefix)) this.folders.delete(folder);
-		}
-		for (const asset of await this.metadata.listAssets()) {
-			if (!asset.relativePath.startsWith(prefix)) continue;
-			await this.commitRemoval(asset, true);
-		}
-		this.emit({ type: "folder_remove", relativePath });
-	}
-
-	private async removeFile(absolutePath: string): Promise<void> {
-		const paths = this.requirePaths();
-		if (paths.isIgnoredPath(absolutePath)) return;
-		const relativePath = paths.toRelativePath(absolutePath);
-		const asset = await this.metadata.getAssetByPath(relativePath);
-		if (!asset) return;
-		if (!asset.fileSystemId) {
-			await this.commitRemoval(asset, true);
+		if (event.type === "error") {
+			this.emit({ type: "error", message: event.error.message });
 			return;
 		}
-		this.schedulePendingRemoval(asset);
-	}
-
-	private schedulePendingRemoval(asset: Asset): void {
-		const fileSystemId = asset.fileSystemId;
-		if (!fileSystemId) return;
-		this.clearPendingRemoval(asset);
-		const timer = setTimeout(() => {
+		// Wait for the burst to settle, then reuse the same full-disk match as open.
+		if (this.liveReconcileTimer) clearTimeout(this.liveReconcileTimer);
+		this.liveReconcileTimer = setTimeout(() => {
+			this.liveReconcileTimer = null;
 			this.updateQueue = this.updateQueue
-				.then(async () => {
-					const pending = this.pendingRemovals.get(fileSystemId);
-					if (!pending || pending.asset.assetId !== asset.assetId) return;
-					this.pendingRemovals.delete(fileSystemId);
-					const current = await this.metadata.getAsset(asset.assetId);
-					if (!current || current.relativePath !== asset.relativePath) return;
-					try {
-						await stat(this.requirePaths().toAbsolutePath(current.relativePath));
-					} catch (error) {
-						if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-						await this.commitRemoval(current, true);
-					}
-				})
+				.then(() => this.syncFromDisk(true))
 				.catch((error) => {
 					this.emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
 				});
 		}, REMOVE_GRACE_MS);
-		this.pendingRemovals.set(fileSystemId, { asset, timer });
 	}
 
-	private clearPendingRemoval(asset: Asset): void {
-		if (!asset.fileSystemId) return;
-		const pending = this.pendingRemovals.get(asset.fileSystemId);
-		if (!pending || pending.asset.assetId !== asset.assetId) return;
-		clearTimeout(pending.timer);
-		this.pendingRemovals.delete(asset.fileSystemId);
-	}
+	private async syncFromDisk(notify: boolean): Promise<void> {
+		const paths = this.requirePaths();
+		const previousFolders = new Set(this.folders);
+		this.folders.clear();
+		const diskFiles: ReconcileDiskFile[] = [];
+		await this.collectLibraryFiles(paths.root, diskFiles);
+		const currentVolumeId = await statVolumeId(paths.root);
+		const trustPath = await this.volumeWasRelocated(currentVolumeId);
+		const previous = await this.metadata.listAssets();
+		const next = reconcileOpenAssets(previous, diskFiles, trustPath);
+		await this.handlers.applyOpenReconcile(previous, next);
+		await this.metadata.setLibraryVolumeId(currentVolumeId);
+		if (!notify) return;
 
-	private clearPendingRemovals(): void {
-		for (const pending of this.pendingRemovals.values()) clearTimeout(pending.timer);
-		this.pendingRemovals.clear();
+		for (const situation of diffLibraryAssets(previous, next)) {
+			if (situation.type === "removed") this.emit({ type: "remove", assetId: situation.asset.assetId });
+			else this.emit({ type: "upsert", asset: situation.asset });
+		}
+		for (const folder of previousFolders) {
+			if (!this.folders.has(folder)) this.emit({ type: "folder_remove", relativePath: folder });
+		}
+		for (const folder of this.folders) {
+			if (!previousFolders.has(folder)) this.emit({ type: "folder_upsert", relativePath: folder });
+		}
 	}
 
 	private async commitRemoval(asset: Asset, notify: boolean): Promise<void> {
-		this.clearPendingRemoval(asset);
 		await this.handlers.removeAsset(asset);
 		if (notify) this.emit({ type: "remove", assetId: asset.assetId });
 	}
@@ -412,9 +306,4 @@ export class Library {
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}
-}
-
-function sameFileIdentity(stored: string | null | undefined, next: string | null): boolean {
-	if (!stored || !next) return true;
-	return stored === next;
 }
