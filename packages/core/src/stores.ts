@@ -14,6 +14,8 @@ export interface MetadataStore {
 	getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined>;
 	listAssets(): Promise<Asset[]>;
 	removeAsset(assetId: string): Promise<void>;
+	getLibraryVolumeId(): Promise<string | undefined>;
+	setLibraryVolumeId(volumeId: string): Promise<void>;
 }
 
 export interface AssetRelation {

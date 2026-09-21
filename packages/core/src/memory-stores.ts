@@ -6,17 +6,20 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly assets = new Map<string, Asset>();
 	private readonly assetIdByPath = new Map<string, string>();
 	private readonly assetIdByFileSystemId = new Map<string, string>();
+	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
 		this.assets.clear();
 		this.assetIdByPath.clear();
 		this.assetIdByFileSystemId.clear();
+		this.volumeId = undefined;
 	}
 
 	async close(): Promise<void> {
 		this.assets.clear();
 		this.assetIdByPath.clear();
 		this.assetIdByFileSystemId.clear();
+		this.volumeId = undefined;
 	}
 
 	async upsertAsset(asset: Asset): Promise<void> {
@@ -66,6 +69,14 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.assets.delete(assetId);
 		this.assetIdByPath.delete(asset.relativePath);
 		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
+	}
+
+	async getLibraryVolumeId(): Promise<string | undefined> {
+		return this.volumeId;
+	}
+
+	async setLibraryVolumeId(volumeId: string): Promise<void> {
+		this.volumeId = volumeId;
 	}
 
 }

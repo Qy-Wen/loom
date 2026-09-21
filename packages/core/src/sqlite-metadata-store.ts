@@ -16,7 +16,7 @@ interface AssetRow {
 	file_system_id: string | null;
 }
 
-const SCHEMA_VERSION = 2;
+const VOLUME_ID_KEY = "volume_id";
 
 export class SqliteMetadataStore implements MetadataStore {
 	private database: Database.Database | null = null;
@@ -30,7 +30,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			database.pragma("journal_mode = WAL");
 			database.pragma("foreign_keys = ON");
 			database.pragma("busy_timeout = 5000");
-			this.migrate(database);
+			this.ensureSchema(database);
 			this.database = database;
 		} catch (error) {
 			database.close();
@@ -103,54 +103,44 @@ export class SqliteMetadataStore implements MetadataStore {
 		this.requireDatabase().prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
 	}
 
-	private migrate(database: Database.Database): void {
-		const version = database.pragma("user_version", { simple: true }) as number;
-		if (version > SCHEMA_VERSION) {
-			throw new Error(`metadata.db schema ${version} is newer than supported ${SCHEMA_VERSION}`);
-		}
-		if (version < 1) {
-			database.transaction(() => {
-				database.exec(`
-					CREATE TABLE assets (
-						asset_id TEXT PRIMARY KEY,
-						relative_path TEXT NOT NULL UNIQUE,
-						filename TEXT NOT NULL,
-						type TEXT NOT NULL,
-						size INTEGER NOT NULL,
-						created_at REAL NOT NULL,
-						modified_at REAL NOT NULL,
-						file_system_id TEXT
-					);
-					CREATE INDEX assets_type_idx ON assets(type);
-					CREATE INDEX assets_file_system_id_idx ON assets(file_system_id);
-				`);
-				database.pragma("user_version = 2");
-			})();
-			return;
-		}
-		if (version < 2) {
-			database.transaction(() => {
-				database.exec("ALTER TABLE assets ADD COLUMN file_system_id TEXT");
-				database.exec("CREATE INDEX IF NOT EXISTS assets_file_system_id_idx ON assets(file_system_id)");
-				database.pragma("user_version = 2");
-			})();
-		}
-		renameLegacyFileIdColumn(database);
+	async getLibraryVolumeId(): Promise<string | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT value FROM library_meta WHERE key = ?")
+			.get(VOLUME_ID_KEY) as { value: string } | undefined;
+		return row?.value;
+	}
+
+	async setLibraryVolumeId(volumeId: string): Promise<void> {
+		this.requireDatabase()
+			.prepare("INSERT INTO library_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+			.run(VOLUME_ID_KEY, volumeId);
+	}
+
+	private ensureSchema(database: Database.Database): void {
+		database.exec(`
+			CREATE TABLE IF NOT EXISTS assets (
+				asset_id TEXT PRIMARY KEY,
+				relative_path TEXT NOT NULL UNIQUE,
+				filename TEXT NOT NULL,
+				type TEXT NOT NULL,
+				size INTEGER NOT NULL,
+				created_at REAL NOT NULL,
+				modified_at REAL NOT NULL,
+				file_system_id TEXT
+			);
+			CREATE INDEX IF NOT EXISTS assets_type_idx ON assets(type);
+			CREATE INDEX IF NOT EXISTS assets_file_system_id_idx ON assets(file_system_id);
+			CREATE TABLE IF NOT EXISTS library_meta (
+				key TEXT PRIMARY KEY,
+				value TEXT NOT NULL
+			);
+		`);
 	}
 
 	private requireDatabase(): Database.Database {
 		if (!this.database?.open) throw new Error("Metadata store is not open");
 		return this.database;
 	}
-}
-
-function renameLegacyFileIdColumn(database: Database.Database): void {
-	const columns = database.prepare("PRAGMA table_info(assets)").all() as { name: string }[];
-	const names = new Set(columns.map((column) => column.name));
-	if (!names.has("file_id") || names.has("file_system_id")) return;
-	database.exec("ALTER TABLE assets RENAME COLUMN file_id TO file_system_id");
-	database.exec("DROP INDEX IF EXISTS assets_file_id_idx");
-	database.exec("CREATE INDEX IF NOT EXISTS assets_file_system_id_idx ON assets(file_system_id)");
 }
 
 function toAsset(row: AssetRow): Asset {

@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { fileSystemIdFromDevIno, statAssetFile } from "../src/file-identity.ts";
+import { fileSystemIdFromDevIno, statAssetFile, statVolumeId } from "../src/file-identity.ts";
 
 describe("file identity", () => {
 	it("treats a zero inode as unknown", () => {
@@ -22,6 +22,7 @@ describe("file identity", () => {
 			assert.ok(first.fileSystemId);
 			assert.equal(first.fileSystemId, second.fileSystemId);
 			assert.equal(first.size, 5);
+			assert.equal(await statVolumeId(root), await statVolumeId(path));
 		} finally {
 			await rm(root, { recursive: true, force: true });
 		}

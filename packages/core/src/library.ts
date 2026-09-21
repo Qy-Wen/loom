@@ -7,7 +7,7 @@ import {
 	type LibraryChange,
 	type LibrarySnapshot,
 } from "./asset.ts";
-import { statAssetFile } from "./file-identity.ts";
+import { statAssetFile, statVolumeId } from "./file-identity.ts";
 import { LibraryPaths } from "./library-paths.ts";
 import { LibraryWatcher, type LibraryFileEvent } from "./library-watcher.ts";
 import type { MetadataStore } from "./stores.ts";
@@ -48,10 +48,13 @@ export class Library {
 		const staleAssets = new Map(
 			(await this.metadataStore.listAssets()).map((asset) => [asset.relativePath, asset]),
 		);
-		await this.scanDirectory(this.paths.root, staleAssets);
+		const currentVolumeId = await statVolumeId(this.paths.root);
+		const trustPath = await this.volumeWasRelocated(currentVolumeId);
+		await this.scanDirectory(this.paths.root, staleAssets, trustPath);
 		for (const staleAsset of staleAssets.values()) {
 			await this.commitRemoval(staleAsset, false);
 		}
+		await this.metadataStore.setLibraryVolumeId(currentVolumeId);
 
 		const watcher = new LibraryWatcher(this.paths);
 		this.watcher = watcher;
@@ -208,9 +211,15 @@ export class Library {
 		await this.updateQueue;
 	}
 
+	private async volumeWasRelocated(currentVolumeId: string): Promise<boolean> {
+		const storedVolumeId = await this.metadataStore.getLibraryVolumeId();
+		return storedVolumeId !== undefined && storedVolumeId !== currentVolumeId;
+	}
+
 	private async scanDirectory(
 		directory: string,
 		staleAssets: Map<string, Asset>,
+		trustPath: boolean,
 	): Promise<void> {
 		const paths = this.requirePaths();
 		const entries = await readdir(directory, { withFileTypes: true });
@@ -220,9 +229,9 @@ export class Library {
 			if (paths.isIgnoredPath(absolutePath) || entry.isSymbolicLink()) continue;
 			if (entry.isDirectory()) {
 				this.folders.add(paths.toRelativePath(absolutePath));
-				await this.scanDirectory(absolutePath, staleAssets);
+				await this.scanDirectory(absolutePath, staleAssets, trustPath);
 			} else if (entry.isFile()) {
-				await this.upsertFile(absolutePath, false);
+				await this.upsertFile(absolutePath, false, trustPath);
 				const relativePath = paths.toRelativePath(absolutePath);
 				staleAssets.delete(relativePath);
 				const written = await this.metadataStore.getAssetByPath(relativePath);
@@ -255,7 +264,7 @@ export class Library {
 			});
 	}
 
-	private async upsertFile(absolutePath: string, notify: boolean): Promise<void> {
+	private async upsertFile(absolutePath: string, notify: boolean, trustPath = false): Promise<void> {
 		const paths = this.requirePaths();
 		if (paths.isIgnoredPath(absolutePath)) return;
 
@@ -270,10 +279,14 @@ export class Library {
 
 		const relativePath = paths.toRelativePath(absolutePath);
 		const byPath = await this.metadataStore.getAssetByPath(relativePath);
-		const byFileId = info.fileSystemId ? await this.metadataStore.getAssetByFileSystemId(info.fileSystemId) : undefined;
+		const byFileId = !trustPath && info.fileSystemId
+			? await this.metadataStore.getAssetByFileSystemId(info.fileSystemId)
+			: undefined;
 
 		let existing: Asset | undefined;
-		if (byPath && sameFileIdentity(byPath.fileSystemId, info.fileSystemId)) {
+		if (trustPath) {
+			existing = byPath;
+		} else if (byPath && sameFileIdentity(byPath.fileSystemId, info.fileSystemId)) {
 			existing = byPath;
 		} else if (byPath && byPath.fileSystemId && info.fileSystemId && byPath.fileSystemId !== info.fileSystemId) {
 			this.clearPendingRemoval(byPath);

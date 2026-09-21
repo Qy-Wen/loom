@@ -44,6 +44,14 @@ describe("InMemoryMetadataStore", () => {
 		assert.equal(await store.getAssetByFileSystemId("1:99"), undefined);
 	});
 
+	it("stores the library volume id", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		assert.equal(await store.getLibraryVolumeId(), undefined);
+		await store.setLibraryVolumeId("1");
+		assert.equal(await store.getLibraryVolumeId(), "1");
+	});
+
 	it("gives a path to the most recently upserted asset", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
