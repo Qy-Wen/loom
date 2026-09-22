@@ -6,21 +6,28 @@
  * the vendored pi agent. If pi is ever replaced, only the adapter changes.
  */
 
+export interface LoomToolResult<TDetails = unknown> {
+	/** Concise text returned to the model. */
+	content: string;
+	/** Structured UI payload; never injected into the model context. */
+	details?: TDetails;
+}
+
 /** A tool the agent can call. Loom's own shape, kept minimal. */
-export interface LoomTool<TArgs = unknown> {
+export interface LoomTool<TArgs = unknown, TDetails = unknown> {
 	name: string;
 	description: string;
-	/** JSON-schema-ish parameter definition (passed through to the underlying engine). */
+	/** TypeBox-compatible JSON schema passed through to the underlying engine. */
 	parameters: unknown;
-	execute: (args: TArgs) => Promise<string> | string;
+	execute: (args: TArgs) => Promise<string | LoomToolResult<TDetails>> | string | LoomToolResult<TDetails>;
 }
 
 /** Events Loom surfaces to callers. A deliberately small, engine-agnostic subset. */
 export type LoomAgentEvent =
 	| { type: "agent_start" }
 	| { type: "text"; delta: string }
-	| { type: "tool_start"; name: string; args: unknown }
-	| { type: "tool_end"; name: string; result: unknown }
+	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
+	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "agent_end" };
 
 export interface LoomAgentOptions {

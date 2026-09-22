@@ -10,6 +10,16 @@ import type {
 	PropertyType,
 	PropertyValue,
 } from "./model/property.ts";
+import {
+	toSearchItem,
+	type AssetDetailResult,
+	type AssetPropertyFilter,
+	type AssetPropertyView,
+	type AssetSearchItem,
+	type AssetSearchQuery,
+	type AssetSearchResult,
+} from "./model/retrieval.ts";
+import { matchesPropertyFilters } from "./retrieval/filter.ts";
 import { InMemoryGraphStore } from "./stores/memory.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import type { GraphStore, MetadataStore } from "./stores/types.ts";
@@ -104,6 +114,76 @@ export class LocalCore {
 
 	removeAssetProperty(assetId: string, propertyId: string): Promise<void> {
 		return this.metadataStore.removeAssetProperty(assetId, propertyId);
+	}
+
+	async searchAssets(query: AssetSearchQuery = {}): Promise<AssetSearchResult> {
+		const [assets, definitions, values] = await Promise.all([
+			this.metadataStore.listAssets(),
+			this.metadataStore.listProperties(),
+			this.metadataStore.listAllAssetProperties(),
+		]);
+		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
+		const definitionByName = new Map(
+			definitions.map((property) => [property.name.trim().toLowerCase(), property]),
+		);
+		const propertiesByAsset = new Map<string, AssetPropertyView[]>();
+		for (const value of values) {
+			const definition = definitionsById.get(value.propertyId);
+			if (!definition) continue;
+			const list = propertiesByAsset.get(value.assetId) ?? [];
+			list.push({
+				propertyId: definition.propertyId,
+				name: definition.name,
+				type: definition.type,
+				value: value.value,
+			});
+			propertiesByAsset.set(value.assetId, list);
+		}
+
+		const textQuery = query.query?.trim().toLowerCase();
+		const filters = query.properties ?? [];
+		const matches: AssetSearchItem[] = [];
+		for (const asset of assets) {
+			if (query.type && asset.type !== query.type) continue;
+			const properties = propertiesByAsset.get(asset.assetId) ?? [];
+			if (textQuery) {
+				const searchable = [asset.filename, asset.relativePath, ...properties.map((item) => String(item.value))];
+				if (!searchable.some((value) => value.toLowerCase().includes(textQuery))) continue;
+			}
+			if (!matchesPropertyFilters(properties, filters, definitionByName)) continue;
+			matches.push(toSearchItem(asset, properties));
+		}
+
+		const total = matches.length;
+		const limit = Math.min(100, Math.max(1, Math.trunc(query.limit ?? 20)));
+		return { kind: "asset_list", assets: matches.slice(0, limit), total };
+	}
+
+	async inspectAsset(assetId: string): Promise<AssetDetailResult> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) throw new Error("Asset not found");
+		const [definitions, values] = await Promise.all([
+			this.metadataStore.listProperties(),
+			this.metadataStore.listAssetProperties(assetId),
+		]);
+		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
+		const properties: AssetPropertyView[] = [];
+		for (const value of values) {
+			const definition = definitionsById.get(value.propertyId);
+			if (!definition) continue;
+			properties.push({
+				propertyId: definition.propertyId,
+				name: definition.name,
+				type: definition.type,
+				value: value.value,
+			});
+		}
+		return {
+			kind: "asset_detail",
+			...toSearchItem(asset, properties),
+			createdAt: asset.createdAt,
+			previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
+		};
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {

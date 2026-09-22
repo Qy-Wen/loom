@@ -218,8 +218,8 @@ Main 进程（Local Core）
 |---|---|
 | `agent_start` | `RUN_STARTED` |
 | `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
-| `tool_start` | `TOOL_CALL_START` (+ `TOOL_CALL_ARGS`) |
-| `tool_end` | `TOOL_CALL_END` |
+| `tool_start` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，保留 pi 的稳定 `toolCallId` |
+| `tool_end` | `TOOL_CALL_END` + `TOOL_CALL_RESULT`；结构化 `details` 另发 `CUSTOM loom.tool_result` |
 | `agent_end` | `RUN_FINISHED` |
 
 ### 5.3 两处 v1 不做、但架构留好位置
@@ -234,10 +234,10 @@ Main 进程（Local Core）
 
 **b) 工具富输出**
 
-- pi 的 `AgentToolResult` 天然分两条通道：`content`（文字/图，给模型看）与 `details`（结构化数据，供 UI 渲染）。
-- 未来：`hybrid_search` 结果集、`generate_image` 产物等 `details` 走 AG-UI `STATE_DELTA`（前端画廊面板订阅）；工具进度（ffmpeg/ComfyUI）走 `CUSTOM`。
-- `details` 的统一 schema（按 `kind` 分类，如 `asset_list` / `generated`）等第一个工具（`hybrid_search`）落地时再定。
-- 留位：v1 忽略 `details`、仅用 `content` 出纯文本；adapter 对 `tool_start` / `tool_end` 保留处理入口。
+- pi 的 `AgentToolResult` 天然分两条通道：`content`（给模型看的文字）与 `details`（供 UI 渲染的结构化数据）。
+- Loom 现在保留两条通道：文字映射为 `TOOL_CALL_RESULT`，结构化 details 发出 `CUSTOM loom.tool_result`。
+- `search_assets` 与 `inspect_asset` 分别使用 `asset_list` 和 `asset_detail` 数据。当前聊天壳负责传输，后续工作台渲染器会将其显示为可交互资产卡片。
+- FFmpeg / ComfyUI 的进度以后可继续增加其他 `CUSTOM` 事件。
 
 ---
 
@@ -248,4 +248,4 @@ Main 进程（Local Core）
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务只依赖 `packages/agent/src/types.ts`，`pi-adapter.ts`（通过 `#vendor/pi-agent`）是唯一 vendor 入口。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`AgUiAdapter` 把 `LoomAgentEvent` 翻成 AG-UI，pi 协议不外泄。
-- **v1 范围**：先跑通「问→答→工具」主链路；thinking 映射与工具富输出（`STATE_DELTA`/`CUSTOM`）暂不做，但 adapter 均预留占位 `case`。
+- **当前范围**：「问→答→工具」主链路已完成；资产工具已经保留稳定调用 ID 和结构化结果。thinking 映射与富结果交互渲染暂时后置，并保留明确扩展点。

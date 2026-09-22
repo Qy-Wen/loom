@@ -31,9 +31,10 @@ function toPiTool(tool: LoomTool): AgentTool {
 		parameters: (tool.parameters ?? Type.Object({})) as never,
 		execute: async (_toolCallId, params) => {
 			const output = await tool.execute(params as never);
+			const result = typeof output === "string" ? { content: output } : output;
 			return {
-				content: [{ type: "text", text: output }],
-				details: { output },
+				content: [{ type: "text", text: result.content }],
+				details: result.details,
 			};
 		},
 	};
@@ -85,11 +86,29 @@ class PiAgentAdapter implements LoomAgent {
 				break;
 			}
 			case "tool_execution_start":
-				this.emit({ type: "tool_start", name: event.toolName, args: event.args });
+				this.emit({
+					type: "tool_start",
+					toolCallId: event.toolCallId,
+					name: event.toolName,
+					args: event.args,
+				});
 				break;
-			case "tool_execution_end":
-				this.emit({ type: "tool_end", name: event.toolName, result: event.result });
+			case "tool_execution_end": {
+				const text = Array.isArray(event.result?.content)
+					? event.result.content
+						.filter((part: { type?: string }) => part.type === "text")
+						.map((part: { text?: string }) => part.text ?? "")
+						.join("\n")
+					: String(event.result ?? "");
+				this.emit({
+					type: "tool_end",
+					toolCallId: event.toolCallId,
+					name: event.toolName,
+					result: { content: text, details: event.result?.details },
+					isError: event.isError,
+				});
 				break;
+			}
 			default:
 				// Other pi events (turn_*, message_start/end, tool_execution_update)
 				// are not surfaced by Loom's minimal event set yet.
