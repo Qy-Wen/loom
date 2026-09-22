@@ -13,6 +13,7 @@ import {
 import type { LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
+import { createAssetTools } from "./asset-tools.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
@@ -25,12 +26,15 @@ protocol.registerSchemesAsPrivileged([
 	},
 ]);
 
-const AGENT_OPTIONS: LoomAgentOptions = {
-	systemPrompt: "You are Loom, a helpful assistant for a creative asset workspace.",
-	model: { provider: "deepseek", model: "deepseek-v4-flash" },
-};
-
 const localCore = new LocalCore();
+const AGENT_OPTIONS: LoomAgentOptions = {
+	systemPrompt:
+		"You are Loom, an assistant for a local creative asset workspace. " +
+		"Use search_assets to find real assets and inspect_asset before making claims about one asset. " +
+		"Refer to assets by assetId or relative path and never invent or request absolute filesystem paths.",
+	model: { provider: "deepseek", model: "deepseek-v4-flash" },
+	tools: createAssetTools(localCore),
+};
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
 

@@ -76,12 +76,47 @@ describe("LoomAgUiAgent", () => {
 		assert.equal((events[3] as unknown as { delta: string }).delta, "world");
 	});
 
+	it("keeps repeated same-name tool calls separated by their stable IDs", async () => {
+		const fake = new FakeLoomAgent([
+			{ type: "agent_start" },
+			{ type: "tool_start", toolCallId: "call-a", name: "search_assets", args: { query: "a" } },
+			{ type: "tool_start", toolCallId: "call-b", name: "search_assets", args: { query: "b" } },
+			{
+				type: "tool_end",
+				toolCallId: "call-b",
+				name: "search_assets",
+				result: { content: "b" },
+				isError: false,
+			},
+			{
+				type: "tool_end",
+				toolCallId: "call-a",
+				name: "search_assets",
+				result: { content: "a" },
+				isError: false,
+			},
+			{ type: "agent_end" },
+		]);
+		const adapter = new LoomAgUiAgent(OPTIONS, () => fake);
+		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
+		const ids = events
+			.filter((event) => event.type === EventType.TOOL_CALL_START || event.type === EventType.TOOL_CALL_END)
+			.map((event) => (event as unknown as { toolCallId: string }).toolCallId);
+		assert.deepEqual(ids, ["call-a", "call-b", "call-b", "call-a"]);
+	});
+
 	it("maps tool calls and reuses one Loom conversation per thread", async () => {
 		let factoryCalls = 0;
 		const fake = new FakeLoomAgent([
 			{ type: "agent_start" },
-			{ type: "tool_start", name: "search_assets", args: { query: "sunset" } },
-			{ type: "tool_end", name: "search_assets", result: [] },
+			{ type: "tool_start", toolCallId: "call-1", name: "search_assets", args: { query: "sunset" } },
+			{
+				type: "tool_end",
+				toolCallId: "call-1",
+				name: "search_assets",
+				result: { content: "found", details: { kind: "asset_list", assets: [] } },
+				isError: false,
+			},
 			{ type: "agent_end" },
 		]);
 		const adapter = new LoomAgUiAgent(OPTIONS, () => {
@@ -99,8 +134,16 @@ describe("LoomAgUiAgent", () => {
 			EventType.TOOL_CALL_START,
 			EventType.TOOL_CALL_ARGS,
 			EventType.TOOL_CALL_END,
+			EventType.TOOL_CALL_RESULT,
+			EventType.CUSTOM,
 			EventType.RUN_FINISHED,
 		]);
+		assert.equal((first[1] as unknown as { toolCallId: string }).toolCallId, "call-1");
 		assert.equal((first[2] as unknown as { delta: string }).delta, '{"query":"sunset"}');
+		assert.equal((first[4] as unknown as { content: string }).content, "found");
+		assert.deepEqual(
+			(first[5] as unknown as { value: { details: unknown } }).value.details,
+			{ kind: "asset_list", assets: [] },
+		);
 	});
 });

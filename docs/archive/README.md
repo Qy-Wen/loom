@@ -74,3 +74,16 @@ Added typed, persistent user properties and a structured asset-table workspace.
 - Added custom-property creation, editing, clearing, and deletion to the Details panel
 - Enabled the Table view with dynamic property columns, typed sorting, text filtering, and row selection
 - Added tests for both in-memory and SQLite stores, persistence across reopen, cascading cleanup, non-destructive reconciliation, and typed table values
+
+---
+
+## ✅ Agent asset retrieval tools
+
+Connected the live local asset library to the Agent through safe, structured tools.
+
+- Added stable pi `toolCallId` propagation through Loom events and AG-UI, including repeated same-name calls
+- Added `search_assets` for filename/path text, asset type, and AND-combined custom-property filters
+- Added `inspect_asset` for one asset's metadata, custom properties, and renderer-safe preview reference
+- Registered both tools in Electron Main through `@loom/agent`; absolute filesystem paths never enter model or UI results
+- Preserved model text and structured `asset_list` / `asset_detail` channels through `TOOL_CALL_RESULT` and `CUSTOM loom.tool_result`
+- Added retrieval, structured-result, invalid-argument, repeated-tool-call, and path-boundary tests

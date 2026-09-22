@@ -68,9 +68,6 @@ export class LoomAgUiAgent extends AbstractAgent {
 			// One assistant text message per run; open lazily on first text delta.
 			const messageId = nextId("msg");
 			let textOpen = false;
-			// Map tool invocations to AG-UI tool-call ids.
-			const toolCallIds = new Map<string, string>();
-
 			const openText = () => {
 				if (textOpen) return;
 				textOpen = true;
@@ -107,30 +104,43 @@ export class LoomAgUiAgent extends AbstractAgent {
 
 					case "tool_start": {
 						closeText();
-						const toolCallId = nextId("tool");
-						toolCallIds.set(event.name, toolCallId);
 						emit({
 							type: EventType.TOOL_CALL_START,
-							toolCallId,
+							toolCallId: event.toolCallId,
 							toolCallName: event.name,
 						} as BaseEvent);
 						emit({
 							type: EventType.TOOL_CALL_ARGS,
-							toolCallId,
+							toolCallId: event.toolCallId,
 							delta: JSON.stringify(event.args ?? {}),
 						} as BaseEvent);
 						break;
 					}
 
 					case "tool_end": {
-						const toolCallId = toolCallIds.get(event.name);
-						if (toolCallId) {
+						emit({
+							type: EventType.TOOL_CALL_END,
+							toolCallId: event.toolCallId,
+						} as BaseEvent);
+						emit({
+							type: EventType.TOOL_CALL_RESULT,
+							messageId: nextId("tool-result"),
+							toolCallId: event.toolCallId,
+							content: event.result.content,
+							role: "tool",
+						} as BaseEvent);
+						if (event.result.details !== undefined) {
 							emit({
-								type: EventType.TOOL_CALL_END,
-								toolCallId,
+								type: EventType.CUSTOM,
+								name: "loom.tool_result",
+								value: {
+									toolCallId: event.toolCallId,
+									toolName: event.name,
+									isError: event.isError,
+									details: event.result.details,
+								},
 							} as BaseEvent);
 						}
-						// v1: `details` rich output ignored (see AGENT.md §5.3b).
 						break;
 					}
 

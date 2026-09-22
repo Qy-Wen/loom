@@ -74,3 +74,16 @@
 - Details 面板支持创建、编辑、清空和删除自定义属性
 - 启用 Table 视图：动态属性列、按真实类型排序、文本过滤和行选择
 - 测试覆盖内存与 SQLite Store、跨重启持久化、级联清理、非破坏性 reconcile 和 Table 类型排序
+
+---
+
+## ✅ Agent 资产检索工具
+
+通过安全、结构化工具将真实本地素材库接入 Agent。
+
+- 将 pi 的稳定 `toolCallId` 贯穿 Loom 事件与 AG-UI，支持同名工具重复调用
+- 增加 `search_assets`：文件名/路径文本、资产类型与 AND 组合自定义属性过滤
+- 增加 `inspect_asset`：单个资产的元数据、自定义属性与 renderer 安全预览引用
+- 在 Electron Main 通过 `@loom/agent` 注册两个工具；模型和 UI 结果都不包含绝对文件系统路径
+- 通过 `TOOL_CALL_RESULT` 与 `CUSTOM loom.tool_result` 同时保留模型文字和 `asset_list` / `asset_detail` 结构化通道
+- 测试覆盖检索、结构化结果、非法参数、同名重复工具调用和路径安全边界

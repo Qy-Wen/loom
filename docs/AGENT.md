@@ -218,8 +218,8 @@ AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into 
 |---|---|
 | `agent_start` | `RUN_STARTED` |
 | `text` delta | `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` |
-| `tool_start` | `TOOL_CALL_START` and `TOOL_CALL_ARGS` |
-| `tool_end` | `TOOL_CALL_END` |
+| `tool_start` | `TOOL_CALL_START` and `TOOL_CALL_ARGS`, preserving pi's stable `toolCallId` |
+| `tool_end` | `TOOL_CALL_END` and `TOOL_CALL_RESULT`; structured `details` also emits `CUSTOM loom.tool_result` |
 | `agent_end` | `RUN_FINISHED` |
 
 ### 5.3 Deferred v1 capabilities with preserved extension points
@@ -234,10 +234,10 @@ Two capabilities are intentionally excluded from v1, but AgUiAdapter retains cle
 
 **b. Rich tool output**
 
-- Pi's `AgentToolResult` naturally has two channels: `content` (text/images for the model) and `details` (structured data for UI rendering).
-- Later, `hybrid_search` result sets and generated assets can send `details` through AG-UI `STATE_DELTA`; FFmpeg and ComfyUI progress can use `CUSTOM`.
-- Define a shared `details` schema by `kind`, such as `asset_list` or `generated`, when the first tool requiring it is implemented.
-- v1 ignores `details` and returns text only, while retaining `tool_start` and `tool_end` handling points.
+- Pi's `AgentToolResult` naturally has two channels: `content` (text for the model) and `details` (structured data for UI rendering).
+- Loom now preserves both channels: text maps to `TOOL_CALL_RESULT`, while structured details emit `CUSTOM loom.tool_result`.
+- `search_assets` and `inspect_asset` use `asset_list` and `asset_detail` detail payloads. The current chat shell transports them; a later workbench renderer will display them as interactive asset cards.
+- FFmpeg and ComfyUI progress can use additional `CUSTOM` events later.
 
 ---
 
@@ -248,4 +248,4 @@ Two capabilities are intentionally excluded from v1, but AgUiAdapter retains cle
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code depends on `packages/agent/src/types.ts`; `pi-adapter.ts` is the sole vendor boundary through `#vendor/pi-agent`.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; AgUiAdapter translates LoomAgentEvent without leaking pi's protocol.
-- **v1 scope:** complete question → answer → tool flow first. Thinking and rich tool output remain deferred behind explicit extension points.
+- **Current scope:** the question → answer → tool flow is complete; asset tools now preserve stable call IDs and structured result payloads. Thinking and interactive rich-result rendering remain deferred behind explicit extension points.

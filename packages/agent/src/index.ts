@@ -3,5 +3,6 @@ export type {
 	LoomAgentEvent,
 	LoomAgentOptions,
 	LoomTool,
+	LoomToolResult,
 } from "./types.ts";
 export { createLoomAgent } from "./pi-adapter.ts";
