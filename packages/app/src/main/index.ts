@@ -10,7 +10,7 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
-import type { LoomAgentOptions } from "@loom/agent";
+import { createWorkspaceTools, type LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
@@ -31,10 +31,11 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const localCore = new LocalCore();
+const workspaceTools = createWorkspaceTools();
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
 	model: { provider: "deepseek", model: "deepseek-v4-flash" },
-	tools: [...createAssetTools(localCore), ...createFfmpegTools(localCore)],
+	tools: [...workspaceTools.tools, ...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
 let mcpHost: McpHost | null = null;
 let agentServer: AgentServer | null = null;
@@ -149,6 +150,7 @@ function registerIpc(): void {
 			: await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		if (result.canceled || !result.filePaths[0]) return null;
 		const snapshot = await localCore.openLibrary(result.filePaths[0]);
+		if (snapshot.rootPath) workspaceTools.setCwd(snapshot.rootPath);
 		agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
 		agentServer?.resetSessions();
 		return snapshot;

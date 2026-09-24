@@ -6,7 +6,7 @@ describe("systemPromptForLibrary", () => {
 	it("names the open asset library as the working directory", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
 		assert.match(prompt, /working directory, is D:\\library/);
-		assert.match(prompt, /not the application directory/);
+		assert.match(prompt, /read, edit, write, and bash/);
 	});
 
 	it("refuses to invent a directory when no library is open", () => {

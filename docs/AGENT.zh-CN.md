@@ -9,7 +9,7 @@
 
 ## 1. 目标与定位
 
-- Loom 的 Agent 是**创作资产 Agent**，不是编码 Agent：工具是 `search_assets` / `hybrid_search` / `ffmpeg.*` / `comfyui.*` / `create_relationship` 等，而非 read/edit/bash。
+- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。路径 jail 和进程沙箱以后再加。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。
 
@@ -144,19 +144,16 @@ packages/agent/src/
 
 约束落地：
 
-1. **单一入口**：只有 `pi-adapter.ts` 允许 `import ... from "#vendor/pi-agent"`。（后续可用 ESLint `no-restricted-imports` 强制。）
+1. **Vendor 边界**：只有 `pi-adapter.ts` 和 `pi-tools.ts` 允许 `import ... from "#vendor/pi-agent"`。（后续可用 ESLint `no-restricted-imports` 强制。）
 2. **接口归 Loom**：`types.ts` 定义 `LoomAgent`，adapter 把它翻译成 pi 的 `Agent` API。将来换掉 pi，只改 adapter，上层不动。
 3. **引用方式**：用 node 原生的 `imports` 字段（`package.json` 里 `"#vendor/pi-agent": "./vendor-pi-agent/src/index.ts"`）+ tsconfig `paths` 同名映射。选 `#` subpath imports 而非 TS 路径别名，是因为前者 typecheck 与运行时都认，无需打包步骤。
 
-### 把编码 Agent 改造成创作 Agent（无需改上游源码）
+### 注册工具（无需改上游源码）
 
-这些都通过配置完成，不用动 vendor 里的代码：
-
-- **关掉编码工具**：`noTools: "builtin"`（去掉 read/edit/bash…）。
-- **注册 Loom 工具**：`customTools: [search_assets, hybrid_search, ffmpeg.*, ingest_to_library, create_relationship, index_asset]`。
-- **MCP 客户端**：Main 读 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，和自家工具并列。ComfyUI 这类创作运行时从这里挂；不写第一方 Comfy HTTP 客户端。URL、命令和凭据留在 Main。
-- **换系统提示词**：`systemPromptOverride` → 创作 Agent 提示词。
-- **换上下文**：注入素材库信息，而非代码仓库。
+- **工作区工具**：用 `NodeExecutionEnv` 包一层 pi 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
+- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。
+- **MCP 客户端**：Main 读 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。ComfyUI 这类创作运行时从这里挂。
+- **系统提示词**：打开的素材库根目录就是工作目录。
 
 ---
 

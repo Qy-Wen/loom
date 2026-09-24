@@ -7,7 +7,8 @@
     ".": "./src/index.ts"
   },
   "imports": {
-    "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts"
+    "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts",
+    "#vendor/pi-agent/node": "./vendor-pi-agent/src/node.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",

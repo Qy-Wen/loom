@@ -199,13 +199,13 @@ See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific proce
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, path jail, and ingest. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider.
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Path jail and a process sandbox are deferred.
 
 ### 6.1 FFmpeg — first Agent tools
 
 FFmpeg alone supports many useful Agent workflows without requiring a generation model.
 
-Agent tools address files by **library-relative path** (`clips/hero.mp4`). Outputs may be written anywhere under the library root; the user or Agent chooses the path. If omitted, convenience tools default to `outputs/`. Absolute filesystem paths never enter tool arguments or results; Local Core resolves them at the disk boundary. `asset_id` remains the internal identity (see Section 4).
+The open library is the working directory. Relative paths resolve against it; absolute paths are allowed. If omitted, convenience tools default to `outputs/`. `asset_id` remains the internal identity (see Section 4).
 
 **Toolset:**
 
@@ -244,7 +244,7 @@ MCP host  (stdio or remote HTTP)
 ComfyUI / other creation servers
 ```
 
-A first-party ingest tool copies MCP outputs into the current library (relative path, default `outputs/`). The existing watcher indexes them. If a server already writes inside the library root, ingest is unnecessary.
+If a server writes outside the library, the Agent copies the file in with `bash` or `write`. The existing watcher indexes it.
 
 > Deferred: do not add `generate_image` / `generate_video` wrappers that hide providers. MCP tool names stay visible.
 
@@ -261,7 +261,7 @@ A first-party ingest tool copies MCP outputs into the current library (relative 
 4.  inspect_assets
 5.  plan_workflow
 6.  MCP creation tool  → ComfyUI (or other server)
-6b. ingest             → library-relative path
+6b. bash / write       → copy into the library if needed
 7.  ffmpeg             → 9:16 → 15 sec
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset

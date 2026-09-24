@@ -9,7 +9,7 @@
 
 ## 1. Goal and positioning
 
-- Loom's Agent is a **creative-asset Agent**, not a coding Agent. Its tools are `search_assets`, `hybrid_search`, `ffmpeg.*`, `comfyui.*`, `create_relationship`, and similar capabilities rather than read/edit/bash.
+- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Path jail and a process sandbox are deferred.
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
 
@@ -144,19 +144,16 @@ packages/agent/src/
 
 Enforced constraints:
 
-1. **Single entry point:** only `pi-adapter.ts` may import `#vendor/pi-agent`. ESLint `no-restricted-imports` can enforce this later.
+1. **Vendor boundary:** only `pi-adapter.ts` and `pi-tools.ts` may import `#vendor/pi-agent`. ESLint `no-restricted-imports` can enforce this later.
 2. **Loom owns its interfaces:** `types.ts` defines `LoomAgent`; the adapter translates that API into pi. Replacing pi changes only the adapter.
-3. **Import mechanism:** Node's native `imports` field maps `#vendor/pi-agent` to `./vendor-pi-agent/src/index.ts`, with a matching tsconfig path. A `#` subpath import works for both typechecking and runtime without a build-only alias.
+3. **Import mechanism:** Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
 
-### Turning a coding Agent into a creative Agent without changing upstream
+### Registering tools without changing upstream
 
-Configuration is enough; vendor source does not need to change:
-
-- **Disable coding tools:** `noTools: "builtin"` removes read/edit/bash and similar tools.
-- **Register Loom tools:** `customTools: [search_assets, hybrid_search, ffmpeg.*, ingest_to_library, create_relationship, index_asset]`.
-- **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` beside first-party tools. Creation runtimes such as ComfyUI attach here; do not add a first-party Comfy HTTP client. URLs, commands, and credentials stay in Main.
-- **Replace the system prompt:** `systemPromptOverride` receives the creative-Agent prompt.
-- **Replace context:** inject asset-library context rather than a code repository.
+- **Workspace tools:** wrap pi's `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
+- **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`.
+- **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Creation runtimes such as ComfyUI attach here.
+- **System prompt:** the open library root is the working directory.
 
 ---
 

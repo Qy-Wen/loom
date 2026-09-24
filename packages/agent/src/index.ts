@@ -4,6 +4,8 @@ export type {
 	LoomAgentOptions,
 	LoomTranscriptMessage,
 	LoomTool,
+	LoomToolContentPart,
 	LoomToolResult,
 } from "./types.ts";
-export { createLoomAgent } from "./pi-adapter.ts";
+export { toolResultText } from "./types.ts";
+export { createLoomAgent, createWorkspaceTools, type WorkspaceTools } from "./pi-adapter.ts";
