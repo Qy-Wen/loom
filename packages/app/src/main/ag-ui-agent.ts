@@ -103,11 +103,13 @@ export class LoomAgUiAgent extends AbstractAgent {
 			const emit = (event: BaseEvent) => subscriber.next(event);
 			let cancelled = false;
 
-			// One assistant text message per run; open lazily on first text delta.
-			const messageId = nextId("msg");
+			// One assistant text message per text segment. Reusing a single id for
+			// the whole run makes CopilotChat paint all text, then dump every tool.
+			let messageId = "";
 			let textOpen = false;
 			const openText = () => {
 				if (textOpen) return;
+				messageId = nextId("msg");
 				textOpen = true;
 				emit({
 					type: EventType.TEXT_MESSAGE_START,
@@ -119,6 +121,15 @@ export class LoomAgUiAgent extends AbstractAgent {
 				if (!textOpen) return;
 				textOpen = false;
 				emit({ type: EventType.TEXT_MESSAGE_END, messageId } as BaseEvent);
+			};
+			const parentForTool = (): string => {
+				if (!messageId) {
+					openText();
+					closeText();
+				} else if (textOpen) {
+					closeText();
+				}
+				return messageId;
 			};
 
 			let unsubscribe = (): void => undefined;
@@ -148,11 +159,11 @@ export class LoomAgUiAgent extends AbstractAgent {
 							break;
 
 						case "tool_start": {
-							closeText();
 							emit({
 								type: EventType.TOOL_CALL_START,
 								toolCallId: event.toolCallId,
 								toolCallName: event.name,
+								parentMessageId: parentForTool(),
 							} as BaseEvent);
 							emit({
 								type: EventType.TOOL_CALL_ARGS,

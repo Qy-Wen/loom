@@ -1,4 +1,4 @@
-import type { Message } from "@ag-ui/core";
+import type { Message, ToolCall } from "@ag-ui/core";
 import type { LoomTranscriptMessage } from "@loom/core";
 
 export function transcriptText(content: unknown): string {
@@ -14,6 +14,25 @@ export function transcriptText(content: unknown): string {
 		.join("");
 }
 
+function assistantToolCalls(content: unknown): ToolCall[] {
+	if (!Array.isArray(content)) return [];
+	const calls: ToolCall[] = [];
+	for (const part of content) {
+		if (typeof part !== "object" || part === null) continue;
+		const record = part as { type?: unknown; id?: unknown; name?: unknown; arguments?: unknown };
+		if (record.type !== "toolCall" || typeof record.id !== "string" || typeof record.name !== "string") continue;
+		calls.push({
+			id: record.id,
+			type: "function",
+			function: {
+				name: record.name,
+				arguments: typeof record.arguments === "string" ? record.arguments : JSON.stringify(record.arguments ?? {}),
+			},
+		});
+	}
+	return calls;
+}
+
 /** Map persisted pi/Loom transcript messages into AG-UI chat messages. */
 export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 	const out: Message[] = [];
@@ -24,7 +43,13 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 			continue;
 		}
 		if (message.role === "assistant") {
-			out.push({ id, role: "assistant", content: transcriptText(message.content) });
+			const toolCalls = assistantToolCalls(message.content);
+			out.push({
+				id,
+				role: "assistant",
+				content: transcriptText(message.content),
+				...(toolCalls.length ? { toolCalls } : {}),
+			});
 			continue;
 		}
 		if (message.role === "toolResult" || message.role === "tool") {
