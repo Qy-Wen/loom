@@ -45,4 +45,5 @@ export interface LoomAgent {
 	prompt(input: string): Promise<void>;
 	getMessages(): LoomTranscriptMessage[];
 	addTools(tools: LoomTool[]): void;
+	setSystemPrompt(systemPrompt: string): void;
 }

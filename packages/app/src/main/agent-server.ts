@@ -19,6 +19,7 @@ export interface AgentServer {
 	resetSessions: () => void;
 	dropSession: (id: string) => void;
 	addTools: (tools: LoomTool[]) => void;
+	setSystemPrompt: (systemPrompt: string) => void;
 	close: () => Promise<void>;
 }
 
@@ -78,6 +79,7 @@ export async function startAgentServer(
 		resetSessions: () => agent.resetSessions(),
 		dropSession: (id) => agent.dropSession(id),
 		addTools: (tools) => agent.addTools(tools),
+		setSystemPrompt: (systemPrompt) => agent.setSystemPrompt(systemPrompt),
 		close: () =>
 			new Promise<void>((resolve, reject) => {
 				server.close((err) => (err ? reject(err) : resolve()));
