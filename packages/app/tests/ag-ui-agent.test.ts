@@ -120,6 +120,48 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(ids, ["call-a", "call-b", "call-b", "call-a"]);
 	});
 
+	it("starts a new assistant message after tools so text and results stay in order", async () => {
+		const fake = new FakeLoomAgent([
+			{ type: "agent_start" },
+			{ type: "text", delta: "looking" },
+			{ type: "tool_start", toolCallId: "call-1", name: "search_assets", args: {} },
+			{
+				type: "tool_end",
+				toolCallId: "call-1",
+				name: "search_assets",
+				result: { content: "found" },
+				isError: false,
+			},
+			{ type: "text", delta: "done" },
+			{ type: "agent_end" },
+		]);
+		const adapter = new LoomAgUiAgent(OPTIONS, () => fake);
+		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
+		const starts = events.filter((event) => event.type === EventType.TEXT_MESSAGE_START) as Array<{
+			messageId: string;
+		}>;
+		assert.equal(starts.length, 2);
+		assert.notEqual(starts[0]?.messageId, starts[1]?.messageId);
+		const toolStart = events.find((event) => event.type === EventType.TOOL_CALL_START) as {
+			parentMessageId?: string;
+		};
+		assert.equal(toolStart.parentMessageId, starts[0]?.messageId);
+		assert.deepEqual(eventTypes(events), [
+			EventType.RUN_STARTED,
+			EventType.TEXT_MESSAGE_START,
+			EventType.TEXT_MESSAGE_CONTENT,
+			EventType.TEXT_MESSAGE_END,
+			EventType.TOOL_CALL_START,
+			EventType.TOOL_CALL_ARGS,
+			EventType.TOOL_CALL_END,
+			EventType.TOOL_CALL_RESULT,
+			EventType.TEXT_MESSAGE_START,
+			EventType.TEXT_MESSAGE_CONTENT,
+			EventType.TEXT_MESSAGE_END,
+			EventType.RUN_FINISHED,
+		]);
+	});
+
 	it("maps tool calls and reuses one Loom conversation per thread", async () => {
 		let factoryCalls = 0;
 		const fake = new FakeLoomAgent([
@@ -146,6 +188,8 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(fake.prompts, ["one", "two"]);
 		assert.deepEqual(eventTypes(first), [
 			EventType.RUN_STARTED,
+			EventType.TEXT_MESSAGE_START,
+			EventType.TEXT_MESSAGE_END,
 			EventType.TOOL_CALL_START,
 			EventType.TOOL_CALL_ARGS,
 			EventType.TOOL_CALL_END,
@@ -153,11 +197,11 @@ describe("LoomAgUiAgent", () => {
 			EventType.CUSTOM,
 			EventType.RUN_FINISHED,
 		]);
-		assert.equal((first[1] as unknown as { toolCallId: string }).toolCallId, "call-1");
-		assert.equal((first[2] as unknown as { delta: string }).delta, '{"query":"sunset"}');
-		assert.equal((first[4] as unknown as { content: string }).content, "found");
+		assert.equal((first[3] as unknown as { toolCallId: string }).toolCallId, "call-1");
+		assert.equal((first[4] as unknown as { delta: string }).delta, '{"query":"sunset"}');
+		assert.equal((first[6] as unknown as { content: string }).content, "found");
 		assert.deepEqual(
-			(first[5] as unknown as { value: { details: unknown } }).value.details,
+			(first[7] as unknown as { value: { details: unknown } }).value.details,
 			{ kind: "asset_list", assets: [] },
 		);
 	});

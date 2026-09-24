@@ -5,7 +5,14 @@ import { mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
 	const messages = toAgUiMessages([
 		{ role: "user", content: "hello" },
-		{ role: "assistant", content: [{ type: "text", text: "hi " }, { type: "text", text: "there" }] },
+		{
+			role: "assistant",
+			content: [
+				{ type: "text", text: "hi " },
+				{ type: "text", text: "there" },
+				{ type: "toolCall", id: "call-1", name: "search_assets", arguments: { query: "x" } },
+			],
+		},
 		{ role: "toolResult", toolCallId: "call-1", content: "ok" },
 		{ role: "system", content: "ignore" },
 	]);
@@ -18,6 +25,11 @@ test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", ()
 		],
 	);
 	assert.equal(transcriptText([{ type: "text", text: "a" }]), "a");
+	const assistant = messages[1];
+	assert.ok(assistant && assistant.role === "assistant");
+	assert.deepEqual(assistant.role === "assistant" ? assistant.toolCalls : undefined, [
+		{ id: "call-1", type: "function", function: { name: "search_assets", arguments: "{\"query\":\"x\"}" } },
+	]);
 });
 
 test("mergeChatMessages keeps stored history when live is empty and appends new turns", () => {
