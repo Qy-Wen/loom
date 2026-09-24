@@ -601,6 +601,40 @@ body.resizing-columns {
 	padding: 8px 12px;
 }
 
+.tool-call {
+	margin: 8px 0;
+	padding: 8px 10px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	font-size: 12px;
+}
+
+.tool-call-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 8px;
+	color: #7a7d82;
+}
+
+.tool-call-name {
+	color: #202124;
+	font-weight: 600;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.tool-call-result {
+	margin: 8px 0 0;
+	max-height: 220px;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-size: 11px;
+	line-height: 1.4;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .details-content {
 	padding: 18px;
 	overflow-y: auto;
