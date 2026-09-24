@@ -1,14 +1,13 @@
-import { execFile } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
-import { promisify } from "node:util";
 import type { Asset, AssetType } from "../model/asset.ts";
+import { resolveMediaBinary } from "../media/binaries.ts";
+import { parseFfprobeJson } from "../media/probe.ts";
+import { runMediaProcess } from "../media/run.ts";
 import {
 	TEXT_ENRICHMENT_LIMIT,
 	type EnrichmentData,
 } from "../model/enrichment.ts";
-
-const execFileAsync = promisify(execFile);
 const TEXT_EXTENSIONS = new Set([".txt", ".md", ".json", ".csv"]);
 
 export function canExtractText(filename: string): boolean {
@@ -51,53 +50,29 @@ async function extractImage(absolutePath: string): Promise<EnrichmentData> {
 }
 
 async function extractMedia(absolutePath: string, type: "video" | "audio"): Promise<EnrichmentData> {
-	let stdout: string;
 	try {
-		const result = await execFileAsync(
-			"ffprobe",
-			["-v", "error", "-print_format", "json", "-show_format", "-show_streams", absolutePath],
-			{ timeout: 20_000, maxBuffer: 2_000_000 },
-		);
-		stdout = result.stdout;
-	} catch (error) {
-		if ((error as NodeJS.ErrnoException).code === "ENOENT") throw new Error("ffprobe is not installed");
-		throw error instanceof Error ? error : new Error(String(error));
+		resolveMediaBinary("ffprobe");
+	} catch {
+		throw new Error("ffprobe is not bundled. Run pnpm vendor:ffmpeg.");
 	}
-
-	const probe = JSON.parse(stdout) as {
-		format?: { duration?: string };
-		streams?: Array<{
-			codec_type?: string;
-			codec_name?: string;
-			width?: number;
-			height?: number;
-			avg_frame_rate?: string;
-		}>;
-	};
-	const duration = Number(probe.format?.duration);
-	if (!Number.isFinite(duration)) throw new Error("ffprobe did not return a duration");
-	const video = probe.streams?.find((stream) => stream.codec_type === "video");
-	const audio = probe.streams?.find((stream) => stream.codec_type === "audio");
+	const { stdout } = await runMediaProcess({
+		program: "ffprobe",
+		args: ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", absolutePath],
+	});
+	const probe = parseFfprobeJson(stdout);
+	if (probe.duration === undefined) throw new Error("ffprobe did not return a duration");
 	if (type === "audio") {
-		return { kind: "audio", duration, audioCodec: audio?.codec_name };
+		return { kind: "audio", duration: probe.duration, audioCodec: probe.audioCodec };
 	}
 	return {
 		kind: "video",
-		duration,
-		width: video?.width,
-		height: video?.height,
-		videoCodec: video?.codec_name,
-		audioCodec: audio?.codec_name,
-		frameRate: parseFrameRate(video?.avg_frame_rate),
+		duration: probe.duration,
+		width: probe.width,
+		height: probe.height,
+		videoCodec: probe.videoCodec,
+		audioCodec: probe.audioCodec,
+		frameRate: probe.frameRate,
 	};
-}
-
-function parseFrameRate(value: string | undefined): number | undefined {
-	if (!value || value === "0/0") return undefined;
-	const [numerator, denominator] = value.split("/").map(Number);
-	if (!denominator) return Number.isFinite(numerator) ? numerator : undefined;
-	const rate = numerator / denominator;
-	return Number.isFinite(rate) ? rate : undefined;
 }
 
 function readImageSize(buffer: Buffer): { width: number; height: number } | undefined {

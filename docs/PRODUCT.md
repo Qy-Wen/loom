@@ -204,14 +204,17 @@ The Agent calls tools to access external capabilities. The first release focuses
 
 FFmpeg alone supports many useful Agent workflows without requiring a generation model.
 
+Agent tools address files by **library-relative path** (`clips/hero.mp4`). Outputs may be written anywhere under the library root; the user or Agent chooses the path. If omitted, convenience tools default to `outputs/`. Absolute filesystem paths never enter tool arguments or results; Local Core resolves them at the disk boundary. `asset_id` remains the internal identity (see Section 4).
+
 **Toolset:**
 
 ```
 get_media_info      extract_frame       extract_clip
-concat_video        resize_video        crop_video
-change_speed        extract_audio       convert_format
-generate_thumbnail  add_subtitle
+resize_video        crop_video          convert_format
+run_ffmpeg
 ```
+
+`run_ffmpeg` is the escape hatch for argv the convenience tools cannot express. `concat_video`, `change_speed`, `extract_audio`, and `add_subtitle` can wait; use `run_ffmpeg` until they exist.
 
 Example:
 

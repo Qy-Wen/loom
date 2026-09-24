@@ -292,9 +292,13 @@ export class Library {
 		if (notify) this.emit({ type: "remove", assetId: asset.assetId });
 	}
 
-	private requirePaths(): LibraryPaths {
+	getPaths(): LibraryPaths {
 		if (!this.paths) throw new Error("No library is open");
 		return this.paths;
+	}
+
+	private requirePaths(): LibraryPaths {
+		return this.getPaths();
 	}
 
 	private async requireAsset(assetId: string): Promise<Asset> {

@@ -7,7 +7,15 @@
 
 ---
 
-## 第一步：Hybrid Search
+## 第一步：FFmpeg Agent 工具
+
+让 Agent 直接调用 FFmpeg 做本地媒体处理，并将产物重新索引。
+
+- [x] 封装工具：媒体信息、抽帧、裁剪片段、缩放、画面裁切、格式转换；不够用时用 `run_ffmpeg`
+- [x] 工具只收库内相对路径；绝对路径留在 Local Core，禁止出库
+- [x] 产物写在库内（默认 `outputs/`，可指定其它相对路径），由现有 watcher 收编
+
+## 第二步：Hybrid Search
 
 将确定性资产搜索升级为词法、向量与结构化过滤融合的统一检索栈。
 
@@ -16,16 +24,6 @@
 - [ ] Metadata Filter：内置字段与自定义属性过滤
 - [ ] 在 `search_assets` / `hybrid_search` 后融合检索能力
 - [ ] 建立最小检索评测集
-
-## 第二步：FFmpeg Agent 工具
-
-让 Agent 执行确定性的本地媒体操作，并将产物重新索引。
-
-- [ ] 增加媒体信息、抽帧、裁剪片段、缩放、画面裁切和格式转换工具
-- [ ] 校验所有 asset ID，并将文件系统路径限制在 Local Core 内部
-- [ ] 流式返回工具进度并支持取消
-- [ ] 索引生成文件，并把 provenance 关联到源 asset ID
-- [ ] 增加基于 fixture 的工具与失败路径测试
 
 ## 第三步：AI 富化
 
@@ -44,6 +42,7 @@
 
 ## 后续（概述）
 
+- **FFmpeg 进度与取消**：长任务可中断，协议层推送进度（不做也能先跑完）
 - **前端协议扩展**：AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md
 - **创作**：直连 ComfyUI 生成图片/视频
 - **关系图**：LadybugDB 实现关系存储，自动建立 provenance，Graph 视图
