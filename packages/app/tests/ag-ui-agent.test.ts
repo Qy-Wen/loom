@@ -137,12 +137,12 @@ describe("LoomAgUiAgent", () => {
 		]);
 		const adapter = new LoomAgUiAgent(OPTIONS, () => fake);
 		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
-		const starts = events.filter((event) => event.type === EventType.TEXT_MESSAGE_START) as Array<{
-			messageId: string;
-		}>;
+		const starts = events
+			.filter((event) => event.type === EventType.TEXT_MESSAGE_START)
+			.map((event) => event as unknown as { messageId: string });
 		assert.equal(starts.length, 2);
 		assert.notEqual(starts[0]?.messageId, starts[1]?.messageId);
-		const toolStart = events.find((event) => event.type === EventType.TOOL_CALL_START) as {
+		const toolStart = events.find((event) => event.type === EventType.TOOL_CALL_START) as unknown as {
 			parentMessageId?: string;
 		};
 		assert.equal(toolStart.parentMessageId, starts[0]?.messageId);
