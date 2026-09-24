@@ -134,6 +134,10 @@ class PiAgentAdapter implements LoomAgent {
 		if (!tools.length) return;
 		this.agent.state.tools = [...this.agent.state.tools, ...tools.map(toPiTool)];
 	}
+
+	setSystemPrompt(systemPrompt: string): void {
+		this.agent.state.systemPrompt = systemPrompt;
+	}
 }
 
 /** Create a Loom agent backed by the vendored pi engine. */

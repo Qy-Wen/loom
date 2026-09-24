@@ -88,6 +88,11 @@ export class LoomAgUiAgent extends AbstractAgent {
 		for (const session of this.sessions.values()) session.addTools(tools);
 	}
 
+	setSystemPrompt(systemPrompt: string): void {
+		this.agentOptions.systemPrompt = systemPrompt;
+		for (const session of this.sessions.values()) session.setSystemPrompt(systemPrompt);
+	}
+
 	dropSession(id: string): void {
 		this.sessions.delete(id);
 		this.titles.delete(id);

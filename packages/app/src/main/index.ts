@@ -13,6 +13,7 @@ import {
 import type { LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
+import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
 import { loadMcpConfigFile } from "./mcp/config.ts";
@@ -31,13 +32,7 @@ protocol.registerSchemesAsPrivileged([
 
 const localCore = new LocalCore();
 const AGENT_OPTIONS: LoomAgentOptions = {
-	systemPrompt:
-		"You are Loom, an assistant for a local creative asset workspace. " +
-		"Use search_assets to find real assets and inspect_asset before making claims about one asset. " +
-		"Refer to files by library-relative path (clips/hero.mp4) and never invent or request absolute filesystem paths. " +
-		"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
-		"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array of library-relative paths. " +
-		"MCP tools are named server__tool and attach after configured servers connect.",
+	systemPrompt: systemPromptForLibrary(null),
 	model: { provider: "deepseek", model: "deepseek-v4-flash" },
 	tools: [...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
@@ -154,6 +149,7 @@ function registerIpc(): void {
 			: await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		if (result.canceled || !result.filePaths[0]) return null;
 		const snapshot = await localCore.openLibrary(result.filePaths[0]);
+		agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
 		agentServer?.resetSessions();
 		return snapshot;
 	});

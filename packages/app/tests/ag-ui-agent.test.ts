@@ -30,6 +30,7 @@ function runInput(threadId = "thread-1", text = "latest question"): RunAgentInpu
 class FakeLoomAgent implements LoomAgent {
 	readonly prompts: string[] = [];
 	readonly addedTools: LoomTool[] = [];
+	systemPrompt = "";
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 	private readonly events: LoomAgentEvent[];
 
@@ -55,6 +56,10 @@ class FakeLoomAgent implements LoomAgent {
 
 	addTools(tools: LoomTool[]): void {
 		this.addedTools.push(...tools);
+	}
+
+	setSystemPrompt(systemPrompt: string): void {
+		this.systemPrompt = systemPrompt;
 	}
 }
 
@@ -201,6 +206,22 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(created[0]?.addedTools.map((tool) => tool.name), ["comfy__x"]);
 		await lastValueFrom(adapter.run(runInput("t2")).pipe(toArray()));
 		assert.equal(seen[1]?.tools?.[0]?.name, "comfy__x");
+	});
+
+	it("sets the working directory on live sessions and later-created ones", async () => {
+		const created: FakeLoomAgent[] = [];
+		const seen: LoomAgentOptions[] = [];
+		const adapter = new LoomAgUiAgent(OPTIONS, (options) => {
+			seen.push(options);
+			const fake = new FakeLoomAgent([{ type: "agent_end" }]);
+			created.push(fake);
+			return fake;
+		});
+		await lastValueFrom(adapter.run(runInput("t1", "hi")).pipe(toArray()));
+		adapter.setSystemPrompt("library D:\\assets");
+		assert.equal(created[0]?.systemPrompt, "library D:\\assets");
+		await lastValueFrom(adapter.run(runInput("t2", "hi")).pipe(toArray()));
+		assert.equal(seen[1]?.systemPrompt, "library D:\\assets");
 	});
 });
 
