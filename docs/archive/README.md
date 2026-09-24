@@ -112,3 +112,27 @@ Let the Agent call bundled FFmpeg for local media work; watcher indexes the outp
 - Write outputs inside the library (default `outputs/`, or a caller-specified relative path)
 - Enrichment ffprobe uses the same bundled binary; chat shows tool-call JSON results
 - Tests cover path jail, real-fixture extract/resize/crop/convert, and skip without binaries
+
+---
+
+## ✅ Local Agent sessions
+
+Persist multiple conversations per library as append-only JSONL, following pi's JsonlSessionRepo shape. Do not use CopilotKit cloud Threads.
+
+- Session files under the current library `.loom/sessions/`; create, switch, and list
+- Close archives a session (history stays, can reopen); delete is separate and refused while open
+- Restore transcript into the Agent after restart so the model keeps context
+- Agent panel uses session tabs; the first user message titles the tab
+- Tests cover repo CRUD/archive, refusing delete while open, and keeping session files out of the asset watcher
+
+---
+
+## ✅ MCP client
+
+Loom is an MCP client. Third-party servers attach beside first-party library tools.
+
+- Main loads `mcp.json` or `LOOM_MCP_CONFIG` (stdio and Streamable HTTP); commands, URLs, and credentials stay out of the renderer
+- Tools register as `server__tool` in the same Agent loop; a broken server is skipped
+- Windows stdio resolves `npx` via `node.exe` + `npx-cli.js` (cannot spawn `.cmd` directly)
+- First-party tools stay search, FFmpeg, and path jail; creation providers are not hardcoded
+- Tests cover config parse, name prefix, error surfacing, host skip, and PATHEXT rewrite; live fetch smoke is optional

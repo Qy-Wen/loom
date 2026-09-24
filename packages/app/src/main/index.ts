@@ -15,6 +15,8 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell }
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
+import { loadMcpConfigFile } from "./mcp/config.ts";
+import { McpHost } from "./mcp/host.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
@@ -38,6 +40,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 	model: { provider: "deepseek", model: "deepseek-v4-flash" },
 	tools: [...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
+let mcpHost: McpHost | null = null;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
 
@@ -292,9 +295,18 @@ app
 			if (existsSync(envFile)) process.loadEnvFile(envFile);
 		}
 
+		mcpHost = new McpHost();
+		const mcpTools = await mcpHost.connect(await loadConfiguredMcpServers());
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint.
-		agentServer = await startAgentServer(AGENT_OPTIONS, localCore);
+		agentServer = await startAgentServer({
+			...AGENT_OPTIONS,
+			tools: [...(AGENT_OPTIONS.tools ?? []), ...mcpTools],
+			systemPrompt: AGENT_OPTIONS.systemPrompt +
+				(mcpTools.length
+					? " MCP tools are named server__tool and come from configured MCP servers."
+					: ""),
+		}, localCore);
 		registerAssetProtocol();
 		registerIpc();
 		createWindow();
@@ -319,7 +331,26 @@ app.on("will-quit", (event) => {
 
 	const server = agentServer;
 	agentServer = null;
-	void Promise.allSettled([localCore.close(), server?.close() ?? Promise.resolve()]).finally(() => {
+	const host = mcpHost;
+	mcpHost = null;
+	void Promise.allSettled([
+		localCore.close(),
+		server?.close() ?? Promise.resolve(),
+		host?.close() ?? Promise.resolve(),
+	]).finally(() => {
 		app.quit();
 	});
 });
+
+async function loadConfiguredMcpServers() {
+	const configured = process.env.LOOM_MCP_CONFIG?.trim();
+	const fallback = !app.isPackaged ? resolve(app.getAppPath(), "../../mcp.json") : "";
+	const path = configured || (fallback && existsSync(fallback) ? fallback : "");
+	if (!path) return [];
+	try {
+		return await loadMcpConfigFile(path);
+	} catch (error) {
+		console.error("Failed to read MCP config", error);
+		return [];
+	}
+}

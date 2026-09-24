@@ -112,3 +112,27 @@
 - 产物写在库内（默认 `outputs/`，可指定其它相对路径）
 - 富化 ffprobe 走同一套捆绑二进制；聊天里显示工具结果 JSON
 - 测试覆盖路径狱、真实 fixture 的抽帧/缩放/裁切/转码，无二进制时跳过
+
+---
+
+## ✅ 本地 Agent 会话
+
+每个素材库多会话，形态对齐 pi 的 JsonlSessionRepo（create / open / list / delete，JSONL 只追加）。不走 CopilotKit 云 Threads。
+
+- 会话文件落在当前库 `.loom/sessions/`；支持新建、切换、列表
+- 关闭即归档（历史可再打开）；删除是单独动作，打开中不能删
+- 重启后把 transcript 灌回 Agent，模型仍有上下文
+- Agent 面板用会话 tab；第一条用户消息生成标题
+- 测试覆盖 CRUD/归档、打开中不能删、会话文件不进素材 watcher
+
+---
+
+## ✅ MCP 客户端
+
+Loom 作为 MCP 客户端。第三方 server 和自家库工具并列挂上。
+
+- Main 读 `mcp.json` 或 `LOOM_MCP_CONFIG`（stdio 与 Streamable HTTP）；命令、URL、凭据不进 renderer
+- 工具注册成 `server__tool`，走同一套 Agent 循环；单个 server 失败就跳过
+- Windows stdio 把 `npx` 改写成 `node.exe` + `npx-cli.js`（不能直接 spawn `.cmd`）
+- 第一方仍是检索、FFmpeg、路径狱；不把创作 provider 写死在代码里
+- 测试覆盖配置解析、命名前缀、错误上浮、host 跳过、PATHEXT 改写；真实 fetch 冒烟可选
