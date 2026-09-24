@@ -7,17 +7,7 @@
 
 ---
 
-## Step 1: Local asset enrichment
-
-Add non-AI local media metadata as the foundation for stronger search and later semantic analysis.
-
-- [ ] Track enrichment job state and version
-- [ ] Extract image EXIF, dimensions, and basic metadata
-- [ ] Run ffprobe for audio/video duration, dimensions, codecs, and related metadata
-- [ ] Extract common text formats for full-text indexing
-- [ ] Recompute only invalidated enrichment results after file changes
-
-## Step 2: Hybrid Search
+## Step 1: Hybrid Search
 
 Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
 
@@ -27,7 +17,7 @@ Upgrade deterministic asset search into one retrieval stack combining lexical, v
 - [ ] Fuse retrieval behind `search_assets` / `hybrid_search`
 - [ ] Establish a minimal retrieval evaluation set
 
-## Step 3: FFmpeg Agent tools
+## Step 2: FFmpeg Agent tools
 
 Let the Agent perform deterministic local media operations and index their outputs.
 
@@ -37,6 +27,15 @@ Let the Agent perform deterministic local media operations and index their outpu
 - [ ] Index generated files and attach provenance to source asset IDs
 - [ ] Add fixture-based tool and failure-path tests
 
+## Step 3: AI enrichment
+
+Add optional, on-demand embeddings and VLM analysis on top of local technical metadata.
+
+- [ ] Persist Level 2 embeddings for selected assets and expose them to Hybrid Search
+- [ ] Add an on-demand VLM pass for captions, tags, or scene descriptions
+- [ ] Track enrichment jobs and cost-visible status in the UI
+- [ ] Keep all AI work user-triggered; never enrich the whole library by default
+
 ---
 
 Completed steps are recorded in the [archive](./archive/README.md).
@@ -45,7 +44,6 @@ Completed steps are recorded in the [archive](./archive/README.md).
 
 ## Later
 
-- **AI enrichment:** optional, on-demand embeddings and VLM semantic analysis
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
 - **Creation:** connect directly to ComfyUI for image and video generation
 - **Relationship graph:** implement relationship storage with LadybugDB, automatic provenance, and Graph view

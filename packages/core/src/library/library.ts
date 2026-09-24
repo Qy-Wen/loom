@@ -303,6 +303,10 @@ export class Library {
 		return asset;
 	}
 
+	notifyEnrichment(assetId: string): void {
+		this.emit({ type: "enrichment", assetId });
+	}
+
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}

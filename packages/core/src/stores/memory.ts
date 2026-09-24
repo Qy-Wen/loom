@@ -1,4 +1,5 @@
 import type { Asset } from "../model/asset.ts";
+import type { AssetEnrichment } from "../model/enrichment.ts";
 import {
 	assertPropertyDefinition,
 	assertPropertyValue,
@@ -15,6 +16,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly properties = new Map<string, PropertyDefinition>();
 	private readonly propertyIdByName = new Map<string, string>();
 	private readonly assetProperties = new Map<string, Map<string, AssetPropertyValue>>();
+	private readonly enrichments = new Map<string, AssetEnrichment>();
 	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
@@ -24,6 +26,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.properties.clear();
 		this.propertyIdByName.clear();
 		this.assetProperties.clear();
+		this.enrichments.clear();
 		this.volumeId = undefined;
 	}
 
@@ -34,6 +37,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.properties.clear();
 		this.propertyIdByName.clear();
 		this.assetProperties.clear();
+		this.enrichments.clear();
 		this.volumeId = undefined;
 	}
 
@@ -51,6 +55,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 			const replaced = this.assets.get(replacedId);
 			this.assets.delete(replacedId);
 			if (replaced?.fileSystemId) this.assetIdByFileSystemId.delete(replaced.fileSystemId);
+			this.enrichments.delete(replacedId);
 		}
 
 		this.assets.set(asset.assetId, asset);
@@ -91,6 +96,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.assetProperties.keys()) {
 			if (!nextAssetIds.has(assetId)) this.assetProperties.delete(assetId);
 		}
+		for (const assetId of this.enrichments.keys()) {
+			if (!nextAssetIds.has(assetId)) this.enrichments.delete(assetId);
+		}
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -100,6 +108,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.assetIdByPath.delete(asset.relativePath);
 		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
 		this.assetProperties.delete(assetId);
+		this.enrichments.delete(assetId);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {
@@ -177,6 +186,15 @@ export class InMemoryMetadataStore implements MetadataStore {
 
 	async removeAssetProperty(assetId: string, propertyId: string): Promise<void> {
 		this.assetProperties.get(assetId)?.delete(propertyId);
+	}
+
+	async getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
+		return this.enrichments.get(assetId);
+	}
+
+	async upsertAssetEnrichment(record: AssetEnrichment): Promise<void> {
+		if (!this.assets.has(record.assetId)) throw new Error("Asset not found");
+		this.enrichments.set(record.assetId, record);
 	}
 
 	private hasValuesForProperty(propertyId: string): boolean {

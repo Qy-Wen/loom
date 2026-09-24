@@ -21,6 +21,8 @@ const api: LoomApi = {
 		ipcRenderer.invoke(IPC.setAssetProperty, assetId, propertyId, value),
 	removeAssetProperty: (assetId, propertyId) =>
 		ipcRenderer.invoke(IPC.removeAssetProperty, assetId, propertyId),
+	getAssetEnrichment: (assetId) => ipcRenderer.invoke(IPC.getAssetEnrichment, assetId),
+	analyzeAsset: (assetId) => ipcRenderer.invoke(IPC.analyzeAsset, assetId),
 	onLibraryChanged: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, change: LibraryChange) => listener(change);
 		ipcRenderer.on(IPC.libraryChanged, handler);

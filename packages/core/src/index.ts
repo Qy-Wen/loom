@@ -1,4 +1,7 @@
+export * from "./enrichment/extract.ts";
+export * from "./enrichment/service.ts";
 export * from "./library/file-identity.ts";
+export * from "./model/enrichment.ts";
 export * from "./library/handlers.ts";
 export * from "./library/library.ts";
 export * from "./library/paths.ts";

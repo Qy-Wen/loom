@@ -1,12 +1,14 @@
 import { CopilotChat } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
+	AssetEnrichment,
 	AssetPropertyValue,
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
 } from "@loom/core";
 import { formatBytes } from "./asset-utils.ts";
+import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 
 export type SidePanelTab = "agent" | "details";
@@ -22,6 +24,9 @@ interface SidePanelProps {
 	onRemoveProperty: (propertyId: string) => Promise<void>;
 	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
 	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
+	enrichment: AssetEnrichment | undefined;
+	analyzing: boolean;
+	onAnalyze: () => void;
 }
 
 export function SidePanel({
@@ -35,6 +40,9 @@ export function SidePanel({
 	onRemoveProperty,
 	onSetPropertyValue,
 	onRemovePropertyValue,
+	enrichment,
+	analyzing,
+	onAnalyze,
 }: SidePanelProps): React.JSX.Element {
 	const selectedValues = asset
 		? propertyValues.filter((value) => value.assetId === asset.assetId)
@@ -73,6 +81,13 @@ export function SidePanel({
 						<div className="empty no-padding">Select an asset to see its properties.</div>
 					)}
 				</section>
+				{asset && (
+					<EnrichmentDetails
+						enrichment={enrichment}
+						analyzing={analyzing}
+						onAnalyze={onAnalyze}
+					/>
+				)}
 				{asset && (
 					<section>
 						<PropertyEditor

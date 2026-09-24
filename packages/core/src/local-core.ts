@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
 import { LibraryHandlers, NoopGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
+import type { AssetEnrichment } from "./model/enrichment.ts";
 import type {
 	AssetPropertyValue,
 	PropertyDefinition,
@@ -34,11 +36,27 @@ export class LocalCore {
 	readonly metadataStore: MetadataStore;
 	readonly graphStore: GraphStore;
 	private readonly library: Library;
+	private readonly enrichment: EnrichmentService;
 
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
 		this.graphStore = options.graphStore ?? new InMemoryGraphStore();
 		this.library = new Library(new LibraryHandlers(this.metadataStore, new NoopGraphHandlers()));
+		this.enrichment = new EnrichmentService(
+			this.metadataStore,
+			(assetId) => this.library.getAssetFilePath(assetId),
+		);
+		this.library.subscribe((change) => {
+			if (change.type === "reset") {
+				void this.enrichment.refreshStale(change.snapshot.assets).then((records) => {
+					for (const record of records) this.library.notifyEnrichment(record.assetId);
+				}).catch(() => undefined);
+			} else if (change.type === "upsert") {
+				void this.enrichment.refreshStale([change.asset]).then((records) => {
+					for (const record of records) this.library.notifyEnrichment(record.assetId);
+				}).catch(() => undefined);
+			}
+		});
 	}
 
 	async openLibrary(rootPath: string): Promise<LibrarySnapshot> {
@@ -183,7 +201,22 @@ export class LocalCore {
 			...toSearchItem(asset, properties),
 			createdAt: asset.createdAt,
 			previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
+			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
 		};
+	}
+
+	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
+		return this.metadataStore.getAssetEnrichment(assetId);
+	}
+
+	async analyzeAsset(assetId: string): Promise<AssetEnrichment> {
+		const record = await this.enrichment.analyze(assetId);
+		this.library.notifyEnrichment(assetId);
+		return record;
+	}
+
+	refreshEnrichment(assets: Asset[]): Promise<AssetEnrichment[]> {
+		return this.enrichment.refreshStale(assets);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {

@@ -606,6 +606,13 @@ body.resizing-columns {
 	overflow-y: auto;
 }
 
+.enrichment-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
 .details-content section + section {
 	margin-top: 24px;
 	padding-top: 18px;

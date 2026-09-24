@@ -87,3 +87,15 @@
 - 在 Electron Main 通过 `@loom/agent` 注册两个工具；模型和 UI 结果都不包含绝对文件系统路径
 - 通过 `TOOL_CALL_RESULT` 与 `CUSTOM loom.tool_result` 同时保留模型文字和 `asset_list` / `asset_detail` 结构化通道
 - 测试覆盖检索、结构化结果、非法参数、同名重复工具调用和路径安全边界
+
+---
+
+## ✅ 本地资产富化
+
+补齐不依赖 AI 的 Level 1 技术元数据，按 `asset_id` 做本地缓存。
+
+- 新增 `asset_metadata`：固定失效列（`version`、`source_modified_at`、`status`、`error`）+ 带 `kind` 的 JSON
+- 从磁盘文件提取：图片尺寸与安全 EXIF、系统 `ffprobe` 音视频、txt/md/json/csv 限长文本
+- 打开/reconcile 后自动刷新缺失或过期记录；Analyze 强制重跑；重命名/移动不重算
+- Details 展示只读技术元数据并提供 Analyze
+- 测试覆盖 PNG 尺寸、文本提取、mtime 失效、持久化与重命名跳过

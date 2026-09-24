@@ -1,6 +1,7 @@
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type {
 	Asset,
+	AssetEnrichment,
 	AssetPropertyValue,
 	LibraryChange,
 	LibrarySnapshot,
@@ -34,6 +35,8 @@ export const IPC = {
 	removeProperty: "loom:removeProperty",
 	setAssetProperty: "loom:setAssetProperty",
 	removeAssetProperty: "loom:removeAssetProperty",
+	getAssetEnrichment: "loom:getAssetEnrichment",
+	analyzeAsset: "loom:analyzeAsset",
 } as const;
 
 export interface LoomApi {
@@ -57,6 +60,8 @@ export interface LoomApi {
 		value: PropertyValue,
 	) => Promise<AssetPropertyValue>;
 	removeAssetProperty: (assetId: string, propertyId: string) => Promise<void>;
+	getAssetEnrichment: (assetId: string) => Promise<AssetEnrichment | undefined>;
+	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 }
 
 declare global {
