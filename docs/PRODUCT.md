@@ -199,7 +199,7 @@ See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific proce
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. The first release focuses on FFmpeg media processing, followed by ComfyUI as a creation runtime. FFmpeg is exposed through a curated toolset, while ComfyUI's lower-level capabilities are initially exposed directly rather than hidden behind an early abstraction.
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, path jail, and ingest. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider.
 
 ### 6.1 FFmpeg — first Agent tools
 
@@ -232,25 +232,21 @@ parallel [
 
 This provides a strong tool-calling demonstration.
 
-### 6.2 ComfyUI — Creative Runtime
+### 6.2 Creation via MCP
 
-ComfyUI is already a flexible, programmable creation platform. Initially the Agent interacts directly with its underlying API instead of forcing an abstraction too early.
+ComfyUI, and later GPT Image / Kling / Seedance, attach as MCP servers. The Agent calls `server__tool` names; Loom does not embed each provider's HTTP API.
 
 ```
 Agent
  ↓
-ComfyUI API
+MCP host  (stdio or remote HTTP)
+ ↓
+ComfyUI / other creation servers
 ```
 
-The Agent can:
+A first-party ingest tool copies MCP outputs into the current library (relative path, default `outputs/`). The existing watcher indexes them. If a server already writes inside the library root, ingest is unnecessary.
 
-- submit and compose Workflow JSON
-- choose Checkpoint, LoRA, Sampler, VAE, and other node parameters
-- run workflows and collect image or video outputs
-
-This preserves ComfyUI's flexibility and avoids premature abstraction.
-
-> Deferred: after adding more creation providers such as GPT Image, Kling, and Seedance, introduce higher-level `generate_image` and `generate_video` capabilities to hide provider differences. Do not build this abstraction yet.
+> Deferred: do not add `generate_image` / `generate_video` wrappers that hide providers. MCP tool names stay visible.
 
 ---
 
@@ -264,7 +260,8 @@ This preserves ComfyUI's flexibility and avoids premature abstraction.
 3.  hybrid_search      rating / semantic / metadata
 4.  inspect_assets
 5.  plan_workflow
-6.  generate_video     → ComfyUI
+6.  MCP creation tool  → ComfyUI (or other server)
+6b. ingest             → library-relative path
 7.  ffmpeg             → 9:16 → 15 sec
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
@@ -351,6 +348,6 @@ Introduce these progressively when real scenarios require them:
 - **Sandboxing:** isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
-- **MCP:** connect external tools and creative services.
+- **MCP settings UI:** add/remove servers without editing a config file.
 - **Evals:** evaluate Agent behavior, tool calls, and retrieval quality.
 - **Observability:** record run traces, tool calls, latency, and token usage.

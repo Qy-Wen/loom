@@ -153,7 +153,8 @@ Enforced constraints:
 Configuration is enough; vendor source does not need to change:
 
 - **Disable coding tools:** `noTools: "builtin"` removes read/edit/bash and similar tools.
-- **Register Loom tools:** `customTools: [search_assets, hybrid_search, ffmpeg.*, comfyui.*, create_relationship, index_asset]`.
+- **Register Loom tools:** `customTools: [search_assets, hybrid_search, ffmpeg.*, ingest_to_library, create_relationship, index_asset]`.
+- **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` beside first-party tools. Creation runtimes such as ComfyUI attach here; do not add a first-party Comfy HTTP client. URLs, commands, and credentials stay in Main.
 - **Replace the system prompt:** `systemPromptOverride` receives the creative-Agent prompt.
 - **Replace context:** inject asset-library context rather than a code repository.
 

@@ -199,7 +199,7 @@ Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相
 
 ## 6. Agent 工具与创作层
 
-Agent 通过工具调用外部能力。第一版聚焦 FFmpeg（媒体处理），随后接入 ComfyUI（创作运行时）；FFmpeg 以封装好的工具集形式提供，而 ComfyUI 初期直接把底层能力暴露给 Agent。
+Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、路径狱、入库。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。
 
 ### 6.1 FFmpeg — 第一批 Agent Tools
 
@@ -232,25 +232,21 @@ parallel [
 
 非常适合演示 Tool Calling。
 
-### 6.2 ComfyUI — Creative Runtime
+### 6.2 创作走 MCP
 
-ComfyUI 本身就是一个通用、可编排的创作平台，因此初期直接把它的底层能力暴露给 Agent，让 Agent 直接操作 ComfyUI（而不强行先做一层能力抽象）。
+ComfyUI，以及以后的 GPT Image / Kling / Seedance，都以 MCP server 挂上。Agent 调 `server__tool`；Loom 不内嵌各家 HTTP API。
 
 ```
 Agent
  ↓
-ComfyUI API
+MCP host（stdio 或远程 HTTP）
+ ↓
+ComfyUI / 其他创作 server
 ```
 
-Agent 可以直接：
+第一方入库工具把 MCP 产物拷进当前库（相对路径，默认 `outputs/`），现有 watcher 收编。若 server 已经写在库根下，就不必入库。
 
-- 提交 / 编排 Workflow JSON
-- 选择 Checkpoint / LoRA / Sampler / VAE 等节点与参数
-- 运行工作流并取回产物（图片 / 视频）
-
-这样能充分利用 ComfyUI 的灵活性，也避免早期过度抽象。
-
-> 后置：待接入更多创作 provider（GPT Image / Kling / Seedance 等）时，再在上层引入统一能力抽象（`generate_image` / `generate_video`）屏蔽 provider 差异。当前不做。
+> 后置：不上 `generate_image` / `generate_video` 这类屏蔽 provider 的封装。MCP 工具名保持可见。
 
 ---
 
@@ -264,7 +260,8 @@ Agent 可以直接：
 3.  hybrid_search      rating / semantic / metadata
 4.  inspect_assets
 5.  plan_workflow
-6.  generate_video     → ComfyUI
+6.  MCP 创作工具       → ComfyUI（或其他 server）
+6b. ingest             → 库内相对路径
 7.  ffmpeg             → 9:16 → 15 sec
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
@@ -351,6 +348,6 @@ POST /graph/query
 - **沙箱**：隔离执行高风险工具与生成任务。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
-- **MCP**：接入外部工具与创作服务。
+- **MCP 设置页**：加减 server，不用手改配置文件。
 - **Evals**：评测 Agent、工具调用与检索效果。
 - **可观测性**：记录运行轨迹、工具调用、耗时与 token。

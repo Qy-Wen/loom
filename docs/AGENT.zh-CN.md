@@ -153,7 +153,8 @@ packages/agent/src/
 这些都通过配置完成，不用动 vendor 里的代码：
 
 - **关掉编码工具**：`noTools: "builtin"`（去掉 read/edit/bash…）。
-- **注册 Loom 工具**：`customTools: [search_assets, hybrid_search, ffmpeg.*, comfyui.*, create_relationship, index_asset]`。
+- **注册 Loom 工具**：`customTools: [search_assets, hybrid_search, ffmpeg.*, ingest_to_library, create_relationship, index_asset]`。
+- **MCP 客户端**：Main 读 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，和自家工具并列。ComfyUI 这类创作运行时从这里挂；不写第一方 Comfy HTTP 客户端。URL、命令和凭据留在 Main。
 - **换系统提示词**：`systemPromptOverride` → 创作 Agent 提示词。
 - **换上下文**：注入素材库信息，而非代码仓库。
 

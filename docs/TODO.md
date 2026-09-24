@@ -4,35 +4,32 @@
 
 > Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design and [AGENT.md](./AGENT.md) for the Agent architecture.
 > Only the next three steps are detailed; later work stays at summary level.
+> Creation tools (ComfyUI and later) attach as MCP servers. Loom-owned tools stay the library: search, FFmpeg, path jail, and ingest.
 
 ---
 
-## Step 1: Local Agent sessions
+## Step 1: Library ingest for MCP outputs
 
-Persist multiple conversations per library, following pi's JsonlSessionRepo shape (create / open / list / delete, append-only JSONL). Do not use CopilotKit cloud Threads.
+MCP servers create files wherever they want. Loom only indexes the library, so the Agent needs one first-party way to land bytes or a file inside the current library.
 
-- [x] Session files under the current library `.loom/sessions/`; create, switch, list
-- [x] Close archives a session (history stays, can reopen); delete is separate and refused while open
-- [x] Restore transcript into the Agent after restart so the model keeps context
+- [ ] First-party tool writes into the library by relative path (default `outputs/`); absolute paths stay in Main
+- [ ] Accept MCP-returned bytes or a path the host can read; copy into the library, then let the watcher index
+- [ ] Not Comfy-specific; the same tool serves any creation MCP
+- [ ] Do not add `generate_image` / `generate_video` or a Comfy HTTP client
 
-## Step 2: Hybrid Search
+## Step 2: Output provenance
 
-Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
+Record where Agent-created files came from. Do not introduce LadybugDB or the Graph view yet.
 
-- [ ] SQLite FTS full-text search over filenames, paths, properties, and extracted text
-- [ ] sqlite-vec vector search over selectively enriched assets
-- [ ] Metadata Filter over built-in fields and custom properties
-- [ ] Fuse retrieval behind `search_assets` / `hybrid_search`
-- [ ] Establish a minimal retrieval evaluation set
+- [ ] Persist `GENERATED_FROM` (or equivalent) when FFmpeg convenience tools write an output
+- [ ] Persist the same edge when ingest writes an MCP output
+- [ ] Expose those edges on `inspect_asset` and in Details
+- [ ] Keep the store thin (SQLite is enough); graph handlers can stay no-op
 
-## Step 3: AI enrichment
+## Step 3: Search Level 1 text
 
-Add optional, on-demand embeddings and VLM analysis on top of local technical metadata.
-
-- [ ] Persist Level 2 embeddings for selected assets and expose them to Hybrid Search
-- [ ] Add an on-demand VLM pass for captions, tags, or scene descriptions
-- [ ] Track enrichment jobs and cost-visible status in the UI
-- [ ] Keep all AI work user-triggered; never enrich the whole library by default
+- [ ] Include `asset_metadata` extracts in the current `search_assets` match
+- [ ] Do not add FTS, vectors, or Hybrid Search yet
 
 ---
 
@@ -42,9 +39,10 @@ Completed steps are recorded in the [archive](./archive/README.md).
 
 ## Later
 
+- **Hybrid Search:** SQLite FTS, sqlite-vec, fused `hybrid_search`, and a minimal retrieval eval set — after embeddings exist
+- **AI enrichment:** on-demand Level 2 embeddings and VLM captions/tags; never enrich the whole library by default
+- **Relationship graph:** LadybugDB, Graph view, and manual relationship editing
 - **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
-- **Creation:** connect directly to ComfyUI for image and video generation
-- **Relationship graph:** implement relationship storage with LadybugDB, automatic provenance, and Graph view
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
