@@ -22,6 +22,17 @@ import {
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
+import { MediaService } from "./media/service.ts";
+import type {
+	ConvertFormatArgs,
+	CropVideoArgs,
+	ExtractClipArgs,
+	ExtractFrameArgs,
+	MediaInfoResult,
+	MediaJobResult,
+	ResizeVideoArgs,
+	RunFfmpegArgs,
+} from "./model/media.ts";
 import { InMemoryGraphStore } from "./stores/memory.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import type { GraphStore, MetadataStore } from "./stores/types.ts";
@@ -37,6 +48,7 @@ export class LocalCore {
 	readonly graphStore: GraphStore;
 	private readonly library: Library;
 	private readonly enrichment: EnrichmentService;
+	private readonly media: MediaService;
 
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
@@ -46,6 +58,7 @@ export class LocalCore {
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
 		);
+		this.media = new MediaService(this.library);
 		this.library.subscribe((change) => {
 			if (change.type === "reset") {
 				void this.enrichment.refreshStale(change.snapshot.assets).then((records) => {
@@ -217,6 +230,34 @@ export class LocalCore {
 
 	refreshEnrichment(assets: Asset[]): Promise<AssetEnrichment[]> {
 		return this.enrichment.refreshStale(assets);
+	}
+
+	getMediaInfo(path: string): Promise<MediaInfoResult> {
+		return this.media.getMediaInfo(path);
+	}
+
+	extractFrame(args: ExtractFrameArgs): Promise<MediaJobResult> {
+		return this.media.extractFrame(args);
+	}
+
+	extractClip(args: ExtractClipArgs): Promise<MediaJobResult> {
+		return this.media.extractClip(args);
+	}
+
+	resizeVideo(args: ResizeVideoArgs): Promise<MediaJobResult> {
+		return this.media.resizeVideo(args);
+	}
+
+	cropVideo(args: CropVideoArgs): Promise<MediaJobResult> {
+		return this.media.cropVideo(args);
+	}
+
+	convertFormat(args: ConvertFormatArgs): Promise<MediaJobResult> {
+		return this.media.convertFormat(args);
+	}
+
+	runFfmpeg(args: RunFfmpegArgs): Promise<MediaJobResult> {
+		return this.media.runFfmpeg(args);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {

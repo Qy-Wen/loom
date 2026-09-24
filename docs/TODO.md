@@ -7,7 +7,15 @@
 
 ---
 
-## Step 1: Hybrid Search
+## Step 1: FFmpeg Agent tools
+
+Let the Agent call FFmpeg for local media work and index the outputs.
+
+- [x] Convenience tools: media info, frame extract, clip, resize, crop, convert; `run_ffmpeg` when those are not enough
+- [x] Tools accept library-relative paths only; absolute paths stay in Local Core
+- [x] Write outputs inside the library (default `outputs/`, or a caller-specified relative path) and let the existing watcher index them
+
+## Step 2: Hybrid Search
 
 Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
 
@@ -16,16 +24,6 @@ Upgrade deterministic asset search into one retrieval stack combining lexical, v
 - [ ] Metadata Filter over built-in fields and custom properties
 - [ ] Fuse retrieval behind `search_assets` / `hybrid_search`
 - [ ] Establish a minimal retrieval evaluation set
-
-## Step 2: FFmpeg Agent tools
-
-Let the Agent perform deterministic local media operations and index their outputs.
-
-- [ ] Add media inspection, frame extraction, clipping, resizing, cropping, and format conversion tools
-- [ ] Validate all asset IDs and keep filesystem paths inside Local Core
-- [ ] Stream tool progress and support cancellation
-- [ ] Index generated files and attach provenance to source asset IDs
-- [ ] Add fixture-based tool and failure-path tests
 
 ## Step 3: AI enrichment
 
@@ -44,6 +42,7 @@ Completed steps are recorded in the [archive](./archive/README.md).
 
 ## Later
 
+- **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
 - **Creation:** connect directly to ComfyUI for image and video generation
 - **Relationship graph:** implement relationship storage with LadybugDB, automatic provenance, and Graph view

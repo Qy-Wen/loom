@@ -10,7 +10,11 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "dev": "pnpm --filter @loom/app dev",
-    "vendor:sync": "pnpm --filter @loom/agent vendor:sync"
+    "vendor:sync": "pnpm --filter @loom/agent vendor:sync",
+    "vendor:ffmpeg": "node scripts/download-ffmpeg.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

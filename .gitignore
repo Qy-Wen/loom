@@ -16,6 +16,9 @@ build/
 # Loom library metadata (should never be committed)
 .loom/
 
+# Bundled FFmpeg (pnpm vendor:ffmpeg)
+packages/core/vendor/ffmpeg/*/
+
 # Logs
 *.log
 npm-debug.log*

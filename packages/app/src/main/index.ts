@@ -14,6 +14,7 @@ import type { LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { createAssetTools } from "./asset-tools.ts";
+import { createFfmpegTools } from "./ffmpeg-tools.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
@@ -31,9 +32,11 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt:
 		"You are Loom, an assistant for a local creative asset workspace. " +
 		"Use search_assets to find real assets and inspect_asset before making claims about one asset. " +
-		"Refer to assets by assetId or relative path and never invent or request absolute filesystem paths.",
+		"Refer to files by library-relative path (clips/hero.mp4) and never invent or request absolute filesystem paths. " +
+		"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
+		"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array of library-relative paths.",
 	model: { provider: "deepseek", model: "deepseek-v4-flash" },
-	tools: createAssetTools(localCore),
+	tools: [...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;

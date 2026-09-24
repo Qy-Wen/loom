@@ -204,14 +204,17 @@ Agent 通过工具调用外部能力。第一版聚焦 FFmpeg（媒体处理）�
 
 第一版无需接入任何生成模型，仅凭 FFmpeg 就能支撑大量 Agent Workflow。
 
+Agent 工具用**库内相对路径**指文件（`clips/hero.mp4`）。产物可以写在库根下任意位置，路径由用户或 Agent 指定；未指定时封装工具默认写到 `outputs/`。绝对路径不进工具参数和返回值，由 Local Core 在碰盘时解析。`asset_id` 仍是内部身份（见第 4 节）。
+
 **工具集：**
 
 ```
 get_media_info      extract_frame       extract_clip
-concat_video        resize_video        crop_video
-change_speed        extract_audio       convert_format
-generate_thumbnail  add_subtitle
+resize_video        crop_video          convert_format
+run_ffmpeg
 ```
+
+`run_ffmpeg` 是封装工具盖不住时的逃生口。`concat_video`、`change_speed`、`extract_audio`、`add_subtitle` 可以后做，先走 `run_ffmpeg`。
 
 **示例：**
 
