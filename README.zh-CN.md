@@ -13,6 +13,8 @@ pnpm install
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
 pnpm --filter @loom/agent try:agent   # 冒烟测试：跑通一轮 agent loop
 pnpm test                            # 全部单元 / 集成测试
+pnpm test:e2e                        # Playwright 冷启动（需先 build）
+pnpm test:e2e:attach                 # Playwright 连上正在跑的 pnpm dev（:9333）
 pnpm -r typecheck
 ```
 

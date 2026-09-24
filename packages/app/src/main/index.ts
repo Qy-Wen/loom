@@ -1,5 +1,6 @@
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
+import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
@@ -22,6 +23,22 @@ import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 
 const ASSET_SCHEME = "loom-asset";
+const DEFAULT_CDP_PORT = "9333";
+
+function configureAutomation(): void {
+	if (process.env.LOOM_E2E === "1") {
+		app.setPath("userData", process.env.LOOM_E2E_USER_DATA?.trim() || join(tmpdir(), `loom-e2e-${process.pid}`));
+		return;
+	}
+	if (app.isPackaged || process.env.LOOM_CDP_PORT === "0") return;
+	const port = process.env.LOOM_CDP_PORT?.trim() || DEFAULT_CDP_PORT;
+	app.commandLine.appendSwitch("remote-debugging-port", port);
+	app.commandLine.appendSwitch("remote-debugging-address", "127.0.0.1");
+	app.commandLine.appendSwitch("remote-allow-origins", `http://127.0.0.1:${port}`);
+	console.log(`[loom:e2e] CDP http://127.0.0.1:${port}`);
+}
+
+configureAutomation();
 
 protocol.registerSchemesAsPrivileged([
 	{
@@ -320,6 +337,7 @@ app.on("window-all-closed", () => {
 });
 
 app.on("will-quit", (event) => {
+	if (process.env.LOOM_E2E === "1") return;
 	if (shutdownStarted) return;
 	event.preventDefault();
 	shutdownStarted = true;

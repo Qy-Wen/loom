@@ -19,6 +19,9 @@ build/
 # Bundled FFmpeg (pnpm vendor:ffmpeg)
 packages/core/vendor/ffmpeg/*/
 
+# Playwright
+packages/app/e2e-results/
+
 # Logs
 *.log
 npm-debug.log*
