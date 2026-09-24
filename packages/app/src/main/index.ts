@@ -36,7 +36,8 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 		"Use search_assets to find real assets and inspect_asset before making claims about one asset. " +
 		"Refer to files by library-relative path (clips/hero.mp4) and never invent or request absolute filesystem paths. " +
 		"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
-		"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array of library-relative paths.",
+		"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array of library-relative paths. " +
+		"MCP tools are named server__tool and attach after configured servers connect.",
 	model: { provider: "deepseek", model: "deepseek-v4-flash" },
 	tools: [...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
@@ -296,20 +297,16 @@ app
 		}
 
 		mcpHost = new McpHost();
-		const mcpTools = await mcpHost.connect(await loadConfiguredMcpServers());
 		// Start the localhost agent server before the window loads, so the
-		// renderer always finds a ready endpoint.
+		// renderer always finds a ready endpoint. MCP attaches in the background.
 		agentServer = await startAgentServer({
 			...AGENT_OPTIONS,
-			tools: [...(AGENT_OPTIONS.tools ?? []), ...mcpTools],
-			systemPrompt: AGENT_OPTIONS.systemPrompt +
-				(mcpTools.length
-					? " MCP tools are named server__tool and come from configured MCP servers."
-					: ""),
+			tools: [...(AGENT_OPTIONS.tools ?? [])],
 		}, localCore);
 		registerAssetProtocol();
 		registerIpc();
 		createWindow();
+		void attachConfiguredMcp(mcpHost);
 
 		app.on("activate", () => {
 			if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -341,6 +338,12 @@ app.on("will-quit", (event) => {
 		app.quit();
 	});
 });
+
+async function attachConfiguredMcp(host: McpHost): Promise<void> {
+	const tools = await host.connect(await loadConfiguredMcpServers());
+	if (shutdownStarted || mcpHost !== host) return;
+	if (tools.length) agentServer?.addTools(tools);
+}
 
 async function loadConfiguredMcpServers() {
 	const configured = process.env.LOOM_MCP_CONFIG?.trim();

@@ -129,6 +129,11 @@ class PiAgentAdapter implements LoomAgent {
 	getMessages(): LoomTranscriptMessage[] {
 		return this.agent.state.messages as unknown as LoomTranscriptMessage[];
 	}
+
+	addTools(tools: LoomTool[]): void {
+		if (!tools.length) return;
+		this.agent.state.tools = [...this.agent.state.tools, ...tools.map(toPiTool)];
+	}
 }
 
 /** Create a Loom agent backed by the vendored pi engine. */

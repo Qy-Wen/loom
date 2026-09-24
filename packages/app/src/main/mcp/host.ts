@@ -12,28 +12,40 @@ export type McpSessionFactory = (config: McpServerConfig) => Promise<McpSession>
 export class McpHost {
 	private readonly sessions: { config: McpServerConfig; session: McpSession }[] = [];
 	private readonly openSession: McpSessionFactory;
+	private closed = false;
 
 	constructor(openSession: McpSessionFactory = openSdkSession) {
 		this.openSession = openSession;
 	}
 
 	async connect(configs: McpServerConfig[]): Promise<LoomTool[]> {
-		const tools: LoomTool[] = [];
-		for (const config of configs) {
-			try {
-				const session = await this.openSession(config);
-				const specs = await session.listTools();
-				this.sessions.push({ config, session });
-				tools.push(...toolsFromMcpSession(config.id, session, specs));
-				console.log(`MCP ${config.id}: ${specs.map((spec) => spec.name).join(", ") || "(no tools)"}`);
-			} catch (error) {
-				console.error(`Failed to connect MCP server ${config.id}`, error);
+		const results = await Promise.all(configs.map((config) => this.connectOne(config)));
+		return results.flat();
+	}
+
+	private async connectOne(config: McpServerConfig): Promise<LoomTool[]> {
+		try {
+			const session = await this.openSession(config);
+			if (this.closed) {
+				await session.close();
+				return [];
 			}
+			const specs = await session.listTools();
+			if (this.closed) {
+				await session.close();
+				return [];
+			}
+			this.sessions.push({ config, session });
+			console.log(`MCP ${config.id}: ${specs.map((spec) => spec.name).join(", ") || "(no tools)"}`);
+			return toolsFromMcpSession(config.id, session, specs);
+		} catch (error) {
+			console.error(`Failed to connect MCP server ${config.id}`, error);
+			return [];
 		}
-		return tools;
 	}
 
 	async close(): Promise<void> {
+		this.closed = true;
 		const closing = this.sessions.splice(0).map(({ session }) => session.close());
 		await Promise.allSettled(closing);
 	}

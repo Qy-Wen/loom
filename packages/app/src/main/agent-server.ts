@@ -6,7 +6,7 @@
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { LoomAgentOptions } from "@loom/agent";
+import type { LoomAgentOptions, LoomTool } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
 import { type AgentSessionStore, LoomAgUiAgent } from "./ag-ui-agent.ts";
@@ -18,6 +18,7 @@ export interface AgentServer {
 	agentId: string;
 	resetSessions: () => void;
 	dropSession: (id: string) => void;
+	addTools: (tools: LoomTool[]) => void;
 	close: () => Promise<void>;
 }
 
@@ -76,6 +77,7 @@ export async function startAgentServer(
 		agentId: AGENT_ID,
 		resetSessions: () => agent.resetSessions(),
 		dropSession: (id) => agent.dropSession(id),
+		addTools: (tools) => agent.addTools(tools),
 		close: () =>
 			new Promise<void>((resolve, reject) => {
 				server.close((err) => (err ? reject(err) : resolve()));

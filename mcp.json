@@ -1,0 +1,11 @@
+{
+	"servers": [
+		{
+			"id": "comfy",
+			"command": "C:\\Users\\AAlex\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\comfy-mcp.exe",
+			"env": {
+				"COMFY_BIN": "C:\\Users\\AAlex\\AppData\\Local\\Programs\\Python\\Python312\\Scripts\\comfy.exe"
+			}
+		}
+	]
+}
