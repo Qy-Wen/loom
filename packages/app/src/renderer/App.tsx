@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
+	AssetEnrichment,
 	AssetPropertyValue,
 	LibraryChange,
 	LibrarySnapshot,
@@ -28,7 +29,7 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
-	if (change.type === "error") return current;
+	if (change.type === "error" || change.type === "enrichment") return current;
 	if (change.type === "remove") {
 		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
 	}
@@ -67,6 +68,9 @@ export function App(): React.JSX.Element {
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
+	const [analyzing, setAnalyzing] = useState(false);
+	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
 		shellRef,
 		shellStyle,
@@ -104,8 +108,23 @@ export function App(): React.JSX.Element {
 			if (change.type === "folder_upsert") {
 				setCollapsedFolders((current) => new Set(current).add(change.relativePath));
 			}
+			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
+				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
+			}
 		});
 	}, []);
+
+	selectedAssetIdRef.current = selectedAssetId;
+
+	useEffect(() => {
+		if (!selectedAssetId) {
+			setEnrichment(undefined);
+			return;
+		}
+		void window.loom.getAssetEnrichment(selectedAssetId).then(setEnrichment).catch(() => {
+			setEnrichment(undefined);
+		});
+	}, [selectedAssetId]);
 
 	const selectedAsset = useMemo(
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
@@ -152,6 +171,19 @@ export function App(): React.JSX.Element {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			setRenamingAssetId(null);
+		}
+	}
+
+	async function analyzeSelected(): Promise<void> {
+		if (!selectedAssetId) return;
+		setAnalyzing(true);
+		setError(null);
+		try {
+			setEnrichment(await window.loom.analyzeAsset(selectedAssetId));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setAnalyzing(false);
 		}
 	}
 
@@ -349,6 +381,9 @@ export function App(): React.JSX.Element {
 						onRemoveProperty={removeProperty}
 						onSetPropertyValue={setPropertyValue}
 						onRemovePropertyValue={removePropertyValue}
+						enrichment={enrichment}
+						analyzing={analyzing}
+						onAnalyze={() => void analyzeSelected()}
 					/>
 				</div>
 			</div>

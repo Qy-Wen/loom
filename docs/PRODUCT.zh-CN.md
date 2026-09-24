@@ -76,42 +76,7 @@ CreativeAssets/          -- 用户选择的库根目录
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 
-SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。
-
-**资产主表：**
-
-```
-assets
-------
-asset_id          -- UUID（见第 4 节）
-path
-filename
-type
-size
-created_at
-modified_at
-hash
-width
-height
-duration
-embedding_status
-```
-
-**Obsidian 风格的自定义属性：**
-
-```
-properties
-----------
-property_id
-name
-type
-
-asset_properties
-----------------
-asset_id
-property_id
-value
-```
+SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。数据库在 `<library>/.loom/metadata.db`：资产索引（`assets`）、库级键值（`library_meta`）、Obsidian 风格的自定义属性（`properties`、`asset_properties`），以及 Level 1 技术元数据（`asset_metadata`）。列定义见 [data/SCHEMA.zh-CN.md](./data/SCHEMA.zh-CN.md)。
 
 用户可以自由创建属性字段，例如：
 
@@ -224,6 +189,8 @@ Level 3  VLM Semantic Understanding 可选、可能收费
    ↓
 Level 4  Deep Analysis              可选
 ```
+
+Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相机、文本）。存在 `asset_metadata` 里，按源文件 `mtime` 和提取器版本失效。
 
 > 各层的具体处理管线、媒体类型处理流程，以及视频的多粒度（scene / transcript chunk）理解方案，见 [ENRICHMENT.md](./ENRICHMENT.zh-CN.md)。
 

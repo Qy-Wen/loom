@@ -121,6 +121,8 @@ extract_clip(73s, 78s)
 
 ## 4. 与检索层的关系
 
+- Level 1 写入按 `asset_id` 关联的 `asset_metadata`。失效判断用固定列；各类型字段放在带 `kind` 的 JSON 里（`image` / `video` / `audio` / `text`）。
+- Level 1 从磁盘文件提取。缺失或过期记录在 reconcile 后刷新；Analyze 强制重跑。重命名/移动不会。
 - Level 2/3/4 的产物最终写入 SQLite（向量 + FTS + metadata），供 Hybrid Search 使用（见 PRODUCT.md 第 3.2 节）。
 - 视频分段 / transcript chunk 作为独立的可检索单元存储，使 Agent 能定位到时间片段而非整段视频。
 - 富化状态由 `assets.embedding_status` 及富化任务表跟踪（见 PRODUCT.md 第 3.2 节）。

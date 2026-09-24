@@ -87,3 +87,15 @@ Connected the live local asset library to the Agent through safe, structured too
 - Registered both tools in Electron Main through `@loom/agent`; absolute filesystem paths never enter model or UI results
 - Preserved model text and structured `asset_list` / `asset_detail` channels through `TOOL_CALL_RESULT` and `CUSTOM loom.tool_result`
 - Added retrieval, structured-result, invalid-argument, repeated-tool-call, and path-boundary tests
+
+---
+
+## ✅ Local asset enrichment
+
+Added non-AI Level 1 technical metadata as a local cache keyed by `asset_id`.
+
+- Added `asset_metadata` with fixed invalidation columns (`version`, `source_modified_at`, `status`, `error`) and a `kind` JSON payload
+- Extractors read the file on disk: image size and safe EXIF, system `ffprobe` for audio/video, and size-capped text for txt/md/json/csv
+- Auto-refresh missing or stale rows after open/reconcile; Analyze forces a rerun; rename/move does not
+- Details shows read-only technical metadata plus Analyze
+- Tests cover PNG dimensions, text extract, stale/mtime invalidation, persist, and rename skip

@@ -32,7 +32,8 @@ export type LibraryChange =
 	| { type: "remove"; assetId: string }
 	| { type: "folder_upsert"; relativePath: string }
 	| { type: "folder_remove"; relativePath: string }
-	| { type: "error"; message: string };
+	| { type: "error"; message: string }
+	| { type: "enrichment"; assetId: string };
 
 const EXTENSIONS: Record<Exclude<AssetType, "other">, ReadonlySet<string>> = {
 	image: new Set([".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".svg", ".webp"]),

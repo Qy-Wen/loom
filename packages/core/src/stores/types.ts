@@ -1,4 +1,5 @@
 import type { Asset } from "../model/asset.ts";
+import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
 
@@ -28,6 +29,8 @@ export interface MetadataStore {
 	listAssetProperties(assetId: string): Promise<AssetPropertyValue[]>;
 	listAllAssetProperties(): Promise<AssetPropertyValue[]>;
 	removeAssetProperty(assetId: string, propertyId: string): Promise<void>;
+	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined>;
+	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
 }
 
 export interface AssetRelation {

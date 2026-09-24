@@ -1,6 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
+import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
 import {
 	assertPropertyDefinition,
 	assertPropertyValue,
@@ -267,6 +268,37 @@ export class SqliteMetadataStore implements MetadataStore {
 			.run(assetId, propertyId);
 	}
 
+	async getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM asset_metadata WHERE asset_id = ?")
+			.get(assetId) as AssetMetadataRow | undefined;
+		return row ? toEnrichment(row) : undefined;
+	}
+
+	async upsertAssetEnrichment(record: AssetEnrichment): Promise<void> {
+		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
+		this.requireDatabase().prepare(`
+			INSERT INTO asset_metadata (
+				asset_id, version, source_modified_at, status, error, data
+			) VALUES (
+				@assetId, @version, @sourceModifiedAt, @status, @error, @data
+			)
+			ON CONFLICT(asset_id) DO UPDATE SET
+				version = excluded.version,
+				source_modified_at = excluded.source_modified_at,
+				status = excluded.status,
+				error = excluded.error,
+				data = excluded.data
+		`).run({
+			assetId: record.assetId,
+			version: record.version,
+			sourceModifiedAt: record.sourceModifiedAt,
+			status: record.status,
+			error: record.error ?? null,
+			data: record.data ? JSON.stringify(record.data) : null,
+		});
+	}
+
 	private ensureSchema(database: Database.Database): void {
 		database.exec(`
 			CREATE TABLE IF NOT EXISTS assets (
@@ -308,6 +340,14 @@ export class SqliteMetadataStore implements MetadataStore {
 			);
 			CREATE INDEX IF NOT EXISTS asset_properties_property_idx
 				ON asset_properties(property_id);
+			CREATE TABLE IF NOT EXISTS asset_metadata (
+				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+				version INTEGER NOT NULL,
+				source_modified_at REAL NOT NULL,
+				status TEXT NOT NULL CHECK(status IN ('ready', 'failed', 'skipped')),
+				error TEXT,
+				data TEXT
+			);
 		`);
 	}
 
@@ -349,6 +389,26 @@ function propertyValueColumns(
 		valueNumber: type === "number" ? value as number : null,
 		valueBoolean: type === "boolean" ? Number(value) : null,
 		valueDate: type === "date" ? value as string : null,
+	};
+}
+
+interface AssetMetadataRow {
+	asset_id: string;
+	version: number;
+	source_modified_at: number;
+	status: EnrichmentStatus;
+	error: string | null;
+	data: string | null;
+}
+
+function toEnrichment(row: AssetMetadataRow): AssetEnrichment {
+	return {
+		assetId: row.asset_id,
+		version: row.version,
+		sourceModifiedAt: row.source_modified_at,
+		status: row.status,
+		error: row.error ?? undefined,
+		data: row.data ? JSON.parse(row.data) as EnrichmentData : undefined,
 	};
 }
 

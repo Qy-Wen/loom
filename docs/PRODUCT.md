@@ -76,42 +76,7 @@ CreativeAssets/          -- selected library root
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 
-SQLite stores all asset metadata, not only vectors.
-
-**Primary asset table:**
-
-```
-assets
-------
-asset_id          -- UUID; see Section 4
-path
-filename
-type
-size
-created_at
-modified_at
-hash
-width
-height
-duration
-embedding_status
-```
-
-**Obsidian-style custom properties:**
-
-```
-properties
-----------
-property_id
-name
-type
-
-asset_properties
-----------------
-asset_id
-property_id
-value
-```
+SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [data/SCHEMA.md](./data/SCHEMA.md).
 
 Users may define fields such as:
 
@@ -224,6 +189,8 @@ Level 3  VLM semantic understanding  Optional, may cost money
    ↓
 Level 4  Deep analysis               Optional
 ```
+
+Level 1 is a local cache of file-derived technical metadata (dimensions, duration, camera, text extract). It is stored in `asset_metadata` and invalidated by source `mtime` plus an extractor version.
 
 See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific processing, and scene/transcript-level video understanding.
 

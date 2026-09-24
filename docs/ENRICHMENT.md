@@ -121,6 +121,8 @@ Asset search becomes true media understanding and manipulation rather than file-
 
 ## 4. Relationship to retrieval
 
+- Level 1 writes `asset_metadata` keyed by `asset_id`. Common invalidation columns stay fixed; per-type fields are a `kind` JSON payload (`image` / `video` / `audio` / `text`).
+- Level 1 is extracted from the file on disk. Missing or stale rows refresh after reconcile; Analyze forces a rerun. Rename/move does not.
 - Level 2/3/4 outputs are written to SQLite (vectors, FTS, and metadata) for Hybrid Search; see PRODUCT.md Section 3.2.
 - Video scenes and transcript chunks are independent retrieval units, allowing the Agent to locate a time range rather than only a whole video.
 - `assets.embedding_status` and enrichment-job records track enrichment state; see PRODUCT.md Section 3.2.

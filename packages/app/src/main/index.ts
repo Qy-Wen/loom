@@ -223,6 +223,12 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.removeAssetProperty, (_event, assetId: string, propertyId: string) => {
 		return localCore.removeAssetProperty(assetId, propertyId);
 	});
+	ipcMain.handle(IPC.getAssetEnrichment, (_event, assetId: string) => {
+		return localCore.getAssetEnrichment(assetId);
+	});
+	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
+		return localCore.analyzeAsset(assetId);
+	});
 
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
