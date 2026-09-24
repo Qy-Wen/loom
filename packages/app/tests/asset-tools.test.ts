@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
-import type { LoomToolResult } from "@loom/agent";
+import { toolResultText, type LoomToolResult } from "@loom/agent";
 import { createAssetTools } from "../src/main/asset-tools.ts";
 
 test("asset tools return structured safe results", async () => {
@@ -23,7 +23,7 @@ test("asset tools return structured safe results", async () => {
 
 		const searchResult = await search.execute({ query: "hero", type: "image" }) as LoomToolResult;
 		assert.equal((searchResult.details as { kind: string }).kind, "asset_list");
-		assert.equal(searchResult.content.includes(hero.assetId), true);
+		assert.equal(toolResultText(searchResult.content).includes(hero.assetId), true);
 		assert.equal(JSON.stringify(searchResult).includes(root), false);
 
 		const detailResult = await inspect.execute({ assetId: hero.assetId }) as LoomToolResult;

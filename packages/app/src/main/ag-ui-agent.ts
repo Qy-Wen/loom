@@ -9,6 +9,7 @@ import { AbstractAgent, type RunAgentInput } from "@ag-ui/client";
 import { type BaseEvent, EventType } from "@ag-ui/core";
 import {
 	createLoomAgent,
+	toolResultText,
 	type LoomAgent as LoomAgentInstance,
 	type LoomAgentOptions,
 	type LoomTool,
@@ -182,7 +183,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								type: EventType.TOOL_CALL_RESULT,
 								messageId: nextId("tool-result"),
 								toolCallId: event.toolCallId,
-								content: event.result.content,
+								content: toolResultText(event.result.content),
 								role: "tool",
 							} as BaseEvent);
 							if (event.result.details !== undefined) {

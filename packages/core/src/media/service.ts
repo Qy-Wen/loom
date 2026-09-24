@@ -23,7 +23,7 @@ import {
 	normalizeConvertFormat,
 } from "./operations.ts";
 import { parseFfprobeJson } from "./probe.ts";
-import { prepareFfmpegArgs, resolveLibraryPath } from "./policy.ts";
+import { prepareFfmpegArgs, resolveMediaPath } from "./policy.ts";
 import { runMediaProcess } from "./run.ts";
 
 export class MediaService {
@@ -35,15 +35,17 @@ export class MediaService {
 		this.run = run;
 	}
 
-	async getMediaInfo(relativePath: string): Promise<MediaInfoResult> {
-		const input = resolveLibraryPath(relativePath, this.library.getPaths());
+	async getMediaInfo(path: string): Promise<MediaInfoResult> {
+		const cwd = this.cwd();
+		const input = resolveMediaPath(path, cwd);
 		const { stdout } = await this.run({
 			program: "ffprobe",
 			args: buildProbeArgs(input.absolutePath),
+			cwd,
 		});
 		return {
 			kind: "media_info",
-			path: input.relativePath,
+			path: input.path,
 			...parseFfprobeJson(stdout),
 		};
 	}
@@ -98,73 +100,62 @@ export class MediaService {
 		if (program !== "ffmpeg" && program !== "ffprobe") {
 			throw new TypeError("program must be ffmpeg or ffprobe");
 		}
-		const paths = this.library.getPaths();
-		const prepared = prepareFfmpegArgs(input.args, paths);
-		await ensureOutputParents(prepared.outputRelativePaths, paths);
+		const cwd = this.cwd();
+		const prepared = prepareFfmpegArgs(input.args, cwd);
+		await ensureOutputParents(prepared.outputPaths, cwd);
+		const { stdout } = await this.run({
+			program,
+			args: prepared.args,
+			cwd,
+		});
+		return {
+			kind: "media_job",
+			program,
+			output: prepared.outputPaths[0],
+			outputs: prepared.outputPaths,
+			stdout: program === "ffprobe" ? stdout : undefined,
+		};
+	}
 
-		try {
-			const { stdout } = await this.run({
-				program,
-				args: prepared.args,
-				cwd: paths.root,
-			});
-			return {
-				kind: "media_job",
-				program,
-				output: prepared.outputRelativePaths[0],
-				outputs: prepared.outputRelativePaths,
-				stdout: program === "ffprobe" ? redactLibraryPaths(stdout, paths.root) : undefined,
-			};
-		} catch (error) {
-			throw redactError(error, paths.root);
-		}
+	private cwd(): string {
+		return this.library.getPaths().root;
 	}
 
 	private async runConvenience(
-		inputRelative: string,
-		outputRelative: string | undefined,
+		inputPath: string,
+		outputPath: string | undefined,
 		suffix: string,
 		extension: string | undefined,
 		buildArgs: (inputPath: string, outputPath: string) => string[],
 	): Promise<MediaJobResult> {
-		const paths = this.library.getPaths();
-		const input = resolveLibraryPath(inputRelative, paths);
-		const ext = extension ?? extensionOf(input.relativePath);
-		const destination = outputRelative
-			? resolveLibraryPath(outputRelative, paths)
-			: await unusedDefaultOutput(input.relativePath, suffix, ext, paths);
+		const cwd = this.cwd();
+		const input = resolveMediaPath(inputPath, cwd);
+		const ext = extension ?? extensionOf(input.path);
+		const destination = outputPath
+			? resolveMediaPath(outputPath, cwd)
+			: await unusedDefaultOutput(input.path, suffix, ext, cwd);
 		await mkdir(dirname(destination.absolutePath), { recursive: true });
-		try {
-			await this.run({
-				program: "ffmpeg",
-				args: buildArgs(input.absolutePath, destination.absolutePath),
-				cwd: paths.root,
-			});
-			return {
-				kind: "media_job",
-				program: "ffmpeg",
-				output: destination.relativePath,
-				outputs: [destination.relativePath],
-			};
-		} catch (error) {
-			throw redactError(error, paths.root);
-		}
+		await this.run({
+			program: "ffmpeg",
+			args: buildArgs(input.absolutePath, destination.absolutePath),
+			cwd,
+		});
+		return {
+			kind: "media_job",
+			program: "ffmpeg",
+			output: destination.path,
+			outputs: [destination.path],
+		};
 	}
 }
 
-async function unusedDefaultOutput(
-	inputRelative: string,
-	suffix: string,
-	extension: string,
-	paths: ReturnType<Library["getPaths"]>,
-) {
-	const stem = sanitizeStem(basename(inputRelative).replace(/\.[^.]+$/, "") || "output");
+async function unusedDefaultOutput(inputPath: string, suffix: string, extension: string, cwd: string) {
+	const stem = sanitizeStem(basename(inputPath).replace(/\.[^.]+$/, "") || "output");
 	const ext = extension.startsWith(".") ? extension.slice(1) : extension;
 	let copyNumber = 1;
 	while (true) {
 		const filename = `${stem}_${suffix}${copyNumber === 1 ? "" : ` ${copyNumber}`}.${ext}`;
-		const relativePath = `outputs/${filename}`;
-		const resolved = resolveLibraryPath(relativePath, paths);
+		const resolved = resolveMediaPath(`outputs/${filename}`, cwd);
 		try {
 			await access(resolved.absolutePath);
 			copyNumber += 1;
@@ -175,32 +166,18 @@ async function unusedDefaultOutput(
 	}
 }
 
-async function ensureOutputParents(
-	relativePaths: string[],
-	paths: ReturnType<Library["getPaths"]>,
-): Promise<void> {
-	for (const relativePath of relativePaths) {
-		const absolutePath = paths.toAbsolutePath(relativePath);
-		await mkdir(dirname(absolutePath), { recursive: true });
+async function ensureOutputParents(paths: string[], cwd: string): Promise<void> {
+	for (const path of paths) {
+		await mkdir(dirname(resolveMediaPath(path, cwd).absolutePath), { recursive: true });
 	}
 }
 
-function extensionOf(relativePath: string): string {
-	const name = basename(relativePath);
+function extensionOf(path: string): string {
+	const name = basename(path);
 	const index = name.lastIndexOf(".");
 	return index > 0 ? name.slice(index + 1) : "mp4";
 }
 
 function sanitizeStem(value: string): string {
 	return (value.trim().replace(/[\\/:*?"<>|\0]+/g, "-").replace(/^\.+/, "") || "output").slice(0, 80);
-}
-
-function redactLibraryPaths(text: string, root: string): string {
-	return text.split(root).join("<library>");
-}
-
-function redactError(error: unknown, root: string): Error {
-	if (!(error instanceof Error)) return new Error(redactLibraryPaths(String(error), root));
-	error.message = redactLibraryPaths(error.message, root);
-	return error;
 }

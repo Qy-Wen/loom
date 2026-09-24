@@ -2,19 +2,20 @@ import type { LocalCore, MediaJobResult } from "@loom/core";
 import type { LoomTool, LoomToolResult } from "@loom/agent";
 
 /**
- * Agent-facing FFmpeg tools. Callers use library-relative paths only.
+ * Agent-facing FFmpeg tools. Paths are relative to the open library cwd, or absolute.
  */
 export function createFfmpegTools(core: LocalCore): LoomTool[] {
 	return [
 		{
 			name: "get_media_info",
 			description:
-				"Read duration, resolution, codecs, and format for one library file. " +
-				"Pass a library-relative path such as clips/hero.mp4. Prefer this over run_ffmpeg for inspection.",
+				"Read duration, resolution, codecs, and format for one media file. " +
+				"Pass a path relative to the workspace cwd, such as clips/hero.mp4, or an absolute path. " +
+				"Prefer this over run_ffmpeg for inspection.",
 			parameters: {
 				type: "object",
 				properties: {
-					path: { type: "string", description: "Library-relative path." },
+					path: { type: "string", description: "Workspace-relative or absolute path." },
 				},
 				required: ["path"],
 				additionalProperties: false,
@@ -29,7 +30,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "extract_frame",
 			description:
 				"Extract one still frame from a video at timeSeconds. " +
-				"Optional output is a library-relative path; defaults to outputs/.",
+				"Optional output path; defaults to outputs/.",
 			parameters: objectSchema({
 				path: { type: "string" },
 				timeSeconds: { type: "number" },
@@ -48,7 +49,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "extract_clip",
 			description:
 				"Cut a clip from startSeconds for durationSeconds. " +
-				"Optional output is a library-relative path; defaults to outputs/.",
+				"Optional output path; defaults to outputs/.",
 			parameters: objectSchema({
 				path: { type: "string" },
 				startSeconds: { type: "number" },
@@ -68,7 +69,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "resize_video",
 			description:
 				"Resize a video by width, height, and/or maxEdge. " +
-				"Optional output is a library-relative path; defaults to outputs/.",
+				"Optional output path; defaults to outputs/.",
 			parameters: objectSchema({
 				path: { type: "string" },
 				width: { type: "number" },
@@ -89,7 +90,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 		{
 			name: "crop_video",
 			description:
-				"Crop a video to x,y,width,height. Optional output is a library-relative path; defaults to outputs/.",
+				"Crop a video to x,y,width,height. Optional output path; defaults to outputs/.",
 			parameters: objectSchema({
 				path: { type: "string" },
 				x: { type: "number" },
@@ -113,7 +114,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "convert_format",
 			description:
 				"Convert a file to another container/format (mp4, webm, gif, mp3, wav, png, jpg, ...). " +
-				"Optional output is a library-relative path; defaults to outputs/.",
+				"Optional output path; defaults to outputs/.",
 			parameters: objectSchema({
 				path: { type: "string" },
 				format: { type: "string" },
@@ -135,8 +136,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "run_ffmpeg",
 			description:
 				"Run bundled ffmpeg or ffprobe with an argv array when the other media tools are not enough. " +
-				"File operands must be library-relative paths. Do not pass a shell string or absolute paths. " +
-				"Network inputs and concat/file protocols are rejected until the sandbox exists.",
+				"Pass args as a string array. File operands may be workspace-relative or absolute.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -185,7 +185,7 @@ function asRecord(value: unknown): Record<string, unknown> {
 function requiredPath(value: unknown, name: string): string {
 	const record = asRecord(value);
 	if (typeof record[name] !== "string" || !record[name].trim()) {
-		throw new TypeError(`${name} must be a non-empty library-relative path`);
+		throw new TypeError(`${name} must be a non-empty path`);
 	}
 	return record[name];
 }
@@ -194,7 +194,7 @@ function optionalPath(value: unknown, name: string): string | undefined {
 	const record = asRecord(value);
 	if (record[name] === undefined) return undefined;
 	if (typeof record[name] !== "string" || !record[name].trim()) {
-		throw new TypeError(`${name} must be a non-empty library-relative path`);
+		throw new TypeError(`${name} must be a non-empty path`);
 	}
 	return record[name];
 }

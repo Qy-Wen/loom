@@ -2,7 +2,8 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "paths": {
-      "#vendor/pi-agent": ["./vendor-pi-agent/src/index.ts"]
+      "#vendor/pi-agent": ["./vendor-pi-agent/src/index.ts"],
+      "#vendor/pi-agent/node": ["./vendor-pi-agent/src/node.ts"]
     }
   },
   "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "vendor-pi-agent/src/**/*.ts"]

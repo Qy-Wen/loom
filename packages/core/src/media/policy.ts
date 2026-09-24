@@ -1,19 +1,11 @@
-import { isAbsolute } from "node:path";
-import type { LibraryPaths } from "../library/paths.ts";
+import { isAbsolute, relative, resolve, sep } from "node:path";
 
-const DENIED_PROTOCOLS =
-	/^(https?|tls|tcp|udp|rtp|rtsp|rtsps?|rtmp|rtmps|srt|srtp|ftp|sftp|smb|crypto|concat|subfile|data|tee|gopher|ipfs|file|pipe):/i;
-
-const FILTER_FILE_SOURCES = /\b(movie|amovie|subtitles)\s*=/i;
-const INPUT_FLAGS = new Set(["-i", "-attach"]);
-const FILTER_FLAGS = new Set(["-vf", "-af", "-filter", "-filter_complex", "-filter:v", "-filter:a"]);
-
-export type MediaPolicyCode = "sandbox_required" | "path_jail" | "invalid_args";
+export type MediaPolicyCode = "invalid_args";
 
 export class MediaPolicyError extends Error {
 	readonly code: MediaPolicyCode;
 
-	constructor(message: string, code: MediaPolicyCode) {
+	constructor(message: string, code: MediaPolicyCode = "invalid_args") {
 		super(message);
 		this.name = "MediaPolicyError";
 		this.code = code;
@@ -22,72 +14,55 @@ export class MediaPolicyError extends Error {
 
 export interface PreparedMediaArgs {
 	args: string[];
-	outputRelativePaths: string[];
+	outputPaths: string[];
 }
 
 export function assertArgv(args: unknown): string[] {
 	if (!Array.isArray(args) || args.some((arg) => typeof arg !== "string")) {
-		throw new MediaPolicyError("args must be an array of strings, not a shell command", "invalid_args");
+		throw new MediaPolicyError("args must be an array of strings, not a shell command");
 	}
 	if (args.some((arg) => arg.includes("\0"))) {
-		throw new MediaPolicyError("args must not contain NUL", "invalid_args");
+		throw new MediaPolicyError("args must not contain NUL");
 	}
 	return args;
 }
 
-/** Resolve a caller-facing library-relative path to an absolute path inside the library. */
-export function resolveLibraryPath(relativePath: string, paths: LibraryPaths): { relativePath: string; absolutePath: string } {
-	if (typeof relativePath !== "string" || !relativePath.trim()) {
-		throw new MediaPolicyError("path must be a non-empty library-relative path", "invalid_args");
+/** Resolve a file path against `cwd`. Relative or absolute; no containment check. */
+export function resolveMediaPath(path: string, cwd: string): { path: string; absolutePath: string } {
+	if (typeof path !== "string" || !path.trim()) {
+		throw new MediaPolicyError("path must be a non-empty string");
 	}
-	const trimmed = relativePath.trim();
-	if (isAbsolute(trimmed) || DENIED_PROTOCOLS.test(trimmed)) {
-		throw deniedOrJail(trimmed);
-	}
-	try {
-		const absolutePath = paths.toAbsolutePath(trimmed.replaceAll("\\", "/"));
-		if (paths.isLoomPath(absolutePath)) {
-			throw new MediaPolicyError("Paths inside .loom are not allowed", "path_jail");
-		}
-		return { relativePath: paths.toRelativePath(absolutePath), absolutePath };
-	} catch (error) {
-		if (error instanceof MediaPolicyError) throw error;
-		throw new MediaPolicyError("Path is outside the library", "path_jail");
-	}
+	const trimmed = path.trim().replaceAll("\\", "/");
+	const absolutePath = isAbsolute(trimmed) ? resolve(trimmed) : resolve(cwd, trimmed);
+	return { path: displayPath(absolutePath, cwd), absolutePath };
 }
 
-export function prepareFfmpegArgs(rawArgs: unknown, paths: LibraryPaths): PreparedMediaArgs {
+export function prepareFfmpegArgs(rawArgs: unknown, cwd: string): PreparedMediaArgs {
 	const args = assertArgv(rawArgs);
 	const rewritten: string[] = [];
-	const outputRelativePaths: string[] = [];
+	const outputPaths: string[] = [];
 	let expectInput = false;
 	let expectFilter = false;
 
 	for (const arg of args) {
 		if (expectFilter) {
-			if (FILTER_FILE_SOURCES.test(arg) || DENIED_PROTOCOLS.test(arg)) {
-				throw new MediaPolicyError(
-					"Filter file sources and network protocols require the sandbox",
-					"sandbox_required",
-				);
-			}
 			rewritten.push(arg);
 			expectFilter = false;
 			continue;
 		}
 
 		if (expectInput) {
-			rewritten.push(resolveOperand(arg, paths).absolutePath);
+			rewritten.push(resolveOperand(arg, cwd).absolutePath);
 			expectInput = false;
 			continue;
 		}
 
-		if (INPUT_FLAGS.has(arg)) {
+		if (arg === "-i" || arg === "-attach") {
 			expectInput = true;
 			rewritten.push(arg);
 			continue;
 		}
-		if (FILTER_FLAGS.has(arg)) {
+		if (arg === "-vf" || arg === "-af" || arg === "-filter" || arg === "-filter_complex" || arg === "-filter:v" || arg === "-filter:a") {
 			expectFilter = true;
 			rewritten.push(arg);
 			continue;
@@ -97,11 +72,10 @@ export function prepareFfmpegArgs(rawArgs: unknown, paths: LibraryPaths): Prepar
 			continue;
 		}
 
-		if (isDeniedSpecifier(arg)) throw deniedOrJail(arg);
-		if (looksLikePath(arg)) {
-			const resolved = resolveOperand(arg, paths);
+		if (looksLikePath(arg) && !isFfmpegSpecifier(arg)) {
+			const resolved = resolveMediaPath(arg, cwd);
 			rewritten.push(resolved.absolutePath);
-			outputRelativePaths.push(resolved.relativePath);
+			outputPaths.push(resolved.path);
 			continue;
 		}
 
@@ -109,36 +83,35 @@ export function prepareFfmpegArgs(rawArgs: unknown, paths: LibraryPaths): Prepar
 	}
 
 	if (expectInput || expectFilter) {
-		throw new MediaPolicyError("FFmpeg arguments are incomplete", "invalid_args");
+		throw new MediaPolicyError("FFmpeg arguments are incomplete");
 	}
 
-	return { args: rewritten, outputRelativePaths: [...new Set(outputRelativePaths)] };
+	return { args: rewritten, outputPaths: [...new Set(outputPaths)] };
 }
 
-function resolveOperand(arg: string, paths: LibraryPaths): { relativePath: string; absolutePath: string } {
-	if (arg === "-" || arg === "/dev/stdin" || arg === "/dev/stdout" || arg === "/dev/stderr") {
-		throw new MediaPolicyError("Pipe and device I/O require the sandbox", "sandbox_required");
+function resolveOperand(arg: string, cwd: string): { path: string; absolutePath: string } {
+	if (isFfmpegSpecifier(arg) || !looksLikePath(arg)) {
+		return { path: arg, absolutePath: arg };
 	}
-	if (isDeniedSpecifier(arg)) throw deniedOrJail(arg);
-	if (!looksLikePath(arg)) {
-		return { relativePath: arg, absolutePath: arg };
-	}
-	return resolveLibraryPath(arg, paths);
+	return resolveMediaPath(arg, cwd);
 }
 
-function deniedOrJail(arg: string): MediaPolicyError {
-	if (isDeniedSpecifier(arg)) {
-		return new MediaPolicyError(`This input requires the sandbox: ${arg}`, "sandbox_required");
-	}
-	return new MediaPolicyError("Path is outside the library", "path_jail");
-}
-
-function isDeniedSpecifier(arg: string): boolean {
-	return DENIED_PROTOCOLS.test(arg);
+function isFfmpegSpecifier(arg: string): boolean {
+	if (arg === "-" || arg.startsWith("/dev/")) return true;
+	if (/^[a-zA-Z]:[\\/]/.test(arg)) return false;
+	return /^[a-z][a-z0-9+.-]*:/i.test(arg);
 }
 
 function looksLikePath(arg: string): boolean {
 	if (!arg || arg.startsWith("-")) return false;
 	if (arg.includes("=")) return false;
 	return isAbsolute(arg) || arg.includes("/") || arg.includes("\\") || /\.[a-z0-9]{2,5}$/i.test(arg);
+}
+
+function displayPath(absolutePath: string, cwd: string): string {
+	const value = relative(cwd, absolutePath);
+	if (value === "" || value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value)) {
+		return absolutePath;
+	}
+	return value.split(sep).join("/");
 }

@@ -199,13 +199,13 @@ Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相
 
 ## 6. Agent 工具与创作层
 
-Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、路径狱、入库。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。
+Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。路径 jail 和进程沙箱以后再加。
 
 ### 6.1 FFmpeg — 第一批 Agent Tools
 
 第一版无需接入任何生成模型，仅凭 FFmpeg 就能支撑大量 Agent Workflow。
 
-Agent 工具用**库内相对路径**指文件（`clips/hero.mp4`）。产物可以写在库根下任意位置，路径由用户或 Agent 指定；未指定时封装工具默认写到 `outputs/`。绝对路径不进工具参数和返回值，由 Local Core 在碰盘时解析。`asset_id` 仍是内部身份（见第 4 节）。
+打开的素材库是工作目录。相对路径相对它解析，也允许绝对路径。未指定输出时封装工具默认写到 `outputs/`。`asset_id` 仍是内部身份（见第 4 节）。
 
 **工具集：**
 
@@ -244,7 +244,7 @@ MCP host（stdio 或远程 HTTP）
 ComfyUI / 其他创作 server
 ```
 
-第一方入库工具把 MCP 产物拷进当前库（相对路径，默认 `outputs/`），现有 watcher 收编。若 server 已经写在库根下，就不必入库。
+若 server 写在库外，Agent 用 `bash` 或 `write` 拷进来，现有 watcher 收编。
 
 > 后置：不上 `generate_image` / `generate_video` 这类屏蔽 provider 的封装。MCP 工具名保持可见。
 
@@ -261,7 +261,7 @@ ComfyUI / 其他创作 server
 4.  inspect_assets
 5.  plan_workflow
 6.  MCP 创作工具       → ComfyUI（或其他 server）
-6b. ingest             → 库内相对路径
+6b. bash / write       → 必要时拷进库
 7.  ffmpeg             → 9:16 → 15 sec
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset

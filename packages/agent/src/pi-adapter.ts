@@ -1,6 +1,5 @@
 /**
- * The ONLY module allowed to import from `#vendor/pi-agent` (and pi-ai for the
- * stream function + model catalog). Everything else in Loom depends on
+ * Vendor boundary with `pi-tools.ts`. Everything else in Loom depends on
  * `./types.ts` instead.
  *
  * Responsibilities:
@@ -11,7 +10,14 @@
 import { Agent, type AgentEvent, type AgentTool } from "#vendor/pi-agent";
 import { createModels, Type } from "@earendil-works/pi-ai";
 import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
-import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTool, LoomTranscriptMessage } from "./types.ts";
+import type {
+	LoomAgent,
+	LoomAgentEvent,
+	LoomAgentOptions,
+	LoomTool,
+	LoomToolContentPart,
+	LoomTranscriptMessage,
+} from "./types.ts";
 
 /** Build the pi-ai model runtime with the providers Loom supports. */
 function buildModels() {
@@ -33,7 +39,7 @@ function toPiTool(tool: LoomTool): AgentTool {
 			const output = await tool.execute(params as never);
 			const result = typeof output === "string" ? { content: output } : output;
 			return {
-				content: [{ type: "text", text: result.content }],
+				content: toPiContent(result.content),
 				details: result.details,
 			};
 		},
@@ -140,7 +146,14 @@ class PiAgentAdapter implements LoomAgent {
 	}
 }
 
+function toPiContent(content: string | LoomToolContentPart[]): LoomToolContentPart[] {
+	if (typeof content === "string") return [{ type: "text", text: content }];
+	return content;
+}
+
 /** Create a Loom agent backed by the vendored pi engine. */
 export function createLoomAgent(options: LoomAgentOptions): LoomAgent {
 	return new PiAgentAdapter(options);
 }
+
+export { createWorkspaceTools, type WorkspaceTools } from "./pi-tools.ts";
