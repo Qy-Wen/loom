@@ -10,6 +10,7 @@ import type {
 import { formatBytes } from "./asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
+import { ToolCallViews } from "./tool-call-views.tsx";
 
 export type SidePanelTab = "agent" | "details";
 
@@ -64,6 +65,7 @@ export function SidePanel({
 			</div>
 
 			<div className={`panel-content agent-content ${activeTab === "agent" ? "active" : ""}`}>
+				<ToolCallViews />
 				<CopilotChat />
 			</div>
 
