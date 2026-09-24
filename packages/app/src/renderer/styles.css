@@ -586,15 +586,206 @@ body.resizing-columns {
 
 .agent-content {
 	height: 100%;
-	padding: 0 10px;
+	padding: 0;
 }
 
 .agent-content.active {
-	display: block;
+	display: flex;
+	flex-direction: column;
 }
 
-.agent-content > * {
-	height: 100%;
+.session-bar {
+	display: flex;
+	align-items: stretch;
+	flex: 0 0 36px;
+	gap: 2px;
+	min-width: 0;
+	padding: 0 6px;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.session-tabs {
+	display: flex;
+	align-items: stretch;
+	min-width: 0;
+	flex: 1;
+	overflow-x: auto;
+	scrollbar-width: thin;
+}
+
+.session-tab {
+	display: flex;
+	align-items: stretch;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 160px;
+}
+
+.session-tab button,
+.session-tab-new,
+.session-archived > button {
+	border: 0;
+	color: #7a7d82;
+	background: transparent;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.session-tab > button[role="tab"] {
+	position: relative;
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	padding: 0 4px 0 10px;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.session-tab.active > button[role="tab"] {
+	color: #202124;
+	font-weight: 620;
+}
+
+.session-tab.active > button[role="tab"]::after {
+	position: absolute;
+	right: 4px;
+	bottom: -1px;
+	left: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: #202124;
+	content: "";
+}
+
+.session-tab-close {
+	flex: 0 0 20px;
+	width: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	color: #9aa0a6;
+	background: transparent;
+	font-size: 14px;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.session-tab-new,
+.session-archived > button {
+	flex: 0 0 auto;
+	padding: 0 8px;
+}
+
+.session-tab-new {
+	font-size: 16px;
+	line-height: 1;
+}
+
+.session-archived {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	flex: 0 0 auto;
+}
+
+.session-archived > button.active,
+.session-tab button:hover:not(:disabled),
+.session-tab-new:hover:not(:disabled),
+.session-archived > button:hover:not(:disabled),
+.session-tab-close:hover:not(:disabled) {
+	color: #202124;
+	background: #f0f0ed;
+}
+
+.session-bar button:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+
+.session-archived-menu {
+	position: absolute;
+	top: calc(100% + 4px);
+	right: 0;
+	z-index: 4;
+	min-width: 180px;
+	max-width: 240px;
+	padding: 4px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 8px 20px rgba(20, 20, 20, 0.08);
+}
+
+.session-archived-row {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+}
+
+.session-archived-row > button[role="menuitem"] {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 6px;
+	color: #202124;
+	background: transparent;
+	font-size: 12px;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.session-archived-row > button[role="menuitem"]:hover:not(:disabled) {
+	background: #f0f0ed;
+}
+
+.session-error {
+	flex: 0 0 auto;
+	padding: 6px 10px;
+	color: #8d2020;
+	background: #fff0f0;
+	font-size: 12px;
+}
+
+.agent-chat {
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-height: 0;
+	overflow: hidden;
+	padding: 0 10px;
+}
+
+.agent-chat > * {
+	flex: 1;
+	min-height: 0;
+}
+
+/* Composer sits in flow so the scrollbar is not covered by the overlay input. */
+.agent-chat [data-testid="copilot-input-overlay"] {
+	position: relative;
+	inset: auto;
+}
+
+.agent-chat [data-testid="copilot-scroll-content"] {
+	padding-bottom: 12px !important;
+}
+
+.session-chat-scroll {
+	flex: 1;
+	min-height: 0;
+	max-height: 100%;
+	overflow-x: hidden;
+	overflow-y: auto;
+}
+
+.agent-content > .empty {
+	flex: 1;
+	padding: 16px 10px;
 }
 
 .agent-content .copilotKitAssistantMessage table :is(th, td) {

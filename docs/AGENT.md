@@ -203,6 +203,7 @@ Model (DeepSeek, ...)
 - The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
 - The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
 - Runtime clones the registered Agent for each run. The adapter overrides `clone()` so its Agent configuration and thread session map survive cloning.
+- Transcripts are append-only JSONL files in the current library `.loom/sessions/`. The adapter restores `initialMessages` the first time it sees a thread id and appends new messages after each run.
 
 **Server rules:**
 

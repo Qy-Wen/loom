@@ -9,25 +9,31 @@ import { createServer, type Server } from "node:http";
 import type { LoomAgentOptions } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
-import { LoomAgUiAgent } from "./ag-ui-agent.ts";
+import { type AgentSessionStore, LoomAgUiAgent } from "./ag-ui-agent.ts";
 
 export interface AgentServer {
 	/** e.g. http://127.0.0.1:53421/api/copilotkit */
 	runtimeUrl: string;
 	/** The agentId the frontend must target. */
 	agentId: string;
+	resetSessions: () => void;
+	dropSession: (id: string) => void;
 	close: () => Promise<void>;
 }
 
 const ENDPOINT = "/api/copilotkit";
 const AGENT_ID = "loom";
 
-export async function startAgentServer(options: LoomAgentOptions): Promise<AgentServer> {
+export async function startAgentServer(
+	options: LoomAgentOptions,
+	store?: AgentSessionStore,
+): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
+	const agent = new LoomAgUiAgent(options, undefined, store);
 	const runtime = new CopilotRuntime({
-		agents: { [AGENT_ID]: new LoomAgUiAgent(options) },
+		agents: { [AGENT_ID]: agent },
 	});
 
 	const listener = createCopilotNodeListener({ runtime, basePath: ENDPOINT });
@@ -68,6 +74,8 @@ export async function startAgentServer(options: LoomAgentOptions): Promise<Agent
 	return {
 		runtimeUrl: `http://127.0.0.1:${address.port}${ENDPOINT}`,
 		agentId: AGENT_ID,
+		resetSessions: () => agent.resetSessions(),
+		dropSession: (id) => agent.dropSession(id),
 		close: () =>
 			new Promise<void>((resolve, reject) => {
 				server.close((err) => (err ? reject(err) : resolve()));

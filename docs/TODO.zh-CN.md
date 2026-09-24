@@ -7,13 +7,13 @@
 
 ---
 
-## 第一步：FFmpeg Agent 工具
+## 第一步：本地 Agent 会话
 
-让 Agent 直接调用 FFmpeg 做本地媒体处理，并将产物重新索引。
+每个素材库多会话，形态对齐 pi 的 JsonlSessionRepo（create / open / list / delete，JSONL 只追加）。不走 CopilotKit 云 Threads。
 
-- [x] 封装工具：媒体信息、抽帧、裁剪片段、缩放、画面裁切、格式转换；不够用时用 `run_ffmpeg`
-- [x] 工具只收库内相对路径；绝对路径留在 Local Core，禁止出库
-- [x] 产物写在库内（默认 `outputs/`，可指定其它相对路径），由现有 watcher 收编
+- [x] 会话文件落在当前库 `.loom/sessions/`；支持新建、切换、列表
+- [x] 关闭即归档（历史可再打开）；删除是单独动作，打开中不能删
+- [x] 重启后把 transcript 灌回 Agent，模型仍有上下文
 
 ## 第二步：Hybrid Search
 
@@ -42,6 +42,7 @@
 
 ## 后续（概述）
 
+- **会话历史面板**：重启后在聊天区展示已恢复的 transcript
 - **FFmpeg 进度与取消**：长任务可中断，协议层推送进度（不做也能先跑完）
 - **前端协议扩展**：AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md
 - **创作**：直连 ComfyUI 生成图片/视频

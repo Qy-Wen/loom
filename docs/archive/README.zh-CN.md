@@ -99,3 +99,16 @@
 - 打开/reconcile 后自动刷新缺失或过期记录；Analyze 强制重跑；重命名/移动不重算
 - Details 展示只读技术元数据并提供 Analyze
 - 测试覆盖 PNG 尺寸、文本提取、mtime 失效、持久化与重命名跳过
+
+---
+
+## ✅ FFmpeg Agent 工具
+
+让 Agent 用捆绑的 FFmpeg 做本地媒体处理，产物由 watcher 收编。
+
+- `pnpm vendor:ffmpeg` 下载捆绑 `ffmpeg` / `ffprobe`（优先 npmmirror）；不进仓库，运行时从 vendor 再到 Electron `resources` 解析
+- 封装工具：媒体信息、抽帧、裁剪片段、缩放、画面裁切、格式转换；不够用时用 `run_ffmpeg`
+- 工具只收库内相对路径；绝对路径留在 Local Core
+- 产物写在库内（默认 `outputs/`，可指定其它相对路径）
+- 富化 ffprobe 走同一套捆绑二进制；聊天里显示工具结果 JSON
+- 测试覆盖路径狱、真实 fixture 的抽帧/缩放/裁切/转码，无二进制时跳过

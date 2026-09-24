@@ -33,6 +33,8 @@ import type {
 	ResizeVideoArgs,
 	RunFfmpegArgs,
 } from "./model/media.ts";
+import type { LoomTranscriptMessage, SessionRecord, SessionSummary } from "./model/session.ts";
+import { JsonlSessionRepo } from "./sessions/repo.ts";
 import { InMemoryGraphStore } from "./stores/memory.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import type { GraphStore, MetadataStore } from "./stores/types.ts";
@@ -49,6 +51,8 @@ export class LocalCore {
 	private readonly library: Library;
 	private readonly enrichment: EnrichmentService;
 	private readonly media: MediaService;
+	private sessions: JsonlSessionRepo | null = null;
+	private readonly sessionListeners = new Set<(sessions: SessionSummary[]) => void>();
 
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
@@ -73,9 +77,14 @@ export class LocalCore {
 	}
 
 	async openLibrary(rootPath: string): Promise<LibrarySnapshot> {
+		this.sessions?.resetHandles();
+		this.sessions = null;
 		await this.graphStore.close();
-		await this.graphStore.open(new LibraryPaths(rootPath));
-		return this.library.open(rootPath);
+		const paths = new LibraryPaths(rootPath);
+		await this.graphStore.open(paths);
+		const snapshot = await this.library.open(rootPath);
+		this.sessions = new JsonlSessionRepo(paths.sessions);
+		return snapshot;
 	}
 
 	getLibrarySnapshot(): Promise<LibrarySnapshot> {
@@ -264,7 +273,79 @@ export class LocalCore {
 		return this.library.subscribe(listener);
 	}
 
+	subscribeSessions(listener: (sessions: SessionSummary[]) => void): () => void {
+		this.sessionListeners.add(listener);
+		return () => this.sessionListeners.delete(listener);
+	}
+
+	async listSessions(): Promise<SessionSummary[]> {
+		return this.requireSessions().list();
+	}
+
+	async createSession(): Promise<SessionRecord> {
+		const repo = this.requireSessions();
+		repo.resetHandles();
+		const created = await repo.create();
+		await this.emitSessions();
+		return created;
+	}
+
+	async getSession(id: string): Promise<SessionRecord> {
+		return this.requireSessions().get(id);
+	}
+
+	async openSession(id: string): Promise<SessionRecord> {
+		const repo = this.requireSessions();
+		repo.resetHandles();
+		return repo.open(id);
+	}
+
+	closeSessionHandle(id: string): void {
+		this.sessions?.closeHandle(id);
+	}
+
+	resetSessionHandles(): void {
+		this.sessions?.resetHandles();
+	}
+
+	async appendSessionMessages(id: string, messages: LoomTranscriptMessage[]): Promise<void> {
+		return this.requireSessions().appendMessages(id, messages);
+	}
+
+	async setSessionName(id: string, title: string): Promise<void> {
+		await this.requireSessions().setName(id, title);
+		await this.emitSessions();
+	}
+
+	async archiveSession(id: string): Promise<void> {
+		await this.requireSessions().setStatus(id, "archived");
+		await this.emitSessions();
+	}
+
+	async unarchiveSession(id: string): Promise<void> {
+		await this.requireSessions().setStatus(id, "open");
+		await this.emitSessions();
+	}
+
+	async deleteSession(id: string): Promise<void> {
+		await this.requireSessions().delete(id);
+		await this.emitSessions();
+	}
+
 	async close(): Promise<void> {
+		this.sessions?.resetHandles();
+		this.sessions = null;
 		await Promise.all([this.library.close(), this.graphStore.close()]);
+	}
+
+	private requireSessions(): JsonlSessionRepo {
+		if (!this.sessions) throw new Error("No library is open");
+		return this.sessions;
+	}
+
+	private async emitSessions(): Promise<void> {
+		if (!this.sessions || this.sessionListeners.size === 0) return;
+		const sessions = await this.sessions.list();
+		for (const listener of this.sessionListeners) listener(sessions);
 	}
 }

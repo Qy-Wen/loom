@@ -30,14 +30,18 @@ export type LoomAgentEvent =
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "agent_end" };
 
+export type LoomTranscriptMessage = Record<string, unknown> & { role: string };
+
 export interface LoomAgentOptions {
 	systemPrompt?: string;
 	/** Provider id + model id, e.g. { provider: "deepseek", model: "deepseek-flash" }. */
 	model: { provider: string; model: string };
 	tools?: LoomTool[];
+	initialMessages?: LoomTranscriptMessage[];
 }
 
 export interface LoomAgent {
 	subscribe(listener: (event: LoomAgentEvent) => void): () => void;
 	prompt(input: string): Promise<void>;
+	getMessages(): LoomTranscriptMessage[];
 }

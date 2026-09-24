@@ -149,7 +149,9 @@ function registerIpc(): void {
 			? await dialog.showOpenDialog(owner, { properties: ["openDirectory"] })
 			: await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		if (result.canceled || !result.filePaths[0]) return null;
-		return localCore.openLibrary(result.filePaths[0]);
+		const snapshot = await localCore.openLibrary(result.filePaths[0]);
+		agentServer?.resetSessions();
+		return snapshot;
 	});
 
 	ipcMain.handle(
@@ -232,6 +234,19 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});
+	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
+	ipcMain.handle(IPC.createSession, () => localCore.createSession());
+	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
+	ipcMain.handle(IPC.getSession, (_event, id: string) => localCore.getSession(id));
+	ipcMain.handle(IPC.archiveSession, async (_event, id: string) => {
+		await localCore.archiveSession(id);
+		agentServer?.dropSession(id);
+	});
+	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => localCore.unarchiveSession(id));
+	ipcMain.handle(IPC.deleteSession, async (_event, id: string) => {
+		await localCore.deleteSession(id);
+		agentServer?.dropSession(id);
+	});
 
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
@@ -260,6 +275,11 @@ function registerIpc(): void {
 			if (!window.isDestroyed()) window.webContents.send(IPC.libraryChanged, change);
 		}
 	});
+	localCore.subscribeSessions((sessions) => {
+		for (const window of BrowserWindow.getAllWindows()) {
+			if (!window.isDestroyed()) window.webContents.send(IPC.sessionsChanged, sessions);
+		}
+	});
 }
 
 app
@@ -274,7 +294,7 @@ app
 
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint.
-		agentServer = await startAgentServer(AGENT_OPTIONS);
+		agentServer = await startAgentServer(AGENT_OPTIONS, localCore);
 		registerAssetProtocol();
 		registerIpc();
 		createWindow();

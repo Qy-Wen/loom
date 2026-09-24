@@ -99,3 +99,16 @@ Added non-AI Level 1 technical metadata as a local cache keyed by `asset_id`.
 - Auto-refresh missing or stale rows after open/reconcile; Analyze forces a rerun; rename/move does not
 - Details shows read-only technical metadata plus Analyze
 - Tests cover PNG dimensions, text extract, stale/mtime invalidation, persist, and rename skip
+
+---
+
+## ✅ FFmpeg Agent tools
+
+Let the Agent call bundled FFmpeg for local media work; watcher indexes the outputs.
+
+- Bundled `ffmpeg` / `ffprobe` via `pnpm vendor:ffmpeg` (npmmirror first); not committed, resolved from vendor then Electron `resources`
+- Convenience tools: media info, frame extract, clip, resize, crop, convert; `run_ffmpeg` when those are not enough
+- Tools accept library-relative paths only; absolute paths stay in Local Core
+- Write outputs inside the library (default `outputs/`, or a caller-specified relative path)
+- Enrichment ffprobe uses the same bundled binary; chat shows tool-call JSON results
+- Tests cover path jail, real-fixture extract/resize/crop/convert, and skip without binaries
