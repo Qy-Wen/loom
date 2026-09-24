@@ -15,6 +15,8 @@ export * from "./model/asset.ts";
 export * from "./model/media.ts";
 export * from "./model/property.ts";
 export * from "./model/retrieval.ts";
+export * from "./model/session.ts";
+export * from "./sessions/repo.ts";
 export * from "./stores/memory.ts";
 export * from "./stores/sqlite.ts";
 export * from "./stores/types.ts";

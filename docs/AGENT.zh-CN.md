@@ -203,6 +203,7 @@ Main 进程（Local Core）
 - Node 端点用 v2 `createCopilotNodeListener`；不用已 deprecated 的 v1 endpoint。
 - 前端直接用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`，无需 `@copilotkit/react-ui`。
 - runtime 每次 run 会 clone 注册的 agent；需覆盖 `clone()`，把 adapter 的 agent 配置带到实例副本。
+- 会话 transcript 以只追加的 JSONL 落在当前库 `.loom/sessions/`。adapter 第一次碰到某个 thread id 时用 `initialMessages` 恢复，每轮结束后再 append 新增消息。
 
 **server 落地要点**（都是标准做法，一次写好即忘）：
 

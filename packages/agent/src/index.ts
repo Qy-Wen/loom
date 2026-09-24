@@ -2,6 +2,7 @@ export type {
 	LoomAgent,
 	LoomAgentEvent,
 	LoomAgentOptions,
+	LoomTranscriptMessage,
 	LoomTool,
 	LoomToolResult,
 } from "./types.ts";

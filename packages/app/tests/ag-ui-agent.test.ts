@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EventType, type BaseEvent } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
-import type { LoomAgent, LoomAgentEvent, LoomAgentOptions } from "@loom/agent";
+import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTranscriptMessage } from "@loom/agent";
+import { DEFAULT_SESSION_TITLE } from "@loom/core";
 import { lastValueFrom, toArray } from "rxjs";
-import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
+import { type AgentSessionStore, LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 
 const OPTIONS: LoomAgentOptions = {
 	model: { provider: "test", model: "test" },
@@ -45,6 +46,10 @@ class FakeLoomAgent implements LoomAgent {
 		for (const event of this.events) {
 			for (const listener of this.listeners) listener(event);
 		}
+	}
+
+	getMessages(): LoomTranscriptMessage[] {
+		return [];
 	}
 }
 
@@ -146,4 +151,74 @@ describe("LoomAgUiAgent", () => {
 			{ kind: "asset_list", assets: [] },
 		);
 	});
+
+	it("restores transcript messages and appends new ones after a run", async () => {
+		const store = new MemorySessionStore();
+		store.records.set("thread-restore", {
+			title: DEFAULT_SESSION_TITLE,
+			messages: [{ role: "user", content: "older question" }],
+		});
+		const created: ScriptedAgent[] = [];
+		const adapter = new LoomAgUiAgent(OPTIONS, (options) => {
+			const agent = new ScriptedAgent(
+				[{ type: "agent_start" }, { type: "text", delta: "ok" }, { type: "agent_end" }],
+				options.initialMessages ?? [],
+			);
+			created.push(agent);
+			return agent;
+		}, store);
+
+		await lastValueFrom(adapter.run(runInput("thread-restore", "follow up")).pipe(toArray()));
+
+		assert.equal(created.length, 1);
+		assert.deepEqual(created[0]?.messages[0], { role: "user", content: "older question" });
+		const saved = store.records.get("thread-restore");
+		assert.equal(saved?.title, "follow up");
+		assert.deepEqual(saved?.messages.at(-1), { role: "assistant", content: "ok" });
+	});
 });
+
+class ScriptedAgent extends FakeLoomAgent {
+	messages: LoomTranscriptMessage[];
+
+	constructor(events: LoomAgentEvent[], initial: LoomTranscriptMessage[]) {
+		super(events);
+		this.messages = [...initial];
+	}
+
+	override async prompt(input: string): Promise<void> {
+		this.messages.push({ role: "user", content: input });
+		this.messages.push({ role: "assistant", content: "ok" });
+		await super.prompt(input);
+	}
+
+	override getMessages() {
+		return this.messages;
+	}
+}
+
+class MemorySessionStore implements AgentSessionStore {
+	readonly records = new Map<string, { title: string; messages: LoomTranscriptMessage[] }>();
+
+	async openSession(id: string) {
+		const record = this.records.get(id);
+		if (!record) throw new Error(`missing ${id}`);
+		return record;
+	}
+
+	async appendSessionMessages(id: string, messages: LoomTranscriptMessage[]) {
+		const record = this.records.get(id);
+		if (!record) throw new Error(`missing ${id}`);
+		record.messages.push(...messages);
+	}
+
+	async setSessionName(id: string, title: string) {
+		const record = this.records.get(id);
+		if (!record) throw new Error(`missing ${id}`);
+		record.title = title;
+	}
+
+	resetSessionHandles() {
+		return undefined;
+	}
+}

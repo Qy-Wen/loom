@@ -371,6 +371,7 @@ export function App(): React.JSX.Element {
 					/>
 
 					<SidePanel
+						libraryRoot={library.rootPath}
 						activeTab={sidePanel}
 						asset={selectedAsset}
 						properties={properties}

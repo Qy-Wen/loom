@@ -11,7 +11,7 @@
 import { Agent, type AgentEvent, type AgentTool } from "#vendor/pi-agent";
 import { createModels, Type } from "@earendil-works/pi-ai";
 import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
-import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTool } from "./types.ts";
+import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTool, LoomTranscriptMessage } from "./types.ts";
 
 /** Build the pi-ai model runtime with the providers Loom supports. */
 function buildModels() {
@@ -58,6 +58,7 @@ class PiAgentAdapter implements LoomAgent {
 				systemPrompt: options.systemPrompt ?? "",
 				model,
 				tools: (options.tools ?? []).map(toPiTool),
+				messages: (options.initialMessages ?? []) as never,
 			},
 			streamFn: (m, context, streamOptions) => models.streamSimple(m, context, streamOptions),
 		});
@@ -123,6 +124,10 @@ class PiAgentAdapter implements LoomAgent {
 
 	async prompt(input: string): Promise<void> {
 		await this.agent.prompt(input);
+	}
+
+	getMessages(): LoomTranscriptMessage[] {
+		return this.agent.state.messages as unknown as LoomTranscriptMessage[];
 	}
 }
 

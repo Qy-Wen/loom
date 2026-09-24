@@ -68,6 +68,7 @@ CreativeAssets/          -- selected library root
      ├── graph.db         -- LadybugDB
      ├── thumbnails/
      ├── cache/
+     ├── sessions/        -- local Agent transcripts (JSONL)
      └── config.json
 ```
 

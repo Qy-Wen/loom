@@ -7,13 +7,13 @@
 
 ---
 
-## Step 1: FFmpeg Agent tools
+## Step 1: Local Agent sessions
 
-Let the Agent call FFmpeg for local media work and index the outputs.
+Persist multiple conversations per library, following pi's JsonlSessionRepo shape (create / open / list / delete, append-only JSONL). Do not use CopilotKit cloud Threads.
 
-- [x] Convenience tools: media info, frame extract, clip, resize, crop, convert; `run_ffmpeg` when those are not enough
-- [x] Tools accept library-relative paths only; absolute paths stay in Local Core
-- [x] Write outputs inside the library (default `outputs/`, or a caller-specified relative path) and let the existing watcher index them
+- [x] Session files under the current library `.loom/sessions/`; create, switch, list
+- [x] Close archives a session (history stays, can reopen); delete is separate and refused while open
+- [x] Restore transcript into the Agent after restart so the model keeps context
 
 ## Step 2: Hybrid Search
 
@@ -42,6 +42,7 @@ Completed steps are recorded in the [archive](./archive/README.md).
 
 ## Later
 
+- **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
 - **Creation:** connect directly to ComfyUI for image and video generation

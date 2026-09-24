@@ -68,6 +68,7 @@ CreativeAssets/          -- 用户选择的库根目录
      ├── graph.db         -- LadybugDB
      ├── thumbnails/
      ├── cache/
+     ├── sessions/        -- 本地 Agent 会话（JSONL）
      └── config.json
 ```
 

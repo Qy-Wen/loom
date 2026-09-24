@@ -12,6 +12,7 @@ export class LibraryPaths {
 	readonly graphDb: string;
 	readonly thumbnails: string;
 	readonly cache: string;
+	readonly sessions: string;
 
 	constructor(rootPath: string) {
 		this.root = resolve(rootPath);
@@ -20,6 +21,7 @@ export class LibraryPaths {
 		this.graphDb = resolve(this.loom, "graph.db");
 		this.thumbnails = resolve(this.loom, "thumbnails");
 		this.cache = resolve(this.loom, "cache");
+		this.sessions = resolve(this.loom, "sessions");
 	}
 
 	toRelativePath(absolutePath: string): string {

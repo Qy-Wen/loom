@@ -9,6 +9,8 @@ import type {
 	PropertySnapshot,
 	PropertyType,
 	PropertyValue,
+	SessionRecord,
+	SessionSummary,
 } from "@loom/core";
 
 export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal" | "trash";
@@ -37,6 +39,14 @@ export const IPC = {
 	removeAssetProperty: "loom:removeAssetProperty",
 	getAssetEnrichment: "loom:getAssetEnrichment",
 	analyzeAsset: "loom:analyzeAsset",
+	listSessions: "loom:listSessions",
+	createSession: "loom:createSession",
+	openSession: "loom:openSession",
+	getSession: "loom:getSession",
+	archiveSession: "loom:archiveSession",
+	unarchiveSession: "loom:unarchiveSession",
+	deleteSession: "loom:deleteSession",
+	sessionsChanged: "loom:sessionsChanged",
 } as const;
 
 export interface LoomApi {
@@ -62,6 +72,14 @@ export interface LoomApi {
 	removeAssetProperty: (assetId: string, propertyId: string) => Promise<void>;
 	getAssetEnrichment: (assetId: string) => Promise<AssetEnrichment | undefined>;
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
+	listSessions: () => Promise<SessionSummary[]>;
+	createSession: () => Promise<SessionRecord>;
+	openSession: (id: string) => Promise<SessionRecord>;
+	getSession: (id: string) => Promise<SessionRecord>;
+	archiveSession: (id: string) => Promise<void>;
+	unarchiveSession: (id: string) => Promise<void>;
+	deleteSession: (id: string) => Promise<void>;
+	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
 }
 
 declare global {
