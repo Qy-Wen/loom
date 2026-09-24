@@ -11,6 +11,7 @@ import {
 	createLoomAgent,
 	type LoomAgent as LoomAgentInstance,
 	type LoomAgentOptions,
+	type LoomTool,
 	type LoomTranscriptMessage,
 } from "@loom/agent";
 import { DEFAULT_SESSION_TITLE, titleFromUserText } from "@loom/core";
@@ -77,6 +78,14 @@ export class LoomAgUiAgent extends AbstractAgent {
 		this.sessions.clear();
 		this.titles.clear();
 		this.store?.resetSessionHandles();
+	}
+
+	addTools(tools: LoomTool[]): void {
+		if (!tools.length) return;
+		const current = this.agentOptions.tools ?? [];
+		if (!this.agentOptions.tools) this.agentOptions.tools = current;
+		current.push(...tools);
+		for (const session of this.sessions.values()) session.addTools(tools);
 	}
 
 	dropSession(id: string): void {

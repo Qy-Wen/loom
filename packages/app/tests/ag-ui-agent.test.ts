@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EventType, type BaseEvent } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
-import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTranscriptMessage } from "@loom/agent";
+import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTool, LoomTranscriptMessage } from "@loom/agent";
 import { DEFAULT_SESSION_TITLE } from "@loom/core";
 import { lastValueFrom, toArray } from "rxjs";
 import { type AgentSessionStore, LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
@@ -29,6 +29,7 @@ function runInput(threadId = "thread-1", text = "latest question"): RunAgentInpu
 
 class FakeLoomAgent implements LoomAgent {
 	readonly prompts: string[] = [];
+	readonly addedTools: LoomTool[] = [];
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 	private readonly events: LoomAgentEvent[];
 
@@ -50,6 +51,10 @@ class FakeLoomAgent implements LoomAgent {
 
 	getMessages(): LoomTranscriptMessage[] {
 		return [];
+	}
+
+	addTools(tools: LoomTool[]): void {
+		this.addedTools.push(...tools);
 	}
 }
 
@@ -175,6 +180,27 @@ describe("LoomAgUiAgent", () => {
 		const saved = store.records.get("thread-restore");
 		assert.equal(saved?.title, "follow up");
 		assert.deepEqual(saved?.messages.at(-1), { role: "assistant", content: "ok" });
+	});
+
+	it("adds tools to live sessions and later-created ones", async () => {
+		const created: FakeLoomAgent[] = [];
+		const seen: LoomAgentOptions[] = [];
+		const adapter = new LoomAgUiAgent({ ...OPTIONS, tools: [] }, (options) => {
+			seen.push(options);
+			const fake = new FakeLoomAgent([
+				{ type: "agent_start" },
+				{ type: "text", delta: "ok" },
+				{ type: "agent_end" },
+			]);
+			created.push(fake);
+			return fake;
+		});
+		await lastValueFrom(adapter.run(runInput("t1")).pipe(toArray()));
+		const extra: LoomTool = { name: "comfy__x", description: "x", parameters: {}, execute: async () => "ok" };
+		adapter.addTools([extra]);
+		assert.deepEqual(created[0]?.addedTools.map((tool) => tool.name), ["comfy__x"]);
+		await lastValueFrom(adapter.run(runInput("t2")).pipe(toArray()));
+		assert.equal(seen[1]?.tools?.[0]?.name, "comfy__x");
 	});
 });
 

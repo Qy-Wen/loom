@@ -112,4 +112,28 @@ describe("McpHost", () => {
 		assert.equal(await tools[0]?.execute({}), "pong");
 		await host.close();
 	});
+
+	it("connects servers concurrently", async () => {
+		const release: Array<() => void> = [];
+		const host = new McpHost(async (config) => {
+			await new Promise<void>((resolve) => {
+				release.push(resolve);
+			});
+			return {
+				listTools: async () => [{ name: config.id }],
+				callTool: async () => ({ content: "" }),
+				close: async () => undefined,
+			};
+		});
+		const pending = host.connect([
+			{ id: "a", command: "echo" },
+			{ id: "b", command: "echo" },
+		]);
+		await new Promise((resolve) => setImmediate(resolve));
+		assert.equal(release.length, 2);
+		for (const done of release) done();
+		const tools = await pending;
+		assert.deepEqual(tools.map((tool) => tool.name).sort(), ["a__a", "b__b"]);
+		await host.close();
+	});
 });

@@ -44,4 +44,5 @@ export interface LoomAgent {
 	subscribe(listener: (event: LoomAgentEvent) => void): () => void;
 	prompt(input: string): Promise<void>;
 	getMessages(): LoomTranscriptMessage[];
+	addTools(tools: LoomTool[]): void;
 }
