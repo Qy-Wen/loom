@@ -220,6 +220,7 @@ AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into 
 | `text` delta | `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` |
 | `tool_start` | `TOOL_CALL_START` and `TOOL_CALL_ARGS`, preserving pi's stable `toolCallId` |
 | `tool_end` | `TOOL_CALL_END` and `TOOL_CALL_RESULT`; structured `details` also emits `CUSTOM loom.tool_result` |
+| `error` | A `loom-error-*` notice plus `RUN_ERROR` (bad key, unreachable Chat, missing Settings). Styled as a system alert, not a model reply. |
 | `agent_end` | `RUN_FINISHED` |
 
 ### 5.3 Deferred v1 capabilities with preserved extension points

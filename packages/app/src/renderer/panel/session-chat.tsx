@@ -1,8 +1,16 @@
 import type { Message } from "@ag-ui/core";
-import { CopilotChat, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
+import {
+	CopilotChat,
+	CopilotChatAssistantMessage,
+	CopilotChatMessageView,
+	type CopilotChatAssistantMessageProps,
+	type CopilotChatMessageViewProps,
+	type CopilotChatViewProps,
+} from "@copilotkit/react-core/v2";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import type { LoomTranscriptMessage } from "@loom/core";
 import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
+import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 
 const StoredMessagesContext = createContext<Message[]>([]);
 
@@ -53,6 +61,23 @@ function SessionScrollView({
 	);
 }
 
+const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
+	if (isChatErrorMessageId(props.message.id)) {
+		const text = typeof props.message.content === "string" ? props.message.content : "";
+		return (
+			<div className="chat-error" role="alert">
+				<div className="chat-error-label">Request failed</div>
+				<p className="chat-error-body">{text}</p>
+			</div>
+		);
+	}
+	return <CopilotChatAssistantMessage {...props} />;
+}) as typeof CopilotChatAssistantMessage;
+
+const SessionMessageView = ((props: CopilotChatMessageViewProps) => {
+	return <CopilotChatMessageView {...props} assistantMessage={SessionAssistantMessage} />;
+}) as typeof CopilotChatMessageView;
+
 /** Stable slot so CopilotChat does not remount the view on every parent render. */
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	const stored = useContext(StoredMessagesContext);
@@ -60,7 +85,14 @@ function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 		() => mergeChatMessages(stored, props.messages ?? []),
 		[stored, props.messages],
 	);
-	return <CopilotChat.View {...props} messages={messages} scrollView={SessionScrollView} />;
+	return (
+		<CopilotChat.View
+			{...props}
+			messages={messages}
+			scrollView={SessionScrollView}
+			messageView={SessionMessageView}
+		/>
+	);
 }
 
 /** Draw JSONL history through CopilotChat.View without writing into its agent. */

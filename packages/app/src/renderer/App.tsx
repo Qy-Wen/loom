@@ -18,6 +18,7 @@ import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
+import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
@@ -76,6 +77,7 @@ export function App(): React.JSX.Element {
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
+	const [settingsOpen, setSettingsOpen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
 		shellRef,
@@ -375,6 +377,9 @@ export function App(): React.JSX.Element {
 						>Graph</button>
 					</nav>
 					<div className="topbar-spacer" />
+					<button className="topbar-settings" type="button" onClick={() => setSettingsOpen(true)}>
+						Settings
+					</button>
 				</header>
 
 				{error && <div className="error-banner">{error}</div>}
@@ -488,6 +493,7 @@ export function App(): React.JSX.Element {
 						onRemoveRelation={removeRelation}
 					/>
 				</div>
+				{settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
 			</div>
 		</CopilotKitProvider>
 	);

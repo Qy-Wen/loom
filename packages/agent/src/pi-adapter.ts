@@ -3,27 +3,66 @@
  * `./types.ts` instead.
  *
  * Responsibilities:
- *  - build a pi `Agent` wired to a pi-ai provider (`streamFn`)
+ *  - build a pi `Agent` wired to an OpenAI-compatible chat endpoint (`streamFn`)
  *  - translate Loom tools -> pi `AgentTool`
  *  - translate pi `AgentEvent` -> Loom `LoomAgentEvent`
  */
 import { Agent, type AgentEvent, type AgentTool } from "#vendor/pi-agent";
-import { createModels, Type } from "@earendil-works/pi-ai";
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
+import { createModels, createProvider, Type } from "@earendil-works/pi-ai";
+import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import type {
 	LoomAgent,
 	LoomAgentEvent,
 	LoomAgentOptions,
+	LoomChatEndpoint,
 	LoomTool,
 	LoomToolContentPart,
 	LoomTranscriptMessage,
 } from "./types.ts";
 
-/** Build the pi-ai model runtime with the providers Loom supports. */
-function buildModels() {
+const CHAT_PROVIDER = "loom-chat";
+
+export function chatEndpointReady(chat: LoomChatEndpoint | undefined): chat is LoomChatEndpoint {
+	return Boolean(chat?.baseUrl.trim() && chat.model.trim());
+}
+
+/** Build a one-model OpenAI-compatible provider from the Chat settings slot. */
+function buildModels(chat: LoomChatEndpoint) {
+	const baseUrl = chat.baseUrl.trim().replace(/\/+$/, "");
+	const modelId = chat.model.trim();
+	const apiKey = chat.apiKey?.trim();
 	const models = createModels();
-	// Register providers. deepseekProvider() reads DEEPSEEK_API_KEY from env.
-	models.setProvider(deepseekProvider());
+	models.setProvider(createProvider({
+		id: CHAT_PROVIDER,
+		name: "Loom Chat",
+		baseUrl,
+		auth: {
+			apiKey: {
+				name: "Chat API key",
+				async resolve() {
+					return { auth: apiKey ? { apiKey } : {}, source: apiKey ? "settings" : "none" };
+				},
+			},
+		},
+		models: [{
+			id: modelId,
+			name: modelId,
+			api: "openai-completions",
+			provider: CHAT_PROVIDER,
+			baseUrl,
+			reasoning: false,
+			input: ["text"],
+			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+			contextWindow: 128_000,
+			maxTokens: 8192,
+			compat: {
+				supportsStore: false,
+				supportsDeveloperRole: false,
+				maxTokensField: "max_tokens",
+			},
+		}],
+		api: openAICompletionsApi(),
+	}));
 	return models;
 }
 
@@ -33,7 +72,6 @@ function toPiTool(tool: LoomTool): AgentTool {
 		name: tool.name,
 		label: tool.name,
 		description: tool.description,
-		// pi expects a typebox schema; callers pass a compatible schema object.
 		parameters: (tool.parameters ?? Type.Object({})) as never,
 		execute: async (_toolCallId, params) => {
 			const output = await tool.execute(params as never);
@@ -51,12 +89,13 @@ class PiAgentAdapter implements LoomAgent {
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 
 	constructor(options: LoomAgentOptions) {
-		const models = buildModels();
-		const model = models.getModel(options.model.provider, options.model.model);
+		if (!chatEndpointReady(options.chat)) {
+			throw new Error("Chat is not configured. Set base URL and model in Settings.");
+		}
+		const models = buildModels(options.chat);
+		const model = models.getModel(CHAT_PROVIDER, options.chat.model.trim());
 		if (!model) {
-			throw new Error(
-				`Unknown model: ${options.model.provider}/${options.model.model}`,
-			);
+			throw new Error(`Unknown model: ${options.chat.model}`);
 		}
 
 		this.agent = new Agent({
@@ -84,12 +123,18 @@ class PiAgentAdapter implements LoomAgent {
 			case "agent_end":
 				this.emit({ type: "agent_end" });
 				break;
+			case "turn_end": {
+				const message = event.message;
+				if (message.role === "assistant" && message.errorMessage?.trim()) {
+					this.emit({ type: "error", message: message.errorMessage.trim() });
+				}
+				break;
+			}
 			case "message_update": {
 				const inner = event.assistantMessageEvent;
 				if (inner.type === "text_delta") {
 					this.emit({ type: "text", delta: inner.delta });
 				}
-				// thinking_* deltas intentionally ignored in v1 (see docs/AGENT.md 5.3).
 				break;
 			}
 			case "tool_execution_start":
@@ -117,8 +162,6 @@ class PiAgentAdapter implements LoomAgent {
 				break;
 			}
 			default:
-				// Other pi events (turn_*, message_start/end, tool_execution_update)
-				// are not surfaced by Loom's minimal event set yet.
 				break;
 		}
 	}
@@ -130,6 +173,8 @@ class PiAgentAdapter implements LoomAgent {
 
 	async prompt(input: string): Promise<void> {
 		await this.agent.prompt(input);
+		const failed = this.agent.state.errorMessage?.trim();
+		if (failed) throw new Error(failed);
 	}
 
 	getMessages(): LoomTranscriptMessage[] {

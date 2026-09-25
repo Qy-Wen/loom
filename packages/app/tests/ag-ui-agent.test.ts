@@ -8,7 +8,7 @@ import { lastValueFrom, toArray } from "rxjs";
 import { type AgentSessionStore, LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 
 const OPTIONS: LoomAgentOptions = {
-	model: { provider: "test", model: "test" },
+	chat: { baseUrl: "http://127.0.0.1:9", model: "test" },
 };
 
 function runInput(threadId = "thread-1", text = "latest question"): RunAgentInput {
@@ -33,9 +33,11 @@ class FakeLoomAgent implements LoomAgent {
 	systemPrompt = "";
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 	private readonly events: LoomAgentEvent[];
+	private readonly failure?: string;
 
-	constructor(events: LoomAgentEvent[]) {
+	constructor(events: LoomAgentEvent[], failure?: string) {
 		this.events = events;
+		this.failure = failure;
 	}
 
 	subscribe(listener: (event: LoomAgentEvent) => void): () => void {
@@ -48,6 +50,7 @@ class FakeLoomAgent implements LoomAgent {
 		for (const event of this.events) {
 			for (const listener of this.listeners) listener(event);
 		}
+		if (this.failure) throw new Error(this.failure);
 	}
 
 	getMessages(): LoomTranscriptMessage[] {
@@ -89,6 +92,32 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(fake.prompts, ["latest question"]);
 		assert.equal((events[2] as unknown as { delta: string }).delta, "hello ");
 		assert.equal((events[3] as unknown as { delta: string }).delta, "world");
+	});
+
+	it("writes a Chat failure into the transcript instead of going silent", async () => {
+		const adapter = new LoomAgUiAgent(OPTIONS, () => new FakeLoomAgent([
+			{ type: "agent_start" },
+			{ type: "error", message: "401 Unauthorized" },
+			{ type: "agent_end" },
+		], "401 Unauthorized"));
+		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
+		assert.equal(events.some((event) => event.type === EventType.RUN_ERROR), true);
+		assert.equal(events.some((event) => event.type === EventType.RUN_FINISHED), false);
+		const start = events.find((event) => event.type === EventType.TEXT_MESSAGE_START);
+		assert.match(String((start as unknown as { messageId: string }).messageId), /^loom-error-/);
+		const text = events.find((event) => event.type === EventType.TEXT_MESSAGE_CONTENT);
+		assert.match(String((text as unknown as { delta: string }).delta), /API key was rejected/);
+	});
+
+	it("surfaces a missing Chat slot before the run starts", async () => {
+		const adapter = new LoomAgUiAgent(OPTIONS, () => {
+			throw new Error("Chat is not configured. Set base URL and model in Settings.");
+		});
+		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
+		assert.equal(events[0]?.type, EventType.RUN_STARTED);
+		assert.equal(events.some((event) => event.type === EventType.RUN_ERROR), true);
+		const text = events.find((event) => event.type === EventType.TEXT_MESSAGE_CONTENT);
+		assert.match(String((text as unknown as { delta: string }).delta), /Set a base URL and model/);
 	});
 
 	it("keeps repeated same-name tool calls separated by their stable IDs", async () => {
@@ -250,6 +279,20 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(created[0]?.addedTools.map((tool) => tool.name), ["comfy__x"]);
 		await lastValueFrom(adapter.run(runInput("t2")).pipe(toArray()));
 		assert.equal(seen[1]?.tools?.[0]?.name, "comfy__x");
+	});
+
+	it("applies a new Chat slot and drops live sessions", async () => {
+		const seen: LoomAgentOptions[] = [];
+		const adapter = new LoomAgUiAgent(OPTIONS, (options) => {
+			seen.push(options);
+			return new FakeLoomAgent([{ type: "agent_end" }]);
+		});
+		await lastValueFrom(adapter.run(runInput("t1", "hi")).pipe(toArray()));
+		adapter.setChat({ baseUrl: "http://127.0.0.1:11434/v1", model: "llama" });
+		await lastValueFrom(adapter.run(runInput("t1", "again")).pipe(toArray()));
+		assert.equal(seen.length, 2);
+		assert.equal(seen[1]?.chat?.model, "llama");
+		assert.equal(seen[1]?.chat?.baseUrl, "http://127.0.0.1:11434/v1");
 	});
 
 	it("sets the working directory on live sessions and later-created ones", async () => {

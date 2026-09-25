@@ -12,10 +12,12 @@ import {
 	toolResultText,
 	type LoomAgent as LoomAgentInstance,
 	type LoomAgentOptions,
+	type LoomChatEndpoint,
 	type LoomTool,
 	type LoomTranscriptMessage,
 } from "@loom/agent";
 import { DEFAULT_SESSION_TITLE, titleFromUserText } from "@loom/core";
+import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
 import { Observable } from "rxjs";
 
 type LoomAgentFactory = (options: LoomAgentOptions) => LoomAgentInstance;
@@ -29,6 +31,17 @@ export interface AgentSessionStore {
 
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${Date.now()}-${idCounter++}`;
+
+export function formatChatError(cause: unknown): string {
+	const raw = cause instanceof Error ? cause.message : String(cause);
+	if (/Chat is not configured/i.test(raw)) {
+		return "Set a base URL and model in Settings.";
+	}
+	if (/401|unauthorized|invalid api key|incorrect api key|authentication/i.test(raw)) {
+		return `API key was rejected. Check the Chat key in Settings.\n${raw}`;
+	}
+	return raw.trim() || "The Chat endpoint did not return a reply.";
+}
 
 /** Pull the latest user text out of the AG-UI run input. */
 function latestUserText(input: RunAgentInput): string {
@@ -94,6 +107,11 @@ export class LoomAgUiAgent extends AbstractAgent {
 		for (const session of this.sessions.values()) session.setSystemPrompt(systemPrompt);
 	}
 
+	setChat(chat: LoomChatEndpoint | undefined): void {
+		this.agentOptions.chat = chat;
+		this.resetSessions();
+	}
+
 	dropSession(id: string): void {
 		this.sessions.delete(id);
 		this.titles.delete(id);
@@ -108,9 +126,9 @@ export class LoomAgUiAgent extends AbstractAgent {
 			// the whole run makes CopilotChat paint all text, then dump every tool.
 			let messageId = "";
 			let textOpen = false;
-			const openText = () => {
+			const openText = (id = nextId("msg")) => {
 				if (textOpen) return;
-				messageId = nextId("msg");
+				messageId = id;
 				textOpen = true;
 				emit({
 					type: EventType.TEXT_MESSAGE_START,
@@ -134,6 +152,33 @@ export class LoomAgUiAgent extends AbstractAgent {
 			};
 
 			let unsubscribe = (): void => undefined;
+			let started = false;
+			let failed = false;
+			const startRun = () => {
+				if (started) return;
+				started = true;
+				emit({
+					type: EventType.RUN_STARTED,
+					threadId: input.threadId,
+					runId: input.runId,
+				} as BaseEvent);
+			};
+			const fail = (cause: unknown) => {
+				const message = formatChatError(cause);
+				if (failed) return message;
+				failed = true;
+				startRun();
+				closeText();
+				openText(nextId(CHAT_ERROR_ID_PREFIX.slice(0, -1)));
+				emit({
+					type: EventType.TEXT_MESSAGE_CONTENT,
+					messageId,
+					delta: message,
+				} as BaseEvent);
+				closeText();
+				emit({ type: EventType.RUN_ERROR, message } as BaseEvent);
+				return message;
+			};
 
 			void this.loadAgent(input.threadId).then(async (loom) => {
 				if (cancelled) return;
@@ -143,11 +188,10 @@ export class LoomAgUiAgent extends AbstractAgent {
 				unsubscribe = loom.subscribe((event) => {
 					switch (event.type) {
 						case "agent_start":
-							emit({
-								type: EventType.RUN_STARTED,
-								threadId: input.threadId,
-								runId: input.runId,
-							} as BaseEvent);
+							startRun();
+							break;
+						case "error":
+							fail(event.message);
 							break;
 
 						case "text":
@@ -202,6 +246,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 						}
 
 						case "agent_end":
+							if (failed) break;
 							closeText();
 							emit({
 								type: EventType.RUN_FINISHED,
@@ -215,19 +260,16 @@ export class LoomAgUiAgent extends AbstractAgent {
 				loom
 					.prompt(latestUserText(input))
 					.then(async () => {
-						await this.persist(input.threadId, loom, before);
+						if (!failed) await this.persist(input.threadId, loom, before);
 						if (!cancelled) subscriber.complete();
 					})
 					.catch((err) => {
-						closeText();
-						emit({
-							type: EventType.RUN_ERROR,
-							message: err instanceof Error ? err.message : String(err),
-						} as BaseEvent);
-						if (!cancelled) subscriber.error(err);
+						fail(err);
+						if (!cancelled) subscriber.complete();
 					});
 			}).catch((err) => {
-				if (!cancelled) subscriber.error(err);
+				fail(err);
+				if (!cancelled) subscriber.complete();
 			});
 
 			return () => {

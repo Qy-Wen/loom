@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
+import { isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
 	const messages = toAgUiMessages([
@@ -47,4 +48,10 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 		["old", "reply", "new", "ok"],
 	);
 	assert.equal(mergeChatMessages(stored, stored).length, 2);
+});
+
+test("chat error message ids are distinct from model replies", () => {
+	assert.equal(isChatErrorMessageId("loom-error-1"), true);
+	assert.equal(isChatErrorMessageId("msg-1"), false);
+	assert.equal(isChatErrorMessageId(undefined), false);
 });

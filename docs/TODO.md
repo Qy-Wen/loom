@@ -12,9 +12,9 @@
 
 One Settings page for Chat / Embedding / Rerank / VLM. Same fields: `baseUrl`, optional API key, `model`. Local and remote are the same form. See [SETTINGS.md](./SETTINGS.md).
 
-- [ ] Persist slots in app user data; secrets stay in Main; renderer does not see raw keys
-- [ ] Chat slot (`baseUrl` + key + `model`) drives the Agent; no hardcoded DeepSeek. Empty Chat may prefill once from `.env`
-- [ ] Embedding is OpenAI `POST /v1/embeddings`; Rerank is Cohere/Jina `/v1/rerank`; VLM is chat completions plus `image_url`
+- [x] Persist slots in app user data; Settings shows keys masked, with an eye to reveal
+- [x] Chat slot (`baseUrl` + key + `model`) drives the Agent; no hardcoded DeepSeek. Empty Chat may prefill once from `.env`
+- [x] Embedding is OpenAI `POST /v1/embeddings`; Rerank is Cohere/Jina `/v1/rerank`; VLM is chat completions plus `image_url`
 
 ## Step 2: Text embeddings (RAG index)
 

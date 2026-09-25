@@ -22,7 +22,7 @@
 每个槽位存：
 
 - `baseUrl`
-- `apiKey`（可选；本地服务常常不需要）
+- `apiKey`（远程托管一般要填；本地服务常常不需要）
 - `model`
 
 Loom 不加载、不运行模型。只当 HTTP 客户端。
@@ -35,7 +35,7 @@ TEI 原生存根（字段叫 `texts` 不叫 `documents`）不做第一家。只�
 
 - 落在应用用户数据目录，不进 `<library>/.loom/`。拷贝素材库时不能把 API key 一起拷走。
 - `<library>/.loom/config.json` 只放库级偏好。
-- 密钥留在 Main（以后进系统钥匙串）。Renderer 可以看 `baseUrl`、`model`，以及 key 是否已填。
+- 密钥留在应用用户数据，不进素材库。设置页默认掩码（`••••`），旁边眼睛可显示明文。以后可以再进系统钥匙串。
 - Chat 和 Embedding 一样由用户配置。Chat 槽位为空时，Main 可以从 `.env`（`DEEPSEEK_API_KEY` 和 DeepSeek 的 `baseUrl`）预填一次，方便现有开发环境启动。用户保存 Chat 之后，只认这个槽位。
 
 ---
