@@ -3,7 +3,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
-import { LocalCore } from "../src/index.ts";
+import { ENRICHMENT_VERSION, LocalCore } from "../src/index.ts";
+import { searchableEnrichmentTexts } from "../src/retrieval/text.ts";
 
 test("LocalCore searches and inspects assets without exposing absolute paths", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-retrieval-"));
@@ -50,4 +51,64 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 		await core.close();
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test("search_assets matches Level 1 text and camera extracts", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-search-enrich-"));
+	const core = new LocalCore();
+	try {
+		await writeFile(join(root, "brief.md"), "Launch the amber harvest campaign next week.");
+		await writeFile(join(root, "other.txt"), "unrelated");
+		await writeFile(join(root, "shot.jpg"), "image");
+		const snapshot = await core.openLibrary(root);
+		const brief = snapshot.assets.find((asset) => asset.relativePath === "brief.md");
+		const shot = snapshot.assets.find((asset) => asset.relativePath === "shot.jpg");
+		assert.ok(brief && shot);
+		await core.analyzeAsset(brief.assetId);
+		await core.metadataStore.upsertAssetEnrichment({
+			assetId: shot.assetId,
+			version: ENRICHMENT_VERSION,
+			sourceModifiedAt: shot.modifiedAt,
+			status: "ready",
+			data: { kind: "image", width: 1920, height: 1080, camera: "Canon EOS R5" },
+		});
+
+		const byText = await core.searchAssets({ query: "amber harvest" });
+		assert.equal(byText.total, 1);
+		assert.equal(byText.assets[0]?.assetId, brief.assetId);
+		assert.equal(JSON.stringify(byText).includes(root), false);
+
+		const byCamera = await core.searchAssets({ query: "canon eos" });
+		assert.equal(byCamera.total, 1);
+		assert.equal(byCamera.assets[0]?.assetId, shot.assetId);
+		assert.equal((await core.searchAssets({ query: "1920" })).total, 0);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("searchableEnrichmentTexts uses ready extracts only", () => {
+	assert.deepEqual(searchableEnrichmentTexts({
+		assetId: "a",
+		version: ENRICHMENT_VERSION,
+		sourceModifiedAt: 1,
+		status: "ready",
+		data: { kind: "text", text: "hello", truncated: false, charCount: 5 },
+	}), ["hello"]);
+	assert.deepEqual(searchableEnrichmentTexts({
+		assetId: "a",
+		version: ENRICHMENT_VERSION,
+		sourceModifiedAt: 1,
+		status: "failed",
+		error: "hello",
+		data: { kind: "text", text: "hello", truncated: false, charCount: 5 },
+	}), []);
+	assert.deepEqual(searchableEnrichmentTexts({
+		assetId: "a",
+		version: ENRICHMENT_VERSION,
+		sourceModifiedAt: 1,
+		status: "ready",
+		data: { kind: "video", duration: 12, videoCodec: "h264", audioCodec: "aac" },
+	}), ["h264", "aac"]);
 });

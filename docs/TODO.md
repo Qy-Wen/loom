@@ -8,12 +8,7 @@
 
 ---
 
-## Step 1: Search Level 1 text
-
-- [ ] Include `asset_metadata` extracts in the current `search_assets` match
-- [ ] Do not add FTS, vectors, or Hybrid Search yet
-
-## Step 2: Hybrid Search
+## Step 1: Hybrid Search
 
 Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
 

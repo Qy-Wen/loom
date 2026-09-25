@@ -30,12 +30,12 @@ export function createAssetTools(core: LocalCore): LoomTool[] {
 		{
 			name: "search_assets",
 			description:
-				"Search the open local asset library by filename/path text, media type, and custom properties. " +
+				"Search the open local asset library by filename/path text, Level 1 extracts (file text, camera, codecs), media type, and custom properties. " +
 				"Property filters are AND-combined. Returns stable asset IDs; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
 				properties: {
-					query: { type: "string", description: "Case-insensitive filename, relative path, or property-value text." },
+					query: { type: "string", description: "Case-insensitive filename, relative path, property value, or Level 1 extract text." },
 					type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
 					properties: {
 						type: "array",
