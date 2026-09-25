@@ -88,6 +88,20 @@ body {
 	flex: 1;
 }
 
+.topbar-settings {
+	padding: 4px 8px;
+	border: 0;
+	border-radius: 5px;
+	color: #5f6368;
+	background: transparent;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.topbar-settings:hover {
+	background: #eeeeeb;
+}
+
 .error-banner {
 	flex: 0 0 auto;
 	padding: 7px 14px;
@@ -973,6 +987,33 @@ body.resizing-columns {
 	font-size: 12px;
 }
 
+.chat-error {
+	width: 100%;
+	margin: 8px 0 4px;
+	padding: 8px 10px 9px;
+	border: 1px solid #f1b7b7;
+	border-radius: 7px;
+	background: #fff6f6;
+	color: #8d2020;
+	box-shadow: none;
+}
+
+.chat-error-label {
+	margin: 0 0 4px;
+	color: #b3261e;
+	font-size: 10px;
+	font-weight: 680;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.chat-error-body {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+}
+
 .agent-chat {
 	display: flex;
 	flex-direction: column;
@@ -1569,6 +1610,164 @@ body.resizing-table-columns {
 	justify-content: center;
 	height: 100%;
 	color: #888;
+}
+
+.settings-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 20;
+	display: flex;
+	align-items: flex-start;
+	justify-content: center;
+	padding: 48px 16px 24px;
+	background: rgb(32 33 36 / 28%);
+}
+
+.settings-dialog {
+	display: flex;
+	flex-direction: column;
+	width: min(640px, 100%);
+	max-height: calc(100vh - 72px);
+	overflow: auto;
+	padding: 16px 18px 18px;
+	border: 1px solid #dededb;
+	border-radius: 10px;
+	background: #fafaf9;
+	box-shadow: 0 16px 40px rgb(32 33 36 / 16%);
+}
+
+.settings-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.settings-header h2 {
+	margin: 0;
+	font-size: 16px;
+	font-weight: 650;
+}
+
+.settings-lead {
+	margin: 8px 0 14px;
+	color: #6f7379;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.settings-form {
+	display: grid;
+	gap: 12px;
+}
+
+.settings-slot {
+	margin: 0;
+	padding: 12px;
+	border: 1px solid #e1e1de;
+	border-radius: 8px;
+	background: #fff;
+}
+
+.settings-slot legend {
+	padding: 0 4px;
+	font-size: 13px;
+	font-weight: 620;
+}
+
+.settings-slot p {
+	margin: 0 0 10px;
+	color: #85888e;
+	font-size: 11px;
+	line-height: 1.45;
+}
+
+.settings-slot label {
+	display: grid;
+	gap: 4px;
+	margin-bottom: 8px;
+	color: #5f6368;
+	font-size: 11px;
+}
+
+.settings-slot input {
+	min-width: 0;
+	padding: 6px 8px;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	outline: none;
+	color: inherit;
+	background: #fff;
+	font: inherit;
+	font-size: 12px;
+}
+
+.settings-slot input:focus {
+	border-color: #7896c8;
+	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);
+}
+
+.settings-secret {
+	display: grid;
+	gap: 4px;
+	margin-bottom: 8px;
+	color: #5f6368;
+	font-size: 11px;
+}
+
+.settings-secret-row {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 28px;
+	gap: 4px;
+	align-items: center;
+}
+
+.settings-reveal {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	color: #6f7379;
+	background: transparent;
+	cursor: pointer;
+}
+
+.settings-reveal:hover {
+	background: #f0f0ed;
+}
+
+.settings-actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 8px;
+	margin-top: 4px;
+}
+
+.settings-actions button {
+	padding: 6px 10px;
+	border: 1px solid #cacac6;
+	border-radius: 6px;
+	color: #292a2d;
+	background: #fff;
+	cursor: pointer;
+}
+
+.settings-actions button:hover:not(:disabled) {
+	background: #eeeeeb;
+}
+
+.settings-actions .primary-button {
+	border-color: #202124;
+	color: #fff;
+	background: #202124;
+}
+
+.settings-actions .primary-button:hover:not(:disabled) {
+	background: #3c4043;
 }
 
 @media (max-width: 1000px) {

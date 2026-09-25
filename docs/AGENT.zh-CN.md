@@ -220,6 +220,7 @@ Main 进程（Local Core）
 | `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
 | `tool_start` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，保留 pi 的稳定 `toolCallId` |
 | `tool_end` | `TOOL_CALL_END` + `TOOL_CALL_RESULT`；结构化 `details` 另发 `CUSTOM loom.tool_result` |
+| `error` | 发 `loom-error-*` 提示条 + `RUN_ERROR`（key 错、Chat 连不上、没配设置）。按系统告警渲染，不走模型气泡。 |
 | `agent_end` | `RUN_FINISHED` |
 
 ### 5.3 两处 v1 不做、但架构留好位置

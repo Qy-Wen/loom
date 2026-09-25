@@ -15,7 +15,11 @@ async function main() {
 	const agent = createLoomAgent({
 		systemPrompt:
 			"You are a helpful assistant. When asked to echo something, you MUST call the `echo` tool.",
-		model: { provider: "deepseek", model: "deepseek-v4-flash" },
+		chat: {
+			baseUrl: "https://api.deepseek.com",
+			apiKey: process.env.DEEPSEEK_API_KEY,
+			model: "deepseek-v4-flash",
+		},
 		tools: [
 			{
 				name: "echo",

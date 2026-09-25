@@ -45,6 +45,8 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.sessionsChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.sessionsChanged, handler);
 	},
+	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
+	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
 };
 
 contextBridge.exposeInMainWorld("loom", api);

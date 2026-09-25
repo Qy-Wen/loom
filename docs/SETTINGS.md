@@ -22,7 +22,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 Each slot stores:
 
 - `baseUrl`
-- `apiKey` (optional; local servers often omit it)
+- `apiKey` (hosted APIs usually need it; local servers often omit it)
 - `model`
 
 Loom never loads or runs a model. It is only an HTTP client.
@@ -35,7 +35,7 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 
 - Persist in the app user data directory, not `<library>/.loom/`. Copying a library must not copy API keys.
 - `<library>/.loom/config.json` stays library preferences only.
-- Secrets stay in Main (later OS keychain). Renderer may show `baseUrl` and `model`, and only whether a key is set.
+- Keys stay in app user data, not the library. Settings shows the key masked (`••••`); an eye toggle reveals the real value. Later they can move to the OS keychain.
 - Chat is user-configured like Embedding. If the Chat slot is empty, Main may prefill once from `.env` (`DEEPSEEK_API_KEY` and a DeepSeek `baseUrl`) so existing dev setups still start. After the user saves Chat, that slot is the only source.
 
 ---

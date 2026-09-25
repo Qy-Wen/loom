@@ -21,6 +21,8 @@ import { loadMcpConfigFile } from "./mcp/config.ts";
 import { McpHost } from "./mcp/host.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
+import type { ModelSettingsDraft } from "../shared/model-settings.ts";
+import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
 const DEFAULT_CDP_PORT = "9333";
@@ -51,9 +53,9 @@ const localCore = new LocalCore();
 const workspaceTools = createWorkspaceTools();
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
-	model: { provider: "deepseek", model: "deepseek-v4-flash" },
 	tools: [...workspaceTools.tools, ...createAssetTools(localCore), ...createFfmpegTools(localCore)],
 };
+let modelSettings: ModelSettingsStore | null = null;
 let mcpHost: McpHost | null = null;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
@@ -270,6 +272,18 @@ function registerIpc(): void {
 		agentServer?.dropSession(id);
 	});
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => localCore.unarchiveSession(id));
+	ipcMain.handle(IPC.getModelSettings, async () => {
+		if (!modelSettings) throw new Error("Settings store not started");
+		return modelSettings.view();
+	});
+
+	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
+		if (!modelSettings) throw new Error("Settings store not started");
+		const file = await modelSettings.update(draft);
+		agentServer?.setChat(resolveChatEndpoint(file, process.env, false));
+		return settingsView(file);
+	});
+
 	ipcMain.handle(IPC.deleteSession, async (_event, id: string) => {
 		await localCore.deleteSession(id);
 		agentServer?.dropSession(id);
@@ -319,11 +333,13 @@ app
 			if (existsSync(envFile)) process.loadEnvFile(envFile);
 		}
 
+		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		agentServer = await startAgentServer({
 			...AGENT_OPTIONS,
+			chat: await modelSettings.chat(),
 			tools: [...(AGENT_OPTIONS.tools ?? [])],
 		}, localCore);
 		registerAssetProtocol();

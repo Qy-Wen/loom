@@ -14,6 +14,7 @@ import type {
 	SessionRecord,
 	SessionSummary,
 } from "@loom/core";
+import type { ModelSettingsDraft, ModelSettingsView } from "./model-settings.ts";
 
 export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal" | "trash";
 
@@ -53,6 +54,8 @@ export const IPC = {
 	unarchiveSession: "loom:unarchiveSession",
 	deleteSession: "loom:deleteSession",
 	sessionsChanged: "loom:sessionsChanged",
+	getModelSettings: "loom:getModelSettings",
+	saveModelSettings: "loom:saveModelSettings",
 } as const;
 
 export interface LoomApi {
@@ -90,6 +93,8 @@ export interface LoomApi {
 	unarchiveSession: (id: string) => Promise<void>;
 	deleteSession: (id: string) => Promise<void>;
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
+	getModelSettings: () => Promise<ModelSettingsView>;
+	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
 }
 
 declare global {

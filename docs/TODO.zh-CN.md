@@ -12,9 +12,9 @@
 
 一个设置页，管 Chat / Embedding / Rerank / VLM。同一套字段：`baseUrl`、可选 API key、`model`。本地和远程同一张表。见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
-- [ ] 槽位落到应用用户数据；密钥留在 Main；renderer 看不到明文 key
-- [ ] Chat 槽位（`baseUrl` + key + `model`）驱动 Agent，不写死 DeepSeek。空槽位可从 `.env` 预填一次
-- [ ] Embedding 走 OpenAI `POST /v1/embeddings`；Rerank 走 Cohere/Jina `/v1/rerank`；VLM 走 chat completions + `image_url`
+- [x] 槽位落到应用用户数据；设置页默认掩码，眼睛可显示明文 key
+- [x] Chat 槽位（`baseUrl` + key + `model`）驱动 Agent，不写死 DeepSeek。空槽位可从 `.env` 预填一次
+- [x] Embedding 走 OpenAI `POST /v1/embeddings`；Rerank 走 Cohere/Jina `/v1/rerank`；VLM 走 chat completions + `image_url`
 
 ## 第二步：文本 Embedding（RAG 建索引）
 

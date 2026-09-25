@@ -40,14 +40,21 @@ export type LoomAgentEvent =
 	| { type: "text"; delta: string }
 	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
+	| { type: "error"; message: string }
 	| { type: "agent_end" };
 
 export type LoomTranscriptMessage = Record<string, unknown> & { role: string };
 
+export interface LoomChatEndpoint {
+	baseUrl: string;
+	apiKey?: string;
+	model: string;
+}
+
 export interface LoomAgentOptions {
 	systemPrompt?: string;
-	/** Provider id + model id, e.g. { provider: "deepseek", model: "deepseek-flash" }. */
-	model: { provider: string; model: string };
+	/** OpenAI-compatible Chat slot. Missing or incomplete until the user configures Settings. */
+	chat?: LoomChatEndpoint;
 	tools?: LoomTool[];
 	initialMessages?: LoomTranscriptMessage[];
 }
