@@ -1,7 +1,24 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Asset } from "@loom/core";
+import { findMatchOffsets, overflowScrollDelta } from "../src/renderer/workbench/find-in-view.ts";
 import { renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/markdown.ts";
+
+test("findMatchOffsets is case-insensitive and non-overlapping", () => {
+	assert.deepEqual(findMatchOffsets("Hello hello HELLO", "hello"), [0, 6, 12]);
+	assert.deepEqual(findMatchOffsets("aaaa", "aa"), [0, 2]);
+	assert.deepEqual(findMatchOffsets("abc", ""), []);
+});
+
+test("overflowScrollDelta only moves when the target is outside the padded viewport", () => {
+	const viewport = { top: 100, bottom: 400, left: 0, right: 200 };
+	assert.deepEqual(
+		overflowScrollDelta({ top: 180, bottom: 200, left: 40, right: 80 }, viewport),
+		{ top: 0, left: 0 },
+	);
+	assert.equal(overflowScrollDelta({ top: 80, bottom: 90, left: 10, right: 40 }, viewport).top, -44);
+	assert.equal(overflowScrollDelta({ top: 500, bottom: 520, left: 10, right: 40 }, viewport).top, 144);
+});
 
 test("renderMarkdown turns headings and lists into HTML", () => {
 	const html = renderMarkdown("# Title\n\n- one\n- two");
