@@ -20,7 +20,24 @@ import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpSettingsView } from "./mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSettingsView } from "./model-settings.ts";
 
-export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal" | "trash";
+export type AssetContextAction =
+	| "rename"
+	| "duplicate"
+	| "copy"
+	| "paste"
+	| "new_folder"
+	| "copy_path"
+	| "reveal"
+	| "trash";
+export type FolderContextAction =
+	| "rename"
+	| "copy"
+	| "paste"
+	| "new_folder"
+	| "copy_path"
+	| "reveal"
+	| "trash";
+export type LibraryContextAction = "paste" | "new_folder" | "new_md_file";
 
 export interface AgentEndpoint {
 	runtimeUrl: string;
@@ -39,11 +56,21 @@ export const IPC = {
 	getLibrarySnapshot: "loom:getLibrarySnapshot",
 	libraryChanged: "loom:libraryChanged",
 	showAssetContextMenu: "loom:showAssetContextMenu",
+	showFolderContextMenu: "loom:showFolderContextMenu",
+	showLibraryContextMenu: "loom:showLibraryContextMenu",
 	renameAsset: "loom:renameAsset",
 	duplicateAsset: "loom:duplicateAsset",
+	copyAssetsInto: "loom:copyAssetsInto",
+	createFolder: "loom:createFolder",
+	createMarkdownFile: "loom:createMarkdownFile",
+	renameFolder: "loom:renameFolder",
+	copyFolderInto: "loom:copyFolderInto",
 	copyAssetPath: "loom:copyAssetPath",
+	copyFolderPath: "loom:copyFolderPath",
 	revealAsset: "loom:revealAsset",
+	revealFolder: "loom:revealFolder",
 	trashAsset: "loom:trashAsset",
+	trashFolder: "loom:trashFolder",
 	getPropertySnapshot: "loom:getPropertySnapshot",
 	createProperty: "loom:createProperty",
 	updateProperty: "loom:updateProperty",
@@ -80,12 +107,22 @@ export interface LoomApi {
 	openLibrary: () => Promise<LibrarySnapshot | null>;
 	getLibrarySnapshot: () => Promise<LibrarySnapshot>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
-	showAssetContextMenu: (assetId: string) => Promise<AssetContextAction | null>;
+	showAssetContextMenu: (assetId: string, canPaste: boolean) => Promise<AssetContextAction | null>;
+	showFolderContextMenu: (relativePath: string, canPaste: boolean) => Promise<FolderContextAction | null>;
+	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
+	copyAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
+	createFolder: (parentRelativePath: string) => Promise<string>;
+	createMarkdownFile: (parentRelativePath: string) => Promise<Asset>;
+	renameFolder: (relativePath: string, name: string) => Promise<string>;
+	copyFolderInto: (sourceFolder: string, destFolder: string) => Promise<string>;
 	copyAssetPath: (assetId: string) => Promise<void>;
+	copyFolderPath: (relativePath: string) => Promise<void>;
 	revealAsset: (assetId: string) => Promise<void>;
+	revealFolder: (relativePath: string) => Promise<void>;
 	trashAsset: (assetId: string) => Promise<boolean>;
+	trashFolder: (relativePath: string) => Promise<boolean>;
 	getPropertySnapshot: () => Promise<PropertySnapshot>;
 	createProperty: (name: string, type: PropertyType) => Promise<PropertyDefinition>;
 	updateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<PropertyDefinition>;

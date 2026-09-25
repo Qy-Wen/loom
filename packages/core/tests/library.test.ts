@@ -205,3 +205,53 @@ test("Library keeps both asset ids when two files are swapped while closed", asy
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Library creates, renames, copies, and pastes folders and files", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-ops-"));
+	const core = new LocalCore();
+
+	try {
+		await mkdir(join(root, "notes"));
+		await writeFile(join(root, "cover.jpg"), "image fixture");
+		await writeFile(join(root, "notes", "brief.md"), "# Brief");
+
+		const initial = await core.openLibrary(root);
+		const cover = initial.assets.find((asset) => asset.relativePath === "cover.jpg");
+		const brief = initial.assets.find((asset) => asset.relativePath === "notes/brief.md");
+		assert.ok(cover && brief);
+
+		assert.equal(await core.createFolder(""), "New Folder");
+		assert.equal(await core.createFolder(""), "New Folder 2");
+		assert.equal(await core.createFolder("notes"), "notes/New Folder");
+
+		assert.equal(await core.renameFolder("notes", "briefs"), "briefs");
+		const renamed = await core.getLibrarySnapshot();
+		assert.deepEqual(
+			renamed.folders.filter((folder) => folder === "briefs" || folder.startsWith("briefs/")),
+			["briefs", "briefs/New Folder"],
+		);
+		assert.equal(renamed.assets.find((asset) => asset.relativePath === "briefs/brief.md")?.assetId, brief.assetId);
+
+		const pasted = await core.copyAssetsInto([cover.assetId], "briefs");
+		assert.equal(pasted[0].relativePath, "briefs/cover.jpg");
+		assert.notEqual(pasted[0].assetId, cover.assetId);
+
+		const copiedFolder = await core.copyFolderInto("briefs", "");
+		assert.equal(copiedFolder, "briefs copy");
+		const afterCopy = await core.getLibrarySnapshot();
+		assert.ok(afterCopy.assets.some((asset) => asset.relativePath === "briefs copy/brief.md"));
+		assert.ok(afterCopy.assets.some((asset) => asset.relativePath === "briefs copy/cover.jpg"));
+
+		await assert.rejects(() => core.copyFolderInto("briefs", "briefs"), /into itself/);
+		await assert.rejects(() => core.renameFolder("briefs", "briefs copy"), /already exists/);
+
+		const markdown = await core.createMarkdownFile("");
+		assert.equal(markdown.relativePath, "Untitled.md");
+		assert.equal(markdown.type, "text");
+		assert.equal((await core.createMarkdownFile("")).relativePath, "Untitled 2.md");
+		assert.equal((await core.createMarkdownFile("briefs")).relativePath, "briefs/Untitled.md");
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
