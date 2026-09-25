@@ -1,82 +1,37 @@
-import { useEffect, useState } from "react";
-import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotId } from "../../shared/model-settings.ts";
+import { useEffect, useRef, useState } from "react";
+import type { AgentStatsView } from "../../shared/agent-stats.ts";
+import type { McpServerDraft, McpSettingsView } from "../../shared/mcp-settings.ts";
+import type { ModelSettingsDraft, ModelSlotId } from "../../shared/model-settings.ts";
+import { SettingsMcp } from "./settings-mcp.tsx";
+import { SettingsModels } from "./settings-models.tsx";
+import { SettingsStats } from "./settings-stats.tsx";
 
-const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: string }> = {
-	chat: {
-		title: "Chat",
-		hint: "Agent loop. OpenAI-compatible POST /v1/chat/completions.",
-		keyHint: "needed for llm chat",
-	},
-	embedding: {
-		title: "Embedding",
-		hint: "Text RAG. OpenAI-compatible POST /v1/embeddings.",
-		keyHint: "optional",
-	},
-	rerank: {
-		title: "Rerank",
-		hint: "Later retrieve. Cohere/Jina POST /v1/rerank. Slot is optional.",
-		keyHint: "optional",
-	},
-	vlm: {
-		title: "VLM",
-		hint: "Later Level 3. Chat completions plus image_url. Slot is optional.",
-		keyHint: "optional",
-	},
-};
+type SettingsTab = "models" | "mcp" | "stats";
 
-const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
-	chat: true,
-	embedding: true,
-	rerank: true,
-	vlm: true,
+const TABS: { id: SettingsTab; label: string }[] = [
+	{ id: "models", label: "Models" },
+	{ id: "mcp", label: "MCP" },
+	{ id: "stats", label: "Stats" },
+];
+
+const LEAD: Record<SettingsTab, string> = {
+	models: "Local or remote is the same form: URL, API key, and model. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
+	mcp: "Any stdio or HTTP MCP server. The id becomes the tool prefix (id__tool). Nothing is hardcoded to a vendor.",
+	stats: "Lifetime Chat usage for this app. Prompt-cache hit rate is the number that matters for prefix stability.",
 };
 
 interface SettingsPageProps {
 	onClose: () => void;
 }
 
-function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
-	return (
-		<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-			{open ? (
-				<>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinecap="round"
-						d="M3 3l18 18"
-					/>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						d="M10.6 10.7a2.2 2.2 0 0 0 3 3M9.5 5.6A10.4 10.4 0 0 1 12 5.3c5.2 0 8.8 4.2 9.7 6.7a1 1 0 0 1 0 .7 12 12 0 0 1-4.2 5.1M6.2 6.4A12 12 0 0 0 2.3 12.3a1 1 0 0 0 0 .7C3.2 15.5 6.8 19.7 12 19.7c1.5 0 2.8-.3 4-.8"
-					/>
-				</>
-			) : (
-				<>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinejoin="round"
-						d="M2.3 12.3a1 1 0 0 1 0-.6C3.2 8.5 6.8 4.3 12 4.3s8.8 4.2 9.7 7.4a1 1 0 0 1 0 .6C20.8 15.5 17.2 19.7 12 19.7S3.2 15.5 2.3 12.3Z"
-					/>
-					<circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-				</>
-			)}
-		</svg>
-	);
-}
-
 export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element {
+	const [tab, setTab] = useState<SettingsTab>("models");
 	const [draft, setDraft] = useState<ModelSettingsDraft | null>(null);
-	const [hidden, setHidden] = useState(HIDDEN_KEYS);
+	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
+	const [stats, setStats] = useState<AgentStatsView | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
+	const closeOnBackdrop = useRef(false);
 
 	useEffect(() => {
 		function onKey(event: KeyboardEvent): void {
@@ -87,23 +42,43 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 	}, [onClose]);
 
 	useEffect(() => {
-		void window.loom.getModelSettings().then((view) => {
-			setDraft({
-				chat: { baseUrl: view.chat.baseUrl, model: view.chat.model, apiKey: view.chat.apiKey },
-				embedding: { baseUrl: view.embedding.baseUrl, model: view.embedding.model, apiKey: view.embedding.apiKey },
-				rerank: { baseUrl: view.rerank.baseUrl, model: view.rerank.model, apiKey: view.rerank.apiKey },
-				vlm: { baseUrl: view.vlm.baseUrl, model: view.vlm.model, apiKey: view.vlm.apiKey },
-			});
-		}).catch((cause) => {
+		if (tab !== "stats") return;
+		void window.loom.getAgentStats().then(setStats).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		});
+	}, [tab]);
+
+	useEffect(() => {
+		void (async () => {
+			try {
+				const [models, mcpView, statsView] = await Promise.all([
+					window.loom.getModelSettings(),
+					window.loom.getMcpSettings(),
+					window.loom.getAgentStats(),
+				]);
+				setDraft({
+					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey },
+					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey },
+					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey },
+					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey },
+				});
+				setMcp(mcpView);
+				setStats(statsView);
+			} catch (cause) {
+				setError(cause instanceof Error ? cause.message : String(cause));
+			}
+		})();
 	}, []);
 
-	function patch(id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string): void {
+	function patchModel(id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string): void {
 		setDraft((current) => current ? { ...current, [id]: { ...current[id], [field]: value } } : current);
 	}
 
-	async function save(): Promise<void> {
+	function patchMcp(servers: McpServerDraft[]): void {
+		setMcp((current) => current ? { ...current, servers } : current);
+	}
+
+	async function saveModels(): Promise<void> {
 		if (!draft) return;
 		setSaving(true);
 		setError(null);
@@ -117,85 +92,89 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 		}
 	}
 
+	async function saveMcp(): Promise<void> {
+		if (!mcp) return;
+		setSaving(true);
+		setError(null);
+		try {
+			setMcp(await window.loom.saveMcpSettings(mcp.servers));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	async function resetStats(): Promise<void> {
+		setSaving(true);
+		setError(null);
+		try {
+			setStats(await window.loom.resetAgentStats());
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	function onBackdropPointerDown(event: React.PointerEvent<HTMLDivElement>): void {
+		closeOnBackdrop.current = event.target === event.currentTarget;
+	}
+
+	function onBackdropClick(event: React.MouseEvent<HTMLDivElement>): void {
+		if (event.target === event.currentTarget && closeOnBackdrop.current) onClose();
+		closeOnBackdrop.current = false;
+	}
+
 	return (
-		<div className="settings-overlay" role="presentation" onClick={onClose}>
+		<div
+			className="settings-overlay"
+			role="presentation"
+			onPointerDown={onBackdropPointerDown}
+			onClick={onBackdropClick}
+		>
 			<div
 				className="settings-dialog"
 				role="dialog"
 				aria-labelledby="settings-title"
-				onClick={(event) => event.stopPropagation()}
 			>
 				<div className="settings-header">
 					<h2 id="settings-title">Settings</h2>
 					<button className="icon-button" type="button" onClick={onClose} aria-label="Close settings">×</button>
 				</div>
-				<p className="settings-lead">
-					Local or remote is the same form: URL, API key, and model. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.
-				</p>
+				<div className="settings-tabs" role="tablist" aria-label="Settings sections">
+					{TABS.map((item) => (
+						<button
+							key={item.id}
+							type="button"
+							role="tab"
+							aria-selected={tab === item.id}
+							className={tab === item.id ? "is-active" : undefined}
+							onClick={() => setTab(item.id)}
+						>
+							{item.label}
+						</button>
+					))}
+				</div>
+				<p className="settings-lead">{LEAD[tab]}</p>
 				{error && <div className="session-error">{error}</div>}
-				{!draft ? (
-					<div className="empty">Loading…</div>
-				) : (
-					<form
-						className="settings-form"
-						onSubmit={(event) => {
-							event.preventDefault();
-							void save();
-						}}
-					>
-						{MODEL_SLOTS.map((id) => (
-							<fieldset key={id} className="settings-slot">
-								<legend>{SLOT_LABELS[id].title}</legend>
-								<p>{SLOT_LABELS[id].hint}</p>
-								<label>
-									Base URL
-									<input
-										value={draft[id].baseUrl}
-										onChange={(event) => patch(id, "baseUrl", event.target.value)}
-										placeholder="https://api.example.com"
-										autoComplete="off"
-									/>
-								</label>
-								<label>
-									Model
-									<input
-										value={draft[id].model}
-										onChange={(event) => patch(id, "model", event.target.value)}
-										placeholder="model id"
-										autoComplete="off"
-									/>
-								</label>
-								<div className="settings-secret">
-									<span>API key</span>
-									<div className="settings-secret-row">
-										<input
-											type={hidden[id] ? "password" : "text"}
-											value={draft[id].apiKey ?? ""}
-											onChange={(event) => patch(id, "apiKey", event.target.value)}
-											placeholder={SLOT_LABELS[id].keyHint}
-											autoComplete="off"
-											aria-label={`${SLOT_LABELS[id].title} API key`}
-										/>
-										<button
-											className="settings-reveal"
-											type="button"
-											aria-label={hidden[id] ? `Show ${SLOT_LABELS[id].title} API key` : `Hide ${SLOT_LABELS[id].title} API key`}
-											onClick={() => setHidden((current) => ({ ...current, [id]: !current[id] }))}
-										>
-											<EyeIcon open={!hidden[id]} />
-										</button>
-									</div>
-								</div>
-							</fieldset>
-						))}
-						<div className="settings-actions">
-							<button type="button" onClick={onClose}>Cancel</button>
-							<button className="primary-button" type="submit" disabled={saving}>
-								{saving ? "Saving…" : "Save"}
-							</button>
-						</div>
-					</form>
-				)}
+				{tab === "models" && (draft
+					? (
+						<SettingsModels
+							draft={draft}
+							saving={saving}
+							onChange={patchModel}
+							onCancel={onClose}
+							onSave={() => void saveModels()}
+						/>
+					)
+					: <div className="empty">Loading…</div>)}
+				{tab === "mcp" && (mcp
+					? <SettingsMcp view={mcp} saving={saving} onChange={patchMcp} onSave={() => void saveMcp()} />
+					: <div className="empty">Loading…</div>)}
+				{tab === "stats" && (stats
+					? <SettingsStats stats={stats} resetting={saving} onReset={() => void resetStats()} />
+					: <div className="empty">Loading…</div>)}
 			</div>
 		</div>
 	);

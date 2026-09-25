@@ -20,6 +20,7 @@ import {
 } from "@loom/agent";
 import { DEFAULT_SESSION_TITLE, titleFromUserText } from "@loom/core";
 import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
+import { usageFromMessage } from "../shared/agent-stats.ts";
 import { Observable } from "rxjs";
 
 type LoomAgentFactory = (options: LoomAgentOptions) => LoomAgentInstance;
@@ -63,6 +64,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 	private createAgent: LoomAgentFactory;
 	private store: AgentSessionStore | undefined;
 	private getUiSelection: (() => UiSelectionFields | null) | undefined;
+	private onUsage: ((usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) | undefined;
 	/** One pi-backed conversation per AG-UI thread; clones share this map. */
 	private sessions = new Map<string, LoomAgentInstance>();
 	private titles = new Map<string, string>();
@@ -72,12 +74,14 @@ export class LoomAgUiAgent extends AbstractAgent {
 		createAgent: LoomAgentFactory = createLoomAgent,
 		store?: AgentSessionStore,
 		getUiSelection?: () => UiSelectionFields | null,
+		onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void,
 	) {
 		super({ agentId: "loom" });
 		this.agentOptions = options;
 		this.createAgent = createAgent;
 		this.store = store;
 		this.getUiSelection = getUiSelection;
+		this.onUsage = onUsage;
 	}
 
 	// CopilotKit's runner clones the registered agent per run; the base clone()
@@ -89,6 +93,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		cloned.createAgent = this.createAgent;
 		cloned.store = this.store;
 		cloned.getUiSelection = this.getUiSelection;
+		cloned.onUsage = this.onUsage;
 		cloned.sessions = this.sessions;
 		cloned.titles = this.titles;
 		return cloned;
@@ -106,6 +111,11 @@ export class LoomAgUiAgent extends AbstractAgent {
 		if (!this.agentOptions.tools) this.agentOptions.tools = current;
 		current.push(...tools);
 		for (const session of this.sessions.values()) session.addTools(tools);
+	}
+
+	setTools(tools: LoomTool[]): void {
+		this.agentOptions.tools = [...tools];
+		this.resetSessions();
 	}
 
 	setSystemPrompt(systemPrompt: string): void {
@@ -267,7 +277,10 @@ export class LoomAgUiAgent extends AbstractAgent {
 				loom
 					.prompt(latestUserText(input), attachment ? { attachments: [attachment] } : undefined)
 					.then(async () => {
-						if (!failed) await this.persist(input.threadId, loom, before);
+						if (!failed) {
+							this.recordUsage(loom.getMessages().slice(before));
+							await this.persist(input.threadId, loom, before);
+						}
 						if (!cancelled) subscriber.complete();
 					})
 					.catch((err) => {
@@ -304,6 +317,14 @@ export class LoomAgUiAgent extends AbstractAgent {
 		const loom = this.createAgent({ ...this.agentOptions, initialMessages });
 		this.sessions.set(threadId, loom);
 		return loom;
+	}
+
+	private recordUsage(messages: LoomTranscriptMessage[]): void {
+		if (!this.onUsage) return;
+		for (const message of messages) {
+			const usage = usageFromMessage(message);
+			if (usage) this.onUsage(usage);
+		}
 	}
 
 	private async persist(threadId: string, loom: LoomAgentInstance, before: number): Promise<void> {

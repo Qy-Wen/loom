@@ -16,6 +16,8 @@ import type {
 	SessionSummary,
 	TextEmbedStatus,
 } from "@loom/core";
+import type { AgentStatsView } from "./agent-stats.ts";
+import type { McpServerDraft, McpSettingsView } from "./mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSettingsView } from "./model-settings.ts";
 
 export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal" | "trash";
@@ -66,6 +68,10 @@ export const IPC = {
 	sessionsChanged: "loom:sessionsChanged",
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
+	getMcpSettings: "loom:getMcpSettings",
+	saveMcpSettings: "loom:saveMcpSettings",
+	getAgentStats: "loom:getAgentStats",
+	resetAgentStats: "loom:resetAgentStats",
 	setUiSelection: "loom:setUiSelection",
 } as const;
 
@@ -108,6 +114,10 @@ export interface LoomApi {
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
+	getMcpSettings: () => Promise<McpSettingsView>;
+	saveMcpSettings: (servers: McpServerDraft[]) => Promise<McpSettingsView>;
+	getAgentStats: () => Promise<AgentStatsView>;
+	resetAgentStats: () => Promise<AgentStatsView>;
 	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;
 }
 

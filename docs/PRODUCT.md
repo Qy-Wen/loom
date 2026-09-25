@@ -348,6 +348,6 @@ Introduce these progressively when real scenarios require them:
 - **Sandboxing:** isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
-- **MCP settings UI:** add/remove servers without editing a config file.
+- **MCP settings UI:** done — Settings → MCP tab.
 - **Evals:** evaluate Agent behavior, tool calls, and retrieval quality.
 - **Observability:** record run traces, tool calls, latency, and token usage.

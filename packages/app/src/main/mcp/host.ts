@@ -4,43 +4,54 @@ import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { LoomTool } from "@loom/agent";
+import type { McpServerStatus } from "../../shared/mcp-settings.ts";
 import { isHttpServer, type McpServerConfig, type McpSession } from "./types.ts";
 import { toolsFromMcpSession } from "./tools.ts";
 
 export type McpSessionFactory = (config: McpServerConfig) => Promise<McpSession>;
 
+type ConnectOne = { tools: LoomTool[]; status: McpServerStatus };
+
 export class McpHost {
 	private readonly sessions: { config: McpServerConfig; session: McpSession }[] = [];
 	private readonly openSession: McpSessionFactory;
 	private closed = false;
+	private status: McpServerStatus[] = [];
 
 	constructor(openSession: McpSessionFactory = openSdkSession) {
 		this.openSession = openSession;
 	}
 
-	async connect(configs: McpServerConfig[]): Promise<LoomTool[]> {
-		const results = await Promise.all(configs.map((config) => this.connectOne(config)));
-		return results.flat();
+	lastStatus(): McpServerStatus[] {
+		return this.status;
 	}
 
-	private async connectOne(config: McpServerConfig): Promise<LoomTool[]> {
+	async connect(configs: McpServerConfig[]): Promise<LoomTool[]> {
+		const results = await Promise.all(configs.map((config) => this.connectOne(config)));
+		this.status = results.map((row) => row.status);
+		return results.flatMap((row) => row.tools);
+	}
+
+	private async connectOne(config: McpServerConfig): Promise<ConnectOne> {
 		try {
 			const session = await this.openSession(config);
 			if (this.closed) {
 				await session.close();
-				return [];
+				return { tools: [], status: { id: config.id, tools: [] } };
 			}
 			const specs = await session.listTools();
 			if (this.closed) {
 				await session.close();
-				return [];
+				return { tools: [], status: { id: config.id, tools: [] } };
 			}
 			this.sessions.push({ config, session });
-			console.log(`MCP ${config.id}: ${specs.map((spec) => spec.name).join(", ") || "(no tools)"}`);
-			return toolsFromMcpSession(config.id, session, specs);
+			const tools = specs.map((spec) => spec.name);
+			console.log(`MCP ${config.id}: ${tools.join(", ") || "(no tools)"}`);
+			return { tools: toolsFromMcpSession(config.id, session, specs), status: { id: config.id, tools } };
 		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
 			console.error(`Failed to connect MCP server ${config.id}`, error);
-			return [];
+			return { tools: [], status: { id: config.id, tools: [], error: message } };
 		}
 	}
 

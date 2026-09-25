@@ -6,6 +6,21 @@ test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByRole("button", { name: "Settings" })).toBeVisible();
 });
 
+test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
+	await loomPage.getByRole("button", { name: "Settings" }).click();
+	const dialog = loomPage.getByRole("dialog", { name: "Settings" });
+	await expect(dialog).toBeVisible();
+	await expect(dialog.getByRole("tab", { name: "Models" })).toBeVisible();
+	await expect(dialog.getByRole("tab", { name: "MCP" })).toBeVisible();
+	await expect(dialog.getByRole("tab", { name: "Stats" })).toBeVisible();
+	await dialog.getByRole("tab", { name: "MCP" }).click();
+	await expect(dialog.getByRole("button", { name: "Add server" })).toBeVisible();
+	await dialog.getByRole("tab", { name: "Stats" }).click();
+	await expect(dialog.getByText("Prompt-cache hit rate")).toBeVisible();
+	await dialog.getByRole("button", { name: "Close settings" }).click();
+	await expect(dialog).toBeHidden();
+});
+
 test("settings persist the chat slot", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running userData");
 	await loomPage.getByRole("button", { name: "Settings" }).click();

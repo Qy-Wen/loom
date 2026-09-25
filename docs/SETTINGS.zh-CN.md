@@ -42,7 +42,8 @@ TEI 原生存根（字段叫 `texts` 不叫 `documents`）不做第一家。只�
 
 ## 界面
 
-- 一个设置窗口或面板，不为每种模型单独弹窗。
-- 四个槽位在同一页。Rerank / VLM 可以空着。
+- 一个设置窗口，三个 tab：**Models**、**MCP**、**Stats**。
+- Models：四个槽位在同一页。Rerank / VLM 可以空着。
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。
-- MCP 服务列表以后可以进这个窗口；不是第一批设置工作。见 PRODUCT.md §10。
+- MCP：加减任意 stdio / HTTP server，保存后重连 Agent 工具。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
+- Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；当前 Chat 槽位没有标价。

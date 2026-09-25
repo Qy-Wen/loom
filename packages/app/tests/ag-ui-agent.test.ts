@@ -341,6 +341,47 @@ describe("LoomAgUiAgent", () => {
 		}]);
 	});
 
+	it("records Chat usage from new assistant messages", async () => {
+		const recorded: Array<{ input: number; output: number; cacheRead: number; cacheWrite: number }> = [];
+		class UsageAgent extends ScriptedAgent {
+			override async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
+				this.messages.push({ role: "user", content: input });
+				this.messages.push({
+					role: "assistant",
+					content: "ok",
+					usage: { input: 100, output: 20, cacheRead: 768, cacheWrite: 0 },
+				});
+				await FakeLoomAgent.prototype.prompt.call(this, input, options);
+			}
+		}
+		const adapter = new LoomAgUiAgent(
+			OPTIONS,
+			() => new UsageAgent(
+				[{ type: "agent_start" }, { type: "text", delta: "ok" }, { type: "agent_end" }],
+				[],
+			),
+			undefined,
+			undefined,
+			(usage) => recorded.push(usage),
+		);
+		await lastValueFrom(adapter.run(runInput("usage-1", "hi")).pipe(toArray()));
+		assert.deepEqual(recorded, [{ input: 100, output: 20, cacheRead: 768, cacheWrite: 0 }]);
+	});
+
+	it("replaces tools and drops live sessions", async () => {
+		const seen: LoomAgentOptions[] = [];
+		const adapter = new LoomAgUiAgent({ ...OPTIONS, tools: [] }, (options) => {
+			seen.push(options);
+			return new FakeLoomAgent([{ type: "agent_end" }]);
+		});
+		await lastValueFrom(adapter.run(runInput("t1", "hi")).pipe(toArray()));
+		const extra: LoomTool = { name: "comfy__x", description: "x", parameters: {}, execute: async () => "ok" };
+		adapter.setTools([extra]);
+		await lastValueFrom(adapter.run(runInput("t1", "again")).pipe(toArray()));
+		assert.equal(seen.length, 2);
+		assert.deepEqual(seen[1]?.tools?.map((tool) => tool.name), ["comfy__x"]);
+	});
+
 	it("sets the working directory on live sessions and later-created ones", async () => {
 		const created: FakeLoomAgent[] = [];
 		const seen: LoomAgentOptions[] = [];

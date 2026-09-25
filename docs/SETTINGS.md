@@ -42,7 +42,8 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 
 ## UI
 
-- One Settings window or panel, not a dialog per model type.
-- Four slots on one page. Empty rerank / VLM slots are allowed.
+- One Settings window with three tabs: **Models**, **MCP**, **Stats**.
+- Models: four slots on one page. Empty rerank / VLM slots are allowed.
 - Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md).
-- MCP server list can join this window later; it is not the first Settings work. See PRODUCT.md §10.
+- MCP: add/remove any stdio or HTTP servers and save to reconnect Agent tools. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
+- Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.
