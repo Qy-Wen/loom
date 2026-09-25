@@ -34,7 +34,7 @@
 ```
 
 - **左：Asset Library** — 素材库入口与真实文件层级，保持窄而稳定。
-- **中：Workbench** — 占据最大空间，在 Preview / Gallery / Table / Graph 间切换。Preview 直接展示图片、视频、音频、PDF 与常见文本文件；Markdown 默认渲染预览（含库内相对路径图片），可切到 Source。Ctrl/Cmd+F 可在当前 Markdown 或文本中查找。不支持的格式显示基础信息。
+- **中：Workbench** — 占据最大空间，在 Preview / Gallery / Table / Graph 间切换。Preview 直接展示图片、视频、音频、PDF 与常见文本文件；Markdown 默认渲染预览（含公式与库内相对路径图片），可切到 Source。Ctrl/Cmd+F 可在当前 Markdown 或文本中查找。不支持的格式显示基础信息。
 - **右：Agent / Details** — 默认显示 Agent；按需切到资产属性与关系，避免次要信息永久占位。Details 支持库级文本、数字、复选框与日期属性。
 - 左 / 中 / 右之间的分隔条可拖动调整宽度，双击恢复默认宽度；用户调整结果保存在本地。
 - 文件和文件夹支持原生右键菜单：新建文件夹、重命名、复制、粘贴、复制路径、在 Finder 中显示、移到废纸篓。文件树空白处还可新建 Markdown 文件。点击文件夹行会展开或收起。Ctrl/Cmd+C 复制当前选中项，Ctrl/Cmd+V 粘贴到选中文件夹（或选中文件所在目录），F2 重命名，Ctrl/Cmd+Shift+N 新建文件夹。

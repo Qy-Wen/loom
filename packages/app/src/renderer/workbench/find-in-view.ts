@@ -23,7 +23,7 @@ export function collectTextRanges(root: HTMLElement, query: string): Range[] {
 	const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
 		acceptNode(node) {
 			const parent = node.parentElement;
-			if (!parent || parent.closest("style, script")) return NodeFilter.FILTER_REJECT;
+			if (!parent || parent.closest("style, script, .katex-mathml")) return NodeFilter.FILTER_REJECT;
 			return NodeFilter.FILTER_ACCEPT;
 		},
 	});

@@ -87,3 +87,8 @@ test("renderMarkdown turns wiki image embeds into library images", () => {
 	});
 	assert.match(html, /src="loom-asset:\/\/asset\/cover-id\?v=4"/);
 });
+
+test("renderMarkdown typesets TeX with KaTeX", () => {
+	assert.match(renderMarkdown("The formula is $E=mc^2$."), /class="katex"/);
+	assert.match(renderMarkdown("$$\\int_0^1 x\\,dx$$"), /katex-display/);
+});
