@@ -138,6 +138,8 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性或富化变更时刷新对应行。
 
+Level 2 文本 RAG 切片（段落 + 向量 + 模型名）还没进这张表。以后单独建表，按 `asset_id` 关联，不塞进 `asset_metadata`。
+
 关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph.db`。见 [图](#graph-ladybugdb)。
 
 ---

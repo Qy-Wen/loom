@@ -10,6 +10,7 @@
 ## 1. 目标与定位
 
 - Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。路径 jail 和进程沙箱以后再加。
+- 素材库检索就是 RAG：Hybrid Search 返回文本段落（以后才是图/视频命中），Agent 用这些切片来回答或动手，而不是把整库塞进 prompt。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。
 
@@ -151,7 +152,7 @@ packages/agent/src/
 ### 注册工具（无需改上游源码）
 
 - **工作区工具**：用 `NodeExecutionEnv` 包一层 pi 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
-- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。
+- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步，会从 FTS 长到切片级 hybrid 命中。
 - **MCP 客户端**：Main 读 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。ComfyUI 这类创作运行时从这里挂。
 - **系统提示词**：打开的素材库根目录就是工作目录。
 

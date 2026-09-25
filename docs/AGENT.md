@@ -10,6 +10,7 @@
 ## 1. Goal and positioning
 
 - Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Path jail and a process sandbox are deferred.
+- Library retrieval is RAG: Hybrid Search returns text passages (later image/video hits) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt.
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
 
@@ -151,7 +152,7 @@ Enforced constraints:
 ### Registering tools without changing upstream
 
 - **Workspace tools:** wrap pi's `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
-- **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`.
+- **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG; it will grow from FTS to chunk-level hybrid hits.
 - **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Creation runtimes such as ComfyUI attach here.
 - **System prompt:** the open library root is the working directory.
 

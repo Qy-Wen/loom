@@ -28,7 +28,7 @@ Level 4  Deep analysis               Optional
 |---|---|---|---|
 | 0 | Filesystem metadata: path, size, hash, mtime, type | Free | Automatic on import |
 | 1 | FFprobe (duration/resolution/codec), EXIF, text extraction | Local compute | Automatic or on demand |
-| 2 | Embeddings for similarity search | Optional, local or cloud | User-selected |
+| 2 | Chunked text embeddings first (RAG index); image/video later | Optional, local or cloud | User-selected |
 | 3 | VLM semantics: caption, scene, people, OCR, ASR | May cost money | User-selected |
 | 4 | Deep analysis: segmentation, quality scoring, style tags, and more | May cost money | User-selected |
 
@@ -119,10 +119,13 @@ Asset search becomes true media understanding and manipulation rather than file-
 
 ---
 
-## 4. Relationship to retrieval
+## 4. Relationship to retrieval (RAG)
+
+Level 1 extract → Level 2 chunks + vectors → Hybrid Search → Agent uses the passages. That is RAG. Do not embed the whole library by default.
 
 - Level 1 writes `asset_metadata` keyed by `asset_id`. Common invalidation columns stay fixed; per-type fields are a `kind` JSON payload (`image` / `video` / `audio` / `text`).
 - Level 1 is extracted from the file on disk. Missing or stale rows refresh after reconcile; Analyze forces a rerun. Rename/move does not.
-- Level 2/3/4 outputs are written to SQLite (vectors, FTS, and metadata) for Hybrid Search; see PRODUCT.md Section 3.2.
-- Video scenes and transcript chunks are independent retrieval units, allowing the Agent to locate a time range rather than only a whole video.
-- `assets.embedding_status` and enrichment-job records track enrichment state; see PRODUCT.md Section 3.2.
+- Level 2 starts with text chunks (short files stay one chunk). Each chunk stores text, offsets, vector, and model id. Analyze stays Level 1; embed is a separate user/Agent action.
+- Hybrid Search retrieves those chunks and returns passage + `asset_id` so the Agent can cite or open the file. sqlite-vec and fusion come after the index exists.
+- Image and video embeddings, then scene / transcript chunks, reuse the same retrieve path.
+- Level 2/3/4 outputs stay in SQLite (vectors, FTS, and metadata); see PRODUCT.md Section 3.2.

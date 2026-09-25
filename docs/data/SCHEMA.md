@@ -138,6 +138,8 @@ FTS5 virtual table for `search_assets` text queries. One row per asset. Not a so
 
 Tokenizer is `unicode61` with diacritics removed. The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, or its enrichment change.
 
+Level 2 text RAG chunks (passage + vector + model id) are not in this schema yet. They will be a separate table keyed by `asset_id`, not a blob inside `asset_metadata`.
+
 Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
 
 ---
