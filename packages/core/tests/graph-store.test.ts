@@ -42,6 +42,7 @@ for (const kind of ["memory", "ladybug"] as const) {
 
 				assert.deepEqual((await store.listRelations("out")).map((item) => item.relationId), ["r1-dup"]);
 				assert.deepEqual((await store.listRelations("src")).map((item) => item.toAssetId), ["src"]);
+				assert.deepEqual((await store.listAllRelations()).map((item) => item.relationId), ["r1-dup"]);
 			});
 		});
 

@@ -121,15 +121,16 @@ export class LadybugGraphStore implements GraphStore {
 			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id,
 				label(r) AS label, r.type AS rel_type
 		`, { id: assetId });
-		return rows
-			.map((row) => ({
-				relationId: String(row.relation_id ?? ""),
-				fromAssetId: String(row.from_id ?? ""),
-				toAssetId: String(row.to_id ?? ""),
-				type: String(row.rel_type ?? row.label ?? ""),
-			}))
-			.filter((relation) => relation.relationId && relation.fromAssetId && relation.toAssetId && relation.type)
-			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
+		return toRelations(rows);
+	}
+
+	async listAllRelations(): Promise<AssetRelation[]> {
+		const rows = await this.run(`
+			MATCH (a:Asset)-[r]->(b:Asset)
+			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id,
+				label(r) AS label, r.type AS rel_type
+		`);
+		return toRelations(rows);
 	}
 
 	async removeRelation(relationId: string): Promise<void> {
@@ -178,6 +179,18 @@ export class LadybugGraphStore implements GraphStore {
 		if (!this.connection) throw new Error("Graph store is not open");
 		return this.connection;
 	}
+}
+
+function toRelations(rows: Record<string, unknown>[]): AssetRelation[] {
+	return rows
+		.map((row) => ({
+			relationId: String(row.relation_id ?? ""),
+			fromAssetId: String(row.from_id ?? ""),
+			toAssetId: String(row.to_id ?? ""),
+			type: String(row.rel_type ?? row.label ?? ""),
+		}))
+		.filter((relation) => relation.relationId && relation.fromAssetId && relation.toAssetId && relation.type)
+		.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
 }
 
 async function collect(result: QueryResult): Promise<Record<string, unknown>[]> {

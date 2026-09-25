@@ -23,6 +23,7 @@ const api: LoomApi = {
 		ipcRenderer.invoke(IPC.removeAssetProperty, assetId, propertyId),
 	getAssetEnrichment: (assetId) => ipcRenderer.invoke(IPC.getAssetEnrichment, assetId),
 	getAssetRelations: (assetId) => ipcRenderer.invoke(IPC.getAssetRelations, assetId),
+	listGraphRelations: () => ipcRenderer.invoke(IPC.listGraphRelations),
 	analyzeAsset: (assetId) => ipcRenderer.invoke(IPC.analyzeAsset, assetId),
 	listSessions: () => ipcRenderer.invoke(IPC.listSessions),
 	createSession: () => ipcRenderer.invoke(IPC.createSession),

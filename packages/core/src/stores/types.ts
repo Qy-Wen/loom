@@ -53,5 +53,6 @@ export interface GraphStore {
 	removeAsset(assetId: string): Promise<void>;
 	upsertRelation(relation: AssetRelation): Promise<void>;
 	listRelations(assetId: string): Promise<AssetRelation[]>;
+	listAllRelations(): Promise<AssetRelation[]>;
 	removeRelation(relationId: string): Promise<void>;
 }

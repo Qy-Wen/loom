@@ -4,6 +4,7 @@ import type {
 	Asset,
 	AssetEnrichment,
 	AssetPropertyValue,
+	AssetRelation,
 	AssetRelationsResult,
 	LibraryChange,
 	LibrarySnapshot,
@@ -17,12 +18,13 @@ import { sortAssets } from "./asset-utils.ts";
 import { folderSet } from "./file-tree.tsx";
 import { LibrarySidebar } from "./library-sidebar.tsx";
 import { SidePanel, type SidePanelTab } from "./side-panel.tsx";
+import { GraphView } from "./graph-view.tsx";
 import { TableView } from "./table-view.tsx";
 import { useResizableLayout } from "./use-resizable-layout.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [] };
-type WorkbenchView = "library" | "table";
+type WorkbenchView = "library" | "table" | "graph";
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
 	return [...properties].sort((a, b) => a.name.localeCompare(b.name));
@@ -72,6 +74,7 @@ export function App(): React.JSX.Element {
 	const [error, setError] = useState<string | null>(null);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
+	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
@@ -93,6 +96,7 @@ export function App(): React.JSX.Element {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
+				setGraphEdges(await window.loom.listGraphRelations());
 			}
 		}).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -114,18 +118,23 @@ export function App(): React.JSX.Element {
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
 				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
 			}
-			if (
-				(change.type === "upsert" || change.type === "remove" || change.type === "reset")
-				&& selectedAssetIdRef.current
-			) {
-				void window.loom.getAssetRelations(selectedAssetIdRef.current)
-					.then(setRelations)
-					.catch(() => setRelations(EMPTY_RELATIONS));
+			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
+				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
+				if (selectedAssetIdRef.current) {
+					void window.loom.getAssetRelations(selectedAssetIdRef.current)
+						.then(setRelations)
+						.catch(() => setRelations(EMPTY_RELATIONS));
+				}
 			}
 		});
 	}, []);
 
 	selectedAssetIdRef.current = selectedAssetId;
+
+	useEffect(() => {
+		if (workbenchView !== "graph" || !library.rootPath) return;
+		void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
+	}, [workbenchView, library.rootPath, library.assets.length]);
 
 	useEffect(() => {
 		if (!selectedAssetId) {
@@ -282,6 +291,7 @@ export function App(): React.JSX.Element {
 				setCollapsedFolders(folderSet(snapshot));
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
+				setGraphEdges(await window.loom.listGraphRelations());
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -311,7 +321,11 @@ export function App(): React.JSX.Element {
 							type="button"
 							onClick={() => setWorkbenchView("table")}
 						>Table</button>
-						<button type="button" disabled>Graph</button>
+						<button
+							className={workbenchView === "graph" ? "active" : ""}
+							type="button"
+							onClick={() => setWorkbenchView("graph")}
+						>Graph</button>
 					</nav>
 					<div className="topbar-spacer" />
 				</header>
@@ -351,6 +365,16 @@ export function App(): React.JSX.Element {
 								selectedAssetId={selectedAssetId}
 								canEditProperties={library.rootPath !== null}
 								onCreateProperty={createProperty}
+								onSelectAsset={(assetId) => {
+									setSelectedAssetId(assetId);
+									setSidePanel("details");
+								}}
+							/>
+						) : workbenchView === "graph" ? (
+							<GraphView
+								assets={library.assets}
+								edges={graphEdges}
+								selectedAssetId={selectedAssetId}
 								onSelectAsset={(assetId) => {
 									setSelectedAssetId(assetId);
 									setSidePanel("details");

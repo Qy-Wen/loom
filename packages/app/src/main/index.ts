@@ -253,6 +253,7 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getAssetRelations, (_event, assetId: string) => {
 		return localCore.listAssetRelations(assetId);
 	});
+	ipcMain.handle(IPC.listGraphRelations, () => localCore.listGraphRelations());
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});
