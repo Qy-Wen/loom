@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Asset } from "@loom/core";
-import { findMatchOffsets, overflowScrollDelta } from "../src/renderer/workbench/find-in-view.ts";
+import { findMatchOffsets, overflowScrollDelta, preferVisibleRect } from "../src/renderer/workbench/find-in-view.ts";
 import { renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/markdown.ts";
 
 test("findMatchOffsets is case-insensitive and non-overlapping", () => {
@@ -18,6 +18,13 @@ test("overflowScrollDelta only moves when the target is outside the padded viewp
 	);
 	assert.equal(overflowScrollDelta({ top: 80, bottom: 90, left: 10, right: 40 }, viewport).top, -44);
 	assert.equal(overflowScrollDelta({ top: 500, bottom: 520, left: 10, right: 40 }, viewport).top, 144);
+});
+
+test("preferVisibleRect falls back when a range reports an empty box", () => {
+	const empty = { top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0 };
+	const drawn = { top: 80, bottom: 96, left: 40, right: 120, width: 80, height: 16 };
+	assert.equal(preferVisibleRect(empty, drawn), drawn);
+	assert.equal(preferVisibleRect(drawn, empty), drawn);
 });
 
 test("renderMarkdown turns headings and lists into HTML", () => {
@@ -91,4 +98,12 @@ test("renderMarkdown turns wiki image embeds into library images", () => {
 test("renderMarkdown typesets TeX with KaTeX", () => {
 	assert.match(renderMarkdown("The formula is $E=mc^2$."), /class="katex"/);
 	assert.match(renderMarkdown("$$\\int_0^1 x\\,dx$$"), /katex-display/);
+});
+
+test("renderMarkdown leaves mermaid fences for client hydration", () => {
+	const html = renderMarkdown("```mermaid\ngraph TD\n  A[\"x < y\"] --> B\n```");
+	assert.match(html, /class="markdown-mermaid"/);
+	assert.match(html, /<pre class="mermaid">/);
+	assert.match(html, /A\[&quot;x &lt; y&quot;\] --&gt; B/);
+	assert.equal(html.includes("language-mermaid"), false);
 });
