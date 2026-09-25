@@ -3,6 +3,8 @@ import type {
 	Asset,
 	AssetEnrichment,
 	AssetPropertyValue,
+	AssetRelationsResult,
+	AssetRelationView,
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
@@ -31,8 +33,10 @@ interface SidePanelProps {
 	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
 	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 	enrichment: AssetEnrichment | undefined;
+	relations: AssetRelationsResult;
 	analyzing: boolean;
 	onAnalyze: () => void;
+	onSelectAsset: (assetId: string) => void;
 }
 
 export function SidePanel({
@@ -48,6 +52,8 @@ export function SidePanel({
 	onSetPropertyValue,
 	onRemovePropertyValue,
 	enrichment,
+	relations,
+	onSelectAsset,
 	analyzing,
 	onAnalyze,
 }: SidePanelProps): React.JSX.Element {
@@ -262,9 +268,50 @@ export function SidePanel({
 				)}
 				<section className="relations-section">
 					<div className="section-label">Relations</div>
-					<div className="empty no-padding">No relations yet.</div>
+					{asset && (relations.generatedFrom.length > 0 || relations.generated.length > 0) ? (
+						<>
+							<RelationGroup
+								label="Generated from"
+								items={relations.generatedFrom}
+								onSelect={onSelectAsset}
+							/>
+							<RelationGroup
+								label="Generated"
+								items={relations.generated}
+								onSelect={onSelectAsset}
+							/>
+						</>
+					) : (
+						<div className="empty no-padding">No relations yet.</div>
+					)}
 				</section>
 			</div>
 		</aside>
+	);
+}
+
+function RelationGroup({
+	label,
+	items,
+	onSelect,
+}: {
+	label: string;
+	items: AssetRelationView[];
+	onSelect: (assetId: string) => void;
+}): React.JSX.Element | null {
+	if (items.length === 0) return null;
+	return (
+		<div className="relation-group">
+			<div className="relation-group-label">{label}</div>
+			<ul className="relation-list">
+				{items.map((item) => (
+					<li key={item.assetId}>
+						<button type="button" onClick={() => onSelect(item.assetId)}>
+							<span className="relation-filename">{item.filename}</span>
+						</button>
+					</li>
+				))}
+			</ul>
+		</div>
 	);
 }

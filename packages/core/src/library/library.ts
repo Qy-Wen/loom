@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { copyFile, readdir, rename, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import {
+	assetTypeFromPath,
 	type Asset,
 	type LibraryChange,
 	type LibrarySnapshot,
@@ -189,6 +190,47 @@ export class Library {
 		await this.commitRemoval(asset, true);
 	}
 
+	/** Index a file that already exists on disk so its UUID is available immediately. */
+	async indexFile(relativePath: string): Promise<Asset | undefined> {
+		const paths = this.requirePaths();
+		let absolutePath: string;
+		try {
+			absolutePath = paths.toAbsolutePath(relativePath);
+		} catch {
+			return undefined;
+		}
+		if (paths.isIgnoredPath(absolutePath)) return undefined;
+
+		let info: Awaited<ReturnType<typeof statAssetFile>>;
+		try {
+			info = await statAssetFile(absolutePath);
+		} catch {
+			return undefined;
+		}
+		if (!info.isFile) return undefined;
+
+		const existing = await this.metadata.getAssetByPath(relativePath)
+			?? (info.fileSystemId ? await this.metadata.getAssetByFileSystemId(info.fileSystemId) : undefined);
+		const asset: Asset = {
+			assetId: existing?.assetId ?? randomUUID(),
+			relativePath,
+			filename: basename(relativePath),
+			type: assetTypeFromPath(relativePath),
+			size: info.size,
+			createdAt: existing?.createdAt ?? info.createdAt,
+			modifiedAt: info.modifiedAt,
+			fileSystemId: info.fileSystemId,
+		};
+		await this.handlers.upsertAsset(asset);
+		for (const folder of ancestorFolders(relativePath)) {
+			if (this.folders.has(folder)) continue;
+			this.folders.add(folder);
+			this.emit({ type: "folder_upsert", relativePath: folder });
+		}
+		this.emit({ type: "upsert", asset });
+		return asset;
+	}
+
 	async close(): Promise<void> {
 		await this.stopWatcher();
 		await this.updateQueue;
@@ -314,4 +356,16 @@ export class Library {
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}
+}
+
+function ancestorFolders(relativePath: string): string[] {
+	const parts = relativePath.split("/").filter(Boolean);
+	parts.pop();
+	const folders: string[] = [];
+	let current = "";
+	for (const part of parts) {
+		current = current ? `${current}/${part}` : part;
+		folders.push(current);
+	}
+	return folders;
 }

@@ -1,5 +1,5 @@
 import type { Asset } from "../model/asset.ts";
-import type { MetadataStore } from "../stores/types.ts";
+import type { GraphStore, MetadataStore } from "../stores/types.ts";
 
 export type LibrarySituation =
 	| { type: "added"; asset: Asset }
@@ -7,7 +7,7 @@ export type LibrarySituation =
 	| { type: "moved"; asset: Asset; previousPath: string }
 	| { type: "updated"; asset: Asset; previous: Asset };
 
-/** Graph-side reactions to library situations. LadybugDB will fill these in. */
+/** Graph-side reactions to library situations. */
 export interface GraphHandlers {
 	handleAdded(asset: Asset): Promise<void>;
 	handleRemoved(asset: Asset): Promise<void>;
@@ -19,6 +19,27 @@ export class NoopGraphHandlers implements GraphHandlers {
 	async handleAdded(): Promise<void> {}
 	async handleRemoved(): Promise<void> {}
 	async handleMoved(): Promise<void> {}
+	async handleUpdated(): Promise<void> {}
+}
+
+/** Keeps graph nodes in sync with library add/remove. Path changes stay on SQLite. */
+export class StoreGraphHandlers implements GraphHandlers {
+	private readonly graph: GraphStore;
+
+	constructor(graph: GraphStore) {
+		this.graph = graph;
+	}
+
+	handleAdded(asset: Asset): Promise<void> {
+		return this.graph.ensureAsset(asset.assetId);
+	}
+
+	handleRemoved(asset: Asset): Promise<void> {
+		return this.graph.removeAsset(asset.assetId);
+	}
+
+	async handleMoved(): Promise<void> {}
+
 	async handleUpdated(): Promise<void> {}
 }
 

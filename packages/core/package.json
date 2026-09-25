@@ -8,9 +8,10 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --experimental-strip-types --test tests/*.test.ts"
+    "test": "node --experimental-strip-types --test --test-force-exit tests/*.test.ts"
   },
   "dependencies": {
+    "@ladybugdb/wasm-core": "0.20.4",
     "better-sqlite3": "13.0.3",
     "chokidar": "4.0.3"
   },

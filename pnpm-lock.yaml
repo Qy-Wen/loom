@@ -60,6 +60,9 @@ importers:
       '@copilotkit/runtime':
         specifier: 1.73.0
         version: 1.73.0(@anthropic-ai/sdk@0.123.0(zod@3.25.76))(@langchain/core@1.2.12(@opentelemetry/api@1.9.1)(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(@langchain/langgraph-sdk@1.11.1(@langchain/core@1.2.12(@opentelemetry/api@1.9.1)(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(react-dom@19.2.0(react@19.2.0))(react@19.2.0))(@opentelemetry/api@1.9.1)(langchain@1.5.11(@langchain/core@1.2.12(@opentelemetry/api@1.9.1)(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3))(@opentelemetry/api@1.9.1)(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(ws@8.21.3))(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@ladybugdb/wasm-core':
+        specifier: 0.20.4
+        version: 0.20.4
       '@loom/agent':
         specifier: workspace:*
         version: link:../agent
@@ -115,6 +118,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@ladybugdb/wasm-core':
+        specifier: 0.20.4
+        version: 0.20.4
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
@@ -1044,6 +1050,9 @@ packages:
 
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
+
+  '@ladybugdb/wasm-core@0.20.4':
+    resolution: {integrity: sha512-EBHFbr2N5hhBHe5Lpd7GMnl8W+mx8q38tCpvmRR11VbLUpmO9Ymggch2YMj4t4KhevI+rGFV5FCiD9ziSQ0k8Q==}
 
   '@langchain/core@1.2.12':
     resolution: {integrity: sha512-DvNsrN5Gz+bgEy/B/kK1AvxxcrwdrflI8hZJxqo/DtA17FMUeWM5k0o1c6G8ChH8+sIakV2UsDudFmNZJp1ugQ==}
@@ -2150,6 +2159,10 @@ packages:
     resolution: {integrity: sha512-+ys997U96po4Kx/ABpBCqhA9EuxJaQWDQg7295H4hBphv3IZg0boBKuwYpt4YXp6MZ5AmZQnU/tyMTlRpaSejg==}
     engines: {node: '>= 0.4'}
 
+  callsites@3.1.0:
+    resolution: {integrity: sha512-P8BjAsXvZS+VIDUI11hHCQEv74YT67YUi5JJFNWIqL235sBmjX4+qx9Muvls5ivyNENctx46xQLQ3aTuE7ssaQ==}
+    engines: {node: '>=6'}
+
   caniuse-lite@1.0.30001810:
     resolution: {integrity: sha512-TITQPUkaz+aVk5GL6NhOdwk1aEaNTSDPsGFWrTuhKGtjTF70jL/Oht2W4c6rXUe5fu7Ie19VIahAXHIIiWWNeg==}
 
@@ -2614,6 +2627,10 @@ packages:
     resolution: {integrity: sha512-/veY75JbMK4j1yjvuUxuVsiS/hr/4iHs9FTT6cgTexxdE0Ly/glccBAkloH/DofkjRbZU3bnoj38mOmhkZ0lHw==}
     engines: {node: '>=12'}
 
+  esm@3.2.25:
+    resolution: {integrity: sha512-U1suiZ2oDVWv4zPO56S0NcR5QriEahGtdN2OR6FiOG4WJvcjBVFB0qI4+eKoWFH483PKGuLuu6V8Z4T5g63UVA==}
+    engines: {node: '>=6'}
+
   estree-util-is-identifier-name@3.0.0:
     resolution: {integrity: sha512-hFtqIDZTIUZ9BXLb8y4pYGyk6+wekIivNVTcmvk8NoOh+VeRn5y6cEHzbURrWbfp1fIqdVipilzj+lfaadNZmg==}
 
@@ -3001,6 +3018,10 @@ packages:
   is-network-error@1.3.2:
     resolution: {integrity: sha512-PhBY86zaxNZUuWP6h13Vu5oFe0XY6/UlKzQnYFELzGVHygP3MxmvTfYSG7GN3aIab/iWudSMgjSnG9Dq+nHrgA==}
     engines: {node: '>=16'}
+
+  is-observable@2.1.0:
+    resolution: {integrity: sha512-DailKdLb0WU+xX8K5w7VsJhapwHLZ9jjmazqCJq4X12CTgqq73TKnbRcnSLuXYPOoLQgV5IrD7ePiX/h1vnkBw==}
+    engines: {node: '>=8'}
 
   is-plain-obj@4.1.0:
     resolution: {integrity: sha512-+Pgi+vMuUNkJyExiMBt5IlFoMyKnr5zhJ4Uspz58WOhBF5QoIZkFyNHIbBAtHwzVAgk5RtndVNsDRN61/mmDqg==}
@@ -3553,6 +3574,9 @@ packages:
     resolution: {integrity: sha512-NuAESUOUMrlIXOfHKzD6bpPu3tYt3xvjNdRIQ+FeT0lNb4K8WR70CaDxhuNguS2XG+GjkyMwOzsN5ZktImfhLA==}
     engines: {node: '>= 0.4'}
 
+  observable-fns@0.6.1:
+    resolution: {integrity: sha512-9gRK4+sRWzeN6AOewNBTLXir7Zl/i3GB6Yl26gK4flxz8BXVpD3kt8amREmWNb0mxYOGDotvE5a4N+PtGGKdkg==}
+
   on-exit-leak-free@2.1.2:
     resolution: {integrity: sha512-0eJJY6hXLGf1udHwfNftBqH+g73EU4B504nZeKpz1sYRKafAghwxEJunB2O7rDZkL4PGfsMVnTXZ2EjibbqcsA==}
     engines: {node: '>=14.0.0'}
@@ -4065,6 +4089,12 @@ packages:
   thread-stream@4.2.0:
     resolution: {integrity: sha512-e2zZ96wSChazBsbENf/Pcm/4swHt2cEKQ92rhUjkL9GCKiTDJIaTBenjE/m9DXi0QBmTMDkFDdOomUy20A1tDQ==}
     engines: {node: '>=20'}
+
+  threads@1.7.0:
+    resolution: {integrity: sha512-Mx5NBSHX3sQYR6iI9VYbgHKBLisyB+xROCBGjjWm1O9wb9vfLxdaGtmT/KCjUqMsSNW6nERzCW3T6H43LqjDZQ==}
+
+  tiny-worker@2.3.0:
+    resolution: {integrity: sha512-pJ70wq5EAqTAEl9IkGzA+fN0836rycEuz2Cn6yeZ6FRzlVS5IDOkFHpIoEsksPRQV34GDqXm65+OlnZqUSyK2g==}
 
   tinyexec@1.3.1:
     resolution: {integrity: sha512-GCvB3aoys96IuDFBMcTB46JOR6mdMtAToqwiW8JlWhsoh1mhHi/xn9ss/Dg7N555GiJyEt2qzoG/NHCwM6h1EA==}
@@ -5532,6 +5562,14 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.6.0
 
+  '@ladybugdb/wasm-core@0.20.4':
+    dependencies:
+      threads: 1.7.0
+      tiny-worker: 2.3.0
+      uuid: 11.1.1
+    transitivePeerDependencies:
+      - supports-color
+
   '@langchain/core@1.2.12(@opentelemetry/api@1.9.1)(openai@6.40.0(ws@8.21.3)(zod@3.25.76))(ws@8.21.3)':
     dependencies:
       '@cfworker/json-schema': 4.1.1
@@ -6721,6 +6759,8 @@ snapshots:
       call-bind-apply-helpers: 1.0.2
       get-intrinsic: 1.3.0
 
+  callsites@3.1.0: {}
+
   caniuse-lite@1.0.30001810: {}
 
   ccount@2.0.1: {}
@@ -7210,6 +7250,8 @@ snapshots:
     optional: true
 
   escape-string-regexp@5.0.0: {}
+
+  esm@3.2.25: {}
 
   estree-util-is-identifier-name@3.0.0: {}
 
@@ -7758,6 +7800,8 @@ snapshots:
   is-hexadecimal@2.0.1: {}
 
   is-network-error@1.3.2: {}
+
+  is-observable@2.1.0: {}
 
   is-plain-obj@4.1.0: {}
 
@@ -8583,6 +8627,8 @@ snapshots:
   object-keys@1.1.1:
     optional: true
 
+  observable-fns@0.6.1: {}
+
   on-exit-leak-free@2.1.2: {}
 
   on-finished@2.4.1:
@@ -9270,6 +9316,21 @@ snapshots:
   thread-stream@4.2.0:
     dependencies:
       real-require: 1.0.0
+
+  threads@1.7.0:
+    dependencies:
+      callsites: 3.1.0
+      debug: 4.4.3
+      is-observable: 2.1.0
+      observable-fns: 0.6.1
+    optionalDependencies:
+      tiny-worker: 2.3.0
+    transitivePeerDependencies:
+      - supports-color
+
+  tiny-worker@2.3.0:
+    dependencies:
+      esm: 3.2.25
 
   tinyexec@1.3.1: {}
 

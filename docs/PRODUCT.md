@@ -168,7 +168,7 @@ The watcher updates the database for:
 Cross-platform file identity uses Node `fs.stat` `(dev, ino)` as `file_system_id`. On macOS/Linux this represents device and inode; on Windows it maps to volume and a 64-bit file index. It is an OS-assigned identity signal, not Loom's UUID. `asset_id` remains the business identity.
 
 - Opening a library first scans the complete filesystem and then reconciles it: match by `file_system_id`, then relative path; after a volume change, trust only relative paths. This prevents incremental deletion from losing UUIDs for moved files.
-- Identified additions, removals, moves, and updates flow through `LibraryHandlers`, which dispatches to metadata and graph handlers. LadybugDB is not connected yet, so graph handlers currently do nothing.
+- Identified additions, removals, moves, and updates flow through `LibraryHandlers`, which dispatches to metadata and graph handlers. Graph handlers MERGE or `DETACH DELETE` `Asset` nodes in Ladybug.
 - While the app is open, watcher events are allowed to settle and then use the same full-library reconciliation. This avoids losing UUIDs when a whole folder is renamed or files exchange paths.
 - If the filesystem does not expose a usable identity, as on some FAT or virtual filesystems, matching falls back to paths. Hash-based verification is deferred.
 - On open, Loom compares the stored volume ID with the current root `stat.dev`. Copying the whole library to another volume causes path-based reconciliation and refreshes all filesystem identities.

@@ -127,6 +127,8 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 删除资产时，对应富化行一并删除。
 
+关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph.db`。见 [图](#graph-ladybugdb)。
+
 ---
 
 ## DDL
@@ -184,3 +186,19 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
   data TEXT
 );
 ```
+
+---
+
+## Graph（LadybugDB）
+
+`LadybugGraphStore` 用 `@ladybugdb/wasm-core` 进程内运行（无独立服务，无原生模块）。查询在内存里做。`<library>/.loom/graph.db` 是 Ladybug `EXPORT DATABASE` 目录，打开时 `IMPORT DATABASE`。节点只有资产 UUID。路径、属性和富化仍在 SQLite。
+
+```
+CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id));
+CREATE REL TABLE IF NOT EXISTS GENERATED_FROM(FROM Asset TO Asset, relation_id STRING);
+CREATE REL TABLE IF NOT EXISTS RELATED(FROM Asset TO Asset, relation_id STRING, type STRING);
+```
+
+`GENERATED_FROM` 是产物 → 源文件。其它边用 `RELATED` 加 `type`。`(from, to, type)` 唯一性由 store 保证，不是 Ladybug 约束。
+
+库内增删会 MERGE 或 `DETACH DELETE` `Asset` 节点。

@@ -8,20 +8,12 @@
 
 ---
 
-## 第一步：产物出处
-
-记下 Agent 产出的文件从哪来。先不上 LadybugDB，也不做 Graph 视图。
-
-- [ ] FFmpeg 封装工具写出产物时记下 `GENERATED_FROM`（或等价边）
-- [ ] 在 `inspect_asset` 和 Details 里能看到这些边
-- [ ] 存储保持薄（SQLite 即可）；graph handlers 可以继续空操作
-
-## 第二步：检索 Level 1 文本
+## 第一步：检索 Level 1 文本
 
 - [ ] 现有 `search_assets` 纳入 `asset_metadata` 摘录
 - [ ] 先不上 FTS、向量或 Hybrid Search
 
-## 第三步：Hybrid Search
+## 第二步：Hybrid Search
 
 把确定性资产搜索升级为词法、向量与结构化过滤融合的检索栈。
 
@@ -39,7 +31,7 @@
 ## 后续（概述）
 
 - **AI 富化：** 按需 Level 2 Embedding 与 VLM 说明/标签；默认不整库富化
-- **关系图：** LadybugDB、Graph 视图、手动建关系
+- **关系图：** Graph 视图、手动建关系（Ladybug 已存 `GENERATED_FROM`）
 - **会话历史面板：** 重启后在聊天区展示已恢复的 transcript
 - **FFmpeg 进度与取消：** 长任务可中断，协议层推送进度
 - **前端协议扩展：** AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md

@@ -33,6 +33,9 @@ export interface MetadataStore {
 	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
 }
 
+/** Output → source. `fromAssetId` is the generated file. */
+export const GENERATED_FROM = "GENERATED_FROM";
+
 export interface AssetRelation {
 	relationId: string;
 	fromAssetId: string;
@@ -44,6 +47,8 @@ export interface AssetRelation {
 export interface GraphStore {
 	open(paths: LibraryPaths): Promise<void>;
 	close(): Promise<void>;
+	ensureAsset(assetId: string): Promise<void>;
+	removeAsset(assetId: string): Promise<void>;
 	upsertRelation(relation: AssetRelation): Promise<void>;
 	listRelations(assetId: string): Promise<AssetRelation[]>;
 	removeRelation(relationId: string): Promise<void>;

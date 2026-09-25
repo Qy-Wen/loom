@@ -21,7 +21,11 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 	try {
 		await copyFile(join(FIXTURES, VIDEO), join(root, VIDEO));
 		await copyFile(join(FIXTURES, IMAGE), join(root, IMAGE));
-		await core.openLibrary(root);
+		const snapshot = await core.openLibrary(root);
+		const video = snapshot.assets.find((asset) => asset.relativePath === VIDEO);
+		const image = snapshot.assets.find((asset) => asset.relativePath === IMAGE);
+		assert.ok(video);
+		assert.ok(image);
 
 		const videoInfo = await core.getMediaInfo(VIDEO);
 		assert.equal(videoInfo.kind, "media_info");
@@ -47,6 +51,11 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		});
 		assert.equal(frame.output, "outputs/frame.jpg");
 		await assertOutputFile(root, "outputs/frame.jpg");
+		const videoAfterFrame = await core.inspectAsset(video.assetId);
+		const frameView = videoAfterFrame.generated.find((item) => item.relativePath === "outputs/frame.jpg");
+		assert.ok(frameView);
+		const frameDetail = await core.inspectAsset(frameView.assetId);
+		assert.equal(frameDetail.generatedFrom[0]?.relativePath, VIDEO);
 		const frameInfo = await core.getMediaInfo("outputs/frame.jpg");
 		assert.equal(frameInfo.width, videoInfo.width);
 		assert.equal(frameInfo.height, videoInfo.height);
@@ -116,6 +125,14 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		assert.equal(raw.output, "outputs/clip.wav");
 		await assertOutputFile(root, "outputs/clip.wav");
 		assertNoAbsoluteLeak(raw, root, FIXTURES);
+
+		const clipView = (await core.inspectAsset(video.assetId)).generated.find(
+			(item) => item.relativePath === "outputs/clip.mp4",
+		);
+		assert.ok(clipView);
+		const clipDetail = await core.inspectAsset(clipView.assetId);
+		assert.ok(clipDetail.generated.some((item) => item.relativePath === "outputs/clip.mp3"));
+		assert.equal(clipDetail.generated.some((item) => item.relativePath === "outputs/clip.wav"), false);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

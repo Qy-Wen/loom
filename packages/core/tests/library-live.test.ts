@@ -4,6 +4,20 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { LocalCore, type LibrarySnapshot } from "../src/index.ts";
+import { InMemoryGraphStore } from "../src/stores/memory.ts";
+
+async function renameRetry(from: string, to: string): Promise<void> {
+	for (let attempt = 0; ; attempt++) {
+		try {
+			await rename(from, to);
+			return;
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException).code;
+			if (attempt >= 8 || (code !== "EPERM" && code !== "EACCES")) throw error;
+			await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
+		}
+	}
+}
 
 async function waitUntil(
 	core: LocalCore,
@@ -36,7 +50,7 @@ async function waitUntil(
 
 test("Library keeps asset id when a folder is renamed while open", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-live-folder-"));
-	const core = new LocalCore();
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
 	try {
 		await mkdir(join(root, "shots"));
 		await writeFile(join(root, "shots", "a.jpg"), "a");
@@ -51,7 +65,7 @@ test("Library keeps asset id when a folder is renamed while open", async () => {
 		});
 		await core.metadataStore.setAssetProperty({ assetId: id, propertyId: "status", value: "Selected" });
 
-		await rename(join(root, "shots"), join(root, "stills"));
+		await renameRetry(join(root, "shots"), join(root, "stills"));
 		const snap = await waitUntil(
 			core,
 			(snapshot) => snapshot.assets.some((asset) => asset.relativePath === "stills/a.jpg"),
@@ -69,7 +83,7 @@ test("Library keeps asset id when a folder is renamed while open", async () => {
 
 test("Library keeps both ids when two files are swapped while open", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-live-swap-"));
-	const core = new LocalCore();
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
 	try {
 		await writeFile(join(root, "a.jpg"), "aaa");
 		await writeFile(join(root, "b.jpg"), "bbb");
@@ -98,7 +112,7 @@ test("Library keeps both ids when two files are swapped while open", async () =>
 
 test("Library keeps a moved file's id when the old path is reused while open", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-live-replace-"));
-	const core = new LocalCore();
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
 	try {
 		await writeFile(join(root, "cover.jpg"), "original");
 		const initial = await core.openLibrary(root);
