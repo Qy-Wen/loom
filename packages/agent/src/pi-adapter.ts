@@ -7,14 +7,16 @@
  *  - translate Loom tools -> pi `AgentTool`
  *  - translate pi `AgentEvent` -> Loom `LoomAgentEvent`
  */
-import { Agent, type AgentEvent, type AgentTool } from "#vendor/pi-agent";
+import { Agent, convertToLlm as toLlmMessages, type AgentEvent, type AgentMessage, type AgentTool } from "#vendor/pi-agent";
 import { createModels, createProvider, Type } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import { foldUserMessageForLlm } from "./attachments.ts";
 import type {
 	LoomAgent,
 	LoomAgentEvent,
 	LoomAgentOptions,
 	LoomChatEndpoint,
+	LoomPromptOptions,
 	LoomTool,
 	LoomToolContentPart,
 	LoomTranscriptMessage,
@@ -105,6 +107,7 @@ class PiAgentAdapter implements LoomAgent {
 				tools: (options.tools ?? []).map(toPiTool),
 				messages: (options.initialMessages ?? []) as never,
 			},
+			convertToLlm,
 			streamFn: (m, context, streamOptions) => models.streamSimple(m, context, streamOptions),
 		});
 
@@ -171,8 +174,18 @@ class PiAgentAdapter implements LoomAgent {
 		return () => this.listeners.delete(listener);
 	}
 
-	async prompt(input: string): Promise<void> {
-		await this.agent.prompt(input);
+	async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
+		const attachments = options?.attachments?.filter(Boolean) ?? [];
+		if (attachments.length === 0) {
+			await this.agent.prompt(input);
+		} else {
+			await this.agent.prompt({
+				role: "user",
+				content: [{ type: "text", text: input }],
+				timestamp: Date.now(),
+				attachments,
+			} as AgentMessage);
+		}
 		const failed = this.agent.state.errorMessage?.trim();
 		if (failed) throw new Error(failed);
 	}
@@ -189,6 +202,10 @@ class PiAgentAdapter implements LoomAgent {
 	setSystemPrompt(systemPrompt: string): void {
 		this.agent.state.systemPrompt = systemPrompt;
 	}
+}
+
+function convertToLlm(messages: AgentMessage[]): ReturnType<typeof toLlmMessages> {
+	return toLlmMessages(messages.map((message) => foldUserMessageForLlm(message)));
 }
 
 function toPiContent(content: string | LoomToolContentPart[]): LoomToolContentPart[] {

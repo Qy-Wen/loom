@@ -2,7 +2,7 @@
 
 # Agent Architecture
 
-> This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, and the frontend interaction protocol (AG-UI).
+> This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, user-message attachments, and the frontend interaction protocol (AG-UI).
 > See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning and [TODO.md](./TODO.md) for the roadmap.
 
 ---
@@ -154,15 +154,71 @@ Enforced constraints:
 - **Workspace tools:** wrap pi's `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
 - **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG; it will grow from FTS to chunk-level hybrid hits.
 - **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Creation runtimes such as ComfyUI attach here.
-- **System prompt:** the open library root is the working directory.
+- **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
 
 ---
 
-## 5. Frontend protocol: CopilotKit and AG-UI, without exposing pi AgentEvent
+## 5. User message attachments
+
+> Transcript contract for system-injected context (UI selection first). Chat bubbles show `content` only. Prefix cache requires the folded Chat `content` for a stored user message to be identical on every later request.
+
+Do not put changing UI state in the system prompt (that busts the entire prefix). Do not add a `get_selection` tool. Do not persist the fold inside `content` and then strip it for display.
+
+### 5.1 Stored user message
+
+JSONL / `state.messages` keep a sidecar field. After send, that user row is frozen.
+
+```json
+{
+  "role": "user",
+  "timestamp": 1727000000000,
+  "content": [{ "type": "text", "text": "把这个处理一下" }],
+  "attachments": [
+    {
+      "type": "ui_selection",
+      "assetId": "a1b2c3d4-…",
+      "path": "clips/hero.mp4",
+      "assetType": "video"
+    }
+  ]
+}
+```
+
+When nothing is selected, omit `ui_selection` (omit `attachments` if it would be empty). Do not store a `none` placeholder.
+
+Snapshot at send time from the current library selection (`assetId`, workspace-relative `path`, `assetType`). Graph edges are not a selection. `attachments` may grow later with other `type` values; do not put timestamps or other per-request noise in the payload.
+
+Chat UI, titles, and `userMessageText` read `content` only.
+
+### 5.2 Fold for the Chat API
+
+Chat today is OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `convertToLlm` in `pi-adapter` therefore joins the user text and every attachment into **one string**. Images stay as image parts on `content` if a later VLM turn needs them; injections never become a second text part.
+
+The fold is deterministic. The HTTP body never includes `attachments`.
+
+```
+把这个处理一下
+
+<ui_selection>
+path: clips/hero.mp4
+asset_id: a1b2c3d4-…
+type: video
+</ui_selection>
+```
+
+Empty selection: fold is the user text only. Do not append `<ui_selection>none</ui_selection>`.
+
+System prompt gets one **fixed** sentence: a user message may include a `<ui_selection>` block for the file selected when they sent that message; use it for “this” / “the file” when they do not name a path; if they name a different path, prefer that.
+
+The next user turn snapshots selection again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit the attachment and the fold — history still has that block. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot.
+
+---
+
+## 6. Frontend protocol: CopilotKit and AG-UI, without exposing pi AgentEvent
 
 Pi's “protocol” is only an **in-process TypeScript event stream**, the `AgentEvent` discriminated union exposed by `session.subscribe()`. It defines neither JSON nor transport. Changing frontend protocols means adding another consumer that subscribes to AgentEvent, translates it into AG-UI, and streams it to the frontend over SSE.
 
-### 5.1 Seam location
+### 6.1 Seam location
 
 The frontend **temporarily uses CopilotKit** for a ready-made chat UI over AG-UI. CopilotKit requires an HTTP runtime endpoint, so Electron Main hosts it in a localhost HTTP server. This directly realizes PRODUCT.md Section 9, where Local Core may become a local service.
 
@@ -210,7 +266,7 @@ Model (DeepSeek, ...)
 - Preload/IPC injects the actual port into Renderer for `<CopilotKitProvider runtimeUrl>`.
 - Main awaits the listener before creating the window and closes the server during `app.on("will-quit")`.
 
-### 5.2 Event mapping
+### 6.2 Event mapping
 
 AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into AG-UI:
 
@@ -223,7 +279,7 @@ AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into 
 | `error` | A `loom-error-*` notice plus `RUN_ERROR` (bad key, unreachable Chat, missing Settings). Styled as a system alert, not a model reply. |
 | `agent_end` | `RUN_FINISHED` |
 
-### 5.3 Deferred v1 capabilities with preserved extension points
+### 6.3 Deferred v1 capabilities with preserved extension points
 
 Two capabilities are intentionally excluded from v1, but AgUiAdapter retains clear extension points so adding them does not require restructuring.
 
@@ -242,11 +298,24 @@ Two capabilities are intentionally excluded from v1, but AgUiAdapter retains cle
 
 ---
 
-## 6. Summary
+## 7. Evals
+
+Evals live in `packages/agent/evals/`. Compaction rate (`compaction-rate.ts`) is context tokens after compact / tokens before. Prompt-cache hit rate (`prompt-cache-hit.ts`) is `cacheRead / (input + cacheRead + cacheWrite)` from Chat usage (the API's `prompt_tokens` split).
+
+```bash
+pnpm --filter @loom/agent eval:compaction-rate
+pnpm --filter @loom/agent eval:prompt-cache-hit
+```
+
+---
+
+## 8. Summary
 
 - **One vendored package:** pi-agent, available for source-level study and modification.
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code depends on `packages/agent/src/types.ts`; `pi-adapter.ts` is the sole vendor boundary through `#vendor/pi-agent`.
+- **User attachments:** UI selection (and later injections) live on the user row as `attachments`, fold to one Chat `content` string in `convertToLlm`, and stay out of the bubble.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; AgUiAdapter translates LoomAgentEvent without leaking pi's protocol.
+- **Evals:** compaction rate and prompt-cache hit rate; retrieval evals stay on the Hybrid Search step.
 - **Current scope:** the question → answer → tool flow is complete; asset tools now preserve stable call IDs and structured result payloads. Thinking and interactive rich-result rendering remain deferred behind explicit extension points.

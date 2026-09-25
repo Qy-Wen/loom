@@ -7,6 +7,7 @@ describe("systemPromptForLibrary", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
 		assert.match(prompt, /working directory, is D:\\library/);
 		assert.match(prompt, /read, edit, write, and bash/);
+		assert.match(prompt, /<ui_selection>/);
 	});
 
 	it("refuses to invent a directory when no library is open", () => {

@@ -5,7 +5,11 @@ import { isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
 	const messages = toAgUiMessages([
-		{ role: "user", content: "hello" },
+		{
+			role: "user",
+			content: "hello",
+			attachments: [{ type: "ui_selection", assetId: "a", path: "clips/hero.mp4", assetType: "video" }],
+		},
 		{
 			role: "assistant",
 			content: [

@@ -1,3 +1,5 @@
+import type { LoomUserAttachment } from "./attachments.ts";
+
 /**
  * Loom's own Agent interface.
  *
@@ -59,9 +61,13 @@ export interface LoomAgentOptions {
 	initialMessages?: LoomTranscriptMessage[];
 }
 
+export interface LoomPromptOptions {
+	attachments?: LoomUserAttachment[];
+}
+
 export interface LoomAgent {
 	subscribe(listener: (event: LoomAgentEvent) => void): () => void;
-	prompt(input: string): Promise<void>;
+	prompt(input: string, options?: LoomPromptOptions): Promise<void>;
 	getMessages(): LoomTranscriptMessage[];
 	addTools(tools: LoomTool[]): void;
 	setSystemPrompt(systemPrompt: string): void;
