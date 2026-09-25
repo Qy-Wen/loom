@@ -117,6 +117,34 @@ export class LocalCore {
 		return this.library.duplicateAsset(assetId);
 	}
 
+	createFolder(parentRelativePath: string, name?: string): Promise<string> {
+		return this.library.createFolder(parentRelativePath, name);
+	}
+
+	createMarkdownFile(parentRelativePath: string): Promise<Asset> {
+		return this.library.createMarkdownFile(parentRelativePath);
+	}
+
+	renameFolder(relativePath: string, name: string): Promise<string> {
+		return this.library.renameFolder(relativePath, name);
+	}
+
+	copyAssetsInto(assetIds: string[], destFolder: string): Promise<Asset[]> {
+		return this.library.copyAssetsInto(assetIds, destFolder);
+	}
+
+	copyFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
+		return this.library.copyFolderInto(sourceFolder, destFolder);
+	}
+
+	getFolderFilePath(relativePath: string): string {
+		return this.library.getFolderFilePath(relativePath);
+	}
+
+	forgetFolder(relativePath: string): Promise<void> {
+		return this.library.forgetFolder(relativePath);
+	}
+
 	forgetAsset(assetId: string): Promise<void> {
 		return this.library.forgetAsset(assetId);
 	}

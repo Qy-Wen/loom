@@ -16,7 +16,7 @@ import type {
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
-import { ancestorFolders, folderSet } from "./library/file-tree.tsx";
+import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
@@ -27,6 +27,9 @@ import { TableView } from "./workbench/table-view.tsx";
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
 type WorkbenchView = "library" | "table" | "graph";
+type LibraryClipboard =
+	| { kind: "assets"; assetIds: string[] }
+	| { kind: "folder"; relativePath: string };
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
 	return [...properties].sort((a, b) => a.name.localeCompare(b.name));
@@ -66,7 +69,10 @@ export function App(): React.JSX.Element {
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
+	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
+	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [sidePanel, setSidePanel] = useState<SidePanelTab>("agent");
 	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
@@ -117,8 +123,16 @@ export function App(): React.JSX.Element {
 				setPropertyValues((current) => current.filter((value) => value.assetId !== change.assetId));
 			}
 			if (change.type === "reset") setCollapsedFolders(folderSet(change.snapshot));
-			if (change.type === "folder_upsert") {
-				setCollapsedFolders((current) => new Set(current).add(change.relativePath));
+			if (change.type === "folder_remove") {
+				const prefix = `${change.relativePath}/`;
+				setSelectedFolder((current) => {
+					if (!current) return current;
+					return current === change.relativePath || current.startsWith(prefix) ? null : current;
+				});
+				setRenamingFolder((current) => {
+					if (!current) return current;
+					return current === change.relativePath || current.startsWith(prefix) ? null : current;
+				});
 			}
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
 				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
@@ -235,16 +249,91 @@ export function App(): React.JSX.Element {
 		});
 	}
 
-	async function showAssetContextMenu(asset: Asset): Promise<void> {
-		setSelectedAssetId(asset.assetId);
+	function selectAsset(assetId: string): void {
+		setSelectedAssetId(assetId);
+		setSelectedFolder(null);
+	}
+
+	function selectFolder(relativePath: string): void {
+		setSelectedFolder(relativePath);
+		setSelectedAssetId(null);
+	}
+
+	function cancelRename(): void {
+		setRenamingAssetId(null);
+		setRenamingFolder(null);
+	}
+
+	function pasteDestination(): string {
+		if (selectedFolder) return selectedFolder;
+		if (selectedAsset) return parentFolder(selectedAsset.relativePath);
+		return "";
+	}
+
+	function copySelection(): void {
+		if (selectedFolder) {
+			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder });
+			return;
+		}
+		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId] });
+	}
+
+	function revealCreatedFolder(relativePath: string): void {
+		setSelectedFolder(relativePath);
+		setSelectedAssetId(null);
+		setRenamingFolder(relativePath);
+		const parent = parentFolder(relativePath);
+		setCollapsedFolders((current) => {
+			const next = new Set(current);
+			next.delete(relativePath);
+			if (parent) next.delete(parent);
+			return next;
+		});
+	}
+
+	async function createFolderIn(parentRelativePath: string): Promise<void> {
+		if (!library.rootPath) return;
 		setError(null);
 		try {
-			const action = await window.loom.showAssetContextMenu(asset.assetId);
+			revealCreatedFolder(await window.loom.createFolder(parentRelativePath));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function pasteInto(destFolder: string): Promise<void> {
+		if (!libraryClipboard) return;
+		setError(null);
+		try {
+			if (libraryClipboard.kind === "assets") {
+				const copied = await window.loom.copyAssetsInto(libraryClipboard.assetIds, destFolder);
+				if (copied[0]) selectAsset(copied[0].assetId);
+			} else {
+				const created = await window.loom.copyFolderInto(libraryClipboard.relativePath, destFolder);
+				setSelectedFolder(created);
+				setSelectedAssetId(null);
+			}
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function showAssetContextMenu(asset: Asset): Promise<void> {
+		selectAsset(asset.assetId);
+		setError(null);
+		try {
+			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null);
 			if (action === "rename") {
 				setRenamingAssetId(asset.assetId);
 			} else if (action === "duplicate") {
 				const duplicate = await window.loom.duplicateAsset(asset.assetId);
-				setSelectedAssetId(duplicate.assetId);
+				selectAsset(duplicate.assetId);
+			} else if (action === "copy") {
+				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId] });
+			} else if (action === "paste") {
+				await pasteInto(parentFolder(asset.relativePath));
+			} else if (action === "new_folder") {
+				await createFolderIn(parentFolder(asset.relativePath));
 			} else if (action === "copy_path") {
 				await window.loom.copyAssetPath(asset.assetId);
 			} else if (action === "reveal") {
@@ -258,6 +347,77 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function showFolderContextMenu(relativePath: string): Promise<void> {
+		selectFolder(relativePath);
+		setError(null);
+		try {
+			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null);
+			if (action === "rename") {
+				setRenamingFolder(relativePath);
+			} else if (action === "copy") {
+				setLibraryClipboard({ kind: "folder", relativePath });
+			} else if (action === "paste") {
+				await pasteInto(relativePath);
+			} else if (action === "new_folder") {
+				await createFolderIn(relativePath);
+			} else if (action === "copy_path") {
+				await window.loom.copyFolderPath(relativePath);
+			} else if (action === "reveal") {
+				await window.loom.revealFolder(relativePath);
+			} else if (action === "trash") {
+				const removed = await window.loom.trashFolder(relativePath);
+				if (removed) setSelectedFolder(null);
+			}
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function createMarkdownIn(parentRelativePath: string): Promise<void> {
+		if (!library.rootPath) return;
+		setError(null);
+		try {
+			const created = await window.loom.createMarkdownFile(parentRelativePath);
+			selectAsset(created.assetId);
+			setRenamingAssetId(created.assetId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function showLibraryContextMenu(): Promise<void> {
+		if (!library.rootPath) return;
+		setError(null);
+		try {
+			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
+			if (action === "new_folder") await createFolderIn("");
+			else if (action === "new_md_file") await createMarkdownIn("");
+			else if (action === "paste") await pasteInto("");
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	function onLibraryKeyDown(event: React.KeyboardEvent): void {
+		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+		if (!library.rootPath) return;
+		const mod = event.metaKey || event.ctrlKey;
+		if (mod && event.key.toLowerCase() === "c") {
+			event.preventDefault();
+			copySelection();
+		} else if (mod && event.key.toLowerCase() === "v") {
+			event.preventDefault();
+			void pasteInto(pasteDestination());
+		} else if (event.key === "F2") {
+			event.preventDefault();
+			if (selectedFolder) setRenamingFolder(selectedFolder);
+			else if (selectedAssetId) setRenamingAssetId(selectedAssetId);
+		} else if (mod && event.shiftKey && event.key.toLowerCase() === "n") {
+			event.preventDefault();
+			void createFolderIn(pasteDestination());
+		}
+	}
+
 	async function renameAsset(asset: Asset, stem: string): Promise<void> {
 		setError(null);
 		try {
@@ -266,6 +426,17 @@ export function App(): React.JSX.Element {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			setRenamingAssetId(null);
+		}
+	}
+
+	async function renameFolder(relativePath: string, name: string): Promise<void> {
+		setError(null);
+		try {
+			setSelectedFolder(await window.loom.renameFolder(relativePath, name));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setRenamingFolder(null);
 		}
 	}
 
@@ -371,7 +542,10 @@ export function App(): React.JSX.Element {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setLibrary(snapshot);
 				setSelectedAssetId(null);
+				setSelectedFolder(null);
 				setRenamingAssetId(null);
+				setRenamingFolder(null);
+				setLibraryClipboard(null);
 				setCollapsedFolders(folderSet(snapshot));
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
@@ -424,14 +598,21 @@ export function App(): React.JSX.Element {
 						library={library}
 						opening={opening}
 						selectedAssetId={selectedAssetId}
+						selectedFolder={selectedFolder}
 						renamingAssetId={renamingAssetId}
+						renamingFolder={renamingFolder}
 						collapsedFolders={collapsedFolders}
 						onOpenLibrary={() => void openLibrary()}
 						onToggleFolder={toggleFolder}
-						onSelectAsset={setSelectedAssetId}
+						onSelectAsset={selectAsset}
+						onSelectFolder={selectFolder}
 						onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
+						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
+						onLibraryContextMenu={() => void showLibraryContextMenu()}
 						onRenameAsset={renameAsset}
-						onCancelRename={() => setRenamingAssetId(null)}
+						onRenameFolder={renameFolder}
+						onCancelRename={cancelRename}
+						onKeyDown={onLibraryKeyDown}
 					/>
 
 					<div
@@ -453,7 +634,7 @@ export function App(): React.JSX.Element {
 								canEditProperties={library.rootPath !== null}
 								onCreateProperty={createProperty}
 								onSelectAsset={(assetId) => {
-									setSelectedAssetId(assetId);
+									selectAsset(assetId);
 									setSidePanel("details");
 								}}
 							/>
@@ -464,7 +645,7 @@ export function App(): React.JSX.Element {
 								selectedAssetId={selectedAssetId}
 								relationTypes={relationTypes}
 								onSelectAsset={(assetId) => {
-									setSelectedAssetId(assetId);
+									selectAsset(assetId);
 									setSidePanel("details");
 								}}
 								onCreateRelation={createRelation}
@@ -521,7 +702,7 @@ export function App(): React.JSX.Element {
 						analyzing={analyzing}
 						onAnalyze={() => void analyzeSelected()}
 						onSelectAsset={(assetId) => {
-							setSelectedAssetId(assetId);
+							selectAsset(assetId);
 							setSidePanel("details");
 						}}
 						onCreateRelation={(toAssetId, type) => {

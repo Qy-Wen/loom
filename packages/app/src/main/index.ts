@@ -12,7 +12,7 @@ import {
 	type PropertyValue,
 } from "@loom/core";
 import { createWorkspaceTools, type LoomAgentOptions } from "@loom/agent";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
@@ -21,7 +21,7 @@ import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelSettingsDraft } from "../shared/model-settings.ts";
@@ -45,6 +45,43 @@ function configureAutomation(): void {
 }
 
 configureAutomation();
+
+type ContextMenuItem<T extends string> =
+	| { type: "separator" }
+	| { label: string; enabled?: boolean; click: () => T };
+
+function popupContextMenu<T extends string>(
+	event: IpcMainInvokeEvent,
+	items: ContextMenuItem<T>[],
+): Promise<T | null> {
+	const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+	return new Promise((resolveAction) => {
+		let resolved = false;
+		const choose = (action: T) => {
+			if (resolved) return;
+			resolved = true;
+			resolveAction(action);
+		};
+		const menu = Menu.buildFromTemplate(
+			items.map((item) => {
+				if ("label" in item) {
+					return {
+						label: item.label,
+						enabled: item.enabled,
+						click: () => choose(item.click()),
+					};
+				}
+				return { type: "separator" as const };
+			}),
+		);
+		menu.popup({
+			window: owner,
+			callback: () => {
+				if (!resolved) resolveAction(null);
+			},
+		});
+	});
+}
 
 protocol.registerSchemesAsPrivileged([
 	{
@@ -189,33 +226,51 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showAssetContextMenu,
-		async (event, assetId: string): Promise<AssetContextAction | null> => {
+		async (event, assetId: string, canPaste: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
-			const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+			return popupContextMenu<AssetContextAction>(event, [
+				{ label: "New Folder", click: () => "new_folder" },
+				{ type: "separator" },
+				{ label: "Rename", click: () => "rename" },
+				{ label: "Duplicate", click: () => "duplicate" },
+				{ label: "Copy", click: () => "copy" },
+				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+				{ type: "separator" },
+				{ label: "Copy Path", click: () => "copy_path" },
+				{ label: "Show in Finder", click: () => "reveal" },
+				{ type: "separator" },
+				{ label: "Move to Trash", click: () => "trash" },
+			]);
+		},
+	);
 
-			return new Promise<AssetContextAction | null>((resolveAction) => {
-				let resolved = false;
-				const choose = (action: AssetContextAction) => {
-					if (resolved) return;
-					resolved = true;
-					resolveAction(action);
-				};
-				const menu = Menu.buildFromTemplate([
-					{ label: "Rename", click: () => choose("rename") },
-					{ label: "Duplicate", click: () => choose("duplicate") },
-					{ type: "separator" },
-					{ label: "Copy Path", click: () => choose("copy_path") },
-					{ label: "Show in Finder", click: () => choose("reveal") },
-					{ type: "separator" },
-					{ label: "Move to Trash", click: () => choose("trash") },
-				]);
-				menu.popup({
-					window: owner,
-					callback: () => {
-						if (!resolved) resolveAction(null);
-					},
-				});
-			});
+	ipcMain.handle(
+		IPC.showFolderContextMenu,
+		async (event, relativePath: string, canPaste: boolean): Promise<FolderContextAction | null> => {
+			localCore.getFolderFilePath(relativePath);
+			return popupContextMenu<FolderContextAction>(event, [
+				{ label: "New Folder", click: () => "new_folder" },
+				{ type: "separator" },
+				{ label: "Rename", click: () => "rename" },
+				{ label: "Copy", click: () => "copy" },
+				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+				{ type: "separator" },
+				{ label: "Copy Path", click: () => "copy_path" },
+				{ label: "Show in Finder", click: () => "reveal" },
+				{ type: "separator" },
+				{ label: "Move to Trash", click: () => "trash" },
+			]);
+		},
+	);
+
+	ipcMain.handle(
+		IPC.showLibraryContextMenu,
+		async (event, canPaste: boolean): Promise<LibraryContextAction | null> => {
+			return popupContextMenu<LibraryContextAction>(event, [
+				{ label: "New Folder", click: () => "new_folder" },
+				{ label: "New MD File", click: () => "new_md_file" },
+				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+			]);
 		},
 	);
 
@@ -225,6 +280,26 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.duplicateAsset, (_event, assetId: string) => {
 		return localCore.duplicateAsset(assetId);
+	});
+
+	ipcMain.handle(IPC.copyAssetsInto, (_event, assetIds: string[], destFolder: string) => {
+		return localCore.copyAssetsInto(assetIds, destFolder);
+	});
+
+	ipcMain.handle(IPC.createFolder, (_event, parentRelativePath: string) => {
+		return localCore.createFolder(parentRelativePath);
+	});
+
+	ipcMain.handle(IPC.createMarkdownFile, (_event, parentRelativePath: string) => {
+		return localCore.createMarkdownFile(parentRelativePath);
+	});
+
+	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {
+		return localCore.renameFolder(relativePath, name);
+	});
+
+	ipcMain.handle(IPC.copyFolderInto, (_event, sourceFolder: string, destFolder: string) => {
+		return localCore.copyFolderInto(sourceFolder, destFolder);
 	});
 
 	ipcMain.handle(IPC.copyAssetPath, async (_event, assetId: string): Promise<void> => {
@@ -237,6 +312,14 @@ function registerIpc(): void {
 		const filePath = await localCore.getAssetFilePath(assetId);
 		if (!filePath) throw new Error("Asset not found");
 		shell.showItemInFolder(filePath);
+	});
+
+	ipcMain.handle(IPC.copyFolderPath, (_event, relativePath: string): void => {
+		clipboard.writeText(localCore.getFolderFilePath(relativePath));
+	});
+
+	ipcMain.handle(IPC.revealFolder, (_event, relativePath: string): void => {
+		shell.showItemInFolder(localCore.getFolderFilePath(relativePath));
 	});
 
 	ipcMain.handle(IPC.getPropertySnapshot, () => localCore.getPropertySnapshot());
@@ -344,6 +427,29 @@ function registerIpc(): void {
 
 		await shell.trashItem(filePath);
 		await localCore.forgetAsset(assetId);
+		return true;
+	});
+
+	ipcMain.handle(IPC.trashFolder, async (event, relativePath: string): Promise<boolean> => {
+		if (!relativePath) throw new Error("Cannot trash the library root");
+		const folderPath = localCore.getFolderFilePath(relativePath);
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const name = relativePath.includes("/") ? relativePath.slice(relativePath.lastIndexOf("/") + 1) : relativePath;
+		const options = {
+			type: "warning" as const,
+			buttons: ["Cancel", "Move to Trash"],
+			defaultId: 0,
+			cancelId: 0,
+			message: `Move “${name}” to the Trash?`,
+			detail: "Everything inside this folder can be recovered from the system Trash.",
+		};
+		const result = owner
+			? await dialog.showMessageBox(owner, options)
+			: await dialog.showMessageBox(options);
+		if (result.response !== 1) return false;
+
+		await shell.trashItem(folderPath);
+		await localCore.forgetFolder(relativePath);
 		return true;
 	});
 

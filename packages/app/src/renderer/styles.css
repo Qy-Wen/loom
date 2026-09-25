@@ -128,6 +128,7 @@ body {
 	min-height: 0;
 	flex-direction: column;
 	background: #f3f3f1;
+	outline: none;
 }
 
 .library-header {
@@ -228,6 +229,7 @@ body {
 	background: transparent;
 	cursor: pointer;
 	text-align: left;
+	font: inherit;
 }
 
 .folder-row:hover,
@@ -237,14 +239,34 @@ body {
 
 .folder-row {
 	font-weight: 520;
+	cursor: default;
+}
+
+.folder-main {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+	flex: 1;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+	text-align: left;
 }
 
 .folder-chevron {
-	width: 9px;
+	width: 16px;
 	flex: 0 0 auto;
+	padding: 0;
+	border: 0;
+	background: transparent;
 	color: #7c7f84;
 	font-size: 15px;
 	line-height: 1;
+	cursor: pointer;
 }
 
 .folder-symbol {
@@ -254,6 +276,7 @@ body {
 	font-size: 13px;
 }
 
+.folder-row.selected,
 .asset-row.selected {
 	background: #dde6f7;
 }

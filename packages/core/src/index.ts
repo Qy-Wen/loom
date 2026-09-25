@@ -4,6 +4,7 @@ export * from "./library/file-identity.ts";
 export * from "./model/enrichment.ts";
 export * from "./library/handlers.ts";
 export * from "./library/library.ts";
+export * from "./library/names.ts";
 export * from "./library/paths.ts";
 export * from "./library/reconcile.ts";
 export * from "./library/watcher.ts";
