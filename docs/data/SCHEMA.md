@@ -127,6 +127,8 @@ A row is stale when it is missing, `version` does not match the extractor, or `s
 
 Deleting an asset deletes its enrichment row.
 
+Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
+
 ---
 
 ## DDL
@@ -184,3 +186,19 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
   data TEXT
 );
 ```
+
+---
+
+## Graph (LadybugDB)
+
+`LadybugGraphStore` uses `@ladybugdb/wasm-core` in-process (no server, no native addon). Queries run in memory. `<library>/.loom/graph.db` is a Ladybug `EXPORT DATABASE` folder, loaded with `IMPORT DATABASE` on open. Nodes are asset UUIDs only. Path, properties, and enrichment stay in SQLite.
+
+```
+CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id));
+CREATE REL TABLE IF NOT EXISTS GENERATED_FROM(FROM Asset TO Asset, relation_id STRING);
+CREATE REL TABLE IF NOT EXISTS RELATED(FROM Asset TO Asset, relation_id STRING, type STRING);
+```
+
+`GENERATED_FROM` is output → source. Other edge kinds use `RELATED` plus a `type` property. Unique `(from, to, type)` is enforced in the store, not by Ladybug.
+
+Library add/remove MERGEs or `DETACH DELETE`s the `Asset` node.

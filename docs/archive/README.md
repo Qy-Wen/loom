@@ -136,3 +136,14 @@ Loom is an MCP client. Third-party servers attach beside first-party library too
 - Windows stdio resolves `npx` via `node.exe` + `npx-cli.js` (cannot spawn `.cmd` directly)
 - First-party tools stay search, FFmpeg, and path jail; creation providers are not hardcoded
 - Tests cover config parse, name prefix, error surfacing, host skip, and PATHEXT rewrite; live fetch smoke is optional
+
+---
+
+## ✅ Output provenance
+
+Record where FFmpeg convenience-tool outputs came from. Edges go in Ladybug; the Graph view is not built yet.
+
+- Ladybug at `.loom/graph.db`; `GENERATED_FROM` is output → source, keyed by asset UUID
+- Convenience tools index the output immediately and write the edge; `run_ffmpeg` does not
+- `inspect_asset` returns `generatedFrom` / `generated`; Details lists them and can jump to the other file
+- Graph handlers MERGE / `DETACH DELETE` Asset nodes. Tests cover persist, cascade, inspect, and real-fixture extract/convert vs raw `run_ffmpeg`

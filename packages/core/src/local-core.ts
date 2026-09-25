@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
-import { LibraryHandlers, NoopGraphHandlers } from "./library/handlers.ts";
+import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
@@ -17,12 +17,15 @@ import {
 	type AssetDetailResult,
 	type AssetPropertyFilter,
 	type AssetPropertyView,
+	type AssetRelationView,
+	type AssetRelationsResult,
 	type AssetSearchItem,
 	type AssetSearchQuery,
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
 import { MediaService } from "./media/service.ts";
+import { resolveMediaPath } from "./media/policy.ts";
 import type {
 	ConvertFormatArgs,
 	CropVideoArgs,
@@ -35,9 +38,9 @@ import type {
 } from "./model/media.ts";
 import type { LoomTranscriptMessage, SessionRecord, SessionSummary } from "./model/session.ts";
 import { JsonlSessionRepo } from "./sessions/repo.ts";
-import { InMemoryGraphStore } from "./stores/memory.ts";
+import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
-import type { GraphStore, MetadataStore } from "./stores/types.ts";
+import { GENERATED_FROM, type GraphStore, type MetadataStore } from "./stores/types.ts";
 
 export interface LocalCoreOptions {
 	metadataStore?: MetadataStore;
@@ -56,8 +59,8 @@ export class LocalCore {
 
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
-		this.graphStore = options.graphStore ?? new InMemoryGraphStore();
-		this.library = new Library(new LibraryHandlers(this.metadataStore, new NoopGraphHandlers()));
+		this.graphStore = options.graphStore ?? new LadybugGraphStore();
+		this.library = new Library(new LibraryHandlers(this.metadataStore, new StoreGraphHandlers(this.graphStore)));
 		this.enrichment = new EnrichmentService(
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
@@ -224,7 +227,28 @@ export class LocalCore {
 			createdAt: asset.createdAt,
 			previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
 			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
+			...await this.listAssetRelations(asset.assetId),
 		};
+	}
+
+	async listAssetRelations(assetId: string): Promise<AssetRelationsResult> {
+		const relations = await this.graphStore.listRelations(assetId);
+		const generatedFrom: AssetRelationView[] = [];
+		const generated: AssetRelationView[] = [];
+		for (const relation of relations) {
+			if (relation.type !== GENERATED_FROM) continue;
+			if (relation.fromAssetId === assetId) {
+				const source = await this.metadataStore.getAsset(relation.toAssetId);
+				if (source) generatedFrom.push(toRelationView(source));
+			}
+			if (relation.toAssetId === assetId) {
+				const output = await this.metadataStore.getAsset(relation.fromAssetId);
+				if (output) generated.push(toRelationView(output));
+			}
+		}
+		generatedFrom.sort(compareRelationView);
+		generated.sort(compareRelationView);
+		return { generatedFrom, generated };
 	}
 
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
@@ -245,24 +269,24 @@ export class LocalCore {
 		return this.media.getMediaInfo(path);
 	}
 
-	extractFrame(args: ExtractFrameArgs): Promise<MediaJobResult> {
-		return this.media.extractFrame(args);
+	async extractFrame(args: ExtractFrameArgs): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.extractFrame(args));
 	}
 
-	extractClip(args: ExtractClipArgs): Promise<MediaJobResult> {
-		return this.media.extractClip(args);
+	async extractClip(args: ExtractClipArgs): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.extractClip(args));
 	}
 
-	resizeVideo(args: ResizeVideoArgs): Promise<MediaJobResult> {
-		return this.media.resizeVideo(args);
+	async resizeVideo(args: ResizeVideoArgs): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.resizeVideo(args));
 	}
 
-	cropVideo(args: CropVideoArgs): Promise<MediaJobResult> {
-		return this.media.cropVideo(args);
+	async cropVideo(args: CropVideoArgs): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.cropVideo(args));
 	}
 
-	convertFormat(args: ConvertFormatArgs): Promise<MediaJobResult> {
-		return this.media.convertFormat(args);
+	async convertFormat(args: ConvertFormatArgs): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.convertFormat(args));
 	}
 
 	runFfmpeg(args: RunFfmpegArgs): Promise<MediaJobResult> {
@@ -348,4 +372,56 @@ export class LocalCore {
 		const sessions = await this.sessions.list();
 		for (const listener of this.sessionListeners) listener(sessions);
 	}
+
+	private async runConvenience(
+		inputPath: string,
+		run: () => Promise<MediaJobResult>,
+	): Promise<MediaJobResult> {
+		const result = await run();
+		await this.recordGeneratedFrom(inputPath, result);
+		return result;
+	}
+
+	private async recordGeneratedFrom(inputPath: string, result: MediaJobResult): Promise<void> {
+		const sourceRel = this.libraryRelative(inputPath);
+		if (!sourceRel) return;
+		const source = await this.metadataStore.getAssetByPath(sourceRel);
+		if (!source) return;
+
+		const outputs = [...new Set(result.outputs ?? (result.output ? [result.output] : []))];
+		for (const outputPath of outputs) {
+			const outputRel = this.libraryRelative(outputPath);
+			if (!outputRel) continue;
+			const output = await this.library.indexFile(outputRel);
+			if (!output || output.assetId === source.assetId) continue;
+			await this.graphStore.upsertRelation({
+				relationId: `${output.assetId}:${source.assetId}:${GENERATED_FROM}`,
+				fromAssetId: output.assetId,
+				toAssetId: source.assetId,
+				type: GENERATED_FROM,
+			});
+		}
+	}
+
+	private libraryRelative(path: string): string | undefined {
+		try {
+			const paths = this.library.getPaths();
+			return paths.toRelativePath(resolveMediaPath(path, paths.root).absolutePath);
+		} catch {
+			return undefined;
+		}
+	}
+}
+
+function toRelationView(asset: Asset): AssetRelationView {
+	return {
+		assetId: asset.assetId,
+		filename: asset.filename,
+		relativePath: asset.relativePath,
+		type: asset.type,
+	};
+}
+
+function compareRelationView(a: AssetRelationView, b: AssetRelationView): number {
+	return a.relativePath.localeCompare(b.relativePath) || a.assetId.localeCompare(b.assetId);
 }

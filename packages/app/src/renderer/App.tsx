@@ -4,6 +4,7 @@ import type {
 	Asset,
 	AssetEnrichment,
 	AssetPropertyValue,
+	AssetRelationsResult,
 	LibraryChange,
 	LibrarySnapshot,
 	PropertyDefinition,
@@ -20,6 +21,7 @@ import { TableView } from "./table-view.tsx";
 import { useResizableLayout } from "./use-resizable-layout.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
+const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [] };
 type WorkbenchView = "library" | "table";
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
@@ -69,6 +71,7 @@ export function App(): React.JSX.Element {
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
+	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [analyzing, setAnalyzing] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
@@ -111,6 +114,14 @@ export function App(): React.JSX.Element {
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
 				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
 			}
+			if (
+				(change.type === "upsert" || change.type === "remove" || change.type === "reset")
+				&& selectedAssetIdRef.current
+			) {
+				void window.loom.getAssetRelations(selectedAssetIdRef.current)
+					.then(setRelations)
+					.catch(() => setRelations(EMPTY_RELATIONS));
+			}
 		});
 	}, []);
 
@@ -119,10 +130,14 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		if (!selectedAssetId) {
 			setEnrichment(undefined);
+			setRelations(EMPTY_RELATIONS);
 			return;
 		}
 		void window.loom.getAssetEnrichment(selectedAssetId).then(setEnrichment).catch(() => {
 			setEnrichment(undefined);
+		});
+		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
+			setRelations(EMPTY_RELATIONS);
 		});
 	}, [selectedAssetId]);
 
@@ -383,8 +398,13 @@ export function App(): React.JSX.Element {
 						onSetPropertyValue={setPropertyValue}
 						onRemovePropertyValue={removePropertyValue}
 						enrichment={enrichment}
+						relations={relations}
 						analyzing={analyzing}
 						onAnalyze={() => void analyzeSelected()}
+						onSelectAsset={(assetId) => {
+							setSelectedAssetId(assetId);
+							setSidePanel("details");
+						}}
 					/>
 				</div>
 			</div>

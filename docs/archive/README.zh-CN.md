@@ -136,3 +136,14 @@ Loom 作为 MCP 客户端。第三方 server 和自家库工具并列挂上。
 - Windows stdio 把 `npx` 改写成 `node.exe` + `npx-cli.js`（不能直接 spawn `.cmd`）
 - 第一方仍是检索、FFmpeg、路径狱；不把创作 provider 写死在代码里
 - 测试覆盖配置解析、命名前缀、错误上浮、host 跳过、PATHEXT 改写；真实 fetch 冒烟可选
+
+---
+
+## ✅ 产物出处
+
+记下 FFmpeg 封装工具产物从哪来。边进 Ladybug，先不做 Graph 视图。
+
+- Ladybug 落在 `.loom/graph.db`；`GENERATED_FROM` 是产物 → 源文件，按资产 UUID
+- 封装工具立刻索引产物并写边；`run_ffmpeg` 不记
+- `inspect_asset` 返回 `generatedFrom` / `generated`；Details 列出并可跳到另一端
+- graph handlers MERGE / `DETACH DELETE` Asset 节点。测试覆盖持久化、级联删除、inspect，以及真实 fixture 的封装工具 vs 裸 `run_ffmpeg`

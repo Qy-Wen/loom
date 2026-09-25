@@ -8,20 +8,12 @@
 
 ---
 
-## Step 1: Output provenance
-
-Record where Agent-created files came from. Do not introduce LadybugDB or the Graph view yet.
-
-- [ ] Persist `GENERATED_FROM` (or equivalent) when FFmpeg convenience tools write an output
-- [ ] Expose those edges on `inspect_asset` and in Details
-- [ ] Keep the store thin (SQLite is enough); graph handlers can stay no-op
-
-## Step 2: Search Level 1 text
+## Step 1: Search Level 1 text
 
 - [ ] Include `asset_metadata` extracts in the current `search_assets` match
 - [ ] Do not add FTS, vectors, or Hybrid Search yet
 
-## Step 3: Hybrid Search
+## Step 2: Hybrid Search
 
 Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
 
@@ -39,7 +31,7 @@ Completed steps are recorded in the [archive](./archive/README.md).
 ## Later
 
 - **AI enrichment:** on-demand Level 2 embeddings and VLM captions/tags; never enrich the whole library by default
-- **Relationship graph:** LadybugDB, Graph view, and manual relationship editing
+- **Relationship graph:** Graph view and manual relationship editing (Ladybug already stores `GENERATED_FROM`)
 - **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md

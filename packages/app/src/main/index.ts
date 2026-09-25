@@ -250,6 +250,9 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getAssetEnrichment, (_event, assetId: string) => {
 		return localCore.getAssetEnrichment(assetId);
 	});
+	ipcMain.handle(IPC.getAssetRelations, (_event, assetId: string) => {
+		return localCore.listAssetRelations(assetId);
+	});
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});

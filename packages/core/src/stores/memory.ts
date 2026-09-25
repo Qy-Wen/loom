@@ -210,7 +210,7 @@ function normalizePropertyName(name: string): string {
 	return name.trim().toLowerCase();
 }
 
-/** Temporary graph implementation until the persistent graph store lands. */
+/** Volatile GraphStore used by focused tests and explicit dependency injection. */
 export class InMemoryGraphStore implements GraphStore {
 	private readonly relations = new Map<string, AssetRelation>();
 
@@ -222,18 +222,36 @@ export class InMemoryGraphStore implements GraphStore {
 		this.relations.clear();
 	}
 
+	async ensureAsset(): Promise<void> {}
+
+	async removeAsset(assetId: string): Promise<void> {
+		for (const [relationId, relation] of this.relations) {
+			if (relation.fromAssetId === assetId || relation.toAssetId === assetId) {
+				this.relations.delete(relationId);
+			}
+		}
+	}
+
 	async upsertRelation(relation: AssetRelation): Promise<void> {
+		for (const [relationId, existing] of this.relations) {
+			if (
+				existing.fromAssetId === relation.fromAssetId &&
+				existing.toAssetId === relation.toAssetId &&
+				existing.type === relation.type
+			) {
+				this.relations.delete(relationId);
+			}
+		}
 		this.relations.set(relation.relationId, relation);
 	}
 
 	async listRelations(assetId: string): Promise<AssetRelation[]> {
-		return [...this.relations.values()].filter(
-			(relation) => relation.fromAssetId === assetId || relation.toAssetId === assetId,
-		);
+		return [...this.relations.values()]
+			.filter((relation) => relation.fromAssetId === assetId || relation.toAssetId === assetId)
+			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
 	}
 
 	async removeRelation(relationId: string): Promise<void> {
 		this.relations.delete(relationId);
 	}
-
 }

@@ -66,7 +66,7 @@ export function createAssetTools(core: LocalCore): LoomTool[] {
 		{
 			name: "inspect_asset",
 			description:
-				"Inspect one asset by stable assetId. Returns file metadata, custom properties, and a safe preview reference. " +
+				"Inspect one asset by stable assetId. Returns file metadata, custom properties, GENERATED_FROM relations, and a safe preview reference. " +
 				"Never accepts or returns an absolute filesystem path.",
 			parameters: {
 				type: "object",

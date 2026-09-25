@@ -85,8 +85,11 @@ describe("InMemoryGraphStore", () => {
 		await store.upsertRelation({ relationId: "r2", fromAssetId: "c", toAssetId: "a", type: "reference" });
 		await store.upsertRelation({ relationId: "r3", fromAssetId: "c", toAssetId: "d", type: "other" });
 
-		assert.deepEqual((await store.listRelations("a")).map((item) => item.relationId), ["r1", "r2"]);
+		assert.deepEqual((await store.listRelations("a")).map((item) => item.relationId).sort(), ["r1", "r2"]);
 		await store.removeRelation("r1");
 		assert.deepEqual((await store.listRelations("a")).map((item) => item.relationId), ["r2"]);
+		await store.removeAsset("a");
+		assert.deepEqual(await store.listRelations("a"), []);
+		assert.deepEqual((await store.listRelations("c")).map((item) => item.relationId), ["r3"]);
 	});
 });

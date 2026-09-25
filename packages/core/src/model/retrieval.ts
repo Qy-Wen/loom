@@ -42,7 +42,19 @@ export interface AssetSearchResult {
 	total: number;
 }
 
-export interface AssetDetailResult extends AssetSearchItem {
+export interface AssetRelationView {
+	assetId: string;
+	filename: string;
+	relativePath: string;
+	type: AssetType;
+}
+
+export interface AssetRelationsResult {
+	generatedFrom: AssetRelationView[];
+	generated: AssetRelationView[];
+}
+
+export interface AssetDetailResult extends AssetSearchItem, AssetRelationsResult {
 	kind: "asset_detail";
 	createdAt: number;
 	/** Renderer-safe reference resolved by Electron Main through asset UUID. */
