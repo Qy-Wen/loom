@@ -28,7 +28,7 @@ Level 4  Deep Analysis              可选
 |-------|------|------|------|
 | 0 | 文件系统元数据：path、size、hash、mtime、type | 免费 | 自动（导入即有） |
 | 1 | FFprobe（时长/分辨率/编码）、EXIF、文本内容提取 | 本地计算 | 自动或按需 |
-| 2 | Embedding（向量化，用于相似检索） | 可选（可能本地或云端） | 用户选择 |
+| 2 | 先做文本切片 embedding（RAG 索引）；图/视频以后 | 可选（本地或云） | 用户选择 |
 | 3 | VLM 语义理解：caption / 场景 / 人物 / OCR / ASR | 可能收费 | 用户选择 |
 | 4 | 深度分析：分段、质量评分、风格标签等 | 可能收费 | 用户选择 |
 
@@ -119,10 +119,13 @@ extract_clip(73s, 78s)
 
 ---
 
-## 4. 与检索层的关系
+## 4. 与检索层的关系（RAG）
+
+Level 1 摘录 → Level 2 切片和向量 → Hybrid Search → Agent 用这些段落。这就是 RAG。默认不整库 embedding。
 
 - Level 1 写入按 `asset_id` 关联的 `asset_metadata`。失效判断用固定列；各类型字段放在带 `kind` 的 JSON 里（`image` / `video` / `audio` / `text`）。
 - Level 1 从磁盘文件提取。缺失或过期记录在 reconcile 后刷新；Analyze 强制重跑。重命名/移动不会。
-- Level 2/3/4 的产物最终写入 SQLite（向量 + FTS + metadata），供 Hybrid Search 使用（见 PRODUCT.md 第 3.2 节）。
-- 视频分段 / transcript chunk 作为独立的可检索单元存储，使 Agent 能定位到时间片段而非整段视频。
-- 富化状态由 `assets.embedding_status` 及富化任务表跟踪（见 PRODUCT.md 第 3.2 节）。
+- Level 2 先做文本切片（短文一篇一段）。每段存原文、偏移、向量、模型名。Analyze 仍是 Level 1；embed 是单独的用户/Agent 动作。
+- Hybrid Search 检索这些切片，返回段落 + `asset_id`，Agent 可以引用或打开文件。sqlite-vec 和融合等索引有了再做。
+- 图/视频 embedding，以及之后的镜头 / 台词切块，走同一套检索。
+- Level 2/3/4 的产物仍落在 SQLite（向量 + FTS + metadata），见 PRODUCT.md 第 3.2 节。

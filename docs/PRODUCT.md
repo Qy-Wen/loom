@@ -104,7 +104,7 @@ Combined with:
 - **Vector Search** for semantic retrieval
 - **Metadata Filter** for structured properties
 
-these form **Hybrid Search**.
+these form **Hybrid Search**. That retrieve step, plus the Agent answering or acting from the returned passages, is Loom's RAG loop. The first index is chunked text embeddings, not one vector per file.
 
 ### 3.3 LadybugDB — asset relationship graph
 
@@ -192,6 +192,8 @@ Level 4  Deep analysis               Optional
 ```
 
 Level 1 is a local cache of file-derived technical metadata (dimensions, duration, camera, text extract). It is stored in `asset_metadata` and invalidated by source `mtime` plus an extractor version.
+
+Level 2 starts with **text**: chunk the Level 1 extract and embed each chunk. Short files stay one chunk. That index is what Hybrid Search retrieves for RAG. Image and video embeddings come later; video scenes and transcript chunks stay the longer-term unit for media.
 
 See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific processing, and scene/transcript-level video understanding.
 

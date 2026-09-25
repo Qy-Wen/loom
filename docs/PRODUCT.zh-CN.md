@@ -104,7 +104,7 @@ AND rating >= 4
 - **Vector Search**（向量检索）
 - **Metadata Filter**（属性过滤）
 
-三者结合，正好形成 **Hybrid Search**。
+三者结合，正好形成 **Hybrid Search**。这一步检索，再加上 Agent 用返回的段落来回答或动手，就是 Loom 的 RAG。第一批索引是切过的文本 embedding，不是整篇一根向量。
 
 ### 3.3 LadybugDB — 资产关系图
 
@@ -192,6 +192,8 @@ Level 4  Deep Analysis              可选
 ```
 
 Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相机、文本）。存在 `asset_metadata` 里，按源文件 `mtime` 和提取器版本失效。
+
+Level 2 先做**文本**：把 Level 1 摘录切片再 embedding。短文一篇一段。Hybrid Search 检索这些切片，就是 RAG。图和视频的 embedding 以后再做；视频按镜头 / 台词切块仍是更后面的单位。
 
 > 各层的具体处理管线、媒体类型处理流程，以及视频的多粒度（scene / transcript chunk）理解方案，见 [ENRICHMENT.md](./ENRICHMENT.zh-CN.md)。
 

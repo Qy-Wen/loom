@@ -8,12 +8,20 @@
 
 ---
 
-## Step 1: Hybrid Search
+## Step 1: Text embeddings (RAG index)
 
-Upgrade lexical search into one retrieval stack with vectors and structured filters.
+Index is chunked text, not one vector per file. Text assets only. Do not embed the whole library by default. Images and video wait.
 
-- [ ] sqlite-vec over selectively enriched assets
-- [ ] Fuse retrieval behind `search_assets` / `hybrid_search`
+- [ ] Chunk Level 1 text extracts (short files stay one chunk; overlap on long files)
+- [ ] `EmbeddingProvider` seam; persist chunks + vectors + model id; skip rename/move when mtime is unchanged
+- [ ] Details / Agent can request embed and see status
+
+## Step 2: Hybrid Search (RAG retrieve)
+
+Retrieve chunks, then ground the Agent on those passages. Fuse with the existing FTS and property filters.
+
+- [ ] sqlite-vec over text chunks that already have embeddings
+- [ ] Fuse behind `search_assets` / `hybrid_search`; return passage + `asset_id`
 - [ ] Establish a minimal retrieval evaluation set
 
 ---
@@ -24,7 +32,8 @@ Completed steps are recorded in the [archive](./archive/README.md).
 
 ## Later
 
-- **AI enrichment:** on-demand Level 2 embeddings and VLM captions/tags; never enrich the whole library by default
+- **Image / video embeddings:** CLIP-style or one keyframe; same RAG retrieve path
+- **Level 3 VLM:** on-demand captions/tags; never enrich the whole library by default
 - **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
