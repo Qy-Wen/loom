@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import type {
 	Asset,
 	AssetEnrichment,
+	AssetLinkView,
 	AssetPropertyValue,
 	AssetRelationsResult,
-	AssetRelationView,
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
@@ -34,9 +34,13 @@ interface SidePanelProps {
 	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 	enrichment: AssetEnrichment | undefined;
 	relations: AssetRelationsResult;
+	assets: Asset[];
+	relationTypes: string[];
 	analyzing: boolean;
 	onAnalyze: () => void;
 	onSelectAsset: (assetId: string) => void;
+	onCreateRelation: (toAssetId: string, type: string) => Promise<void>;
+	onRemoveRelation: (relationId: string) => Promise<void>;
 }
 
 export function SidePanel({
@@ -53,7 +57,11 @@ export function SidePanel({
 	onRemovePropertyValue,
 	enrichment,
 	relations,
+	assets,
+	relationTypes,
 	onSelectAsset,
+	onCreateRelation,
+	onRemoveRelation,
 	analyzing,
 	onAnalyze,
 }: SidePanelProps): React.JSX.Element {
@@ -267,37 +275,156 @@ export function SidePanel({
 					</section>
 				)}
 				<section className="relations-section">
-					<div className="section-label">Relations</div>
-					{asset && (relations.generatedFrom.length > 0 || relations.generated.length > 0) ? (
-						<>
-							<RelationGroup
-								label="Generated from"
-								items={relations.generatedFrom}
-								onSelect={onSelectAsset}
-							/>
-							<RelationGroup
-								label="Generated"
-								items={relations.generated}
-								onSelect={onSelectAsset}
-							/>
-						</>
-					) : (
-						<div className="empty no-padding">No relations yet.</div>
-					)}
+					<RelationsEditor
+						asset={asset}
+						assets={assets}
+						relations={relations}
+						relationTypes={relationTypes}
+						onSelect={onSelectAsset}
+						onCreate={onCreateRelation}
+						onRemove={onRemoveRelation}
+					/>
 				</section>
 			</div>
 		</aside>
 	);
 }
 
+function RelationsEditor({
+	asset,
+	assets,
+	relations,
+	relationTypes,
+	onSelect,
+	onCreate,
+	onRemove,
+}: {
+	asset: Asset | null;
+	assets: Asset[];
+	relations: AssetRelationsResult;
+	relationTypes: string[];
+	onSelect: (assetId: string) => void;
+	onCreate: (toAssetId: string, type: string) => Promise<void>;
+	onRemove: (relationId: string) => Promise<void>;
+}): React.JSX.Element {
+	const others = assets
+		.filter((item) => item.assetId !== asset?.assetId)
+		.sort((a, b) => a.filename.localeCompare(b.filename) || a.relativePath.localeCompare(b.relativePath));
+	const generatedFrom = relations.links.filter(
+		(link) => link.relationType === "GENERATED_FROM" && link.direction === "out",
+	);
+	const generated = relations.links.filter(
+		(link) => link.relationType === "GENERATED_FROM" && link.direction === "in",
+	);
+	const customGroups = groupCustomLinks(relations.links);
+	const [form, setForm] = useState<{ type: string; toAssetId: string } | null>(null);
+	const [error, setError] = useState<string | null>(null);
+	const [saving, setSaving] = useState(false);
+
+	useEffect(() => {
+		setForm(null);
+		setError(null);
+	}, [asset?.assetId]);
+
+	async function submit(): Promise<void> {
+		if (!form?.type.trim() || !form.toAssetId || saving) return;
+		setSaving(true);
+		setError(null);
+		try {
+			await onCreate(form.toAssetId, form.type);
+			setForm(null);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setSaving(false);
+		}
+	}
+
+	return (
+		<>
+			<div className="property-heading">
+				<div className="section-label">Relations</div>
+				{asset && others.length > 0 && (
+					<button
+						className="icon-button"
+						type="button"
+						title="Add relation"
+						onClick={() => {
+							setForm({ type: relationTypes[0] ?? "", toAssetId: others[0]?.assetId ?? "" });
+							setError(null);
+						}}
+					>+</button>
+				)}
+			</div>
+			{asset && form && (
+				<div className="property-definition-form relation-form">
+					<input
+						autoFocus
+						list="details-relation-types"
+						placeholder="Relationship type"
+						value={form.type}
+						onChange={(event) => setForm({ ...form, type: event.target.value })}
+					/>
+					<datalist id="details-relation-types">
+						{relationTypes.map((type) => (
+							<option key={type} value={type} />
+						))}
+					</datalist>
+					<select
+						value={form.toAssetId}
+						onChange={(event) => setForm({ ...form, toAssetId: event.target.value })}
+					>
+						{others.map((item) => (
+							<option key={item.assetId} value={item.assetId}>
+								{item.filename}
+							</option>
+						))}
+					</select>
+					{error && <div className="relation-form-error">{error}</div>}
+					<div className="property-form-actions">
+						<button type="button" onClick={() => { setForm(null); setError(null); }}>Cancel</button>
+						<button
+							type="button"
+							disabled={!form.type.trim() || !form.toAssetId || saving}
+							onClick={() => void submit()}
+						>{saving ? "Adding…" : "Add"}</button>
+					</div>
+				</div>
+			)}
+			{asset && (generatedFrom.length > 0 || generated.length > 0 || customGroups.length > 0) ? (
+				<>
+					<RelationGroup label="Generated from" items={generatedFrom} onSelect={onSelect} onRemove={onRemove} />
+					<RelationGroup label="Generated" items={generated} onSelect={onSelect} onRemove={onRemove} />
+					{customGroups.map((group) => (
+						<RelationGroup
+							key={group.type}
+							label={group.type}
+							items={group.items}
+							showDirection
+							onSelect={onSelect}
+							onRemove={onRemove}
+						/>
+					))}
+				</>
+			) : (
+				<div className="empty no-padding">{asset ? "No relations yet." : "Select an asset to see its relations."}</div>
+			)}
+		</>
+	);
+}
+
 function RelationGroup({
 	label,
 	items,
+	showDirection,
 	onSelect,
+	onRemove,
 }: {
 	label: string;
-	items: AssetRelationView[];
+	items: AssetLinkView[];
+	showDirection?: boolean;
 	onSelect: (assetId: string) => void;
+	onRemove: (relationId: string) => Promise<void>;
 }): React.JSX.Element | null {
 	if (items.length === 0) return null;
 	return (
@@ -305,13 +432,35 @@ function RelationGroup({
 			<div className="relation-group-label">{label}</div>
 			<ul className="relation-list">
 				{items.map((item) => (
-					<li key={item.assetId}>
-						<button type="button" onClick={() => onSelect(item.assetId)}>
-							<span className="relation-filename">{item.filename}</span>
+					<li key={item.relationId}>
+						<button type="button" onClick={() => onSelect(item.asset.assetId)}>
+							<span className="relation-filename">
+								{showDirection ? `${item.direction === "out" ? "→" : "←"} ` : ""}
+								{item.asset.filename}
+							</span>
 						</button>
+						<button
+							className="icon-button"
+							type="button"
+							title="Remove relation"
+							onClick={() => void onRemove(item.relationId)}
+						>×</button>
 					</li>
 				))}
 			</ul>
 		</div>
 	);
+}
+
+function groupCustomLinks(links: AssetLinkView[]): { type: string; items: AssetLinkView[] }[] {
+	const groups = new Map<string, AssetLinkView[]>();
+	for (const link of links) {
+		if (link.relationType === "GENERATED_FROM") continue;
+		const items = groups.get(link.relationType) ?? [];
+		items.push(link);
+		groups.set(link.relationType, items);
+	}
+	return [...groups.entries()]
+		.sort(([left], [right]) => left.localeCompare(right))
+		.map(([type, items]) => ({ type, items }));
 }

@@ -49,9 +49,18 @@ export interface AssetRelationView {
 	type: AssetType;
 }
 
+/** One edge touching the inspected asset. `direction` is from that asset's side. */
+export interface AssetLinkView {
+	relationId: string;
+	relationType: string;
+	direction: "out" | "in";
+	asset: AssetRelationView;
+}
+
 export interface AssetRelationsResult {
 	generatedFrom: AssetRelationView[];
 	generated: AssetRelationView[];
+	links: AssetLinkView[];
 }
 
 export interface AssetDetailResult extends AssetSearchItem, AssetRelationsResult {

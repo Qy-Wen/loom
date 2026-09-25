@@ -17,6 +17,7 @@ import {
 	type AssetDetailResult,
 	type AssetPropertyFilter,
 	type AssetPropertyView,
+	type AssetLinkView,
 	type AssetRelationView,
 	type AssetRelationsResult,
 	type AssetSearchItem,
@@ -40,7 +41,13 @@ import type { LoomTranscriptMessage, SessionRecord, SessionSummary } from "./mod
 import { JsonlSessionRepo } from "./sessions/repo.ts";
 import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
-import { GENERATED_FROM, type AssetRelation, type GraphStore, type MetadataStore } from "./stores/types.ts";
+import {
+	GENERATED_FROM,
+	normalizeRelationType,
+	type AssetRelation,
+	type GraphStore,
+	type MetadataStore,
+} from "./stores/types.ts";
 
 export interface LocalCoreOptions {
 	metadataStore?: MetadataStore;
@@ -234,24 +241,58 @@ export class LocalCore {
 		return this.graphStore.listAllRelations();
 	}
 
+	async createRelation(fromAssetId: string, toAssetId: string, type: string): Promise<AssetRelation> {
+		const relationType = normalizeRelationType(type);
+		if (fromAssetId === toAssetId) throw new Error("Cannot relate an asset to itself");
+		const [from, to] = await Promise.all([
+			this.metadataStore.getAsset(fromAssetId),
+			this.metadataStore.getAsset(toAssetId),
+		]);
+		if (!from || !to) throw new Error("Asset not found");
+		const relation: AssetRelation = {
+			relationId: `${fromAssetId}:${toAssetId}:${relationType}`,
+			fromAssetId,
+			toAssetId,
+			type: relationType,
+		};
+		await this.graphStore.upsertRelation(relation);
+		return relation;
+	}
+
+	async removeRelation(relationId: string): Promise<void> {
+		if (!relationId.trim()) throw new Error("Relation not found");
+		await this.graphStore.removeRelation(relationId);
+	}
+
 	async listAssetRelations(assetId: string): Promise<AssetRelationsResult> {
 		const relations = await this.graphStore.listRelations(assetId);
 		const generatedFrom: AssetRelationView[] = [];
 		const generated: AssetRelationView[] = [];
+		const links: AssetLinkView[] = [];
 		for (const relation of relations) {
+			const outgoing = relation.fromAssetId === assetId;
+			const otherId = outgoing ? relation.toAssetId : relation.fromAssetId;
+			const other = await this.metadataStore.getAsset(otherId);
+			if (!other) continue;
+			const view = toRelationView(other);
+			links.push({
+				relationId: relation.relationId,
+				relationType: relation.type,
+				direction: outgoing ? "out" : "in",
+				asset: view,
+			});
 			if (relation.type !== GENERATED_FROM) continue;
-			if (relation.fromAssetId === assetId) {
-				const source = await this.metadataStore.getAsset(relation.toAssetId);
-				if (source) generatedFrom.push(toRelationView(source));
-			}
-			if (relation.toAssetId === assetId) {
-				const output = await this.metadataStore.getAsset(relation.fromAssetId);
-				if (output) generated.push(toRelationView(output));
-			}
+			if (outgoing) generatedFrom.push(view);
+			else generated.push(view);
 		}
 		generatedFrom.sort(compareRelationView);
 		generated.sort(compareRelationView);
-		return { generatedFrom, generated };
+		links.sort((a, b) => (
+			a.relationType.localeCompare(b.relationType)
+			|| a.direction.localeCompare(b.direction)
+			|| compareRelationView(a.asset, b.asset)
+		));
+		return { generatedFrom, generated, links };
 	}
 
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {

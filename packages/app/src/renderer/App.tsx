@@ -15,7 +15,7 @@ import type {
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { AssetPreview } from "./asset-preview.tsx";
 import { sortAssets } from "./asset-utils.ts";
-import { folderSet } from "./file-tree.tsx";
+import { ancestorFolders, folderSet } from "./file-tree.tsx";
 import { LibrarySidebar } from "./library-sidebar.tsx";
 import { SidePanel, type SidePanelTab } from "./side-panel.tsx";
 import { GraphView } from "./graph-view.tsx";
@@ -23,7 +23,7 @@ import { TableView } from "./table-view.tsx";
 import { useResizableLayout } from "./use-resizable-layout.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
-const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [] };
+const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
@@ -154,6 +154,53 @@ export function App(): React.JSX.Element {
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
 		[library.assets, selectedAssetId],
 	);
+
+	useEffect(() => {
+		if (!selectedAsset) return;
+		const folders = ancestorFolders(selectedAsset.relativePath);
+		if (folders.length === 0) return;
+		setCollapsedFolders((current) => {
+			let changed = false;
+			const next = new Set(current);
+			for (const folder of folders) {
+				if (next.delete(folder)) changed = true;
+			}
+			return changed ? next : current;
+		});
+	}, [selectedAsset]);
+	const relationTypes = useMemo(
+		() => [...new Set(graphEdges.map((edge) => edge.type).filter((type) => type !== "GENERATED_FROM"))].sort(),
+		[graphEdges],
+	);
+
+	async function refreshRelations(): Promise<void> {
+		setGraphEdges(await window.loom.listGraphRelations());
+		if (selectedAssetIdRef.current) {
+			setRelations(await window.loom.getAssetRelations(selectedAssetIdRef.current));
+		}
+	}
+
+	async function createRelation(fromAssetId: string, toAssetId: string, type: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.createRelation(fromAssetId, toAssetId, type);
+			await refreshRelations();
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function removeRelation(relationId: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.removeRelation(relationId);
+			await refreshRelations();
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
 
 	function toggleFolder(relativePath: string): void {
 		setCollapsedFolders((current) => {
@@ -375,10 +422,13 @@ export function App(): React.JSX.Element {
 								assets={library.assets}
 								edges={graphEdges}
 								selectedAssetId={selectedAssetId}
+								relationTypes={relationTypes}
 								onSelectAsset={(assetId) => {
 									setSelectedAssetId(assetId);
 									setSidePanel("details");
 								}}
+								onCreateRelation={createRelation}
+								onRemoveRelation={removeRelation}
 							/>
 						) : selectedAsset ? (
 							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} />
@@ -423,12 +473,19 @@ export function App(): React.JSX.Element {
 						onRemovePropertyValue={removePropertyValue}
 						enrichment={enrichment}
 						relations={relations}
+						assets={library.assets}
+						relationTypes={relationTypes}
 						analyzing={analyzing}
 						onAnalyze={() => void analyzeSelected()}
 						onSelectAsset={(assetId) => {
 							setSelectedAssetId(assetId);
 							setSidePanel("details");
 						}}
+						onCreateRelation={(toAssetId, type) => {
+							if (!selectedAsset) return Promise.resolve();
+							return createRelation(selectedAsset.assetId, toAssetId, type);
+						}}
+						onRemoveRelation={removeRelation}
 					/>
 				</div>
 			</div>

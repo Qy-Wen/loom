@@ -254,6 +254,10 @@ function registerIpc(): void {
 		return localCore.listAssetRelations(assetId);
 	});
 	ipcMain.handle(IPC.listGraphRelations, () => localCore.listGraphRelations());
+	ipcMain.handle(IPC.createRelation, (_event, fromAssetId: string, toAssetId: string, type: string) => {
+		return localCore.createRelation(fromAssetId, toAssetId, type);
+	});
+	ipcMain.handle(IPC.removeRelation, (_event, relationId: string) => localCore.removeRelation(relationId));
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});
@@ -377,3 +381,4 @@ async function loadConfiguredMcpServers() {
 		return [];
 	}
 }
+

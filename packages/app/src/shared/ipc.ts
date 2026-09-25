@@ -42,6 +42,8 @@ export const IPC = {
 	getAssetEnrichment: "loom:getAssetEnrichment",
 	getAssetRelations: "loom:getAssetRelations",
 	listGraphRelations: "loom:listGraphRelations",
+	createRelation: "loom:createRelation",
+	removeRelation: "loom:removeRelation",
 	analyzeAsset: "loom:analyzeAsset",
 	listSessions: "loom:listSessions",
 	createSession: "loom:createSession",
@@ -77,6 +79,8 @@ export interface LoomApi {
 	getAssetEnrichment: (assetId: string) => Promise<AssetEnrichment | undefined>;
 	getAssetRelations: (assetId: string) => Promise<AssetRelationsResult>;
 	listGraphRelations: () => Promise<AssetRelation[]>;
+	createRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<AssetRelation>;
+	removeRelation: (relationId: string) => Promise<void>;
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;

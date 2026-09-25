@@ -1,5 +1,36 @@
 export const GRAPH_NODE_RADIUS = 14;
 export const GRAPH_SELECTED_RADIUS = 18;
+export const GRAPH_PLUS_OFFSET = 10;
+export const GRAPH_SNAP_PAD = 16;
+
+export type NodeHitZone = "body" | "rim" | "none";
+
+/** Inner disc moves the node; the rim band is the link handle. */
+export function nodeHitZone(distance: number, radius: number): NodeHitZone {
+	if (distance <= radius * 0.62) return "body";
+	if (distance <= radius + GRAPH_PLUS_OFFSET + 6) return "rim";
+	return "none";
+}
+
+export function nearestNode<T extends { id: string; x: number; y: number }>(
+	nodes: T[],
+	x: number,
+	y: number,
+	excludeId: string | null,
+	snapRadius: number,
+): T | undefined {
+	let best: T | undefined;
+	let bestDist = snapRadius;
+	for (const node of nodes) {
+		if (node.id === excludeId) continue;
+		const dist = Math.hypot(x - node.x, y - node.y);
+		if (dist <= bestDist) {
+			best = node;
+			bestDist = dist;
+		}
+	}
+	return best;
+}
 
 export interface GraphLayoutNode {
 	id: string;

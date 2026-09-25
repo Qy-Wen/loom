@@ -167,3 +167,34 @@ Loom 作为 MCP 客户端。第三方 server 和自家库工具并列挂上。
 - `assets_fts` 索引文件名、路径、属性值和已就绪的 Level 1 摘录
 - 资产、属性、富化写入时刷新对应行；打开时行数对不上就重建
 - 查询词按前缀 AND（`canon eos` → `"canon"* AND "eos"*`）
+
+---
+
+## ✅ 全库 Graph 画布
+
+Graph 页是全库力导向画布。可平移、缩放，点节点选中。不做 Cypher 栏。
+
+- 每个已索引资产是一个节点，Ladybug 的边画在它们之间
+- 按素材类型着色；点击打开 Details
+- 布局是渲染进程里的 Fruchterman–Reingold
+
+---
+
+## ✅ 手动建关系
+
+用户自己建边、删边。类型是自由标签；`GENERATED_FROM` 仍留给 FFmpeg。
+
+- 在 Graph 上把一个节点拖到另一个节点上，再填写类型（提示本库已用过的名字）
+- Details：选另一个资产和类型；可从列表或选中的 Graph 边删除
+- 存成 Ladybug `RELATED` 加 `type`；`(from, to, type)` 唯一
+- `inspect_asset` 用 `links` 返回该资产的全部边
+
+---
+
+## ✅ Graph 交互
+
+SVG 画布上的活力度场。坐标只留在本次会话。
+
+- `d3-force`：拖节点本体来挪位置，周围会动，松手后停住
+- 指针在圆边缘出现 `+`；从 `+` 拖出才建边
+- 橡皮筋碰到其他节点时高亮并吸过去

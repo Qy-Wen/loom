@@ -167,3 +167,34 @@ Record where FFmpeg convenience-tool outputs came from. Edges go in Ladybug; the
 - `assets_fts` indexes filename, path, property values, and ready Level 1 extracts
 - Rows refresh on asset, property, and enrichment writes; open rebuilds if counts drift
 - Query tokens are prefix-ANDed (`canon eos` → `"canon"* AND "eos"*`)
+
+---
+
+## ✅ Global Graph canvas
+
+Full-library force-directed canvas in the Graph tab. Pan, zoom, click a node to select it. No Cypher bar.
+
+- Every indexed asset is a node; Ladybug edges are drawn between them
+- Type-colored circles; click opens Details
+- Layout is Fruchterman–Reingold in the renderer
+
+---
+
+## ✅ Manual relationships
+
+Users create and delete edges. Types are free-form labels; `GENERATED_FROM` stays reserved for FFmpeg.
+
+- Drag one Graph node onto another, then name the type (datalist of types already used)
+- Details: pick another asset and a type; delete from the list or a selected Graph edge
+- Stored as Ladybug `RELATED` plus `type`; unique `(from, to, type)`
+- `inspect_asset` includes `links` for every touching edge
+
+---
+
+## ✅ Graph interaction
+
+Live force field on the SVG canvas. Positions stay in the session.
+
+- `d3-force`: drag a node body to move it; neighbors react, then settle after release
+- Hover the rim for `+`; drag from `+` to create an edge
+- Rubber-band highlights and snaps when it hits another node

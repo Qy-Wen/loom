@@ -4,9 +4,7 @@ import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Connection, Database, QueryResult } from "@ladybugdb/wasm-core";
 import type { LibraryPaths } from "../library/paths.ts";
-import { GENERATED_FROM, type AssetRelation, type GraphStore } from "./types.ts";
-
-const RELATED = "RELATED";
+import { GENERATED_FROM, RELATED, type AssetRelation, type GraphStore } from "./types.ts";
 const require = createRequire(import.meta.url);
 
 interface WasmModule {

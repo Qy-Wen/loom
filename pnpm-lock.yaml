@@ -75,6 +75,9 @@ importers:
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3
+      d3-force:
+        specifier: ^3.0.0
+        version: 3.0.0
       react:
         specifier: 19.2.0
         version: 19.2.0
@@ -88,6 +91,9 @@ importers:
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
+      '@types/d3-force':
+        specifier: ^3.0.10
+        version: 3.0.10
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19
