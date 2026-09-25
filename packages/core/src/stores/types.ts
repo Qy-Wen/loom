@@ -2,6 +2,11 @@ import type { Asset } from "../model/asset.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
+import type {
+	ChildEmbeddingUpdate,
+	StoredTextChunk,
+	TextEmbedJob,
+} from "../model/text-embed.ts";
 
 /**
  * Persistence boundary for derived asset metadata.
@@ -32,6 +37,11 @@ export interface MetadataStore {
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined>;
 	listAssetEnrichments(): Promise<AssetEnrichment[]>;
 	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
+	getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined>;
+	upsertTextEmbedJob(job: TextEmbedJob): Promise<void>;
+	replaceTextChunks(assetId: string, chunks: StoredTextChunk[]): Promise<void>;
+	listTextChunks(assetId: string): Promise<StoredTextChunk[]>;
+	updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void>;
 	searchAssetIds(query: string): Promise<string[]>;
 }
 

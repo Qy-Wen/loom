@@ -13,6 +13,7 @@ import type {
 	PropertyValue,
 	SessionRecord,
 	SessionSummary,
+	TextEmbedStatus,
 } from "@loom/core";
 import type { ModelSettingsDraft, ModelSettingsView } from "./model-settings.ts";
 
@@ -46,6 +47,8 @@ export const IPC = {
 	createRelation: "loom:createRelation",
 	removeRelation: "loom:removeRelation",
 	analyzeAsset: "loom:analyzeAsset",
+	getTextEmbedStatus: "loom:getTextEmbedStatus",
+	embedAsset: "loom:embedAsset",
 	listSessions: "loom:listSessions",
 	createSession: "loom:createSession",
 	openSession: "loom:openSession",
@@ -85,6 +88,8 @@ export interface LoomApi {
 	createRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<AssetRelation>;
 	removeRelation: (relationId: string) => Promise<void>;
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
+	getTextEmbedStatus: (assetId: string) => Promise<TextEmbedStatus>;
+	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;
 	openSession: (id: string) => Promise<SessionRecord>;

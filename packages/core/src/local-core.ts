@@ -5,6 +5,8 @@ import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
+import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
+import { TextEmbedService } from "./rag/service.ts";
 import type {
 	AssetPropertyValue,
 	PropertyDefinition,
@@ -60,6 +62,7 @@ export class LocalCore {
 	readonly graphStore: GraphStore;
 	private readonly library: Library;
 	private readonly enrichment: EnrichmentService;
+	private readonly textEmbed: TextEmbedService;
 	private readonly media: MediaService;
 	private sessions: JsonlSessionRepo | null = null;
 	private readonly sessionListeners = new Set<(sessions: SessionSummary[]) => void>();
@@ -72,6 +75,7 @@ export class LocalCore {
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
 		);
+		this.textEmbed = new TextEmbedService(this.metadataStore, this.enrichment);
 		this.media = new MediaService(this.library);
 		this.library.subscribe((change) => {
 			if (change.type === "reset") {
@@ -233,6 +237,7 @@ export class LocalCore {
 			createdAt: asset.createdAt,
 			previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
 			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
+			textEmbed: await this.textEmbed.getStatus(asset.assetId),
 			...await this.listAssetRelations(asset.assetId),
 		};
 	}
@@ -303,6 +308,18 @@ export class LocalCore {
 		const record = await this.enrichment.analyze(assetId);
 		this.library.notifyEnrichment(assetId);
 		return record;
+	}
+
+	getTextEmbedStatus(assetId: string, currentModelId?: string): Promise<TextEmbedStatus> {
+		return this.textEmbed.getStatus(assetId, currentModelId);
+	}
+
+	async embedTextAsset(assetId: string, provider: EmbeddingProvider): Promise<TextEmbedStatus> {
+		const status = await this.textEmbed.embed(assetId, provider, () => {
+			this.library.notifyTextEmbed(assetId);
+		});
+		this.library.notifyTextEmbed(assetId);
+		return status;
 	}
 
 	refreshEnrichment(assets: Asset[]): Promise<AssetEnrichment[]> {

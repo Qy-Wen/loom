@@ -3,6 +3,7 @@ import type {
 	LocalCore,
 	PropertyFilterOperator,
 	PropertyValue,
+	TextEmbedStatus,
 } from "@loom/core";
 import type { LoomTool, LoomToolResult } from "@loom/agent";
 
@@ -21,11 +22,19 @@ interface InspectAssetArgs {
 	assetId: string;
 }
 
+interface EmbedAssetArgs {
+	assetId: string;
+}
+
+export interface AssetToolOptions {
+	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+}
+
 /**
  * Agent-facing asset tools. Results contain UUIDs and relative paths only;
  * absolute filesystem paths stay behind LocalCore.
  */
-export function createAssetTools(core: LocalCore): LoomTool[] {
+export function createAssetTools(core: LocalCore, options: AssetToolOptions): LoomTool[] {
 	return [
 		{
 			name: "search_assets",
@@ -79,6 +88,28 @@ export function createAssetTools(core: LocalCore): LoomTool[] {
 			execute: async (rawArgs) => {
 				const args = validateInspectArgs(rawArgs);
 				const result = await core.inspectAsset(args.assetId);
+				return {
+					content: JSON.stringify(result),
+					details: result,
+				} satisfies LoomToolResult;
+			},
+		},
+		{
+			name: "embed_asset",
+			description:
+				"Index one Markdown asset for later retrieval: chunk the Level 1 extract and request embeddings. " +
+				"Only .md files are supported. Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
+			parameters: {
+				type: "object",
+				properties: {
+					assetId: { type: "string", minLength: 1 },
+				},
+				required: ["assetId"],
+				additionalProperties: false,
+			},
+			execute: async (rawArgs) => {
+				const args = validateInspectArgs(rawArgs) satisfies EmbedAssetArgs;
+				const result = await options.embedAsset(args.assetId);
 				return {
 					content: JSON.stringify(result),
 					details: result,

@@ -2,6 +2,13 @@ import { mkdir } from "node:fs/promises";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
 import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
+import type {
+	ChildEmbeddingUpdate,
+	StoredTextChunk,
+	TextChunkRole,
+	TextEmbedJob,
+	TextEmbedJobStatus,
+} from "../model/text-embed.ts";
 import {
 	assertPropertyDefinition,
 	assertPropertyValue,
@@ -323,6 +330,82 @@ export class SqliteMetadataStore implements MetadataStore {
 		this.refreshFts(this.requireDatabase(), record.assetId);
 	}
 
+	async getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM text_embed_jobs WHERE asset_id = ?")
+			.get(assetId) as TextEmbedJobRow | undefined;
+		return row ? toTextEmbedJob(row) : undefined;
+	}
+
+	async upsertTextEmbedJob(job: TextEmbedJob): Promise<void> {
+		if (!await this.getAsset(job.assetId)) throw new Error("Asset not found");
+		this.requireDatabase().prepare(`
+			INSERT INTO text_embed_jobs (
+				asset_id, status, model_id, source_modified_at, error, child_count, parent_count, updated_at
+			) VALUES (
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @childCount, @parentCount, @updatedAt
+			)
+			ON CONFLICT(asset_id) DO UPDATE SET
+				status = excluded.status,
+				model_id = excluded.model_id,
+				source_modified_at = excluded.source_modified_at,
+				error = excluded.error,
+				child_count = excluded.child_count,
+				parent_count = excluded.parent_count,
+				updated_at = excluded.updated_at
+		`).run({
+			assetId: job.assetId,
+			status: job.status,
+			modelId: job.modelId ?? null,
+			sourceModifiedAt: job.sourceModifiedAt,
+			error: job.error ?? null,
+			childCount: job.childCount,
+			parentCount: job.parentCount,
+			updatedAt: job.updatedAt,
+		});
+	}
+
+	async replaceTextChunks(assetId: string, chunks: StoredTextChunk[]): Promise<void> {
+		if (!await this.getAsset(assetId)) throw new Error("Asset not found");
+		const database = this.requireDatabase();
+		const replace = database.transaction((values: StoredTextChunk[]) => {
+			database.prepare("DELETE FROM text_chunks WHERE asset_id = ? AND role = 'child'").run(assetId);
+			database.prepare("DELETE FROM text_chunks WHERE asset_id = ? AND role = 'parent'").run(assetId);
+			const insert = database.prepare(`
+				INSERT INTO text_chunks (
+					chunk_id, asset_id, parent_id, role, start_offset, end_offset, text, token_count, embedding, model_id
+				) VALUES (
+					@chunkId, @assetId, @parentId, @role, @startOffset, @endOffset, @text, @tokenCount, @embedding, @modelId
+				)
+			`);
+			for (const chunk of values.filter((value) => value.role === "parent")) insert.run(toChunkParams(chunk));
+			for (const chunk of values.filter((value) => value.role === "child")) insert.run(toChunkParams(chunk));
+		});
+		replace(chunks);
+	}
+
+	async listTextChunks(assetId: string): Promise<StoredTextChunk[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT * FROM text_chunks WHERE asset_id = ? ORDER BY start_offset, role DESC, chunk_id")
+			.all(assetId) as TextChunkRow[];
+		return rows.map(toStoredChunk);
+	}
+
+	async updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void> {
+		const database = this.requireDatabase();
+		const update = database.prepare(`
+			UPDATE text_chunks
+			SET embedding = ?, model_id = ?
+			WHERE asset_id = ? AND chunk_id = ? AND role = 'child'
+		`);
+		const write = database.transaction((values: ChildEmbeddingUpdate[]) => {
+			for (const value of values) {
+				update.run(embeddingToBlob(value.embedding), value.modelId, assetId, value.chunkId);
+			}
+		});
+		write(updates);
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const match = compileFtsQuery(query);
 		if (!match) return [];
@@ -386,6 +469,33 @@ export class SqliteMetadataStore implements MetadataStore {
 				body,
 				tokenize = 'unicode61 remove_diacritics 2'
 			);
+			CREATE TABLE IF NOT EXISTS text_embed_jobs (
+				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+				status TEXT NOT NULL CHECK(status IN ('embedding', 'ready', 'failed')),
+				model_id TEXT,
+				source_modified_at REAL NOT NULL,
+				error TEXT,
+				child_count INTEGER NOT NULL DEFAULT 0,
+				parent_count INTEGER NOT NULL DEFAULT 0,
+				updated_at REAL NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS text_chunks (
+				chunk_id TEXT PRIMARY KEY,
+				asset_id TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+				parent_id TEXT REFERENCES text_chunks(chunk_id) ON DELETE CASCADE,
+				role TEXT NOT NULL CHECK(role IN ('parent', 'child')),
+				start_offset INTEGER NOT NULL,
+				end_offset INTEGER NOT NULL,
+				text TEXT NOT NULL,
+				token_count INTEGER NOT NULL,
+				embedding BLOB,
+				model_id TEXT,
+				CHECK (
+					(role = 'parent' AND parent_id IS NULL AND embedding IS NULL)
+					OR (role = 'child' AND parent_id IS NOT NULL)
+				)
+			);
+			CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
 		`);
 	}
 
@@ -495,4 +605,81 @@ function toAssetProperty(row: AssetPropertyRow): AssetPropertyValue {
 	else value = row.value_date;
 	if (value === null) throw new Error(`Property ${row.property_id} has no ${row.type} value`);
 	return { assetId: row.asset_id, propertyId: row.property_id, value };
+}
+
+interface TextEmbedJobRow {
+	asset_id: string;
+	status: TextEmbedJobStatus;
+	model_id: string | null;
+	source_modified_at: number;
+	error: string | null;
+	child_count: number;
+	parent_count: number;
+	updated_at: number;
+}
+
+interface TextChunkRow {
+	chunk_id: string;
+	asset_id: string;
+	parent_id: string | null;
+	role: TextChunkRole;
+	start_offset: number;
+	end_offset: number;
+	text: string;
+	token_count: number;
+	embedding: Buffer | null;
+	model_id: string | null;
+}
+
+function toTextEmbedJob(row: TextEmbedJobRow): TextEmbedJob {
+	return {
+		assetId: row.asset_id,
+		status: row.status,
+		modelId: row.model_id ?? undefined,
+		sourceModifiedAt: row.source_modified_at,
+		error: row.error ?? undefined,
+		childCount: row.child_count,
+		parentCount: row.parent_count,
+		updatedAt: row.updated_at,
+	};
+}
+
+function toStoredChunk(row: TextChunkRow): StoredTextChunk {
+	return {
+		chunkId: row.chunk_id,
+		assetId: row.asset_id,
+		parentId: row.parent_id,
+		role: row.role,
+		startOffset: row.start_offset,
+		endOffset: row.end_offset,
+		text: row.text,
+		tokenCount: row.token_count,
+		embedding: blobToEmbedding(row.embedding),
+		modelId: row.model_id ?? undefined,
+	};
+}
+
+function toChunkParams(chunk: StoredTextChunk): Record<string, string | number | Buffer | null> {
+	return {
+		chunkId: chunk.chunkId,
+		assetId: chunk.assetId,
+		parentId: chunk.parentId,
+		role: chunk.role,
+		startOffset: chunk.startOffset,
+		endOffset: chunk.endOffset,
+		text: chunk.text,
+		tokenCount: chunk.tokenCount,
+		embedding: chunk.role === "parent" ? null : embeddingToBlob(chunk.embedding),
+		modelId: chunk.modelId ?? null,
+	};
+}
+
+function embeddingToBlob(values?: number[]): Buffer | null {
+	if (!values) return null;
+	return Buffer.from(new Float32Array(values).buffer);
+}
+
+function blobToEmbedding(blob: Buffer | null): number[] | undefined {
+	if (!blob) return undefined;
+	return Array.from(new Float32Array(blob.buffer, blob.byteOffset, Math.floor(blob.byteLength / 4)));
 }
