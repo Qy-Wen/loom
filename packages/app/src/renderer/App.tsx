@@ -168,6 +168,18 @@ export function App(): React.JSX.Element {
 	);
 
 	useEffect(() => {
+		void window.loom.setUiSelection(
+			selectedAsset
+				? {
+					assetId: selectedAsset.assetId,
+					path: selectedAsset.relativePath,
+					assetType: selectedAsset.type,
+				}
+				: null,
+		);
+	}, [selectedAsset]);
+
+	useEffect(() => {
 		if (!selectedAsset) return;
 		const folders = ancestorFolders(selectedAsset.relativePath);
 		if (folders.length === 0) return;

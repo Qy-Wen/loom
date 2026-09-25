@@ -306,7 +306,7 @@ POST /graph/query
 
 The UI then remains unchanged if Local Core moves from Node to Python, Go, Rust, or the cloud. It also makes Loom legible as a backend and Agent-systems project.
 
-> **The Agent channel already runs as a localhost service:** Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see AGENT.md Section 5. CopilotKit is temporary UI infrastructure and can later be replaced by a custom workbench without changing the AG-UI backend boundary.
+> **The Agent channel already runs as a localhost service:** Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see AGENT.md Section 6. CopilotKit is temporary UI infrastructure and can later be replaced by a custom workbench without changing the AG-UI backend boundary.
 
 ### Capability layers
 

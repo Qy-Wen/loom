@@ -1,6 +1,7 @@
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type {
 	Asset,
+	AssetType,
 	AssetEnrichment,
 	AssetPropertyValue,
 	AssetRelation,
@@ -22,6 +23,12 @@ export type AssetContextAction = "rename" | "duplicate" | "copy_path" | "reveal"
 export interface AgentEndpoint {
 	runtimeUrl: string;
 	agentId: string;
+}
+
+export interface UiSelectionDraft {
+	assetId: string;
+	path: string;
+	assetType: AssetType;
 }
 
 export const IPC = {
@@ -59,6 +66,7 @@ export const IPC = {
 	sessionsChanged: "loom:sessionsChanged",
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
+	setUiSelection: "loom:setUiSelection",
 } as const;
 
 export interface LoomApi {
@@ -100,6 +108,7 @@ export interface LoomApi {
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
+	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;
 }
 
 declare global {

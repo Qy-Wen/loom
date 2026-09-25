@@ -2,7 +2,17 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { EventType, type BaseEvent } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
-import type { LoomAgent, LoomAgentEvent, LoomAgentOptions, LoomTool, LoomTranscriptMessage } from "@loom/agent";
+import {
+	parseUserAttachments,
+	type LoomAgent,
+	type LoomAgentEvent,
+	type LoomAgentOptions,
+	type LoomPromptOptions,
+	type LoomTool,
+	type LoomTranscriptMessage,
+	type LoomUserAttachment,
+	type UiSelectionFields,
+} from "@loom/agent";
 import { DEFAULT_SESSION_TITLE } from "@loom/core";
 import { lastValueFrom, toArray } from "rxjs";
 import { type AgentSessionStore, LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
@@ -29,6 +39,7 @@ function runInput(threadId = "thread-1", text = "latest question"): RunAgentInpu
 
 class FakeLoomAgent implements LoomAgent {
 	readonly prompts: string[] = [];
+	readonly promptAttachments: Array<LoomUserAttachment[] | undefined> = [];
 	readonly addedTools: LoomTool[] = [];
 	systemPrompt = "";
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
@@ -45,8 +56,9 @@ class FakeLoomAgent implements LoomAgent {
 		return () => this.listeners.delete(listener);
 	}
 
-	async prompt(input: string): Promise<void> {
+	async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
 		this.prompts.push(input);
+		this.promptAttachments.push(options?.attachments);
 		for (const event of this.events) {
 			for (const listener of this.listeners) listener(event);
 		}
@@ -295,6 +307,40 @@ describe("LoomAgUiAgent", () => {
 		assert.equal(seen[1]?.chat?.baseUrl, "http://127.0.0.1:11434/v1");
 	});
 
+	it("attaches the UI selection once, then skips the same asset", async () => {
+		const selection = {
+			assetId: "asset-1",
+			path: "clips/hero.mp4",
+			assetType: "video" as const,
+		};
+		let current: UiSelectionFields = selection;
+		const created: ScriptedAgent[] = [];
+		const adapter = new LoomAgUiAgent(OPTIONS, (options) => {
+			const agent = new ScriptedAgent(
+				[{ type: "agent_start" }, { type: "text", delta: "ok" }, { type: "agent_end" }],
+				options.initialMessages ?? [],
+			);
+			created.push(agent);
+			return agent;
+		}, undefined, () => current);
+
+		await lastValueFrom(adapter.run(runInput("sel-1", "把这个处理一下")).pipe(toArray()));
+		assert.deepEqual(created[0]?.promptAttachments[0], [{ type: "ui_selection", ...selection }]);
+		assert.equal(parseUserAttachments(created[0]?.messages[0]?.attachments)[0]?.type, "ui_selection");
+
+		await lastValueFrom(adapter.run(runInput("sel-1", "再裁短一点")).pipe(toArray()));
+		assert.equal(created[0]?.promptAttachments[1], undefined);
+
+		current = { assetId: "asset-2", path: "notes/brief.md", assetType: "text" };
+		await lastValueFrom(adapter.run(runInput("sel-1", "这篇也看下")).pipe(toArray()));
+		assert.deepEqual(created[0]?.promptAttachments[2], [{
+			type: "ui_selection",
+			assetId: "asset-2",
+			path: "notes/brief.md",
+			assetType: "text",
+		}]);
+	});
+
 	it("sets the working directory on live sessions and later-created ones", async () => {
 		const created: FakeLoomAgent[] = [];
 		const seen: LoomAgentOptions[] = [];
@@ -320,10 +366,14 @@ class ScriptedAgent extends FakeLoomAgent {
 		this.messages = [...initial];
 	}
 
-	override async prompt(input: string): Promise<void> {
-		this.messages.push({ role: "user", content: input });
+	override async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
+		this.messages.push({
+			role: "user",
+			content: input,
+			...(options?.attachments?.length ? { attachments: options.attachments } : {}),
+		});
 		this.messages.push({ role: "assistant", content: "ok" });
-		await super.prompt(input);
+		await super.prompt(input, options);
 	}
 
 	override getMessages() {

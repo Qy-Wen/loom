@@ -21,6 +21,7 @@ import { loadMcpConfigFile } from "./mcp/config.ts";
 import { McpHost } from "./mcp/host.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
+import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import type { ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
@@ -175,6 +176,7 @@ function registerIpc(): void {
 		if (result.canceled || !result.filePaths[0]) return null;
 		const snapshot = await localCore.openLibrary(result.filePaths[0]);
 		if (snapshot.rootPath) workspaceTools.setCwd(snapshot.rootPath);
+		setUiSelection(null);
 		agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
 		agentServer?.resetSessions();
 		return snapshot;
@@ -287,6 +289,10 @@ function registerIpc(): void {
 		return modelSettings.view();
 	});
 
+	ipcMain.handle(IPC.setUiSelection, (_event, raw: unknown) => {
+		setUiSelection(parseUiSelectionDraft(raw));
+	});
+
 	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
 		if (!modelSettings) throw new Error("Settings store not started");
 		const file = await modelSettings.update(draft);
@@ -351,7 +357,7 @@ app
 			...AGENT_OPTIONS,
 			chat: await modelSettings.chat(),
 			tools: [...(AGENT_OPTIONS.tools ?? [])],
-		}, localCore);
+		}, localCore, getUiSelection);
 		registerAssetProtocol();
 		registerIpc();
 		createWindow();

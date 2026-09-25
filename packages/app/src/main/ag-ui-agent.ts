@@ -3,18 +3,20 @@
  *
  * Wraps `@loom/agent` (LoomAgent) as an AG-UI `AbstractAgent`, so CopilotKit's
  * runtime can drive it. Translates `LoomAgentEvent` → AG-UI `BaseEvent`
- * (see AGENT.md §5.2). `LoomAgentEvent` never leaves this file.
+ * (see AGENT.md §6.2). `LoomAgentEvent` never leaves this file.
  */
 import { AbstractAgent, type RunAgentInput } from "@ag-ui/client";
 import { type BaseEvent, EventType } from "@ag-ui/core";
 import {
 	createLoomAgent,
 	toolResultText,
+	uiSelectionToAttach,
 	type LoomAgent as LoomAgentInstance,
 	type LoomAgentOptions,
 	type LoomChatEndpoint,
 	type LoomTool,
 	type LoomTranscriptMessage,
+	type UiSelectionFields,
 } from "@loom/agent";
 import { DEFAULT_SESSION_TITLE, titleFromUserText } from "@loom/core";
 import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
@@ -60,6 +62,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 	private agentOptions: LoomAgentOptions;
 	private createAgent: LoomAgentFactory;
 	private store: AgentSessionStore | undefined;
+	private getUiSelection: (() => UiSelectionFields | null) | undefined;
 	/** One pi-backed conversation per AG-UI thread; clones share this map. */
 	private sessions = new Map<string, LoomAgentInstance>();
 	private titles = new Map<string, string>();
@@ -68,11 +71,13 @@ export class LoomAgUiAgent extends AbstractAgent {
 		options: LoomAgentOptions,
 		createAgent: LoomAgentFactory = createLoomAgent,
 		store?: AgentSessionStore,
+		getUiSelection?: () => UiSelectionFields | null,
 	) {
 		super({ agentId: "loom" });
 		this.agentOptions = options;
 		this.createAgent = createAgent;
 		this.store = store;
+		this.getUiSelection = getUiSelection;
 	}
 
 	// CopilotKit's runner clones the registered agent per run; the base clone()
@@ -83,6 +88,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		cloned.agentOptions = this.agentOptions;
 		cloned.createAgent = this.createAgent;
 		cloned.store = this.store;
+		cloned.getUiSelection = this.getUiSelection;
 		cloned.sessions = this.sessions;
 		cloned.titles = this.titles;
 		return cloned;
@@ -257,8 +263,9 @@ export class LoomAgUiAgent extends AbstractAgent {
 					}
 				});
 
+				const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, loom.getMessages());
 				loom
-					.prompt(latestUserText(input))
+					.prompt(latestUserText(input), attachment ? { attachments: [attachment] } : undefined)
 					.then(async () => {
 						if (!failed) await this.persist(input.threadId, loom, before);
 						if (!cancelled) subscriber.complete();

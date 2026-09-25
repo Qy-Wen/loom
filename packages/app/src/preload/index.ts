@@ -49,6 +49,7 @@ const api: LoomApi = {
 	},
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
+	setUiSelection: (selection) => ipcRenderer.invoke(IPC.setUiSelection, selection),
 };
 
 contextBridge.exposeInMainWorld("loom", api);

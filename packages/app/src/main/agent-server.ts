@@ -1,12 +1,12 @@
 /**
  * Local Core HTTP server — hosts the CopilotKit runtime on a random localhost
- * port (see AGENT.md §5.1). The renderer connects to it via `runtimeUrl`.
+ * port (see AGENT.md §6.1). The renderer connects to it via `runtimeUrl`.
  *
  * Standard hardening: bind 127.0.0.1 only, random free port (`listen(0)`),
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
+import type { LoomAgentOptions, LoomChatEndpoint, LoomTool, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
 import { type AgentSessionStore, LoomAgUiAgent } from "./ag-ui-agent.ts";
@@ -30,11 +30,12 @@ const AGENT_ID = "loom";
 export async function startAgentServer(
 	options: LoomAgentOptions,
 	store?: AgentSessionStore,
+	getUiSelection?: () => UiSelectionFields | null,
 ): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(options, undefined, store);
+	const agent = new LoomAgUiAgent(options, undefined, store, getUiSelection);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
 	});

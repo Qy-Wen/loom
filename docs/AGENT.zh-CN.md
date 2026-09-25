@@ -2,7 +2,7 @@
 
 # Agent 技术方案（Agent Architecture）
 
-> 记录 Loom 的 Agent 层怎么实现：引入边界、解耦、合并上游更新、前端交互协议（AG-UI）。
+> 记录 Loom 的 Agent 层怎么实现：引入边界、解耦、合并上游更新、user 消息 attachments、前端交互协议（AG-UI）。
 > 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，待办见 [TODO.md](./TODO.zh-CN.md)。
 
 ---
@@ -154,15 +154,71 @@ packages/agent/src/
 - **工作区工具**：用 `NodeExecutionEnv` 包一层 pi 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
 - **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步，会从 FTS 长到切片级 hybrid 命中。
 - **MCP 客户端**：Main 读 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。ComfyUI 这类创作运行时从这里挂。
-- **系统提示词**：打开的素材库根目录就是工作目录。
+- **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
 
 ---
 
-## 5. 前端协议：CopilotKit + AG-UI，不暴露 pi 的 AgentEvent
+## 5. User 消息的 attachments
+
+> 系统注入上下文的 transcript 合同（先做 UI 选中）。气泡只显示 `content`。前缀缓存要求：同一条已落盘的 user，折进 Chat `content` 的字符串每次请求必须一样。
+
+不要把会变的 UI 状态写进 system prompt（整段前缀都会废）。不要做 `get_selection` 工具。不要把折好的字写进 `content` 再在界面上剥。
+
+### 5.1 落盘的 user 消息
+
+JSONL / `state.messages` 用旁路字段。发出去之后这条 user 不再改。
+
+```json
+{
+  "role": "user",
+  "timestamp": 1727000000000,
+  "content": [{ "type": "text", "text": "把这个处理一下" }],
+  "attachments": [
+    {
+      "type": "ui_selection",
+      "assetId": "a1b2c3d4-…",
+      "path": "clips/hero.mp4",
+      "assetType": "video"
+    }
+  ]
+}
+```
+
+没有选中就不写 `ui_selection`（`attachments` 若因此为空则整段省略）。不要存 `none` 占位。
+
+发送时从当前库选中快照（`assetId`、库内相对 `path`、`assetType`）。Graph 上的边不算选中。以后 `attachments` 可以加别的 `type`；payload 里不要放发送时间这类每轮都变的字段。
+
+聊天、标题、`userMessageText` 只读 `content`。
+
+### 5.2 折给 Chat API
+
+Chat 目前是 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。因此 `pi-adapter` 的 `convertToLlm` 把用户原文和所有 attachment **拼成一段字符串**。图如果以后 VLM 要用，仍走 `content` 里的 image part；系统注入永远不做成第二个 text part。
+
+折法固定。HTTP 里没有 `attachments` 字段。
+
+```
+把这个处理一下
+
+<ui_selection>
+path: clips/hero.mp4
+asset_id: a1b2c3d4-…
+type: video
+</ui_selection>
+```
+
+未选中：只折用户原文，不要拼 `<ui_selection>none</ui_selection>`。
+
+System prompt 加一句**不变**的规则：user 消息里可能有 `<ui_selection>`，表示发送时界面选中的库文件；用户说「这个 / 它」又没点名时用它；点了别的路径就听用户的。
+
+下一轮再快照选中。若与 transcript 里**最近一条** `ui_selection` 的 `assetId` 相同，本轮不挂 attachment、也不折——历史上还有那一块。没有更早的 `ui_selection`，或换了文件，再按上面挂并折。旧行不改。同一轮的 tool 循环共用发送时那份快照。
+
+---
+
+## 6. 前端协议：CopilotKit + AG-UI，不暴露 pi 的 AgentEvent
 
 pi 的「协议」只是一个**进程内的 TypeScript 事件流**（`session.subscribe()` 暴露的 `AgentEvent` discriminated union），不规定 JSON 格式或传输方式。换协议 = 再写一个消费者：订阅 `AgentEvent`，翻译成 AG-UI，通过 SSE 发给前端。
 
-### 5.1 接缝位置
+### 6.1 接缝位置
 
 前端 **暂时用 CopilotKit**（现成聊天 UI，走 AG-UI 协议）快速起步。CopilotKit 的数据流要求一个 HTTP runtime 端点，因此在 **Electron main 进程里起一个 localhost HTTP server** 承载它——这恰好落地 PRODUCT.md §9「Local Core 可抽成 localhost 服务」。
 
@@ -210,7 +266,7 @@ Main 进程（Local Core）
 - 实际端口经 preload/IPC 注入 renderer，供 `<CopilotKitProvider runtimeUrl>` 使用。
 - 先 `await listen` 再创建窗口，避免 renderer 早于 server；`app.on("will-quit")` 里 `server.close()`。
 
-### 5.2 事件映射
+### 6.2 事件映射
 
 `AgUiAdapter` 消费 `@loom/agent` 的 `LoomAgentEvent`（它已是 pi `AgentEvent` 的精简子集），翻译成 AG-UI：
 
@@ -223,7 +279,7 @@ Main 进程（Local Core）
 | `error` | 发 `loom-error-*` 提示条 + `RUN_ERROR`（key 错、Chat 连不上、没配设置）。按系统告警渲染，不走模型气泡。 |
 | `agent_end` | `RUN_FINISHED` |
 
-### 5.3 两处 v1 不做、但架构留好位置
+### 6.3 两处 v1 不做、但架构留好位置
 
 两处都不在 v1 实现，但 `AgUiAdapter` 里预留处理入口（占位 `case`），以免后续改动伤筋动骨。
 
@@ -242,11 +298,24 @@ Main 进程（Local Core）
 
 ---
 
-## 6. 小结
+## 7. Evals
+
+评测在 `packages/agent/evals/`。压缩率（`compaction-rate.ts`）是压缩后 / 压缩前的上下文 token。Prompt-cache 命中率（`prompt-cache-hit.ts`）以 Chat usage 为准：`cacheRead / (input + cacheRead + cacheWrite)`（接口 `prompt_tokens` 拆开后）。
+
+```bash
+pnpm --filter @loom/agent eval:compaction-rate
+pnpm --filter @loom/agent eval:prompt-cache-hit
+```
+
+---
+
+## 8. 小结
 
 - **vendor 一个包**：`pi-agent`（源码级、可魔改）。
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务只依赖 `packages/agent/src/types.ts`，`pi-adapter.ts`（通过 `#vendor/pi-agent`）是唯一 vendor 入口。
+- **User attachments**：界面选中（以及以后的系统注入）挂在 user 的 `attachments` 上，在 `convertToLlm` 折成一段 Chat `content` 字符串，不进气泡。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`AgUiAdapter` 把 `LoomAgentEvent` 翻成 AG-UI，pi 协议不外泄。
+- **Evals：** 压缩率和 prompt-cache 命中率；检索评测仍挂在 Hybrid Search 那步。
 - **当前范围**：「问→答→工具」主链路已完成；资产工具已经保留稳定调用 ID 和结构化结果。thinking 映射与富结果交互渲染暂时后置，并保留明确扩展点。
