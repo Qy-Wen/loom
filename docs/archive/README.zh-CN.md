@@ -147,3 +147,13 @@ Loom 作为 MCP 客户端。第三方 server 和自家库工具并列挂上。
 - 封装工具立刻索引产物并写边；`run_ffmpeg` 不记
 - `inspect_asset` 返回 `generatedFrom` / `generated`；Details 列出并可跳到另一端
 - graph handlers MERGE / `DETACH DELETE` Asset 节点。测试覆盖持久化、级联删除、inspect，以及真实 fixture 的封装工具 vs 裸 `run_ffmpeg`
+
+---
+
+## ✅ 检索 Level 1 文本
+
+`search_assets` 的子串匹配纳入已就绪的 `asset_metadata` 摘录。还没有 FTS 或向量。
+
+- 文本文件用抽出的正文；图片用相机 / 拍摄时间；视频和音频用编码名
+- `kind`、宽高、时长、失败/跳过的行不参与搜索
+- 测试覆盖正文和相机命中，以及尺寸数字不会误中

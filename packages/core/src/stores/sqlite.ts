@@ -275,6 +275,13 @@ export class SqliteMetadataStore implements MetadataStore {
 		return row ? toEnrichment(row) : undefined;
 	}
 
+	async listAssetEnrichments(): Promise<AssetEnrichment[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT * FROM asset_metadata")
+			.all() as AssetMetadataRow[];
+		return rows.map(toEnrichment);
+	}
+
 	async upsertAssetEnrichment(record: AssetEnrichment): Promise<void> {
 		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
 		this.requireDatabase().prepare(`

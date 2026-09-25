@@ -30,6 +30,7 @@ export interface MetadataStore {
 	listAllAssetProperties(): Promise<AssetPropertyValue[]>;
 	removeAssetProperty(assetId: string, propertyId: string): Promise<void>;
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined>;
+	listAssetEnrichments(): Promise<AssetEnrichment[]>;
 	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
 }
 

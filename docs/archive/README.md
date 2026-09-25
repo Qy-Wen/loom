@@ -147,3 +147,13 @@ Record where FFmpeg convenience-tool outputs came from. Edges go in Ladybug; the
 - Convenience tools index the output immediately and write the edge; `run_ffmpeg` does not
 - `inspect_asset` returns `generatedFrom` / `generated`; Details lists them and can jump to the other file
 - Graph handlers MERGE / `DETACH DELETE` Asset nodes. Tests cover persist, cascade, inspect, and real-fixture extract/convert vs raw `run_ffmpeg`
+
+---
+
+## ✅ Search Level 1 text
+
+`search_assets` substring match now includes ready `asset_metadata` extracts. No FTS or vectors yet.
+
+- Text files contribute their extracted body; images contribute camera / capture time; video and audio contribute codecs
+- Kind, dimensions, duration, and failed/skipped rows are not searchable
+- Tests cover file-text and camera hits, and that a dimension string does not match

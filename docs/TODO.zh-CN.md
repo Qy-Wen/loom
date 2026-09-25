@@ -8,12 +8,7 @@
 
 ---
 
-## 第一步：检索 Level 1 文本
-
-- [ ] 现有 `search_assets` 纳入 `asset_metadata` 摘录
-- [ ] 先不上 FTS、向量或 Hybrid Search
-
-## 第二步：Hybrid Search
+## 第一步：Hybrid Search
 
 把确定性资产搜索升级为词法、向量与结构化过滤融合的检索栈。
 

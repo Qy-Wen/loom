@@ -24,6 +24,7 @@ import {
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
+import { searchableEnrichmentTexts } from "./retrieval/text.ts";
 import { MediaService } from "./media/service.ts";
 import { resolveMediaPath } from "./media/policy.ts";
 import type {
@@ -160,11 +161,13 @@ export class LocalCore {
 	}
 
 	async searchAssets(query: AssetSearchQuery = {}): Promise<AssetSearchResult> {
-		const [assets, definitions, values] = await Promise.all([
+		const [assets, definitions, values, enrichments] = await Promise.all([
 			this.metadataStore.listAssets(),
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
+			this.metadataStore.listAssetEnrichments(),
 		]);
+		const enrichmentByAsset = new Map(enrichments.map((record) => [record.assetId, record]));
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
 			definitions.map((property) => [property.name.trim().toLowerCase(), property]),
@@ -190,7 +193,12 @@ export class LocalCore {
 			if (query.type && asset.type !== query.type) continue;
 			const properties = propertiesByAsset.get(asset.assetId) ?? [];
 			if (textQuery) {
-				const searchable = [asset.filename, asset.relativePath, ...properties.map((item) => String(item.value))];
+				const searchable = [
+					asset.filename,
+					asset.relativePath,
+					...properties.map((item) => String(item.value)),
+					...searchableEnrichmentTexts(enrichmentByAsset.get(asset.assetId)),
+				];
 				if (!searchable.some((value) => value.toLowerCase().includes(textQuery))) continue;
 			}
 			if (!matchesPropertyFilters(properties, filters, definitionByName)) continue;

@@ -192,6 +192,10 @@ export class InMemoryMetadataStore implements MetadataStore {
 		return this.enrichments.get(assetId);
 	}
 
+	async listAssetEnrichments(): Promise<AssetEnrichment[]> {
+		return [...this.enrichments.values()];
+	}
+
 	async upsertAssetEnrichment(record: AssetEnrichment): Promise<void> {
 		if (!this.assets.has(record.assetId)) throw new Error("Asset not found");
 		this.enrichments.set(record.assetId, record);
