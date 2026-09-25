@@ -19,6 +19,7 @@ export interface AgentServer {
 	resetSessions: () => void;
 	dropSession: (id: string) => void;
 	addTools: (tools: LoomTool[]) => void;
+	setTools: (tools: LoomTool[]) => void;
 	setSystemPrompt: (systemPrompt: string) => void;
 	setChat: (chat: LoomChatEndpoint | undefined) => void;
 	close: () => Promise<void>;
@@ -31,11 +32,12 @@ export async function startAgentServer(
 	options: LoomAgentOptions,
 	store?: AgentSessionStore,
 	getUiSelection?: () => UiSelectionFields | null,
+	onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void,
 ): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(options, undefined, store, getUiSelection);
+	const agent = new LoomAgUiAgent(options, undefined, store, getUiSelection, onUsage);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
 	});
@@ -81,6 +83,7 @@ export async function startAgentServer(
 		resetSessions: () => agent.resetSessions(),
 		dropSession: (id) => agent.dropSession(id),
 		addTools: (tools) => agent.addTools(tools),
+		setTools: (tools) => agent.setTools(tools),
 		setSystemPrompt: (systemPrompt) => agent.setSystemPrompt(systemPrompt),
 		setChat: (chat) => agent.setChat(chat),
 		close: () =>

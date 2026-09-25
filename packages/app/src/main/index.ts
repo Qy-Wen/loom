@@ -17,11 +17,13 @@ import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
-import { loadMcpConfigFile } from "./mcp/config.ts";
 import { McpHost } from "./mcp/host.ts";
+import { McpSettingsStore } from "./mcp/store.ts";
+import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
+import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
@@ -53,15 +55,18 @@ protocol.registerSchemesAsPrivileged([
 
 const localCore = new LocalCore();
 const workspaceTools = createWorkspaceTools();
+const BUILTIN_TOOLS = [
+	...workspaceTools.tools,
+	...createAssetTools(localCore, { embedAsset: embedAssetWithSettings }),
+	...createFfmpegTools(localCore),
+];
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
-	tools: [
-		...workspaceTools.tools,
-		...createAssetTools(localCore, { embedAsset: embedAssetWithSettings }),
-		...createFfmpegTools(localCore),
-	],
+	tools: [...BUILTIN_TOOLS],
 };
 let modelSettings: ModelSettingsStore | null = null;
+let mcpSettings: McpSettingsStore | null = null;
+let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
@@ -288,6 +293,21 @@ function registerIpc(): void {
 		if (!modelSettings) throw new Error("Settings store not started");
 		return modelSettings.view();
 	});
+	ipcMain.handle(IPC.getMcpSettings, async () => mcpSettingsView());
+	ipcMain.handle(IPC.saveMcpSettings, async (_event, drafts: McpServerDraft[]) => {
+		if (!mcpSettings) throw new Error("Settings store not started");
+		const configs = await mcpSettings.save(drafts);
+		await reconnectMcp(configs);
+		return mcpSettingsView();
+	});
+	ipcMain.handle(IPC.getAgentStats, async () => {
+		if (!agentStats) throw new Error("Settings store not started");
+		return agentStats.view();
+	});
+	ipcMain.handle(IPC.resetAgentStats, async () => {
+		if (!agentStats) throw new Error("Settings store not started");
+		return agentStats.reset();
+	});
 
 	ipcMain.handle(IPC.setUiSelection, (_event, raw: unknown) => {
 		setUiSelection(parseUiSelectionDraft(raw));
@@ -350,18 +370,22 @@ app
 		}
 
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
+		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
+		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		agentServer = await startAgentServer({
 			...AGENT_OPTIONS,
 			chat: await modelSettings.chat(),
-			tools: [...(AGENT_OPTIONS.tools ?? [])],
-		}, localCore, getUiSelection);
+			tools: [...BUILTIN_TOOLS],
+		}, localCore, getUiSelection, (usage) => {
+			void agentStats?.record(usage);
+		});
 		registerAssetProtocol();
 		registerIpc();
 		createWindow();
-		void attachConfiguredMcp(mcpHost);
+		void attachConfiguredMcp();
 
 		app.on("activate", () => {
 			if (BrowserWindow.getAllWindows().length === 0) createWindow();
@@ -404,22 +428,34 @@ async function embedAssetWithSettings(assetId: string) {
 	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
 }
 
-async function attachConfiguredMcp(host: McpHost): Promise<void> {
-	const tools = await host.connect(await loadConfiguredMcpServers());
-	if (shutdownStarted || mcpHost !== host) return;
-	if (tools.length) agentServer?.addTools(tools);
+function mcpConfigPath(): string {
+	return process.env.LOOM_MCP_CONFIG?.trim() || join(app.getPath("userData"), "mcp.json");
 }
 
-async function loadConfiguredMcpServers() {
-	const configured = process.env.LOOM_MCP_CONFIG?.trim();
-	const fallback = !app.isPackaged ? resolve(app.getAppPath(), "../../mcp.json") : "";
-	const path = configured || (fallback && existsSync(fallback) ? fallback : "");
-	if (!path) return [];
+async function mcpSettingsView() {
+	if (!mcpSettings) throw new Error("Settings store not started");
+	return {
+		path: mcpSettings.path(),
+		servers: await mcpSettings.drafts(),
+		status: mcpHost?.lastStatus() ?? [],
+	};
+}
+
+async function reconnectMcp(configs: Awaited<ReturnType<McpSettingsStore["load"]>>): Promise<void> {
+	const previous = mcpHost;
+	mcpHost = new McpHost();
+	const tools = await mcpHost.connect(configs);
+	if (shutdownStarted || !mcpHost) return;
+	agentServer?.setTools([...BUILTIN_TOOLS, ...tools]);
+	if (previous) await previous.close();
+}
+
+async function attachConfiguredMcp(): Promise<void> {
+	if (!mcpSettings) return;
 	try {
-		return await loadMcpConfigFile(path);
+		await reconnectMcp(await mcpSettings.load());
 	} catch (error) {
 		console.error("Failed to read MCP config", error);
-		return [];
 	}
 }
 

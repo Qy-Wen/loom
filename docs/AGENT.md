@@ -153,7 +153,7 @@ Enforced constraints:
 
 - **Workspace tools:** wrap pi's `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
 - **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG; it will grow from FTS to chunk-level hybrid hits.
-- **MCP client:** Main loads `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Creation runtimes such as ComfyUI attach here.
+- **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
 
 ---

@@ -49,6 +49,10 @@ const api: LoomApi = {
 	},
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
+	getMcpSettings: () => ipcRenderer.invoke(IPC.getMcpSettings),
+	saveMcpSettings: (servers) => ipcRenderer.invoke(IPC.saveMcpSettings, servers),
+	getAgentStats: () => ipcRenderer.invoke(IPC.getAgentStats),
+	resetAgentStats: () => ipcRenderer.invoke(IPC.resetAgentStats),
 	setUiSelection: (selection) => ipcRenderer.invoke(IPC.setUiSelection, selection),
 };
 
