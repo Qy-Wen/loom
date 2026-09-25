@@ -2,21 +2,29 @@
 
 # TODO
 
-> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./AGENT.zh-CN.md)。
+> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./AGENT.zh-CN.md)，模型端点见 [SETTINGS.md](./SETTINGS.zh-CN.md)，检索见 [RAG](./RAG/RAG.zh-CN.md)。
 > 只详细列最近三步，后续只做概述。
 > 创作工具（ComfyUI 以及以后的）以 MCP server 挂上。Loom 自管库：检索、FFmpeg、工作区工具。文件用 write/bash 落到库里，watcher 负责索引。路径 jail 和沙箱以后再加。
 
 ---
 
-## 第一步：文本 Embedding（RAG 建索引）
+## 第一步：模型设置
 
-索引单位是切片，不是整篇一根向量。只做文本资产。默认不整库。图和视频以后再做。
+一个设置页，管 Chat / Embedding / Rerank / VLM。同一套字段：`baseUrl`、可选 API key、`model`。本地和远程同一张表。见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
+
+- [ ] 槽位落到应用用户数据；密钥留在 Main；renderer 看不到明文 key
+- [ ] Chat 槽位（`baseUrl` + key + `model`）驱动 Agent，不写死 DeepSeek。空槽位可从 `.env` 预填一次
+- [ ] Embedding 走 OpenAI `POST /v1/embeddings`；Rerank 走 Cohere/Jina `/v1/rerank`；VLM 走 chat completions + `image_url`
+
+## 第二步：文本 Embedding（RAG 建索引）
+
+索引单位是切过的 **Markdown**，不是整篇一根向量。见 [TEXT](./RAG/TEXT.zh-CN.md)。默认不整库。图和视频以后再做。
 
 - [ ] 切 Level 1 文本摘录（短文一篇一段；长文重叠切片）
-- [ ] `EmbeddingProvider` 接缝；切片 + 向量 + 模型名落盘；mtime 没变的 rename/move 不重算
+- [ ] HTTP `EmbeddingProvider` 读 Embedding 槽位；切片 + 向量 + 模型名落盘；mtime 没变的 rename/move 不重算
 - [ ] Details / Agent 能请求 embed 并看到状态
 
-## 第二步：Hybrid Search（RAG 检索）
+## 第三步：Hybrid Search（RAG 检索）
 
 先检索切片，再用这些段落给 Agent 当依据。和现有的 FTS、属性过滤融合。
 
@@ -26,7 +34,7 @@
 
 ---
 
-已完成的步骤存档见 [archive/](./archive/README.zh-CN.md)。
+已完成的步骤存档见 [ARCHIVE](./archive/ARCHIVE.zh-CN.md)。
 
 ---
 

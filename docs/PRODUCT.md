@@ -73,11 +73,11 @@ CreativeAssets/          -- selected library root
 ```
 
 - The user owns asset names, locations, and nesting.
-- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files.
+- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 
-SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [data/SCHEMA.md](./data/SCHEMA.md).
+SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [SCHEMA.md](./RAG/data/SCHEMA.md).
 
 Users may define fields such as:
 
@@ -104,7 +104,7 @@ Combined with:
 - **Vector Search** for semantic retrieval
 - **Metadata Filter** for structured properties
 
-these form **Hybrid Search**. That retrieve step, plus the Agent answering or acting from the returned passages, is Loom's RAG loop. The first index is chunked text embeddings, not one vector per file.
+these form **Hybrid Search**. That retrieve step, plus the Agent answering or acting from the returned passages, is Loom's RAG loop. See [RAG](./RAG/RAG.md).
 
 ### 3.3 LadybugDB — asset relationship graph
 
@@ -193,9 +193,7 @@ Level 4  Deep analysis               Optional
 
 Level 1 is a local cache of file-derived technical metadata (dimensions, duration, camera, text extract). It is stored in `asset_metadata` and invalidated by source `mtime` plus an extractor version.
 
-Level 2 starts with **text**: chunk the Level 1 extract and embed each chunk. Short files stay one chunk. That index is what Hybrid Search retrieves for RAG. Image and video embeddings come later; video scenes and transcript chunks stay the longer-term unit for media.
-
-See [ENRICHMENT.md](./ENRICHMENT.md) for the full pipeline, media-specific processing, and scene/transcript-level video understanding.
+Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md). Image and video embeddings come later; video scenes and transcript chunks stay the longer-term unit for media. Levels and later media: [RAG](./RAG/RAG.md).
 
 ---
 

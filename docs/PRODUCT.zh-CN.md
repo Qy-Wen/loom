@@ -73,11 +73,11 @@ CreativeAssets/          -- 用户选择的库根目录
 ```
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
-- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。若 `.loom/` 丢失或损坏，也只需重新索引，素材本体不受影响。符合 Local-first 理念。
+- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。若 `.loom/` 丢失或损坏，也只需重新索引，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 
-SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。数据库在 `<library>/.loom/metadata.db`：资产索引（`assets`）、库级键值（`library_meta`）、Obsidian 风格的自定义属性（`properties`、`asset_properties`），以及 Level 1 技术元数据（`asset_metadata`）。列定义见 [data/SCHEMA.zh-CN.md](./data/SCHEMA.zh-CN.md)。
+SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。数据库在 `<library>/.loom/metadata.db`：资产索引（`assets`）、库级键值（`library_meta`）、Obsidian 风格的自定义属性（`properties`、`asset_properties`），以及 Level 1 技术元数据（`asset_metadata`）。列定义见 [SCHEMA.zh-CN.md](./RAG/data/SCHEMA.zh-CN.md)。
 
 用户可以自由创建属性字段，例如：
 
@@ -104,7 +104,7 @@ AND rating >= 4
 - **Vector Search**（向量检索）
 - **Metadata Filter**（属性过滤）
 
-三者结合，正好形成 **Hybrid Search**。这一步检索，再加上 Agent 用返回的段落来回答或动手，就是 Loom 的 RAG。第一批索引是切过的文本 embedding，不是整篇一根向量。
+三者结合，正好形成 **Hybrid Search**。这一步检索，再加上 Agent 用返回的段落来回答或动手，就是 Loom 的 RAG。见 [RAG](./RAG/RAG.zh-CN.md)。
 
 ### 3.3 LadybugDB — 资产关系图
 
@@ -193,9 +193,7 @@ Level 4  Deep Analysis              可选
 
 Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相机、文本）。存在 `asset_metadata` 里，按源文件 `mtime` 和提取器版本失效。
 
-Level 2 先做**文本**：把 Level 1 摘录切片再 embedding。短文一篇一段。Hybrid Search 检索这些切片，就是 RAG。图和视频的 embedding 以后再做；视频按镜头 / 台词切块仍是更后面的单位。
-
-> 各层的具体处理管线、媒体类型处理流程，以及视频的多粒度（scene / transcript chunk）理解方案，见 [ENRICHMENT.md](./ENRICHMENT.zh-CN.md)。
+Level 2 先做切过的 **Markdown** embedding。规则见 [TEXT](./RAG/TEXT.zh-CN.md)。图和视频的 embedding 以后再做；视频按镜头 / 台词切块仍是更后面的单位。层级和以后的媒体见 [RAG](./RAG/RAG.zh-CN.md)。
 
 ---
 
