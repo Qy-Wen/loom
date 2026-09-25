@@ -652,7 +652,7 @@ export function App(): React.JSX.Element {
 								onRemoveRelation={removeRelation}
 							/>
 						) : selectedAsset ? (
-							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} />
+							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} assets={library.assets} />
 						) : (
 							<div className="welcome">
 								<div className="welcome-mark">L</div>
