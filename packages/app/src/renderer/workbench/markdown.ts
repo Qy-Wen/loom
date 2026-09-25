@@ -30,6 +30,17 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 	return defaultLinkOpen(tokens, idx, options, env, self);
 };
 
+const defaultFence = markdown.renderer.rules.fence ?? ((tokens, idx, options, env, self) => {
+	return self.renderToken(tokens, idx, options);
+});
+markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
+	const lang = String(tokens[idx].info ?? "").trim().split(/\s+/)[0]?.toLowerCase();
+	if (lang === "mermaid") {
+		return `<div class="markdown-mermaid"><pre class="mermaid">${markdown.utils.escapeHtml(tokens[idx].content)}</pre></div>\n`;
+	}
+	return defaultFence(tokens, idx, options, env, self);
+};
+
 const defaultImage = markdown.renderer.rules.image ?? ((tokens, idx, options, env, self) => {
 	return self.renderToken(tokens, idx, options);
 });

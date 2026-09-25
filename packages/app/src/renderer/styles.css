@@ -957,6 +957,31 @@ body.resizing-columns {
 	margin: 0.9em 0;
 }
 
+.markdown-preview-body .markdown-mermaid {
+	margin: 0 0 0.9em;
+	text-align: center;
+}
+
+.markdown-preview-body .markdown-mermaid pre.mermaid {
+	margin: 0;
+	padding: 8px 0;
+	overflow: visible;
+	background: transparent;
+}
+
+.markdown-preview-body .markdown-mermaid pre.mermaid:not([data-processed]),
+.markdown-preview-body .markdown-mermaid pre.mermaid.mermaid-failed {
+	color: #8a8d92;
+	font-size: 12px;
+	text-align: left;
+	white-space: pre-wrap;
+}
+
+.markdown-preview-body .markdown-mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
 .preview-loading {
 	display: flex;
 	align-items: center;

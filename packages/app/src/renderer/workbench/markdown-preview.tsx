@@ -1,9 +1,32 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { FindBar } from "./find-bar.tsx";
 import { renderMarkdown } from "./markdown.ts";
+import { hydrateMermaid } from "./mermaid.ts";
 
 type MarkdownMode = "preview" | "source";
+
+const MarkdownRenderedBody = memo(function MarkdownRenderedBody({
+	html,
+	onHydrated,
+}: {
+	html: string;
+	onHydrated: () => void;
+}): React.JSX.Element {
+	const bodyRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		const root = bodyRef.current;
+		if (!root) return;
+		let cancelled = false;
+		void hydrateMermaid(root).then((rendered) => {
+			if (!cancelled && rendered) onHydrated();
+		});
+		return () => {
+			cancelled = true;
+		};
+	}, [html, onHydrated]);
+	return <div className="markdown-preview-body" ref={bodyRef} dangerouslySetInnerHTML={{ __html: html }} />;
+});
 
 export function MarkdownPreview({
 	asset,
@@ -22,6 +45,8 @@ export function MarkdownPreview({
 		[asset.relativePath, assets, content],
 	);
 	const contentRef = useRef<HTMLDivElement>(null);
+	const [diagramsKey, setDiagramsKey] = useState(0);
+	const onHydrated = useCallback(() => setDiagramsKey((key) => key + 1), []);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -79,16 +104,12 @@ export function MarkdownPreview({
 					Source
 				</button>
 			</div>
-			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${mode}:${html}`} />
+			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${mode}:${html}:${diagramsKey}`} />
 			<div
 				className={mode === "preview" ? "markdown-preview" : "text-preview"}
 				ref={contentRef}
 			>
-				{mode === "preview" ? (
-					<div className="markdown-preview-body" dangerouslySetInnerHTML={{ __html: html }} />
-				) : (
-					content
-				)}
+				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} /> : content}
 			</div>
 		</div>
 	);
