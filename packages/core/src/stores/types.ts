@@ -32,6 +32,7 @@ export interface MetadataStore {
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined>;
 	listAssetEnrichments(): Promise<AssetEnrichment[]>;
 	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
+	searchAssetIds(query: string): Promise<string[]>;
 }
 
 /** Output → source. `fromAssetId` is the generated file. */

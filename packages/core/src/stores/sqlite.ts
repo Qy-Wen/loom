@@ -10,6 +10,7 @@ import {
 	type PropertyType,
 } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
+import { compileFtsQuery, searchDocument } from "../retrieval/text.ts";
 import type { MetadataStore } from "./types.ts";
 
 interface AssetRow {
@@ -57,6 +58,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			database.pragma("busy_timeout = 5000");
 			this.ensureSchema(database);
 			this.database = database;
+			this.rebuildFtsIfStale();
 		} catch (error) {
 			database.close();
 			throw error;
@@ -74,9 +76,13 @@ export class SqliteMetadataStore implements MetadataStore {
 		const upsert = database.transaction((value: Asset) => {
 			// relative_path is unique. Removing a stale owner first mirrors the
 			// in-memory store and lets an explicit rename preserve the asset UUID.
+			const occupant = database
+				.prepare("SELECT asset_id FROM assets WHERE relative_path = ? AND asset_id != ?")
+				.get(value.relativePath, value.assetId) as { asset_id: string } | undefined;
 			database
 				.prepare("DELETE FROM assets WHERE relative_path = ? AND asset_id != ?")
 				.run(value.relativePath, value.assetId);
+			if (occupant) this.deleteFts(database, occupant.asset_id);
 			database.prepare(`
 				INSERT INTO assets (
 					asset_id, relative_path, filename, type, size, created_at, modified_at, file_system_id
@@ -92,6 +98,7 @@ export class SqliteMetadataStore implements MetadataStore {
 					modified_at = excluded.modified_at,
 					file_system_id = excluded.file_system_id
 			`).run({ ...value, fileSystemId: value.fileSystemId ?? null });
+			this.refreshFts(database, value.assetId);
 		});
 		upsert(asset);
 	}
@@ -160,10 +167,13 @@ export class SqliteMetadataStore implements MetadataStore {
 			}
 		});
 		replace(assets);
+		this.rebuildFts();
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
-		this.requireDatabase().prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
+		const database = this.requireDatabase();
+		this.deleteFts(database, assetId);
+		database.prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {
@@ -217,7 +227,12 @@ export class SqliteMetadataStore implements MetadataStore {
 	}
 
 	async removeProperty(propertyId: string): Promise<void> {
-		this.requireDatabase().prepare("DELETE FROM properties WHERE property_id = ?").run(propertyId);
+		const database = this.requireDatabase();
+		const rows = database
+			.prepare("SELECT asset_id FROM asset_properties WHERE property_id = ?")
+			.all(propertyId) as Array<{ asset_id: string }>;
+		database.prepare("DELETE FROM properties WHERE property_id = ?").run(propertyId);
+		for (const { asset_id: assetId } of rows) this.refreshFts(database, assetId);
 	}
 
 	async setAssetProperty(value: AssetPropertyValue): Promise<void> {
@@ -239,6 +254,7 @@ export class SqliteMetadataStore implements MetadataStore {
 				value_boolean = excluded.value_boolean,
 				value_date = excluded.value_date
 		`).run({ ...value, ...columns });
+		this.refreshFts(database, value.assetId);
 	}
 
 	async listAssetProperties(assetId: string): Promise<AssetPropertyValue[]> {
@@ -263,9 +279,9 @@ export class SqliteMetadataStore implements MetadataStore {
 	}
 
 	async removeAssetProperty(assetId: string, propertyId: string): Promise<void> {
-		this.requireDatabase()
-			.prepare("DELETE FROM asset_properties WHERE asset_id = ? AND property_id = ?")
-			.run(assetId, propertyId);
+		const database = this.requireDatabase();
+		database.prepare("DELETE FROM asset_properties WHERE asset_id = ? AND property_id = ?").run(assetId, propertyId);
+		this.refreshFts(database, assetId);
 	}
 
 	async getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
@@ -304,6 +320,16 @@ export class SqliteMetadataStore implements MetadataStore {
 			error: record.error ?? null,
 			data: record.data ? JSON.stringify(record.data) : null,
 		});
+		this.refreshFts(this.requireDatabase(), record.assetId);
+	}
+
+	async searchAssetIds(query: string): Promise<string[]> {
+		const match = compileFtsQuery(query);
+		if (!match) return [];
+		const rows = this.requireDatabase()
+			.prepare("SELECT asset_id FROM assets_fts WHERE assets_fts MATCH ?")
+			.all(match) as Array<{ asset_id: string }>;
+		return rows.map((row) => row.asset_id);
 	}
 
 	private ensureSchema(database: Database.Database): void {
@@ -355,7 +381,49 @@ export class SqliteMetadataStore implements MetadataStore {
 				error TEXT,
 				data TEXT
 			);
+			CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
+				asset_id UNINDEXED,
+				body,
+				tokenize = 'unicode61 remove_diacritics 2'
+			);
 		`);
+	}
+
+	private rebuildFtsIfStale(): void {
+		const database = this.requireDatabase();
+		const assets = database.prepare("SELECT COUNT(*) AS count FROM assets").get() as { count: number };
+		const indexed = database.prepare("SELECT COUNT(*) AS count FROM assets_fts").get() as { count: number };
+		if (assets.count !== indexed.count) this.rebuildFts();
+	}
+
+	private rebuildFts(): void {
+		const database = this.requireDatabase();
+		database.exec("DELETE FROM assets_fts");
+		const ids = database.prepare("SELECT asset_id FROM assets").all() as Array<{ asset_id: string }>;
+		for (const { asset_id: assetId } of ids) this.refreshFts(database, assetId);
+	}
+
+	private refreshFts(database: Database.Database, assetId: string): void {
+		const asset = database.prepare("SELECT * FROM assets WHERE asset_id = ?").get(assetId) as AssetRow | undefined;
+		this.deleteFts(database, assetId);
+		if (!asset) return;
+		const values = (database.prepare(`
+			SELECT ap.*, p.type
+			FROM asset_properties ap
+			JOIN properties p ON p.property_id = ap.property_id
+			WHERE ap.asset_id = ?
+		`).all(assetId) as AssetPropertyRow[]).map((row) => toAssetProperty(row).value);
+		const enrichmentRow = database
+			.prepare("SELECT * FROM asset_metadata WHERE asset_id = ?")
+			.get(assetId) as AssetMetadataRow | undefined;
+		database.prepare("INSERT INTO assets_fts (asset_id, body) VALUES (?, ?)").run(
+			assetId,
+			searchDocument(asset.filename, asset.relative_path, values, enrichmentRow ? toEnrichment(enrichmentRow) : undefined),
+		);
+	}
+
+	private deleteFts(database: Database.Database, assetId: string): void {
+		database.prepare("DELETE FROM assets_fts WHERE asset_id = ?").run(assetId);
 	}
 
 	private requireDatabase(): Database.Database {

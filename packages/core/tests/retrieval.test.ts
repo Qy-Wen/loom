@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { ENRICHMENT_VERSION, LocalCore } from "../src/index.ts";
-import { searchableEnrichmentTexts } from "../src/retrieval/text.ts";
+import { compileFtsQuery, searchableEnrichmentTexts } from "../src/retrieval/text.ts";
 
 test("LocalCore searches and inspects assets without exposing absolute paths", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-retrieval-"));
@@ -45,6 +45,7 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 		assert.deepEqual(detail.generated, []);
 		assert.equal(JSON.stringify(detail).includes(root), false);
 
+		assert.equal((await core.searchAssets({ query: "published", type: "image" })).total, 1);
 		assert.equal((await core.searchAssets({ properties: [{ name: "Missing", operator: "eq", value: true }] })).total, 0);
 		await assert.rejects(core.inspectAsset("missing"), /Asset not found/);
 	} finally {
@@ -86,6 +87,11 @@ test("search_assets matches Level 1 text and camera extracts", async () => {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test("compileFtsQuery ANDs prefix tokens", () => {
+	assert.equal(compileFtsQuery("  Canon EOS  "), `"canon"* AND "eos"*`);
+	assert.equal(compileFtsQuery("***"), undefined);
 });
 
 test("searchableEnrichmentTexts uses ready extracts only", () => {

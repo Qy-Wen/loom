@@ -10,9 +10,8 @@
 
 ## Step 1: Hybrid Search
 
-Upgrade deterministic asset search into one retrieval stack combining lexical, vector, and structured filters.
+Upgrade lexical search into one retrieval stack with vectors and structured filters.
 
-- [ ] SQLite FTS over filenames, paths, properties, and extracted text
 - [ ] sqlite-vec over selectively enriched assets
 - [ ] Fuse retrieval behind `search_assets` / `hybrid_search`
 - [ ] Establish a minimal retrieval evaluation set

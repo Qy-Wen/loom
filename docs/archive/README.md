@@ -157,3 +157,13 @@ Record where FFmpeg convenience-tool outputs came from. Edges go in Ladybug; the
 - Text files contribute their extracted body; images contribute camera / capture time; video and audio contribute codecs
 - Kind, dimensions, duration, and failed/skipped rows are not searchable
 - Tests cover file-text and camera hits, and that a dimension string does not match
+
+---
+
+## ✅ SQLite FTS5
+
+`search_assets` text queries use FTS5 instead of scanning every asset in memory. Property filters stay AND. No vectors.
+
+- `assets_fts` indexes filename, path, property values, and ready Level 1 extracts
+- Rows refresh on asset, property, and enrichment writes; open rebuilds if counts drift
+- Query tokens are prefix-ANDed (`canon eos` → `"canon"* AND "eos"*`)

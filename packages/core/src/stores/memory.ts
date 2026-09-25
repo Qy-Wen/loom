@@ -6,6 +6,7 @@ import {
 	type AssetPropertyValue,
 	type PropertyDefinition,
 } from "../model/property.ts";
+import { documentMatchesTokens, searchDocument, searchTokens } from "../retrieval/text.ts";
 import type { AssetRelation, GraphStore, MetadataStore } from "./types.ts";
 
 /** Volatile MetadataStore used by focused tests and explicit dependency injection. */
@@ -199,6 +200,18 @@ export class InMemoryMetadataStore implements MetadataStore {
 	async upsertAssetEnrichment(record: AssetEnrichment): Promise<void> {
 		if (!this.assets.has(record.assetId)) throw new Error("Asset not found");
 		this.enrichments.set(record.assetId, record);
+	}
+
+	async searchAssetIds(query: string): Promise<string[]> {
+		const tokens = searchTokens(query);
+		if (tokens.length === 0) return [];
+		const matches: string[] = [];
+		for (const asset of this.assets.values()) {
+			const values = [...(this.assetProperties.get(asset.assetId)?.values() ?? [])].map((item) => item.value);
+			const document = searchDocument(asset.filename, asset.relativePath, values, this.enrichments.get(asset.assetId));
+			if (documentMatchesTokens(document, tokens)) matches.push(asset.assetId);
+		}
+		return matches;
 	}
 
 	private hasValuesForProperty(propertyId: string): boolean {
