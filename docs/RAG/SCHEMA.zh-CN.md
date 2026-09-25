@@ -138,9 +138,51 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性或富化变更时刷新对应行。
 
-Level 2 文本 RAG 切片（段落 + 向量 + 模型名）还没进这张表。以后单独建表，按 `asset_id` 关联，不塞进 `asset_metadata`。见 [TEXT](../TEXT.zh-CN.md)。
+Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](../TEXT.zh-CN.md)。
 
 关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph.db`。见 [图](#graph-ladybugdb)。
+
+---
+
+## `text_embed_jobs`
+
+每个做过（或正在做）文本索引的 Markdown 资产一行。没有行就是 idle。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY，FK → `assets(asset_id)` ON DELETE CASCADE | 资产。 |
+| `status` | TEXT | NOT NULL，`embedding` / `ready` / `failed` | 最近一次 embed。 |
+| `model_id` | TEXT | 可空 | 最近一次用的 Embedding 槽位 `model`。 |
+| `source_modified_at` | REAL | NOT NULL | embed 时的 `assets.modified_at`。mtime 规则同 Level 1。 |
+| `error` | TEXT | 可空 | 失败原因。 |
+| `child_count` | INTEGER | NOT NULL | 这次写下的子切片数。 |
+| `parent_count` | INTEGER | NOT NULL | 这次写下的父切片数。 |
+| `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
+
+`ready` 在 `source_modified_at` 对不上，或设置页换了 embedding 模型时算过期。rename/move 且 mtime 没变不重跑。
+
+---
+
+## `text_chunks`
+
+一个资产的父子切片。只有子切片存向量。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `chunk_id` | TEXT | PRIMARY KEY | UUID。 |
+| `asset_id` | TEXT | NOT NULL，FK → `assets(asset_id)` ON DELETE CASCADE | 资产。 |
+| `parent_id` | TEXT | 可空，FK → `text_chunks(chunk_id)` ON DELETE CASCADE | 父行为空；子行指向父。 |
+| `role` | TEXT | NOT NULL，`parent` 或 `child` | 角色。 |
+| `start_offset` | INTEGER | NOT NULL | Level 1 摘录上的闭区间 UTF-16 起点。 |
+| `end_offset` | INTEGER | NOT NULL | 开区间终点。 |
+| `text` | TEXT | NOT NULL | 源文跨度。父切片是这段源文，不是重叠子串拼接。 |
+| `token_count` | INTEGER | NOT NULL | `text` 的 `cl100k_base` token 数。 |
+| `embedding` | BLOB | 可空 | Float32 小端向量。父行为空。 |
+| `model_id` | TEXT | 可空 | 子切片 embed 后写入。 |
+
+索引：`text_chunks_asset_idx`（`asset_id`）。
+
+先插父再插子。重建时先删子、再删父、再写入。
 
 ---
 
@@ -203,6 +245,35 @@ CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
   body,
   tokenize = 'unicode61 remove_diacritics 2'
 );
+
+CREATE TABLE IF NOT EXISTS text_embed_jobs (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('embedding', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  child_count INTEGER NOT NULL DEFAULT 0,
+  parent_count INTEGER NOT NULL DEFAULT 0,
+  updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS text_chunks (
+  chunk_id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES text_chunks(chunk_id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK(role IN ('parent', 'child')),
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  token_count INTEGER NOT NULL,
+  embedding BLOB,
+  model_id TEXT,
+  CHECK (
+    (role = 'parent' AND parent_id IS NULL AND embedding IS NULL)
+    OR (role = 'child' AND parent_id IS NOT NULL)
+  )
+);
+CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
 ```
 
 ---

@@ -1,6 +1,7 @@
 import type { Asset, AssetType } from "./asset.ts";
 import type { AssetEnrichment } from "./enrichment.ts";
 import type { PropertyType, PropertyValue } from "./property.ts";
+import type { TextEmbedStatus } from "./text-embed.ts";
 
 export type PropertyFilterOperator = "eq" | "contains" | "gte" | "lte";
 
@@ -69,6 +70,7 @@ export interface AssetDetailResult extends AssetSearchItem, AssetRelationsResult
 	/** Renderer-safe reference resolved by Electron Main through asset UUID. */
 	previewRef: string;
 	enrichment?: AssetEnrichment;
+	textEmbed: TextEmbedStatus;
 }
 
 export function toSearchItem(asset: Asset, properties: AssetPropertyView[]): AssetSearchItem {

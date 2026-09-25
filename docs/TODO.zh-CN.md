@@ -20,9 +20,9 @@
 
 索引单位是切过的 **Markdown**，不是整篇一根向量。见 [TEXT](./RAG/TEXT.zh-CN.md)。默认不整库。图和视频以后再做。
 
-- [ ] 切 Level 1 文本摘录（短文一篇一段；长文重叠切片）
-- [ ] HTTP `EmbeddingProvider` 读 Embedding 槽位；切片 + 向量 + 模型名落盘；mtime 没变的 rename/move 不重算
-- [ ] Details / Agent 能请求 embed 并看到状态
+- [x] Level 1 摘录过 markdown-it 再切（先章节/段落；仍长则 512 / 重叠 64）；落盘带父子关系
+- [x] HTTP `EmbeddingProvider` 读 Embedding 槽位；子切片向量 + 模型名落盘；mtime 没变的 rename/move 不重算
+- [x] Details / Agent 能请求 embed 并看到状态
 
 ## 第三步：Hybrid Search（RAG 检索）
 

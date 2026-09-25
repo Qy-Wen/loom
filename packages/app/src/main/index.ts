@@ -22,6 +22,7 @@ import { McpHost } from "./mcp/host.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, IPC } from "../shared/ipc.ts";
 import type { ModelSettingsDraft } from "../shared/model-settings.ts";
+import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
@@ -53,7 +54,11 @@ const localCore = new LocalCore();
 const workspaceTools = createWorkspaceTools();
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
-	tools: [...workspaceTools.tools, ...createAssetTools(localCore), ...createFfmpegTools(localCore)],
+	tools: [
+		...workspaceTools.tools,
+		...createAssetTools(localCore, { embedAsset: embedAssetWithSettings }),
+		...createFfmpegTools(localCore),
+	],
 };
 let modelSettings: ModelSettingsStore | null = null;
 let mcpHost: McpHost | null = null;
@@ -263,6 +268,11 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});
+	ipcMain.handle(IPC.getTextEmbedStatus, async (_event, assetId: string) => {
+		const modelId = modelSettings ? (await modelSettings.load()).embedding.model.trim() : "";
+		return localCore.getTextEmbedStatus(assetId, modelId || undefined);
+	});
+	ipcMain.handle(IPC.embedAsset, (_event, assetId: string) => embedAssetWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
 	ipcMain.handle(IPC.createSession, () => localCore.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
@@ -378,6 +388,15 @@ app.on("will-quit", (event) => {
 		app.quit();
 	});
 });
+
+async function embedAssetWithSettings(assetId: string) {
+	if (!modelSettings) throw new Error("Settings store not started");
+	const slot = (await modelSettings.load()).embedding;
+	if (!slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Configure the Embedding slot in Settings first.");
+	}
+	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
+}
 
 async function attachConfiguredMcp(host: McpHost): Promise<void> {
 	const tools = await host.connect(await loadConfiguredMcpServers());

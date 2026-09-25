@@ -16,7 +16,12 @@ test("asset tools return structured safe results", async () => {
 		const hero = snapshot.assets[0];
 		assert.ok(hero);
 
-		const tools = createAssetTools(core);
+		const tools = createAssetTools(core, {
+			embedAsset: (assetId) => core.embedTextAsset(assetId, {
+				modelId: "test-embed",
+				embed: async (texts) => texts.map(() => [0.1, 0.2]),
+			}),
+		});
 		const search = tools.find((tool) => tool.name === "search_assets");
 		const inspect = tools.find((tool) => tool.name === "inspect_asset");
 		assert.ok(search && inspect);

@@ -6,6 +6,11 @@ import {
 	type AssetPropertyValue,
 	type PropertyDefinition,
 } from "../model/property.ts";
+import type {
+	ChildEmbeddingUpdate,
+	StoredTextChunk,
+	TextEmbedJob,
+} from "../model/text-embed.ts";
 import { documentMatchesTokens, searchDocument, searchTokens } from "../retrieval/text.ts";
 import type { AssetRelation, GraphStore, MetadataStore } from "./types.ts";
 
@@ -18,6 +23,8 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly propertyIdByName = new Map<string, string>();
 	private readonly assetProperties = new Map<string, Map<string, AssetPropertyValue>>();
 	private readonly enrichments = new Map<string, AssetEnrichment>();
+	private readonly textEmbedJobs = new Map<string, TextEmbedJob>();
+	private readonly textChunks = new Map<string, StoredTextChunk[]>();
 	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
@@ -28,6 +35,8 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.propertyIdByName.clear();
 		this.assetProperties.clear();
 		this.enrichments.clear();
+		this.textEmbedJobs.clear();
+		this.textChunks.clear();
 		this.volumeId = undefined;
 	}
 
@@ -39,6 +48,8 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.propertyIdByName.clear();
 		this.assetProperties.clear();
 		this.enrichments.clear();
+		this.textEmbedJobs.clear();
+		this.textChunks.clear();
 		this.volumeId = undefined;
 	}
 
@@ -57,6 +68,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.assets.delete(replacedId);
 			if (replaced?.fileSystemId) this.assetIdByFileSystemId.delete(replaced.fileSystemId);
 			this.enrichments.delete(replacedId);
+			this.clearTextIndex(replacedId);
 		}
 
 		this.assets.set(asset.assetId, asset);
@@ -100,6 +112,12 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.enrichments.keys()) {
 			if (!nextAssetIds.has(assetId)) this.enrichments.delete(assetId);
 		}
+		for (const assetId of this.textEmbedJobs.keys()) {
+			if (!nextAssetIds.has(assetId)) this.clearTextIndex(assetId);
+		}
+		for (const assetId of this.textChunks.keys()) {
+			if (!nextAssetIds.has(assetId)) this.clearTextIndex(assetId);
+		}
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -110,6 +128,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
 		this.assetProperties.delete(assetId);
 		this.enrichments.delete(assetId);
+		this.clearTextIndex(assetId);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {
@@ -202,6 +221,36 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.enrichments.set(record.assetId, record);
 	}
 
+	async getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined> {
+		return this.textEmbedJobs.get(assetId);
+	}
+
+	async upsertTextEmbedJob(job: TextEmbedJob): Promise<void> {
+		if (!this.assets.has(job.assetId)) throw new Error("Asset not found");
+		this.textEmbedJobs.set(job.assetId, job);
+	}
+
+	async replaceTextChunks(assetId: string, chunks: StoredTextChunk[]): Promise<void> {
+		if (!this.assets.has(assetId)) throw new Error("Asset not found");
+		this.textChunks.set(assetId, chunks.map(cloneChunk));
+	}
+
+	async listTextChunks(assetId: string): Promise<StoredTextChunk[]> {
+		return (this.textChunks.get(assetId) ?? []).map(cloneChunk);
+	}
+
+	async updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void> {
+		const chunks = this.textChunks.get(assetId);
+		if (!chunks) return;
+		const byId = new Map(updates.map((update) => [update.chunkId, update]));
+		for (const chunk of chunks) {
+			const update = byId.get(chunk.chunkId);
+			if (!update || chunk.role !== "child") continue;
+			chunk.embedding = [...update.embedding];
+			chunk.modelId = update.modelId;
+		}
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const tokens = searchTokens(query);
 		if (tokens.length === 0) return [];
@@ -221,6 +270,18 @@ export class InMemoryMetadataStore implements MetadataStore {
 		return false;
 	}
 
+	private clearTextIndex(assetId: string): void {
+		this.textEmbedJobs.delete(assetId);
+		this.textChunks.delete(assetId);
+	}
+
+}
+
+function cloneChunk(chunk: StoredTextChunk): StoredTextChunk {
+	return {
+		...chunk,
+		embedding: chunk.embedding ? [...chunk.embedding] : undefined,
+	};
 }
 
 function normalizePropertyName(name: string): string {

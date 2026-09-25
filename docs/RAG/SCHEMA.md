@@ -138,9 +138,51 @@ FTS5 virtual table for `search_assets` text queries. One row per asset. Not a so
 
 Tokenizer is `unicode61` with diacritics removed. The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, or its enrichment change.
 
-Level 2 text RAG chunks (passage + vector + model id) are not in this schema yet. They will be a separate table keyed by `asset_id`, not a blob inside `asset_metadata`. See [TEXT](../TEXT.md).
+Level 2 text RAG chunks live in `text_chunks` and `text_embed_jobs`, not in `asset_metadata`. See [TEXT](../TEXT.md).
 
 Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
+
+---
+
+## `text_embed_jobs`
+
+One row per Markdown asset that has been (or is being) indexed. Missing row means idle.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY, FK → `assets(asset_id)` ON DELETE CASCADE | Asset. |
+| `status` | TEXT | NOT NULL, one of `embedding`, `ready`, `failed` | Last embed attempt. |
+| `model_id` | TEXT | nullable | Embedding slot `model` used for the last run. |
+| `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at embed time. Same mtime skip as Level 1. |
+| `error` | TEXT | nullable | Failure reason. |
+| `child_count` | INTEGER | NOT NULL | Child rows written for this run. |
+| `parent_count` | INTEGER | NOT NULL | Parent rows written for this run. |
+| `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
+
+A ready index is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different embedding model. Rename or move does not rerun if mtime is unchanged.
+
+---
+
+## `text_chunks`
+
+Parent and child passages for one asset. Only child rows store a vector.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `chunk_id` | TEXT | PRIMARY KEY | UUID. |
+| `asset_id` | TEXT | NOT NULL, FK → `assets(asset_id)` ON DELETE CASCADE | Asset. |
+| `parent_id` | TEXT | nullable, FK → `text_chunks(chunk_id)` ON DELETE CASCADE | Null on a parent; child points at its parent. |
+| `role` | TEXT | NOT NULL, `parent` or `child` | Row kind. |
+| `start_offset` | INTEGER | NOT NULL | Inclusive UTF-16 offset into the Level 1 extract. |
+| `end_offset` | INTEGER | NOT NULL | Exclusive UTF-16 offset. |
+| `text` | TEXT | NOT NULL | Source span. Parent text is that span, not a concat of overlapping children. |
+| `token_count` | INTEGER | NOT NULL | `cl100k_base` token count of `text`. |
+| `embedding` | BLOB | nullable | Float32 little-endian vector. Null on parents. |
+| `model_id` | TEXT | nullable | Set on children after embed. |
+
+Index: `text_chunks_asset_idx` on `asset_id`.
+
+Parents are inserted first, then children. Replacing an index deletes children, then parents, then writes the new rows.
 
 ---
 
@@ -203,6 +245,35 @@ CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
   body,
   tokenize = 'unicode61 remove_diacritics 2'
 );
+
+CREATE TABLE IF NOT EXISTS text_embed_jobs (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('embedding', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  child_count INTEGER NOT NULL DEFAULT 0,
+  parent_count INTEGER NOT NULL DEFAULT 0,
+  updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS text_chunks (
+  chunk_id TEXT PRIMARY KEY,
+  asset_id TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+  parent_id TEXT REFERENCES text_chunks(chunk_id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK(role IN ('parent', 'child')),
+  start_offset INTEGER NOT NULL,
+  end_offset INTEGER NOT NULL,
+  text TEXT NOT NULL,
+  token_count INTEGER NOT NULL,
+  embedding BLOB,
+  model_id TEXT,
+  CHECK (
+    (role = 'parent' AND parent_id IS NULL AND embedding IS NULL)
+    OR (role = 'child' AND parent_id IS NOT NULL)
+  )
+);
+CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
 ```
 
 ---

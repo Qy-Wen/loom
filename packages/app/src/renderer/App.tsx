@@ -11,6 +11,7 @@ import type {
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
+	TextEmbedStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { sortAssets } from "./assets/asset-utils.ts";
@@ -34,7 +35,7 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
-	if (change.type === "error" || change.type === "enrichment") return current;
+	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed") return current;
 	if (change.type === "remove") {
 		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
 	}
@@ -74,9 +75,11 @@ export function App(): React.JSX.Element {
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
+	const [textEmbed, setTextEmbed] = useState<TextEmbedStatus | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
+	const [embedding, setEmbedding] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
@@ -120,6 +123,9 @@ export function App(): React.JSX.Element {
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
 				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
 			}
+			if (change.type === "text_embed" && change.assetId === selectedAssetIdRef.current) {
+				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+			}
 			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
 				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
 				if (selectedAssetIdRef.current) {
@@ -141,11 +147,15 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		if (!selectedAssetId) {
 			setEnrichment(undefined);
+			setTextEmbed(undefined);
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
 		void window.loom.getAssetEnrichment(selectedAssetId).then(setEnrichment).catch(() => {
 			setEnrichment(undefined);
+		});
+		void window.loom.getTextEmbedStatus(selectedAssetId).then(setTextEmbed).catch(() => {
+			setTextEmbed(undefined);
 		});
 		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
 			setRelations(EMPTY_RELATIONS);
@@ -257,6 +267,19 @@ export function App(): React.JSX.Element {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			setAnalyzing(false);
+		}
+	}
+
+	async function embedSelected(): Promise<void> {
+		if (!selectedAssetId) return;
+		setEmbedding(true);
+		setError(null);
+		try {
+			setTextEmbed(await window.loom.embedAsset(selectedAssetId));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setEmbedding(false);
 		}
 	}
 
@@ -477,6 +500,9 @@ export function App(): React.JSX.Element {
 						onSetPropertyValue={setPropertyValue}
 						onRemovePropertyValue={removePropertyValue}
 						enrichment={enrichment}
+						textEmbed={textEmbed}
+						embedding={embedding}
+						onEmbed={() => void embedSelected()}
 						relations={relations}
 						assets={library.assets}
 						relationTypes={relationTypes}

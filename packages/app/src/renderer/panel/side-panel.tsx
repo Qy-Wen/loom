@@ -10,9 +10,11 @@ import type {
 	PropertyValue,
 	LoomTranscriptMessage,
 	SessionSummary,
+	TextEmbedStatus,
 } from "@loom/core";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
+import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
@@ -33,6 +35,9 @@ interface SidePanelProps {
 	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
 	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 	enrichment: AssetEnrichment | undefined;
+	textEmbed: TextEmbedStatus | undefined;
+	embedding: boolean;
+	onEmbed: () => void;
 	relations: AssetRelationsResult;
 	assets: Asset[];
 	relationTypes: string[];
@@ -56,6 +61,9 @@ export function SidePanel({
 	onSetPropertyValue,
 	onRemovePropertyValue,
 	enrichment,
+	textEmbed,
+	embedding,
+	onEmbed,
 	relations,
 	assets,
 	relationTypes,
@@ -256,6 +264,13 @@ export function SidePanel({
 						enrichment={enrichment}
 						analyzing={analyzing}
 						onAnalyze={onAnalyze}
+					/>
+				)}
+				{asset && (
+					<TextEmbedDetails
+						status={textEmbed}
+						embedding={embedding}
+						onEmbed={onEmbed}
 					/>
 				)}
 				{asset && (

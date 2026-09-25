@@ -20,9 +20,9 @@ One Settings page for Chat / Embedding / Rerank / VLM. Same fields: `baseUrl`, o
 
 Index is chunked **Markdown**, not one vector per file. See [TEXT](./RAG/TEXT.md). Do not embed the whole library by default. Images and video wait.
 
-- [ ] Chunk Level 1 text extracts (short files stay one chunk; overlap on long files)
-- [ ] HTTP `EmbeddingProvider` reads the Embedding slot; persist chunks + vectors + model id; skip rename/move when mtime is unchanged
-- [ ] Details / Agent can request embed and see status
+- [x] Chunk Level 1 extracts via markdown-it (headings/paragraphs first; 512 / overlap 64 if still long); persist parent/child rows
+- [x] HTTP `EmbeddingProvider` reads the Embedding slot; persist child vectors + model id; skip rename/move when mtime is unchanged
+- [x] Details / Agent can request embed and see status
 
 ## Step 3: Hybrid Search (RAG retrieve)
 

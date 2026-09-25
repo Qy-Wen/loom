@@ -13,10 +13,13 @@
   "dependencies": {
     "@ladybugdb/wasm-core": "0.20.4",
     "better-sqlite3": "13.0.3",
-    "chokidar": "4.0.3"
+    "chokidar": "4.0.3",
+    "js-tiktoken": "1.0.21",
+    "markdown-it": "15.0.2"
   },
   "devDependencies": {
     "@types/better-sqlite3": "9.6.0",
+    "@types/markdown-it": "14.2.0",
     "@types/node": "22.19.19",
     "typescript": "5.9.3"
   }
