@@ -2,7 +2,7 @@ import type { Message } from "@ag-ui/core";
 import { CopilotChat, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef } from "react";
 import type { LoomTranscriptMessage } from "@loom/core";
-import { mergeChatMessages, toAgUiMessages } from "../shared/ag-ui-messages.ts";
+import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 
 const StoredMessagesContext = createContext<Message[]>([]);
 

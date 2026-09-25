@@ -11,7 +11,7 @@ import type {
 	LoomTranscriptMessage,
 	SessionSummary,
 } from "@loom/core";
-import { formatBytes } from "./asset-utils.ts";
+import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";

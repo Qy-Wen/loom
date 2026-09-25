@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
-import { assetPreviewUrl, extensionOf, filenameStem, sortAssets } from "./asset-utils.ts";
+import { assetPreviewUrl, extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
 
 interface FolderNode {
 	name: string;

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import type { Asset } from "@loom/core";
-import { assetPreviewUrl, extensionOf } from "./asset-utils.ts";
+import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
 
 const TEXT_EXTENSIONS = new Set([
 	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log", ".md",
