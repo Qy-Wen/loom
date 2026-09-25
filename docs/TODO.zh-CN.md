@@ -25,7 +25,7 @@
 ## 后续（概述）
 
 - **AI 富化：** 按需 Level 2 Embedding 与 VLM 说明/标签；默认不整库富化
-- **关系图：** Graph 视图、手动建关系（Ladybug 已存 `GENERATED_FROM`）
+- **关系图：** 手动建边（Graph 页已能看全库）
 - **会话历史面板：** 重启后在聊天区展示已恢复的 transcript
 - **FFmpeg 进度与取消：** 长任务可中断，协议层推送进度
 - **前端协议扩展：** AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md

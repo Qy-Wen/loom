@@ -40,7 +40,7 @@ import type { LoomTranscriptMessage, SessionRecord, SessionSummary } from "./mod
 import { JsonlSessionRepo } from "./sessions/repo.ts";
 import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
-import { GENERATED_FROM, type GraphStore, type MetadataStore } from "./stores/types.ts";
+import { GENERATED_FROM, type AssetRelation, type GraphStore, type MetadataStore } from "./stores/types.ts";
 
 export interface LocalCoreOptions {
 	metadataStore?: MetadataStore;
@@ -228,6 +228,10 @@ export class LocalCore {
 			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
 			...await this.listAssetRelations(asset.assetId),
 		};
+	}
+
+	listGraphRelations(): Promise<AssetRelation[]> {
+		return this.graphStore.listAllRelations();
 	}
 
 	async listAssetRelations(assetId: string): Promise<AssetRelationsResult> {

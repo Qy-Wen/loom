@@ -48,5 +48,5 @@ The information hierarchy stays clear: the left answers “what assets do I have
 - **Files View:** filesystem tree and directory browsing
 - **Gallery View:** thumbnail grid for images and video
 - **Table / Database View:** Obsidian-style table with an `Add field` action, dynamic property columns, draggable persisted column widths, typed sorting, text filtering, and asset selection
-- **Graph View:** visual asset relationship graph
+- **Graph View:** read-only canvas of every library asset and its edges. Pan, zoom, and click a node to select it. No Cypher bar or manual edge editing yet.
 - **Agent View:** Agent conversation and workflows

@@ -25,7 +25,7 @@ Completed steps are recorded in the [archive](./archive/README.md).
 ## Later
 
 - **AI enrichment:** on-demand Level 2 embeddings and VLM captions/tags; never enrich the whole library by default
-- **Relationship graph:** Graph view and manual relationship editing (Ladybug already stores `GENERATED_FROM`)
+- **Relationship graph:** manual relationship editing (the Graph tab already shows the whole library)
 - **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md

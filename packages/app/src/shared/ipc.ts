@@ -3,6 +3,7 @@ import type {
 	Asset,
 	AssetEnrichment,
 	AssetPropertyValue,
+	AssetRelation,
 	AssetRelationsResult,
 	LibraryChange,
 	LibrarySnapshot,
@@ -40,6 +41,7 @@ export const IPC = {
 	removeAssetProperty: "loom:removeAssetProperty",
 	getAssetEnrichment: "loom:getAssetEnrichment",
 	getAssetRelations: "loom:getAssetRelations",
+	listGraphRelations: "loom:listGraphRelations",
 	analyzeAsset: "loom:analyzeAsset",
 	listSessions: "loom:listSessions",
 	createSession: "loom:createSession",
@@ -74,6 +76,7 @@ export interface LoomApi {
 	removeAssetProperty: (assetId: string, propertyId: string) => Promise<void>;
 	getAssetEnrichment: (assetId: string) => Promise<AssetEnrichment | undefined>;
 	getAssetRelations: (assetId: string) => Promise<AssetRelationsResult>;
+	listGraphRelations: () => Promise<AssetRelation[]>;
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;

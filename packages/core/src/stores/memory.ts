@@ -268,6 +268,11 @@ export class InMemoryGraphStore implements GraphStore {
 			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
 	}
 
+	async listAllRelations(): Promise<AssetRelation[]> {
+		return [...this.relations.values()]
+			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
+	}
+
 	async removeRelation(relationId: string): Promise<void> {
 		this.relations.delete(relationId);
 	}
