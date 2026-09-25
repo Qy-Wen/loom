@@ -48,5 +48,5 @@
 - **Files View** — 文件树 / 目录浏览
 - **Gallery View** — 缩略图网格，适合图片/视频浏览
 - **Table / Database View** — Obsidian 风格表格，可直接通过 `Add field` 新增字段，并支持动态属性列、拖动并保存列宽、按真实类型排序、文本过滤与资产选择
-- **Graph View** — 只读全库关系画布。可平移、缩放，点节点选中资产。还没有 Cypher 栏和手动建边。
+- **Graph View** — 全库关系画布。左下角类型图例。可平移、缩放，拖节点挪位置，指针在边缘出 `+` 后拖出建边，点边选中后删除。不做 Cypher 栏。
 - **Agent View** — Agent 对话与工作流

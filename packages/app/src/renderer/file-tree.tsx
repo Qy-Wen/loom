@@ -13,6 +13,19 @@ export function folderSet(snapshot: LibrarySnapshot): Set<string> {
 	return new Set(snapshot.folders);
 }
 
+/** Parent folders of a library-relative file path: `a/b/c.jpg` → `["a", "a/b"]`. */
+export function ancestorFolders(relativePath: string): string[] {
+	const parts = relativePath.split("/").filter(Boolean);
+	parts.pop();
+	const folders: string[] = [];
+	let current = "";
+	for (const part of parts) {
+		current = current ? `${current}/${part}` : part;
+		folders.push(current);
+	}
+	return folders;
+}
+
 /** Build a render-only tree from Core's flat, portable relative paths. */
 function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 	const root: FolderNode = { name: "", relativePath: "", folders: new Map(), assets: [] };

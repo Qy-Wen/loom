@@ -38,6 +38,24 @@ export interface MetadataStore {
 /** Output → source. `fromAssetId` is the generated file. */
 export const GENERATED_FROM = "GENERATED_FROM";
 
+/** Ladybug table for user-defined edge labels. Not a user-facing type. */
+export const RELATED = "RELATED";
+
+const MAX_RELATION_TYPE_LENGTH = 64;
+
+/** Trim and reject empty / reserved labels. `GENERATED_FROM` stays FFmpeg-only. */
+export function normalizeRelationType(type: string): string {
+	const value = type.trim();
+	if (!value) throw new Error("Relationship type is required");
+	if (value.length > MAX_RELATION_TYPE_LENGTH) throw new Error("Relationship type is too long");
+	const reserved = value.toUpperCase();
+	if (reserved === GENERATED_FROM) {
+		throw new Error("GENERATED_FROM is reserved for FFmpeg provenance");
+	}
+	if (reserved === RELATED) throw new Error("RELATED is reserved");
+	return value;
+}
+
 export interface AssetRelation {
 	relationId: string;
 	fromAssetId: string;

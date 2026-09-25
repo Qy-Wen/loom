@@ -43,6 +43,7 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 		);
 		assert.deepEqual(detail.generatedFrom, []);
 		assert.deepEqual(detail.generated, []);
+		assert.deepEqual(detail.links, []);
 		assert.equal(JSON.stringify(detail).includes(root), false);
 
 		assert.equal((await core.searchAssets({ query: "published", type: "image" })).total, 1);

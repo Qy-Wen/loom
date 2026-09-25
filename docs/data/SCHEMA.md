@@ -215,6 +215,6 @@ CREATE REL TABLE IF NOT EXISTS GENERATED_FROM(FROM Asset TO Asset, relation_id S
 CREATE REL TABLE IF NOT EXISTS RELATED(FROM Asset TO Asset, relation_id STRING, type STRING);
 ```
 
-`GENERATED_FROM` is output → source. Other edge kinds use `RELATED` plus a `type` property. Unique `(from, to, type)` is enforced in the store, not by Ladybug.
+`GENERATED_FROM` is output → source, reserved for FFmpeg convenience tools. Other edge kinds use `RELATED` plus a user-defined `type` (suggested from types already used in the library). Unique `(from, to, type)` is enforced in the store, not by Ladybug. `inspect_asset` returns `generatedFrom` / `generated` plus a `links` list of every touching edge.
 
-Library add/remove MERGEs or `DETACH DELETE`s the `Asset` node.
+Library add/remove MERGEs or `DETACH DELETE`s the `Asset` node. Users create and delete edges from the Graph canvas or Details.

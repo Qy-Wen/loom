@@ -24,6 +24,9 @@ const api: LoomApi = {
 	getAssetEnrichment: (assetId) => ipcRenderer.invoke(IPC.getAssetEnrichment, assetId),
 	getAssetRelations: (assetId) => ipcRenderer.invoke(IPC.getAssetRelations, assetId),
 	listGraphRelations: () => ipcRenderer.invoke(IPC.listGraphRelations),
+	createRelation: (fromAssetId, toAssetId, type) =>
+		ipcRenderer.invoke(IPC.createRelation, fromAssetId, toAssetId, type),
+	removeRelation: (relationId) => ipcRenderer.invoke(IPC.removeRelation, relationId),
 	analyzeAsset: (assetId) => ipcRenderer.invoke(IPC.analyzeAsset, assetId),
 	listSessions: () => ipcRenderer.invoke(IPC.listSessions),
 	createSession: () => ipcRenderer.invoke(IPC.createSession),
@@ -45,3 +48,4 @@ const api: LoomApi = {
 };
 
 contextBridge.exposeInMainWorld("loom", api);
+
