@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
+import { FindBar } from "./find-bar.tsx";
 import { renderMarkdown } from "./markdown.ts";
 
 type MarkdownMode = "preview" | "source";
@@ -20,6 +21,7 @@ export function MarkdownPreview({
 		() => (content === null ? "" : renderMarkdown(content, { fromRelativePath: asset.relativePath, assets })),
 		[asset.relativePath, assets, content],
 	);
+	const contentRef = useRef<HTMLDivElement>(null);
 
 	useEffect(() => {
 		const controller = new AbortController();
@@ -77,13 +79,17 @@ export function MarkdownPreview({
 					Source
 				</button>
 			</div>
-			{mode === "preview" ? (
-				<div className="markdown-preview">
+			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${mode}:${html}`} />
+			<div
+				className={mode === "preview" ? "markdown-preview" : "text-preview"}
+				ref={contentRef}
+			>
+				{mode === "preview" ? (
 					<div className="markdown-preview-body" dangerouslySetInnerHTML={{ __html: html }} />
-				</div>
-			) : (
-				<pre className="text-preview">{content}</pre>
-			)}
+				) : (
+					content
+				)}
+			</div>
 		</div>
 	);
 }

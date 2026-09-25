@@ -34,7 +34,7 @@
 ```
 
 - **Left — Asset Library:** entry point for the library and its real filesystem hierarchy; narrow and stable.
-- **Center — Workbench:** the largest area, switching among Preview, Gallery, Table, and Graph. Preview directly displays images, video, audio, PDFs, and common text files; Markdown defaults to a rendered Preview with a Source toggle, including library-relative images. Unsupported formats show basic information.
+- **Center — Workbench:** the largest area, switching among Preview, Gallery, Table, and Graph. Preview directly displays images, video, audio, PDFs, and common text files; Markdown defaults to a rendered Preview with a Source toggle, including library-relative images. Ctrl/Cmd+F finds in the open Markdown or text document. Unsupported formats show basic information.
 - **Right — Agent / Details:** Agent by default, with asset properties and relationships available on demand so secondary information does not permanently consume space. Details supports library-wide text, number, checkbox, and date properties.
 - Dividers between the three columns are draggable. Double-click restores the default width, and preferences are stored locally.
 - Files and folders have a native context menu for new folder, rename, copy, paste, copy path, reveal in Finder, and move to Trash. Empty space in the tree also offers New MD File. Folder rows expand or collapse on click. Ctrl/Cmd+C copies the selection, Ctrl/Cmd+V pastes into the selected folder (or the parent of a selected file), F2 renames, and Ctrl/Cmd+Shift+N creates a folder.

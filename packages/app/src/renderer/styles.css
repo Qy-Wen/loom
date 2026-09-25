@@ -740,12 +740,76 @@ body.resizing-columns {
 	tab-size: 2;
 }
 
-.markdown-workbench {
+.markdown-workbench,
+.text-workbench {
 	display: flex;
 	min-width: 0;
 	min-height: 0;
 	flex: 1;
 	flex-direction: column;
+	position: relative;
+}
+
+.find-bar {
+	position: absolute;
+	top: 8px;
+	right: 12px;
+	z-index: 3;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 4px 6px 4px 8px;
+	border: 1px solid #d8d8d4;
+	border-radius: 8px;
+	background: #fff;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 10%);
+}
+
+.markdown-workbench .find-bar {
+	top: 40px;
+}
+
+.find-bar input {
+	width: 160px;
+	padding: 4px 6px;
+	border: 0;
+	outline: none;
+	background: transparent;
+	color: inherit;
+	font: 12px/1.4 inherit;
+}
+
+.find-bar-count {
+	min-width: 36px;
+	color: #7a7d82;
+	font-size: 11px;
+	text-align: right;
+}
+
+.find-bar button {
+	width: 22px;
+	height: 22px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	color: #5c5f64;
+	background: transparent;
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.find-bar button:hover {
+	background: #eee;
+}
+
+::highlight(loom-find-match) {
+	background-color: #ffe08a;
+	color: inherit;
+}
+
+::highlight(loom-find-current) {
+	background-color: #ffb347;
+	color: inherit;
 }
 
 .markdown-toolbar {

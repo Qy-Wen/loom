@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
+import { FindBar } from "./find-bar.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
 
 const TEXT_EXTENSIONS = new Set([
@@ -19,6 +20,7 @@ function PreviewFallback({ asset, message }: { asset: Asset; message: string }):
 }
 
 function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.Element {
+	const contentRef = useRef<HTMLPreElement>(null);
 	const [content, setContent] = useState<string | null>(null);
 	const [failure, setFailure] = useState<string | null>(null);
 
@@ -46,7 +48,12 @@ function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.E
 
 	if (failure) return <PreviewFallback asset={asset} message={failure} />;
 	if (content === null) return <div className="preview-loading">Loading text preview…</div>;
-	return <pre className="text-preview">{content}</pre>;
+	return (
+		<div className="text-workbench">
+			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={content} />
+			<pre className="text-preview" ref={contentRef}>{content}</pre>
+		</div>
+	);
 }
 
 export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
