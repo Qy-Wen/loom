@@ -26,6 +26,11 @@
     ],
     "overrides": {
       "streamdown": "1.3.0"
+    },
+    "peerDependencyRules": {
+      "allowedVersions": {
+        "@types/express": "4"
+      }
     }
   }
 }
