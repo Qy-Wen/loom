@@ -2,7 +2,7 @@
 
 # Metadata tables
 
-> SQLite schema for one asset library. Product context is in [PRODUCT.md](../PRODUCT.md) sections 3 and 4.
+> SQLite schema for one asset library. Product context is in [PRODUCT.md](../../PRODUCT.md) sections 3 and 4.
 >
 > The database is created at `<library>/.loom/metadata.db` when the library opens. Asset files stay on the filesystem. This database is a derived index.
 
@@ -138,7 +138,7 @@ FTS5 virtual table for `search_assets` text queries. One row per asset. Not a so
 
 Tokenizer is `unicode61` with diacritics removed. The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, or its enrichment change.
 
-Level 2 text RAG chunks (passage + vector + model id) are not in this schema yet. They will be a separate table keyed by `asset_id`, not a blob inside `asset_metadata`.
+Level 2 text RAG chunks (passage + vector + model id) are not in this schema yet. They will be a separate table keyed by `asset_id`, not a blob inside `asset_metadata`. See [TEXT](../TEXT.md).
 
 Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
 
