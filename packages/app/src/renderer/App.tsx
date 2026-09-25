@@ -13,14 +13,14 @@ import type {
 	PropertyValue,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
-import { AssetPreview } from "./asset-preview.tsx";
-import { sortAssets } from "./asset-utils.ts";
-import { ancestorFolders, folderSet } from "./file-tree.tsx";
-import { LibrarySidebar } from "./library-sidebar.tsx";
-import { SidePanel, type SidePanelTab } from "./side-panel.tsx";
-import { GraphView } from "./graph-view.tsx";
-import { TableView } from "./table-view.tsx";
-import { useResizableLayout } from "./use-resizable-layout.ts";
+import { sortAssets } from "./assets/asset-utils.ts";
+import { useResizableLayout } from "./layout/use-resizable-layout.ts";
+import { ancestorFolders, folderSet } from "./library/file-tree.tsx";
+import { LibrarySidebar } from "./library/library-sidebar.tsx";
+import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
+import { AssetPreview } from "./workbench/asset-preview.tsx";
+import { GraphView } from "./workbench/graph-view.tsx";
+import { TableView } from "./workbench/table-view.tsx";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };

@@ -6,7 +6,7 @@ import type {
 	PropertyType,
 	PropertyValue,
 } from "@loom/core";
-import { formatBytes } from "./asset-utils.ts";
+import { formatBytes } from "../assets/asset-utils.ts";
 import { comparePropertyValues, displayPropertyValue } from "./table-values.ts";
 
 type SortKey = "filename" | "type" | "size" | "modifiedAt" | `property:${string}`;

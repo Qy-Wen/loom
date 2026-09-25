@@ -7,7 +7,7 @@ import {
 	filenameStem,
 	formatBytes,
 	sortAssets,
-} from "../src/renderer/asset-utils.ts";
+} from "../src/renderer/assets/asset-utils.ts";
 
 const asset = (assetId: string, relativePath: string, modifiedAt = 10): Asset => ({
 	assetId,
