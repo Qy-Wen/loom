@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
+import { MarkdownPreview } from "./markdown-preview.tsx";
 
 const TEXT_EXTENSIONS = new Set([
-	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log", ".md",
+	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log",
 	".py", ".sh", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
 ]);
 
@@ -48,7 +49,7 @@ function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.E
 	return <pre className="text-preview">{content}</pre>;
 }
 
-export function AssetPreview({ asset }: { asset: Asset }): React.JSX.Element {
+export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
 	const [failed, setFailed] = useState(false);
 	const url = assetPreviewUrl(asset);
 	const extension = extensionOf(asset.filename);
@@ -88,6 +89,7 @@ export function AssetPreview({ asset }: { asset: Asset }): React.JSX.Element {
 	if (extension === ".pdf") {
 		return <iframe className="pdf-preview" src={url} title={`Preview ${asset.filename}`} />;
 	}
+	if (extension === ".md") return <MarkdownPreview asset={asset} assets={assets} url={url} />;
 	if (TEXT_EXTENSIONS.has(extension)) return <TextPreview asset={asset} url={url} />;
 	return <PreviewFallback asset={asset} message="No inline preview is available for this format yet." />;
 }

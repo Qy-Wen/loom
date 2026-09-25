@@ -78,6 +78,9 @@ importers:
       d3-force:
         specifier: ^3.0.0
         version: 3.0.0
+      markdown-it:
+        specifier: 15.0.2
+        version: 15.0.2
       react:
         specifier: 19.2.0
         version: 19.2.0
@@ -94,6 +97,9 @@ importers:
       '@types/d3-force':
         specifier: ^3.0.10
         version: 3.0.10
+      '@types/markdown-it':
+        specifier: 14.2.0
+        version: 14.2.0
       '@types/node':
         specifier: 22.19.19
         version: 22.19.19
@@ -134,17 +140,17 @@ importers:
         specifier: 4.0.3
         version: 4.0.3
       js-tiktoken:
-        specifier: ^1.0.21
+        specifier: 1.0.21
         version: 1.0.21
       markdown-it:
-        specifier: ^15.0.2
+        specifier: 15.0.2
         version: 15.0.2
     devDependencies:
       '@types/better-sqlite3':
         specifier: 9.6.0
         version: 9.6.0
       '@types/markdown-it':
-        specifier: ^14.2.0
+        specifier: 14.2.0
         version: 14.2.0
       '@types/node':
         specifier: 22.19.19
