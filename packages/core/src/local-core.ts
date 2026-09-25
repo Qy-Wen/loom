@@ -24,7 +24,6 @@ import {
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
-import { searchableEnrichmentTexts } from "./retrieval/text.ts";
 import { MediaService } from "./media/service.ts";
 import { resolveMediaPath } from "./media/policy.ts";
 import type {
@@ -161,13 +160,14 @@ export class LocalCore {
 	}
 
 	async searchAssets(query: AssetSearchQuery = {}): Promise<AssetSearchResult> {
-		const [assets, definitions, values, enrichments] = await Promise.all([
+		const textQuery = query.query?.trim();
+		const [assets, definitions, values, matchedIds] = await Promise.all([
 			this.metadataStore.listAssets(),
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
-			this.metadataStore.listAssetEnrichments(),
+			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve(undefined),
 		]);
-		const enrichmentByAsset = new Map(enrichments.map((record) => [record.assetId, record]));
+		const matchedIdSet = matchedIds ? new Set(matchedIds) : undefined;
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
 			definitions.map((property) => [property.name.trim().toLowerCase(), property]),
@@ -186,21 +186,12 @@ export class LocalCore {
 			propertiesByAsset.set(value.assetId, list);
 		}
 
-		const textQuery = query.query?.trim().toLowerCase();
 		const filters = query.properties ?? [];
 		const matches: AssetSearchItem[] = [];
 		for (const asset of assets) {
 			if (query.type && asset.type !== query.type) continue;
+			if (matchedIdSet && !matchedIdSet.has(asset.assetId)) continue;
 			const properties = propertiesByAsset.get(asset.assetId) ?? [];
-			if (textQuery) {
-				const searchable = [
-					asset.filename,
-					asset.relativePath,
-					...properties.map((item) => String(item.value)),
-					...searchableEnrichmentTexts(enrichmentByAsset.get(asset.assetId)),
-				];
-				if (!searchable.some((value) => value.toLowerCase().includes(textQuery))) continue;
-			}
 			if (!matchesPropertyFilters(properties, filters, definitionByName)) continue;
 			matches.push(toSearchItem(asset, properties));
 		}

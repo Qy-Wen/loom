@@ -127,6 +127,17 @@ A row is stale when it is missing, `version` does not match the extractor, or `s
 
 Deleting an asset deletes its enrichment row.
 
+## `assets_fts`
+
+FTS5 virtual table for `search_assets` text queries. One row per asset. Not a source of truth.
+
+| Column | Meaning |
+|---|---|
+| `asset_id` | Asset UUID. Unindexed; used to map hits back to `assets`. |
+| `body` | Filename, relative path, property values, and ready Level 1 extracts. |
+
+Tokenizer is `unicode61` with diacritics removed. The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, or its enrichment change.
+
 Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
 
 ---
@@ -184,6 +195,11 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
   status TEXT NOT NULL CHECK(status IN ('ready', 'failed', 'skipped')),
   error TEXT,
   data TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
+  asset_id UNINDEXED,
+  body,
+  tokenize = 'unicode61 remove_diacritics 2'
 );
 ```
 

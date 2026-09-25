@@ -127,6 +127,17 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 删除资产时，对应富化行一并删除。
 
+## `assets_fts`
+
+`search_assets` 文本查询用的 FTS5 虚表。每个资产一行。不是事实来源。
+
+| 列 | 含义 |
+|---|---|
+| `asset_id` | 资产 UUID。不建索引，用来把命中映回 `assets`。 |
+| `body` | 文件名、相对路径、属性值和已就绪的 Level 1 摘录。 |
+
+分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性或富化变更时刷新对应行。
+
 关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph.db`。见 [图](#graph-ladybugdb)。
 
 ---
@@ -184,6 +195,11 @@ CREATE TABLE IF NOT EXISTS asset_metadata (
   status TEXT NOT NULL CHECK(status IN ('ready', 'failed', 'skipped')),
   error TEXT,
   data TEXT
+);
+CREATE VIRTUAL TABLE IF NOT EXISTS assets_fts USING fts5(
+  asset_id UNINDEXED,
+  body,
+  tokenize = 'unicode61 remove_diacritics 2'
 );
 ```
 
