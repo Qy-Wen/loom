@@ -8,29 +8,28 @@
 
 ---
 
-## Step 1: Model settings
+## Step 1: Image VLM
 
-One Settings page for Chat / Embedding / Rerank / VLM. Same fields: `baseUrl`, optional API key, `model`. Local and remote are the same form. See [SETTINGS.md](./SETTINGS.md).
+Turn the image into text, then use the existing text embedding path. Do not embed the image as a vector. Do not embed the whole library by default. Uses the VLM slot: chat completions with `image_url`. See [MEDIA](./RAG/MEDIA.md).
 
-- [x] Persist slots in app user data; Settings shows keys masked, with an eye to reveal
-- [x] Chat slot (`baseUrl` + key + `model`) drives the Agent; no hardcoded DeepSeek. Empty Chat may prefill once from `.env`
-- [x] Embedding is OpenAI `POST /v1/embeddings`; Rerank is Cohere/Jina `/v1/rerank`; VLM is chat completions plus `image_url`
+- [ ] HTTP caption / tags (may include visible text in the image). Loom does not load or run the model
+- [ ] Persist the text per asset; skip rename/move when mtime is unchanged
+- [ ] Fold into Markdown and hand it to the Embedding slot. If that slot is empty, the text still stays. Details / Agent can request it and see status
 
-## Step 2: Text embeddings (RAG index)
+## Step 2: Video VLM
 
-Index is chunked **Markdown**, not one vector per file. See [TEXT](./RAG/TEXT.md). Do not embed the whole library by default. Images and video wait.
+Extract one frame and use the same VLM path. Do not embed the whole library by default. Scenes and dialogue wait.
 
-- [x] Chunk Level 1 extracts via markdown-it (headings/paragraphs first; 512 / overlap 64 if still long); persist parent/child rows
-- [x] HTTP `EmbeddingProvider` reads the Embedding slot; persist child vectors + model id; skip rename/move when mtime is unchanged
-- [x] Details / Agent can request embed and see status
+- [ ] FFmpeg extracts one frame, then send it to the VLM; persist the text per asset
+- [ ] Fold into Markdown and hand it to the Embedding slot. Skip when mtime is unchanged; Details / Agent can request it and see status
 
-## Step 3: Hybrid Search (RAG retrieve)
+## Step 3: Audio transcription
 
-Retrieve chunks, then ground the Agent on those passages. Fuse with the existing FTS and property filters.
+Audio files only. Do not transcribe the whole library by default. Transcribe first, then hand the text to the Embedding slot. Acoustic vectors wait.
 
-- [ ] sqlite-vec over text chunks that already have embeddings
-- [ ] Fuse behind `search_assets` / `hybrid_search`; return passage + `asset_id`
-- [ ] Establish a minimal retrieval evaluation set
+- [ ] Add an ASR settings slot (`baseUrl`, optional key, `model`). Wire is OpenAI-compatible `POST /v1/audio/transcriptions` with timestamped segments
+- [ ] FFmpeg extracts audio locally; long files are split before upload and segment times are shifted back. Loom does not run the model
+- [ ] Persist segments by `asset_id`, then embed them with the Embedding slot. Skip when mtime is unchanged; changing the ASR model invalidates the transcript. Details / Agent can request it and see status
 
 ---
 
@@ -40,8 +39,9 @@ Completed steps are recorded in the [ARCHIVE](./archive/ARCHIVE.md).
 
 ## Later
 
-- **Image / video embeddings:** CLIP-style or one keyframe; same RAG retrieve path
-- **Level 3 VLM:** on-demand captions/tags; never enrich the whole library by default
+- **Hybrid Search:** sqlite-vec over embeddings that already exist (text chunks, and text from images / video); fuse with FTS and property filters; return the hit plus `asset_id`; keep a minimal retrieval eval set
+- **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).
+- **CLIP / image vectors:** embed the image without going through text; later if needed
 - **Session history UI:** show the restored transcript in the chat panel after restart
 - **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
 - **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md

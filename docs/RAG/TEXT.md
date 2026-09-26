@@ -2,7 +2,7 @@
 
 # Text RAG
 
-> First RAG path: Markdown only. Overview and later media stay in [RAG.md](./RAG.md). Work items stay in [TODO.md](../TODO.md).
+> First RAG path: Markdown only. Overview: [RAG.md](./RAG.md). Image / video / audio: [MEDIA.md](./MEDIA.md). Work items stay in [TODO.md](../TODO.md).
 >
 > Record conclusions here.
 
@@ -47,7 +47,7 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 - sqlite-vec over **child** chunks that already have embeddings
 - A hit can return the child passage and optionally the parent text
 - Fuse with `assets_fts` and property filters
-- Image / video embeddings later reuse this path; see [RAG.md](./RAG.md)
+- Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
 
 ---
 

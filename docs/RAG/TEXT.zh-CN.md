@@ -2,7 +2,7 @@
 
 # 文本 RAG
 
-> 第一条 RAG 路径：只做 Markdown。总览和以后的媒体见 [RAG.md](./RAG.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
+> 第一条 RAG 路径：只做 Markdown。总览见 [RAG.md](./RAG.zh-CN.md)。图 / 视频 / 音频见 [MEDIA.md](./MEDIA.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
 >
 > 这里只记结论。
 
@@ -47,7 +47,7 @@
 - sqlite-vec 只打已有向量的 **子切片**
 - 命中可返回子段落，并可带上父切片正文
 - 和 `assets_fts`、属性过滤融合
-- 以后图 / 视频 embedding 走同一条检索，见 [RAG.md](./RAG.zh-CN.md)
+- 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
 
 ---
 

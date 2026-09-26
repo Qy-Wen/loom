@@ -8,29 +8,28 @@
 
 ---
 
-## 第一步：模型设置
+## 第一步：图片 VLM
 
-一个设置页，管 Chat / Embedding / Rerank / VLM。同一套字段：`baseUrl`、可选 API key、`model`。本地和远程同一张表。见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
+图先变成文字，再走已经做好的文本 embedding。不直接嵌图片向量。默认不整库。走设置里已有的 VLM 槽位：chat completions，消息里带 `image_url`。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 
-- [x] 槽位落到应用用户数据；设置页默认掩码，眼睛可显示明文 key
-- [x] Chat 槽位（`baseUrl` + key + `model`）驱动 Agent，不写死 DeepSeek。空槽位可从 `.env` 预填一次
-- [x] Embedding 走 OpenAI `POST /v1/embeddings`；Rerank 走 Cohere/Jina `/v1/rerank`；VLM 走 chat completions + `image_url`
+- [ ] HTTP 要 caption / 标签（可含图中可见文字）；Loom 不加载、不运行模型
+- [ ] 正文按资产落盘；mtime 没变的 rename/move 不重算
+- [ ] 拼成 Markdown 后交给 Embedding 槽位。槽位空着时正文仍留下。Details / Agent 能请求并看到状态
 
-## 第二步：文本 Embedding（RAG 建索引）
+## 第二步：视频 VLM
 
-索引单位是切过的 **Markdown**，不是整篇一根向量。见 [TEXT](./RAG/TEXT.zh-CN.md)。默认不整库。图和视频以后再做。
+抽一帧，走同一套 VLM。默认不整库。镜头和台词以后再做。
 
-- [x] Level 1 摘录过 markdown-it 再切（先章节/段落；仍长则 512 / 重叠 64）；落盘带父子关系
-- [x] HTTP `EmbeddingProvider` 读 Embedding 槽位；子切片向量 + 模型名落盘；mtime 没变的 rename/move 不重算
-- [x] Details / Agent 能请求 embed 并看到状态
+- [ ] FFmpeg 抽出一帧再发给 VLM；说明按资产落盘
+- [ ] 拼成 Markdown 后交给 Embedding 槽位。mtime 没变不重跑；Details / Agent 能请求并看到状态
 
-## 第三步：Hybrid Search（RAG 检索）
+## 第三步：音频转录
 
-先检索切片，再用这些段落给 Agent 当依据。和现有的 FTS、属性过滤融合。
+只做音频文件。默认不整库。先转写，再交给 Embedding 槽位。声学向量以后再做。
 
-- [ ] sqlite-vec：只检索已有 embedding 的文本切片
-- [ ] 在 `search_assets` / `hybrid_search` 后融合；返回段落 + `asset_id`
-- [ ] 建立最小检索评测集
+- [ ] 设置里加 ASR 槽位（`baseUrl`、可选 key、`model`）。报文是 OpenAI 兼容的 `POST /v1/audio/transcriptions`，要带时间戳的分段
+- [ ] FFmpeg 在本地抽出音频；长文件切开再送，拼回时加上时间偏移。Loom 不跑模型
+- [ ] 分段文本按 `asset_id` 落盘，再交给 Embedding 槽位。mtime 没变不重跑；换 ASR 模型则转录作废。Details / Agent 能请求并看到状态
 
 ---
 
@@ -40,8 +39,9 @@
 
 ## 后续（概述）
 
-- **图 / 视频 embedding：** CLIP 或抽一帧；走同一套 RAG 检索
-- **Level 3 VLM：** 按需说明/标签；默认不整库富化
+- **Hybrid Search：** sqlite-vec 检索已有向量（文本切片、以及图 / 视频转成的文字）；和 FTS、属性过滤融合，返回命中 + `asset_id`；建最小评测集
+- **进程内 OCR（可选）：** RapidOCR + ONNX，CPU，可开关，默认关。不一定做。优先 VLM。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
+- **CLIP / 图片向量：** 不经文字、直接嵌图；需要时再做
 - **会话历史面板：** 重启后在聊天区展示已恢复的 transcript
 - **FFmpeg 进度与取消：** 长任务可中断，协议层推送进度
 - **前端协议扩展：** AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md

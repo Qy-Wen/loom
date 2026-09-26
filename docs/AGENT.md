@@ -10,7 +10,7 @@
 ## 1. Goal and positioning
 
 - Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Path jail and a process sandbox are deferred.
-- Library retrieval is RAG: Hybrid Search returns text passages (later image/video hits) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
+- Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
 
