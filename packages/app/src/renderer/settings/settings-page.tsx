@@ -158,6 +158,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				</div>
 				<p className="settings-lead">{LEAD[tab]}</p>
 				{error && <div className="session-error">{error}</div>}
+				<div className="settings-pane">
 				{tab === "models" && (draft
 					? (
 						<SettingsModels
@@ -175,6 +176,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				{tab === "stats" && (stats
 					? <SettingsStats stats={stats} resetting={saving} onReset={() => void resetStats()} />
 					: <div className="empty">Loading…</div>)}
+				</div>
 			</div>
 		</div>
 	);

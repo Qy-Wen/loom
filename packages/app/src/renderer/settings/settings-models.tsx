@@ -8,7 +8,7 @@ const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: s
 		keyHint: "needed for llm chat",
 	},
 	embedding: {
-		title: "Embedding",
+		title: "Text embedding",
 		hint: "Text RAG. OpenAI-compatible POST /v1/embeddings.",
 		keyHint: "optional",
 	},
@@ -81,12 +81,13 @@ export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: Se
 
 	return (
 		<form
-			className="settings-form"
+			className="settings-form settings-form-docked"
 			onSubmit={(event) => {
 				event.preventDefault();
 				onSave();
 			}}
 		>
+			<div className="settings-form-scroll">
 			{MODEL_SLOTS.map((id) => (
 				<fieldset key={id} className="settings-slot">
 					<legend>{SLOT_LABELS[id].title}</legend>
@@ -132,6 +133,7 @@ export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: Se
 					</div>
 				</fieldset>
 			))}
+			</div>
 			<div className="settings-actions">
 				<button type="button" onClick={onCancel}>Cancel</button>
 				<button className="primary-button" type="submit" disabled={saving}>

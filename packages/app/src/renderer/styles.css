@@ -1900,12 +1900,27 @@ body.resizing-table-columns {
 	flex-direction: column;
 	width: min(720px, 100%);
 	max-height: calc(100vh - 72px);
-	overflow: auto;
+	overflow: hidden;
 	padding: 16px 18px 18px;
 	border: 1px solid #dededb;
 	border-radius: 10px;
 	background: #fafaf9;
 	box-shadow: 0 16px 40px rgb(32 33 36 / 16%);
+}
+
+.settings-pane {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+}
+
+.settings-pane > .settings-form:not(.settings-form-docked),
+.settings-pane > .empty {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
 }
 
 .settings-tabs {
@@ -1957,6 +1972,22 @@ body.resizing-table-columns {
 }
 
 .settings-form {
+	display: grid;
+	gap: 12px;
+}
+
+.settings-form-docked {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0;
+}
+
+.settings-form-scroll {
+	flex: 1;
+	min-height: 0;
+	overflow: auto;
 	display: grid;
 	gap: 12px;
 }
@@ -2146,6 +2177,14 @@ body.resizing-table-columns {
 	justify-content: flex-end;
 	gap: 8px;
 	margin-top: 4px;
+}
+
+.settings-form-docked > .settings-actions {
+	flex-shrink: 0;
+	margin: 0;
+	padding-top: 12px;
+	border-top: 1px solid #e1e1de;
+	background: #fafaf9;
 }
 
 .settings-actions button {

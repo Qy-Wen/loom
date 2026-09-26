@@ -18,12 +18,13 @@ export function SettingsMcp({ view, saving, onChange, onSave }: SettingsMcpProps
 
 	return (
 		<form
-			className="settings-form"
+			className="settings-form settings-form-docked"
 			onSubmit={(event) => {
 				event.preventDefault();
 				onSave();
 			}}
 		>
+			<div className="settings-form-scroll">
 			<p className="settings-path">Config file: {view.path}</p>
 			{view.servers.length === 0 && (
 				<div className="empty">No MCP servers. Add a stdio or HTTP server, then save to connect.</div>
@@ -134,6 +135,7 @@ export function SettingsMcp({ view, saving, onChange, onSave }: SettingsMcpProps
 					</fieldset>
 				);
 			})}
+			</div>
 			<div className="settings-actions">
 				<button type="button" onClick={() => onChange([...view.servers, emptyMcpServerDraft()])}>
 					Add server
