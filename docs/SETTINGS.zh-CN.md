@@ -16,7 +16,7 @@
 |---|---|---|
 | Chat | Agent 循环 | OpenAI 兼容 `POST /v1/chat/completions`。和其它槽位一样填 `baseUrl`、可选 API key、`model`。不写死 DeepSeek。 |
 | Text embedding | 文本 RAG 索引 | OpenAI 兼容 `POST /v1/embeddings` |
-| Rerank | 以后的检索 | Cohere/Jina `POST /v1/rerank`（`query` + `documents`） |
+| Rerank | Hybrid Search 融合后再排一次 | Cohere/Jina `POST /v1/rerank`（`query` + `documents`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`。可选。 |
 | VLM | 图片 caption / 标签；视频文件级说明 | 和 Chat 一样走 OpenAI 兼容 `POST /v1/chat/completions`。图片用 `image_url`。视频能 native 就带 video 部分；否则 FFmpeg 抽帧再当 `image_url`。只做视觉。 |
 | Audio | 音频文件级说明（音乐、环境声，有人声再转写） | OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。托管 Qwen-Omni 发 `input_audio` + `modalities: ["text"]` + `stream: true`。不走 VLM 槽位。 |
 
@@ -27,11 +27,20 @@
 - `model`
 - `enabled`（每个槽位右边的开关）
 
-打开开关会 ping（先 `GET /v1/models`，没有这个路由再发一个很小的 POST）。通了绿灯，失败红灯并写出原因。保存只写配置文件，不负责连服务。关掉的 Chat / Embedding / VLM / Audio 运行时不会用。旧文件没有 `enabled` 时，只要已经填了 URL 和 model，就当作开着。
+打开开关会 ping（先 `GET /v1/models`，没有这个路由再发一个很小的 POST）。通了绿灯，失败红灯并写出原因。保存只写配置文件，不负责连服务。关掉的 Chat / Embedding / Rerank / VLM / Audio 运行时不会用。旧文件没有 `enabled` 时，只要已经填了 URL 和 model，就当作开着。
 
 Loom 不加载、不运行模型。只当 HTTP 客户端。
 
 TEI 原生存根（字段叫 `texts` 不叫 `documents`）不做第一家。只讲 TEI 的服务需要代理，或以后再加适配。
+
+### 托管 Rerank
+
+LM Studio 没有 `/v1/rerank`。槽位空着就保持 RRF。
+
+- **百度千帆：** Base URL `https://qianfan.baidubce.com/v2`，模型 `bce-reranker-base`，用千帆的 key。
+- **阿里云百炼：** 可以填和 Chat 一样的 DashScope URL（`https://dashscope.aliyuncs.com/compatible-mode/v1` 或国际站）。Loom 会改写成 `.../compatible-api/v1/reranks`。模型用 `qwen3-rerank`（不要用已下线的 `gte-rerank`）。`gte-rerank-v2` 走 DashScope 原生 text-rerank。Key 和 Audio 同一把 DashScope key。
+
+Rerank 开关会发一次很小的 rerank POST。绿灯表示这条路径通了，不是 `GET /v1/models`。
 
 ### 托管 Audio（Qwen-Omni）
 

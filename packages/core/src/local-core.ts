@@ -7,6 +7,7 @@ import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
 import type { NearestChildHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
+import type { RerankProvider } from "./model/rerank.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
 import type { VideoVlmProvider, VideoVlmStatus } from "./model/video-vlm.ts";
 import type { AudioWriteupProvider, AudioWriteupStatus } from "./model/audio-writeup.ts";
@@ -37,6 +38,7 @@ import {
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
 import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
+import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
 import { resolveMediaPath } from "./media/policy.ts";
 import type {
@@ -228,6 +230,7 @@ export class LocalCore {
 	async searchAssets(
 		query: AssetSearchQuery = {},
 		provider?: EmbeddingProvider,
+		rerank?: RerankProvider,
 	): Promise<AssetSearchResult> {
 		const textQuery = query.query?.trim();
 		const [assets, definitions, values, ftsIds, nearest] = await Promise.all([
@@ -294,7 +297,24 @@ export class LocalCore {
 					: {}),
 			});
 		}
-		return { kind: "asset_list", assets: matches.slice(0, limit), total: matches.length };
+		const ranked = await this.rerankMatches(textQuery, matches, rerank);
+		return { kind: "asset_list", assets: ranked.slice(0, limit), total: ranked.length };
+	}
+
+	private async rerankMatches(
+		query: string,
+		matches: AssetSearchItem[],
+		rerank?: RerankProvider,
+	): Promise<AssetSearchItem[]> {
+		if (!rerank || matches.length < 2) return matches;
+		const documents = matches.map((hit) => hit.passage ?? hit.parentPassage ?? hit.filename);
+		try {
+			const scores = await rerank.rerank(query, documents);
+			if (scores.length !== matches.length) return matches;
+			return rerankHits(matches, scores);
+		} catch {
+			return matches;
+		}
 	}
 
 	private async nearestChildrenForQuery(

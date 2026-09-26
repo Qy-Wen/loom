@@ -21,7 +21,7 @@
 
 不要把整库塞进 prompt。默认不整库 embedding。
 
-`search_assets` 是检索步。用 **RRF**（`k = 60`）融合 `assets_fts` 排名和子切片向量，返回 **段落 + `asset_id`**。属性过滤仍是 AND。子切片命中后可以扩到父切片。没有查询文本时只按类型/属性列出。Embedding 槽位未开或查询向量失败时退回 FTS。
+`search_assets` 是检索步。用 **RRF**（`k = 60`）融合 `assets_fts` 排名和子切片向量。Rerank 槽位开着时，融合后的段落再走 `POST /v1/rerank`（`query` + `documents`），然后才截断。槽位空、只有一条命中、或 rerank 失败，都保持 RRF 顺序。返回 **段落 + `asset_id`**。属性过滤仍是 AND。子切片命中后可以扩到父切片。没有查询文本时只按类型/属性列出。Embedding 槽位未开或查询向量失败时退回 FTS。
 
 ---
 
@@ -48,10 +48,10 @@
 - sqlite-vec（或 JS 余弦）只打已有向量的 **子切片**
 - `assets_fts` 仍按现在那样排文件名 / 路径 / 属性 / Level 1 / VLM 正文（`ORDER BY rank`）
 - 属性过滤对两路都是硬 AND，融合前先滤
-- 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。Settings 里的 Rerank 槽位以后再做。
+- 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。Rerank 槽位开着时，这些段落作为 `documents` 再发。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。失败或槽位空着就保持 RRF。TEI 原生 `texts` 以后再说。
 - 命中可返回子段落，并可带上父切片正文
 - 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
-- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND）
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）
 
 ---
 

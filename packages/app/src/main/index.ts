@@ -7,6 +7,7 @@ import { Readable } from "node:stream";
 import {
 	LocalCore,
 	type EmbeddingProvider,
+	type RerankProvider,
 	type LibraryChange,
 	type LibrarySnapshot,
 	type PropertyType,
@@ -27,6 +28,7 @@ import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-sele
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
+import { createHttpRerankProvider } from "./rerank-provider.ts";
 import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
@@ -102,6 +104,7 @@ const BUILTIN_TOOLS = [
 	...createAssetTools(localCore, {
 		embedAsset: embedAssetWithSettings,
 		embeddingProvider: embeddingProviderFromSettings,
+		rerankProvider: rerankProviderFromSettings,
 		describeImage: describeImageWithSettings,
 		describeVideo: describeVideoWithSettings,
 		describeAudio: describeAudioWithSettings,
@@ -565,6 +568,13 @@ async function embeddingProviderFromSettings(): Promise<EmbeddingProvider | unde
 	const slot = (await modelSettings.load()).embedding;
 	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) return undefined;
 	return createHttpEmbeddingProvider(slot);
+}
+
+async function rerankProviderFromSettings(): Promise<RerankProvider | undefined> {
+	if (!modelSettings) throw new Error("Settings store not started");
+	const slot = (await modelSettings.load()).rerank;
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) return undefined;
+	return createHttpRerankProvider(slot);
 }
 
 async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
