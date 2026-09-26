@@ -4,6 +4,7 @@ import type { PropertyType, PropertyValue } from "./property.ts";
 import type { ImageVlmStatus } from "./image-vlm.ts";
 import type { TextEmbedStatus } from "./text-embed.ts";
 import type { VideoVlmStatus } from "./video-vlm.ts";
+import type { AudioWriteupStatus } from "./audio-writeup.ts";
 
 export type PropertyFilterOperator = "eq" | "contains" | "gte" | "lte";
 
@@ -79,6 +80,7 @@ export interface AssetDetailResult extends AssetSearchItem, AssetRelationsResult
 	textEmbed: TextEmbedStatus;
 	imageVlm: ImageVlmStatus;
 	videoVlm: VideoVlmStatus;
+	audioWriteup: AudioWriteupStatus;
 }
 
 export function toSearchItem(asset: Asset, properties: AssetPropertyView[]): AssetSearchItem {

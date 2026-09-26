@@ -13,6 +13,7 @@ import type {
 	TextEmbedStatus,
 	ImageVlmStatus,
 	VideoVlmStatus,
+	AudioWriteupStatus,
 } from "@loom/core";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
@@ -43,6 +44,7 @@ interface SidePanelProps {
 	onEmbed: () => void;
 	imageVlm: ImageVlmStatus | undefined;
 	videoVlm: VideoVlmStatus | undefined;
+	audioWriteup: AudioWriteupStatus | undefined;
 	describing: boolean;
 	onDescribe: () => void;
 	relations: AssetRelationsResult;
@@ -73,6 +75,7 @@ export function SidePanel({
 	onEmbed,
 	imageVlm,
 	videoVlm,
+	audioWriteup,
 	describing,
 	onDescribe,
 	relations,
@@ -279,7 +282,7 @@ export function SidePanel({
 				)}
 				{asset && (
 					<ImageVlmDetails
-						status={imageVlm?.supported ? imageVlm : videoVlm}
+						status={imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup}
 						describing={describing}
 						onDescribe={onDescribe}
 					/>

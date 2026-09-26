@@ -36,7 +36,8 @@ export type LibraryChange =
 	| { type: "enrichment"; assetId: string }
 	| { type: "text_embed"; assetId: string }
 	| { type: "image_vlm"; assetId: string }
-	| { type: "video_vlm"; assetId: string };
+	| { type: "video_vlm"; assetId: string }
+	| { type: "audio_writeup"; assetId: string };
 
 const EXTENSIONS: Record<Exclude<AssetType, "other">, ReadonlySet<string>> = {
 	image: new Set([".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".svg", ".webp"]),

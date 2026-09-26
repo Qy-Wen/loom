@@ -17,7 +17,8 @@ One Settings page. Same form for every role. Local and remote are the same field
 | Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Not a hardcoded DeepSeek provider. |
 | Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Later retrieve | Cohere/Jina `POST /v1/rerank` (`query` + `documents`) |
-| VLM | Image captions / tags; video file-level write-up next | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. |
+| VLM | Image captions / tags; video file-level write-up | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. Vision only. |
+| Audio | Audio file-level write-up (music, ambient sound, speech if any) | OpenAI-compatible `POST /v1/chat/completions` with an audio part. Hosted Qwen-Omni uses `input_audio` + `modalities: ["text"]` + `stream: true`. Not the VLM slot. |
 
 Each slot stores:
 
@@ -26,11 +27,22 @@ Each slot stores:
 - `model`
 - `enabled` (the switch on the right of each slot)
 
-Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / VLM slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
+Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
 
 Loom never loads or runs a model. It is only an HTTP client.
 
 TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A server that only speaks TEI needs a proxy or a later adapter.
+
+### Hosted Audio (Qwen-Omni)
+
+LM Studio and typical OpenAI-compatible local servers only accept `text` / `image_url` on `/v1/chat/completions`. Baidu Qianfan’s compatible chat has no audio part. The remote path that works is **Alibaba DashScope compatible-mode** (user-filled; not a product default):
+
+- China: `https://dashscope.aliyuncs.com/compatible-mode/v1`
+- International: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- Model: e.g. `qwen3-omni-flash` (or `qwen3.5-omni-plus` / `qwen3.8-omni-flash`)
+- API key: a DashScope key
+
+Green on the switch means the URL is reachable (`GET /v1/models`). It does not prove audio parts work. DashScope’s encoded audio cap is 10 MB; Loom still compacts files over 32 MB first.
 
 ---
 
@@ -47,7 +59,7 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 ## UI
 
 - One Settings window with three tabs: **Models**, **MCP**, **Stats**.
-- Models: four slots on one page. Empty rerank / VLM slots are allowed. The switch pings; **Save** writes Models and MCP together and closes Settings.
-- Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image write-ups; see [MEDIA.md](./RAG/MEDIA.md).
+- Models: five slots on one page. Empty rerank / VLM / Audio slots are allowed. The switch pings; **Save** writes Models and MCP together and closes Settings.
+- Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image and video write-ups; see [MEDIA.md](./RAG/MEDIA.md). Changing the Audio `model` invalidates existing audio write-ups.
 - MCP: add/remove servers. The form matches a Cursor `mcp.json` entry: name, then `command` + `args` (local) or `url` (remote). Env / headers / cwd sit under Advanced. The switch connects or disconnects that server. **Save** writes Models and MCP together. On app start, only enabled servers connect. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
 - Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.

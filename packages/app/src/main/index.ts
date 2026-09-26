@@ -27,7 +27,7 @@ import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-sele
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
-import { createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
+import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
@@ -104,6 +104,7 @@ const BUILTIN_TOOLS = [
 		embeddingProvider: embeddingProviderFromSettings,
 		describeImage: describeImageWithSettings,
 		describeVideo: describeVideoWithSettings,
+		describeAudio: describeAudioWithSettings,
 	}),
 	...createFfmpegTools(localCore),
 ];
@@ -379,6 +380,11 @@ function registerIpc(): void {
 		return localCore.getVideoVlmStatus(assetId, modelId || undefined);
 	});
 	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeVideoWithSettings(assetId));
+	ipcMain.handle(IPC.getAudioWriteupStatus, async (_event, assetId: string) => {
+		const modelId = modelSettings ? (await modelSettings.load()).audio.model.trim() : "";
+		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
+	});
+	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
 	ipcMain.handle(IPC.createSession, () => localCore.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
@@ -599,6 +605,15 @@ async function describeVideoWithSettings(assetId: string) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
 	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot));
+}
+
+async function describeAudioWithSettings(assetId: string) {
+	if (!modelSettings) throw new Error("Settings store not started");
+	const slot = (await modelSettings.load()).audio;
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Enable the Audio slot in Settings first.");
+	}
+	return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot));
 }
 
 async function setMcpServerLive(draft: McpServerDraft) {

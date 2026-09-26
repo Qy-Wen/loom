@@ -16,13 +16,13 @@ sqlite-vec 检索已有的 child 向量（Markdown 切片，以及图 / 视频�
 - [x] 和 `assets_fts` 做 RRF 融合；child 命中可以扩到 parent
 - [x] 建最小评测集
 
-## 第二步：音频转录
+## 第二步：音频理解
 
-只做音频文件。默认不整库。先转写，再交给 Embedding 槽位。声学向量以后再做。
+只做独立音频文件。默认不整库。和图的 VLM 同一套：一次 HTTP 写说明（场景、音乐、环境声，有人声再带转写），再交给 Embedding 槽位。专用 Whisper ASR 和 CLAP 以后再做。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 
-- [ ] 设置里加 ASR 槽位（`baseUrl`、可选 key、`model`）。报文是 OpenAI 兼容的 `POST /v1/audio/transcriptions`，要带时间戳的分段
-- [ ] FFmpeg 在本地抽出音频；长文件切开再送，拼回时加上时间偏移。Loom 不跑模型
-- [ ] 分段文本按 `asset_id` 落盘，再交给 Embedding 槽位。mtime 没变不重跑；换 ASR 模型则转录作废。Details / Agent 能请求并看到状态
+- [x] 设置里加 Audio 槽位（`baseUrl`、可选 key、`model`）。报文是 OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。VLM 槽位仍只做视觉。
+- [x] 端点不收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Loom 不跑模型
+- [x] Markdown 按 `asset_id` 落盘，再 `embed_asset`。mtime 没变不重跑；换 Audio 模型则说明作废。Details / Agent 能请求并看到状态
 
 ---
 
@@ -33,6 +33,7 @@ sqlite-vec 检索已有的 child 向量（Markdown 切片，以及图 / 视频�
 ## 后续（概述）
 
 - **进程内 OCR（可选）：** RapidOCR + ONNX，CPU，可开关，默认关。不一定做。优先 VLM。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
+- **专用 ASR：** OpenAI 兼容 `POST /v1/audio/transcriptions`。优先 Audio 理解槽位。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 - **CLIP / 图片向量：** 不经文字、直接嵌图；需要时再做
 - **会话历史面板：** 重启后在聊天区展示已恢复的 transcript
 - **FFmpeg 进度与取消：** 长任务可中断，协议层推送进度

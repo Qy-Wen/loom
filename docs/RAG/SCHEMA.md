@@ -161,7 +161,7 @@ One row per Markdown asset that has been (or is being) indexed. Missing row mean
 | `parent_count` | INTEGER | NOT NULL | Parent rows written for this run. |
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
-A ready index is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different embedding model. Rename or move does not rerun if mtime is unchanged. Image and video rows also go stale if the VLM write-up is newer than the last embed.
+A ready index is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different embedding model. Rename or move does not rerun if mtime is unchanged. Image, video, and audio rows also go stale if their write-up is newer than the last embed.
 
 ---
 
@@ -198,6 +198,24 @@ One row per video that has been (or is being) described by the VLM slot. Missing
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
 A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. Native video is tried first (`video_url` data URI, files up to 32 MB). If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs (not library assets) and sends them as `image_url`. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
+
+---
+
+## `audio_writeup`
+
+One row per standalone audio file that has been (or is being) described by the Audio slot. Missing row means idle. aac / flac / m4a / mp3 / ogg / wav.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY, FK → `assets(asset_id)` ON DELETE CASCADE | Asset. |
+| `status` | TEXT | NOT NULL, one of `describing`, `ready`, `failed` | Last describe attempt. |
+| `model_id` | TEXT | nullable | Audio slot `model` used for the last run. |
+| `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at describe time. Same mtime skip as Level 1. |
+| `error` | TEXT | nullable | Failure reason. |
+| `markdown` | TEXT | nullable | Caption / tags / transcript Markdown when `status = ready`. |
+| `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
+
+A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different Audio model. Rename or move does not rerun if mtime is unchanged. DashScope-looking URLs send hosted Omni first (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Other URLs try `audio_url` (data URI, files up to 32 MB), then `input_audio`, then Omni. Files over 32 MB are compacted locally to 16 kHz mono MP3. DashScope’s encoded-audio cap is 10 MB. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
 
 ---
 
@@ -324,6 +342,16 @@ CREATE TABLE IF NOT EXISTS image_vlm (
 );
 
 CREATE TABLE IF NOT EXISTS video_vlm (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  markdown TEXT,
+  updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audio_writeup (
   asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
   model_id TEXT,

@@ -23,6 +23,11 @@ const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: s
 		hint: "Image and video captions. OpenAI-compatible POST /v1/chat/completions; video prefers a native video part, otherwise stills as image_url. Slot is optional.",
 		keyHint: "optional",
 	},
+	audio: {
+		title: "Audio",
+		hint: "Audio file-level write-up. Hosted Omni: DashScope compatible-mode URL, API key, and a Qwen-Omni model. Not LM Studio and not Qianfan. Optional.",
+		keyHint: "optional",
+	},
 };
 
 const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
@@ -30,6 +35,7 @@ const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
 	embedding: true,
 	rerank: true,
 	vlm: true,
+	audio: true,
 };
 
 const IDLE: Record<ModelSlotId, { state: ProbeState; error?: string }> = {
@@ -37,6 +43,7 @@ const IDLE: Record<ModelSlotId, { state: ProbeState; error?: string }> = {
 	embedding: { state: "idle" },
 	rerank: { state: "idle" },
 	vlm: { state: "idle" },
+	audio: { state: "idle" },
 };
 
 function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
@@ -84,7 +91,7 @@ interface SettingsModelsProps {
 export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.JSX.Element {
 	const [hidden, setHidden] = useState(HIDDEN_KEYS);
 	const [probes, setProbes] = useState(IDLE);
-	const generation = useRef<Record<ModelSlotId, number>>({ chat: 0, embedding: 0, rerank: 0, vlm: 0 });
+	const generation = useRef<Record<ModelSlotId, number>>({ chat: 0, embedding: 0, rerank: 0, vlm: 0, audio: 0 });
 	const debounce = useRef<Partial<Record<ModelSlotId, number>>>({});
 	const draftRef = useRef(draft);
 	draftRef.current = draft;

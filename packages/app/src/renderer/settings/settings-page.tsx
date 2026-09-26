@@ -61,6 +61,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey, enabled: models.embedding.enabled },
 					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey, enabled: models.rerank.enabled },
 					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey, enabled: models.vlm.enabled },
+					audio: { baseUrl: models.audio.baseUrl, model: models.audio.model, apiKey: models.audio.apiKey, enabled: models.audio.enabled },
 				});
 				setMcp(mcpView);
 				setStats(statsView);

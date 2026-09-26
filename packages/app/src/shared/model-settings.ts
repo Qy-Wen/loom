@@ -1,4 +1,4 @@
-export const MODEL_SLOTS = ["chat", "embedding", "rerank", "vlm"] as const;
+export const MODEL_SLOTS = ["chat", "embedding", "rerank", "vlm", "audio"] as const;
 
 export type ModelSlotId = (typeof MODEL_SLOTS)[number];
 
@@ -45,10 +45,7 @@ export type ProbeResult = {
 
 export function emptySettingsFile(): ModelSettingsFile {
 	const empty = { baseUrl: "", apiKey: "", model: "", enabled: false };
-	return {
-		chat: { ...empty },
-		embedding: { ...empty },
-		rerank: { ...empty },
-		vlm: { ...empty },
-	};
+	const next = {} as ModelSettingsFile;
+	for (const id of MODEL_SLOTS) next[id] = { ...empty };
+	return next;
 }

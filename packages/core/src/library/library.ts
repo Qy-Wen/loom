@@ -564,6 +564,10 @@ export class Library {
 		this.emit({ type: "video_vlm", assetId });
 	}
 
+	notifyAudioWriteup(assetId: string): void {
+		this.emit({ type: "audio_writeup", assetId });
+	}
+
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}

@@ -61,4 +61,4 @@ Loom 只当 HTTP 客户端。不随包装权重，不上 ONNX，不在进程里�
 
 - **报文：** OpenAI 兼容的 `POST {baseUrl}/v1/embeddings`，body 为 `{ model, input }`。
 - **本地或远程：** 同一套字段。本地是用户自己起的服务（Ollama、TEI 等）。远程是同一套调用，外加 API key。
-- 端点由用户配置，不内置默认供应商。Chat、embedding、rerank、VLM 共用一个设置页，见 [SETTINGS.md](../SETTINGS.zh-CN.md)。
+- 端点由用户配置，不内置默认供应商。Chat、embedding、rerank、VLM、Audio 共用一个设置页，见 [SETTINGS.md](../SETTINGS.zh-CN.md)。

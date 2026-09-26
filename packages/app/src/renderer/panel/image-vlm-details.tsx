@@ -1,7 +1,8 @@
-import type { ImageVlmStatus, VideoVlmStatus } from "@loom/core";
+import type { AudioWriteupStatus, ImageVlmStatus, VideoVlmStatus } from "@loom/core";
+import { CopyableError } from "./copyable-error.tsx";
 
 interface ImageVlmDetailsProps {
-	status: ImageVlmStatus | VideoVlmStatus | undefined;
+	status: ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus | undefined;
 	describing: boolean;
 	onDescribe: () => void;
 }
@@ -40,7 +41,7 @@ export function ImageVlmDetails({
 				{status.error && (
 					<>
 						<dt>Error</dt>
-						<dd title={status.error}>{status.error}</dd>
+						<dd className="copyable-error-cell"><CopyableError text={status.error} /></dd>
 					</>
 				)}
 			</dl>
@@ -48,7 +49,7 @@ export function ImageVlmDetails({
 	);
 }
 
-function formatStatus(status: ImageVlmStatus | VideoVlmStatus): string {
+function formatStatus(status: ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus): string {
 	if (status.status === "idle") return "Not described";
 	if (status.stale) return `${status.status} (stale)`;
 	return status.status;

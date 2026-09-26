@@ -1,4 +1,5 @@
 import type { TextEmbedStatus } from "@loom/core";
+import { CopyableError } from "./copyable-error.tsx";
 
 interface TextEmbedDetailsProps {
 	status: TextEmbedStatus | undefined;
@@ -40,7 +41,7 @@ export function TextEmbedDetails({
 				{status.error && (
 					<>
 						<dt>Error</dt>
-						<dd title={status.error}>{status.error}</dd>
+						<dd className="copyable-error-cell"><CopyableError text={status.error} /></dd>
 					</>
 				)}
 			</dl>

@@ -14,7 +14,7 @@ Media becomes **text** first, then the text RAG path. Do not embed an image or v
 
 ```
 image / video / audio on disk
-    → Markdown (VLM / later ASR)
+    → Markdown (VLM / Audio understanding)
     → same parent/child chunks + Embedding slot    (index)
     → Hybrid Search                                (retrieve)
     → Agent answers or acts                        (generate / tools)
@@ -77,7 +77,7 @@ On-demand file-level write-up, same VLM slot as images. Do not run on the whole 
 1. **Native video** when the endpoint accepts it: OpenAI-compatible `POST /v1/chat/completions` with a `video_url` data URI (files up to 32 MB). Models such as Qwen3-VL can do this. Loom stays an HTTP client; it does not decode video in-process except as needed to attach the request. A 400/413/415/422/5xx from native is remembered per endpoint+model for the process, then frames are used.
 2. **Frames as `image_url`** when native is skipped or rejected: FFmpeg extracts 1–3 temp JPEGs (about 10% / 50% / 90% of duration; fewer for short clips). They are not library assets.
 
-One Markdown write-up per file in this step. Scene chunks, per-shot captions, soundtrack ASR, and frame OCR wait. The longer-term unit is still segmented index, not one vector for the file:
+One Markdown write-up per file in this step. Scene chunks, per-shot captions, soundtrack understanding, and frame OCR wait. The longer-term unit is still segmented index, not one vector for the file:
 
 ```
 video.mp4
@@ -95,21 +95,35 @@ A user can ask “find the shot where the person gets out of the car.” The Age
 
 ## Audio
 
-Standalone audio files. Transcribe first, then hand the text to the Embedding slot. Import does not run it.
+Standalone audio files. On-demand file-level write-up, same idea as image VLM: one model that can describe music and ambient sound, and transcribe speech when there is any. Import does not run it. Do not reuse the VLM slot (that slot is vision-only).
 
-- A later ASR settings slot. Wire is OpenAI-compatible `POST /v1/audio/transcriptions` with timestamped segments.
-- FFmpeg extracts audio locally; long files are split before upload and segment times are shifted back. Loom does not run the recognizer.
-- Video soundtracks later reuse this ASR. Do not build a second pipeline.
-- CLAP-style acoustic vectors wait; they do not use the text Embedding slot.
+- **Audio slot:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes an audio part. Local and remote are the same fields. There is no built-in default vendor. Loom does not load or run the model. LM Studio cannot take audio on `/v1/chat/completions`. Qianfan compatible chat has no audio part. Hosted Qwen-Omni is DashScope compatible-mode (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Local OpenAI-compatible audio servers still try `audio_url` then `input_audio`.
+- **Output:** caption / tags; speech goes under Transcript when present. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
+- **Do not embed the waveform.** CLAP-style acoustic vectors wait; they do not use the text Embedding slot.
+- **ASR:** not a separate `/v1/audio/transcriptions` path in this step. Prefer the Audio understanding model, as image OCR prefers VLM. Dedicated Whisper waits.
+- **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the Audio model invalidates the write-up. Changing the embedding model invalidates the chunk vectors.
+- FFmpeg converts locally when the file is not a form the endpoint accepts. Keep a size cap like video (data URI, up to 32 MB). Over that cap, compact to 16 kHz mono MP3. DashScope-looking URLs send Omni first (`input_audio`, stream, text-only modalities). Other URLs try `audio_url`, then `input_audio`, then Omni. DashScope’s encoded-audio cap is 10 MB. Video soundtracks later reuse this slot. Do not build a second pipeline.
+- **Store:** `audio_writeup` keyed by `asset_id`. Details Caption and `describe_audio`; then `embed_asset` folds the Markdown into `text_chunks`. Empty Embedding slot still keeps the text. No sidecar `.md`.
+
+Shape:
+
+```markdown
+## Caption
+...
+## Tags
+...
+## Transcript
+... only if there is speech ...
+```
 
 ---
 
 ## Provider
 
-Loom is only an HTTP client. The VLM does not run in-process.
+Loom is only an HTTP client. The VLM and Audio models do not run in-process.
 
-- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. Images use `image_url` (a data URI for a local file). Video tries `video_url` (data URI, up to 32 MB) when the endpoint allows it; otherwise extracted frames as `image_url`.
-- **Local or remote:** the same fields (`baseUrl`, optional API key, `model`). Local is a server the user runs (LM Studio, Ollama, and similar). Remote is the OpenAI-compatible call plus an API key.
+- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. Images use `image_url` (a data URI for a local file). Video tries `video_url` (data URI, up to 32 MB) when the endpoint allows it; otherwise extracted frames as `image_url`. Audio uses the Audio slot: hosted Omni is streamed `input_audio`; other endpoints try `audio_url` / `input_audio`. Not the VLM slot.
+- **Local or remote:** the same fields (`baseUrl`, optional API key, `model`). Local is a server the user runs. Remote audio that works today is DashScope compatible-mode Qwen-Omni, not Qianfan. See [SETTINGS.md](../SETTINGS.md).
 - Endpoints are user-configured. There is no built-in default vendor. See [SETTINGS.md](../SETTINGS.md).
 
 ---

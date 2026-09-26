@@ -1,4 +1,5 @@
 import type { AssetEnrichment, EnrichmentData } from "@loom/core";
+import { CopyableError } from "./copyable-error.tsx";
 
 interface EnrichmentDetailsProps {
 	enrichment: AssetEnrichment | undefined;
@@ -22,7 +23,12 @@ export function EnrichmentDetails({
 			{enrichment ? (
 				<dl className="properties">
 					<dt>Status</dt><dd>{enrichment.status}</dd>
-					{enrichment.error && <><dt>Error</dt><dd title={enrichment.error}>{enrichment.error}</dd></>}
+					{enrichment.error && (
+						<>
+							<dt>Error</dt>
+							<dd className="copyable-error-cell"><CopyableError text={enrichment.error} /></dd>
+						</>
+					)}
 					{enrichment.data && <EnrichmentFields data={enrichment.data} />}
 				</dl>
 			) : (

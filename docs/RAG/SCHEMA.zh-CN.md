@@ -161,7 +161,7 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `parent_count` | INTEGER | NOT NULL | 这次写下的父切片数。 |
 | `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
 
-`ready` 在 `source_modified_at` 对不上，或设置页换了 embedding 模型时算过期。rename/move 且 mtime 没变不重跑。图片和视频行在 VLM 说明比上次 embed 新时也算过期。
+`ready` 在 `source_modified_at` 对不上，或设置页换了 embedding 模型时算过期。rename/move 且 mtime 没变不重跑。图片、视频、音频行在说明比上次 embed 新时也算过期。
 
 ---
 
@@ -198,6 +198,24 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
 
 `ready` 在 `source_modified_at` 对不上，或设置页换了 VLM 模型时算过期。rename/move 且 mtime 没变不重跑。先试 native video（`video_url` data URI，文件不超过 32 MB）。端点拒收或文件更大时，FFmpeg 抽 1–3 张临时 JPEG（不进素材库）再当 `image_url` 发。Markdown 只有用户或 Agent 点 Embed 才会进 `text_chunks`。
+
+---
+
+## `audio_writeup`
+
+每个做过（或正在做）Audio 槽位说明的独立音频一行。没有行就是 idle。aac / flac / m4a / mp3 / ogg / wav。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY，FK → `assets(asset_id)` ON DELETE CASCADE | 资产。 |
+| `status` | TEXT | NOT NULL，`describing` / `ready` / `failed` | 最近一次 describe。 |
+| `model_id` | TEXT | 可空 | 最近一次用的 Audio 槽位 `model`。 |
+| `source_modified_at` | REAL | NOT NULL | describe 时的 `assets.modified_at`。mtime 规则同 Level 1。 |
+| `error` | TEXT | 可空 | 失败原因。 |
+| `markdown` | TEXT | 可空 | `status = ready` 时的 caption / 标签 / 转写 Markdown。 |
+| `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
+
+`ready` 在 `source_modified_at` 对不上，或设置页换了 Audio 模型时算过期。rename/move 且 mtime 没变不重跑。看起来像 DashScope 的 URL 先发托管 Omni（`input_audio.data` 用 `data:;base64,...` + `modalities: ["text"]` + `stream: true`）。其它 URL 先 `audio_url`（data URI，不超过 32 MB），再 `input_audio`，再 Omni。超过 32 MB 时本地压成 16 kHz 单声道 MP3。DashScope 编码后音频上限 10 MB。Markdown 只有用户或 Agent 点 Embed 才会进 `text_chunks`。
 
 ---
 
@@ -324,6 +342,16 @@ CREATE TABLE IF NOT EXISTS image_vlm (
 );
 
 CREATE TABLE IF NOT EXISTS video_vlm (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  markdown TEXT,
+  updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS audio_writeup (
   asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
   model_id TEXT,
