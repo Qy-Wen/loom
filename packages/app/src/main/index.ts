@@ -29,6 +29,7 @@ import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
 import { createHttpVlmProvider } from "./vlm-provider.ts";
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
+import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
@@ -109,6 +110,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 };
 let modelSettings: ModelSettingsStore | null = null;
 let mcpSettings: McpSettingsStore | null = null;
+let lastLibrary: LastLibraryStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let agentServer: AgentServer | null = null;
@@ -222,12 +224,7 @@ function registerIpc(): void {
 			? await dialog.showOpenDialog(owner, { properties: ["openDirectory"] })
 			: await dialog.showOpenDialog({ properties: ["openDirectory"] });
 		if (result.canceled || !result.filePaths[0]) return null;
-		const snapshot = await localCore.openLibrary(result.filePaths[0]);
-		if (snapshot.rootPath) workspaceTools.setCwd(snapshot.rootPath);
-		setUiSelection(null);
-		agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
-		agentServer?.resetSessions();
-		return snapshot;
+		return applyOpenedLibrary(result.filePaths[0]);
 	});
 
 	ipcMain.handle(
@@ -493,6 +490,7 @@ app
 
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
+		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
@@ -506,6 +504,7 @@ app
 		});
 		registerAssetProtocol();
 		registerIpc();
+		await restoreLastLibrary();
 		createWindow();
 		void attachConfiguredMcp();
 
@@ -548,6 +547,28 @@ async function embedAssetWithSettings(assetId: string) {
 		throw new Error("Enable the Embedding slot in Settings first.");
 	}
 	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
+}
+
+async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
+	const snapshot = await localCore.openLibrary(rootPath);
+	if (snapshot.rootPath) {
+		workspaceTools.setCwd(snapshot.rootPath);
+		await lastLibrary?.remember(snapshot.rootPath);
+	}
+	setUiSelection(null);
+	agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
+	agentServer?.resetSessions();
+	return snapshot;
+}
+
+async function restoreLastLibrary(): Promise<void> {
+	const rootPath = await lastLibrary?.load();
+	if (!rootPath || !(await lastLibraryStillOpenable(rootPath))) return;
+	try {
+		await applyOpenedLibrary(rootPath);
+	} catch (error) {
+		console.error("Failed to reopen last library", error);
+	}
 }
 
 async function describeImageWithSettings(assetId: string) {
