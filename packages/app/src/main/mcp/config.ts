@@ -34,6 +34,7 @@ function parseServer(value: unknown, env: NodeJS.ProcessEnv): McpServerConfig {
 			id,
 			url: expandEnv(record.url.trim(), env),
 			headers: mapEnvStrings(record.headers, env),
+			enabled: record.enabled !== false,
 		};
 	}
 	if (typeof record.command === "string" && record.command.trim()) {
@@ -43,6 +44,7 @@ function parseServer(value: unknown, env: NodeJS.ProcessEnv): McpServerConfig {
 			args: Array.isArray(record.args) ? record.args.map((arg) => expandEnv(String(arg), env)) : undefined,
 			env: mapEnvStrings(record.env, env),
 			cwd: typeof record.cwd === "string" ? expandEnv(record.cwd, env) : undefined,
+			enabled: record.enabled !== false,
 		};
 	}
 	throw new Error(`MCP server ${id} needs command or url`);

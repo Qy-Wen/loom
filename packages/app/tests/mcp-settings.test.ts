@@ -18,6 +18,7 @@ describe("mcp drafts", () => {
 		assert.deepEqual(draftToRawServer(draft), {
 			id: "demo",
 			command: "npx",
+			enabled: false,
 			args: ["-y", "mcp-demo"],
 			env: { TOKEN: "secret", HOME: "/tmp" },
 		});
@@ -27,6 +28,7 @@ describe("mcp drafts", () => {
 			command: "npx",
 			args: ["-y"],
 			env: { TOKEN: "secret" },
+			enabled: true,
 		}).envText, "TOKEN=secret");
 	});
 });

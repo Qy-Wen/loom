@@ -6,6 +6,7 @@ export interface ModelSlotRecord {
 	baseUrl: string;
 	apiKey: string;
 	model: string;
+	enabled: boolean;
 }
 
 export type ModelSettingsFile = Record<ModelSlotId, ModelSlotRecord>;
@@ -14,6 +15,7 @@ export interface ModelSlotView {
 	baseUrl: string;
 	model: string;
 	apiKey: string;
+	enabled: boolean;
 }
 
 export type ModelSettingsView = Record<ModelSlotId, ModelSlotView>;
@@ -21,6 +23,7 @@ export type ModelSettingsView = Record<ModelSlotId, ModelSlotView>;
 export interface ModelSlotDraft {
 	baseUrl: string;
 	model: string;
+	enabled: boolean;
 	/** Set only when the user typed a new key. Omit to keep the stored key. */
 	apiKey?: string;
 	clearApiKey?: boolean;
@@ -28,8 +31,20 @@ export interface ModelSlotDraft {
 
 export type ModelSettingsDraft = Record<ModelSlotId, ModelSlotDraft>;
 
+export type ModelProbeDraft = {
+	slot: ModelSlotId;
+	baseUrl: string;
+	model: string;
+	apiKey?: string;
+};
+
+export type ProbeResult = {
+	ok: boolean;
+	error?: string;
+};
+
 export function emptySettingsFile(): ModelSettingsFile {
-	const empty = { baseUrl: "", apiKey: "", model: "" };
+	const empty = { baseUrl: "", apiKey: "", model: "", enabled: false };
 	return {
 		chat: { ...empty },
 		embedding: { ...empty },

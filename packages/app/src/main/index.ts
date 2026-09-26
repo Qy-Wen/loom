@@ -24,9 +24,11 @@ import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
-import type { ModelSettingsDraft } from "../shared/model-settings.ts";
+import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
 import { createHttpVlmProvider } from "./vlm-provider.ts";
+import { probeModelSlot } from "./model-probe.ts";
+import { configFromDraft } from "./mcp/store.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
@@ -388,9 +390,14 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getMcpSettings, async () => mcpSettingsView());
 	ipcMain.handle(IPC.saveMcpSettings, async (_event, drafts: McpServerDraft[]) => {
 		if (!mcpSettings) throw new Error("Settings store not started");
-		const configs = await mcpSettings.save(drafts);
-		await reconnectMcp(configs);
+		await mcpSettings.save(drafts);
 		return mcpSettingsView();
+	});
+	ipcMain.handle(IPC.setMcpServerLive, async (_event, draft: McpServerDraft) => {
+		return setMcpServerLive(draft);
+	});
+	ipcMain.handle(IPC.probeModelSlot, async (_event, draft: ModelProbeDraft) => {
+		return probeModelSlot(draft);
 	});
 	ipcMain.handle(IPC.getAgentStats, async () => {
 		if (!agentStats) throw new Error("Settings store not started");
@@ -537,8 +544,8 @@ app.on("will-quit", (event) => {
 async function embedAssetWithSettings(assetId: string) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).embedding;
-	if (!slot.baseUrl.trim() || !slot.model.trim()) {
-		throw new Error("Configure the Embedding slot in Settings first.");
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Enable the Embedding slot in Settings first.");
 	}
 	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
 }
@@ -546,10 +553,33 @@ async function embedAssetWithSettings(assetId: string) {
 async function describeImageWithSettings(assetId: string) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).vlm;
-	if (!slot.baseUrl.trim() || !slot.model.trim()) {
-		throw new Error("Configure the VLM slot in Settings first.");
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Enable the VLM slot in Settings first.");
 	}
 	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot));
+}
+
+async function setMcpServerLive(draft: McpServerDraft) {
+	if (!mcpHost) throw new Error("MCP host not started");
+	const id = draft.id.trim();
+	if (!id) return { id: "", tools: [], error: "Each MCP server needs an id" };
+	if (!draft.enabled) {
+		await mcpHost.dropServer(id);
+		applyMcpTools();
+		return { id, tools: [] };
+	}
+	try {
+		const status = await mcpHost.upsertServer({ ...configFromDraft(draft), enabled: true });
+		applyMcpTools();
+		return status;
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		return { id, tools: [], error: message };
+	}
+}
+
+function applyMcpTools(): void {
+	agentServer?.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
 }
 
 function mcpConfigPath(): string {
@@ -568,9 +598,9 @@ async function mcpSettingsView() {
 async function reconnectMcp(configs: Awaited<ReturnType<McpSettingsStore["load"]>>): Promise<void> {
 	const previous = mcpHost;
 	mcpHost = new McpHost();
-	const tools = await mcpHost.connect(configs);
+	await mcpHost.connect(configs);
 	if (shutdownStarted || !mcpHost) return;
-	agentServer?.setTools([...BUILTIN_TOOLS, ...tools]);
+	applyMcpTools();
 	if (previous) await previous.close();
 }
 

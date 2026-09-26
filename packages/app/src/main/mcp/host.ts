@@ -10,10 +10,11 @@ import { toolsFromMcpSession } from "./tools.ts";
 
 export type McpSessionFactory = (config: McpServerConfig) => Promise<McpSession>;
 
-type ConnectOne = { tools: LoomTool[]; status: McpServerStatus };
+type ConnectOne = { tools: LoomTool[]; status: McpServerStatus; live?: Live };
+type Live = { config: McpServerConfig; session: McpSession; tools: LoomTool[] };
 
 export class McpHost {
-	private readonly sessions: { config: McpServerConfig; session: McpSession }[] = [];
+	private readonly sessions: Live[] = [];
 	private readonly openSession: McpSessionFactory;
 	private closed = false;
 	private status: McpServerStatus[] = [];
@@ -26,10 +27,40 @@ export class McpHost {
 		return this.status;
 	}
 
+	allTools(): LoomTool[] {
+		return this.sessions.flatMap((row) => row.tools);
+	}
+
 	async connect(configs: McpServerConfig[]): Promise<LoomTool[]> {
-		const results = await Promise.all(configs.map((config) => this.connectOne(config)));
+		const enabled = configs.filter((config) => config.enabled);
+		const results = await Promise.all(enabled.map((config) => this.connectOne(config)));
 		this.status = results.map((row) => row.status);
+		for (const row of results) {
+			if (row.live) this.sessions.push(row.live);
+		}
 		return results.flatMap((row) => row.tools);
+	}
+
+	async upsertServer(config: McpServerConfig): Promise<McpServerStatus> {
+		await this.dropServer(config.id);
+		if (!config.enabled) return { id: config.id, tools: [] };
+		const result = await this.connectOne(config);
+		if (result.live) this.sessions.push(result.live);
+		this.replaceStatus(result.status);
+		return result.status;
+	}
+
+	async dropServer(id: string): Promise<void> {
+		const index = this.sessions.findIndex((row) => row.config.id === id);
+		if (index >= 0) {
+			const [row] = this.sessions.splice(index, 1);
+			await row?.session.close().catch(() => undefined);
+		}
+		this.status = this.status.filter((row) => row.id !== id);
+	}
+
+	private replaceStatus(status: McpServerStatus): void {
+		this.status = [...this.status.filter((row) => row.id !== status.id), status];
 	}
 
 	private async connectOne(config: McpServerConfig): Promise<ConnectOne> {
@@ -44,10 +75,14 @@ export class McpHost {
 				await session.close();
 				return { tools: [], status: { id: config.id, tools: [] } };
 			}
-			this.sessions.push({ config, session });
-			const tools = specs.map((spec) => spec.name);
-			console.log(`MCP ${config.id}: ${tools.join(", ") || "(no tools)"}`);
-			return { tools: toolsFromMcpSession(config.id, session, specs), status: { id: config.id, tools } };
+			const names = specs.map((spec) => spec.name);
+			const tools = toolsFromMcpSession(config.id, session, specs);
+			console.log(`MCP ${config.id}: ${names.join(", ") || "(no tools)"}`);
+			return {
+				tools,
+				status: { id: config.id, tools: names },
+				live: { config, session, tools },
+			};
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
 			console.error(`Failed to connect MCP server ${config.id}`, error);

@@ -19,8 +19,8 @@ describe("MCP config", () => {
 				],
 			}, env),
 			[
-				{ id: "local", command: "npx", args: ["-y", "demo"], env: { KEY: "secret" }, cwd: undefined },
-				{ id: "cloud", url: "https://example.com/mcp", headers: { Authorization: "Bearer secret" } },
+				{ id: "local", command: "npx", args: ["-y", "demo"], env: { KEY: "secret" }, cwd: undefined, enabled: true },
+				{ id: "cloud", url: "https://example.com/mcp", headers: { Authorization: "Bearer secret" }, enabled: true },
 			],
 		);
 		const claude = parseMcpConfig({
@@ -33,6 +33,11 @@ describe("MCP config", () => {
 	it("rejects entries without command or url", () => {
 		assert.throws(() => parseMcpConfig({ servers: [{ id: "x" }] }), /command or url/);
 		assert.equal(expandEnv("x${MISSING}y", {}), "xy");
+	});
+
+	it("defaults enabled to true and keeps an explicit off switch", () => {
+		assert.equal(parseMcpConfig({ servers: [{ id: "on", command: "echo" }] })[0]?.enabled, true);
+		assert.equal(parseMcpConfig({ servers: [{ id: "off", command: "echo", enabled: false }] })[0]?.enabled, false);
 	});
 });
 
@@ -105,11 +110,13 @@ describe("McpHost", () => {
 			};
 		});
 		const tools = await host.connect([
-			{ id: "good", command: "echo" },
-			{ id: "bad", url: "https://example.invalid/mcp" },
+			{ id: "good", command: "echo", enabled: true },
+			{ id: "bad", url: "https://example.invalid/mcp", enabled: true },
+			{ id: "off", command: "echo", enabled: false },
 		]);
 		assert.deepEqual(tools.map((tool) => tool.name), ["good__ping"]);
 		assert.equal(await tools[0]?.execute({}), "pong");
+		assert.deepEqual(host.lastStatus().map((row) => row.id), ["good", "bad"]);
 		await host.close();
 	});
 
@@ -126,14 +133,33 @@ describe("McpHost", () => {
 			};
 		});
 		const pending = host.connect([
-			{ id: "a", command: "echo" },
-			{ id: "b", command: "echo" },
+			{ id: "a", command: "echo", enabled: true },
+			{ id: "b", command: "echo", enabled: true },
 		]);
 		await new Promise((resolve) => setImmediate(resolve));
 		assert.equal(release.length, 2);
 		for (const done of release) done();
 		const tools = await pending;
 		assert.deepEqual(tools.map((tool) => tool.name).sort(), ["a__a", "b__b"]);
+		await host.close();
+	});
+
+	it("upserts and drops a single server without reconnecting the rest", async () => {
+		const closed: string[] = [];
+		const host = new McpHost(async (config) => ({
+			listTools: async () => [{ name: "ping" }],
+			callTool: async () => ({ content: "pong" }),
+			close: async () => {
+				closed.push(config.id);
+			},
+		}));
+		await host.connect([{ id: "keep", command: "echo", enabled: true }]);
+		const extra = await host.upsertServer({ id: "extra", command: "echo", enabled: true });
+		assert.deepEqual(extra.tools, ["ping"]);
+		assert.deepEqual(host.allTools().map((tool) => tool.name).sort(), ["extra__ping", "keep__ping"]);
+		await host.dropServer("extra");
+		assert.deepEqual(closed, ["extra"]);
+		assert.deepEqual(host.allTools().map((tool) => tool.name), ["keep__ping"]);
 		await host.close();
 	});
 });

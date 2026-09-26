@@ -2000,6 +2000,185 @@ body.resizing-table-columns {
 	background: #fff;
 }
 
+.settings-slot-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	margin-bottom: 8px;
+}
+
+.settings-slot-title {
+	font-size: 13px;
+	font-weight: 620;
+}
+
+.settings-slot-controls {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+.settings-probe {
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: #c8c8c4;
+}
+
+.settings-probe.is-checking {
+	background: #c8b56a;
+	animation: settings-probe-pulse 1s ease-in-out infinite;
+}
+
+.settings-probe.is-ok { background: #2f9e44; }
+.settings-probe.is-error { background: #d73a2a; }
+
+.settings-probe-wrap {
+	display: inline-flex;
+	align-items: center;
+}
+
+.settings-probe-error {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	color: #d73a2a;
+	background: transparent;
+	cursor: pointer;
+}
+
+.settings-probe-error:hover,
+.settings-probe-error:focus-visible {
+	background: #fdecea;
+}
+
+.settings-probe-tip {
+	position: fixed;
+	z-index: 40;
+	display: grid;
+	grid-template-rows: auto minmax(0, 1fr);
+	gap: 8px;
+	width: min(380px, calc(100vw - 24px));
+	padding: 10px;
+	overflow: hidden;
+	border: 1px solid #e8c4be;
+	border-radius: 8px;
+	background: #fff8f7;
+	box-shadow: 0 10px 28px rgb(32 33 36 / 16%);
+}
+
+.settings-probe-tip-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	color: #a1260d;
+	font-size: 11px;
+	font-weight: 620;
+}
+
+.settings-probe-tip-text {
+	margin: 0;
+	min-height: 0;
+	overflow: auto;
+	white-space: pre-wrap;
+	word-break: break-word;
+	color: #5c2b24;
+	font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+.settings-probe-copy {
+	flex-shrink: 0;
+	margin: 0;
+	padding: 3px 8px;
+	border: 1px solid #e0b4ae;
+	border-radius: 5px;
+	color: #a1260d;
+	background: #fff;
+	font: inherit;
+	font-size: 11px;
+	line-height: 1.2;
+	cursor: pointer;
+}
+
+.settings-probe-copy:hover {
+	background: #fdecea;
+}
+
+@keyframes settings-probe-pulse {
+	50% { opacity: 0.35; }
+}
+
+.settings-switch {
+	display: inline-flex;
+	margin: 0;
+	cursor: pointer;
+}
+
+.settings-slot .settings-switch {
+	display: inline-flex;
+	margin: 0;
+	gap: 0;
+}
+
+.settings-slot .settings-switch input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	box-shadow: none;
+}
+
+.settings-switch-ui {
+	display: block;
+	width: 32px;
+	height: 18px;
+	border-radius: 999px;
+	background: #d4d4d0;
+	position: relative;
+	transition: background 0.15s ease;
+}
+
+.settings-switch-ui::after {
+	content: "";
+	position: absolute;
+	top: 2px;
+	left: 2px;
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #fff;
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 8%);
+	transition: transform 0.15s ease;
+}
+
+.settings-switch input:checked + .settings-switch-ui {
+	background: #2f9e44;
+}
+
+.settings-switch input:checked + .settings-switch-ui::after {
+	transform: translateX(14px);
+}
+
+.settings-switch input:disabled + .settings-switch-ui {
+	opacity: 0.55;
+}
+
+.settings-switch input:focus-visible + .settings-switch-ui {
+	box-shadow: 0 0 0 2px rgb(120 150 200 / 35%);
+}
+
 .settings-slot legend {
 	padding: 0 4px;
 	font-size: 13px;
@@ -2052,26 +2231,108 @@ body.resizing-table-columns {
 	font-size: 12px;
 }
 
-.settings-transport {
+.settings-slot-head .settings-slot-name {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
+	padding: 4px 8px;
+	border: 1px solid transparent;
+	font-size: 13px;
+	font-weight: 620;
+	background: transparent;
+}
+
+.settings-slot-head .settings-slot-name:hover,
+.settings-slot-head .settings-slot-name:focus {
+	border-color: #d4d4d0;
+	background: #fff;
+}
+
+.settings-kind {
 	display: flex;
-	gap: 16px;
-	margin: 0 0 8px;
-	padding: 0;
-	border: 0;
+	gap: 4px;
+	margin: 0 0 10px;
+	padding: 2px;
+	border: 1px solid #e1e1de;
+	border-radius: 8px;
+	background: #f3f3f1;
+	width: fit-content;
 }
 
-.settings-transport legend {
-	padding: 0;
-	color: #5f6368;
-	font-size: 11px;
-	font-weight: 500;
-}
-
-.settings-transport label {
+.settings-slot .settings-kind label {
 	display: flex;
 	align-items: center;
-	gap: 6px;
 	margin: 0;
+	padding: 4px 10px;
+	border-radius: 6px;
+	color: #5f6368;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.settings-kind label.is-active {
+	color: #202124;
+	background: #fff;
+	box-shadow: 0 1px 2px rgb(32 33 36 / 8%);
+}
+
+.settings-slot .settings-kind input {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	min-width: 0;
+	padding: 0;
+	border: 0;
+	overflow: hidden;
+	clip: rect(0 0 0 0);
+	box-shadow: none;
+}
+
+.settings-advanced {
+	margin: 2px 0 10px;
+	border: 1px solid #ecece9;
+	border-radius: 8px;
+	background: #f6f6f4;
+}
+
+.settings-advanced > summary {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 10px;
+	color: #5f6368;
+	font-size: 11px;
+	font-weight: 550;
+	line-height: 1.2;
+	cursor: pointer;
+	user-select: none;
+	list-style: none;
+}
+
+.settings-advanced > summary::-webkit-details-marker {
+	display: none;
+}
+
+.settings-advanced > summary::before {
+	content: "";
+	width: 0;
+	height: 0;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 5px solid #8a8d91;
+	transition: transform 0.12s ease;
+}
+
+.settings-advanced[open] > summary::before {
+	transform: rotate(90deg);
+}
+
+.settings-advanced-body {
+	padding: 0 10px 10px;
+}
+
+.settings-advanced-body label:last-child {
+	margin-bottom: 0;
 }
 
 .settings-path,
@@ -2179,12 +2440,23 @@ body.resizing-table-columns {
 	margin-top: 4px;
 }
 
-.settings-form-docked > .settings-actions {
+.settings-pane-form {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+}
+
+.settings-dialog-actions {
 	flex-shrink: 0;
 	margin: 0;
 	padding-top: 12px;
 	border-top: 1px solid #e1e1de;
 	background: #fafaf9;
+}
+
+.settings-dialog-actions .settings-add {
+	margin-right: auto;
 }
 
 .settings-actions button {

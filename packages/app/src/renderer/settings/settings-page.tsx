@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentStatsView } from "../../shared/agent-stats.ts";
-import type { McpServerDraft, McpSettingsView } from "../../shared/mcp-settings.ts";
+import { emptyMcpServerDraft, type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSlotId } from "../../shared/model-settings.ts";
 import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsModels } from "./settings-models.tsx";
@@ -15,8 +15,8 @@ const TABS: { id: SettingsTab; label: string }[] = [
 ];
 
 const LEAD: Record<SettingsTab, string> = {
-	models: "Local or remote is the same form: URL, API key, and model. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
-	mcp: "Any stdio or HTTP MCP server. The id becomes the tool prefix (id__tool). Nothing is hardcoded to a vendor.",
+	models: "Turn a slot on to ping it. Save writes Models and MCP together; it does not connect. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
+	mcp: "Same fields as a Cursor mcp.json: a name, then command + args, or a URL. Turn it on to connect. Save writes Models and MCP together.",
 	stats: "Lifetime Chat usage for this app. Prompt-cache hit rate is the number that matters for prefix stability.",
 };
 
@@ -57,10 +57,10 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					window.loom.getAgentStats(),
 				]);
 				setDraft({
-					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey },
-					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey },
-					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey },
-					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey },
+					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled },
+					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey, enabled: models.embedding.enabled },
+					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey, enabled: models.rerank.enabled },
+					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey, enabled: models.vlm.enabled },
 				});
 				setMcp(mcpView);
 				setStats(statsView);
@@ -70,37 +70,36 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 		})();
 	}, []);
 
-	function patchModel(id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string): void {
-		setDraft((current) => current ? { ...current, [id]: { ...current[id], [field]: value } } : current);
+	function patchModel(id: ModelSlotId, patch: Partial<ModelSettingsDraft[ModelSlotId]>): void {
+		setDraft((current) => current ? { ...current, [id]: { ...current[id], ...patch } } : current);
 	}
 
 	function patchMcp(servers: McpServerDraft[]): void {
 		setMcp((current) => current ? { ...current, servers } : current);
 	}
 
-	async function saveModels(): Promise<void> {
-		if (!draft) return;
+	function patchMcpStatus(status: McpServerStatus): void {
+		setMcp((current) => {
+			if (!current) return current;
+			const rest = current.status.filter((row) => row.id !== status.id);
+			const server = current.servers.find((row) => row.id.trim() === status.id);
+			if (!status.id || (server && !server.enabled)) return { ...current, status: rest };
+			return { ...current, status: [...rest, status] };
+		});
+	}
+
+	async function saveAll(): Promise<void> {
+		if (!draft || !mcp || saving) return;
 		setSaving(true);
 		setError(null);
 		try {
-			await window.loom.saveModelSettings(draft);
+			await Promise.all([
+				window.loom.saveModelSettings(draft),
+				window.loom.saveMcpSettings(mcp.servers),
+			]);
 			onClose();
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setSaving(false);
-		}
-	}
-
-	async function saveMcp(): Promise<void> {
-		if (!mcp) return;
-		setSaving(true);
-		setError(null);
-		try {
-			setMcp(await window.loom.saveMcpSettings(mcp.servers));
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
 			setSaving(false);
 		}
 	}
@@ -158,25 +157,40 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				</div>
 				<p className="settings-lead">{LEAD[tab]}</p>
 				{error && <div className="session-error">{error}</div>}
+				<form
+					className="settings-pane-form"
+					onSubmit={(event) => {
+						event.preventDefault();
+						void saveAll();
+					}}
+				>
 				<div className="settings-pane">
 				{tab === "models" && (draft
-					? (
-						<SettingsModels
-							draft={draft}
-							saving={saving}
-							onChange={patchModel}
-							onCancel={onClose}
-							onSave={() => void saveModels()}
-						/>
-					)
+					? <SettingsModels draft={draft} onChange={patchModel} />
 					: <div className="empty">Loading…</div>)}
 				{tab === "mcp" && (mcp
-					? <SettingsMcp view={mcp} saving={saving} onChange={patchMcp} onSave={() => void saveMcp()} />
+					? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} />
 					: <div className="empty">Loading…</div>)}
 				{tab === "stats" && (stats
 					? <SettingsStats stats={stats} resetting={saving} onReset={() => void resetStats()} />
 					: <div className="empty">Loading…</div>)}
 				</div>
+				<div className="settings-actions settings-dialog-actions">
+					{tab === "mcp" && (
+						<button
+							className="settings-add"
+							type="button"
+							onClick={() => patchMcp([...(mcp?.servers ?? []), emptyMcpServerDraft()])}
+						>
+							Add server
+						</button>
+					)}
+					<button type="button" onClick={onClose}>Cancel</button>
+					<button className="primary-button" type="submit" disabled={saving || !draft || !mcp}>
+						Save
+					</button>
+				</div>
+				</form>
 			</div>
 		</div>
 	);

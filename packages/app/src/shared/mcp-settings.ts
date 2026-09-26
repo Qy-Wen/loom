@@ -9,6 +9,7 @@ export type McpServerDraft = {
 	cwd: string;
 	url: string;
 	headersText: string;
+	enabled: boolean;
 };
 
 export type McpServerStatus = {
@@ -33,6 +34,7 @@ export function emptyMcpServerDraft(): McpServerDraft {
 		cwd: "",
 		url: "",
 		headersText: "",
+		enabled: false,
 	};
 }
 
@@ -61,6 +63,7 @@ export function draftToRawServer(draft: McpServerDraft): Record<string, unknown>
 		return {
 			id,
 			url: draft.url.trim(),
+			enabled: draft.enabled,
 			...(parseEnvText(draft.headersText) ? { headers: parseEnvText(draft.headersText) } : {}),
 		};
 	}
@@ -68,6 +71,7 @@ export function draftToRawServer(draft: McpServerDraft): Record<string, unknown>
 	return {
 		id,
 		command: draft.command.trim(),
+		enabled: draft.enabled,
 		...(args.length ? { args } : {}),
 		...(parseEnvText(draft.envText) ? { env: parseEnvText(draft.envText) } : {}),
 		...(draft.cwd.trim() ? { cwd: draft.cwd.trim() } : {}),

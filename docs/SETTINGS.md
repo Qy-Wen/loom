@@ -24,6 +24,9 @@ Each slot stores:
 - `baseUrl`
 - `apiKey` (hosted APIs usually need it; local servers often omit it)
 - `model`
+- `enabled` (the switch on the right of each slot)
+
+Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / VLM slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
 
 Loom never loads or runs a model. It is only an HTTP client.
 
@@ -43,7 +46,7 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 ## UI
 
 - One Settings window with three tabs: **Models**, **MCP**, **Stats**.
-- Models: four slots on one page. Empty rerank / VLM slots are allowed.
+- Models: four slots on one page. Empty rerank / VLM slots are allowed. The switch pings; **Save** writes Models and MCP together and closes Settings.
 - Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image write-ups; see [MEDIA.md](./RAG/MEDIA.md).
-- MCP: add/remove any stdio or HTTP servers and save to reconnect Agent tools. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
+- MCP: add/remove servers. The form matches a Cursor `mcp.json` entry: name, then `command` + `args` (local) or `url` (remote). Env / headers / cwd sit under Advanced. The switch connects or disconnects that server. **Save** writes Models and MCP together. On app start, only enabled servers connect. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
 - Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.
