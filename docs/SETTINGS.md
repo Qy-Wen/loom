@@ -15,7 +15,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 | Slot | Used for | Wire |
 |---|---|---|
 | Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Not a hardcoded DeepSeek provider. |
-| Embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
+| Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Later retrieve | Cohere/Jina `POST /v1/rerank` (`query` + `documents`) |
 | VLM | Image captions / tags (later video frames too) | Same OpenAI-compatible `POST /v1/chat/completions` as Chat; user message includes `image_url`. Local and remote are the same form; hosted vendors usually need an API key. |
 
