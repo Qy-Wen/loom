@@ -19,7 +19,7 @@ const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: s
 	},
 	vlm: {
 		title: "VLM",
-		hint: "Later Level 3. Chat completions plus image_url. Slot is optional.",
+		hint: "Image captions. OpenAI-compatible POST /v1/chat/completions with image_url. Slot is optional.",
 		keyHint: "optional",
 	},
 };

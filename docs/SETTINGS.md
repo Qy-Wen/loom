@@ -17,7 +17,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 | Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Not a hardcoded DeepSeek provider. |
 | Embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Later retrieve | Cohere/Jina `POST /v1/rerank` (`query` + `documents`) |
-| VLM | Later Level 3 | Same chat completions wire; user message includes `image_url` parts |
+| VLM | Image captions / tags (later video frames too) | Same OpenAI-compatible `POST /v1/chat/completions` as Chat; user message includes `image_url`. Local and remote are the same form; hosted vendors usually need an API key. |
 
 Each slot stores:
 
@@ -44,6 +44,6 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 
 - One Settings window with three tabs: **Models**, **MCP**, **Stats**.
 - Models: four slots on one page. Empty rerank / VLM slots are allowed.
-- Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md).
+- Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image write-ups; see [MEDIA.md](./RAG/MEDIA.md).
 - MCP: add/remove any stdio or HTTP servers and save to reconnect Agent tools. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
 - Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.

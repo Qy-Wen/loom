@@ -2,6 +2,7 @@ import type { Asset } from "../model/asset.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
+import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -42,6 +43,8 @@ export interface MetadataStore {
 	replaceTextChunks(assetId: string, chunks: StoredTextChunk[]): Promise<void>;
 	listTextChunks(assetId: string): Promise<StoredTextChunk[]>;
 	updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void>;
+	getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined>;
+	upsertImageVlm(record: ImageVlmRecord): Promise<void>;
 	searchAssetIds(query: string): Promise<string[]>;
 }
 

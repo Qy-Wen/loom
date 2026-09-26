@@ -12,13 +12,15 @@ export function searchDocument(
 	relativePath: string,
 	propertyValues: Array<string | number | boolean>,
 	enrichment?: AssetEnrichment,
+	extraText?: string,
 ): string {
 	return [
 		filename,
 		relativePath,
 		...propertyValues.map(String),
 		...searchableEnrichmentTexts(enrichment),
-	].join("\n");
+		extraText?.trim() ?? "",
+	].filter((part) => part.length > 0).join("\n");
 }
 
 export function searchTokens(raw: string): string[] {

@@ -2,6 +2,7 @@ import { mkdir } from "node:fs/promises";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
 import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
+import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -406,6 +407,40 @@ export class SqliteMetadataStore implements MetadataStore {
 		write(updates);
 	}
 
+	async getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM image_vlm WHERE asset_id = ?")
+			.get(assetId) as ImageVlmRow | undefined;
+		return row ? toImageVlm(row) : undefined;
+	}
+
+	async upsertImageVlm(record: ImageVlmRecord): Promise<void> {
+		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
+		this.requireDatabase().prepare(`
+			INSERT INTO image_vlm (
+				asset_id, status, model_id, source_modified_at, error, markdown, updated_at
+			) VALUES (
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @markdown, @updatedAt
+			)
+			ON CONFLICT(asset_id) DO UPDATE SET
+				status = excluded.status,
+				model_id = excluded.model_id,
+				source_modified_at = excluded.source_modified_at,
+				error = excluded.error,
+				markdown = excluded.markdown,
+				updated_at = excluded.updated_at
+		`).run({
+			assetId: record.assetId,
+			status: record.status,
+			modelId: record.modelId ?? null,
+			sourceModifiedAt: record.sourceModifiedAt,
+			error: record.error ?? null,
+			markdown: record.markdown ?? null,
+			updatedAt: record.updatedAt,
+		});
+		this.refreshFts(this.requireDatabase(), record.assetId);
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const match = compileFtsQuery(query);
 		if (!match) return [];
@@ -496,6 +531,15 @@ export class SqliteMetadataStore implements MetadataStore {
 				)
 			);
 			CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
+			CREATE TABLE IF NOT EXISTS image_vlm (
+				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+				status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+				model_id TEXT,
+				source_modified_at REAL NOT NULL,
+				error TEXT,
+				markdown TEXT,
+				updated_at REAL NOT NULL
+			);
 		`);
 	}
 
@@ -526,9 +570,18 @@ export class SqliteMetadataStore implements MetadataStore {
 		const enrichmentRow = database
 			.prepare("SELECT * FROM asset_metadata WHERE asset_id = ?")
 			.get(assetId) as AssetMetadataRow | undefined;
+		const vlmRow = database
+			.prepare("SELECT status, markdown FROM image_vlm WHERE asset_id = ?")
+			.get(assetId) as { status: ImageVlmJobStatus; markdown: string | null } | undefined;
 		database.prepare("INSERT INTO assets_fts (asset_id, body) VALUES (?, ?)").run(
 			assetId,
-			searchDocument(asset.filename, asset.relative_path, values, enrichmentRow ? toEnrichment(enrichmentRow) : undefined),
+			searchDocument(
+				asset.filename,
+				asset.relative_path,
+				values,
+				enrichmentRow ? toEnrichment(enrichmentRow) : undefined,
+				vlmRow?.status === "ready" ? vlmRow.markdown ?? undefined : undefined,
+			),
 		);
 	}
 
@@ -682,4 +735,26 @@ function embeddingToBlob(values?: number[]): Buffer | null {
 function blobToEmbedding(blob: Buffer | null): number[] | undefined {
 	if (!blob) return undefined;
 	return Array.from(new Float32Array(blob.buffer, blob.byteOffset, Math.floor(blob.byteLength / 4)));
+}
+
+interface ImageVlmRow {
+	asset_id: string;
+	status: ImageVlmJobStatus;
+	model_id: string | null;
+	source_modified_at: number;
+	error: string | null;
+	markdown: string | null;
+	updated_at: number;
+}
+
+function toImageVlm(row: ImageVlmRow): ImageVlmRecord {
+	return {
+		assetId: row.asset_id,
+		status: row.status,
+		modelId: row.model_id ?? undefined,
+		sourceModifiedAt: row.source_modified_at,
+		error: row.error ?? undefined,
+		markdown: row.markdown ?? undefined,
+		updatedAt: row.updated_at,
+	};
 }

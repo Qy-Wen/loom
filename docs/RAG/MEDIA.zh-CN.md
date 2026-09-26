@@ -30,7 +30,7 @@
 
 用户或 Agent 对单张图请求。导入不跑。
 
-- **VLM：** 设置里已有的 VLM 槽位。报文是 chat completions，用户消息里带 `image_url`（本地文件用 data URI）。 Loom 不加载、不运行模型。
+- **VLM：** 设置里已有的 VLM 槽位。报文是 OpenAI 兼容 `POST {baseUrl}/v1/chat/completions`，用户消息里带 `image_url`（本地文件用 data URI）。本地部署和远程 API 同一张表；远程一般要填 API key，本地常常不需要。Loom 不加载、不运行模型。
 - **产出：** caption / 标签；图中可见文字也可以写进这段说明。拼成固定 Markdown，再交给 Embedding 槽位。槽位空着时正文仍留下。
 - **不直接嵌图。** CLIP / SigLIP 那种图片向量以后再说。
 - **OCR：** 第一版不进进程，靠 VLM 读字。本地 CPU OCR 是可选项，见下面占位；不做也不挡 VLM。
@@ -96,6 +96,16 @@ video.mp4
 - FFmpeg 在本地抽出音频；长文件切开再送，拼回时加上时间偏移。Loom 不跑识别模型。
 - 视频音轨以后复用同一套 ASR，不另做一套。
 - CLAP 一类声学向量以后再做，不进文本 Embedding 槽位。
+
+---
+
+## Provider
+
+Loom 只当 HTTP 客户端。VLM 不进进程。
+
+- **报文：** OpenAI 兼容的 `POST {baseUrl}/v1/chat/completions`。用户消息里带 `image_url`（本地文件用 data URI）。
+- **本地或远程：** 同一套字段（`baseUrl`、可选 API key、`model`）。本地是用户自己起的服务（LM Studio、Ollama 等）。远程是 OpenAI 兼容调用，外加 API key。
+- 端点由用户配置，不内置默认供应商。见 [SETTINGS.md](../SETTINGS.zh-CN.md)。
 
 ---
 

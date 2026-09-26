@@ -10,11 +10,11 @@
 
 ## 第一步：图片 VLM
 
-图先变成文字，再走已经做好的文本 embedding。不直接嵌图片向量。默认不整库。走设置里已有的 VLM 槽位：chat completions，消息里带 `image_url`。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
+图先变成文字，再走已经做好的文本 embedding。不直接嵌图片向量。默认不整库。走设置里已有的 VLM 槽位：本地或远程都是 OpenAI 兼容 chat completions，消息里带 `image_url`。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 
-- [ ] HTTP 要 caption / 标签（可含图中可见文字）；Loom 不加载、不运行模型
-- [ ] 正文按资产落盘；mtime 没变的 rename/move 不重算
-- [ ] 拼成 Markdown 后交给 Embedding 槽位。槽位空着时正文仍留下。Details / Agent 能请求并看到状态
+- [x] HTTP 要 caption / 标签（可含图中可见文字）。本地服务和远程 API 同一套 `baseUrl` + 可选 key + `model`。Loom 不加载、不运行模型
+- [x] 正文按资产落盘；mtime 没变的 rename/move 不重算
+- [x] 拼成 Markdown 后交给 Embedding 槽位。槽位空着时正文仍留下。Details / Agent 能请求并看到状态
 
 ## 第二步：视频 VLM
 
