@@ -22,6 +22,7 @@ function draft(overrides: Partial<ModelSettingsDraft["chat"]> = {}): ModelSettin
 		embedding: empty,
 		rerank: empty,
 		vlm: empty,
+		audio: empty,
 	};
 }
 

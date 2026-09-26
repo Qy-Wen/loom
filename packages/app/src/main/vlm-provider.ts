@@ -1,9 +1,13 @@
 import {
+	AUDIO_WRITEUP_SYSTEM_PROMPT,
+	AUDIO_WRITEUP_USER_PROMPT,
 	IMAGE_VLM_SYSTEM_PROMPT,
 	IMAGE_VLM_USER_PROMPT,
 	VIDEO_VLM_FRAMES_PROMPT,
 	VIDEO_VLM_SYSTEM_PROMPT,
 	VIDEO_VLM_USER_PROMPT,
+	type AudioWriteupInput,
+	type AudioWriteupProvider,
 	type ImageVlmInput,
 	type ImageVlmProvider,
 	type VideoVlmFrame,
@@ -29,10 +33,22 @@ const VIDEO_MEDIA_TYPES: Record<string, string> = {
 	".avi": "video/x-msvideo",
 };
 
+const AUDIO_MEDIA_TYPES: Record<string, string> = {
+	".aac": "audio/aac",
+	".flac": "audio/flac",
+	".m4a": "audio/mp4",
+	".mp3": "audio/mpeg",
+	".ogg": "audio/ogg",
+	".wav": "audio/wav",
+};
+
+const INPUT_AUDIO_FORMATS = new Set(["wav", "mp3", "flac", "ogg"]);
 const nativeVideoRejected = new Set<string>();
+const audioUrlRejected = new Set<string>();
 
 export function resetNativeVideoProbeForTests(): void {
 	nativeVideoRejected.clear();
+	audioUrlRejected.clear();
 }
 
 export function vlmChatUrl(baseUrl: string): string {
@@ -107,6 +123,124 @@ export function createHttpVideoVlmProvider(slot: {
 	};
 }
 
+export function audioDataUrl(audio: AudioWriteupInput): string {
+	const mediaType = AUDIO_MEDIA_TYPES[extname(audio.filename).toLowerCase()];
+	if (!mediaType) throw new Error("Audio slot accepts AAC, FLAC, M4A, MP3, OGG, or WAV");
+	return `data:${mediaType};base64,${Buffer.from(audio.bytes).toString("base64")}`;
+}
+
+/** DashScope Omni treats `input_audio.data` as a URL; raw base64 is rejected. */
+export function omniAudioDataUri(audio: AudioWriteupInput): string {
+	return `data:;base64,${Buffer.from(audio.bytes).toString("base64")}`;
+}
+
+export function inputAudioFormat(filename: string): string {
+	const ext = extname(filename).toLowerCase().replace(".", "");
+	if (ext === "m4a" || ext === "aac") return "mp3";
+	if (INPUT_AUDIO_FORMATS.has(ext)) return ext;
+	return "wav";
+}
+
+export function shouldFallbackFromAudioUrl(status: number, body: string): boolean {
+	if (status === 401 || status === 403) return false;
+	if (status === 400 || status === 413 || status === 415 || status === 422) return true;
+	if (status >= 500) return true;
+	return /audio_url|unsupported.*audio|invalid.*content|unknown.*type|does not support|stream/i.test(body);
+}
+
+export function looksLikeHostedOmni(baseUrl: string): boolean {
+	return /dashscope|compatible-mode/i.test(baseUrl);
+}
+
+export function explainAudioEndpoint(error: unknown): Error {
+	const message = error instanceof Error ? error.message : String(error);
+	if (!/either 'text' or 'image_url'/i.test(message)) {
+		return error instanceof Error ? error : new Error(message);
+	}
+	return new Error(
+		`${message}\nThis Base URL only accepts vision chat parts (text / image_url), not audio. ` +
+			"Use a hosted Omni endpoint (DashScope compatible-mode), not LM Studio or the VLM URL.",
+	);
+}
+
+export function createHttpAudioProvider(slot: {
+	baseUrl: string;
+	apiKey: string;
+	model: string;
+}): AudioWriteupProvider {
+	const modelId = slot.model.trim();
+	const url = vlmChatUrl(slot.baseUrl);
+	if (!modelId) throw new Error("Audio model is required");
+	const apiKey = slot.apiKey.trim();
+	const probeKey = `${url}|${modelId}`;
+	const hostedOmni = looksLikeHostedOmni(slot.baseUrl);
+	return {
+		modelId,
+		async describe(audio: AudioWriteupInput): Promise<string> {
+			const attempts: Array<() => Promise<string>> = hostedOmni
+				? [
+					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio"),
+				]
+				: [
+					() => postChat(url, apiKey, audioUrlRequestBody(modelId, audioDataUrl(audio)), "Audio"),
+					() => postChat(url, apiKey, audioInputRequestBody(modelId, audio), "Audio"),
+					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio"),
+				];
+			let lastError: unknown;
+			for (const [index, attempt] of attempts.entries()) {
+				if (!hostedOmni && index === 0 && audioUrlRejected.has(probeKey)) continue;
+				try {
+					return await attempt();
+				} catch (error) {
+					lastError = error;
+					if (!audioFallbackError(error)) throw explainAudioEndpoint(error);
+					if (!hostedOmni && index === 0) audioUrlRejected.add(probeKey);
+				}
+			}
+			throw explainAudioEndpoint(lastError);
+		},
+	};
+}
+
+export function audioUrlRequestBody(modelId: string, dataUrl: string): Record<string, unknown> {
+	return chatBody(modelId, AUDIO_WRITEUP_SYSTEM_PROMPT, [
+		{ type: "text", text: AUDIO_WRITEUP_USER_PROMPT },
+		{ type: "audio_url", audio_url: { url: dataUrl } },
+	]);
+}
+
+export function audioInputRequestBody(modelId: string, audio: AudioWriteupInput): Record<string, unknown> {
+	return chatBody(modelId, AUDIO_WRITEUP_SYSTEM_PROMPT, [
+		{ type: "text", text: AUDIO_WRITEUP_USER_PROMPT },
+		{
+			type: "input_audio",
+			input_audio: {
+				data: Buffer.from(audio.bytes).toString("base64"),
+				format: inputAudioFormat(audio.filename),
+			},
+		},
+	]);
+}
+
+/** Hosted Qwen-Omni (DashScope compatible-mode): data URI, text-only output, stream required. */
+export function audioOmniRequestBody(modelId: string, audio: AudioWriteupInput): Record<string, unknown> {
+	return {
+		...chatBody(modelId, AUDIO_WRITEUP_SYSTEM_PROMPT, [
+			{ type: "text", text: AUDIO_WRITEUP_USER_PROMPT },
+			{
+				type: "input_audio",
+				input_audio: {
+					data: omniAudioDataUri(audio),
+					format: inputAudioFormat(audio.filename),
+				},
+			},
+		]),
+		modalities: ["text"],
+		stream: true,
+		stream_options: { include_usage: true },
+	};
+}
+
 export function vlmRequestBody(modelId: string, dataUrl: string): Record<string, unknown> {
 	return chatBody(modelId, IMAGE_VLM_SYSTEM_PROMPT, [
 		{ type: "text", text: IMAGE_VLM_USER_PROMPT },
@@ -159,6 +293,15 @@ function chatBody(
 }
 
 async function postVlm(url: string, apiKey: string, payload: Record<string, unknown>): Promise<string> {
+	return postChat(url, apiKey, payload, "VLM");
+}
+
+async function postChat(
+	url: string,
+	apiKey: string,
+	payload: Record<string, unknown>,
+	kind: "VLM" | "Audio",
+): Promise<string> {
 	const headers: Record<string, string> = { "content-type": "application/json" };
 	if (apiKey) headers.authorization = `Bearer ${apiKey}`;
 	const response = await fetch(url, {
@@ -168,18 +311,89 @@ async function postVlm(url: string, apiKey: string, payload: Record<string, unkn
 	});
 	const body = await response.text();
 	if (!response.ok) {
-		throw new Error(`VLM request failed (${response.status}): ${body.slice(0, 240)}`);
+		const detail = body.trim().slice(0, 8_000);
+		throw new Error(detail
+			? `${kind} request failed (${response.status}): ${detail}`
+			: `${kind} request failed (${response.status})`);
+	}
+	if (payload.stream === true) {
+		const trimmed = body.trim();
+		if (trimmed.startsWith("{")) return parseVlmResponse(trimmed);
+		return parseChatSse(body);
 	}
 	return parseVlmResponse(body);
 }
 
+export function parseChatSse(body: string): string {
+	const parts: string[] = [];
+	for (const line of body.split(/\r?\n/)) {
+		const trimmed = line.trim();
+		if (!trimmed.startsWith("data:")) continue;
+		const data = trimmed.slice(5).trim();
+		if (!data || data === "[DONE]") continue;
+		let parsed: unknown;
+		try {
+			parsed = JSON.parse(data);
+		} catch {
+			continue;
+		}
+		if (parsed && typeof parsed === "object" && "error" in parsed) {
+			throw new Error(`Audio stream error: ${JSON.stringify(parsed)}`);
+		}
+		const chunk = sseChoiceText(parsed);
+		if (chunk) parts.push(chunk);
+	}
+	const text = parts.join("").trim();
+	if (!text) throw new Error("Audio response is missing text");
+	return text;
+}
+
+function sseChoiceText(parsed: unknown): string {
+	if (!parsed || typeof parsed !== "object" || !("choices" in parsed) || !Array.isArray(parsed.choices)) {
+		return "";
+	}
+	const choice = parsed.choices[0];
+	if (!choice || typeof choice !== "object") return "";
+	if ("delta" in choice) return contentDelta(choice.delta);
+	if ("message" in choice) return contentDelta(choice.message);
+	return "";
+}
+
+function contentDelta(value: unknown): string {
+	if (!value || typeof value !== "object" || !("content" in value)) return "";
+	const content = value.content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	const parts: string[] = [];
+	for (const part of content) {
+		if (typeof part === "string") {
+			parts.push(part);
+			continue;
+		}
+		if (!part || typeof part !== "object") continue;
+		if ("text" in part && typeof part.text === "string") parts.push(part.text);
+	}
+	return parts.join("");
+}
+
 function nativeFallbackError(error: unknown): boolean {
+	return chatFallbackError(error, shouldFallbackFromNativeVideo);
+}
+
+function audioFallbackError(error: unknown): boolean {
+	return chatFallbackError(error, shouldFallbackFromAudioUrl);
+}
+
+function chatFallbackError(
+	error: unknown,
+	shouldFallback: (status: number, body: string) => boolean,
+): boolean {
 	if (!(error instanceof Error)) return false;
-	const match = error.message.match(/VLM request failed \((\d+)\)/);
+	const match = error.message.match(/request failed \((\d+)\)/);
 	if (!match) return false;
 	const status = Number(match[1]);
 	const body = error.message.slice(error.message.indexOf(":") + 1);
-	return shouldFallbackFromNativeVideo(status, body);
+	return shouldFallback(status, body);
 }
 
 function openaiMessageText(parsed: unknown): string | undefined {
@@ -187,8 +401,13 @@ function openaiMessageText(parsed: unknown): string | undefined {
 		return undefined;
 	}
 	const choice = parsed.choices[0];
-	if (!choice || typeof choice !== "object" || !("message" in choice)) return undefined;
-	return contentText(choice.message);
+	if (!choice || typeof choice !== "object") return undefined;
+	if ("message" in choice) {
+		const text = contentText(choice.message);
+		if (text) return text;
+	}
+	if ("delta" in choice) return contentText(choice.delta);
+	return undefined;
 }
 
 function contentText(value: unknown): string | undefined {

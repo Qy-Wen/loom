@@ -12,11 +12,13 @@ import {
 import type { EnrichmentService } from "../enrichment/service.ts";
 import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
+import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type { MetadataStore } from "../stores/types.ts";
 import { canDescribeImage } from "./image-vlm.ts";
 import { chunkMarkdown } from "./chunk.ts";
 import { canEmbedMarkdown } from "./markdown.ts";
 import { canDescribeVideo } from "./video-vlm.ts";
+import { canDescribeAudio } from "./audio-writeup.ts";
 
 export class TextEmbedService {
 	private chain: Promise<void> = Promise.resolve();
@@ -142,6 +144,7 @@ export class TextEmbedService {
 		if (writeup === "missing") {
 			if (canDescribeImage(asset)) return { error: "Describe the image with the VLM slot first" };
 			if (canDescribeVideo(asset)) return { error: "Describe the video with the VLM slot first" };
+			if (canDescribeAudio(asset)) return { error: "Describe the audio with the Audio slot first" };
 			return { unsupported: true };
 		}
 		if (writeup) return { text: writeup.markdown };
@@ -208,9 +211,10 @@ export class TextEmbedService {
 		return record.sourceModifiedAt !== asset.modifiedAt || record.updatedAt > job.updatedAt;
 	}
 
-	private async writeupRecord(asset: Asset): Promise<ImageVlmRecord | VideoVlmRecord | undefined> {
+	private async writeupRecord(asset: Asset): Promise<ImageVlmRecord | VideoVlmRecord | AudioWriteupRecord | undefined> {
 		if (canDescribeImage(asset)) return this.metadata.getImageVlm(asset.assetId);
 		if (canDescribeVideo(asset)) return this.metadata.getVideoVlm(asset.assetId);
+		if (canDescribeAudio(asset)) return this.metadata.getAudioWriteup(asset.assetId);
 		return undefined;
 	}
 
@@ -229,7 +233,7 @@ export class TextEmbedService {
 }
 
 function needsVlmWriteup(asset: Asset): boolean {
-	return canDescribeImage(asset) || canDescribeVideo(asset);
+	return canDescribeImage(asset) || canDescribeVideo(asset) || canDescribeAudio(asset);
 }
 
 function canIndexAsset(asset: Asset): boolean {

@@ -8,6 +8,7 @@ import {
 } from "../model/property.ts";
 import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
+import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -31,6 +32,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly textChunks = new Map<string, StoredTextChunk[]>();
 	private readonly imageVlm = new Map<string, ImageVlmRecord>();
 	private readonly videoVlm = new Map<string, VideoVlmRecord>();
+	private readonly audioWriteup = new Map<string, AudioWriteupRecord>();
 	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
@@ -45,6 +47,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.textChunks.clear();
 		this.imageVlm.clear();
 		this.videoVlm.clear();
+		this.audioWriteup.clear();
 		this.volumeId = undefined;
 	}
 
@@ -60,6 +63,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.textChunks.clear();
 		this.imageVlm.clear();
 		this.videoVlm.clear();
+		this.audioWriteup.clear();
 		this.volumeId = undefined;
 	}
 
@@ -80,6 +84,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.enrichments.delete(replacedId);
 			this.imageVlm.delete(replacedId);
 			this.videoVlm.delete(replacedId);
+			this.audioWriteup.delete(replacedId);
 			this.clearTextIndex(replacedId);
 		}
 
@@ -136,6 +141,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.videoVlm.keys()) {
 			if (!nextAssetIds.has(assetId)) this.videoVlm.delete(assetId);
 		}
+		for (const assetId of this.audioWriteup.keys()) {
+			if (!nextAssetIds.has(assetId)) this.audioWriteup.delete(assetId);
+		}
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -148,6 +156,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.enrichments.delete(assetId);
 		this.imageVlm.delete(assetId);
 		this.videoVlm.delete(assetId);
+		this.audioWriteup.delete(assetId);
 		this.clearTextIndex(assetId);
 	}
 
@@ -289,6 +298,15 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.videoVlm.set(record.assetId, record);
 	}
 
+	async getAudioWriteup(assetId: string): Promise<AudioWriteupRecord | undefined> {
+		return this.audioWriteup.get(assetId);
+	}
+
+	async upsertAudioWriteup(record: AudioWriteupRecord): Promise<void> {
+		if (!this.assets.has(record.assetId)) throw new Error("Asset not found");
+		this.audioWriteup.set(record.assetId, record);
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const tokens = searchTokens(query);
 		if (tokens.length === 0) return [];
@@ -300,7 +318,11 @@ export class InMemoryMetadataStore implements MetadataStore {
 				asset.relativePath,
 				values,
 				this.enrichments.get(asset.assetId),
-				readyVlmText(this.imageVlm.get(asset.assetId), this.videoVlm.get(asset.assetId)),
+				readyVlmText(
+					this.imageVlm.get(asset.assetId),
+					this.videoVlm.get(asset.assetId),
+					this.audioWriteup.get(asset.assetId),
+				),
 			);
 			if (!documentMatchesTokens(document, tokens)) continue;
 			const haystack = document.toLowerCase();
@@ -361,9 +383,11 @@ function cloneChunk(chunk: StoredTextChunk): StoredTextChunk {
 function readyVlmText(
 	image: ImageVlmRecord | undefined,
 	video: VideoVlmRecord | undefined,
+	audio: AudioWriteupRecord | undefined,
 ): string | undefined {
 	if (image?.status === "ready") return image.markdown;
 	if (video?.status === "ready") return video.markdown;
+	if (audio?.status === "ready") return audio.markdown;
 	return undefined;
 }
 

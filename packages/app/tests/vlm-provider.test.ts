@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
+	audioInputRequestBody,
+	audioOmniRequestBody,
+	audioUrlRequestBody,
+	omniAudioDataUri,
+	createHttpAudioProvider,
 	createHttpVideoVlmProvider,
 	createHttpVlmProvider,
+	explainAudioEndpoint,
+	inputAudioFormat,
+	looksLikeHostedOmni,
+	parseChatSse,
 	parseVlmResponse,
 	resetNativeVideoProbeForTests,
+	shouldFallbackFromAudioUrl,
 	shouldFallbackFromNativeVideo,
 	vlmChatUrl,
 	vlmFrameRequestBody,
@@ -164,4 +174,131 @@ test("vlmVideoRequestBody and vlmFrameRequestBody use the video prompt", () => {
 	assert.ok(Array.isArray(native.messages));
 	const frames = vlmFrameRequestBody("qwen/qwen3-vl-4b", [{ filename: "frame-0.jpg", bytes: new Uint8Array([1]) }]);
 	assert.ok(Array.isArray(frames.messages));
+});
+
+test("createHttpAudioProvider posts audio_url then falls back to input_audio", async () => {
+	const calls: Array<{ url: string; init: RequestInit }> = [];
+	globalThis.fetch = (async (url, init) => {
+		calls.push({ url: String(url), init: init ?? {} });
+		if (calls.length === 1) {
+			return new Response("unknown type audio_url", { status: 400 });
+		}
+		return new Response(JSON.stringify({
+			choices: [{ message: { content: "## Caption\nFrom input_audio.\n" } }],
+		}), { status: 200 });
+	}) as typeof fetch;
+
+	const provider = createHttpAudioProvider({
+		baseUrl: "http://127.0.0.1:8000",
+		apiKey: "",
+		model: "qwen2-audio-7b-instruct",
+	});
+	const text = await provider.describe({ filename: "clip.wav", bytes: new Uint8Array([9]) });
+	assert.match(text, /From input_audio/);
+	assert.equal(calls.length, 2);
+	const first = JSON.parse(String(calls[0]?.init.body)) as {
+		messages: Array<{ content: Array<{ type: string }> }>;
+	};
+	assert.equal(first.messages[1]?.content.some((part) => part.type === "audio_url"), true);
+	const second = JSON.parse(String(calls[1]?.init.body)) as {
+		messages: Array<{ content: Array<{ type: string; input_audio?: { format: string } }> }>;
+	};
+	assert.equal(second.messages[1]?.content.some((part) => part.type === "input_audio"), true);
+});
+
+test("createHttpAudioProvider uses audio_url when the endpoint accepts it", async () => {
+	globalThis.fetch = (async (_url, init) => {
+		const body = JSON.parse(String(init?.body)) as {
+			messages: Array<{ content: Array<{ type: string; audio_url?: { url: string } }> }>;
+		};
+		assert.equal(body.messages[1]?.content.some((part) => (
+			part.type === "audio_url" && part.audio_url?.url.startsWith("data:audio/mpeg;base64,")
+		)), true);
+		return new Response(JSON.stringify({
+			choices: [{ message: { content: "## Caption\nNative audio.\n" } }],
+		}), { status: 200 });
+	}) as typeof fetch;
+
+	const provider = createHttpAudioProvider({
+		baseUrl: "http://127.0.0.1:8000",
+		apiKey: "",
+		model: "qwen2-audio-7b-instruct",
+	});
+	const text = await provider.describe({ filename: "clip.mp3", bytes: new Uint8Array([9]) });
+	assert.match(text, /Native audio/);
+});
+
+test("audio request bodies and fallback rules", () => {
+	assert.equal(inputAudioFormat("clip.wav"), "wav");
+	assert.equal(inputAudioFormat("clip.m4a"), "mp3");
+	assert.equal(shouldFallbackFromAudioUrl(400, "unknown type audio_url"), true);
+	assert.equal(shouldFallbackFromAudioUrl(401, "unauthorized"), false);
+	assert.equal(looksLikeHostedOmni("https://dashscope.aliyuncs.com/compatible-mode/v1"), true);
+	assert.equal(looksLikeHostedOmni("http://127.0.0.1:1234"), false);
+	const urlBody = audioUrlRequestBody("qwen2-audio-7b-instruct", "data:audio/wav;base64,xx");
+	assert.ok(Array.isArray(urlBody.messages));
+	const inputBody = audioInputRequestBody("qwen2-audio-7b-instruct", {
+		filename: "clip.wav",
+		bytes: new Uint8Array([1]),
+	});
+	assert.ok(Array.isArray(inputBody.messages));
+	const omni = audioOmniRequestBody("qwen3-omni-flash", {
+		filename: "clip.wav",
+		bytes: new Uint8Array([1]),
+	});
+	assert.equal(omni.stream, true);
+	assert.deepEqual(omni.modalities, ["text"]);
+	const omniPart = (omni.messages as Array<{ content: Array<{ type: string; input_audio?: { data: string } }> }>)[1]
+		?.content.find((part) => part.type === "input_audio");
+	assert.equal(omniPart?.input_audio?.data.startsWith("data:;base64,"), true);
+	assert.equal(omniAudioDataUri({ filename: "clip.wav", bytes: new Uint8Array([1]) }).startsWith("data:;base64,"), true);
+});
+
+test("parseChatSse concatenates streamed deltas", () => {
+	assert.equal(
+		parseChatSse([
+			"data: {\"choices\":[{\"delta\":{\"content\":\"## Cap\"}}]}",
+			"data: {\"choices\":[{\"delta\":{\"content\":\"tion\\nHi\"}}]}",
+			"data: [DONE]",
+		].join("\n")),
+		"## Caption\nHi",
+	);
+});
+
+test("createHttpAudioProvider streams Omni on DashScope URLs", async () => {
+	const calls: Array<{ url: string; init: RequestInit }> = [];
+	globalThis.fetch = (async (url, init) => {
+		calls.push({ url: String(url), init: init ?? {} });
+		return new Response([
+			"data: {\"choices\":[{\"delta\":{\"content\":\"## Caption\\nHosted.\\n\"}}]}",
+			"data: [DONE]",
+		].join("\n"), { status: 200 });
+	}) as typeof fetch;
+
+	const provider = createHttpAudioProvider({
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		apiKey: "sk-test",
+		model: "qwen3-omni-flash",
+	});
+	const text = await provider.describe({ filename: "clip.wav", bytes: new Uint8Array([9]) });
+	assert.match(text, /Hosted/);
+	assert.equal(calls.length, 1);
+	assert.equal(calls[0]?.url, "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions");
+	const headers = new Headers(calls[0]?.init.headers);
+	assert.equal(headers.get("authorization"), "Bearer sk-test");
+	const body = JSON.parse(String(calls[0]?.init.body)) as {
+		stream?: boolean;
+		modalities?: string[];
+		messages: Array<{ content: Array<{ type: string }> }>;
+	};
+	assert.equal(body.stream, true);
+	assert.deepEqual(body.modalities, ["text"]);
+	assert.equal(body.messages[1]?.content.some((part) => part.type === "input_audio"), true);
+});
+
+test("explainAudioEndpoint points vision-only servers at hosted Omni", () => {
+	const error = explainAudioEndpoint(new Error(
+		"Audio request failed (400): content objects must have a type field that is either 'text' or 'image_url'.",
+	));
+	assert.match(error.message, /DashScope/);
 });

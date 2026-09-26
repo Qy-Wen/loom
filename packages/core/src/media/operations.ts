@@ -41,6 +41,22 @@ export function buildVlmStillArgs(inputPath: string, outputPath: string, timeSec
 	];
 }
 
+export function buildAudioCompactArgs(inputPath: string, outputPath: string): string[] {
+	return [
+		"-y",
+		"-i",
+		inputPath,
+		"-vn",
+		"-ac",
+		"1",
+		"-ar",
+		"16000",
+		"-b:a",
+		"48k",
+		outputPath,
+	];
+}
+
 export function buildExtractClipArgs(
 	inputPath: string,
 	outputPath: string,

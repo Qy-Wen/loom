@@ -61,4 +61,4 @@ Loom is only an HTTP client. It does not ship weights, ONNX, or an in-process ru
 
 - **Wire:** OpenAI-compatible `POST {baseUrl}/v1/embeddings` with `{ model, input }`.
 - **Local or remote:** same fields. Local is a user-run server (Ollama, TEI, …). Remote is the same call plus an API key.
-- Endpoints are user-configured. There is no built-in default vendor. Chat, embedding, rerank, and VLM share one Settings page; see [SETTINGS.md](../SETTINGS.md).
+- Endpoints are user-configured. There is no built-in default vendor. Chat, embedding, rerank, VLM, and Audio share one Settings page; see [SETTINGS.md](../SETTINGS.md).

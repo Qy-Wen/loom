@@ -5,7 +5,8 @@ const BASE_SYSTEM_PROMPT =
 	"Use search_assets to retrieve assets (filename/FTS plus embeddings when indexed) and inspect_asset before making claims about one asset. " +
 	"Use describe_image to write a caption for a JPEG/PNG/WebP/BMP image via the VLM slot; it does not run automatically. " +
 	"Use describe_video for a video (native video when the endpoint allows it, otherwise stills); it does not run automatically. " +
-	"Use embed_asset to index Markdown or a described image/video (chunk + embeddings); it does not run automatically. " +
+	"Use describe_audio for standalone audio via the Audio slot (music, ambient sound, speech if any); it does not run automatically. " +
+	"Use embed_asset to index Markdown or a described image/video/audio (chunk + embeddings); it does not run automatically. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +

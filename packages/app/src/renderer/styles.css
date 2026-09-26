@@ -105,12 +105,20 @@ body {
 }
 
 .error-banner {
+	display: flex;
+	align-items: center;
 	flex: 0 0 auto;
+	min-width: 0;
 	padding: 7px 14px;
 	border-bottom: 1px solid #f1b7b7;
 	color: #8d2020;
 	background: #fff0f0;
 	font-size: 13px;
+}
+
+.error-banner .copyable-error {
+	flex: 1;
+	min-width: 0;
 }
 
 .shell {
@@ -1520,6 +1528,35 @@ body.resizing-columns {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.properties dd.copyable-error-cell {
+	overflow: visible;
+	text-overflow: unset;
+	white-space: normal;
+}
+
+.copyable-error {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.copyable-error-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.copyable-error-copy {
+	flex-shrink: 0;
+}
+
+.error-banner .copyable-error-copy {
+	color: #8d2020;
 }
 
 .property-heading,

@@ -14,12 +14,14 @@ import type {
 	TextEmbedStatus,
 	ImageVlmStatus,
 	VideoVlmStatus,
+	AudioWriteupStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
+import { CopyableError } from "./panel/copyable-error.tsx";
 import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview } from "./workbench/asset-preview.tsx";
@@ -40,7 +42,7 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
-	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm" || change.type === "video_vlm") return current;
+	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm" || change.type === "video_vlm" || change.type === "audio_writeup") return current;
 	if (change.type === "remove") {
 		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
 	}
@@ -86,6 +88,7 @@ export function App(): React.JSX.Element {
 	const [textEmbed, setTextEmbed] = useState<TextEmbedStatus | undefined>();
 	const [imageVlm, setImageVlm] = useState<ImageVlmStatus | undefined>();
 	const [videoVlm, setVideoVlm] = useState<VideoVlmStatus | undefined>();
+	const [audioWriteup, setAudioWriteup] = useState<AudioWriteupStatus | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
@@ -153,6 +156,10 @@ export function App(): React.JSX.Element {
 				void window.loom.getVideoVlmStatus(change.assetId).then(setVideoVlm).catch(() => undefined);
 				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
 			}
+			if (change.type === "audio_writeup" && change.assetId === selectedAssetIdRef.current) {
+				void window.loom.getAudioWriteupStatus(change.assetId).then(setAudioWriteup).catch(() => undefined);
+				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+			}
 			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
 				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
 				if (selectedAssetIdRef.current) {
@@ -177,6 +184,7 @@ export function App(): React.JSX.Element {
 			setTextEmbed(undefined);
 			setImageVlm(undefined);
 			setVideoVlm(undefined);
+			setAudioWriteup(undefined);
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
@@ -191,6 +199,9 @@ export function App(): React.JSX.Element {
 		});
 		void window.loom.getVideoVlmStatus(selectedAssetId).then(setVideoVlm).catch(() => {
 			setVideoVlm(undefined);
+		});
+		void window.loom.getAudioWriteupStatus(selectedAssetId).then(setAudioWriteup).catch(() => {
+			setAudioWriteup(undefined);
 		});
 		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
 			setRelations(EMPTY_RELATIONS);
@@ -481,6 +492,8 @@ export function App(): React.JSX.Element {
 		try {
 			if (selectedAsset?.type === "video") {
 				setVideoVlm(await window.loom.describeVideo(selectedAssetId));
+			} else if (selectedAsset?.type === "audio") {
+				setAudioWriteup(await window.loom.describeAudio(selectedAssetId));
 			} else {
 				setImageVlm(await window.loom.describeImage(selectedAssetId));
 			}
@@ -630,7 +643,11 @@ export function App(): React.JSX.Element {
 					</button>
 				</header>
 
-				{error && <div className="error-banner">{error}</div>}
+				{error && (
+					<div className="error-banner">
+						<CopyableError text={error} />
+					</div>
+				)}
 
 				<div className="shell" ref={shellRef} style={shellStyle}>
 					<LibrarySidebar
@@ -737,6 +754,7 @@ export function App(): React.JSX.Element {
 						onEmbed={() => void embedSelected()}
 						imageVlm={imageVlm}
 						videoVlm={videoVlm}
+						audioWriteup={audioWriteup}
 						describing={describing}
 						onDescribe={() => void describeSelected()}
 						relations={relations}

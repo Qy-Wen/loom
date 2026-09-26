@@ -13,11 +13,14 @@ test("asset tools return structured safe results", async () => {
 	try {
 		await writeFile(join(root, "hero.jpg"), "image");
 		await writeFile(join(root, "clip.mp4"), "video");
+		await writeFile(join(root, "rain.mp3"), "audio");
 		const snapshot = await core.openLibrary(root);
 		const hero = snapshot.assets.find((asset) => asset.filename === "hero.jpg");
 		const clip = snapshot.assets.find((asset) => asset.filename === "clip.mp4");
+		const rain = snapshot.assets.find((asset) => asset.filename === "rain.mp3");
 		assert.ok(hero);
 		assert.ok(clip);
+		assert.ok(rain);
 
 		const tools = createAssetTools(core, {
 			embedAsset: (assetId) => core.embedTextAsset(assetId, {
@@ -32,12 +35,17 @@ test("asset tools return structured safe results", async () => {
 				modelId: "test-vlm",
 				describe: async () => "## Caption\nA test clip.\n\n## Tags\nvideo",
 			}),
+			describeAudio: (assetId) => core.describeAudioAsset(assetId, {
+				modelId: "qwen2-audio-7b-instruct",
+				describe: async () => "## Caption\nRain on a roof.\n\n## Tags\nrain\n\n## Transcript\nNone",
+			}),
 		});
 		const search = tools.find((tool) => tool.name === "search_assets");
 		const inspect = tools.find((tool) => tool.name === "inspect_asset");
 		const describe = tools.find((tool) => tool.name === "describe_image");
 		const describeVideo = tools.find((tool) => tool.name === "describe_video");
-		assert.ok(search && inspect && describe && describeVideo);
+		const describeAudio = tools.find((tool) => tool.name === "describe_audio");
+		assert.ok(search && inspect && describe && describeVideo && describeAudio);
 
 		const searchResult = await search.execute({ query: "hero", type: "image" }) as LoomToolResult;
 		assert.equal((searchResult.details as { kind: string }).kind, "asset_list");
@@ -59,6 +67,12 @@ test("asset tools return structured safe results", async () => {
 		const afterVideo = await inspect.execute({ assetId: clip.assetId }) as LoomToolResult;
 		assert.equal((afterVideo.details as { videoVlm: { status: string } }).videoVlm.status, "ready");
 		assert.equal((await core.searchAssets({ query: "test clip" })).total, 1);
+
+		const describedAudio = await describeAudio.execute({ assetId: rain.assetId }) as LoomToolResult;
+		assert.equal((describedAudio.details as { status: string }).status, "ready");
+		const afterAudio = await inspect.execute({ assetId: rain.assetId }) as LoomToolResult;
+		assert.equal((afterAudio.details as { audioWriteup: { status: string } }).audioWriteup.status, "ready");
+		assert.equal((await core.searchAssets({ query: "Rain on a roof" })).total, 1);
 
 		await assert.rejects(Promise.resolve().then(() => search.execute({ type: "invalid" })), /supported asset type/);
 		await assert.rejects(Promise.resolve().then(() => inspect.execute({ assetId: "" })), /non-empty string/);

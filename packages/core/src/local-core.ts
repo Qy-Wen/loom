@@ -9,9 +9,12 @@ import type { NearestChildHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
 import type { VideoVlmProvider, VideoVlmStatus } from "./model/video-vlm.ts";
+import type { AudioWriteupProvider, AudioWriteupStatus } from "./model/audio-writeup.ts";
 import { ImageVlmService } from "./rag/image-vlm.ts";
 import { extractVideoFramesForVlm } from "./rag/video-frames.ts";
 import { VideoVlmService } from "./rag/video-vlm.ts";
+import { prepareAudioForModel } from "./rag/audio-prepare.ts";
+import { AudioWriteupService } from "./rag/audio-writeup.ts";
 import { TextEmbedService } from "./rag/service.ts";
 import type {
 	AssetPropertyValue,
@@ -72,6 +75,7 @@ export class LocalCore {
 	private readonly textEmbed: TextEmbedService;
 	private readonly imageVlm: ImageVlmService;
 	private readonly videoVlm: VideoVlmService;
+	private readonly audioWriteup: AudioWriteupService;
 	private readonly media: MediaService;
 	private sessions: JsonlSessionRepo | null = null;
 	private readonly sessionListeners = new Set<(sessions: SessionSummary[]) => void>();
@@ -93,6 +97,11 @@ export class LocalCore {
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
 			extractVideoFramesForVlm,
+		);
+		this.audioWriteup = new AudioWriteupService(
+			this.metadataStore,
+			(assetId) => this.library.getAssetFilePath(assetId),
+			prepareAudioForModel,
 		);
 		this.media = new MediaService(this.library);
 		this.library.subscribe((change) => {
@@ -330,6 +339,7 @@ export class LocalCore {
 			textEmbed: await this.textEmbed.getStatus(asset.assetId),
 			imageVlm: await this.imageVlm.getStatus(asset.assetId),
 			videoVlm: await this.videoVlm.getStatus(asset.assetId),
+			audioWriteup: await this.audioWriteup.getStatus(asset.assetId),
 			...await this.listAssetRelations(asset.assetId),
 		};
 	}
@@ -435,6 +445,18 @@ export class LocalCore {
 			this.library.notifyVideoVlm(assetId);
 		});
 		this.library.notifyVideoVlm(assetId);
+		return status;
+	}
+
+	getAudioWriteupStatus(assetId: string, currentModelId?: string): Promise<AudioWriteupStatus> {
+		return this.audioWriteup.getStatus(assetId, currentModelId);
+	}
+
+	async describeAudioAsset(assetId: string, provider: AudioWriteupProvider): Promise<AudioWriteupStatus> {
+		const status = await this.audioWriteup.describe(assetId, provider, () => {
+			this.library.notifyAudioWriteup(assetId);
+		});
+		this.library.notifyAudioWriteup(assetId);
 		return status;
 	}
 

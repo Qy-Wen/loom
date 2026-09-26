@@ -51,12 +51,9 @@ export function slotView(slot: ModelSlotRecord): ModelSlotView {
 }
 
 export function settingsView(file: ModelSettingsFile): ModelSettingsView {
-	return {
-		chat: slotView(file.chat),
-		embedding: slotView(file.embedding),
-		rerank: slotView(file.rerank),
-		vlm: slotView(file.vlm),
-	};
+	const next = {} as ModelSettingsView;
+	for (const id of MODEL_SLOTS) next[id] = slotView(file[id]);
+	return next;
 }
 
 export function applySlotDraft(current: ModelSlotRecord, draft: ModelSlotDraft): ModelSlotRecord {

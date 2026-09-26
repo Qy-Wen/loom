@@ -1,5 +1,6 @@
 import type {
 	AssetSearchQuery,
+	AudioWriteupStatus,
 	EmbeddingProvider,
 	ImageVlmStatus,
 	LocalCore,
@@ -34,6 +35,7 @@ export interface AssetToolOptions {
 	embeddingProvider?: () => Promise<EmbeddingProvider | undefined>;
 	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 	describeVideo: (assetId: string) => Promise<VideoVlmStatus>;
+	describeAudio: (assetId: string) => Promise<AudioWriteupStatus>;
 }
 
 /**
@@ -45,13 +47,13 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "search_assets",
 			description:
-				"Search the open local asset library by filename/path text, Level 1 extracts, VLM captions, embeddings when indexed, media type, and custom properties. " +
+				"Search the open local asset library by filename/path text, Level 1 extracts, VLM/audio captions, embeddings when indexed, media type, and custom properties. " +
 				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF). Property filters are AND-combined. " +
 				"Returns asset IDs plus a matching passage when one exists; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
 				properties: {
-					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract, VLM caption, or semantic query over indexed chunks." },
+					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract, VLM/audio caption, or semantic query over indexed chunks." },
 					type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
 					properties: {
 						type: "array",
@@ -89,7 +91,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			name: "inspect_asset",
 			description:
 				"Inspect one asset by stable assetId. Returns file metadata, custom properties, relations (including GENERATED_FROM), " +
-				"a VLM write-up when the image or video has been described, text-index status, and a safe preview reference. " +
+				"a VLM or Audio write-up when the image, video, or audio has been described, text-index status, and a safe preview reference. " +
 				"Never accepts or returns an absolute filesystem path.",
 			parameters: {
 				type: "object",
@@ -112,7 +114,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			name: "embed_asset",
 			description:
 				"Index one asset for later retrieval: chunk the source Markdown and request embeddings. " +
-				"Supported: .md files, or images/videos that already have a VLM write-up. " +
+				"Supported: .md files, or images/videos/audio that already have a write-up. " +
 				"Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
 			parameters: {
 				type: "object",
@@ -172,6 +174,30 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			execute: async (rawArgs) => {
 				const args = validateInspectArgs(rawArgs);
 				const result = await options.describeVideo(args.assetId);
+				return {
+					content: JSON.stringify(result),
+					details: result,
+				} satisfies LoomToolResult;
+			},
+		},
+		{
+			name: "describe_audio",
+			description:
+				"Describe one standalone audio file with the Audio slot: caption, tags, and transcript as Markdown. " +
+				"Understands music and ambient sound, not speech-only ASR. Does not run on import. AAC/FLAC/M4A/MP3/OGG/WAV. " +
+				"After a ready write-up, use embed_asset to index it. Uses the Audio slot from Settings. " +
+				"Returns idle/describing/ready/failed status.",
+			parameters: {
+				type: "object",
+				properties: {
+					assetId: { type: "string", minLength: 1 },
+				},
+				required: ["assetId"],
+				additionalProperties: false,
+			},
+			execute: async (rawArgs) => {
+				const args = validateInspectArgs(rawArgs);
+				const result = await options.describeAudio(args.assetId);
 				return {
 					content: JSON.stringify(result),
 					details: result,

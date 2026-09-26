@@ -22,6 +22,7 @@ export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResul
 		switch (draft.slot) {
 			case "chat":
 			case "vlm":
+			case "audio":
 				await probeChatLike(baseUrl, model, apiKey);
 				break;
 			case "embedding":
