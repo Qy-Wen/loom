@@ -37,6 +37,7 @@ TEI 原生存根（字段叫 `texts` 不叫 `documents`）不做第一家。只�
 ## 存储
 
 - 落在应用用户数据目录，不进 `<library>/.loom/`。拷贝素材库时不能把 API key 一起拷走。
+- 上次打开的素材库路径记在应用用户数据 `last-library.json`。启动时目录还在就自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
 - `<library>/.loom/config.json` 只放库级偏好。
 - 密钥留在应用用户数据，不进素材库。设置页默认掩码（`••••`），旁边眼睛可显示明文。以后可以再进系统钥匙串。
 - Chat 和 Embedding 一样由用户配置。Chat 槽位为空时，Main 可以从 `.env`（`DEEPSEEK_API_KEY` 和 DeepSeek 的 `baseUrl`）预填一次，方便现有开发环境启动。用户保存 Chat 之后，只认这个槽位。

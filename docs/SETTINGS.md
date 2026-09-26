@@ -37,6 +37,7 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 ## Storage
 
 - Persist in the app user data directory, not `<library>/.loom/`. Copying a library must not copy API keys.
+- Last opened library path is `last-library.json` in app user data. Startup reopens it if that folder still exists; a missing folder leaves the empty state and keeps the remembered path (a disconnected drive can come back). E2E uses its own userData, so it does not restore a host library.
 - `<library>/.loom/config.json` stays library preferences only.
 - Keys stay in app user data, not the library. Settings shows the key masked (`••••`); an eye toggle reveals the real value. Later they can move to the OS keychain.
 - Chat is user-configured like Embedding. If the Chat slot is empty, Main may prefill once from `.env` (`DEEPSEEK_API_KEY` and a DeepSeek `baseUrl`) so existing dev setups still start. After the user saves Chat, that slot is the only source.
