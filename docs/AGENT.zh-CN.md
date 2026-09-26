@@ -152,7 +152,7 @@ packages/agent/src/
 ### 注册工具（无需改上游源码）
 
 - **工作区工具**：用 `NodeExecutionEnv` 包一层 pi 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
-- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步，会从 FTS 长到切片级 hybrid 命中。
+- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
 

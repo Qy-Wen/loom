@@ -3,20 +3,18 @@
 # TODO
 
 > Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design, [AGENT.md](./AGENT.md) for the Agent architecture, [SETTINGS.md](./SETTINGS.md) for model endpoints, and [RAG](./RAG/RAG.md) for retrieval.
-> Only the next three steps are detailed; later work stays at summary level.
+> Only the next steps are detailed; later work stays at summary level.
 > Creation tools (ComfyUI and later) attach as MCP servers. Loom-owned tools stay the library: search, FFmpeg, and workspace tools. Files land in the library via write/bash; the watcher indexes them. Path jail and sandbox come later.
 
 ---
 
-## Step 1: Video VLM
+## Step 1: Hybrid Search
 
-On-demand file-level write-up, same VLM slot, then the text embedding path. Do not embed the whole library by default. Scene chunks, per-shot captions, and soundtrack ASR wait.
+sqlite-vec over child embeddings that already exist (Markdown chunks, and text from images / video). Property filters stay AND. Fuse FTS ranks with vector ranks using **RRF** (`k = 60`). Return the hit plus `asset_id`. Do not embed the whole library. See [TEXT](./RAG/TEXT.md).
 
-Prefer **native video** when the endpoint accepts it (OpenAI-compatible `chat/completions` with a video part, or the vendor's equivalent). If it only takes images, FFmpeg extracts frames and sends them as `image_url`. Loom does not load or run the model.
-
-- [x] Detect whether the VLM endpoint can take native video; otherwise extract frames
-- [x] Persist one write-up per video asset; skip rename/move when mtime is unchanged
-- [x] Fold into Markdown and hand it to the Embedding slot. Details / Agent can request it and see status
+- [x] sqlite-vec over child chunks that already have embeddings
+- [x] RRF-fuse with `assets_fts`; a child hit can expand to its parent
+- [x] Keep a minimal retrieval eval set
 
 ## Step 2: Audio transcription
 
@@ -25,14 +23,6 @@ Audio files only. Do not transcribe the whole library by default. Transcribe fir
 - [ ] Add an ASR settings slot (`baseUrl`, optional key, `model`). Wire is OpenAI-compatible `POST /v1/audio/transcriptions` with timestamped segments
 - [ ] FFmpeg extracts audio locally; long files are split before upload and segment times are shifted back. Loom does not run the model
 - [ ] Persist segments by `asset_id`, then embed them with the Embedding slot. Skip when mtime is unchanged; changing the ASR model invalidates the transcript. Details / Agent can request it and see status
-
-## Step 3: Hybrid Search
-
-sqlite-vec over child embeddings that already exist (Markdown chunks, and text from images / video). Fuse with FTS and property filters. Return the hit plus `asset_id`. Do not embed the whole library. See [TEXT](./RAG/TEXT.md).
-
-- [ ] sqlite-vec over child chunks that already have embeddings
-- [ ] Fuse with `assets_fts` and property filters; a child hit can expand to its parent
-- [ ] Keep a minimal retrieval eval set
 
 ---
 

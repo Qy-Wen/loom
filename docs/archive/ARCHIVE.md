@@ -208,3 +208,13 @@ On-demand image write-up via the VLM slot, then the existing text embedding path
 - OpenAI-compatible `POST /v1/chat/completions` with `image_url` (data URI). Local and remote share `baseUrl`, optional key, and `model`. Loom does not load or run the model
 - JPEG / PNG / WebP / BMP only. Caption / tags Markdown in `image_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
 - Details Caption and `describe_image`; then `embed_asset` folds the Markdown into `text_chunks`. Empty Embedding slot still keeps the text. No sidecar `.md`
+
+---
+
+## ✅ Video VLM
+
+On-demand file-level write-up via the same VLM slot, then the text embedding path. Import does not run it. Scene chunks and soundtrack ASR wait.
+
+- Prefer native `video_url` (data URI, up to 32 MB) on OpenAI-compatible `POST /v1/chat/completions`. If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs as `image_url`. Loom does not load or run the model
+- avi / m4v / mkv / mov / mp4 / webm. Caption / tags Markdown in `video_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
+- Details Caption and `describe_video`; then `embed_asset` folds the Markdown into `text_chunks`. Frames are not library assets. No sidecar `.md`

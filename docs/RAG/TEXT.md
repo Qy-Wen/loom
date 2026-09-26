@@ -21,7 +21,7 @@
 
 Do not stuff the library into the prompt. Do not embed the whole library by default.
 
-`search_assets` is the retrieve step. It is FTS today. After the index exists it returns **passage + `asset_id`**, fused with FTS and property filters. A child hit can expand to its parent for more context.
+`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`) and returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only. No Embedding slot, or a failed query embed, is FTS-only.
 
 ---
 
@@ -37,17 +37,21 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 - **Parent / child:** children first, then pack. Children find the hit; parents fill in context. Cut all child slices first (structure, then 512 / 64). Then group consecutive children into parents until the source span would exceed **2048** tokens (about four children). Parent text is that source span, not a concat of overlapping child strings. Do not use heading level as the parent boundary. `parent_id` is null on a root parent. Only children get embeddings.
 - **Input:** the Level 1 extract. If it is missing or stale, extract first. Analyze stays Level 1; embed is a separate user or Agent action.
 - **Provider:** an `EmbeddingProvider`. Loom never loads or runs a model. Wire format is OpenAI-compatible `POST /v1/embeddings`. `baseUrl`, API key, and `model` come from the Embedding slot in [Settings](../SETTINGS.md).
-- **Store:** a table keyed by `asset_id` (chunk id, `parent_id`, role, offsets, text, mtime; child rows also have vector + model id). Not a blob in `asset_metadata`. Not sqlite-vec yet.
+- **Store:** `text_chunks` keyed by `asset_id` (chunk id, `parent_id`, role, offsets, text, mtime; child rows also have vector + model id). Not a blob in `asset_metadata`. sqlite-vec loads on open and scores those blobs with `vec_distance_cosine`. There is no `vec0` table: dimension follows the Embedding slot. If the extension is missing, the same cosine runs in JavaScript.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the embedding model invalidates the rows.
 
 ---
 
 ## Retrieve
 
-- sqlite-vec over **child** chunks that already have embeddings
+- Embed the query once at search time through the Embedding slot (`POST /v1/embeddings`)
+- sqlite-vec (or JS cosine) over **child** chunks that already have embeddings
+- `assets_fts` ranks filename / path / properties / Level 1 / VLM text as today (`ORDER BY rank`)
+- Property filters stay hard AND on both lists before fusion
+- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. The Rerank settings slot waits.
 - A hit can return the child passage and optionally the parent text
-- Fuse with `assets_fts` and property filters
 - Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND)
 
 ---
 

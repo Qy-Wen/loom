@@ -22,7 +22,7 @@
 
 第一条路径是切过的 Markdown。规则见 [TEXT.md](./TEXT.zh-CN.md)。图 / 视频 / 音频先转成文字，再走同一套切片，见 [MEDIA.md](./MEDIA.zh-CN.md)。
 
-`search_assets` 是检索步。现在是 FTS。索引有了之后返回 **段落 + `asset_id`**，再和 FTS、属性过滤融合。
+`search_assets` 是检索步。返回 **段落 + `asset_id`**。属性过滤仍是 AND。FTS 和向量排名用 RRF 融合。见 [TEXT.md](./TEXT.zh-CN.md)。
 
 ---
 

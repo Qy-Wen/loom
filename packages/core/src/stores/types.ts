@@ -4,6 +4,7 @@ import type { AssetPropertyValue, PropertyDefinition } from "../model/property.t
 import type { LibraryPaths } from "../library/paths.ts";
 import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
+import type { NearestChildHit } from "../model/hybrid.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -49,6 +50,7 @@ export interface MetadataStore {
 	getVideoVlm(assetId: string): Promise<VideoVlmRecord | undefined>;
 	upsertVideoVlm(record: VideoVlmRecord): Promise<void>;
 	searchAssetIds(query: string): Promise<string[]>;
+	searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]>;
 }
 
 /** Output → source. `fromAssetId` is the generated file. */

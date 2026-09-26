@@ -1,9 +1,12 @@
 import { mkdir } from "node:fs/promises";
+import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
 import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
 import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmJobStatus, VideoVlmRecord } from "../model/video-vlm.ts";
+import type { NearestChildHit } from "../model/hybrid.ts";
+import { cosineDistance } from "../retrieval/rrf.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -52,9 +55,11 @@ interface AssetPropertyRow {
 }
 
 const VOLUME_ID_KEY = "volume_id";
+const requireSqlite = createRequire(import.meta.url);
 
 export class SqliteMetadataStore implements MetadataStore {
 	private database: Database.Database | null = null;
+	private vecLoaded = false;
 
 	async open(paths: LibraryPaths): Promise<void> {
 		await this.close();
@@ -65,6 +70,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			database.pragma("journal_mode = WAL");
 			database.pragma("foreign_keys = ON");
 			database.pragma("busy_timeout = 5000");
+			this.vecLoaded = loadSqliteVec(database);
 			this.ensureSchema(database);
 			this.database = database;
 			this.rebuildFtsIfStale();
@@ -77,6 +83,7 @@ export class SqliteMetadataStore implements MetadataStore {
 	async close(): Promise<void> {
 		const database = this.database;
 		this.database = null;
+		this.vecLoaded = false;
 		if (database?.open) database.close();
 	}
 
@@ -480,9 +487,93 @@ export class SqliteMetadataStore implements MetadataStore {
 		const match = compileFtsQuery(query);
 		if (!match) return [];
 		const rows = this.requireDatabase()
-			.prepare("SELECT asset_id FROM assets_fts WHERE assets_fts MATCH ?")
+			.prepare("SELECT asset_id FROM assets_fts WHERE assets_fts MATCH ? ORDER BY rank")
 			.all(match) as Array<{ asset_id: string }>;
 		return rows.map((row) => row.asset_id);
+	}
+
+	async searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]> {
+		const cap = Math.max(0, Math.trunc(limit));
+		if (cap === 0 || vector.length === 0) return [];
+		if (this.vecLoaded) {
+			try {
+				return this.searchNearestWithVec(vector, cap);
+			} catch {
+				return this.searchNearestInJs(vector, cap);
+			}
+		}
+		return this.searchNearestInJs(vector, cap);
+	}
+
+	private searchNearestWithVec(vector: number[], limit: number): NearestChildHit[] {
+		const query = Buffer.from(new Float32Array(vector).buffer);
+		const byteLength = vector.length * 4;
+		const rows = this.requireDatabase().prepare(`
+			SELECT
+				c.chunk_id AS chunkId,
+				c.asset_id AS assetId,
+				c.parent_id AS parentId,
+				c.text AS text,
+				p.text AS parentText,
+				vec_distance_cosine(c.embedding, ?) AS dist
+			FROM text_chunks c
+			LEFT JOIN text_chunks p ON p.chunk_id = c.parent_id
+			WHERE c.role = 'child'
+				AND c.embedding IS NOT NULL
+				AND length(c.embedding) = ?
+			ORDER BY dist ASC
+			LIMIT ?
+		`).all(query, byteLength, limit) as Array<{
+			chunkId: string;
+			assetId: string;
+			parentId: string | null;
+			text: string;
+			parentText: string | null;
+			dist: number;
+		}>;
+		return rows.filter((row) => Number.isFinite(row.dist)).map((row) => ({
+			chunkId: row.chunkId,
+			assetId: row.assetId,
+			parentId: row.parentId,
+			text: row.text,
+			parentText: row.parentText ?? undefined,
+		}));
+	}
+
+	private searchNearestInJs(vector: number[], limit: number): NearestChildHit[] {
+		const rows = this.requireDatabase().prepare(`
+			SELECT
+				c.chunk_id AS chunkId,
+				c.asset_id AS assetId,
+				c.parent_id AS parentId,
+				c.text AS text,
+				c.embedding AS embedding,
+				p.text AS parentText
+			FROM text_chunks c
+			LEFT JOIN text_chunks p ON p.chunk_id = c.parent_id
+			WHERE c.role = 'child' AND c.embedding IS NOT NULL
+		`).all() as Array<{
+			chunkId: string;
+			assetId: string;
+			parentId: string | null;
+			text: string;
+			embedding: Buffer;
+			parentText: string | null;
+		}>;
+		const hits = rows.flatMap((row) => {
+			const embedding = blobToEmbedding(row.embedding);
+			if (!embedding || embedding.length !== vector.length) return [];
+			return [{
+				chunkId: row.chunkId,
+				assetId: row.assetId,
+				parentId: row.parentId,
+				text: row.text,
+				parentText: row.parentText ?? undefined,
+				distance: cosineDistance(vector, embedding),
+			}];
+		});
+		hits.sort((left, right) => left.distance - right.distance || left.chunkId.localeCompare(right.chunkId));
+		return hits.slice(0, limit).map(({ distance: _distance, ...hit }) => hit);
 	}
 
 	private ensureSchema(database: Database.Database): void {
@@ -830,4 +921,15 @@ function toVideoVlm(row: VideoVlmRow): VideoVlmRecord {
 
 function readyMarkdown(row: { status: string; markdown: string | null } | undefined): string | undefined {
 	return row?.status === "ready" ? row.markdown ?? undefined : undefined;
+}
+
+function loadSqliteVec(database: Database.Database): boolean {
+	try {
+		const sqliteVec = requireSqlite("sqlite-vec") as { load: (db: Database.Database) => void };
+		sqliteVec.load(database);
+		database.prepare("SELECT vec_version()").get();
+		return true;
+	} catch {
+		return false;
+	}
 }

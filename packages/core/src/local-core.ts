@@ -5,6 +5,7 @@ import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
+import type { NearestChildHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
 import type { VideoVlmProvider, VideoVlmStatus } from "./model/video-vlm.ts";
@@ -32,6 +33,7 @@ import {
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
+import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
 import { MediaService } from "./media/service.ts";
 import { resolveMediaPath } from "./media/policy.ts";
 import type {
@@ -214,15 +216,18 @@ export class LocalCore {
 		return this.metadataStore.removeAssetProperty(assetId, propertyId);
 	}
 
-	async searchAssets(query: AssetSearchQuery = {}): Promise<AssetSearchResult> {
+	async searchAssets(
+		query: AssetSearchQuery = {},
+		provider?: EmbeddingProvider,
+	): Promise<AssetSearchResult> {
 		const textQuery = query.query?.trim();
-		const [assets, definitions, values, matchedIds] = await Promise.all([
+		const [assets, definitions, values, ftsIds, nearest] = await Promise.all([
 			this.metadataStore.listAssets(),
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
-			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve(undefined),
+			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve([] as string[]),
+			textQuery ? this.nearestChildrenForQuery(textQuery, provider) : Promise.resolve([] as NearestChildHit[]),
 		]);
-		const matchedIdSet = matchedIds ? new Set(matchedIds) : undefined;
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
 			definitions.map((property) => [property.name.trim().toLowerCase(), property]),
@@ -240,20 +245,61 @@ export class LocalCore {
 			});
 			propertiesByAsset.set(value.assetId, list);
 		}
-
+		const assetsById = new Map(assets.map((asset) => [asset.assetId, asset]));
 		const filters = query.properties ?? [];
-		const matches: AssetSearchItem[] = [];
-		for (const asset of assets) {
-			if (query.type && asset.type !== query.type) continue;
-			if (matchedIdSet && !matchedIdSet.has(asset.assetId)) continue;
-			const properties = propertiesByAsset.get(asset.assetId) ?? [];
-			if (!matchesPropertyFilters(properties, filters, definitionByName)) continue;
-			matches.push(toSearchItem(asset, properties));
+		const passes = (assetId: string): boolean => {
+			const asset = assetsById.get(assetId);
+			if (!asset) return false;
+			if (query.type && asset.type !== query.type) return false;
+			return matchesPropertyFilters(propertiesByAsset.get(assetId) ?? [], filters, definitionByName);
+		};
+
+		const limit = Math.min(100, Math.max(1, Math.trunc(query.limit ?? 20)));
+		if (!textQuery) {
+			const matches = assets
+				.filter((asset) => passes(asset.assetId))
+				.map((asset) => toSearchItem(asset, propertiesByAsset.get(asset.assetId) ?? []));
+			return { kind: "asset_list", assets: matches.slice(0, limit), total: matches.length };
 		}
 
-		const total = matches.length;
-		const limit = Math.min(100, Math.max(1, Math.trunc(query.limit ?? 20)));
-		return { kind: "asset_list", assets: matches.slice(0, limit), total };
+		const ftsRanked = uniqueInOrder(ftsIds.filter(passes)).slice(0, HYBRID_CANDIDATES);
+		const vecRanked: string[] = [];
+		const bestChild = new Map<string, NearestChildHit>();
+		for (const hit of nearest) {
+			if (!passes(hit.assetId) || bestChild.has(hit.assetId)) continue;
+			bestChild.set(hit.assetId, hit);
+			vecRanked.push(hit.assetId);
+			if (vecRanked.length >= HYBRID_CANDIDATES) break;
+		}
+
+		const matches: AssetSearchItem[] = [];
+		for (const { id, score } of rrfFuse([ftsRanked, vecRanked])) {
+			const asset = assetsById.get(id);
+			if (!asset) continue;
+			const child = bestChild.get(id);
+			matches.push({
+				...toSearchItem(asset, propertiesByAsset.get(id) ?? []),
+				score,
+				...(child
+					? { passage: child.text, parentPassage: child.parentText, chunkId: child.chunkId }
+					: {}),
+			});
+		}
+		return { kind: "asset_list", assets: matches.slice(0, limit), total: matches.length };
+	}
+
+	private async nearestChildrenForQuery(
+		text: string,
+		provider?: EmbeddingProvider,
+	): Promise<NearestChildHit[]> {
+		if (!provider) return [];
+		try {
+			const [vector] = await provider.embed([text]);
+			if (!vector?.length) return [];
+			return this.metadataStore.searchNearestChildren(vector, HYBRID_CANDIDATES);
+		} catch {
+			return [];
+		}
 	}
 
 	async inspectAsset(assetId: string): Promise<AssetDetailResult> {

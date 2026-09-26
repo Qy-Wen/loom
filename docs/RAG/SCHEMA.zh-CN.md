@@ -18,6 +18,8 @@
 
 `open` 执行 `CREATE TABLE IF NOT EXISTS`。目前没有 schema 版本，也没有迁移。
 
+打开时尝试加载 sqlite-vec。子切片近邻用 `vec_distance_cosine` 打 `text_chunks.embedding` blob。不上 `vec0` 虚表：维度跟着 Embedding 槽位。扩展没有就用 JavaScript 算同一套余弦。
+
 目录不是表里的行。文件树来自扫描资产库。`.loom/` 和 `.DS_Store` 会被忽略。
 
 ---
@@ -216,7 +218,7 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `embedding` | BLOB | 可空 | Float32 小端向量。父行为空。 |
 | `model_id` | TEXT | 可空 | 子切片 embed 后写入。 |
 
-索引：`text_chunks_asset_idx`（`asset_id`）。
+索引：`text_chunks_asset_idx`（`asset_id`）。Hybrid Search 读这里的子切片向量，见 [TEXT](./TEXT.zh-CN.md)。
 
 先插父再插子。重建时先删子、再删父、再写入。
 

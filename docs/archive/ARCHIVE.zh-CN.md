@@ -208,3 +208,13 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 - OpenAI 兼容 `POST /v1/chat/completions`，消息里带 `image_url`（data URI）。本地和远程同一套 `baseUrl` + 可选 key + `model`。Loom 不加载、不运行模型
 - 只做 JPEG / PNG / WebP / BMP。caption / 标签 Markdown 落在 `image_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
 - Details Caption 和 `describe_image`；再用 `embed_asset` 把 Markdown 折进 `text_chunks`。Embedding 槽位空着时正文仍留下。不写 sidecar `.md`
+
+---
+
+## ✅ 视频 VLM
+
+按需用同一套 VLM 槽位给视频写文件级说明，再走文本 embedding。导入不跑。镜头切块和音轨 ASR 以后再做。
+
+- 优先 OpenAI 兼容 `POST /v1/chat/completions` 的 native `video_url`（data URI，不超过 32 MB）。端点拒收或文件更大时，FFmpeg 抽 1–3 张临时 JPEG 再当 `image_url`。Loom 不加载、不运行模型
+- avi / m4v / mkv / mov / mp4 / webm。caption / 标签 Markdown 落在 `video_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
+- Details Caption 和 `describe_video`；再用 `embed_asset` 把 Markdown 折进 `text_chunks`。抽帧不进素材库。不写 sidecar `.md`
