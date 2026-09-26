@@ -1430,6 +1430,13 @@ body.resizing-columns {
 	gap: 8px;
 }
 
+.vlm-markdown {
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 12em;
+	overflow: auto;
+}
+
 .details-content section + section {
 	margin-top: 24px;
 	padding-top: 18px;

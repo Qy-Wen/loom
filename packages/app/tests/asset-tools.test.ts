@@ -21,10 +21,15 @@ test("asset tools return structured safe results", async () => {
 				modelId: "test-embed",
 				embed: async (texts) => texts.map(() => [0.1, 0.2]),
 			}),
+			describeImage: (assetId) => core.describeImageAsset(assetId, {
+				modelId: "test-vlm",
+				describe: async () => "## Caption\nA test image.\n\n## Tags\ntest",
+			}),
 		});
 		const search = tools.find((tool) => tool.name === "search_assets");
 		const inspect = tools.find((tool) => tool.name === "inspect_asset");
-		assert.ok(search && inspect);
+		const describe = tools.find((tool) => tool.name === "describe_image");
+		assert.ok(search && inspect && describe);
 
 		const searchResult = await search.execute({ query: "hero", type: "image" }) as LoomToolResult;
 		assert.equal((searchResult.details as { kind: string }).kind, "asset_list");
@@ -34,6 +39,12 @@ test("asset tools return structured safe results", async () => {
 		const detailResult = await inspect.execute({ assetId: hero.assetId }) as LoomToolResult;
 		assert.equal((detailResult.details as { kind: string }).kind, "asset_detail");
 		assert.equal(JSON.stringify(detailResult).includes(root), false);
+
+		const described = await describe.execute({ assetId: hero.assetId }) as LoomToolResult;
+		assert.equal((described.details as { status: string }).status, "ready");
+		const after = await inspect.execute({ assetId: hero.assetId }) as LoomToolResult;
+		assert.equal((after.details as { imageVlm: { status: string } }).imageVlm.status, "ready");
+		assert.equal((await core.searchAssets({ query: "test image" })).total, 1);
 
 		await assert.rejects(Promise.resolve().then(() => search.execute({ type: "invalid" })), /supported asset type/);
 		await assert.rejects(Promise.resolve().then(() => inspect.execute({ assetId: "" })), /non-empty string/);

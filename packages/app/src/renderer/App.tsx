@@ -12,6 +12,7 @@ import type {
 	PropertyType,
 	PropertyValue,
 	TextEmbedStatus,
+	ImageVlmStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { sortAssets } from "./assets/asset-utils.ts";
@@ -38,7 +39,7 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
-	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed") return current;
+	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm") return current;
 	if (change.type === "remove") {
 		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
 	}
@@ -82,10 +83,12 @@ export function App(): React.JSX.Element {
 	const [error, setError] = useState<string | null>(null);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
 	const [textEmbed, setTextEmbed] = useState<TextEmbedStatus | undefined>();
+	const [imageVlm, setImageVlm] = useState<ImageVlmStatus | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
 	const [embedding, setEmbedding] = useState(false);
+	const [describing, setDescribing] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
@@ -140,6 +143,10 @@ export function App(): React.JSX.Element {
 			if (change.type === "text_embed" && change.assetId === selectedAssetIdRef.current) {
 				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
 			}
+			if (change.type === "image_vlm" && change.assetId === selectedAssetIdRef.current) {
+				void window.loom.getImageVlmStatus(change.assetId).then(setImageVlm).catch(() => undefined);
+				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+			}
 			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
 				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
 				if (selectedAssetIdRef.current) {
@@ -162,6 +169,7 @@ export function App(): React.JSX.Element {
 		if (!selectedAssetId) {
 			setEnrichment(undefined);
 			setTextEmbed(undefined);
+			setImageVlm(undefined);
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
@@ -170,6 +178,9 @@ export function App(): React.JSX.Element {
 		});
 		void window.loom.getTextEmbedStatus(selectedAssetId).then(setTextEmbed).catch(() => {
 			setTextEmbed(undefined);
+		});
+		void window.loom.getImageVlmStatus(selectedAssetId).then(setImageVlm).catch(() => {
+			setImageVlm(undefined);
 		});
 		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
 			setRelations(EMPTY_RELATIONS);
@@ -453,6 +464,20 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function describeSelected(): Promise<void> {
+		if (!selectedAssetId) return;
+		setDescribing(true);
+		setError(null);
+		try {
+			setImageVlm(await window.loom.describeImage(selectedAssetId));
+			setTextEmbed(await window.loom.getTextEmbedStatus(selectedAssetId));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		} finally {
+			setDescribing(false);
+		}
+	}
+
 	async function embedSelected(): Promise<void> {
 		if (!selectedAssetId) return;
 		setEmbedding(true);
@@ -696,6 +721,9 @@ export function App(): React.JSX.Element {
 						textEmbed={textEmbed}
 						embedding={embedding}
 						onEmbed={() => void embedSelected()}
+						imageVlm={imageVlm}
+						describing={describing}
+						onDescribe={() => void describeSelected()}
 						relations={relations}
 						assets={library.assets}
 						relationTypes={relationTypes}

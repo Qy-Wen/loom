@@ -10,11 +10,11 @@
 
 ## Step 1: Image VLM
 
-Turn the image into text, then use the existing text embedding path. Do not embed the image as a vector. Do not embed the whole library by default. Uses the VLM slot: chat completions with `image_url`. See [MEDIA](./RAG/MEDIA.md).
+Turn the image into text, then use the existing text embedding path. Do not embed the image as a vector. Do not embed the whole library by default. Uses the VLM slot: local or remote OpenAI-compatible chat completions with `image_url`. See [MEDIA](./RAG/MEDIA.md).
 
-- [ ] HTTP caption / tags (may include visible text in the image). Loom does not load or run the model
-- [ ] Persist the text per asset; skip rename/move when mtime is unchanged
-- [ ] Fold into Markdown and hand it to the Embedding slot. If that slot is empty, the text still stays. Details / Agent can request it and see status
+- [x] HTTP caption / tags (may include visible text in the image). Local servers and remote APIs share `baseUrl`, optional key, and `model`. Loom does not load or run the model
+- [x] Persist the text per asset; skip rename/move when mtime is unchanged
+- [x] Fold into Markdown and hand it to the Embedding slot. If that slot is empty, the text still stays. Details / Agent can request it and see status
 
 ## Step 2: Video VLM
 

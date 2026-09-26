@@ -556,6 +556,10 @@ export class Library {
 		this.emit({ type: "text_embed", assetId });
 	}
 
+	notifyImageVlm(assetId: string): void {
+		this.emit({ type: "image_vlm", assetId });
+	}
+
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}

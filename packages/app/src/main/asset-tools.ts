@@ -1,5 +1,6 @@
 import type {
 	AssetSearchQuery,
+	ImageVlmStatus,
 	LocalCore,
 	PropertyFilterOperator,
 	PropertyValue,
@@ -28,6 +29,7 @@ interface EmbedAssetArgs {
 
 export interface AssetToolOptions {
 	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 }
 
 /**
@@ -39,12 +41,12 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "search_assets",
 			description:
-				"Search the open local asset library by filename/path text, Level 1 extracts (file text, camera, codecs), media type, and custom properties. " +
+				"Search the open local asset library by filename/path text, Level 1 extracts (file text, camera, codecs), VLM image captions, media type, and custom properties. " +
 				"Property filters are AND-combined. Returns stable asset IDs; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
 				properties: {
-					query: { type: "string", description: "Case-insensitive filename, relative path, property value, or Level 1 extract text." },
+					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract text, or VLM image caption." },
 					type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
 					properties: {
 						type: "array",
@@ -75,7 +77,8 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "inspect_asset",
 			description:
-				"Inspect one asset by stable assetId. Returns file metadata, custom properties, relations (including GENERATED_FROM), and a safe preview reference. " +
+				"Inspect one asset by stable assetId. Returns file metadata, custom properties, relations (including GENERATED_FROM), " +
+				"a VLM write-up when the image has been described, text-index status, and a safe preview reference. " +
 				"Never accepts or returns an absolute filesystem path.",
 			parameters: {
 				type: "object",
@@ -97,8 +100,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "embed_asset",
 			description:
-				"Index one Markdown asset for later retrieval: chunk the Level 1 extract and request embeddings. " +
-				"Only .md files are supported. Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
+				"Index one asset for later retrieval: chunk the source Markdown and request embeddings. " +
+				"Supported: .md files, or JPEG/PNG/WebP/BMP images that already have a VLM write-up. " +
+				"Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -110,6 +114,29 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			execute: async (rawArgs) => {
 				const args = validateInspectArgs(rawArgs) satisfies EmbedAssetArgs;
 				const result = await options.embedAsset(args.assetId);
+				return {
+					content: JSON.stringify(result),
+					details: result,
+				} satisfies LoomToolResult;
+			},
+		},
+		{
+			name: "describe_image",
+			description:
+				"Describe one JPEG, PNG, WebP, or BMP image with the VLM slot: caption and tags as Markdown. " +
+				"Does not run on import. JPEG/PNG/WebP/BMP only. After a ready write-up, use embed_asset to index it. " +
+				"Uses the VLM slot from Settings. Returns idle/describing/ready/failed status.",
+			parameters: {
+				type: "object",
+				properties: {
+					assetId: { type: "string", minLength: 1 },
+				},
+				required: ["assetId"],
+				additionalProperties: false,
+			},
+			execute: async (rawArgs) => {
+				const args = validateInspectArgs(rawArgs);
+				const result = await options.describeImage(args.assetId);
 				return {
 					content: JSON.stringify(result),
 					details: result,

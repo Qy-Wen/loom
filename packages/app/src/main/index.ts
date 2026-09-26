@@ -26,6 +26,7 @@ import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-sele
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
+import { createHttpVlmProvider } from "./vlm-provider.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
@@ -94,7 +95,10 @@ const localCore = new LocalCore();
 const workspaceTools = createWorkspaceTools();
 const BUILTIN_TOOLS = [
 	...workspaceTools.tools,
-	...createAssetTools(localCore, { embedAsset: embedAssetWithSettings }),
+	...createAssetTools(localCore, {
+		embedAsset: embedAssetWithSettings,
+		describeImage: describeImageWithSettings,
+	}),
 	...createFfmpegTools(localCore),
 ];
 const AGENT_OPTIONS: LoomAgentOptions = {
@@ -363,6 +367,11 @@ function registerIpc(): void {
 		return localCore.getTextEmbedStatus(assetId, modelId || undefined);
 	});
 	ipcMain.handle(IPC.embedAsset, (_event, assetId: string) => embedAssetWithSettings(assetId));
+	ipcMain.handle(IPC.getImageVlmStatus, async (_event, assetId: string) => {
+		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
+		return localCore.getImageVlmStatus(assetId, modelId || undefined);
+	});
+	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeImageWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
 	ipcMain.handle(IPC.createSession, () => localCore.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
@@ -532,6 +541,15 @@ async function embedAssetWithSettings(assetId: string) {
 		throw new Error("Configure the Embedding slot in Settings first.");
 	}
 	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
+}
+
+async function describeImageWithSettings(assetId: string) {
+	if (!modelSettings) throw new Error("Settings store not started");
+	const slot = (await modelSettings.load()).vlm;
+	if (!slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Configure the VLM slot in Settings first.");
+	}
+	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot));
 }
 
 function mcpConfigPath(): string {

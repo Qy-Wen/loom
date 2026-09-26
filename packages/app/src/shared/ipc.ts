@@ -15,6 +15,7 @@ import type {
 	SessionRecord,
 	SessionSummary,
 	TextEmbedStatus,
+	ImageVlmStatus,
 } from "@loom/core";
 import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpSettingsView } from "./mcp-settings.ts";
@@ -85,6 +86,8 @@ export const IPC = {
 	analyzeAsset: "loom:analyzeAsset",
 	getTextEmbedStatus: "loom:getTextEmbedStatus",
 	embedAsset: "loom:embedAsset",
+	getImageVlmStatus: "loom:getImageVlmStatus",
+	describeImage: "loom:describeImage",
 	listSessions: "loom:listSessions",
 	createSession: "loom:createSession",
 	openSession: "loom:openSession",
@@ -141,6 +144,8 @@ export interface LoomApi {
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 	getTextEmbedStatus: (assetId: string) => Promise<TextEmbedStatus>;
 	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+	getImageVlmStatus: (assetId: string) => Promise<ImageVlmStatus>;
+	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;
 	openSession: (id: string) => Promise<SessionRecord>;

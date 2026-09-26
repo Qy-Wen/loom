@@ -6,6 +6,7 @@ import {
 	type AssetPropertyValue,
 	type PropertyDefinition,
 } from "../model/property.ts";
+import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -25,6 +26,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly enrichments = new Map<string, AssetEnrichment>();
 	private readonly textEmbedJobs = new Map<string, TextEmbedJob>();
 	private readonly textChunks = new Map<string, StoredTextChunk[]>();
+	private readonly imageVlm = new Map<string, ImageVlmRecord>();
 	private volumeId: string | undefined;
 
 	async open(): Promise<void> {
@@ -37,6 +39,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.enrichments.clear();
 		this.textEmbedJobs.clear();
 		this.textChunks.clear();
+		this.imageVlm.clear();
 		this.volumeId = undefined;
 	}
 
@@ -50,6 +53,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.enrichments.clear();
 		this.textEmbedJobs.clear();
 		this.textChunks.clear();
+		this.imageVlm.clear();
 		this.volumeId = undefined;
 	}
 
@@ -68,6 +72,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.assets.delete(replacedId);
 			if (replaced?.fileSystemId) this.assetIdByFileSystemId.delete(replaced.fileSystemId);
 			this.enrichments.delete(replacedId);
+			this.imageVlm.delete(replacedId);
 			this.clearTextIndex(replacedId);
 		}
 
@@ -118,6 +123,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.textChunks.keys()) {
 			if (!nextAssetIds.has(assetId)) this.clearTextIndex(assetId);
 		}
+		for (const assetId of this.imageVlm.keys()) {
+			if (!nextAssetIds.has(assetId)) this.imageVlm.delete(assetId);
+		}
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -128,6 +136,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		if (asset.fileSystemId) this.assetIdByFileSystemId.delete(asset.fileSystemId);
 		this.assetProperties.delete(assetId);
 		this.enrichments.delete(assetId);
+		this.imageVlm.delete(assetId);
 		this.clearTextIndex(assetId);
 	}
 
@@ -251,13 +260,28 @@ export class InMemoryMetadataStore implements MetadataStore {
 		}
 	}
 
+	async getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined> {
+		return this.imageVlm.get(assetId);
+	}
+
+	async upsertImageVlm(record: ImageVlmRecord): Promise<void> {
+		if (!this.assets.has(record.assetId)) throw new Error("Asset not found");
+		this.imageVlm.set(record.assetId, record);
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const tokens = searchTokens(query);
 		if (tokens.length === 0) return [];
 		const matches: string[] = [];
 		for (const asset of this.assets.values()) {
 			const values = [...(this.assetProperties.get(asset.assetId)?.values() ?? [])].map((item) => item.value);
-			const document = searchDocument(asset.filename, asset.relativePath, values, this.enrichments.get(asset.assetId));
+			const document = searchDocument(
+				asset.filename,
+				asset.relativePath,
+				values,
+				this.enrichments.get(asset.assetId),
+				readyImageVlmText(this.imageVlm.get(asset.assetId)),
+			);
 			if (documentMatchesTokens(document, tokens)) matches.push(asset.assetId);
 		}
 		return matches;
@@ -282,6 +306,10 @@ function cloneChunk(chunk: StoredTextChunk): StoredTextChunk {
 		...chunk,
 		embedding: chunk.embedding ? [...chunk.embedding] : undefined,
 	};
+}
+
+function readyImageVlmText(record: ImageVlmRecord | undefined): string | undefined {
+	return record?.status === "ready" ? record.markdown : undefined;
 }
 
 function normalizePropertyName(name: string): string {

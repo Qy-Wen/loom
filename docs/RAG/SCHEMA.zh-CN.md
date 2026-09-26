@@ -134,9 +134,9 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 | 列 | 含义 |
 |---|---|
 | `asset_id` | 资产 UUID。不建索引，用来把命中映回 `assets`。 |
-| `body` | 文件名、相对路径、属性值和已就绪的 Level 1 摘录。 |
+| `body` | 文件名、相对路径、属性值、已就绪的 Level 1 摘录，以及已就绪的 VLM 图文说明。 |
 
-分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性或富化变更时刷新对应行。
+分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性、富化或 VLM 说明变更时刷新对应行。
 
 Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](../TEXT.zh-CN.md)。
 
@@ -159,7 +159,25 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `parent_count` | INTEGER | NOT NULL | 这次写下的父切片数。 |
 | `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
 
-`ready` 在 `source_modified_at` 对不上，或设置页换了 embedding 模型时算过期。rename/move 且 mtime 没变不重跑。
+`ready` 在 `source_modified_at` 对不上，或设置页换了 embedding 模型时算过期。rename/move 且 mtime 没变不重跑。图片行在 VLM 说明比上次 embed 新时也算过期。
+
+---
+
+## `image_vlm`
+
+每个做过（或正在做）VLM 说明的图片一行。没有行就是 idle。仅 JPEG / PNG / WebP / BMP。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY，FK → `assets(asset_id)` ON DELETE CASCADE | 资产。 |
+| `status` | TEXT | NOT NULL，`describing` / `ready` / `failed` | 最近一次 describe。 |
+| `model_id` | TEXT | 可空 | 最近一次用的 VLM 槽位 `model`。 |
+| `source_modified_at` | REAL | NOT NULL | describe 时的 `assets.modified_at`。mtime 规则同 Level 1。 |
+| `error` | TEXT | 可空 | 失败原因。 |
+| `markdown` | TEXT | 可空 | `status = ready` 时的 caption / 标签 Markdown。 |
+| `updated_at` | REAL | NOT NULL | 最近写入的 `Date.now()`。 |
+
+`ready` 在 `source_modified_at` 对不上，或设置页换了 VLM 模型时算过期。rename/move 且 mtime 没变不重跑。Markdown 只有用户或 Agent 点 Embed 才会进 `text_chunks`。
 
 ---
 
@@ -274,6 +292,16 @@ CREATE TABLE IF NOT EXISTS text_chunks (
   )
 );
 CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
+
+CREATE TABLE IF NOT EXISTS image_vlm (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  markdown TEXT,
+  updated_at REAL NOT NULL
+);
 ```
 
 ---

@@ -30,7 +30,7 @@ Do not stuff the library into the prompt. Do not run this on the whole library b
 
 The user or the Agent requests one image. Import does not run it.
 
-- **VLM:** the existing VLM slot. Wire is chat completions; the user message includes `image_url` (a data URI for a local file). Loom does not load or run the model.
+- **VLM:** the existing VLM slot. Wire is OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes `image_url` (a data URI for a local file). Local servers and remote APIs are the same form; hosted APIs usually need a key, local servers often omit it. Loom does not load or run the model.
 - **Output:** caption / tags; visible text in the image may go into that write-up. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
 - **Do not embed the image itself.** CLIP / SigLIP image vectors wait.
 - **OCR:** not in-process in the first version; the VLM reads the words. Local CPU OCR is optional — see the placeholder below. Skipping it does not block VLM.
@@ -96,6 +96,16 @@ Standalone audio files. Transcribe first, then hand the text to the Embedding sl
 - FFmpeg extracts audio locally; long files are split before upload and segment times are shifted back. Loom does not run the recognizer.
 - Video soundtracks later reuse this ASR. Do not build a second pipeline.
 - CLAP-style acoustic vectors wait; they do not use the text Embedding slot.
+
+---
+
+## Provider
+
+Loom is only an HTTP client. The VLM does not run in-process.
+
+- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. The user message includes `image_url` (a data URI for a local file).
+- **Local or remote:** the same fields (`baseUrl`, optional API key, `model`). Local is a server the user runs (LM Studio, Ollama, and similar). Remote is the OpenAI-compatible call plus an API key.
+- Endpoints are user-configured. There is no built-in default vendor. See [SETTINGS.md](../SETTINGS.md).
 
 ---
 

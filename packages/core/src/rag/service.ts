@@ -11,6 +11,7 @@ import {
 } from "../model/text-embed.ts";
 import type { EnrichmentService } from "../enrichment/service.ts";
 import type { MetadataStore } from "../stores/types.ts";
+import { canDescribeImage } from "./image-vlm.ts";
 import { chunkMarkdown } from "./chunk.ts";
 import { canEmbedMarkdown } from "./markdown.ts";
 
@@ -51,7 +52,7 @@ export class TextEmbedService {
 		provider: EmbeddingProvider,
 		onUpdate?: (status: TextEmbedStatus) => void,
 	): Promise<TextEmbedStatus> {
-		if (!canEmbedMarkdown(asset.filename)) return unsupportedStatus(asset);
+		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
 
 		const current = await this.currentIfFresh(asset, provider.modelId);
 		if (current) return current;
@@ -66,19 +67,20 @@ export class TextEmbedService {
 		onUpdate?.(await this.statusFor(asset, provider.modelId));
 
 		try {
-			const extract = await this.ensureExtract(asset);
-			if (extract.status !== "ready" || extract.data?.kind !== "text") {
+			const source = await this.sourceMarkdown(asset);
+			if ("unsupported" in source) return unsupportedStatus(asset);
+			if ("error" in source) {
 				await this.writeJob(asset, {
 					status: "failed",
 					modelId: provider.modelId,
-					error: extract.error ?? "Level 1 extract is not ready",
+					error: source.error,
 					childCount: 0,
 					parentCount: 0,
 				});
 				return this.statusFor(asset, provider.modelId);
 			}
 
-			const plan = chunkMarkdown(extract.data.text);
+			const plan = chunkMarkdown(source.text);
 			const chunks = toStoredChunks(asset.assetId, plan);
 			await this.metadata.replaceTextChunks(asset.assetId, chunks);
 
@@ -125,10 +127,43 @@ export class TextEmbedService {
 		return this.enrichment.analyze(asset.assetId);
 	}
 
+	private async sourceMarkdown(asset: Asset): Promise<{ text: string } | { error: string } | { unsupported: true }> {
+		if (canEmbedMarkdown(asset.filename)) {
+			const extract = await this.ensureExtract(asset);
+			if (extract.status !== "ready" || extract.data?.kind !== "text") {
+				return { error: extract.error ?? "Level 1 extract is not ready" };
+			}
+			return { text: extract.data.text };
+		}
+		if (canDescribeImage(asset)) {
+			const record = await this.metadata.getImageVlm(asset.assetId);
+			if (
+				record?.status !== "ready"
+				|| record.sourceModifiedAt !== asset.modifiedAt
+				|| !record.markdown?.trim()
+			) {
+				return { error: "Describe the image with the VLM slot first" };
+			}
+			return { text: record.markdown };
+		}
+		return { unsupported: true };
+	}
+
 	private async currentIfFresh(asset: Asset, modelId: string): Promise<TextEmbedStatus | undefined> {
 		const job = await this.metadata.getTextEmbedJob(asset.assetId);
 		if (job?.status !== "ready" || job.modelId !== modelId || job.sourceModifiedAt !== asset.modifiedAt) {
 			return undefined;
+		}
+		if (canDescribeImage(asset)) {
+			const record = await this.metadata.getImageVlm(asset.assetId);
+			if (
+				record?.status !== "ready"
+				|| record.sourceModifiedAt !== asset.modifiedAt
+				|| !record.markdown?.trim()
+				|| record.updatedAt > job.updatedAt
+			) {
+				return undefined;
+			}
 		}
 		const chunks = await this.metadata.listTextChunks(asset.assetId);
 		const children = chunks.filter((chunk) => chunk.role === "child");
@@ -136,7 +171,7 @@ export class TextEmbedService {
 			chunk.text.trim().length > 0 && (!chunk.embedding || chunk.modelId !== modelId)
 		));
 		if (missing) return undefined;
-		return toStatus(asset, job, modelId);
+		return toStatus(asset, job, modelId, await this.extraStale(asset, job));
 	}
 
 	private async writeJob(
@@ -157,11 +192,26 @@ export class TextEmbedService {
 	}
 
 	private async statusFor(asset: Asset, currentModelId?: string): Promise<TextEmbedStatus> {
-		if (!canEmbedMarkdown(asset.filename)) return unsupportedStatus(asset);
+		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
+		if (canDescribeImage(asset)) {
+			const record = await this.metadata.getImageVlm(asset.assetId);
+			if (record?.status !== "ready" || !record.markdown?.trim()) return unsupportedStatus(asset);
+		}
 		const job = await this.metadata.getTextEmbedJob(asset.assetId);
 		if (!job) return idleStatus(asset);
-		return toStatus(asset, job, currentModelId);
+		return toStatus(asset, job, currentModelId, await this.extraStale(asset, job));
 	}
+
+	private async extraStale(asset: Asset, job: TextEmbedJob): Promise<boolean> {
+		if (!canDescribeImage(asset)) return false;
+		const record = await this.metadata.getImageVlm(asset.assetId);
+		if (!record) return true;
+		return record.sourceModifiedAt !== asset.modifiedAt || record.updatedAt > job.updatedAt;
+	}
+}
+
+function canIndexAsset(asset: Asset): boolean {
+	return canEmbedMarkdown(asset.filename) || canDescribeImage(asset);
 }
 
 function toStoredChunks(assetId: string, plan: ReturnType<typeof chunkMarkdown>): StoredTextChunk[] {
@@ -207,8 +257,14 @@ async function embedBatched(provider: EmbeddingProvider, texts: string[]): Promi
 	return vectors;
 }
 
-function toStatus(asset: Asset, job: TextEmbedJob, currentModelId?: string): TextEmbedStatus {
-	const stale = job.sourceModifiedAt !== asset.modifiedAt
+function toStatus(
+	asset: Asset,
+	job: TextEmbedJob,
+	currentModelId?: string,
+	extraStale = false,
+): TextEmbedStatus {
+	const stale = extraStale
+		|| job.sourceModifiedAt !== asset.modifiedAt
 		|| (currentModelId !== undefined && job.modelId !== undefined && job.modelId !== currentModelId);
 	return {
 		assetId: asset.assetId,

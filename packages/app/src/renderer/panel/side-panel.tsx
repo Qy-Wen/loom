@@ -11,9 +11,11 @@ import type {
 	LoomTranscriptMessage,
 	SessionSummary,
 	TextEmbedStatus,
+	ImageVlmStatus,
 } from "@loom/core";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
+import { ImageVlmDetails } from "./image-vlm-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
@@ -38,6 +40,9 @@ interface SidePanelProps {
 	textEmbed: TextEmbedStatus | undefined;
 	embedding: boolean;
 	onEmbed: () => void;
+	imageVlm: ImageVlmStatus | undefined;
+	describing: boolean;
+	onDescribe: () => void;
 	relations: AssetRelationsResult;
 	assets: Asset[];
 	relationTypes: string[];
@@ -64,6 +69,9 @@ export function SidePanel({
 	textEmbed,
 	embedding,
 	onEmbed,
+	imageVlm,
+	describing,
+	onDescribe,
 	relations,
 	assets,
 	relationTypes,
@@ -264,6 +272,13 @@ export function SidePanel({
 						enrichment={enrichment}
 						analyzing={analyzing}
 						onAnalyze={onAnalyze}
+					/>
+				)}
+				{asset && (
+					<ImageVlmDetails
+						status={imageVlm}
+						describing={describing}
+						onDescribe={onDescribe}
 					/>
 				)}
 				{asset && (
