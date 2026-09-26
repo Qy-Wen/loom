@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
 import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
 import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
+import type { VideoVlmJobStatus, VideoVlmRecord } from "../model/video-vlm.ts";
 import type {
 	ChildEmbeddingUpdate,
 	StoredTextChunk,
@@ -441,6 +442,40 @@ export class SqliteMetadataStore implements MetadataStore {
 		this.refreshFts(this.requireDatabase(), record.assetId);
 	}
 
+	async getVideoVlm(assetId: string): Promise<VideoVlmRecord | undefined> {
+		const row = this.requireDatabase()
+			.prepare("SELECT * FROM video_vlm WHERE asset_id = ?")
+			.get(assetId) as VideoVlmRow | undefined;
+		return row ? toVideoVlm(row) : undefined;
+	}
+
+	async upsertVideoVlm(record: VideoVlmRecord): Promise<void> {
+		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
+		this.requireDatabase().prepare(`
+			INSERT INTO video_vlm (
+				asset_id, status, model_id, source_modified_at, error, markdown, updated_at
+			) VALUES (
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @markdown, @updatedAt
+			)
+			ON CONFLICT(asset_id) DO UPDATE SET
+				status = excluded.status,
+				model_id = excluded.model_id,
+				source_modified_at = excluded.source_modified_at,
+				error = excluded.error,
+				markdown = excluded.markdown,
+				updated_at = excluded.updated_at
+		`).run({
+			assetId: record.assetId,
+			status: record.status,
+			modelId: record.modelId ?? null,
+			sourceModifiedAt: record.sourceModifiedAt,
+			error: record.error ?? null,
+			markdown: record.markdown ?? null,
+			updatedAt: record.updatedAt,
+		});
+		this.refreshFts(this.requireDatabase(), record.assetId);
+	}
+
 	async searchAssetIds(query: string): Promise<string[]> {
 		const match = compileFtsQuery(query);
 		if (!match) return [];
@@ -540,6 +575,15 @@ export class SqliteMetadataStore implements MetadataStore {
 				markdown TEXT,
 				updated_at REAL NOT NULL
 			);
+			CREATE TABLE IF NOT EXISTS video_vlm (
+				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+				status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+				model_id TEXT,
+				source_modified_at REAL NOT NULL,
+				error TEXT,
+				markdown TEXT,
+				updated_at REAL NOT NULL
+			);
 		`);
 	}
 
@@ -573,6 +617,9 @@ export class SqliteMetadataStore implements MetadataStore {
 		const vlmRow = database
 			.prepare("SELECT status, markdown FROM image_vlm WHERE asset_id = ?")
 			.get(assetId) as { status: ImageVlmJobStatus; markdown: string | null } | undefined;
+		const videoRow = database
+			.prepare("SELECT status, markdown FROM video_vlm WHERE asset_id = ?")
+			.get(assetId) as { status: VideoVlmJobStatus; markdown: string | null } | undefined;
 		database.prepare("INSERT INTO assets_fts (asset_id, body) VALUES (?, ?)").run(
 			assetId,
 			searchDocument(
@@ -580,7 +627,7 @@ export class SqliteMetadataStore implements MetadataStore {
 				asset.relative_path,
 				values,
 				enrichmentRow ? toEnrichment(enrichmentRow) : undefined,
-				vlmRow?.status === "ready" ? vlmRow.markdown ?? undefined : undefined,
+				readyMarkdown(vlmRow) ?? readyMarkdown(videoRow),
 			),
 		);
 	}
@@ -757,4 +804,30 @@ function toImageVlm(row: ImageVlmRow): ImageVlmRecord {
 		markdown: row.markdown ?? undefined,
 		updatedAt: row.updated_at,
 	};
+}
+
+interface VideoVlmRow {
+	asset_id: string;
+	status: VideoVlmJobStatus;
+	model_id: string | null;
+	source_modified_at: number;
+	error: string | null;
+	markdown: string | null;
+	updated_at: number;
+}
+
+function toVideoVlm(row: VideoVlmRow): VideoVlmRecord {
+	return {
+		assetId: row.asset_id,
+		status: row.status,
+		modelId: row.model_id ?? undefined,
+		sourceModifiedAt: row.source_modified_at,
+		error: row.error ?? undefined,
+		markdown: row.markdown ?? undefined,
+		updatedAt: row.updated_at,
+	};
+}
+
+function readyMarkdown(row: { status: string; markdown: string | null } | undefined): string | undefined {
+	return row?.status === "ready" ? row.markdown ?? undefined : undefined;
 }

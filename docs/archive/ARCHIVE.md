@@ -198,3 +198,13 @@ Live force field on the SVG canvas. Positions stay in the session.
 - `d3-force`: drag a node body to move it; neighbors react, then settle after release
 - Hover the rim for `+`; drag from `+` to create an edge
 - Rubber-band highlights and snaps when it hits another node
+
+---
+
+## ✅ Image VLM
+
+On-demand image write-up via the VLM slot, then the existing text embedding path. Not a CLIP image vector. Import does not run it.
+
+- OpenAI-compatible `POST /v1/chat/completions` with `image_url` (data URI). Local and remote share `baseUrl`, optional key, and `model`. Loom does not load or run the model
+- JPEG / PNG / WebP / BMP only. Caption / tags Markdown in `image_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
+- Details Caption and `describe_image`; then `embed_asset` folds the Markdown into `text_chunks`. Empty Embedding slot still keeps the text. No sidecar `.md`

@@ -17,7 +17,7 @@
 | Chat | Agent 循环 | OpenAI 兼容 `POST /v1/chat/completions`。和其它槽位一样填 `baseUrl`、可选 API key、`model`。不写死 DeepSeek。 |
 | Text embedding | 文本 RAG 索引 | OpenAI 兼容 `POST /v1/embeddings` |
 | Rerank | 以后的检索 | Cohere/Jina `POST /v1/rerank`（`query` + `documents`） |
-| VLM | 图片 caption / 标签（以后也给视频帧） | 和 Chat 一样走 OpenAI 兼容 `POST /v1/chat/completions`，用户消息里带 `image_url`。本地和远程同一张表；远程一般要填 API key。 |
+| VLM | 图片 caption / 标签；下一步是视频文件级说明 | 和 Chat 一样走 OpenAI 兼容 `POST /v1/chat/completions`。图片用 `image_url`。视频能 native 就带 video 部分；否则 FFmpeg 抽帧再当 `image_url`。 |
 
 每个槽位存：
 

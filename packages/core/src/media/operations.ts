@@ -26,6 +26,21 @@ export function buildExtractFrameArgs(inputPath: string, outputPath: string, tim
 	return ["-y", "-ss", formatSeconds(timeSeconds), "-i", inputPath, "-frames:v", "1", outputPath];
 }
 
+export function buildVlmStillArgs(inputPath: string, outputPath: string, timeSeconds: number): string[] {
+	return [
+		"-y",
+		"-ss",
+		formatSeconds(timeSeconds),
+		"-i",
+		inputPath,
+		"-frames:v",
+		"1",
+		"-vf",
+		"scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2",
+		outputPath,
+	];
+}
+
 export function buildExtractClipArgs(
 	inputPath: string,
 	outputPath: string,

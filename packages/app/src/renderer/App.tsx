@@ -13,6 +13,7 @@ import type {
 	PropertyValue,
 	TextEmbedStatus,
 	ImageVlmStatus,
+	VideoVlmStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { sortAssets } from "./assets/asset-utils.ts";
@@ -39,7 +40,7 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 /** Apply one main-process watcher event without refetching the whole library. */
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
-	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm") return current;
+	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm" || change.type === "video_vlm") return current;
 	if (change.type === "remove") {
 		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
 	}
@@ -84,6 +85,7 @@ export function App(): React.JSX.Element {
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
 	const [textEmbed, setTextEmbed] = useState<TextEmbedStatus | undefined>();
 	const [imageVlm, setImageVlm] = useState<ImageVlmStatus | undefined>();
+	const [videoVlm, setVideoVlm] = useState<VideoVlmStatus | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [analyzing, setAnalyzing] = useState(false);
@@ -147,6 +149,10 @@ export function App(): React.JSX.Element {
 				void window.loom.getImageVlmStatus(change.assetId).then(setImageVlm).catch(() => undefined);
 				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
 			}
+			if (change.type === "video_vlm" && change.assetId === selectedAssetIdRef.current) {
+				void window.loom.getVideoVlmStatus(change.assetId).then(setVideoVlm).catch(() => undefined);
+				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+			}
 			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
 				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
 				if (selectedAssetIdRef.current) {
@@ -170,6 +176,7 @@ export function App(): React.JSX.Element {
 			setEnrichment(undefined);
 			setTextEmbed(undefined);
 			setImageVlm(undefined);
+			setVideoVlm(undefined);
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
@@ -181,6 +188,9 @@ export function App(): React.JSX.Element {
 		});
 		void window.loom.getImageVlmStatus(selectedAssetId).then(setImageVlm).catch(() => {
 			setImageVlm(undefined);
+		});
+		void window.loom.getVideoVlmStatus(selectedAssetId).then(setVideoVlm).catch(() => {
+			setVideoVlm(undefined);
 		});
 		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
 			setRelations(EMPTY_RELATIONS);
@@ -469,7 +479,11 @@ export function App(): React.JSX.Element {
 		setDescribing(true);
 		setError(null);
 		try {
-			setImageVlm(await window.loom.describeImage(selectedAssetId));
+			if (selectedAsset?.type === "video") {
+				setVideoVlm(await window.loom.describeVideo(selectedAssetId));
+			} else {
+				setImageVlm(await window.loom.describeImage(selectedAssetId));
+			}
 			setTextEmbed(await window.loom.getTextEmbedStatus(selectedAssetId));
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -722,6 +736,7 @@ export function App(): React.JSX.Element {
 						embedding={embedding}
 						onEmbed={() => void embedSelected()}
 						imageVlm={imageVlm}
+						videoVlm={videoVlm}
 						describing={describing}
 						onDescribe={() => void describeSelected()}
 						relations={relations}

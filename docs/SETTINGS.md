@@ -17,7 +17,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 | Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Not a hardcoded DeepSeek provider. |
 | Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Later retrieve | Cohere/Jina `POST /v1/rerank` (`query` + `documents`) |
-| VLM | Image captions / tags (later video frames too) | Same OpenAI-compatible `POST /v1/chat/completions` as Chat; user message includes `image_url`. Local and remote are the same form; hosted vendors usually need an API key. |
+| VLM | Image captions / tags; video file-level write-up next | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. |
 
 Each slot stores:
 
