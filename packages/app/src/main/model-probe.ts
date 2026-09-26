@@ -1,5 +1,6 @@
 import type { ModelProbeDraft, ProbeResult } from "../shared/model-settings.ts";
 import { embeddingsUrl } from "./embedding-provider.ts";
+import { createHttpRerankProvider, rerankUrl } from "./rerank-provider.ts";
 import { vlmChatUrl } from "./vlm-provider.ts";
 
 const TIMEOUT_MS = 8_000;
@@ -8,9 +9,7 @@ export function modelsUrl(baseUrl: string): string {
 	return openaiLeafUrl(baseUrl, "models");
 }
 
-export function rerankUrl(baseUrl: string): string {
-	return openaiLeafUrl(baseUrl, "rerank");
-}
+export { rerankUrl };
 
 export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResult> {
 	try {
@@ -61,12 +60,7 @@ async function probeEmbedding(baseUrl: string, model: string, apiKey: string): P
 }
 
 async function probeRerank(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	if (await probeModelsList(baseUrl, apiKey)) return;
-	await probeJson("POST", rerankUrl(baseUrl), apiKey, {
-		model,
-		query: "ping",
-		documents: ["pong"],
-	});
+	await createHttpRerankProvider({ baseUrl, apiKey, model }).rerank("ping", ["pong"]);
 }
 
 /** GET /v1/models: 200 JSON is enough. 401/403 fail. Missing route falls through. */

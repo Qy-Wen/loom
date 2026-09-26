@@ -24,6 +24,14 @@ Standalone audio files only. Do not run on the whole library by default. Same pa
 - [x] FFmpeg converts locally if the file is not a form the endpoint accepts; keep a size cap like video. Loom does not run the model
 - [x] Persist Markdown by `asset_id`, then `embed_asset`. Skip when mtime is unchanged; changing the Audio model invalidates the write-up. Details / Agent can request it and see status
 
+## Step 3: Rerank
+
+Optional second pass after Hybrid Search. Empty slot skips it. See [TEXT](./RAG/TEXT.md).
+
+- [x] Cohere/Jina `POST /v1/rerank` with `query` + `documents` (the fused passages). TEI `texts` waits
+- [x] Failure keeps the RRF order. One hit does not call the endpoint
+- [x] `search_assets` uses the slot when it is on
+
 ---
 
 Completed steps are recorded in the [ARCHIVE](./archive/ARCHIVE.md).

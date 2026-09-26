@@ -21,7 +21,7 @@
 
 Do not stuff the library into the prompt. Do not embed the whole library by default.
 
-`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`) and returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only. No Embedding slot, or a failed query embed, is FTS-only.
+`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`). If the Rerank slot is on, those fused passages go to `POST /v1/rerank` (`query` + `documents`) before the limit is applied. Empty slot, one hit, or a failed rerank keeps the RRF order. Returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only. No Embedding slot, or a failed query embed, is FTS-only.
 
 ---
 
@@ -48,10 +48,10 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 - sqlite-vec (or JS cosine) over **child** chunks that already have embeddings
 - `assets_fts` ranks filename / path / properties / Level 1 / VLM text as today (`ORDER BY rank`)
 - Property filters stay hard AND on both lists before fusion
-- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. The Rerank settings slot waits.
+- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. If the Rerank slot is on, send those passages as `documents`. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps RRF. TEI-native `texts` waits.
 - A hit can return the child passage and optionally the parent text
 - Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
-- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND)
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank)
 
 ---
 

@@ -15,7 +15,7 @@ const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: s
 	},
 	rerank: {
 		title: "Rerank",
-		hint: "Later retrieve. Cohere/Jina POST /v1/rerank. Slot is optional.",
+		hint: "Reorder Hybrid Search hits after RRF. Qianfan POST /v2/rerank, or Bailian qwen3-rerank (Chat URL is rewritten). Optional.",
 		keyHint: "optional",
 	},
 	vlm: {

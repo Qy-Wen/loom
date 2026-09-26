@@ -120,3 +120,34 @@ test("hybrid search: embed failure falls back to FTS", async () => {
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("hybrid search: rerank reorders RRF hits; failure keeps RRF", async () => {
+	const { root, core, riverId, soupId } = await openEvalLibrary();
+	try {
+		const reranked = await core.searchAssets({ query: "basil" }, {
+			modelId: "eval-embed",
+			embed: async () => [[1, 0]],
+		}, {
+			modelId: "eval-rerank",
+			rerank: async (_query, documents) => documents.map((text) => (/tomato|soup|basil|recipe/i.test(text) ? 1 : 0)),
+		});
+		assert.equal(reranked.total, 2);
+		assert.equal(reranked.assets[0]?.assetId, soupId);
+		assert.ok(reranked.assets.some((asset) => asset.assetId === riverId));
+
+		const fallback = await core.searchAssets({ query: "basil" }, {
+			modelId: "eval-embed",
+			embed: async () => [[1, 0]],
+		}, {
+			modelId: "broken-rerank",
+			rerank: async () => {
+				throw new Error("offline");
+			},
+		});
+		assert.equal(fallback.total, 2);
+		assert.deepEqual(fallback.assets.map((asset) => asset.assetId).sort(), [riverId, soupId].sort());
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

@@ -16,7 +16,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 |---|---|---|
 | Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Not a hardcoded DeepSeek provider. |
 | Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
-| Rerank | Later retrieve | Cohere/Jina `POST /v1/rerank` (`query` + `documents`) |
+| Rerank | Reorder Hybrid Search hits after RRF | Cohere/Jina `POST /v1/rerank` (`query` + `documents`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`. Optional. |
 | VLM | Image captions / tags; video file-level write-up | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. Vision only. |
 | Audio | Audio file-level write-up (music, ambient sound, speech if any) | OpenAI-compatible `POST /v1/chat/completions` with an audio part. Hosted Qwen-Omni uses `input_audio` + `modalities: ["text"]` + `stream: true`. Not the VLM slot. |
 
@@ -27,11 +27,20 @@ Each slot stores:
 - `model`
 - `enabled` (the switch on the right of each slot)
 
-Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
+Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / Rerank / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
 
 Loom never loads or runs a model. It is only an HTTP client.
 
 TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A server that only speaks TEI needs a proxy or a later adapter.
+
+### Hosted Rerank
+
+LM Studio has no `/v1/rerank`. Empty slot keeps RRF.
+
+- **Baidu Qianfan:** Base URL `https://qianfan.baidubce.com/v2`, model `bce-reranker-base`, Qianfan key.
+- **Alibaba Bailian:** same DashScope Chat URL is fine (`https://dashscope.aliyuncs.com/compatible-mode/v1` or intl). Loom rewrites it to `.../compatible-api/v1/reranks`. Model `qwen3-rerank` (not the old `gte-rerank`). `gte-rerank-v2` uses DashScope’s native text-rerank path. Same DashScope key as Audio.
+
+The Rerank switch POSTs a tiny rerank call. Green means that path worked, not `GET /v1/models`.
 
 ### Hosted Audio (Qwen-Omni)
 

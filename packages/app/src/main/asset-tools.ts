@@ -2,6 +2,7 @@ import type {
 	AssetSearchQuery,
 	AudioWriteupStatus,
 	EmbeddingProvider,
+	RerankProvider,
 	ImageVlmStatus,
 	LocalCore,
 	PropertyFilterOperator,
@@ -33,6 +34,7 @@ interface EmbedAssetArgs {
 export interface AssetToolOptions {
 	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
 	embeddingProvider?: () => Promise<EmbeddingProvider | undefined>;
+	rerankProvider?: () => Promise<RerankProvider | undefined>;
 	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 	describeVideo: (assetId: string) => Promise<VideoVlmStatus>;
 	describeAudio: (assetId: string) => Promise<AudioWriteupStatus>;
@@ -48,7 +50,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			name: "search_assets",
 			description:
 				"Search the open local asset library by filename/path text, Level 1 extracts, VLM/audio captions, embeddings when indexed, media type, and custom properties. " +
-				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF). Property filters are AND-combined. " +
+				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF), then an optional Rerank slot reorders those passages. Property filters are AND-combined. " +
 				"Returns asset IDs plus a matching passage when one exists; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
@@ -75,12 +77,18 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			execute: async (rawArgs) => {
 				const args = validateSearchArgs(rawArgs);
 				let provider: EmbeddingProvider | undefined;
+				let rerank: RerankProvider | undefined;
 				try {
 					provider = await options.embeddingProvider?.();
 				} catch {
 					provider = undefined;
 				}
-				const result = await core.searchAssets(args, provider);
+				try {
+					rerank = await options.rerankProvider?.();
+				} catch {
+					rerank = undefined;
+				}
+				const result = await core.searchAssets(args, provider, rerank);
 				return {
 					content: JSON.stringify({ total: result.total, assets: result.assets }),
 					details: result,

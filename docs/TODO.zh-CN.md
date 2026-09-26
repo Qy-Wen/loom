@@ -24,6 +24,14 @@ sqlite-vec 检索已有的 child 向量（Markdown 切片，以及图 / 视频�
 - [x] 端点不收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Loom 不跑模型
 - [x] Markdown 按 `asset_id` 落盘，再 `embed_asset`。mtime 没变不重跑；换 Audio 模型则说明作废。Details / Agent 能请求并看到状态
 
+## 第三步：Rerank
+
+Hybrid Search 之后的可选第二轮。槽位空着就跳过。见 [TEXT](./RAG/TEXT.zh-CN.md)。
+
+- [x] Cohere/Jina `POST /v1/rerank`，`query` + `documents`（融合后的段落）。TEI `texts` 以后再说
+- [x] 失败保持 RRF 顺序。只有一条命中不调端点
+- [x] `search_assets` 在槽位开启时使用
+
 ---
 
 已完成的步骤存档见 [ARCHIVE](./archive/ARCHIVE.zh-CN.md)。

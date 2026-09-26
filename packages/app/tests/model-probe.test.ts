@@ -75,3 +75,25 @@ test("probeModelSlot requires URL and model", async () => {
 	assert.equal(result.ok, false);
 	assert.match(result.error ?? "", /required/i);
 });
+
+test("probeModelSlot POSTs rerank without treating GET /models as success", async () => {
+	const calls: string[] = [];
+	globalThis.fetch = (async (url, init) => {
+		calls.push(`${init?.method ?? "GET"} ${String(url)}`);
+		if (String(url).endsWith("/models")) {
+			return new Response(JSON.stringify({ data: [{ id: "qwen3-rerank" }] }), { status: 200 });
+		}
+		return new Response(JSON.stringify({
+			results: [{ index: 0, relevance_score: 0.1 }],
+		}), { status: 200 });
+	}) as typeof fetch;
+	const result = await probeModelSlot({
+		slot: "rerank",
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		model: "qwen3-rerank",
+		apiKey: "sk-test",
+	});
+	assert.deepEqual(result, { ok: true });
+	assert.equal(calls.includes("GET https://dashscope.aliyuncs.com/compatible-mode/v1/models"), false);
+	assert.equal(calls.some((call) => call.includes("/compatible-api/v1/reranks")), true);
+});
