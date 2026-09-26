@@ -4,12 +4,14 @@ export interface McpStdioServerConfig {
 	args?: string[];
 	env?: Record<string, string>;
 	cwd?: string;
+	enabled: boolean;
 }
 
 export interface McpHttpServerConfig {
 	id: string;
 	url: string;
 	headers?: Record<string, string>;
+	enabled: boolean;
 }
 
 export type McpServerConfig = McpStdioServerConfig | McpHttpServerConfig;

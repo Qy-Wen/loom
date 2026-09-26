@@ -16,6 +16,7 @@ export function configToDraft(config: McpServerConfig): McpServerDraft {
 			cwd: "",
 			url: config.url,
 			headersText: envToText(config.headers),
+			enabled: config.enabled,
 		};
 	}
 	return {
@@ -27,7 +28,14 @@ export function configToDraft(config: McpServerConfig): McpServerDraft {
 		cwd: config.cwd ?? "",
 		url: "",
 		headersText: "",
+		enabled: config.enabled,
 	};
+}
+
+export function configFromDraft(draft: McpServerDraft, env: NodeJS.ProcessEnv = process.env): McpServerConfig {
+	const [config] = parseMcpConfig(draftsToFile([draft]), env);
+	if (!config) throw new Error("MCP server is invalid");
+	return config;
 }
 
 export function draftsToFile(drafts: McpServerDraft[]): { servers: Record<string, unknown>[] } {

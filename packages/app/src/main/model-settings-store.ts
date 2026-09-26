@@ -17,16 +17,20 @@ const DEEPSEEK_CHAT_URL = "https://api.deepseek.com";
 const DEEPSEEK_CHAT_MODEL = "deepseek-v4-flash";
 
 export function emptySlot(): ModelSlotRecord {
-	return { baseUrl: "", apiKey: "", model: "" };
+	return { baseUrl: "", apiKey: "", model: "", enabled: false };
 }
 
 function asRecord(value: unknown): ModelSlotRecord {
 	if (!value || typeof value !== "object") return emptySlot();
 	const row = value as Partial<ModelSlotRecord>;
+	const baseUrl = typeof row.baseUrl === "string" ? row.baseUrl : "";
+	const apiKey = typeof row.apiKey === "string" ? row.apiKey : "";
+	const model = typeof row.model === "string" ? row.model : "";
 	return {
-		baseUrl: typeof row.baseUrl === "string" ? row.baseUrl : "",
-		apiKey: typeof row.apiKey === "string" ? row.apiKey : "",
-		model: typeof row.model === "string" ? row.model : "",
+		baseUrl,
+		apiKey,
+		model,
+		enabled: typeof row.enabled === "boolean" ? row.enabled : Boolean(baseUrl.trim() && model.trim()),
 	};
 }
 
@@ -42,6 +46,7 @@ export function slotView(slot: ModelSlotRecord): ModelSlotView {
 		baseUrl: slot.baseUrl,
 		model: slot.model,
 		apiKey: slot.apiKey,
+		enabled: slot.enabled,
 	};
 }
 
@@ -59,6 +64,7 @@ export function applySlotDraft(current: ModelSlotRecord, draft: ModelSlotDraft):
 		baseUrl: draft.baseUrl.trim(),
 		model: draft.model.trim(),
 		apiKey: current.apiKey,
+		enabled: draft.enabled,
 	};
 	if (draft.clearApiKey) next.apiKey = "";
 	else if (draft.apiKey !== undefined) next.apiKey = draft.apiKey;
@@ -93,6 +99,7 @@ export function resolveChatEndpoint(
 ): LoomChatEndpoint | undefined {
 	const saved = file.chat;
 	if (saved.baseUrl.trim() && saved.model.trim()) {
+		if (!saved.enabled) return undefined;
 		return {
 			baseUrl: saved.baseUrl.trim(),
 			model: saved.model.trim(),
@@ -117,7 +124,7 @@ export function bootstrapChatView(
 	const chat = resolveChatEndpoint(file, env, allowEnvBootstrap);
 	if (!chat) return slotView(file.chat);
 	if (file.chat.baseUrl.trim() && file.chat.model.trim()) return slotView(file.chat);
-	return { baseUrl: chat.baseUrl, model: chat.model, apiKey: chat.apiKey ?? "" };
+	return { baseUrl: chat.baseUrl, model: chat.model, apiKey: chat.apiKey ?? "", enabled: true };
 }
 
 export class ModelSettingsStore {

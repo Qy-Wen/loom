@@ -18,8 +18,8 @@ import type {
 	ImageVlmStatus,
 } from "@loom/core";
 import type { AgentStatsView } from "./agent-stats.ts";
-import type { McpServerDraft, McpSettingsView } from "./mcp-settings.ts";
-import type { ModelSettingsDraft, ModelSettingsView } from "./model-settings.ts";
+import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
+import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
 
 export type AssetContextAction =
 	| "rename"
@@ -98,8 +98,10 @@ export const IPC = {
 	sessionsChanged: "loom:sessionsChanged",
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
+	probeModelSlot: "loom:probeModelSlot",
 	getMcpSettings: "loom:getMcpSettings",
 	saveMcpSettings: "loom:saveMcpSettings",
+	setMcpServerLive: "loom:setMcpServerLive",
 	getAgentStats: "loom:getAgentStats",
 	resetAgentStats: "loom:resetAgentStats",
 	setUiSelection: "loom:setUiSelection",
@@ -156,8 +158,10 @@ export interface LoomApi {
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
+	probeModelSlot: (draft: ModelProbeDraft) => Promise<ProbeResult>;
 	getMcpSettings: () => Promise<McpSettingsView>;
 	saveMcpSettings: (servers: McpServerDraft[]) => Promise<McpSettingsView>;
+	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
 	getAgentStats: () => Promise<AgentStatsView>;
 	resetAgentStats: () => Promise<AgentStatsView>;
 	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;

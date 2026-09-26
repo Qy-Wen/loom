@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotId } from "../../shared/model-settings.ts";
+import { useEffect, useRef, useState } from "react";
+import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSlotId } from "../../shared/model-settings.ts";
+import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
 
 const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: string }> = {
 	chat: {
@@ -29,6 +30,13 @@ const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
 	embedding: true,
 	rerank: true,
 	vlm: true,
+};
+
+const IDLE: Record<ModelSlotId, { state: ProbeState; error?: string }> = {
+	chat: { state: "idle" },
+	embedding: { state: "idle" },
+	rerank: { state: "idle" },
+	vlm: { state: "idle" },
 };
 
 function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
@@ -70,33 +78,99 @@ function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
 
 interface SettingsModelsProps {
 	draft: ModelSettingsDraft;
-	saving: boolean;
-	onChange: (id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string) => void;
-	onCancel: () => void;
-	onSave: () => void;
+	onChange: (id: ModelSlotId, patch: Partial<ModelSlotDraft>) => void;
 }
 
-export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: SettingsModelsProps): React.JSX.Element {
+export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.JSX.Element {
 	const [hidden, setHidden] = useState(HIDDEN_KEYS);
+	const [probes, setProbes] = useState(IDLE);
+	const generation = useRef<Record<ModelSlotId, number>>({ chat: 0, embedding: 0, rerank: 0, vlm: 0 });
+	const debounce = useRef<Partial<Record<ModelSlotId, number>>>({});
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
+
+	async function runProbe(id: ModelSlotId, slot: ModelSlotDraft): Promise<void> {
+		const token = generation.current[id] + 1;
+		generation.current[id] = token;
+		setProbes((current) => ({ ...current, [id]: { state: "checking" } }));
+		const result = await window.loom.probeModelSlot({
+			slot: id,
+			baseUrl: slot.baseUrl,
+			model: slot.model,
+			apiKey: slot.apiKey,
+		});
+		if (generation.current[id] !== token) return;
+		setProbes((current) => ({
+			...current,
+			[id]: result.ok ? { state: "ok" } : { state: "error", error: result.error },
+		}));
+	}
+
+	function clearTimer(id: ModelSlotId): void {
+		const timer = debounce.current[id];
+		if (timer !== undefined) window.clearTimeout(timer);
+		debounce.current[id] = undefined;
+	}
+
+	useEffect(() => {
+		for (const id of MODEL_SLOTS) {
+			if (draft[id].enabled) void runProbe(id, draft[id]);
+		}
+		return () => {
+			for (const id of MODEL_SLOTS) {
+				generation.current[id] += 1;
+				clearTimer(id);
+			}
+		};
+		// Probe saved-on slots once when the form mounts.
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, []);
+
+	function patchField(id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string): void {
+		const next = { ...draftRef.current[id], [field]: value };
+		draftRef.current = { ...draftRef.current, [id]: next };
+		onChange(id, { [field]: value });
+		if (!next.enabled) return;
+		clearTimer(id);
+		debounce.current[id] = window.setTimeout(() => {
+			void runProbe(id, draftRef.current[id]);
+		}, 500);
+	}
+
+	function patchEnabled(id: ModelSlotId, enabled: boolean): void {
+		const next = { ...draftRef.current[id], enabled };
+		draftRef.current = { ...draftRef.current, [id]: next };
+		onChange(id, { enabled });
+		clearTimer(id);
+		if (!enabled) {
+			generation.current[id] += 1;
+			setProbes((current) => ({ ...current, [id]: { state: "idle" } }));
+			return;
+		}
+		void runProbe(id, next);
+	}
 
 	return (
-		<form
-			className="settings-form settings-form-docked"
-			onSubmit={(event) => {
-				event.preventDefault();
-				onSave();
-			}}
-		>
+		<div className="settings-form settings-form-docked">
 			<div className="settings-form-scroll">
 			{MODEL_SLOTS.map((id) => (
-				<fieldset key={id} className="settings-slot">
-					<legend>{SLOT_LABELS[id].title}</legend>
+				<fieldset key={id} className="settings-slot" aria-label={SLOT_LABELS[id].title}>
+					<div className="settings-slot-head">
+						<span className="settings-slot-title">{SLOT_LABELS[id].title}</span>
+						<SettingsSwitch
+							checked={draft[id].enabled}
+							label={`Enable ${SLOT_LABELS[id].title}`}
+							status={probes[id].state}
+							error={probes[id].error}
+							onChange={(enabled) => patchEnabled(id, enabled)}
+						/>
+					</div>
 					<p>{SLOT_LABELS[id].hint}</p>
 					<label>
 						Base URL
 						<input
 							value={draft[id].baseUrl}
-							onChange={(event) => onChange(id, "baseUrl", event.target.value)}
+							onChange={(event) => patchField(id, "baseUrl", event.target.value)}
 							placeholder="https://api.example.com"
 							autoComplete="off"
 						/>
@@ -105,7 +179,7 @@ export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: Se
 						Model
 						<input
 							value={draft[id].model}
-							onChange={(event) => onChange(id, "model", event.target.value)}
+							onChange={(event) => patchField(id, "model", event.target.value)}
 							placeholder="model id"
 							autoComplete="off"
 						/>
@@ -116,7 +190,7 @@ export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: Se
 							<input
 								type={hidden[id] ? "password" : "text"}
 								value={draft[id].apiKey ?? ""}
-								onChange={(event) => onChange(id, "apiKey", event.target.value)}
+								onChange={(event) => patchField(id, "apiKey", event.target.value)}
 								placeholder={SLOT_LABELS[id].keyHint}
 								autoComplete="off"
 								aria-label={`${SLOT_LABELS[id].title} API key`}
@@ -131,15 +205,15 @@ export function SettingsModels({ draft, saving, onChange, onCancel, onSave }: Se
 							</button>
 						</div>
 					</div>
+					{probes[id].state === "ok" && (
+						<p className="settings-status-ok">Connected</p>
+					)}
+					{probes[id].state === "checking" && (
+						<p className="settings-path">Checking…</p>
+					)}
 				</fieldset>
 			))}
 			</div>
-			<div className="settings-actions">
-				<button type="button" onClick={onCancel}>Cancel</button>
-				<button className="primary-button" type="submit" disabled={saving}>
-					{saving ? "Saving…" : "Save"}
-				</button>
-			</div>
-		</form>
+		</div>
 	);
 }

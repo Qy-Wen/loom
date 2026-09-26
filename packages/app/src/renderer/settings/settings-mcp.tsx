@@ -1,89 +1,136 @@
-import { emptyMcpServerDraft, type McpServerDraft, type McpSettingsView } from "../../shared/mcp-settings.ts";
+import { useState } from "react";
+import { type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
+import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
 
 interface SettingsMcpProps {
 	view: McpSettingsView;
-	saving: boolean;
 	onChange: (servers: McpServerDraft[]) => void;
-	onSave: () => void;
+	onStatus: (status: McpServerStatus) => void;
 }
+
+type LocalProbe = { state: ProbeState; error?: string };
 
 function statusFor(view: McpSettingsView, id: string) {
 	return view.status.find((row) => row.id === id);
 }
 
-export function SettingsMcp({ view, saving, onChange, onSave }: SettingsMcpProps): React.JSX.Element {
+function probeFromStatus(server: McpServerDraft, status: McpServerStatus | undefined): LocalProbe {
+	if (!server.enabled) return { state: "idle" };
+	if (!status) return { state: "idle" };
+	if (status.error) return { state: "error", error: status.error };
+	return { state: "ok" };
+}
+
+function hasAdvanced(server: McpServerDraft): boolean {
+	if (server.transport === "http") return Boolean(server.headersText.trim());
+	return Boolean(server.envText.trim() || server.cwd.trim());
+}
+
+export function SettingsMcp({ view, onChange, onStatus }: SettingsMcpProps): React.JSX.Element {
+	const [busy, setBusy] = useState<Record<number, boolean>>({});
+	const [local, setLocal] = useState<Record<number, LocalProbe>>({});
+	const [advanced, setAdvanced] = useState<Record<number, boolean>>({});
+
 	function patch(index: number, next: Partial<McpServerDraft>): void {
 		onChange(view.servers.map((server, i) => i === index ? { ...server, ...next } : server));
+		if ("enabled" in next) return;
+		setLocal((current) => {
+			const copy = { ...current };
+			delete copy[index];
+			return copy;
+		});
+	}
+
+	async function setEnabled(index: number, enabled: boolean): Promise<void> {
+		const server = { ...view.servers[index], enabled };
+		onChange(view.servers.map((row, i) => i === index ? server : row));
+		setBusy((current) => ({ ...current, [index]: true }));
+		if (!enabled) {
+			setLocal((current) => ({ ...current, [index]: { state: "idle" } }));
+			try {
+				onStatus(await window.loom.setMcpServerLive(server));
+			} finally {
+				setBusy((current) => ({ ...current, [index]: false }));
+			}
+			return;
+		}
+		setLocal((current) => ({ ...current, [index]: { state: "checking" } }));
+		try {
+			const status = await window.loom.setMcpServerLive(server);
+			onStatus(status);
+			setLocal((current) => ({
+				...current,
+				[index]: status.error ? { state: "error", error: status.error } : { state: "ok" },
+			}));
+		} catch (error) {
+			const message = error instanceof Error ? error.message : String(error);
+			setLocal((current) => ({ ...current, [index]: { state: "error", error: message } }));
+		} finally {
+			setBusy((current) => ({ ...current, [index]: false }));
+		}
 	}
 
 	return (
-		<form
-			className="settings-form settings-form-docked"
-			onSubmit={(event) => {
-				event.preventDefault();
-				onSave();
-			}}
-		>
+		<div className="settings-form settings-form-docked">
 			<div className="settings-form-scroll">
 			<p className="settings-path">Config file: {view.path}</p>
 			{view.servers.length === 0 && (
-				<div className="empty">No MCP servers. Add a stdio or HTTP server, then save to connect.</div>
+				<div className="empty">No MCP servers yet. Add one, turn it on to connect, then save.</div>
 			)}
 			{view.servers.map((server, index) => {
 				const status = statusFor(view, server.id.trim());
+				const probe = local[index] ?? probeFromStatus(server, status);
+				const title = server.id.trim() || `Server ${index + 1}`;
 				return (
-					<fieldset key={index} className="settings-slot">
-						<legend>{server.id.trim() || `Server ${index + 1}`}</legend>
-						<label>
-							Id
+					<fieldset key={index} className="settings-slot" aria-label={title}>
+						<div className="settings-slot-head">
 							<input
+								className="settings-slot-name"
 								value={server.id}
 								onChange={(event) => patch(index, { id: event.target.value })}
-								placeholder="my-server"
+								placeholder="Name"
 								autoComplete="off"
+								aria-label="Server name"
 							/>
-						</label>
-						<fieldset className="settings-transport">
-							<legend>Transport</legend>
-							<label>
+							<SettingsSwitch
+								checked={server.enabled}
+								disabled={busy[index]}
+								label={`Enable ${title}`}
+								status={probe.state}
+								error={probe.error}
+								onChange={(enabled) => void setEnabled(index, enabled)}
+							/>
+						</div>
+						<div className="settings-kind" role="radiogroup" aria-label="Server type">
+							<label className={server.transport === "stdio" ? "is-active" : undefined}>
 								<input
 									type="radio"
-									name={`mcp-transport-${index}`}
+									name={`mcp-kind-${index}`}
 									checked={server.transport === "stdio"}
 									onChange={() => patch(index, { transport: "stdio" })}
 								/>
-								stdio
+								Local
 							</label>
-							<label>
+							<label className={server.transport === "http" ? "is-active" : undefined}>
 								<input
 									type="radio"
-									name={`mcp-transport-${index}`}
+									name={`mcp-kind-${index}`}
 									checked={server.transport === "http"}
 									onChange={() => patch(index, { transport: "http" })}
 								/>
-								HTTP
+								Remote
 							</label>
-						</fieldset>
+						</div>
 						{server.transport === "http" ? (
-							<>
-								<label>
-									URL
-									<input
-										value={server.url}
-										onChange={(event) => patch(index, { url: event.target.value })}
-										placeholder="https://example.com/mcp"
-										autoComplete="off"
-									/>
-								</label>
-								<label>
-									Headers (KEY=value, one per line)
-									<textarea
-										value={server.headersText}
-										onChange={(event) => patch(index, { headersText: event.target.value })}
-										rows={3}
-									/>
-								</label>
-							</>
+							<label>
+								URL
+								<input
+									value={server.url}
+									onChange={(event) => patch(index, { url: event.target.value })}
+									placeholder="https://example.com/mcp"
+									autoComplete="off"
+								/>
+							</label>
 						) : (
 							<>
 								<label>
@@ -100,35 +147,71 @@ export function SettingsMcp({ view, saving, onChange, onSave }: SettingsMcpProps
 									<textarea
 										value={server.argsText}
 										onChange={(event) => patch(index, { argsText: event.target.value })}
-										rows={3}
-									/>
-								</label>
-								<label>
-									Env (KEY=value, one per line)
-									<textarea
-										value={server.envText}
-										onChange={(event) => patch(index, { envText: event.target.value })}
-										rows={3}
-									/>
-								</label>
-								<label>
-									cwd
-									<input
-										value={server.cwd}
-										onChange={(event) => patch(index, { cwd: event.target.value })}
-										autoComplete="off"
+										placeholder={"-y\npackage-name"}
+										rows={2}
 									/>
 								</label>
 							</>
 						)}
-						{status?.error && <p className="settings-status-error">{status.error}</p>}
-						{status && !status.error && (
+						<details
+							className="settings-advanced"
+							open={advanced[index] ?? hasAdvanced(server)}
+							onToggle={(event) => {
+								const nextOpen = event.currentTarget.open;
+								setAdvanced((current) => ({ ...current, [index]: nextOpen }));
+							}}
+						>
+							<summary>Advanced</summary>
+							<div className="settings-advanced-body">
+								{server.transport === "http" ? (
+									<label>
+										Headers
+										<textarea
+											value={server.headersText}
+											onChange={(event) => patch(index, { headersText: event.target.value })}
+											placeholder={"Authorization=Bearer …"}
+											rows={2}
+										/>
+									</label>
+								) : (
+									<>
+										<label>
+											Env
+											<textarea
+												value={server.envText}
+												onChange={(event) => patch(index, { envText: event.target.value })}
+												placeholder={"API_KEY=…"}
+												rows={2}
+											/>
+										</label>
+										<label>
+											cwd
+											<input
+												value={server.cwd}
+												onChange={(event) => patch(index, { cwd: event.target.value })}
+												autoComplete="off"
+											/>
+										</label>
+									</>
+								)}
+							</div>
+						</details>
+						{probe.state === "checking" && <p className="settings-path">Connecting…</p>}
+						{probe.state === "ok" && (
 							<p className="settings-status-ok">
-								{status.tools.length ? `Connected: ${status.tools.join(", ")}` : "Connected (no tools)"}
+								{status?.tools.length ? `Connected: ${status.tools.join(", ")}` : "Connected (no tools)"}
 							</p>
 						)}
 						<div className="settings-actions">
-							<button type="button" onClick={() => onChange(view.servers.filter((_, i) => i !== index))}>
+							<button
+								type="button"
+								onClick={() => {
+									if (server.enabled && server.id.trim()) {
+										void window.loom.setMcpServerLive({ ...server, enabled: false });
+									}
+									onChange(view.servers.filter((_, i) => i !== index));
+								}}
+							>
 								Remove
 							</button>
 						</div>
@@ -136,14 +219,6 @@ export function SettingsMcp({ view, saving, onChange, onSave }: SettingsMcpProps
 				);
 			})}
 			</div>
-			<div className="settings-actions">
-				<button type="button" onClick={() => onChange([...view.servers, emptyMcpServerDraft()])}>
-					Add server
-				</button>
-				<button className="primary-button" type="submit" disabled={saving}>
-					{saving ? "Connecting…" : "Save and connect"}
-				</button>
-			</div>
-		</form>
+		</div>
 	);
 }
