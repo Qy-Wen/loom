@@ -18,6 +18,8 @@
 
 `open` runs `CREATE TABLE IF NOT EXISTS`. There is no schema version or migration yet.
 
+On open, try to load the sqlite-vec extension. Child KNN uses `vec_distance_cosine` on `text_chunks.embedding` blobs. There is no `vec0` virtual table: dimension follows the Embedding slot. If the extension is missing, the same cosine runs in JavaScript.
+
 Directories are not rows. The file tree comes from scanning the library. `.loom/` and `.DS_Store` are ignored.
 
 ---
@@ -216,7 +218,7 @@ Parent and child passages for one asset. Only child rows store a vector.
 | `embedding` | BLOB | nullable | Float32 little-endian vector. Null on parents. |
 | `model_id` | TEXT | nullable | Set on children after embed. |
 
-Index: `text_chunks_asset_idx` on `asset_id`.
+Index: `text_chunks_asset_idx` on `asset_id`. Hybrid Search reads child embeddings here; see [TEXT](./TEXT.md).
 
 Parents are inserted first, then children. Replacing an index deletes children, then parents, then writes the new rows.
 

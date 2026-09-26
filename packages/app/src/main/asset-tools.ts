@@ -1,5 +1,6 @@
 import type {
 	AssetSearchQuery,
+	EmbeddingProvider,
 	ImageVlmStatus,
 	LocalCore,
 	PropertyFilterOperator,
@@ -30,6 +31,7 @@ interface EmbedAssetArgs {
 
 export interface AssetToolOptions {
 	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+	embeddingProvider?: () => Promise<EmbeddingProvider | undefined>;
 	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 	describeVideo: (assetId: string) => Promise<VideoVlmStatus>;
 }
@@ -43,12 +45,13 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "search_assets",
 			description:
-				"Search the open local asset library by filename/path text, Level 1 extracts (file text, camera, codecs), VLM captions, media type, and custom properties. " +
-				"Property filters are AND-combined. Returns stable asset IDs; use inspect_asset for one result.",
+				"Search the open local asset library by filename/path text, Level 1 extracts, VLM captions, embeddings when indexed, media type, and custom properties. " +
+				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF). Property filters are AND-combined. " +
+				"Returns asset IDs plus a matching passage when one exists; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
 				properties: {
-					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract text, or VLM caption." },
+					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract, VLM caption, or semantic query over indexed chunks." },
 					type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
 					properties: {
 						type: "array",
@@ -69,7 +72,13 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			},
 			execute: async (rawArgs) => {
 				const args = validateSearchArgs(rawArgs);
-				const result = await core.searchAssets(args);
+				let provider: EmbeddingProvider | undefined;
+				try {
+					provider = await options.embeddingProvider?.();
+				} catch {
+					provider = undefined;
+				}
+				const result = await core.searchAssets(args, provider);
 				return {
 					content: JSON.stringify({ total: result.total, assets: result.assets }),
 					details: result,

@@ -37,6 +37,10 @@ export interface AssetSearchItem {
 	size: number;
 	modifiedAt: number;
 	properties: AssetPropertyView[];
+	passage?: string;
+	parentPassage?: string;
+	chunkId?: string;
+	score?: number;
 }
 
 export interface AssetSearchResult {

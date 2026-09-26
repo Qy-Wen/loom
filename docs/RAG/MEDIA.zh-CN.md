@@ -118,4 +118,4 @@ Loom 只当 HTTP 客户端。VLM 不进进程。
 
 图 / 视频 / 音频的向量都是 **文字切片** 的向量，和 Markdown 走同一张 `text_chunks`、同一套 Hybrid Search。不要为媒体另开一条向量检索。
 
-sqlite-vec、和 FTS / 属性过滤的融合见 [TEXT.md](./TEXT.zh-CN.md) 和待办里的 Hybrid Search。
+sqlite-vec、和 FTS 的 RRF 融合、属性过滤见 [TEXT.md](./TEXT.zh-CN.md)。

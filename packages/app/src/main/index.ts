@@ -6,6 +6,7 @@ import { basename, extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
 import {
 	LocalCore,
+	type EmbeddingProvider,
 	type LibraryChange,
 	type LibrarySnapshot,
 	type PropertyType,
@@ -100,6 +101,7 @@ const BUILTIN_TOOLS = [
 	...workspaceTools.tools,
 	...createAssetTools(localCore, {
 		embedAsset: embedAssetWithSettings,
+		embeddingProvider: embeddingProviderFromSettings,
 		describeImage: describeImageWithSettings,
 		describeVideo: describeVideoWithSettings,
 	}),
@@ -547,12 +549,16 @@ app.on("will-quit", (event) => {
 });
 
 async function embedAssetWithSettings(assetId: string) {
+	const provider = await embeddingProviderFromSettings();
+	if (!provider) throw new Error("Enable the Embedding slot in Settings first.");
+	return localCore.embedTextAsset(assetId, provider);
+}
+
+async function embeddingProviderFromSettings(): Promise<EmbeddingProvider | undefined> {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).embedding;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
-		throw new Error("Enable the Embedding slot in Settings first.");
-	}
-	return localCore.embedTextAsset(assetId, createHttpEmbeddingProvider(slot));
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) return undefined;
+	return createHttpEmbeddingProvider(slot);
 }
 
 async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {

@@ -21,7 +21,7 @@
 
 不要把整库塞进 prompt。默认不整库 embedding。
 
-`search_assets` 是检索步。现在是 FTS。索引有了之后返回 **段落 + `asset_id`**，再和 FTS、属性过滤融合。子切片命中后可以扩到父切片，多带一截上下文。
+`search_assets` 是检索步。用 **RRF**（`k = 60`）融合 `assets_fts` 排名和子切片向量，返回 **段落 + `asset_id`**。属性过滤仍是 AND。子切片命中后可以扩到父切片。没有查询文本时只按类型/属性列出。Embedding 槽位未开或查询向量失败时退回 FTS。
 
 ---
 
@@ -37,17 +37,21 @@
 - **父子：** 先切子切片，再聚合父切片。子切片用来找得准，父切片用来补上下文。先按结构 + 512 / 64 切出全部子切片，再把连续的子切片收成父切片，源文跨度不超过 **2048** token（大约四个子切片）。父切片正文是这段源文，不要把互相重叠的子切片字符串拼起来。父边界不按标题级别。根父节点的 `parent_id` 为空。只有子切片做 embedding。
 - **输入：** Level 1 摘录。没有或过期就先摘录。Analyze 仍是 Level 1；embed 是单独的用户或 Agent 动作。
 - **Provider：** `EmbeddingProvider`。Loom 不加载、不运行模型。报文是 OpenAI 兼容的 `POST /v1/embeddings`。`baseUrl`、API key、`model` 来自设置页的 Embedding 槽位，见 [设置](../SETTINGS.zh-CN.md)。
-- **存储：** 按 `asset_id` 的表（切片 id、`parent_id`、角色、偏移、原文、mtime；子切片另存向量 + 模型名）。不塞进 `asset_metadata`。先不上 sqlite-vec。
+- **存储：** `text_chunks` 按 `asset_id`（切片 id、`parent_id`、角色、偏移、原文、mtime；子切片另存向量 + 模型名）。不塞进 `asset_metadata`。打开库时加载 sqlite-vec，用 `vec_distance_cosine` 打这些 blob。不上 `vec0` 表：维度跟着 Embedding 槽位。扩展没有就用 JavaScript 算同一套余弦。
 - **失效：** 和 Level 1 一样看 mtime。rename/move 不重跑。换 embedding 模型则这些行作废。
 
 ---
 
 ## 检索
 
-- sqlite-vec 只打已有向量的 **子切片**
+- 检索时用 Embedding 槽位把查询 embed 一次（`POST /v1/embeddings`）
+- sqlite-vec（或 JS 余弦）只打已有向量的 **子切片**
+- `assets_fts` 仍按现在那样排文件名 / 路径 / 属性 / Level 1 / VLM 正文（`ORDER BY rank`）
+- 属性过滤对两路都是硬 AND，融合前先滤
+- 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。Settings 里的 Rerank 槽位以后再做。
 - 命中可返回子段落，并可带上父切片正文
-- 和 `assets_fts`、属性过滤融合
 - 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND）
 
 ---
 

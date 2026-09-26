@@ -118,4 +118,4 @@ Loom is only an HTTP client. The VLM does not run in-process.
 
 Image / video / audio vectors are **text-chunk** vectors. They share `text_chunks` and Hybrid Search with Markdown. Do not add a separate vector search for media.
 
-sqlite-vec and fusion with FTS / property filters stay in [TEXT.md](./TEXT.md) and the Hybrid Search work item.
+sqlite-vec and RRF fusion with FTS / property filters stay in [TEXT.md](./TEXT.md).
