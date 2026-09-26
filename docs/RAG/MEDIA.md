@@ -70,21 +70,26 @@ Image
 
 ## Video
 
-First version: FFmpeg extracts **one frame**, same VLM path, one write-up for the whole file. Do not run on the whole library by default.
+On-demand file-level write-up, same VLM slot as images. Do not run on the whole library by default.
 
-Scene chunks, per-shot captions, soundtrack ASR, and frame OCR wait. The longer-term unit is still segmented index, not one vector for the file:
+**How to send the video**
+
+1. **Native video** when the endpoint accepts it: OpenAI-compatible `POST /v1/chat/completions` with a `video_url` data URI (files up to 32 MB). Models such as Qwen3-VL can do this. Loom stays an HTTP client; it does not decode video in-process except as needed to attach the request. A 400/413/415/422/5xx from native is remembered per endpoint+model for the process, then frames are used.
+2. **Frames as `image_url`** when native is skipped or rejected: FFmpeg extracts 1–3 temp JPEGs (about 10% / 50% / 90% of duration; fewer for short clips). They are not library assets.
+
+One Markdown write-up per file in this step. Scene chunks, per-shot captions, soundtrack ASR, and frame OCR wait. The longer-term unit is still segmented index, not one vector for the file:
 
 ```
 video.mp4
 │
-├── file-level write-up (first version: one frame + VLM)
+├── file-level write-up (this step: native video, or frames if the endpoint cannot)
 │
 ├── Scene 1    00:00-00:08   caption + embedding   (later)
 ├── Scene 2    00:08-00:21   caption + embedding   (later)
 └── transcript chunks                              (later)
 ```
 
-A user can ask “find the shot where the person gets out of the car.” The Agent locates `video.mp4  01:13 - 01:18`, then `search_video_segments()` → `extract_clip(73s, 78s)`. That tool chain is not in the first version.
+A user can ask “find the shot where the person gets out of the car.” The Agent locates `video.mp4  01:13 - 01:18`, then `search_video_segments()` → `extract_clip(73s, 78s)`. That tool chain is not in this step.
 
 ---
 
@@ -103,7 +108,7 @@ Standalone audio files. Transcribe first, then hand the text to the Embedding sl
 
 Loom is only an HTTP client. The VLM does not run in-process.
 
-- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. The user message includes `image_url` (a data URI for a local file).
+- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. Images use `image_url` (a data URI for a local file). Video tries `video_url` (data URI, up to 32 MB) when the endpoint allows it; otherwise extracted frames as `image_url`.
 - **Local or remote:** the same fields (`baseUrl`, optional API key, `model`). Local is a server the user runs (LM Studio, Ollama, and similar). Remote is the OpenAI-compatible call plus an API key.
 - Endpoints are user-configured. There is no built-in default vendor. See [SETTINGS.md](../SETTINGS.md).
 

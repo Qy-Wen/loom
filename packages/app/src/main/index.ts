@@ -26,7 +26,7 @@ import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-sele
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
-import { createHttpVlmProvider } from "./vlm-provider.ts";
+import { createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
@@ -101,6 +101,7 @@ const BUILTIN_TOOLS = [
 	...createAssetTools(localCore, {
 		embedAsset: embedAssetWithSettings,
 		describeImage: describeImageWithSettings,
+		describeVideo: describeVideoWithSettings,
 	}),
 	...createFfmpegTools(localCore),
 ];
@@ -371,6 +372,11 @@ function registerIpc(): void {
 		return localCore.getImageVlmStatus(assetId, modelId || undefined);
 	});
 	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeImageWithSettings(assetId));
+	ipcMain.handle(IPC.getVideoVlmStatus, async (_event, assetId: string) => {
+		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
+		return localCore.getVideoVlmStatus(assetId, modelId || undefined);
+	});
+	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeVideoWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
 	ipcMain.handle(IPC.createSession, () => localCore.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
@@ -578,6 +584,15 @@ async function describeImageWithSettings(assetId: string) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
 	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot));
+}
+
+async function describeVideoWithSettings(assetId: string) {
+	if (!modelSettings) throw new Error("Settings store not started");
+	const slot = (await modelSettings.load()).vlm;
+	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+		throw new Error("Enable the VLM slot in Settings first.");
+	}
+	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot));
 }
 
 async function setMcpServerLive(draft: McpServerDraft) {

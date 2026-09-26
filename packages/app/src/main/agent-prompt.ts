@@ -4,7 +4,8 @@ const BASE_SYSTEM_PROMPT =
 	"Use read, edit, write, and bash like a coding agent: relative paths resolve against that directory; absolute paths are allowed. " +
 	"Use search_assets to find indexed assets and inspect_asset before making claims about one asset. " +
 	"Use describe_image to write a caption for a JPEG/PNG/WebP/BMP image via the VLM slot; it does not run automatically. " +
-	"Use embed_asset to index Markdown or a described image (chunk + embeddings); it does not run automatically. " +
+	"Use describe_video for a video (native video when the endpoint allows it, otherwise stills); it does not run automatically. " +
+	"Use embed_asset to index Markdown or a described image/video (chunk + embeddings); it does not run automatically. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +

@@ -20,7 +20,7 @@ const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: s
 	},
 	vlm: {
 		title: "VLM",
-		hint: "Image captions. OpenAI-compatible POST /v1/chat/completions with image_url. Slot is optional.",
+		hint: "Image and video captions. OpenAI-compatible POST /v1/chat/completions; video prefers a native video part, otherwise stills as image_url. Slot is optional.",
 		keyHint: "optional",
 	},
 };

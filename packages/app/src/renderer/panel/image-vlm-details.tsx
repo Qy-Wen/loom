@@ -1,7 +1,7 @@
-import type { ImageVlmStatus } from "@loom/core";
+import type { ImageVlmStatus, VideoVlmStatus } from "@loom/core";
 
 interface ImageVlmDetailsProps {
-	status: ImageVlmStatus | undefined;
+	status: ImageVlmStatus | VideoVlmStatus | undefined;
 	describing: boolean;
 	onDescribe: () => void;
 }
@@ -48,7 +48,7 @@ export function ImageVlmDetails({
 	);
 }
 
-function formatStatus(status: ImageVlmStatus): string {
+function formatStatus(status: ImageVlmStatus | VideoVlmStatus): string {
 	if (status.status === "idle") return "Not described";
 	if (status.stale) return `${status.status} (stale)`;
 	return status.status;

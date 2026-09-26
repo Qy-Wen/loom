@@ -70,21 +70,26 @@ Image
 
 ## 视频
 
-第一版：FFmpeg 抽 **一帧**，走同一套 VLM，一篇说明对应整个文件。默认不整库。
+按需做文件级说明，和图片共用 VLM 槽位。默认不整库。
 
-镜头切块、逐镜 caption、音轨 ASR、画面 OCR 以后再做。长目标仍是分段索引，不是整片一根向量：
+**怎么把视频送给模型**
+
+1. **Native video：** 端点能收就整段发。报文是 OpenAI 兼容 `POST /v1/chat/completions`，带 `video_url` data URI（文件不超过 32 MB）。Qwen3-VL 这类模型可以。Loom 只当 HTTP 客户端；除了组请求，不在进程里解码视频。native 返回 400/413/415/422/5xx 时，按端点+模型记住一次，本进程后续改抽帧。
+2. **抽帧当 `image_url`：** native 跳过或被拒时，FFmpeg 抽 1–3 张临时 JPEG（大约片长的 10% / 50% / 90%；短片更少）。不进素材库。
+
+这一步一篇 Markdown 对应整个文件。镜头切块、逐镜 caption、音轨 ASR、画面 OCR 以后再做。长目标仍是分段索引，不是整片一根向量：
 
 ```
 video.mp4
 │
-├── 文件级说明（第一版：一帧 + VLM）
+├── 文件级说明（这一步：能 native 就 native，否则抽帧）
 │
 ├── Scene 1    00:00-00:08   caption + embedding   （以后）
 ├── Scene 2    00:08-00:21   caption + embedding   （以后）
 └── transcript chunks                              （以后）
 ```
 
-用户可以问「找一下那个『人物从车里走下来』的镜头」。Agent 定位到 `video.mp4  01:13 - 01:18`，然后 `search_video_segments()` → `extract_clip(73s, 78s)`。第一版还没有这条工具链。
+用户可以问「找一下那个『人物从车里走下来』的镜头」。Agent 定位到 `video.mp4  01:13 - 01:18`，然后 `search_video_segments()` → `extract_clip(73s, 78s)`。这一步还没有这条工具链。
 
 ---
 
@@ -103,7 +108,7 @@ video.mp4
 
 Loom 只当 HTTP 客户端。VLM 不进进程。
 
-- **报文：** OpenAI 兼容的 `POST {baseUrl}/v1/chat/completions`。用户消息里带 `image_url`（本地文件用 data URI）。
+- **报文：** OpenAI 兼容的 `POST {baseUrl}/v1/chat/completions`。图片用 `image_url`（本地文件用 data URI）。视频先试 `video_url`（data URI，不超过 32 MB）；否则抽帧再当 `image_url`。
 - **本地或远程：** 同一套字段（`baseUrl`、可选 API key、`model`）。本地是用户自己起的服务（LM Studio、Ollama 等）。远程是 OpenAI 兼容调用，外加 API key。
 - 端点由用户配置，不内置默认供应商。见 [SETTINGS.md](../SETTINGS.zh-CN.md)。
 

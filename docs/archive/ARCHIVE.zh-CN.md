@@ -198,3 +198,13 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 - `d3-force`：拖节点本体来挪位置，周围会动，松手后停住
 - 指针在圆边缘出现 `+`；从 `+` 拖出才建边
 - 橡皮筋碰到其他节点时高亮并吸过去
+
+---
+
+## ✅ 图片 VLM
+
+按需用 VLM 槽位给图写说明，再走已有的文本 embedding。不是 CLIP 图片向量。导入不跑。
+
+- OpenAI 兼容 `POST /v1/chat/completions`，消息里带 `image_url`（data URI）。本地和远程同一套 `baseUrl` + 可选 key + `model`。Loom 不加载、不运行模型
+- 只做 JPEG / PNG / WebP / BMP。caption / 标签 Markdown 落在 `image_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
+- Details Caption 和 `describe_image`；再用 `embed_asset` 把 Markdown 折进 `text_chunks`。Embedding 槽位空着时正文仍留下。不写 sidecar `.md`

@@ -10,10 +10,13 @@ import {
 	type TextEmbedStatus,
 } from "../model/text-embed.ts";
 import type { EnrichmentService } from "../enrichment/service.ts";
+import type { ImageVlmRecord } from "../model/image-vlm.ts";
+import type { VideoVlmRecord } from "../model/video-vlm.ts";
 import type { MetadataStore } from "../stores/types.ts";
 import { canDescribeImage } from "./image-vlm.ts";
 import { chunkMarkdown } from "./chunk.ts";
 import { canEmbedMarkdown } from "./markdown.ts";
+import { canDescribeVideo } from "./video-vlm.ts";
 
 export class TextEmbedService {
 	private chain: Promise<void> = Promise.resolve();
@@ -135,17 +138,13 @@ export class TextEmbedService {
 			}
 			return { text: extract.data.text };
 		}
-		if (canDescribeImage(asset)) {
-			const record = await this.metadata.getImageVlm(asset.assetId);
-			if (
-				record?.status !== "ready"
-				|| record.sourceModifiedAt !== asset.modifiedAt
-				|| !record.markdown?.trim()
-			) {
-				return { error: "Describe the image with the VLM slot first" };
-			}
-			return { text: record.markdown };
+		const writeup = await this.readyWriteup(asset);
+		if (writeup === "missing") {
+			if (canDescribeImage(asset)) return { error: "Describe the image with the VLM slot first" };
+			if (canDescribeVideo(asset)) return { error: "Describe the video with the VLM slot first" };
+			return { unsupported: true };
 		}
+		if (writeup) return { text: writeup.markdown };
 		return { unsupported: true };
 	}
 
@@ -154,8 +153,8 @@ export class TextEmbedService {
 		if (job?.status !== "ready" || job.modelId !== modelId || job.sourceModifiedAt !== asset.modifiedAt) {
 			return undefined;
 		}
-		if (canDescribeImage(asset)) {
-			const record = await this.metadata.getImageVlm(asset.assetId);
+		if (needsVlmWriteup(asset)) {
+			const record = await this.writeupRecord(asset);
 			if (
 				record?.status !== "ready"
 				|| record.sourceModifiedAt !== asset.modifiedAt
@@ -193,8 +192,8 @@ export class TextEmbedService {
 
 	private async statusFor(asset: Asset, currentModelId?: string): Promise<TextEmbedStatus> {
 		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
-		if (canDescribeImage(asset)) {
-			const record = await this.metadata.getImageVlm(asset.assetId);
+		if (needsVlmWriteup(asset)) {
+			const record = await this.writeupRecord(asset);
 			if (record?.status !== "ready" || !record.markdown?.trim()) return unsupportedStatus(asset);
 		}
 		const job = await this.metadata.getTextEmbedJob(asset.assetId);
@@ -203,15 +202,38 @@ export class TextEmbedService {
 	}
 
 	private async extraStale(asset: Asset, job: TextEmbedJob): Promise<boolean> {
-		if (!canDescribeImage(asset)) return false;
-		const record = await this.metadata.getImageVlm(asset.assetId);
+		if (!needsVlmWriteup(asset)) return false;
+		const record = await this.writeupRecord(asset);
 		if (!record) return true;
 		return record.sourceModifiedAt !== asset.modifiedAt || record.updatedAt > job.updatedAt;
 	}
+
+	private async writeupRecord(asset: Asset): Promise<ImageVlmRecord | VideoVlmRecord | undefined> {
+		if (canDescribeImage(asset)) return this.metadata.getImageVlm(asset.assetId);
+		if (canDescribeVideo(asset)) return this.metadata.getVideoVlm(asset.assetId);
+		return undefined;
+	}
+
+	private async readyWriteup(
+		asset: Asset,
+	): Promise<{ markdown: string } | "missing" | undefined> {
+		if (!needsVlmWriteup(asset)) return undefined;
+		const record = await this.writeupRecord(asset);
+		const markdown = record?.status === "ready"
+			&& record.sourceModifiedAt === asset.modifiedAt
+			? record.markdown?.trim()
+			: undefined;
+		if (!markdown) return "missing";
+		return { markdown };
+	}
+}
+
+function needsVlmWriteup(asset: Asset): boolean {
+	return canDescribeImage(asset) || canDescribeVideo(asset);
 }
 
 function canIndexAsset(asset: Asset): boolean {
-	return canEmbedMarkdown(asset.filename) || canDescribeImage(asset);
+	return canEmbedMarkdown(asset.filename) || needsVlmWriteup(asset);
 }
 
 function toStoredChunks(assetId: string, plan: ReturnType<typeof chunkMarkdown>): StoredTextChunk[] {

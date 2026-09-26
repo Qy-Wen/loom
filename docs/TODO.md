@@ -8,28 +8,31 @@
 
 ---
 
-## Step 1: Image VLM
+## Step 1: Video VLM
 
-Turn the image into text, then use the existing text embedding path. Do not embed the image as a vector. Do not embed the whole library by default. Uses the VLM slot: local or remote OpenAI-compatible chat completions with `image_url`. See [MEDIA](./RAG/MEDIA.md).
+On-demand file-level write-up, same VLM slot, then the text embedding path. Do not embed the whole library by default. Scene chunks, per-shot captions, and soundtrack ASR wait.
 
-- [x] HTTP caption / tags (may include visible text in the image). Local servers and remote APIs share `baseUrl`, optional key, and `model`. Loom does not load or run the model
-- [x] Persist the text per asset; skip rename/move when mtime is unchanged
-- [x] Fold into Markdown and hand it to the Embedding slot. If that slot is empty, the text still stays. Details / Agent can request it and see status
+Prefer **native video** when the endpoint accepts it (OpenAI-compatible `chat/completions` with a video part, or the vendor's equivalent). If it only takes images, FFmpeg extracts frames and sends them as `image_url`. Loom does not load or run the model.
 
-## Step 2: Video VLM
+- [x] Detect whether the VLM endpoint can take native video; otherwise extract frames
+- [x] Persist one write-up per video asset; skip rename/move when mtime is unchanged
+- [x] Fold into Markdown and hand it to the Embedding slot. Details / Agent can request it and see status
 
-Extract one frame and use the same VLM path. Do not embed the whole library by default. Scenes and dialogue wait.
-
-- [ ] FFmpeg extracts one frame, then send it to the VLM; persist the text per asset
-- [ ] Fold into Markdown and hand it to the Embedding slot. Skip when mtime is unchanged; Details / Agent can request it and see status
-
-## Step 3: Audio transcription
+## Step 2: Audio transcription
 
 Audio files only. Do not transcribe the whole library by default. Transcribe first, then hand the text to the Embedding slot. Acoustic vectors wait.
 
 - [ ] Add an ASR settings slot (`baseUrl`, optional key, `model`). Wire is OpenAI-compatible `POST /v1/audio/transcriptions` with timestamped segments
 - [ ] FFmpeg extracts audio locally; long files are split before upload and segment times are shifted back. Loom does not run the model
 - [ ] Persist segments by `asset_id`, then embed them with the Embedding slot. Skip when mtime is unchanged; changing the ASR model invalidates the transcript. Details / Agent can request it and see status
+
+## Step 3: Hybrid Search
+
+sqlite-vec over child embeddings that already exist (Markdown chunks, and text from images / video). Fuse with FTS and property filters. Return the hit plus `asset_id`. Do not embed the whole library. See [TEXT](./RAG/TEXT.md).
+
+- [ ] sqlite-vec over child chunks that already have embeddings
+- [ ] Fuse with `assets_fts` and property filters; a child hit can expand to its parent
+- [ ] Keep a minimal retrieval eval set
 
 ---
 
@@ -39,7 +42,6 @@ Completed steps are recorded in the [ARCHIVE](./archive/ARCHIVE.md).
 
 ## Later
 
-- **Hybrid Search:** sqlite-vec over embeddings that already exist (text chunks, and text from images / video); fuse with FTS and property filters; return the hit plus `asset_id`; keep a minimal retrieval eval set
 - **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).
 - **CLIP / image vectors:** embed the image without going through text; later if needed
 - **Session history UI:** show the restored transcript in the chat panel after restart

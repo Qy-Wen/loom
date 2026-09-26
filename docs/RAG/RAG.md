@@ -47,7 +47,7 @@ Level 4  Deep analysis               Optional
 | 0 | Filesystem metadata: path, size, hash, mtime, type | Free | Automatic on import |
 | 1 | FFprobe (duration/resolution/codec), EXIF, text extraction | Local compute | Automatic or on demand |
 | 2 | Chunked Markdown embeddings; image / video / audio become text first, then chunk; see [MEDIA](./MEDIA.md) | Optional, HTTP provider (local server or remote API key) | User-selected |
-| 3 | VLM writes captions / tags for images (and later video frames); dedicated OCR / ASR wait | May cost money | User-selected |
+| 3 | VLM writes captions / tags for images, and file-level video (native video or frames); dedicated OCR / ASR wait | May cost money | User-selected |
 | 4 | Deep analysis: segmentation, quality scoring, style tags, and more | May cost money | User-selected |
 
 - Level 1 writes `asset_metadata` keyed by `asset_id`. Common invalidation columns stay fixed; per-type fields are a `kind` JSON payload (`image` / `video` / `audio` / `text`).
@@ -58,4 +58,4 @@ Level 4  Deep analysis               Optional
 
 ## Media
 
-Image / video / audio conclusions: [MEDIA.md](./MEDIA.md). First version is a VLM write-up then text embeddings. In-process OCR + ONNX is optional and off by default. Scene chunks and CLIP vectors wait.
+Image / video / audio conclusions: [MEDIA.md](./MEDIA.md). Images are a VLM write-up then text embeddings. Video is the same, preferring native video when the endpoint allows it, otherwise frames. In-process OCR + ONNX is optional and off by default. Scene chunks and CLIP vectors wait.

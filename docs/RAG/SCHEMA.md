@@ -134,7 +134,7 @@ FTS5 virtual table for `search_assets` text queries. One row per asset. Not a so
 | Column | Meaning |
 |---|---|
 | `asset_id` | Asset UUID. Unindexed; used to map hits back to `assets`. |
-| `body` | Filename, relative path, property values, ready Level 1 extracts, and a ready VLM image write-up. |
+| `body` | Filename, relative path, property values, ready Level 1 extracts, and a ready VLM image or video write-up. |
 
 The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, its enrichment, or its VLM write-up change.
 
@@ -159,7 +159,7 @@ One row per Markdown asset that has been (or is being) indexed. Missing row mean
 | `parent_count` | INTEGER | NOT NULL | Parent rows written for this run. |
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
-A ready index is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different embedding model. Rename or move does not rerun if mtime is unchanged. Image rows also go stale if the VLM write-up is newer than the last embed.
+A ready index is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different embedding model. Rename or move does not rerun if mtime is unchanged. Image and video rows also go stale if the VLM write-up is newer than the last embed.
 
 ---
 
@@ -178,6 +178,24 @@ One row per image that has been (or is being) described by the VLM slot. Missing
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
 A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
+
+---
+
+## `video_vlm`
+
+One row per video that has been (or is being) described by the VLM slot. Missing row means idle. avi / m4v / mkv / mov / mp4 / webm.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY, FK → `assets(asset_id)` ON DELETE CASCADE | Asset. |
+| `status` | TEXT | NOT NULL, one of `describing`, `ready`, `failed` | Last describe attempt. |
+| `model_id` | TEXT | nullable | VLM slot `model` used for the last run. |
+| `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at describe time. Same mtime skip as Level 1. |
+| `error` | TEXT | nullable | Failure reason. |
+| `markdown` | TEXT | nullable | Caption / tags Markdown when `status = ready`. |
+| `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
+
+A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. Native video is tried first (`video_url` data URI, files up to 32 MB). If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs (not library assets) and sends them as `image_url`. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
 
 ---
 
@@ -294,6 +312,16 @@ CREATE TABLE IF NOT EXISTS text_chunks (
 CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
 
 CREATE TABLE IF NOT EXISTS image_vlm (
+  asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
+  model_id TEXT,
+  source_modified_at REAL NOT NULL,
+  error TEXT,
+  markdown TEXT,
+  updated_at REAL NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS video_vlm (
   asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
   status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
   model_id TEXT,

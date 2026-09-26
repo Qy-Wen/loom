@@ -560,6 +560,10 @@ export class Library {
 		this.emit({ type: "image_vlm", assetId });
 	}
 
+	notifyVideoVlm(assetId: string): void {
+		this.emit({ type: "video_vlm", assetId });
+	}
+
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}

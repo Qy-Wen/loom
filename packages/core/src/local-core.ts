@@ -7,7 +7,10 @@ import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
+import type { VideoVlmProvider, VideoVlmStatus } from "./model/video-vlm.ts";
 import { ImageVlmService } from "./rag/image-vlm.ts";
+import { extractVideoFramesForVlm } from "./rag/video-frames.ts";
+import { VideoVlmService } from "./rag/video-vlm.ts";
 import { TextEmbedService } from "./rag/service.ts";
 import type {
 	AssetPropertyValue,
@@ -66,6 +69,7 @@ export class LocalCore {
 	private readonly enrichment: EnrichmentService;
 	private readonly textEmbed: TextEmbedService;
 	private readonly imageVlm: ImageVlmService;
+	private readonly videoVlm: VideoVlmService;
 	private readonly media: MediaService;
 	private sessions: JsonlSessionRepo | null = null;
 	private readonly sessionListeners = new Set<(sessions: SessionSummary[]) => void>();
@@ -82,6 +86,11 @@ export class LocalCore {
 		this.imageVlm = new ImageVlmService(
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
+		);
+		this.videoVlm = new VideoVlmService(
+			this.metadataStore,
+			(assetId) => this.library.getAssetFilePath(assetId),
+			extractVideoFramesForVlm,
 		);
 		this.media = new MediaService(this.library);
 		this.library.subscribe((change) => {
@@ -274,6 +283,7 @@ export class LocalCore {
 			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
 			textEmbed: await this.textEmbed.getStatus(asset.assetId),
 			imageVlm: await this.imageVlm.getStatus(asset.assetId),
+			videoVlm: await this.videoVlm.getStatus(asset.assetId),
 			...await this.listAssetRelations(asset.assetId),
 		};
 	}
@@ -367,6 +377,18 @@ export class LocalCore {
 			this.library.notifyImageVlm(assetId);
 		});
 		this.library.notifyImageVlm(assetId);
+		return status;
+	}
+
+	getVideoVlmStatus(assetId: string, currentModelId?: string): Promise<VideoVlmStatus> {
+		return this.videoVlm.getStatus(assetId, currentModelId);
+	}
+
+	async describeVideoAsset(assetId: string, provider: VideoVlmProvider): Promise<VideoVlmStatus> {
+		const status = await this.videoVlm.describe(assetId, provider, () => {
+			this.library.notifyVideoVlm(assetId);
+		});
+		this.library.notifyVideoVlm(assetId);
 		return status;
 	}
 
