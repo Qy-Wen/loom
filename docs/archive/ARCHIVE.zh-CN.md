@@ -123,6 +123,7 @@
 - 关闭即归档（历史可再打开）；删除是单独动作，打开中不能删
 - 重启后把 transcript 灌回 Agent，模型仍有上下文
 - Agent 面板用会话 tab；第一条用户消息生成标题
+- 聊天区通过 CopilotChat.View 画出已恢复的 JSONL（和本轮直播消息合并）
 - 测试覆盖 CRUD/归档、打开中不能删、会话文件不进素材 watcher
 
 ---
@@ -218,3 +219,33 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 - 优先 OpenAI 兼容 `POST /v1/chat/completions` 的 native `video_url`（data URI，不超过 32 MB）。端点拒收或文件更大时，FFmpeg 抽 1–3 张临时 JPEG 再当 `image_url`。Loom 不加载、不运行模型
 - avi / m4v / mkv / mov / mp4 / webm。caption / 标签 Markdown 落在 `video_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
 - Details Caption 和 `describe_video`；再用 `embed_asset` 把 Markdown 折进 `text_chunks`。抽帧不进素材库。不写 sidecar `.md`
+
+---
+
+## ✅ Hybrid Search
+
+`search_assets` 融合 FTS 排名和子切片向量。属性过滤仍是 AND。默认不整库 embedding。
+
+- sqlite-vec（或 JS 余弦）只打已有向量的 **子切片**；child 命中可以扩到 parent
+- 和 `assets_fts` 做 RRF 融合（`k = 60`）。返回 **段落 + `asset_id`**。Embedding 槽位空着或查询向量失败时退回 FTS
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`。见 [TEXT](../RAG/TEXT.zh-CN.md)
+
+---
+
+## ✅ 音频理解
+
+按需用 Audio 槽位给独立音频写文件级说明，再走文本 embedding。导入不跑。专用 Whisper 和 CLAP 以后再做。
+
+- OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。托管 Qwen-Omni 发 `input_audio` + `modalities: ["text"]` + `stream: true`。VLM 槽位仍只做视觉。Loom 不加载、不运行模型
+- 端点拒收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Markdown 落在 `audio_writeup`；mtime 没变不重跑；换 Audio 模型则说明作废
+- Details 和 `describe_audio`；再用 `embed_asset`。见 [MEDIA](../RAG/MEDIA.zh-CN.md)
+
+---
+
+## ✅ Rerank
+
+Hybrid Search 之后的可选第二轮。槽位空着就跳过。
+
+- Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`），`query` + `documents`（融合后的段落）。百炼 `qwen3-rerank` 会把 DashScope Chat URL 改写成 `.../compatible-api/v1/reranks`
+- 失败、只有一条命中、或槽位空着，都保持 RRF 顺序。开关探测发一次很小的 rerank POST（不是 `GET /v1/models`）
+- TEI 原生 `texts` 以后再说。见 [TEXT](../RAG/TEXT.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)

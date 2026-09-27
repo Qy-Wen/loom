@@ -9,7 +9,7 @@
 
 ## 1. Goal and positioning
 
-- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Path jail and a process sandbox are deferred.
+- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Skills, multi-agent, path jail, and a process sandbox are deferred; see [TODO](./TODO.md).
 - Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
@@ -186,9 +186,9 @@ JSONL / `state.messages` keep a sidecar field. After send, that user row is froz
 
 When nothing is selected, omit `ui_selection` (omit `attachments` if it would be empty). Do not store a `none` placeholder.
 
-Snapshot at send time from the current library selection (`assetId`, workspace-relative `path`, `assetType`). Graph edges are not a selection. `attachments` may grow later with other `type` values; do not put timestamps or other per-request noise in the payload.
+Snapshot at send time from the current library selection (`assetId`, workspace-relative `path`, `assetType`). Graph edges are not a selection. Later the composer can attach assets explicitly (same sidecar, possibly several). Do not put timestamps or other per-request noise in the payload.
 
-Chat UI, titles, and `userMessageText` read `content` only.
+Chat UI, titles, and `userMessageText` read `content` only today. Later the bubble should also show those attachments as clickable asset refs.
 
 ### 5.2 Fold for the Chat API
 
@@ -258,7 +258,7 @@ Model (DeepSeek, ...)
 - The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
 - The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
 - Runtime clones the registered Agent for each run. The adapter overrides `clone()` so its Agent configuration and thread session map survive cloning.
-- Transcripts are append-only JSONL files in the current library `.loom/sessions/`. The adapter restores `initialMessages` the first time it sees a thread id and appends new messages after each run.
+- Transcripts are append-only JSONL files in the current library `.loom/sessions/`. The adapter restores `initialMessages` the first time it sees a thread id and appends new messages after each run. Continue-from / fork-from an arbitrary message waits; see [TODO](./TODO.md).
 
 **Server rules:**
 
@@ -281,26 +281,37 @@ AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into 
 
 ### 6.3 Deferred v1 capabilities with preserved extension points
 
-Two capabilities are intentionally excluded from v1, but AgUiAdapter retains clear extension points so adding them does not require restructuring.
+These are excluded from v1. AgUiAdapter keeps extension points so adding them does not require restructuring.
 
 **a. Thinking/reasoning**
 
 - Pi has `thinking_start`, `thinking_delta`, and `thinking_end`, including `redacted` and Google's `thoughtSignature`.
 - They can later map to AG-UI `THINKING_*`. Redacted content is discarded, and `thoughtSignature` remains an internal Agent↔model mechanism that must never enter the frontend protocol.
-- Add thinking events to `LoomAgentEvent` before implementing this mapping.
+- Add thinking events to `LoomAgentEvent` before implementing this mapping. See [TODO](./TODO.md).
 
 **b. Rich tool output**
 
 - Pi's `AgentToolResult` naturally has two channels: `content` (text for the model) and `details` (structured data for UI rendering).
 - Loom now preserves both channels: text maps to `TOOL_CALL_RESULT`, while structured details emit `CUSTOM loom.tool_result`.
-- `search_assets` and `inspect_asset` use `asset_list` and `asset_detail` detail payloads. The current chat shell transports them; a later workbench renderer will display them as interactive asset cards.
+- `search_assets` and `inspect_asset` use `asset_list` and `asset_detail` detail payloads. The current chat shell transports them; later render clickable `asset_id` citations that select the asset in the library. See [TODO](./TODO.md).
 - FFmpeg and ComfyUI progress can use additional `CUSTOM` events later.
+
+**c. Stop conversation**
+
+- CopilotChat Stop unsubscribes the AG-UI stream and calls `LoomAgent.abort()`.
+- That aborts the pi run (Chat HTTP via the stream abort controller), in-flight tools (`AbortSignal` on `LoomTool.execute`), FFmpeg child processes, VLM/Audio/embedding/rerank `fetch`, and MCP `callTool`.
+- The aborted turn is still appended to JSONL. Stop is not mapped as a Chat `RUN_ERROR`.
+
+**d. Branch from a message**
+
+- Continue the current session from any turn, or fork a new session from that prefix. The original transcript stays on fork.
+- Today the store is linear append-only JSONL. See [TODO](./TODO.md).
 
 ---
 
 ## 7. Evals
 
-Evals live in `packages/agent/evals/`. Compaction rate (`compaction-rate.ts`) is context tokens after compact / tokens before. Prompt-cache hit rate (`prompt-cache-hit.ts`) is `cacheRead / (input + cacheRead + cacheWrite)` from Chat usage (the API's `prompt_tokens` split).
+Evals live in `packages/agent/evals/`. Compaction rate (`compaction-rate.ts`) is context tokens after compact / tokens before. Prompt-cache hit rate (`prompt-cache-hit.ts`) is `cacheRead / (input + cacheRead + cacheWrite)` from Chat usage (the API's `prompt_tokens` split). Broader Agent / tool / retrieval evals wait; see [TODO](./TODO.md).
 
 ```bash
 pnpm --filter @loom/agent eval:compaction-rate
@@ -315,7 +326,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code depends on `packages/agent/src/types.ts`; `pi-adapter.ts` is the sole vendor boundary through `#vendor/pi-agent`.
-- **User attachments:** UI selection (and later injections) live on the user row as `attachments`, fold to one Chat `content` string in `convertToLlm`, and stay out of the bubble.
+- **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, fold to one Chat `content` string in `convertToLlm`. Clickable asset refs in the bubble wait.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; AgUiAdapter translates LoomAgentEvent without leaking pi's protocol.
-- **Evals:** compaction rate and prompt-cache hit rate; retrieval evals stay on the Hybrid Search step.
-- **Current scope:** the question → answer → tool flow is complete; asset tools now preserve stable call IDs and structured result payloads. Thinking and interactive rich-result rendering remain deferred behind explicit extension points.
+- **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
+- **Current scope:** the question → answer → tool flow is complete; asset tools now preserve stable call IDs and structured result payloads. Stop aborts the run and in-flight tools. Thinking, interactive asset refs in chat, composer asset attach, and branch/fork from a message remain deferred.

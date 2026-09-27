@@ -8,33 +8,33 @@
 
 ---
 
-## Step 1: Hybrid Search
-
-sqlite-vec over child embeddings that already exist (Markdown chunks, and text from images / video). Property filters stay AND. Fuse FTS ranks with vector ranks using **RRF** (`k = 60`). Return the hit plus `asset_id`. Do not embed the whole library. See [TEXT](./RAG/TEXT.md).
-
-- [x] sqlite-vec over child chunks that already have embeddings
-- [x] RRF-fuse with `assets_fts`; a child hit can expand to its parent
-- [x] Keep a minimal retrieval eval set
-
-## Step 2: Audio understanding
-
-Standalone audio files only. Do not run on the whole library by default. Same pattern as VLM: one HTTP write-up (scene, music, ambient sound, and speech if any), then the Embedding slot. Dedicated Whisper ASR and CLAP vectors wait. See [MEDIA](./RAG/MEDIA.md).
-
-- [x] Add an Audio settings slot (`baseUrl`, optional key, `model`). Wire is OpenAI-compatible `POST /v1/chat/completions` with an audio part. The VLM slot stays vision-only.
-- [x] FFmpeg converts locally if the file is not a form the endpoint accepts; keep a size cap like video. Loom does not run the model
-- [x] Persist Markdown by `asset_id`, then `embed_asset`. Skip when mtime is unchanged; changing the Audio model invalidates the write-up. Details / Agent can request it and see status
-
-## Step 3: Rerank
-
-Optional second pass after Hybrid Search. Empty slot skips it. See [TEXT](./RAG/TEXT.md).
-
-- [x] Cohere/Jina `POST /v1/rerank` with `query` + `documents` (the fused passages). TEI `texts` waits
-- [x] Failure keeps the RRF order. One hit does not call the endpoint
-- [x] `search_assets` uses the slot when it is on
+The retrieve path is done (Hybrid Search, Audio write-ups, optional Rerank). Completed steps are in the [ARCHIVE](./archive/ARCHIVE.md).
 
 ---
 
-Completed steps are recorded in the [ARCHIVE](./archive/ARCHIVE.md).
+## Step 1: Stop conversation
+
+CopilotChat Stop must abort the pi run and in-flight tools, not only unsubscribe the UI. See [AGENT](./AGENT.md) §6.3c.
+
+- [x] Call `LoomAgent.abort()` when the AG-UI run unsubscribes
+- [x] Honor `AbortSignal` in Chat, bash, FFmpeg, VLM/Audio HTTP, embedding/rerank, and MCP
+- [x] Persist the aborted turn; do not treat Stop as a Chat error. FFmpeg progress waits
+
+## Step 2: Chat asset refs
+
+Attach library assets in the composer (not only implicit `ui_selection`). Click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5 and §6.3b.
+
+- [ ] Composer chips on the user `attachments` sidecar; fold still goes to Chat as today
+- [ ] Render refs from those chips and from `search_assets` / `inspect_asset`; click selects in the library
+- [ ] Key by `asset_id`, never an absolute path
+
+## Step 3: Branch from a message
+
+Continue the current session from any turn, or fork a new session from that prefix. See [AGENT](./AGENT.md) §6.3d.
+
+- [ ] Continue: later turns drop or park; the model sees the prefix through that message
+- [ ] Fork: new session with the same prefix; the original transcript stays
+- [ ] Today the store is linear append-only JSONL
 
 ---
 
@@ -43,7 +43,10 @@ Completed steps are recorded in the [ARCHIVE](./archive/ARCHIVE.md).
 - **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).
 - **Dedicated ASR:** OpenAI-compatible `POST /v1/audio/transcriptions`. Prefer the Audio understanding slot. See [MEDIA](./RAG/MEDIA.md).
 - **CLIP / image vectors:** embed the image without going through text; later if needed
-- **Session history UI:** show the restored transcript in the chat panel after restart
-- **FFmpeg progress and cancel:** abort long jobs and stream protocol-level progress
-- **Frontend protocol extensions:** add thinking and interactive rendering for structured tool results; see AGENT.md
+- **Thinking:** surface model reasoning in chat. Add thinking events to `LoomAgentEvent`, map to AG-UI `THINKING_*`, drop redacted text, keep `thoughtSignature` off the frontend protocol. See [AGENT](./AGENT.md).
+- **Skills:** load Agent Skills (`SKILL.md`, agentskills.io) into the creative Agent. Pi's harness already has the format; do not vendor `packages/coding-agent`. See [AGENT](./AGENT.md).
+- **Multi-agent:** split collaboration and orchestration by genuine creative roles. See [PRODUCT](./PRODUCT.md) §10.
+- **Sandbox:** path jail for workspace tools, plus a process sandbox for high-risk tools and generation jobs. See [PRODUCT](./PRODUCT.md) §10.
+- **Evals:** Agent behavior, tool calls, and retrieval quality. Compaction rate and prompt-cache hit already live in `packages/agent/evals/`; Hybrid Search has a minimal unit set. See [PRODUCT](./PRODUCT.md) §10 and [AGENT](./AGENT.md).
+- **FFmpeg progress:** stream protocol-level progress for long jobs (kill is Step 1)
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
