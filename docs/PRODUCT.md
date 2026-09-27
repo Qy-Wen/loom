@@ -344,10 +344,13 @@ Future publishing extension:
 
 Introduce these progressively when real scenarios require them:
 
+- **Skills:** load Agent Skills (`SKILL.md`) into the creative Agent. Do not vendor pi's coding-agent shell.
 - **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
-- **Sandboxing:** isolate high-risk tools and generation jobs.
+- **Sandboxing:** path jail for workspace tools; isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.
-- **Evals:** evaluate Agent behavior, tool calls, and retrieval quality.
+- **Evals:** evaluate Agent behavior, tool calls, and retrieval quality. See [TODO](./TODO.md).
+- **Chat asset refs:** attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [TODO](./TODO.md).
+- **Branch from a message:** continue or fork a session from any turn. See [TODO](./TODO.md).
 - **Observability:** record run traces, tool calls, latency, and token usage.

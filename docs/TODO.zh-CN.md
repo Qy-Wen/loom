@@ -8,33 +8,33 @@
 
 ---
 
-## 第一步：Hybrid Search
-
-sqlite-vec 检索已有的 child 向量（Markdown 切片，以及图 / 视频转成的文字）。属性过滤仍是 AND。FTS 排名和向量排名用 **RRF** 融合（`k = 60`）。返回命中 + `asset_id`。默认不整库。见 [TEXT](./RAG/TEXT.zh-CN.md)。
-
-- [x] sqlite-vec 检索已有 embedding 的 child 切片
-- [x] 和 `assets_fts` 做 RRF 融合；child 命中可以扩到 parent
-- [x] 建最小评测集
-
-## 第二步：音频理解
-
-只做独立音频文件。默认不整库。和图的 VLM 同一套：一次 HTTP 写说明（场景、音乐、环境声，有人声再带转写），再交给 Embedding 槽位。专用 Whisper ASR 和 CLAP 以后再做。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
-
-- [x] 设置里加 Audio 槽位（`baseUrl`、可选 key、`model`）。报文是 OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。VLM 槽位仍只做视觉。
-- [x] 端点不收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Loom 不跑模型
-- [x] Markdown 按 `asset_id` 落盘，再 `embed_asset`。mtime 没变不重跑；换 Audio 模型则说明作废。Details / Agent 能请求并看到状态
-
-## 第三步：Rerank
-
-Hybrid Search 之后的可选第二轮。槽位空着就跳过。见 [TEXT](./RAG/TEXT.zh-CN.md)。
-
-- [x] Cohere/Jina `POST /v1/rerank`，`query` + `documents`（融合后的段落）。TEI `texts` 以后再说
-- [x] 失败保持 RRF 顺序。只有一条命中不调端点
-- [x] `search_assets` 在槽位开启时使用
+检索回路已完成（Hybrid Search、音频说明、可选 Rerank）。已完成步骤见 [ARCHIVE](./archive/ARCHIVE.zh-CN.md)。
 
 ---
 
-已完成的步骤存档见 [ARCHIVE](./archive/ARCHIVE.zh-CN.md)。
+## 第一步：停止对话
+
+CopilotChat 的 Stop 必须中止 pi 这一轮和正在跑的工具，不能只退订 UI。见 [AGENT](./AGENT.zh-CN.md) §6.3c。
+
+- [x] AG-UI 退订时调用 `LoomAgent.abort()`
+- [x] Chat、bash、FFmpeg、VLM/Audio HTTP、embedding/rerank、MCP 都响应 `AbortSignal`
+- [x] 中止的这一轮仍写入 JSONL；Stop 不当成 Chat 报错。FFmpeg 进度以后再说
+
+## 第二步：对话资产引用
+
+输入框可贴库内资产（不只是隐式 `ui_selection`）。对话里的 `asset_id` 引用可点并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5 和 §6.3b。
+
+- [ ] 输入框芯片走 user 的 `attachments` 旁路；折进 Chat 的办法不变
+- [ ] 画出这些芯片以及 `search_assets` / `inspect_asset` 的引用；点击后在素材库里选中
+- [ ] 用 `asset_id` 当键，不用绝对路径
+
+## 第三步：从某条消息分支
+
+当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
+
+- [ ] 续聊：该条之后丢掉或收起；模型上下文是到该条为止的前缀
+- [ ] 开新会话：同一前缀；原 transcript 不动
+- [ ] 现在存储是线性只追加 JSONL
 
 ---
 
@@ -43,7 +43,10 @@ Hybrid Search 之后的可选第二轮。槽位空着就跳过。见 [TEXT](./RA
 - **进程内 OCR（可选）：** RapidOCR + ONNX，CPU，可开关，默认关。不一定做。优先 VLM。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 - **专用 ASR：** OpenAI 兼容 `POST /v1/audio/transcriptions`。优先 Audio 理解槽位。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 - **CLIP / 图片向量：** 不经文字、直接嵌图；需要时再做
-- **会话历史面板：** 重启后在聊天区展示已恢复的 transcript
-- **FFmpeg 进度与取消：** 长任务可中断，协议层推送进度
-- **前端协议扩展：** AgUiAdapter 补 thinking 与结构化工具结果的交互渲染，见 AGENT.md
+- **Thinking：** 聊天里展示模型推理过程。先在 `LoomAgentEvent` 补 thinking 事件，再映射到 AG-UI `THINKING_*`；丢弃 redacted；`thoughtSignature` 不进前端协议。见 [AGENT](./AGENT.zh-CN.md)。
+- **Skills：** 把 Agent Skills（`SKILL.md`，agentskills.io）接到创作 Agent。pi harness 已有这套格式；不 vendor `packages/coding-agent`。见 [AGENT](./AGENT.zh-CN.md)。
+- **多 Agent：** 按真实创作角色拆分协作与编排。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
+- **沙箱：** 工作区工具的路径 jail，以及高风险工具和生成任务的进程隔离。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
+- **评测：** Agent 行为、工具调用、检索效果。压缩率和 prompt-cache 命中率已在 `packages/agent/evals/`；Hybrid Search 有最小单测集。见 [PRODUCT](./PRODUCT.zh-CN.md) §10 和 [AGENT](./AGENT.zh-CN.md)。
+- **FFmpeg 进度：** 长任务协议层推送进度（杀进程是第一步）
 - **发布：** 小红书/抖音等平台适配

@@ -123,6 +123,7 @@ Persist multiple conversations per library as append-only JSONL, following pi's 
 - Close archives a session (history stays, can reopen); delete is separate and refused while open
 - Restore transcript into the Agent after restart so the model keeps context
 - Agent panel uses session tabs; the first user message titles the tab
+- Chat panel draws restored JSONL through CopilotChat.View (merged with the live run)
 - Tests cover repo CRUD/archive, refusing delete while open, and keeping session files out of the asset watcher
 
 ---
@@ -218,3 +219,33 @@ On-demand file-level write-up via the same VLM slot, then the text embedding pat
 - Prefer native `video_url` (data URI, up to 32 MB) on OpenAI-compatible `POST /v1/chat/completions`. If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs as `image_url`. Loom does not load or run the model
 - avi / m4v / mkv / mov / mp4 / webm. Caption / tags Markdown in `video_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
 - Details Caption and `describe_video`; then `embed_asset` folds the Markdown into `text_chunks`. Frames are not library assets. No sidecar `.md`
+
+---
+
+## ✅ Hybrid Search
+
+`search_assets` fuses FTS ranks with child-chunk vectors. Property filters stay AND. Do not embed the whole library.
+
+- sqlite-vec (or JS cosine) over **child** chunks that already have embeddings; a child hit can expand to its parent
+- RRF fuse with `assets_fts` (`k = 60`). Return **passage + `asset_id`**. Empty Embedding slot or a failed query embed is FTS-only
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts`. See [TEXT](../RAG/TEXT.md)
+
+---
+
+## ✅ Audio understanding
+
+On-demand file-level write-up for standalone audio via the Audio slot, then the text embedding path. Import does not run it. Dedicated Whisper and CLAP wait.
+
+- OpenAI-compatible `POST /v1/chat/completions` with an audio part. Hosted Qwen-Omni uses `input_audio` + `modalities: ["text"]` + `stream: true`. The VLM slot stays vision-only. Loom does not load or run the model
+- FFmpeg converts locally if the endpoint rejects the original; size cap like video. Markdown in `audio_writeup`; mtime skip; changing the Audio model invalidates the write-up
+- Details and `describe_audio`; then `embed_asset`. See [MEDIA](../RAG/MEDIA.md)
+
+---
+
+## ✅ Rerank
+
+Optional second pass after Hybrid Search. Empty slot skips it.
+
+- Cohere/Jina/Qianfan `POST /v1/rerank` (or `/v2/rerank`) with `query` + `documents` (the fused passages). Bailian `qwen3-rerank` rewrites a DashScope Chat URL to `.../compatible-api/v1/reranks`
+- Failure, one hit, or a missing slot keeps the RRF order. Probe POSTs a tiny rerank call (not `GET /v1/models`)
+- TEI-native `texts` waits. See [TEXT](../RAG/TEXT.md) and [SETTINGS](../SETTINGS.md)
