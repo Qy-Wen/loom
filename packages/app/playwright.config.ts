@@ -1,7 +1,7 @@
 import { defineConfig } from "@playwright/test";
 
 if (process.env.npm_lifecycle_event === "test:e2e:attach") {
-	process.env.LOOM_CDP_URL ??= "http://127.0.0.1:9333";
+	process.env.LOOM_CDP_URL ??= "http://127.0.0.1:9344";
 }
 
 export default defineConfig({
