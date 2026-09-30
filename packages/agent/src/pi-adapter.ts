@@ -75,8 +75,9 @@ function toPiTool(tool: LoomTool): AgentTool {
 		label: tool.name,
 		description: tool.description,
 		parameters: (tool.parameters ?? Type.Object({})) as never,
-		execute: async (_toolCallId, params) => {
-			const output = await tool.execute(params as never);
+		execute: async (_toolCallId, params, signal) => {
+			if (signal?.aborted) throw new Error("Operation aborted");
+			const output = await tool.execute(params as never, signal);
 			const result = typeof output === "string" ? { content: output } : output;
 			return {
 				content: toPiContent(result.content),
@@ -89,6 +90,8 @@ function toPiTool(tool: LoomTool): AgentTool {
 class PiAgentAdapter implements LoomAgent {
 	private readonly agent: Agent;
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
+	/** Reason for the run currently being aborted. The first reason wins. */
+	private abortReason: "user" | undefined;
 
 	constructor(options: LoomAgentOptions) {
 		if (!chatEndpointReady(options.chat)) {
@@ -128,7 +131,11 @@ class PiAgentAdapter implements LoomAgent {
 				break;
 			case "turn_end": {
 				const message = event.message;
-				if (message.role === "assistant" && message.errorMessage?.trim()) {
+				if (
+					message.role === "assistant" &&
+					message.stopReason !== "aborted" &&
+					message.errorMessage?.trim()
+				) {
 					this.emit({ type: "error", message: message.errorMessage.trim() });
 				}
 				break;
@@ -174,18 +181,32 @@ class PiAgentAdapter implements LoomAgent {
 		return () => this.listeners.delete(listener);
 	}
 
+	abort(reason?: "user"): void {
+		if (reason && !this.abortReason) this.abortReason = reason;
+		this.agent.abort();
+	}
+
 	async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
+		if (this.agent.signal?.aborted) await this.agent.waitForIdle();
+		const before = this.agent.state.messages.length;
 		const attachments = options?.attachments?.filter(Boolean) ?? [];
-		if (attachments.length === 0) {
-			await this.agent.prompt(input);
-		} else {
-			await this.agent.prompt({
-				role: "user",
-				content: [{ type: "text", text: input }],
-				timestamp: Date.now(),
-				attachments,
-			} as AgentMessage);
+		try {
+			if (attachments.length === 0) {
+				await this.agent.prompt(input);
+			} else {
+				await this.agent.prompt({
+					role: "user",
+					content: [{ type: "text", text: input }],
+					timestamp: Date.now(),
+					attachments,
+				} as AgentMessage);
+			}
+		} finally {
+			const reason = this.abortReason;
+			this.abortReason = undefined;
+			if (reason === "user") noteUserStop(this.agent.state.messages, before);
 		}
+		if (lastAssistantAborted(this.agent.state.messages)) return;
 		const failed = this.agent.state.errorMessage?.trim();
 		if (failed) throw new Error(failed);
 	}
@@ -202,6 +223,60 @@ class PiAgentAdapter implements LoomAgent {
 	setSystemPrompt(systemPrompt: string): void {
 		this.agent.state.systemPrompt = systemPrompt;
 	}
+}
+
+const USER_STOP_NOTE =
+	"The user pressed Stop. This turn was cancelled on purpose, not because of an error.";
+
+const ABORT_TOOL_TEXT = new Set([
+	"Operation aborted",
+	"Command aborted",
+	"ffmpeg aborted",
+	"ffprobe aborted",
+]);
+
+/** Write a user Stop into this turn's model-visible text. `stopReason` is not sent. */
+function noteUserStop(messages: readonly object[], from: number): void {
+	for (const message of messages.slice(from) as Array<Record<string, unknown>>) {
+		if (message.role === "assistant" && message.stopReason === "aborted") {
+			appendText(message, USER_STOP_NOTE);
+			continue;
+		}
+		if (message.role === "toolResult" && ABORT_TOOL_TEXT.has(messageText(message))) {
+			message.content = [{ type: "text", text: USER_STOP_NOTE }];
+		}
+	}
+}
+
+function messageText(message: Record<string, unknown>): string {
+	const content = message.content;
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((part): part is { type: "text"; text: string } => {
+			return !!part && typeof part === "object" && part.type === "text" && typeof part.text === "string";
+		})
+		.map((part) => part.text)
+		.join("\n");
+}
+
+function appendText(message: Record<string, unknown>, text: string): void {
+	if (messageText(message).includes(text)) return;
+	const content = message.content;
+	if (!Array.isArray(content)) {
+		message.content = [{ type: "text", text }];
+		return;
+	}
+	content.push({ type: "text", text });
+}
+
+function lastAssistantAborted(messages: readonly object[]): boolean {
+	for (let index = messages.length - 1; index >= 0; index -= 1) {
+		const message = messages[index] as { role?: string; stopReason?: string };
+		if (message.role !== "assistant") continue;
+		return message.stopReason === "aborted";
+	}
+	return false;
 }
 
 function convertToLlm(messages: AgentMessage[]): ReturnType<typeof toLlmMessages> {

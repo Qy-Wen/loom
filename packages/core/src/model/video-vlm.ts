@@ -33,7 +33,7 @@ export interface VideoVlmDescribeRequest {
 
 export interface VideoVlmProvider {
 	modelId: string;
-	describe(request: VideoVlmDescribeRequest): Promise<string>;
+	describe(request: VideoVlmDescribeRequest, signal?: AbortSignal): Promise<string>;
 }
 
 export interface VideoVlmRecord {
@@ -57,4 +57,4 @@ export interface VideoVlmStatus {
 	markdown?: string;
 }
 
-export type VideoFrameExtractor = (absolutePath: string) => Promise<VideoVlmFrame[]>;
+export type VideoFrameExtractor = (absolutePath: string, signal?: AbortSignal) => Promise<VideoVlmFrame[]>;

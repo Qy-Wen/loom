@@ -5,6 +5,7 @@
 import {
 	BACKGROUND_CONTEXT,
 	createBashTool,
+	withAbortSignal,
 	createEditTool,
 	createReadTool,
 	createWriteTool,
@@ -51,14 +52,14 @@ function wrapHarnessTool(
 		name: tool.name,
 		description: tool.description,
 		parameters: tool.parameters,
-		execute: async (args) => {
+		execute: async (args, signal) => {
 			const result = await tool.execute(
 				"loom",
 				args as never,
 				() => undefined,
 				{ env },
 				STUB_INVOCATION,
-				BACKGROUND_CONTEXT,
+				signal ? withAbortSignal(signal, BACKGROUND_CONTEXT) : BACKGROUND_CONTEXT,
 			);
 			return {
 				content: fromPiContent(result.content),

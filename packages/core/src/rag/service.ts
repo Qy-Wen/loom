@@ -40,10 +40,11 @@ export class TextEmbedService {
 		assetId: string,
 		provider: EmbeddingProvider,
 		onUpdate?: (status: TextEmbedStatus) => void,
+		signal?: AbortSignal,
 	): Promise<TextEmbedStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate));
+		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -56,6 +57,7 @@ export class TextEmbedService {
 		asset: Asset,
 		provider: EmbeddingProvider,
 		onUpdate?: (status: TextEmbedStatus) => void,
+		signal?: AbortSignal,
 	): Promise<TextEmbedStatus> {
 		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
 
@@ -92,7 +94,7 @@ export class TextEmbedService {
 			const children = chunks.filter((chunk) => chunk.role === "child");
 			const pending = children.filter((chunk) => chunk.text.trim().length > 0);
 			if (pending.length > 0) {
-				const vectors = await embedBatched(provider, pending.map((chunk) => chunk.text));
+				const vectors = await embedBatched(provider, pending.map((chunk) => chunk.text), signal);
 				const updates: ChildEmbeddingUpdate[] = pending.map((chunk, index) => ({
 					chunkId: chunk.chunkId,
 					embedding: vectors[index]!,
@@ -270,11 +272,16 @@ function toStoredChunks(assetId: string, plan: ReturnType<typeof chunkMarkdown>)
 	return chunks;
 }
 
-async function embedBatched(provider: EmbeddingProvider, texts: string[]): Promise<number[][]> {
+async function embedBatched(
+	provider: EmbeddingProvider,
+	texts: string[],
+	signal?: AbortSignal,
+): Promise<number[][]> {
 	const vectors: number[][] = [];
 	for (let index = 0; index < texts.length; index += EMBED_BATCH_SIZE) {
+		if (signal?.aborted) throw new Error("Operation aborted");
 		const batch = texts.slice(index, index + EMBED_BATCH_SIZE);
-		const part = await provider.embed(batch);
+		const part = await provider.embed(batch, signal);
 		if (part.length !== batch.length) {
 			throw new Error("Embedding provider returned the wrong number of vectors");
 		}

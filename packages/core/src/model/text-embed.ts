@@ -9,7 +9,7 @@ export type TextEmbedStatusKind = "idle" | TextEmbedJobStatus;
 
 export interface EmbeddingProvider {
 	modelId: string;
-	embed(texts: string[]): Promise<number[][]>;
+	embed(texts: string[], signal?: AbortSignal): Promise<number[][]>;
 }
 
 export interface TextEmbedJob {

@@ -32,12 +32,12 @@ interface EmbedAssetArgs {
 }
 
 export interface AssetToolOptions {
-	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+	embedAsset: (assetId: string, signal?: AbortSignal) => Promise<TextEmbedStatus>;
 	embeddingProvider?: () => Promise<EmbeddingProvider | undefined>;
 	rerankProvider?: () => Promise<RerankProvider | undefined>;
-	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
-	describeVideo: (assetId: string) => Promise<VideoVlmStatus>;
-	describeAudio: (assetId: string) => Promise<AudioWriteupStatus>;
+	describeImage: (assetId: string, signal?: AbortSignal) => Promise<ImageVlmStatus>;
+	describeVideo: (assetId: string, signal?: AbortSignal) => Promise<VideoVlmStatus>;
+	describeAudio: (assetId: string, signal?: AbortSignal) => Promise<AudioWriteupStatus>;
 }
 
 /**
@@ -74,7 +74,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				},
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = validateSearchArgs(rawArgs);
 				let provider: EmbeddingProvider | undefined;
 				let rerank: RerankProvider | undefined;
@@ -88,7 +88,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				} catch {
 					rerank = undefined;
 				}
-				const result = await core.searchAssets(args, provider, rerank);
+				const result = await core.searchAssets(args, provider, rerank, signal);
 				return {
 					content: JSON.stringify({ total: result.total, assets: result.assets }),
 					details: result,
@@ -132,9 +132,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				required: ["assetId"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = validateInspectArgs(rawArgs) satisfies EmbedAssetArgs;
-				const result = await options.embedAsset(args.assetId);
+				const result = await options.embedAsset(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
 					details: result,
@@ -155,9 +155,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				required: ["assetId"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = validateInspectArgs(rawArgs);
-				const result = await options.describeImage(args.assetId);
+				const result = await options.describeImage(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
 					details: result,
@@ -179,9 +179,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				required: ["assetId"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = validateInspectArgs(rawArgs);
-				const result = await options.describeVideo(args.assetId);
+				const result = await options.describeVideo(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
 					details: result,
@@ -203,9 +203,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				required: ["assetId"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = validateInspectArgs(rawArgs);
-				const result = await options.describeAudio(args.assetId);
+				const result = await options.describeAudio(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
 					details: result,

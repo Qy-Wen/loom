@@ -19,7 +19,7 @@ export function createHttpEmbeddingProvider(slot: {
 	const apiKey = slot.apiKey.trim();
 	return {
 		modelId,
-		async embed(texts: string[]): Promise<number[][]> {
+		async embed(texts: string[], signal?: AbortSignal): Promise<number[][]> {
 			if (texts.length === 0) return [];
 			const headers: Record<string, string> = { "content-type": "application/json" };
 			if (apiKey) headers.authorization = `Bearer ${apiKey}`;
@@ -27,6 +27,7 @@ export function createHttpEmbeddingProvider(slot: {
 				method: "POST",
 				headers,
 				body: JSON.stringify({ model: modelId, input: texts }),
+				signal,
 			});
 			const body = await response.text();
 			if (!response.ok) {

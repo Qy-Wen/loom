@@ -89,8 +89,8 @@ export function createHttpVlmProvider(slot: {
 	const apiKey = slot.apiKey.trim();
 	return {
 		modelId,
-		async describe(image: ImageVlmInput): Promise<string> {
-			return postVlm(url, apiKey, vlmRequestBody(modelId, imageDataUrl(image)));
+		async describe(image: ImageVlmInput, signal?: AbortSignal): Promise<string> {
+			return postVlm(url, apiKey, vlmRequestBody(modelId, imageDataUrl(image)), signal);
 		},
 	};
 }
@@ -107,18 +107,20 @@ export function createHttpVideoVlmProvider(slot: {
 	const probeKey = `${url}|${modelId}`;
 	return {
 		modelId,
-		async describe(request): Promise<string> {
+		async describe(request, signal?: AbortSignal): Promise<string> {
+			if (signal?.aborted) throw new Error("Operation aborted");
 			if (request.native && !nativeVideoRejected.has(probeKey)) {
 				try {
-					return await postVlm(url, apiKey, vlmVideoRequestBody(modelId, videoDataUrl(request.native)));
+					return await postVlm(url, apiKey, vlmVideoRequestBody(modelId, videoDataUrl(request.native)), signal);
 				} catch (error) {
+					if (signal?.aborted) throw error;
 					if (!nativeFallbackError(error)) throw error;
 					nativeVideoRejected.add(probeKey);
 				}
 			}
 			const frames = await request.frames();
 			if (frames.length === 0) throw new Error("Could not extract video frames for VLM");
-			return postVlm(url, apiKey, vlmFrameRequestBody(modelId, frames));
+			return postVlm(url, apiKey, vlmFrameRequestBody(modelId, frames), signal);
 		},
 	};
 }
@@ -176,15 +178,15 @@ export function createHttpAudioProvider(slot: {
 	const hostedOmni = looksLikeHostedOmni(slot.baseUrl);
 	return {
 		modelId,
-		async describe(audio: AudioWriteupInput): Promise<string> {
+		async describe(audio: AudioWriteupInput, signal?: AbortSignal): Promise<string> {
 			const attempts: Array<() => Promise<string>> = hostedOmni
 				? [
-					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio"),
+					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio", signal),
 				]
 				: [
-					() => postChat(url, apiKey, audioUrlRequestBody(modelId, audioDataUrl(audio)), "Audio"),
-					() => postChat(url, apiKey, audioInputRequestBody(modelId, audio), "Audio"),
-					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio"),
+					() => postChat(url, apiKey, audioUrlRequestBody(modelId, audioDataUrl(audio)), "Audio", signal),
+					() => postChat(url, apiKey, audioInputRequestBody(modelId, audio), "Audio", signal),
+					() => postChat(url, apiKey, audioOmniRequestBody(modelId, audio), "Audio", signal),
 				];
 			let lastError: unknown;
 			for (const [index, attempt] of attempts.entries()) {
@@ -292,8 +294,13 @@ function chatBody(
 	};
 }
 
-async function postVlm(url: string, apiKey: string, payload: Record<string, unknown>): Promise<string> {
-	return postChat(url, apiKey, payload, "VLM");
+async function postVlm(
+	url: string,
+	apiKey: string,
+	payload: Record<string, unknown>,
+	signal?: AbortSignal,
+): Promise<string> {
+	return postChat(url, apiKey, payload, "VLM", signal);
 }
 
 async function postChat(
@@ -301,6 +308,7 @@ async function postChat(
 	apiKey: string,
 	payload: Record<string, unknown>,
 	kind: "VLM" | "Audio",
+	signal?: AbortSignal,
 ): Promise<string> {
 	const headers: Record<string, string> = { "content-type": "application/json" };
 	if (apiKey) headers.authorization = `Bearer ${apiKey}`;
@@ -308,6 +316,7 @@ async function postChat(
 		method: "POST",
 		headers,
 		body: JSON.stringify(payload),
+		signal,
 	});
 	const body = await response.text();
 	if (!response.ok) {

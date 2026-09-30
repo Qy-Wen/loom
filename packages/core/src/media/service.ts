@@ -35,13 +35,14 @@ export class MediaService {
 		this.run = run;
 	}
 
-	async getMediaInfo(path: string): Promise<MediaInfoResult> {
+	async getMediaInfo(path: string, signal?: AbortSignal): Promise<MediaInfoResult> {
 		const cwd = this.cwd();
 		const input = resolveMediaPath(path, cwd);
 		const { stdout } = await this.run({
 			program: "ffprobe",
 			args: buildProbeArgs(input.absolutePath),
 			cwd,
+			signal,
 		});
 		return {
 			kind: "media_info",
@@ -50,32 +51,32 @@ export class MediaService {
 		};
 	}
 
-	async extractFrame(args: ExtractFrameArgs): Promise<MediaJobResult> {
+	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const timeSeconds = assertFiniteNumber(args.timeSeconds, "timeSeconds");
 		return this.runConvenience(args.path, args.output, "extract_frame", "jpg", (input, output) => {
 			return buildExtractFrameArgs(input, output, timeSeconds);
-		});
+		}, signal);
 	}
 
-	async extractClip(args: ExtractClipArgs): Promise<MediaJobResult> {
+	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const startSeconds = assertFiniteNumber(args.startSeconds, "startSeconds");
 		const durationSeconds = assertFiniteNumber(args.durationSeconds, "durationSeconds");
 		if (durationSeconds <= 0) throw new TypeError("durationSeconds must be greater than 0");
 		return this.runConvenience(args.path, args.output, "extract_clip", undefined, (input, output) => {
 			return buildExtractClipArgs(input, output, startSeconds, durationSeconds);
-		});
+		}, signal);
 	}
 
-	async resizeVideo(args: ResizeVideoArgs): Promise<MediaJobResult> {
+	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		if (args.width !== undefined) assertFiniteNumber(args.width, "width");
 		if (args.height !== undefined) assertFiniteNumber(args.height, "height");
 		if (args.maxEdge !== undefined) assertFiniteNumber(args.maxEdge, "maxEdge");
 		return this.runConvenience(args.path, args.output, "resize", undefined, (input, output) => {
 			return buildResizeArgs(input, output, args);
-		});
+		}, signal);
 	}
 
-	async cropVideo(args: CropVideoArgs): Promise<MediaJobResult> {
+	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const crop = {
 			x: assertFiniteNumber(args.x, "x"),
 			y: assertFiniteNumber(args.y, "y"),
@@ -85,17 +86,17 @@ export class MediaService {
 		if (crop.width < 2 || crop.height < 2) throw new TypeError("crop width and height must be at least 2");
 		return this.runConvenience(args.path, args.output, "crop", undefined, (input, output) => {
 			return buildCropArgs(input, output, crop);
-		});
+		}, signal);
 	}
 
-	async convertFormat(args: ConvertFormatArgs): Promise<MediaJobResult> {
+	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const format = normalizeConvertFormat(args.format);
 		return this.runConvenience(args.path, args.output, "convert", format, (input, output) => {
 			return buildConvertArgs(input, output);
-		});
+		}, signal);
 	}
 
-	async runFfmpeg(input: RunFfmpegArgs): Promise<MediaJobResult> {
+	async runFfmpeg(input: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const program: MediaProgram = input.program ?? "ffmpeg";
 		if (program !== "ffmpeg" && program !== "ffprobe") {
 			throw new TypeError("program must be ffmpeg or ffprobe");
@@ -107,6 +108,7 @@ export class MediaService {
 			program,
 			args: prepared.args,
 			cwd,
+			signal,
 		});
 		return {
 			kind: "media_job",
@@ -127,6 +129,7 @@ export class MediaService {
 		suffix: string,
 		extension: string | undefined,
 		buildArgs: (inputPath: string, outputPath: string) => string[],
+		signal?: AbortSignal,
 	): Promise<MediaJobResult> {
 		const cwd = this.cwd();
 		const input = resolveMediaPath(inputPath, cwd);
@@ -139,6 +142,7 @@ export class MediaService {
 			program: "ffmpeg",
 			args: buildArgs(input.absolutePath, destination.absolutePath),
 			cwd,
+			signal,
 		});
 		return {
 			kind: "media_job",

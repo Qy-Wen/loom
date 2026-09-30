@@ -52,7 +52,7 @@ export function createHttpRerankProvider(slot: {
 	const url = native ? bailianNativeRerankUrl(slot.baseUrl) : rerankUrl(slot.baseUrl);
 	return {
 		modelId,
-		async rerank(query: string, documents: string[]): Promise<number[]> {
+		async rerank(query: string, documents: string[], signal?: AbortSignal): Promise<number[]> {
 			if (documents.length === 0) return [];
 			const headers: Record<string, string> = { "content-type": "application/json" };
 			if (apiKey) headers.authorization = `Bearer ${apiKey}`;
@@ -72,6 +72,7 @@ export function createHttpRerankProvider(slot: {
 				method: "POST",
 				headers,
 				body: JSON.stringify(payload),
+				signal,
 			});
 			const body = await response.text();
 			if (!response.ok) {

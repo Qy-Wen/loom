@@ -231,6 +231,7 @@ export class LocalCore {
 		query: AssetSearchQuery = {},
 		provider?: EmbeddingProvider,
 		rerank?: RerankProvider,
+		signal?: AbortSignal,
 	): Promise<AssetSearchResult> {
 		const textQuery = query.query?.trim();
 		const [assets, definitions, values, ftsIds, nearest] = await Promise.all([
@@ -238,7 +239,7 @@ export class LocalCore {
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
 			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve([] as string[]),
-			textQuery ? this.nearestChildrenForQuery(textQuery, provider) : Promise.resolve([] as NearestChildHit[]),
+			textQuery ? this.nearestChildrenForQuery(textQuery, provider, signal) : Promise.resolve([] as NearestChildHit[]),
 		]);
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
@@ -297,7 +298,7 @@ export class LocalCore {
 					: {}),
 			});
 		}
-		const ranked = await this.rerankMatches(textQuery, matches, rerank);
+		const ranked = await this.rerankMatches(textQuery, matches, rerank, signal);
 		return { kind: "asset_list", assets: ranked.slice(0, limit), total: ranked.length };
 	}
 
@@ -305,14 +306,16 @@ export class LocalCore {
 		query: string,
 		matches: AssetSearchItem[],
 		rerank?: RerankProvider,
+		signal?: AbortSignal,
 	): Promise<AssetSearchItem[]> {
 		if (!rerank || matches.length < 2) return matches;
 		const documents = matches.map((hit) => hit.passage ?? hit.parentPassage ?? hit.filename);
 		try {
-			const scores = await rerank.rerank(query, documents);
+			const scores = await rerank.rerank(query, documents, signal);
 			if (scores.length !== matches.length) return matches;
 			return rerankHits(matches, scores);
-		} catch {
+		} catch (error) {
+			if (signal?.aborted) throw error;
 			return matches;
 		}
 	}
@@ -320,13 +323,15 @@ export class LocalCore {
 	private async nearestChildrenForQuery(
 		text: string,
 		provider?: EmbeddingProvider,
+		signal?: AbortSignal,
 	): Promise<NearestChildHit[]> {
 		if (!provider) return [];
 		try {
-			const [vector] = await provider.embed([text]);
+			const [vector] = await provider.embed([text], signal);
 			if (!vector?.length) return [];
 			return this.metadataStore.searchNearestChildren(vector, HYBRID_CANDIDATES);
-		} catch {
+		} catch (error) {
+			if (signal?.aborted) throw error;
 			return [];
 		}
 	}
@@ -436,10 +441,14 @@ export class LocalCore {
 		return this.textEmbed.getStatus(assetId, currentModelId);
 	}
 
-	async embedTextAsset(assetId: string, provider: EmbeddingProvider): Promise<TextEmbedStatus> {
+	async embedTextAsset(
+		assetId: string,
+		provider: EmbeddingProvider,
+		signal?: AbortSignal,
+	): Promise<TextEmbedStatus> {
 		const status = await this.textEmbed.embed(assetId, provider, () => {
 			this.library.notifyTextEmbed(assetId);
-		});
+		}, signal);
 		this.library.notifyTextEmbed(assetId);
 		return status;
 	}
@@ -448,10 +457,14 @@ export class LocalCore {
 		return this.imageVlm.getStatus(assetId, currentModelId);
 	}
 
-	async describeImageAsset(assetId: string, provider: ImageVlmProvider): Promise<ImageVlmStatus> {
+	async describeImageAsset(
+		assetId: string,
+		provider: ImageVlmProvider,
+		signal?: AbortSignal,
+	): Promise<ImageVlmStatus> {
 		const status = await this.imageVlm.describe(assetId, provider, () => {
 			this.library.notifyImageVlm(assetId);
-		});
+		}, signal);
 		this.library.notifyImageVlm(assetId);
 		return status;
 	}
@@ -460,10 +473,14 @@ export class LocalCore {
 		return this.videoVlm.getStatus(assetId, currentModelId);
 	}
 
-	async describeVideoAsset(assetId: string, provider: VideoVlmProvider): Promise<VideoVlmStatus> {
+	async describeVideoAsset(
+		assetId: string,
+		provider: VideoVlmProvider,
+		signal?: AbortSignal,
+	): Promise<VideoVlmStatus> {
 		const status = await this.videoVlm.describe(assetId, provider, () => {
 			this.library.notifyVideoVlm(assetId);
-		});
+		}, signal);
 		this.library.notifyVideoVlm(assetId);
 		return status;
 	}
@@ -472,10 +489,14 @@ export class LocalCore {
 		return this.audioWriteup.getStatus(assetId, currentModelId);
 	}
 
-	async describeAudioAsset(assetId: string, provider: AudioWriteupProvider): Promise<AudioWriteupStatus> {
+	async describeAudioAsset(
+		assetId: string,
+		provider: AudioWriteupProvider,
+		signal?: AbortSignal,
+	): Promise<AudioWriteupStatus> {
 		const status = await this.audioWriteup.describe(assetId, provider, () => {
 			this.library.notifyAudioWriteup(assetId);
-		});
+		}, signal);
 		this.library.notifyAudioWriteup(assetId);
 		return status;
 	}
@@ -484,32 +505,32 @@ export class LocalCore {
 		return this.enrichment.refreshStale(assets);
 	}
 
-	getMediaInfo(path: string): Promise<MediaInfoResult> {
-		return this.media.getMediaInfo(path);
+	getMediaInfo(path: string, signal?: AbortSignal): Promise<MediaInfoResult> {
+		return this.media.getMediaInfo(path, signal);
 	}
 
-	async extractFrame(args: ExtractFrameArgs): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.extractFrame(args));
+	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.extractFrame(args, signal));
 	}
 
-	async extractClip(args: ExtractClipArgs): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.extractClip(args));
+	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.extractClip(args, signal));
 	}
 
-	async resizeVideo(args: ResizeVideoArgs): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.resizeVideo(args));
+	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.resizeVideo(args, signal));
 	}
 
-	async cropVideo(args: CropVideoArgs): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.cropVideo(args));
+	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.cropVideo(args, signal));
 	}
 
-	async convertFormat(args: ConvertFormatArgs): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.convertFormat(args));
+	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runConvenience(args.path, () => this.media.convertFormat(args, signal));
 	}
 
-	runFfmpeg(args: RunFfmpegArgs): Promise<MediaJobResult> {
-		return this.media.runFfmpeg(args);
+	runFfmpeg(args: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.media.runFfmpeg(args, signal);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {

@@ -20,9 +20,9 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				required: ["path"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const path = requiredPath(rawArgs, "path");
-				const result = await core.getMediaInfo(path);
+				const result = await core.getMediaInfo(path, signal);
 				return jsonResult(result);
 			},
 		},
@@ -36,13 +36,13 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				timeSeconds: { type: "number" },
 				output: { type: "string" },
 			}, ["path", "timeSeconds"]),
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const args = requiredPath(rawArgs, "path");
 				return jobResult(await core.extractFrame({
 					path: args,
 					timeSeconds: requiredNumber(rawArgs, "timeSeconds"),
 					output: optionalPath(rawArgs, "output"),
-				}));
+				}, signal));
 			},
 		},
 		{
@@ -56,13 +56,13 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				durationSeconds: { type: "number" },
 				output: { type: "string" },
 			}, ["path", "startSeconds", "durationSeconds"]),
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				return jobResult(await core.extractClip({
 					path: requiredPath(rawArgs, "path"),
 					startSeconds: requiredNumber(rawArgs, "startSeconds"),
 					durationSeconds: requiredNumber(rawArgs, "durationSeconds"),
 					output: optionalPath(rawArgs, "output"),
-				}));
+				}, signal));
 			},
 		},
 		{
@@ -77,14 +77,14 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				maxEdge: { type: "number" },
 				output: { type: "string" },
 			}, ["path"]),
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				return jobResult(await core.resizeVideo({
 					path: requiredPath(rawArgs, "path"),
 					width: optionalNumber(rawArgs, "width"),
 					height: optionalNumber(rawArgs, "height"),
 					maxEdge: optionalNumber(rawArgs, "maxEdge"),
 					output: optionalPath(rawArgs, "output"),
-				}));
+				}, signal));
 			},
 		},
 		{
@@ -99,7 +99,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				height: { type: "number" },
 				output: { type: "string" },
 			}, ["path", "x", "y", "width", "height"]),
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				return jobResult(await core.cropVideo({
 					path: requiredPath(rawArgs, "path"),
 					x: requiredNumber(rawArgs, "x"),
@@ -107,7 +107,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 					width: requiredNumber(rawArgs, "width"),
 					height: requiredNumber(rawArgs, "height"),
 					output: optionalPath(rawArgs, "output"),
-				}));
+				}, signal));
 			},
 		},
 		{
@@ -120,7 +120,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				format: { type: "string" },
 				output: { type: "string" },
 			}, ["path", "format"]),
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const record = asRecord(rawArgs);
 				if (typeof record.format !== "string" || !record.format.trim()) {
 					throw new TypeError("format must be a non-empty string");
@@ -129,7 +129,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 					path: requiredPath(rawArgs, "path"),
 					format: record.format,
 					output: optionalPath(rawArgs, "output"),
-				}));
+				}, signal));
 			},
 		},
 		{
@@ -146,7 +146,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				required: ["args"],
 				additionalProperties: false,
 			},
-			execute: async (rawArgs) => {
+			execute: async (rawArgs, signal) => {
 				const record = asRecord(rawArgs);
 				if (record.program !== undefined && record.program !== "ffmpeg" && record.program !== "ffprobe") {
 					throw new TypeError("program must be ffmpeg or ffprobe");
@@ -157,7 +157,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				return jobResult(await core.runFfmpeg({
 					program: record.program,
 					args: record.args,
-				}));
+				}, signal));
 			},
 		},
 	];

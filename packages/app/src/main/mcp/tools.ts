@@ -12,9 +12,9 @@ export function toolsFromMcpSession(serverId: string, session: McpSession, specs
 			? `[MCP:${serverId}] ${spec.description}`
 			: `MCP tool ${spec.name} from ${serverId}`,
 		parameters: spec.inputSchema ?? { type: "object", properties: {} },
-		execute: async (rawArgs) => {
+		execute: async (rawArgs, signal) => {
 			const args = asObject(rawArgs);
-			const result = await session.callTool(spec.name, args);
+			const result = await session.callTool(spec.name, args, signal);
 			if (result.isError) throw new Error(result.content || `MCP tool ${spec.name} failed`);
 			return result.content;
 		},
