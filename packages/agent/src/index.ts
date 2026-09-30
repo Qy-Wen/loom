@@ -1,5 +1,4 @@
 export type {
-	LoomAgent,
 	LoomAgentEvent,
 	LoomAgentOptions,
 	LoomChatEndpoint,
@@ -26,4 +25,7 @@ export {
 	uiSelectionToAttach,
 	userTextFromContent,
 } from "./attachments.ts";
-export { chatEndpointReady, createLoomAgent, createWorkspaceTools, type WorkspaceTools } from "./pi-adapter.ts";
+export { chatEndpointReady, buildChatModels } from "./pi-adapter.ts";
+export { DEFAULT_SESSION_TITLE, titleFromUserText } from "./session-title.ts";
+export { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
+export { HarnessSessionManager, type HarnessSessionRecord, type HarnessSessionSummary } from "./harness-session-manager.ts";

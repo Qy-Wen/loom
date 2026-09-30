@@ -6,22 +6,16 @@
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { LoomAgentOptions, LoomChatEndpoint, LoomTool, UiSelectionFields } from "@loom/agent";
+import type { HarnessSessionManager, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
-import { type AgentSessionStore, LoomAgUiAgent } from "./ag-ui-agent.ts";
+import { LoomAgUiAgent } from "./ag-ui-agent.ts";
 
 export interface AgentServer {
 	/** e.g. http://127.0.0.1:53421/api/copilotkit */
 	runtimeUrl: string;
 	/** The agentId the frontend must target. */
 	agentId: string;
-	resetSessions: () => void;
-	dropSession: (id: string) => void;
-	addTools: (tools: LoomTool[]) => void;
-	setTools: (tools: LoomTool[]) => void;
-	setSystemPrompt: (systemPrompt: string) => void;
-	setChat: (chat: LoomChatEndpoint | undefined) => void;
 	close: () => Promise<void>;
 }
 
@@ -29,15 +23,13 @@ const ENDPOINT = "/api/copilotkit";
 const AGENT_ID = "loom";
 
 export async function startAgentServer(
-	options: LoomAgentOptions,
-	store?: AgentSessionStore,
+	manager: HarnessSessionManager,
 	getUiSelection?: () => UiSelectionFields | null,
-	onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void,
 ): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(options, undefined, store, getUiSelection, onUsage);
+	const agent = new LoomAgUiAgent(manager, getUiSelection);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
 	});
@@ -80,12 +72,6 @@ export async function startAgentServer(
 	return {
 		runtimeUrl: `http://127.0.0.1:${address.port}${ENDPOINT}`,
 		agentId: AGENT_ID,
-		resetSessions: () => agent.resetSessions(),
-		dropSession: (id) => agent.dropSession(id),
-		addTools: (tools) => agent.addTools(tools),
-		setTools: (tools) => agent.setTools(tools),
-		setSystemPrompt: (systemPrompt) => agent.setSystemPrompt(systemPrompt),
-		setChat: (chat) => agent.setChat(chat),
 		close: () =>
 			new Promise<void>((resolve, reject) => {
 				server.close((err) => (err ? reject(err) : resolve()));

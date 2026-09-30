@@ -63,6 +63,10 @@ export function clearFindHighlights(): void {
 	store?.delete(CURRENT_HIGHLIGHT);
 }
 
+export function preferVisibleRect<T extends { width: number; height: number }>(rect: T, fallback: T): T {
+	return rect.width > 0 || rect.height > 0 ? rect : fallback;
+}
+
 export function overflowScrollDelta(
 	target: { top: number; bottom: number; left: number; right: number },
 	viewport: { top: number; bottom: number; left: number; right: number },
@@ -97,7 +101,7 @@ export function scrollRangeIntoView(range: Range | undefined): void {
 	const element = node instanceof Element ? node : node.parentElement;
 	if (!element) return;
 	const scroller = scrollableAncestor(element);
-	const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+	const rect = preferVisibleRect(range.getClientRects()[0] ?? range.getBoundingClientRect(), range.getBoundingClientRect());
 	if (!scroller || (rect.width === 0 && rect.height === 0)) {
 		element.scrollIntoView({ block: "nearest", inline: "nearest" });
 		return;

@@ -89,6 +89,22 @@ describe("EnrichmentService", () => {
 		assert.equal((await service.analyze("a")).status, "ready");
 		assert.equal(calls, 3);
 	});
+
+	it("stores failed extractor errors with library-relative asset paths", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = { ...textAsset("bad"), relativePath: "nested/note.txt" };
+		await store.upsertAsset(asset);
+		const absolutePath = "/private/library/nested/note.txt";
+		const service = new EnrichmentService(store, async () => absolutePath, async () => {
+			throw new Error(`Cannot read ${absolutePath}: invalid input`);
+		});
+
+		const record = await service.analyze(asset.assetId);
+		assert.equal(record.status, "failed");
+		assert.equal(record.error, "Cannot read nested/note.txt: invalid input");
+		assert.equal((await store.getAssetEnrichment(asset.assetId))?.error, record.error);
+	});
 });
 
 describe("LocalCore enrichment", () => {

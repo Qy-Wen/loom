@@ -8,7 +8,7 @@ import {
 	type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef } from "react";
-import type { LoomTranscriptMessage } from "@loom/core";
+import type { LoomTranscriptMessage } from "@loom/agent";
 import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 

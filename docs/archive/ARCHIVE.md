@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Production chat on Pi Harness
+
+- Replaced the plain Pi `Agent` and Loom v1 transcript writer with one Harness session/runtime owner. New sessions live in each library's `.loom/harness-sessions/`; old `.loom/sessions/` files are neither read nor deleted.
+- Preserved AG-UI chat, native workspace tools, library/FFmpeg/MCP tools, Stop, selection attachments, usage, and session controls. Unfinished operations resume automatically after model and MCP tools are ready.
+- Kept automatic threshold compaction off pending model-window validation; overflow recovery remains active. Agent, app, core, and Electron session smoke tests cover the cutover.
+
+---
+
 ## ✅ Vendor pi-agent and run one pure-Node agent loop
 
 Vendored the source of pi's agent engine and completed one tool-calling run without Electron, UI, or a database.

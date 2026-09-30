@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { LibraryChange, SessionSummary } from "@loom/core";
+import type { LibraryChange } from "@loom/core";
+import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
 
 const api: LoomApi = {

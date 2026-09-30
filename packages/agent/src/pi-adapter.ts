@@ -1,26 +1,8 @@
-/**
- * Vendor boundary with `pi-tools.ts`. Everything else in Loom depends on
- * `./types.ts` instead.
- *
- * Responsibilities:
- *  - build a pi `Agent` wired to an OpenAI-compatible chat endpoint (`streamFn`)
- *  - translate Loom tools -> pi `AgentTool`
- *  - translate pi `AgentEvent` -> Loom `LoomAgentEvent`
- */
-import { Agent, convertToLlm as toLlmMessages, type AgentEvent, type AgentMessage, type AgentTool } from "#vendor/pi-agent";
-import { createModels, createProvider, Type } from "@earendil-works/pi-ai";
+import { convertToLlm, type AgentMessage } from "#vendor/pi-agent";
+import { createModels, createProvider } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
 import { foldUserMessageForLlm } from "./attachments.ts";
-import type {
-	LoomAgent,
-	LoomAgentEvent,
-	LoomAgentOptions,
-	LoomChatEndpoint,
-	LoomPromptOptions,
-	LoomTool,
-	LoomToolContentPart,
-	LoomTranscriptMessage,
-} from "./types.ts";
+import type { LoomChatEndpoint } from "./types.ts";
 
 const CHAT_PROVIDER = "loom-chat";
 
@@ -28,8 +10,8 @@ export function chatEndpointReady(chat: LoomChatEndpoint | undefined): chat is L
 	return Boolean(chat?.baseUrl.trim() && chat.model.trim());
 }
 
-/** Build a one-model OpenAI-compatible provider from the Chat settings slot. */
-function buildModels(chat: LoomChatEndpoint) {
+/** Build the current Chat model for the durable Harness runtime. */
+export function buildChatModels(chat: LoomChatEndpoint) {
 	const baseUrl = chat.baseUrl.trim().replace(/\/+$/, "");
 	const modelId = chat.model.trim();
 	const apiKey = chat.apiKey?.trim();
@@ -65,259 +47,12 @@ function buildModels(chat: LoomChatEndpoint) {
 		}],
 		api: openAICompletionsApi(),
 	}));
-	return models;
+	const model = models.getModel(CHAT_PROVIDER, modelId);
+	if (!model) throw new Error(`Unknown model: ${modelId}`);
+	return { models, model };
 }
 
-/** Translate a Loom tool into a pi AgentTool. */
-function toPiTool(tool: LoomTool): AgentTool {
-	return {
-		name: tool.name,
-		label: tool.name,
-		description: tool.description,
-		parameters: (tool.parameters ?? Type.Object({})) as never,
-		execute: async (_toolCallId, params, signal) => {
-			if (signal?.aborted) throw new Error("Operation aborted");
-			const output = await tool.execute(params as never, signal);
-			const result = typeof output === "string" ? { content: output } : output;
-			return {
-				content: toPiContent(result.content),
-				details: result.details,
-			};
-		},
-	};
+/** Keep Loom attachment sidecars on disk; fold them only for Chat requests. */
+export function toProviderMessages(messages: AgentMessage[]) {
+	return convertToLlm(messages.map((message) => foldUserMessageForLlm(message)));
 }
-
-class PiAgentAdapter implements LoomAgent {
-	private readonly agent: Agent;
-	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
-	/** Reason for the run currently being aborted. The first reason wins. */
-	private abortReason: "user" | undefined;
-	/** Content index of a redacted thinking block. Its text never leaves the adapter. */
-	private redactedThinkingIndex: number | undefined;
-
-	constructor(options: LoomAgentOptions) {
-		if (!chatEndpointReady(options.chat)) {
-			throw new Error("Chat is not configured. Set base URL and model in Settings.");
-		}
-		const models = buildModels(options.chat);
-		const model = models.getModel(CHAT_PROVIDER, options.chat.model.trim());
-		if (!model) {
-			throw new Error(`Unknown model: ${options.chat.model}`);
-		}
-
-		this.agent = new Agent({
-			initialState: {
-				systemPrompt: options.systemPrompt ?? "",
-				model,
-				tools: (options.tools ?? []).map(toPiTool),
-				messages: (options.initialMessages ?? []) as never,
-			},
-			convertToLlm,
-			streamFn: (m, context, streamOptions) => models.streamSimple(m, context, streamOptions),
-		});
-
-		this.agent.subscribe((event) => this.translate(event));
-	}
-
-	private emit(event: LoomAgentEvent) {
-		for (const listener of this.listeners) listener(event);
-	}
-
-	private translate(event: AgentEvent) {
-		switch (event.type) {
-			case "agent_start":
-				this.redactedThinkingIndex = undefined;
-				this.emit({ type: "agent_start" });
-				break;
-			case "agent_end":
-				this.emit({ type: "agent_end" });
-				break;
-			case "turn_end": {
-				const message = event.message;
-				if (
-					message.role === "assistant" &&
-					message.stopReason !== "aborted" &&
-					message.errorMessage?.trim()
-				) {
-					this.emit({ type: "error", message: message.errorMessage.trim() });
-				}
-				break;
-			}
-			case "message_update": {
-				const inner = event.assistantMessageEvent;
-				if (inner.type === "text_delta") {
-					this.emit({ type: "text", delta: inner.delta });
-					break;
-				}
-				if (
-					inner.type !== "thinking_start" &&
-					inner.type !== "thinking_delta" &&
-					inner.type !== "thinking_end"
-				) {
-					break;
-				}
-				if (isRedactedThinking(inner) || this.redactedThinkingIndex === inner.contentIndex) {
-					if (inner.type === "thinking_start") this.redactedThinkingIndex = inner.contentIndex;
-					if (inner.type === "thinking_end") this.redactedThinkingIndex = undefined;
-					break;
-				}
-				if (inner.type === "thinking_start") this.emit({ type: "thinking_start" });
-				else if (inner.type === "thinking_delta") this.emit({ type: "thinking_delta", delta: inner.delta });
-				else this.emit({ type: "thinking_end" });
-				break;
-			}
-			case "tool_execution_start":
-				this.emit({
-					type: "tool_start",
-					toolCallId: event.toolCallId,
-					name: event.toolName,
-					args: event.args,
-				});
-				break;
-			case "tool_execution_end": {
-				const text = Array.isArray(event.result?.content)
-					? event.result.content
-						.filter((part: { type?: string }) => part.type === "text")
-						.map((part: { text?: string }) => part.text ?? "")
-						.join("\n")
-					: String(event.result ?? "");
-				this.emit({
-					type: "tool_end",
-					toolCallId: event.toolCallId,
-					name: event.toolName,
-					result: { content: text, details: event.result?.details },
-					isError: event.isError,
-				});
-				break;
-			}
-			default:
-				break;
-		}
-	}
-
-	subscribe(listener: (event: LoomAgentEvent) => void): () => void {
-		this.listeners.add(listener);
-		return () => this.listeners.delete(listener);
-	}
-
-	abort(reason?: "user"): void {
-		if (reason && !this.abortReason) this.abortReason = reason;
-		this.agent.abort();
-	}
-
-	async prompt(input: string, options?: LoomPromptOptions): Promise<void> {
-		if (this.agent.signal?.aborted) await this.agent.waitForIdle();
-		const before = this.agent.state.messages.length;
-		const attachments = options?.attachments?.filter(Boolean) ?? [];
-		try {
-			if (attachments.length === 0) {
-				await this.agent.prompt(input);
-			} else {
-				await this.agent.prompt({
-					role: "user",
-					content: [{ type: "text", text: input }],
-					timestamp: Date.now(),
-					attachments,
-				} as AgentMessage);
-			}
-		} finally {
-			const reason = this.abortReason;
-			this.abortReason = undefined;
-			if (reason === "user") noteUserStop(this.agent.state.messages, before);
-		}
-		if (lastAssistantAborted(this.agent.state.messages)) return;
-		const failed = this.agent.state.errorMessage?.trim();
-		if (failed) throw new Error(failed);
-	}
-
-	getMessages(): LoomTranscriptMessage[] {
-		return this.agent.state.messages as unknown as LoomTranscriptMessage[];
-	}
-
-	addTools(tools: LoomTool[]): void {
-		if (!tools.length) return;
-		this.agent.state.tools = [...this.agent.state.tools, ...tools.map(toPiTool)];
-	}
-
-	setSystemPrompt(systemPrompt: string): void {
-		this.agent.state.systemPrompt = systemPrompt;
-	}
-}
-
-const USER_STOP_NOTE =
-	"The user pressed Stop. This turn was cancelled on purpose, not because of an error.";
-
-const ABORT_TOOL_TEXT = new Set([
-	"Operation aborted",
-	"Command aborted",
-	"ffmpeg aborted",
-	"ffprobe aborted",
-]);
-
-/** Write a user Stop into this turn's model-visible text. `stopReason` is not sent. */
-function noteUserStop(messages: readonly object[], from: number): void {
-	for (const message of messages.slice(from) as Array<Record<string, unknown>>) {
-		if (message.role === "assistant" && message.stopReason === "aborted") {
-			appendText(message, USER_STOP_NOTE);
-			continue;
-		}
-		if (message.role === "toolResult" && ABORT_TOOL_TEXT.has(messageText(message))) {
-			message.content = [{ type: "text", text: USER_STOP_NOTE }];
-		}
-	}
-}
-
-function messageText(message: Record<string, unknown>): string {
-	const content = message.content;
-	if (typeof content === "string") return content;
-	if (!Array.isArray(content)) return "";
-	return content
-		.filter((part): part is { type: "text"; text: string } => {
-			return !!part && typeof part === "object" && part.type === "text" && typeof part.text === "string";
-		})
-		.map((part) => part.text)
-		.join("\n");
-}
-
-function appendText(message: Record<string, unknown>, text: string): void {
-	if (messageText(message).includes(text)) return;
-	const content = message.content;
-	if (!Array.isArray(content)) {
-		message.content = [{ type: "text", text }];
-		return;
-	}
-	content.push({ type: "text", text });
-}
-
-function isRedactedThinking(event: {
-	partial: { content: Array<{ type?: string; redacted?: boolean }> };
-	contentIndex: number;
-}): boolean {
-	const block = event.partial.content[event.contentIndex];
-	return block?.type === "thinking" && block.redacted === true;
-}
-
-function lastAssistantAborted(messages: readonly object[]): boolean {
-	for (let index = messages.length - 1; index >= 0; index -= 1) {
-		const message = messages[index] as { role?: string; stopReason?: string };
-		if (message.role !== "assistant") continue;
-		return message.stopReason === "aborted";
-	}
-	return false;
-}
-
-function convertToLlm(messages: AgentMessage[]): ReturnType<typeof toLlmMessages> {
-	return toLlmMessages(messages.map((message) => foldUserMessageForLlm(message)));
-}
-
-function toPiContent(content: string | LoomToolContentPart[]): LoomToolContentPart[] {
-	if (typeof content === "string") return [{ type: "text", text: content }];
-	return content;
-}
-
-/** Create a Loom agent backed by the vendored pi engine. */
-export function createLoomAgent(options: LoomAgentOptions): LoomAgent {
-	return new PiAgentAdapter(options);
-}
-
-export { createWorkspaceTools, type WorkspaceTools } from "./pi-tools.ts";

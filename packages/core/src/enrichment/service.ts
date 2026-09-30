@@ -84,7 +84,7 @@ export class EnrichmentService {
 				version: ENRICHMENT_VERSION,
 				sourceModifiedAt: asset.modifiedAt,
 				status: "failed",
-				error: error instanceof Error ? error.message : String(error),
+				error: (error instanceof Error ? error.message : String(error)).replaceAll(absolutePath, asset.relativePath),
 			};
 			await this.metadata.upsertAssetEnrichment(record);
 			return record;

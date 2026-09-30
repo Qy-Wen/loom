@@ -6,6 +6,14 @@
 
 ---
 
+## 生产聊天切换到 Pi Harness
+
+- 用统一的 Harness 会话/运行管理器替代普通 pi `Agent` 和 Loom v1 transcript 写入。新会话位于素材库 `.loom/harness-sessions/`；旧 `.loom/sessions/` 文件不读取也不删除。
+- 保留 AG-UI 聊天、原生工作区工具、素材库/FFmpeg/MCP 工具、Stop、选中资产附件、用量统计和会话操作。模型与 MCP 工具就绪后自动恢复未完成操作。
+- 自动阈值压缩暂关，待验证模型窗口；溢出恢复保留。Agent、App、Core 测试及 Electron 会话冒烟测试覆盖此次切换。
+
+---
+
 ## ✅ vendor pi-agent，纯 Node 跑通一轮 agent loop
 
 源码级引入 pi 的 agent 引擎，喂一句话跑通一轮 tool calling（不碰 Electron / UI / DB）。
