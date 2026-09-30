@@ -1301,6 +1301,31 @@ body.resizing-columns {
 	min-height: 0;
 }
 
+.session-chat-shell {
+	display: grid;
+	grid-template-rows: 1fr auto;
+	min-height: 0;
+}
+
+/* CopilotChat's root is display:contents; the .copilotKitChat grandchild is the real row-1 item. */
+.session-chat-shell .copilotKitChat {
+	grid-row: 1;
+	min-height: 0;
+	min-width: 0;
+	height: 100%;
+	overflow: hidden;
+}
+
+.session-chat-shell > .session-context-usage {
+	grid-row: 2;
+	padding: 1px 6px 0;
+	text-align: right;
+	font-size: 11px;
+	opacity: 0.7;
+	user-select: none;
+	font-variant-numeric: tabular-nums;
+}
+
 /* Composer sits in flow so the scrollbar is not covered by the overlay input. */
 .agent-chat [data-testid="copilot-input-overlay"] {
 	position: relative;

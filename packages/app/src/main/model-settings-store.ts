@@ -26,11 +26,15 @@ function asRecord(value: unknown): ModelSlotRecord {
 	const baseUrl = typeof row.baseUrl === "string" ? row.baseUrl : "";
 	const apiKey = typeof row.apiKey === "string" ? row.apiKey : "";
 	const model = typeof row.model === "string" ? row.model : "";
+	const contextWindow = typeof row.contextWindow === "number" && Number.isSafeInteger(row.contextWindow) && row.contextWindow > 0
+		? row.contextWindow
+		: undefined;
 	return {
 		baseUrl,
 		apiKey,
 		model,
 		enabled: typeof row.enabled === "boolean" ? row.enabled : Boolean(baseUrl.trim() && model.trim()),
+		...(contextWindow !== undefined ? { contextWindow } : {}),
 	};
 }
 
@@ -47,6 +51,7 @@ export function slotView(slot: ModelSlotRecord): ModelSlotView {
 		model: slot.model,
 		apiKey: slot.apiKey,
 		enabled: slot.enabled,
+		...(slot.contextWindow !== undefined ? { contextWindow: slot.contextWindow } : {}),
 	};
 }
 
@@ -57,11 +62,15 @@ export function settingsView(file: ModelSettingsFile): ModelSettingsView {
 }
 
 export function applySlotDraft(current: ModelSlotRecord, draft: ModelSlotDraft): ModelSlotRecord {
+	const contextWindow = typeof draft.contextWindow === "number" && Number.isSafeInteger(draft.contextWindow) && draft.contextWindow > 0
+		? draft.contextWindow
+		: undefined;
 	const next = {
 		baseUrl: draft.baseUrl.trim(),
 		model: draft.model.trim(),
 		apiKey: current.apiKey,
 		enabled: draft.enabled,
+		...(contextWindow !== undefined ? { contextWindow } : {}),
 	};
 	if (draft.clearApiKey) next.apiKey = "";
 	else if (draft.apiKey !== undefined) next.apiKey = draft.apiKey;
@@ -101,6 +110,7 @@ export function resolveChatEndpoint(
 			baseUrl: saved.baseUrl.trim(),
 			model: saved.model.trim(),
 			apiKey: saved.apiKey.trim() || undefined,
+			...(saved.contextWindow !== undefined ? { contextWindow: saved.contextWindow } : {}),
 		};
 	}
 	if (!allowEnvBootstrap) return undefined;

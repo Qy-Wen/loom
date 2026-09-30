@@ -144,6 +144,13 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 		}, 500);
 	}
 
+	function patchContextWindow(value: string): void {
+		const parsed = Number(value.replace(/[^0-9]/g, ""));
+		const contextWindow = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
+		draftRef.current = { ...draftRef.current, chat: { ...draftRef.current.chat, contextWindow } };
+		onChange("chat", { contextWindow });
+	}
+
 	function patchEnabled(id: ModelSlotId, enabled: boolean): void {
 		const next = { ...draftRef.current[id], enabled };
 		draftRef.current = { ...draftRef.current, [id]: next };
@@ -212,6 +219,19 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 							</button>
 						</div>
 					</div>
+					{id === "chat" && (
+						<label>
+							Context window
+							<input
+								type="text"
+								inputMode="numeric"
+								value={draft.chat.contextWindow ?? ""}
+								onChange={(event) => patchContextWindow(event.target.value)}
+								placeholder="128000 (default)"
+								autoComplete="off"
+							/>
+						</label>
+					)}
 					{probes[id].state === "ok" && (
 						<p className="settings-status-ok">Connected</p>
 					)}

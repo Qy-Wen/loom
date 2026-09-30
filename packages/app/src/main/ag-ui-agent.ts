@@ -222,7 +222,22 @@ export class LoomAgUiAgent extends AbstractAgent {
 									closeThinking();
 									break;
 
-								case "text":
+								case "compaction_start":
+								emit({
+									type: EventType.CUSTOM,
+									name: "loom.compaction",
+									value: { phase: "start", reason: event.reason },
+								} as BaseEvent);
+								break;
+							case "compaction_end":
+								emit({
+									type: EventType.CUSTOM,
+									name: "loom.compaction",
+									value: { phase: "end", reason: event.reason, status: event.status },
+								} as BaseEvent);
+								break;
+
+							case "text":
 									closeThinking();
 									openText();
 									emit({

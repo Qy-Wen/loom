@@ -163,6 +163,11 @@ describe("HarnessSessionManager", () => {
 			assert.ok(events.some((event) => event.type === "text" && event.delta.includes("hello")));
 			assert.ok(events.some((event) => event.type === "agent_end"));
 			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), ["user", "assistant"]);
+			const usage = (await manager.getSession(session.id)).context;
+			assert.ok(usage);
+			assert.equal(usage.window, 128000);
+			assert.ok(typeof usage.tokens === "number" && usage.tokens > 0);
+			assert.ok(typeof usage.percent === "number" && usage.percent > 0 && usage.percent < 100);
 			await manager.close();
 			const reopened = new HarnessSessionManager(options);
 			try {
@@ -471,6 +476,51 @@ describe("HarnessSessionManager", () => {
 });
 
 describe("chatEndpointReady", () => {
+	it("compacts the context once usage crosses the configured context window", async () => {
+		const requests: Array<{ messages: Array<{ content?: unknown }> }> = [];
+		const server = createServer((request, response) => {
+			let body = "";
+			request.setEncoding("utf8");
+			request.on("data", (chunk: string) => { body += chunk; });
+			request.on("end", () => {
+				requests.push(JSON.parse(body));
+				// First turn: a normal answer that fills the tiny context window.
+				const text = requests.length === 1 ? "a".repeat(120) : requests.length === 2 ? "summarized checkpoint" : "after compaction";
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				response.write(`data: ${JSON.stringify({ id: `compact-${requests.length}`, object: "chat.completion.chunk", created: 0, model: "demo", choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] })}\n\n`);
+				response.write(`data: ${JSON.stringify({ id: `compact-${requests.length}`, object: "chat.completion.chunk", created: 0, model: "demo", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n`);
+				response.end("data: [DONE]\n\n");
+			});
+		});
+		const baseUrl = await listen(server);
+		const root = await mkdtemp(join(tmpdir(), "loom-harness-threshold-"));
+		// Tiny window: 120-char answer + prompt easily exceeds 400 - 16,384 reserve
+		// would never trigger, so use a window where reserve is dominant.
+		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo", contextWindow: 128 } });
+		try {
+			await manager.openLibrary(root);
+			const session = await manager.createSession();
+			const events: LoomAgentEvent[] = [];
+			// First prompt: answer fills context; threshold compaction fires at the checkpoint.
+			await manager.prompt(session.id, "tell me something", { onEvent: (event) => events.push(event) });
+			assert.ok(events.some((event) => event.type === "compaction_start" && event.reason === "threshold"), `expected compaction_start, got: ${events.map((e) => e.type).join(",")}`);
+			assert.ok(events.some((event) => event.type === "compaction_end" && event.status === "completed"));
+			const stored = await manager.getSession(session.id);
+			const compaction = stored.messages.find((message) => message.role === "compactionSummary");
+			assert.ok(compaction, `expected a compactionSummary entry, got roles: ${stored.messages.map((m) => m.role).join(",")}`);
+			// Context usage is unknown right after compaction: no post-compaction assistant usage yet.
+			assert.ok(stored.context, "expected context usage");
+			assert.equal(stored.context.window, 128);
+			assert.equal(stored.context.tokens, null);
+			assert.equal(stored.context.percent, null);
+			assert.match(await readFile(await sessionFile(root), "utf8"), /"type":"compaction"/);
+		} finally {
+			await manager.close();
+			await rm(root, { recursive: true, force: true });
+			await stop(server);
+		}
+	});
+
 	it("requires a trimmed base URL and model", () => {
 		assert.equal(chatEndpointReady(undefined), false);
 		assert.equal(chatEndpointReady({ baseUrl: "  ", model: "x" }), false);

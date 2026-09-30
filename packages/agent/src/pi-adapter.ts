@@ -5,6 +5,7 @@ import { foldUserMessageForLlm } from "./attachments.ts";
 import type { LoomChatEndpoint } from "./types.ts";
 
 const CHAT_PROVIDER = "loom-chat";
+export const DEFAULT_CHAT_CONTEXT_WINDOW = 128_000;
 
 export function chatEndpointReady(chat: LoomChatEndpoint | undefined): chat is LoomChatEndpoint {
 	return Boolean(chat?.baseUrl.trim() && chat.model.trim());
@@ -37,7 +38,7 @@ export function buildChatModels(chat: LoomChatEndpoint) {
 			reasoning: false,
 			input: ["text"],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-			contextWindow: 128_000,
+			contextWindow: chat.contextWindow ?? DEFAULT_CHAT_CONTEXT_WINDOW,
 			maxTokens: 8192,
 			compat: {
 				supportsStore: false,

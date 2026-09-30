@@ -57,7 +57,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					window.loom.getAgentStats(),
 				]);
 				setDraft({
-					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled },
+					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled, contextWindow: models.chat.contextWindow },
 					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey, enabled: models.embedding.enabled },
 					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey, enabled: models.rerank.enabled },
 					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey, enabled: models.vlm.enabled },

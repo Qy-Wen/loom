@@ -68,6 +68,15 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 			});
 			continue;
 		}
+		if (message.role === "compactionSummary") {
+			const summary = typeof message.summary === "string" ? message.summary : "";
+			const tokens = typeof message.tokensBefore === "number" ? message.tokensBefore : undefined;
+			const note = tokens !== undefined
+				? `Context compacted from ~${tokens.toLocaleString()} tokens.`
+				: "Context compacted.";
+			out.push({ id, role: "assistant", content: `${note}\n\n${summary}` });
+			continue;
+		}
 		if (message.role === "toolResult" || message.role === "tool") {
 			out.push({
 				id,

@@ -13,7 +13,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
+import type { HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
@@ -94,14 +94,21 @@ export function SidePanel({
 	const sessionIdRef = useRef<string | null>(null);
 	sessionIdRef.current = sessionId;
 	const [sessionMessages, setSessionMessages] = useState<LoomTranscriptMessage[]>([]);
+	const [sessionContext, setSessionContext] = useState<HarnessContextUsage | null>(null);
 	const [sessionBusy, setSessionBusy] = useState(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
+
+	function applyRecord(record: HarnessSessionRecord): void {
+		setSessionMessages(record.messages);
+		setSessionContext(record.context ?? null);
+	}
 
 	useEffect(() => {
 		if (!libraryRoot) {
 			setSessions([]);
 			setSessionId(null);
 			setSessionMessages([]);
+			setSessionContext(null);
 			setSessionError(null);
 			return;
 		}
@@ -112,7 +119,7 @@ export function SidePanel({
 			const current = sessionIdRef.current;
 			if (!current || !list.some((session) => session.id === current)) return;
 			void window.loom.getSession(current).then((record) => {
-				if (active && sessionIdRef.current === current) setSessionMessages(record.messages);
+				if (active && sessionIdRef.current === current) applyRecord(record);
 			}).catch(() => undefined);
 		});
 		return () => {
@@ -143,13 +150,13 @@ export function SidePanel({
 				const record = await window.loom.openSession(next);
 				setSessions(await window.loom.listSessions());
 				setSessionId(next);
-				setSessionMessages(record.messages);
+				applyRecord(record);
 				return;
 			}
 			const created = await window.loom.createSession();
 			setSessions(await window.loom.listSessions());
 			setSessionId(created.id);
-			setSessionMessages(created.messages);
+			applyRecord(created);
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -164,7 +171,7 @@ export function SidePanel({
 			const created = await window.loom.createSession();
 			setSessions(await window.loom.listSessions());
 			setSessionId(created.id);
-			setSessionMessages(created.messages);
+			applyRecord(created);
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -182,7 +189,7 @@ export function SidePanel({
 			const record = await window.loom.openSession(id);
 			setSessions(await window.loom.listSessions());
 			setSessionId(id);
-			setSessionMessages(record.messages);
+			applyRecord(record);
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -212,11 +219,11 @@ export function SidePanel({
 				if (fallback) {
 					const record = await window.loom.openSession(fallback.id);
 					setSessionId(fallback.id);
-					setSessionMessages(record.messages);
+					applyRecord(record);
 				} else {
 					const created = await window.loom.createSession();
 					setSessionId(created.id);
-					setSessionMessages(created.messages);
+					applyRecord(created);
 				}
 			}
 			await window.loom.deleteSession(id);
@@ -261,7 +268,7 @@ export function SidePanel({
 						{sessionId ? (
 							<div className="agent-chat">
 								<ToolCallViews />
-								<SessionChat threadId={sessionId} messages={sessionMessages} />
+								<SessionChat threadId={sessionId} messages={sessionMessages} context={sessionContext} />
 							</div>
 						) : (
 							<div className="empty">Starting a session…</div>

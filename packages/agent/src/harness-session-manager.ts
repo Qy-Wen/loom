@@ -4,6 +4,8 @@ import {
 	BACKGROUND_CONTEXT,
 	DEFAULT_COMPACTION_SETTINGS,
 	JsonlSessionRepo,
+	calculateContextTokens,
+	estimateContextTokens,
 	laneConfig,
 	laneState,
 	value,
@@ -14,7 +16,7 @@ import {
 	type Session,
 } from "#vendor/pi-agent";
 import { randomUUID } from "node:crypto";
-import { buildChatModels, chatEndpointReady, toProviderMessages } from "./pi-adapter.ts";
+import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import type {
 	LoomAgentEvent,
@@ -39,6 +41,14 @@ type OpenSession = {
 	cancelRecovery?: boolean;
 };
 
+/** Assistant messages that carry a non-empty provider usage block after a compaction boundary. */
+function hasReportedUsage(message: AgentMessage): boolean {
+	if (message.role !== "assistant") return false;
+	const usage = (message as { usage?: { totalTokens?: number; input: number; output: number; cacheRead: number; cacheWrite: number } }).usage;
+	if (!usage) return false;
+	return calculateContextTokens(usage as Parameters<typeof calculateContextTokens>[0]) > 0;
+}
+
 type ActiveRun = { lane: AgentLane; operationId: string; reason?: "user"; cancelRequested?: boolean; done: Promise<void> };
 
 export interface HarnessSessionSummary {
@@ -49,8 +59,16 @@ export interface HarnessSessionSummary {
 	updatedAt: number;
 }
 
+/** Context usage for the session's active path; tokens/percent are null after compaction until the next response. */
+export interface HarnessContextUsage {
+	tokens: number | null;
+	window: number;
+	percent: number | null;
+}
+
 export interface HarnessSessionRecord extends HarnessSessionSummary {
 	messages: LoomTranscriptMessage[];
+	context: HarnessContextUsage | undefined;
 }
 
 /** Sole owner of Pi's file-backed sessions and live Harness instances for one library. */
@@ -188,6 +206,31 @@ export class HarnessSessionManager {
 		});
 	}
 
+	/** Estimate context usage on the active path; null after compaction until a fresh assistant usage arrives. */
+	private contextUsage(entries: readonly { type: string; message?: AgentMessage }[]): HarnessContextUsage | undefined {
+		const chat = this.options.chat;
+		if (!chatEndpointReady(chat)) return undefined;
+		const window = chat.contextWindow ?? DEFAULT_CHAT_CONTEXT_WINDOW;
+		// Mirror pi's post-compaction rule: pre-compaction usage no longer reflects context size.
+		let newestCompaction = -1;
+		for (let index = entries.length - 1; index >= 0; index--) {
+			if (entries[index]!.type === "compaction") { newestCompaction = index; break; }
+		}
+		const context: AgentMessage[] = [];
+		for (let index = newestCompaction + 1; index < entries.length; index++) {
+			const entry = entries[index]!;
+			if (entry.type !== "message") continue;
+			const message = entry.message!;
+			if (message.role === "assistant" && (message.stopReason === "error" || message.stopReason === "aborted" || message.stopReason === "deferred")) continue;
+			context.push(message);
+		}
+		if (newestCompaction >= 0 && !context.some(hasReportedUsage)) {
+			return { tokens: null, window, percent: null };
+		}
+		const estimate = estimateContextTokens(context);
+		return { tokens: estimate.tokens, window, percent: (estimate.tokens / window) * 100 };
+	}
+
 	private async summary(metadata: JsonlSessionMetadata, session?: Session<JsonlSessionMetadata>): Promise<HarnessSessionSummary> {
 		if (!session) return this.withSession(metadata.id, (open) => this.summary(metadata, open.session));
 		return {
@@ -248,8 +291,14 @@ export class HarnessSessionManager {
 			const entries = branch ? await branch.findEntries({ order: "oldestFirst" }, CONTEXT) : [];
 			return {
 				...await this.summary(metadata, session),
-				messages: entries.filter((entry) => entry.type === "message")
-					.map((entry) => ({ ...entry.message, id: entry.id } as LoomTranscriptMessage)),
+				messages: entries.flatMap((entry) => {
+					if (entry.type === "message") return [{ ...entry.message, id: entry.id } as LoomTranscriptMessage];
+					if (entry.type === "compaction") {
+						return [{ role: "compactionSummary", summary: entry.summary, tokensBefore: entry.tokensBefore, timestamp: entry.timestamp, id: entry.id } as LoomTranscriptMessage];
+					}
+					return [];
+				}),
+				context: this.contextUsage(entries),
 			};
 		});
 	}
@@ -316,7 +365,7 @@ export class HarnessSessionManager {
 				toolContext: workspace.toolContext,
 				systemPrompt: () => this.options.systemPrompt ?? "",
 				toProviderMessages,
-				compaction: { ...DEFAULT_COMPACTION_SETTINGS, enabled: false },
+				compaction: DEFAULT_COMPACTION_SETTINGS,
 				entryProjectors: { loom_user_stop: () => [{ role: "user", content: STOP_NOTE, timestamp: Date.now() }] },
 			}, CONTEXT);
 			open.harness = harness;
@@ -429,6 +478,13 @@ export class HarnessSessionManager {
 			if (update.type === "thinking_start") emit({ type: "thinking_start" });
 			else if (update.type === "thinking_delta") emit({ type: "thinking_delta", delta: update.delta });
 			else emit({ type: "thinking_end" });
+		}));
+		unsubscribers.push(open.harness.events.on("compaction_start", (event) => {
+			if (event.lane === MAIN && event.runId === operationId) emit({ type: "compaction_start", reason: event.reason });
+		}));
+		unsubscribers.push(open.harness.events.on("compaction_end", (event) => {
+			if (event.lane !== MAIN || event.runId !== operationId) return;
+			emit({ type: "compaction_end", reason: event.reason, status: event.status });
 		}));
 		unsubscribers.push(open.harness.events.on("tool_start", (event) => {
 			if (event.lane === MAIN && event.runId === operationId) emit({ type: "tool_start", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
