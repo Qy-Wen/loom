@@ -15,10 +15,14 @@ export function vlmFrameTimes(durationSeconds: number): number[] {
 }
 
 /** Temp JPEGs for the VLM. Not written into the library. */
-export async function extractVideoFramesForVlm(absolutePath: string): Promise<VideoVlmFrame[]> {
+export async function extractVideoFramesForVlm(
+	absolutePath: string,
+	signal?: AbortSignal,
+): Promise<VideoVlmFrame[]> {
 	const probe = await runMediaProcess({
 		program: "ffprobe",
 		args: buildProbeArgs(absolutePath),
+		signal,
 	});
 	const duration = parseFfprobeJson(probe.stdout).duration ?? 0;
 	const times = vlmFrameTimes(duration);
@@ -31,6 +35,7 @@ export async function extractVideoFramesForVlm(absolutePath: string): Promise<Vi
 			await runMediaProcess({
 				program: "ffmpeg",
 				args: buildVlmStillArgs(absolutePath, output, time),
+				signal,
 			});
 			frames.push({ filename, bytes: await readFile(output) });
 		}

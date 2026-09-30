@@ -22,7 +22,7 @@ export interface AudioWriteupInput {
 
 export interface AudioWriteupProvider {
 	modelId: string;
-	describe(audio: AudioWriteupInput): Promise<string>;
+	describe(audio: AudioWriteupInput, signal?: AbortSignal): Promise<string>;
 }
 
 export interface AudioWriteupRecord {
@@ -46,7 +46,11 @@ export interface AudioWriteupStatus {
 	markdown?: string;
 }
 
-export type AudioPrepareFn = (absolutePath: string, size: number) => Promise<AudioWriteupInput>;
+export type AudioPrepareFn = (
+	absolutePath: string,
+	size: number,
+	signal?: AbortSignal,
+) => Promise<AudioWriteupInput>;
 
 export function normalizeAudioWriteupMarkdown(raw: string): string {
 	const text = raw.trim();

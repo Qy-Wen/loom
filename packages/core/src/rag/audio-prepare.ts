@@ -6,7 +6,11 @@ import { runMediaProcess } from "../media/run.ts";
 import { AUDIO_WRITEUP_MAX_BYTES, type AudioWriteupInput } from "../model/audio-writeup.ts";
 
 /** Send the file as-is when it fits; otherwise FFmpeg to 16 kHz mono MP3. */
-export async function prepareAudioForModel(absolutePath: string, size: number): Promise<AudioWriteupInput> {
+export async function prepareAudioForModel(
+	absolutePath: string,
+	size: number,
+	signal?: AbortSignal,
+): Promise<AudioWriteupInput> {
 	if (size > 0 && size <= AUDIO_WRITEUP_MAX_BYTES) {
 		return { filename: basename(absolutePath), bytes: await readFile(absolutePath) };
 	}
@@ -16,6 +20,7 @@ export async function prepareAudioForModel(absolutePath: string, size: number): 
 		await runMediaProcess({
 			program: "ffmpeg",
 			args: buildAudioCompactArgs(absolutePath, output),
+			signal,
 		});
 		const compact = await stat(output);
 		if (compact.size > AUDIO_WRITEUP_MAX_BYTES) {

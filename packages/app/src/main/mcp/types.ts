@@ -28,6 +28,10 @@ export interface McpToolSpec {
 
 export interface McpSession {
 	listTools(): Promise<McpToolSpec[]>;
-	callTool(name: string, args: Record<string, unknown>): Promise<{ content: string; isError?: boolean }>;
+	callTool(
+		name: string,
+		args: Record<string, unknown>,
+		signal?: AbortSignal,
+	): Promise<{ content: string; isError?: boolean }>;
 	close(): Promise<void>;
 }

@@ -68,6 +68,8 @@ export class LoomAgUiAgent extends AbstractAgent {
 	/** One pi-backed conversation per AG-UI thread; clones share this map. */
 	private sessions = new Map<string, LoomAgentInstance>();
 	private titles = new Map<string, string>();
+	/** In-flight prompt per thread, so Stop and the next run can abort it. */
+	private inflight = new Map<string, { abort: (reason?: "user") => void; done: Promise<void> }>();
 
 	constructor(
 		options: LoomAgentOptions,
@@ -96,6 +98,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		cloned.onUsage = this.onUsage;
 		cloned.sessions = this.sessions;
 		cloned.titles = this.titles;
+		cloned.inflight = this.inflight;
 		return cloned;
 	}
 
@@ -133,10 +136,35 @@ export class LoomAgUiAgent extends AbstractAgent {
 		this.titles.delete(id);
 	}
 
+	/**
+	 * CopilotKit Stop calls this. The base implementation does nothing, so the
+	 * run Observable stays subscribed and tools keep running. Detach unsubscribes
+	 * `run()`, which aborts the in-flight Loom agent.
+	 */
+	override abortRun(): void {
+		if (this.threadId) this.inflight.get(this.threadId)?.abort("user");
+		void this.detachActiveRun();
+	}
+
 	run(input: RunAgentInput): Observable<BaseEvent> {
 		return new Observable<BaseEvent>((subscriber) => {
 			const emit = (event: BaseEvent) => subscriber.next(event);
 			let cancelled = false;
+			let loom: LoomAgentInstance | undefined;
+			let resolveInflight = (): void => undefined;
+			const inflightDone = new Promise<void>((resolve) => {
+				resolveInflight = resolve;
+			});
+			const handle = {
+				abort: (reason?: "user") => loom?.abort(reason),
+				done: inflightDone,
+			};
+			const previous = this.inflight.get(input.threadId);
+			this.inflight.set(input.threadId, handle);
+			const releaseInflight = () => {
+				resolveInflight();
+				if (this.inflight.get(input.threadId) === handle) this.inflight.delete(input.threadId);
+			};
 
 			// One assistant text message per text segment. Reusing a single id for
 			// the whole run makes CopilotChat paint all text, then dump every tool.
@@ -196,12 +224,26 @@ export class LoomAgUiAgent extends AbstractAgent {
 				return message;
 			};
 
-			void this.loadAgent(input.threadId).then(async (loom) => {
-				if (cancelled) return;
-				await this.ensureTitle(input.threadId, latestUserText(input));
-				if (cancelled) return;
-				const before = loom.getMessages().length;
-				unsubscribe = loom.subscribe((event) => {
+			void (async () => {
+				try {
+					if (previous) {
+						previous.abort();
+						await previous.done;
+					}
+					if (cancelled) return;
+					loom = await this.loadAgent(input.threadId);
+					if (cancelled) {
+						loom.abort();
+						return;
+					}
+					await this.ensureTitle(input.threadId, latestUserText(input));
+					if (cancelled) {
+						loom.abort();
+						return;
+					}
+				const agent = loom;
+				const before = agent.getMessages().length;
+				unsubscribe = agent.subscribe((event) => {
 					switch (event.type) {
 						case "agent_start":
 							startRun();
@@ -273,13 +315,13 @@ export class LoomAgUiAgent extends AbstractAgent {
 					}
 				});
 
-				const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, loom.getMessages());
-				loom
+				const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, agent.getMessages());
+				await agent
 					.prompt(latestUserText(input), attachment ? { attachments: [attachment] } : undefined)
 					.then(async () => {
 						if (!failed) {
-							this.recordUsage(loom.getMessages().slice(before));
-							await this.persist(input.threadId, loom, before);
+							this.recordUsage(agent.getMessages().slice(before));
+							await this.persist(input.threadId, agent, before);
 						}
 						if (!cancelled) subscriber.complete();
 					})
@@ -287,14 +329,18 @@ export class LoomAgUiAgent extends AbstractAgent {
 						fail(err);
 						if (!cancelled) subscriber.complete();
 					});
-			}).catch((err) => {
-				fail(err);
-				if (!cancelled) subscriber.complete();
-			});
+				} catch (err) {
+					fail(err);
+					if (!cancelled) subscriber.complete();
+				} finally {
+					releaseInflight();
+				}
+			})();
 
 			return () => {
 				cancelled = true;
 				unsubscribe();
+				loom?.abort();
 			};
 		});
 	}

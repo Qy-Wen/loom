@@ -132,8 +132,8 @@ export async function openSdkSession(config: McpServerConfig): Promise<McpSessio
 				inputSchema: tool.inputSchema,
 			}));
 		},
-		async callTool(name, args) {
-			const result = await client.callTool({ name, arguments: args });
+		async callTool(name, args, signal) {
+			const result = await client.callTool({ name, arguments: args }, undefined, signal ? { signal } : undefined);
 			return {
 				content: flattenMcpContent(result.content),
 				isError: result.isError === true,

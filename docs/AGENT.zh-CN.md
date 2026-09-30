@@ -300,7 +300,7 @@ Main 进程（Local Core）
 
 - CopilotChat 的 Stop 会退订 AG-UI 流，并调用 `LoomAgent.abort()`。
 - 这会中止 pi 这一轮（Chat HTTP 走 stream 的 abort controller）、正在跑的工具（`LoomTool.execute` 的 `AbortSignal`）、FFmpeg 子进程、VLM/Audio/embedding/rerank 的 `fetch`，以及 MCP `callTool`。
-- 中止的这一轮仍追加到 JSONL。Stop 不会映射成 Chat 的 `RUN_ERROR`。
+- 中止的这一轮仍追加到 JSONL。用户按下停止时，这一轮的正文会写明是主动取消，下一轮能把它和异常退出区分开。Stop 不会映射成 Chat 的 `RUN_ERROR`。
 
 **d) 从某条消息分支**
 

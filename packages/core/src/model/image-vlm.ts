@@ -20,7 +20,7 @@ export interface ImageVlmInput {
 
 export interface ImageVlmProvider {
 	modelId: string;
-	describe(image: ImageVlmInput): Promise<string>;
+	describe(image: ImageVlmInput, signal?: AbortSignal): Promise<string>;
 }
 
 export interface ImageVlmRecord {

@@ -300,7 +300,7 @@ These are excluded from v1. AgUiAdapter keeps extension points so adding them do
 
 - CopilotChat Stop unsubscribes the AG-UI stream and calls `LoomAgent.abort()`.
 - That aborts the pi run (Chat HTTP via the stream abort controller), in-flight tools (`AbortSignal` on `LoomTool.execute`), FFmpeg child processes, VLM/Audio/embedding/rerank `fetch`, and MCP `callTool`.
-- The aborted turn is still appended to JSONL. Stop is not mapped as a Chat `RUN_ERROR`.
+- The aborted turn is still appended to JSONL. A user Stop is written into that turn's text, so the next prompt can tell it from an error. Stop is not mapped as a Chat `RUN_ERROR`.
 
 **d. Branch from a message**
 

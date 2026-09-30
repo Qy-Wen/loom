@@ -557,10 +557,10 @@ app.on("will-quit", (event) => {
 	});
 });
 
-async function embedAssetWithSettings(assetId: string) {
+async function embedAssetWithSettings(assetId: string, signal?: AbortSignal) {
 	const provider = await embeddingProviderFromSettings();
 	if (!provider) throw new Error("Enable the Embedding slot in Settings first.");
-	return localCore.embedTextAsset(assetId, provider);
+	return localCore.embedTextAsset(assetId, provider, signal);
 }
 
 async function embeddingProviderFromSettings(): Promise<EmbeddingProvider | undefined> {
@@ -599,31 +599,31 @@ async function restoreLastLibrary(): Promise<void> {
 	}
 }
 
-async function describeImageWithSettings(assetId: string) {
+async function describeImageWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).vlm;
 	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
-	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot));
+	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), signal);
 }
 
-async function describeVideoWithSettings(assetId: string) {
+async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).vlm;
 	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
-	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot));
+	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), signal);
 }
 
-async function describeAudioWithSettings(assetId: string) {
+async function describeAudioWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).audio;
 	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the Audio slot in Settings first.");
 	}
-	return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot));
+	return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), signal);
 }
 
 async function setMcpServerLive(draft: McpServerDraft) {

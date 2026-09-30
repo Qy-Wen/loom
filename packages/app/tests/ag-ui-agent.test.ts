@@ -45,6 +45,7 @@ class FakeLoomAgent implements LoomAgent {
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 	private readonly events: LoomAgentEvent[];
 	private readonly failure?: string;
+	aborted = false;
 
 	constructor(events: LoomAgentEvent[], failure?: string) {
 		this.events = events;
@@ -63,6 +64,10 @@ class FakeLoomAgent implements LoomAgent {
 			for (const listener of this.listeners) listener(event);
 		}
 		if (this.failure) throw new Error(this.failure);
+	}
+
+	abort(): void {
+		this.aborted = true;
 	}
 
 	getMessages(): LoomTranscriptMessage[] {
@@ -382,6 +387,96 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(seen[1]?.tools?.map((tool) => tool.name), ["comfy__x"]);
 	});
 
+	it("abortRun stops the in-flight prompt without a run error", async () => {
+		const agent = new HangingAgent();
+		const store = new MemorySessionStore();
+		store.records.set("thread-stop", { title: "kept", messages: [] });
+		const adapter = new LoomAgUiAgent(OPTIONS, () => agent, store);
+		adapter.threadId = "thread-stop";
+		const events: BaseEvent[] = [];
+		const pending = adapter.runAgent(runInput("thread-stop", "stop me"), {
+			onEvent: ({ event }) => {
+				events.push(event);
+			},
+		});
+		await agent.started;
+		adapter.abortRun();
+		await Promise.race([
+			pending,
+			new Promise((_, reject) => {
+				setTimeout(() => reject(new Error("abortRun did not finish the run")), 1000);
+			}),
+		]);
+		await agent.settled;
+		for (let attempt = 0; attempt < 20; attempt += 1) {
+			if ((store.records.get("thread-stop")?.messages.length ?? 0) > 0) break;
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+		assert.equal(agent.aborted, true);
+		assert.equal(agent.abortReason, "user");
+		assert.equal(events.some((event) => event.type === EventType.RUN_ERROR), false);
+		assert.equal(store.records.get("thread-stop")?.messages.at(-1)?.stopReason, "aborted");
+	});
+
+	it("aborts on unsubscribe and still appends the turn", async () => {
+		const agent = new HangingAgent();
+		const store = new MemorySessionStore();
+		store.records.set("thread-stop", { title: "kept", messages: [] });
+		const adapter = new LoomAgUiAgent(OPTIONS, () => agent, store);
+		const events: BaseEvent[] = [];
+		const subscription = adapter.run(runInput("thread-stop", "stop me")).subscribe({
+			next: (event) => events.push(event),
+		});
+		await agent.started;
+		subscription.unsubscribe();
+		await agent.settled;
+		for (let attempt = 0; attempt < 20; attempt += 1) {
+			if ((store.records.get("thread-stop")?.messages.length ?? 0) > 0) break;
+			await new Promise((resolve) => setTimeout(resolve, 0));
+		}
+		assert.equal(agent.aborted, true);
+		assert.equal(events.some((event) => event.type === EventType.RUN_ERROR), false);
+		assert.equal(store.records.get("thread-stop")?.messages.at(-1)?.stopReason, "aborted");
+	});
+
+	it("aborts the in-flight run before the next prompt on the same thread", async () => {
+		const agent = new HangingAgent();
+		const adapter = new LoomAgUiAgent(OPTIONS, () => agent);
+		const first = adapter.run(runInput("same", "one")).subscribe({ next() {} });
+		await agent.started;
+		const events = await lastValueFrom(adapter.run(runInput("same", "two")).pipe(toArray()));
+		first.unsubscribe();
+		assert.equal(agent.aborted, true);
+		assert.deepEqual(agent.prompts, ["one", "two"]);
+		assert.equal(events.some((event) => event.type === EventType.RUN_ERROR), false);
+		assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
+	});
+
+	it("does not prompt when unsubscribed before the session loads", async () => {
+		const store = new MemorySessionStore();
+		store.records.set("thread-early", { title: DEFAULT_SESSION_TITLE, messages: [] });
+		let releaseOpen = (): void => undefined;
+		const opened = new Promise<void>((resolve) => {
+			releaseOpen = resolve;
+		});
+		const openSession = store.openSession.bind(store);
+		store.openSession = async (id) => {
+			await opened;
+			return openSession(id);
+		};
+		let agent: HangingAgent | undefined;
+		const adapter = new LoomAgUiAgent(OPTIONS, () => {
+			agent = new HangingAgent();
+			return agent;
+		}, store);
+		const subscription = adapter.run(runInput("thread-early", "nope")).subscribe({ next() {} });
+		subscription.unsubscribe();
+		releaseOpen();
+		await new Promise((resolve) => setTimeout(resolve, 30));
+		assert.equal(agent?.prompts.length, 0);
+		assert.equal(agent?.aborted, true);
+	});
+
 	it("sets the working directory on live sessions and later-created ones", async () => {
 		const created: FakeLoomAgent[] = [];
 		const seen: LoomAgentOptions[] = [];
@@ -398,6 +493,71 @@ describe("LoomAgUiAgent", () => {
 		assert.equal(seen[1]?.systemPrompt, "library D:\\assets");
 	});
 });
+
+class HangingAgent implements LoomAgent {
+	readonly prompts: string[] = [];
+	aborted = false;
+	abortReason: "user" | undefined;
+	messages: LoomTranscriptMessage[] = [];
+	readonly started: Promise<void>;
+	readonly settled: Promise<void>;
+	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
+	private release: (() => void) | undefined;
+	private markStarted: () => void = () => undefined;
+	private markSettled: () => void = () => undefined;
+
+	constructor() {
+		this.started = new Promise((resolve) => {
+			this.markStarted = resolve;
+		});
+		this.settled = new Promise((resolve) => {
+			this.markSettled = resolve;
+		});
+	}
+
+	subscribe(listener: (event: LoomAgentEvent) => void): () => void {
+		this.listeners.add(listener);
+		return () => this.listeners.delete(listener);
+	}
+
+	abort(reason?: "user"): void {
+		this.aborted = true;
+		if (reason) this.abortReason = reason;
+		this.release?.();
+		this.release = undefined;
+	}
+
+	async prompt(input: string): Promise<void> {
+		this.prompts.push(input);
+		if (this.prompts.length > 1) {
+			for (const listener of this.listeners) {
+				listener({ type: "agent_start" });
+				listener({ type: "text", delta: "ok" });
+				listener({ type: "agent_end" });
+			}
+			this.messages.push({ role: "user", content: input });
+			this.messages.push({ role: "assistant", content: "ok" });
+			return;
+		}
+		for (const listener of this.listeners) listener({ type: "agent_start" });
+		this.markStarted();
+		await new Promise<void>((resolve) => {
+			if (this.aborted) resolve();
+			else this.release = resolve;
+		});
+		this.messages.push({ role: "user", content: input });
+		this.messages.push({ role: "assistant", content: "", stopReason: "aborted" });
+		this.markSettled();
+	}
+
+	getMessages(): LoomTranscriptMessage[] {
+		return this.messages;
+	}
+
+	addTools(): void {}
+
+	setSystemPrompt(): void {}
+}
 
 class ScriptedAgent extends FakeLoomAgent {
 	messages: LoomTranscriptMessage[];

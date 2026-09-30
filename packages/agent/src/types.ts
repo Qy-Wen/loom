@@ -33,7 +33,10 @@ export interface LoomTool<TArgs = unknown, TDetails = unknown> {
 	description: string;
 	/** TypeBox-compatible JSON schema passed through to the underlying engine. */
 	parameters: unknown;
-	execute: (args: TArgs) => Promise<string | LoomToolResult<TDetails>> | string | LoomToolResult<TDetails>;
+	execute: (
+		args: TArgs,
+		signal?: AbortSignal,
+	) => Promise<string | LoomToolResult<TDetails>> | string | LoomToolResult<TDetails>;
 }
 
 /** Events Loom surfaces to callers. A deliberately small, engine-agnostic subset. */
@@ -68,6 +71,12 @@ export interface LoomPromptOptions {
 export interface LoomAgent {
 	subscribe(listener: (event: LoomAgentEvent) => void): () => void;
 	prompt(input: string, options?: LoomPromptOptions): Promise<void>;
+	/**
+	 * Abort the current run. Idle agents ignore this.
+	 * `"user"` means the user pressed Stop; that reason is written into the turn
+	 * so the next prompt can tell it from an error.
+	 */
+	abort(reason?: "user"): void;
 	getMessages(): LoomTranscriptMessage[];
 	addTools(tools: LoomTool[]): void;
 	setSystemPrompt(systemPrompt: string): void;

@@ -40,10 +40,11 @@ export class VideoVlmService {
 		assetId: string,
 		provider: VideoVlmProvider,
 		onUpdate?: (status: VideoVlmStatus) => void,
+		signal?: AbortSignal,
 	): Promise<VideoVlmStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate));
+		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -56,6 +57,7 @@ export class VideoVlmService {
 		asset: Asset,
 		provider: VideoVlmProvider,
 		onUpdate?: (status: VideoVlmStatus) => void,
+		signal?: AbortSignal,
 	): Promise<VideoVlmStatus> {
 		if (!canDescribeVideo(asset)) return unsupportedStatus(asset);
 
@@ -75,8 +77,8 @@ export class VideoVlmService {
 			const native = await nativeInput(asset, absolutePath);
 			const markdown = normalizeImageVlmMarkdown(await provider.describe({
 				native,
-				frames: () => this.extractFrames(absolutePath),
-			}));
+				frames: () => this.extractFrames(absolutePath, signal),
+			}, signal));
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,

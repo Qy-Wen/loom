@@ -37,10 +37,11 @@ export class AudioWriteupService {
 		assetId: string,
 		provider: AudioWriteupProvider,
 		onUpdate?: (status: AudioWriteupStatus) => void,
+		signal?: AbortSignal,
 	): Promise<AudioWriteupStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate));
+		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -53,6 +54,7 @@ export class AudioWriteupService {
 		asset: Asset,
 		provider: AudioWriteupProvider,
 		onUpdate?: (status: AudioWriteupStatus) => void,
+		signal?: AbortSignal,
 	): Promise<AudioWriteupStatus> {
 		if (!canDescribeAudio(asset)) return unsupportedStatus(asset);
 
@@ -69,8 +71,8 @@ export class AudioWriteupService {
 		try {
 			const absolutePath = await this.resolvePath(asset.assetId);
 			if (!absolutePath) throw new Error("Asset not found");
-			const prepared = await this.prepare(absolutePath, asset.size);
-			const markdown = normalizeAudioWriteupMarkdown(await provider.describe(prepared));
+			const prepared = await this.prepare(absolutePath, asset.size, signal);
+			const markdown = normalizeAudioWriteupMarkdown(await provider.describe(prepared, signal));
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,

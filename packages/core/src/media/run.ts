@@ -7,6 +7,7 @@ export interface RunMediaProcessOptions {
 	args: string[];
 	cwd?: string;
 	timeoutMs?: number;
+	signal?: AbortSignal;
 }
 
 export interface RunMediaProcessResult {
@@ -19,6 +20,9 @@ export interface RunMediaProcessResult {
  * function without changing callers.
  */
 export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+	const signal = options.signal;
+	if (signal?.aborted) return Promise.reject(abortError(options.program));
+
 	const binary = resolveMediaBinary(options.program);
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
 
@@ -33,11 +37,17 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 		let stderr = "";
 		let settled = false;
 
+		const onAbort = () => {
+			child.kill();
+		};
+
 		const finish = (error?: Error) => {
 			if (settled) return;
 			settled = true;
 			clearTimeout(timer);
-			if (error) reject(error);
+			signal?.removeEventListener("abort", onAbort);
+			if (signal?.aborted) reject(abortError(options.program));
+			else if (error) reject(error);
 			else resolve({ stdout, stderr });
 		};
 
@@ -45,6 +55,11 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 			child.kill();
 			finish(new Error(`${options.program} timed out`));
 		}, timeoutMs);
+
+		if (signal) {
+			if (signal.aborted) onAbort();
+			else signal.addEventListener("abort", onAbort, { once: true });
+		}
 
 		child.stdout.setEncoding("utf8");
 		child.stderr.setEncoding("utf8");
@@ -60,6 +75,12 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 			else finish(new Error(formatProcessError(options.program, code, stderr)));
 		});
 	});
+}
+
+function abortError(program: MediaProgram): Error {
+	const error = new Error(`${program} aborted`);
+	error.name = "AbortError";
+	return error;
 }
 
 function formatProcessError(program: MediaProgram, code: number | null, stderr: string): string {

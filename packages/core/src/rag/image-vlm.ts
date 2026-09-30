@@ -32,10 +32,11 @@ export class ImageVlmService {
 		assetId: string,
 		provider: ImageVlmProvider,
 		onUpdate?: (status: ImageVlmStatus) => void,
+		signal?: AbortSignal,
 	): Promise<ImageVlmStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate));
+		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -48,6 +49,7 @@ export class ImageVlmService {
 		asset: Asset,
 		provider: ImageVlmProvider,
 		onUpdate?: (status: ImageVlmStatus) => void,
+		signal?: AbortSignal,
 	): Promise<ImageVlmStatus> {
 		if (!canDescribeImage(asset)) return unsupportedStatus(asset);
 
@@ -68,7 +70,7 @@ export class ImageVlmService {
 			const absolutePath = await this.resolvePath(asset.assetId);
 			if (!absolutePath) throw new Error("Asset not found");
 			const bytes = await readFile(absolutePath);
-			const markdown = normalizeImageVlmMarkdown(await provider.describe({ filename: asset.filename, bytes }));
+			const markdown = normalizeImageVlmMarkdown(await provider.describe({ filename: asset.filename, bytes }, signal));
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,
