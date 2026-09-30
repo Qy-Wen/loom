@@ -9,7 +9,8 @@ Local-first AI creative workspace —— 一个把「文件系统作事实源、
 ## 开发
 
 ```bash
-pnpm install
+pnpm install                          # 同时下载本机平台的 ffmpeg 和 ffprobe
+pnpm vendor:ffmpeg --all              # win32-x64、darwin-arm64、darwin-x64
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
 pnpm --filter @loom/agent try:agent   # 冒烟测试：跑通一轮 agent loop
 pnpm test                            # 全部单元 / 集成测试

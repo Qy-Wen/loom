@@ -1,5 +1,5 @@
-import { createWriteStream } from "node:fs";
-import { chmod, mkdir, unlink } from "node:fs/promises";
+import { createWriteStream, existsSync } from "node:fs";
+import { chmod, mkdir, stat, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
@@ -42,12 +42,24 @@ for (const id of requested) {
 		continue;
 	}
 	const dest = join(VENDOR, id);
-	await mkdir(dest, { recursive: true });
 	const ffmpegName = spec.exe ? "ffmpeg.exe" : "ffmpeg";
 	const ffprobeName = spec.exe ? "ffprobe.exe" : "ffprobe";
-	await downloadGz(`ffmpeg-${spec.suffix}.gz`, join(dest, ffmpegName), !spec.exe);
-	await downloadGz(`ffprobe-${spec.suffix}.gz`, join(dest, ffprobeName), !spec.exe);
+	const ffmpegPath = join(dest, ffmpegName);
+	const ffprobePath = join(dest, ffprobeName);
+	if (await installedBinary(ffmpegPath) && await installedBinary(ffprobePath)) {
+		console.log(`FFmpeg for ${id} already present -> ${dest}`);
+		continue;
+	}
+	await mkdir(dest, { recursive: true });
+	await downloadGz(`ffmpeg-${spec.suffix}.gz`, ffmpegPath, !spec.exe);
+	await downloadGz(`ffprobe-${spec.suffix}.gz`, ffprobePath, !spec.exe);
 	console.log(`Installed FFmpeg for ${id} -> ${dest}`);
+}
+
+async function installedBinary(path) {
+	if (!existsSync(path)) return false;
+	const info = await stat(path);
+	return info.isFile() && info.size > 0;
 }
 
 async function downloadGz(filename, dest, executable) {
