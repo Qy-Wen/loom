@@ -195,6 +195,27 @@ export class LoomAgUiAgent extends AbstractAgent {
 				return messageId;
 			};
 
+			let thinkingId = "";
+			let thinkingOpen = false;
+			const openThinking = () => {
+				if (thinkingOpen) return;
+				closeText();
+				thinkingId = nextId("think");
+				thinkingOpen = true;
+				emit({ type: EventType.REASONING_START, messageId: thinkingId } as BaseEvent);
+				emit({
+					type: EventType.REASONING_MESSAGE_START,
+					messageId: thinkingId,
+					role: "reasoning",
+				} as BaseEvent);
+			};
+			const closeThinking = () => {
+				if (!thinkingOpen) return;
+				thinkingOpen = false;
+				emit({ type: EventType.REASONING_MESSAGE_END, messageId: thinkingId } as BaseEvent);
+				emit({ type: EventType.REASONING_END, messageId: thinkingId } as BaseEvent);
+			};
+
 			let unsubscribe = (): void => undefined;
 			let started = false;
 			let failed = false;
@@ -212,6 +233,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 				if (failed) return message;
 				failed = true;
 				startRun();
+				closeThinking();
 				closeText();
 				openText(nextId(CHAT_ERROR_ID_PREFIX.slice(0, -1)));
 				emit({
@@ -252,7 +274,23 @@ export class LoomAgUiAgent extends AbstractAgent {
 							fail(event.message);
 							break;
 
+						case "thinking_start":
+							openThinking();
+							break;
+						case "thinking_delta":
+							openThinking();
+							emit({
+								type: EventType.REASONING_MESSAGE_CONTENT,
+								messageId: thinkingId,
+								delta: event.delta,
+							} as BaseEvent);
+							break;
+						case "thinking_end":
+							closeThinking();
+							break;
+
 						case "text":
+							closeThinking();
 							openText();
 							emit({
 								type: EventType.TEXT_MESSAGE_CONTENT,
@@ -262,6 +300,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 							break;
 
 						case "tool_start": {
+							closeThinking();
 							emit({
 								type: EventType.TOOL_CALL_START,
 								toolCallId: event.toolCallId,
@@ -305,6 +344,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 
 						case "agent_end":
 							if (failed) break;
+							closeThinking();
 							closeText();
 							emit({
 								type: EventType.RUN_FINISHED,

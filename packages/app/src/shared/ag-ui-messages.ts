@@ -14,6 +14,20 @@ export function transcriptText(content: unknown): string {
 		.join("");
 }
 
+/** Non-redacted thinking text. Signatures stay on the transcript and are not copied. */
+function visibleThinking(content: unknown): string {
+	if (!Array.isArray(content)) return "";
+	return content
+		.map((part) => {
+			if (typeof part !== "object" || part === null) return "";
+			const record = part as { type?: unknown; thinking?: unknown; redacted?: unknown };
+			if (record.type !== "thinking" || record.redacted === true || typeof record.thinking !== "string") return "";
+			return record.thinking;
+		})
+		.filter((text) => text.trim().length > 0)
+		.join("\n\n");
+}
+
 function assistantToolCalls(content: unknown): ToolCall[] {
 	if (!Array.isArray(content)) return [];
 	const calls: ToolCall[] = [];
@@ -43,6 +57,8 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 			continue;
 		}
 		if (message.role === "assistant") {
+			const thinking = visibleThinking(message.content);
+			if (thinking) out.push({ id: `${id}-thinking`, role: "reasoning", content: thinking });
 			const toolCalls = assistantToolCalls(message.content);
 			out.push({
 				id,

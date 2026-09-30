@@ -249,3 +249,22 @@ Hybrid Search 之后的可选第二轮。槽位空着就跳过。
 - Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`），`query` + `documents`（融合后的段落）。百炼 `qwen3-rerank` 会把 DashScope Chat URL 改写成 `.../compatible-api/v1/reranks`
 - 失败、只有一条命中、或槽位空着，都保持 RRF 顺序。开关探测发一次很小的 rerank POST（不是 `GET /v1/models`）
 - TEI 原生 `texts` 以后再说。见 [TEXT](../RAG/TEXT.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)
+
+---
+
+## ✅ 停止对话
+
+CopilotChat 的 Stop 会中止 pi 这一轮和正在跑的工具。这一轮留在 transcript 里，不当成 Chat 报错。
+
+- Stop 调用 `LoomAgent.abort()`。这会中止 Chat 流、bash、FFmpeg（`child.kill()`）、VLM/Audio/embedding/rerank 的 `fetch`，以及 MCP `callTool`
+- 中止的这一轮仍追加到 JSONL。用户按下停止时，这一轮的正文会写明是主动取消，下一轮能把它和异常退出区分开
+
+---
+
+## ✅ 思考过程
+
+模型的推理过程显示在对话里。签名留在 transcript 上。
+
+- pi 的 `thinking_start` / `thinking_delta` / `thinking_end` 变成同名 `LoomAgentEvent`，再映射成 AG-UI `REASONING_*`。已废弃的 `THINKING_*` 不会生成聊天消息
+- 丢弃 redacted。`thinkingSignature` / `thoughtSignature` 不进前端
+- 重新打开会话时，未打码的思考过程仍会显示。见 [AGENT](../AGENT.zh-CN.md) §6.3a

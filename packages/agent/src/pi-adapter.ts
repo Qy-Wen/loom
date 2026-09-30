@@ -92,6 +92,8 @@ class PiAgentAdapter implements LoomAgent {
 	private readonly listeners = new Set<(event: LoomAgentEvent) => void>();
 	/** Reason for the run currently being aborted. The first reason wins. */
 	private abortReason: "user" | undefined;
+	/** Content index of a redacted thinking block. Its text never leaves the adapter. */
+	private redactedThinkingIndex: number | undefined;
 
 	constructor(options: LoomAgentOptions) {
 		if (!chatEndpointReady(options.chat)) {
@@ -124,6 +126,7 @@ class PiAgentAdapter implements LoomAgent {
 	private translate(event: AgentEvent) {
 		switch (event.type) {
 			case "agent_start":
+				this.redactedThinkingIndex = undefined;
 				this.emit({ type: "agent_start" });
 				break;
 			case "agent_end":
@@ -144,7 +147,23 @@ class PiAgentAdapter implements LoomAgent {
 				const inner = event.assistantMessageEvent;
 				if (inner.type === "text_delta") {
 					this.emit({ type: "text", delta: inner.delta });
+					break;
 				}
+				if (
+					inner.type !== "thinking_start" &&
+					inner.type !== "thinking_delta" &&
+					inner.type !== "thinking_end"
+				) {
+					break;
+				}
+				if (isRedactedThinking(inner) || this.redactedThinkingIndex === inner.contentIndex) {
+					if (inner.type === "thinking_start") this.redactedThinkingIndex = inner.contentIndex;
+					if (inner.type === "thinking_end") this.redactedThinkingIndex = undefined;
+					break;
+				}
+				if (inner.type === "thinking_start") this.emit({ type: "thinking_start" });
+				else if (inner.type === "thinking_delta") this.emit({ type: "thinking_delta", delta: inner.delta });
+				else this.emit({ type: "thinking_end" });
 				break;
 			}
 			case "tool_execution_start":
@@ -268,6 +287,14 @@ function appendText(message: Record<string, unknown>, text: string): void {
 		return;
 	}
 	content.push({ type: "text", text });
+}
+
+function isRedactedThinking(event: {
+	partial: { content: Array<{ type?: string; redacted?: boolean }> };
+	contentIndex: number;
+}): boolean {
+	const block = event.partial.content[event.contentIndex];
+	return block?.type === "thinking" && block.redacted === true;
 }
 
 function lastAssistantAborted(messages: readonly object[]): boolean {

@@ -249,3 +249,22 @@ Optional second pass after Hybrid Search. Empty slot skips it.
 - Cohere/Jina/Qianfan `POST /v1/rerank` (or `/v2/rerank`) with `query` + `documents` (the fused passages). Bailian `qwen3-rerank` rewrites a DashScope Chat URL to `.../compatible-api/v1/reranks`
 - Failure, one hit, or a missing slot keeps the RRF order. Probe POSTs a tiny rerank call (not `GET /v1/models`)
 - TEI-native `texts` waits. See [TEXT](../RAG/TEXT.md) and [SETTINGS](../SETTINGS.md)
+
+---
+
+## ✅ Stop conversation
+
+CopilotChat Stop aborts the pi run and in-flight tools. The turn stays in the transcript. It is not a Chat error.
+
+- Stop calls `LoomAgent.abort()`. That aborts the Chat stream, bash, FFmpeg (`child.kill()`), VLM/Audio/embedding/rerank `fetch`, and MCP `callTool`
+- The aborted turn is still appended to JSONL. A user Stop is written into that turn's text, so the next prompt can tell it from an error
+
+---
+
+## ✅ Thinking
+
+Model reasoning shows in the chat. Signatures stay on the transcript.
+
+- Pi `thinking_start` / `thinking_delta` / `thinking_end` become the same `LoomAgentEvent`s, then AG-UI `REASONING_*`. Deprecated `THINKING_*` events do not create a chat message
+- Redacted thinking is dropped. `thinkingSignature` / `thoughtSignature` are not sent to the frontend
+- Reloading a session shows the same non-redacted thinking. See [AGENT](../AGENT.md) §6.3a
