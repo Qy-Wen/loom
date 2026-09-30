@@ -344,7 +344,7 @@ Future publishing extension:
 
 Introduce these progressively when real scenarios require them:
 
-- **Skills:** load Agent Skills (`SKILL.md`) into the creative Agent. Do not vendor pi's coding-agent shell.
+- **Skills:** load Agent Skills (`SKILL.md`) into the creative Agent. Do not vendor pi's coding-agent shell. See [TODO](./TODO.md).
 - **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
 - **Sandboxing:** path jail for workspace tools; isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.

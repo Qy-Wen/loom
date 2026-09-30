@@ -111,6 +111,37 @@ describe("LoomAgUiAgent", () => {
 		assert.equal((events[3] as unknown as { delta: string }).delta, "world");
 	});
 
+	it("maps thinking deltas to reasoning messages and then the reply", async () => {
+		const adapter = new LoomAgUiAgent(OPTIONS, () => new FakeLoomAgent([
+			{ type: "agent_start" },
+			{ type: "thinking_start" },
+			{ type: "thinking_delta", delta: "because " },
+			{ type: "thinking_delta", delta: "so" },
+			{ type: "thinking_end" },
+			{ type: "text", delta: "answer" },
+			{ type: "agent_end" },
+		]));
+		const events = await lastValueFrom(adapter.run(runInput()).pipe(toArray()));
+		assert.deepEqual(eventTypes(events), [
+			EventType.RUN_STARTED,
+			EventType.REASONING_START,
+			EventType.REASONING_MESSAGE_START,
+			EventType.REASONING_MESSAGE_CONTENT,
+			EventType.REASONING_MESSAGE_CONTENT,
+			EventType.REASONING_MESSAGE_END,
+			EventType.REASONING_END,
+			EventType.TEXT_MESSAGE_START,
+			EventType.TEXT_MESSAGE_CONTENT,
+			EventType.TEXT_MESSAGE_END,
+			EventType.RUN_FINISHED,
+		]);
+		const deltas = events
+			.filter((event) => event.type === EventType.REASONING_MESSAGE_CONTENT)
+			.map((event) => (event as unknown as { delta: string }).delta);
+		assert.deepEqual(deltas, ["because ", "so"]);
+		assert.equal(JSON.stringify(events).includes("thoughtSignature"), false);
+	});
+
 	it("writes a Chat failure into the transcript instead of going silent", async () => {
 		const adapter = new LoomAgUiAgent(OPTIONS, () => new FakeLoomAgent([
 			{ type: "agent_start" },

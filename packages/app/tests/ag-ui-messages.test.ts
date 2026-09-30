@@ -37,6 +37,29 @@ test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", ()
 	]);
 });
 
+test("toAgUiMessages shows thinking and drops redacted text and signatures", () => {
+	const messages = toAgUiMessages([
+		{
+			role: "assistant",
+			content: [
+				{ type: "thinking", thinking: "visible", thinkingSignature: "sig" },
+				{ type: "thinking", thinking: "secret", redacted: true, thinkingSignature: "opaque" },
+				{ type: "text", text: "answer" },
+			],
+		},
+	]);
+	assert.deepEqual(
+		messages.map((message) => ({ role: message.role, content: "content" in message ? message.content : "" })),
+		[
+			{ role: "reasoning", content: "visible" },
+			{ role: "assistant", content: "answer" },
+		],
+	);
+	assert.equal(JSON.stringify(messages).includes("sig"), false);
+	assert.equal(JSON.stringify(messages).includes("opaque"), false);
+	assert.equal(JSON.stringify(messages).includes("secret"), false);
+});
+
 test("mergeChatMessages keeps stored history when live is empty and appends new turns", () => {
 	const stored = toAgUiMessages([
 		{ role: "user", content: "old" },

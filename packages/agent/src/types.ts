@@ -43,6 +43,9 @@ export interface LoomTool<TArgs = unknown, TDetails = unknown> {
 export type LoomAgentEvent =
 	| { type: "agent_start" }
 	| { type: "text"; delta: string }
+	| { type: "thinking_start" }
+	| { type: "thinking_delta"; delta: string }
+	| { type: "thinking_end" }
 	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "error"; message: string }

@@ -274,6 +274,7 @@ Main 进程（Local Core）
 |---|---|
 | `agent_start` | `RUN_STARTED` |
 | `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
+| `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`、`REASONING_MESSAGE_*`、`REASONING_END` |
 | `tool_start` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，保留 pi 的稳定 `toolCallId` |
 | `tool_end` | `TOOL_CALL_END` + `TOOL_CALL_RESULT`；结构化 `details` 另发 `CUSTOM loom.tool_result` |
 | `error` | 发 `loom-error-*` 提示条 + `RUN_ERROR`（key 错、Chat 连不上、没配设置）。按系统告警渲染，不走模型气泡。 |
@@ -285,16 +286,14 @@ Main 进程（Local Core）
 
 **a) thinking / reasoning**
 
-- pi 侧有三段式事件 `thinking_start` / `thinking_delta` / `thinking_end`（含 `redacted`、Google 特有的 `thoughtSignature`）。
-- 未来映射到 AG-UI `THINKING_*`；丢弃 `redacted`；`thoughtSignature` 属 agent↔model 内部机制，**绝不进前端协议**。
-- 留位：adapter 里预留 thinking 处理入口（需先在 `LoomAgentEvent` 补上 thinking 事件）。见 [TODO](./TODO.zh-CN.md)。
+- pi 的 `thinking_start` / `thinking_delta` / `thinking_end` 先变成同名 `LoomAgentEvent`，再映射成 AG-UI `REASONING_*`。已废弃的 `THINKING_*` 不会生成聊天消息。
+- 丢弃 redacted。`thinkingSignature` / `thoughtSignature` 留在 transcript 里，不进前端协议。
 
 **b) 工具富输出**
 
 - pi 的 `AgentToolResult` 天然分两条通道：`content`（给模型看的文字）与 `details`（供 UI 渲染的结构化数据）。
 - Loom 现在保留两条通道：文字映射为 `TOOL_CALL_RESULT`，结构化 details 发出 `CUSTOM loom.tool_result`。
 - `search_assets` 与 `inspect_asset` 分别使用 `asset_list` 和 `asset_detail` 数据。当前聊天壳负责传输，以后渲染可点的 `asset_id` 引用，点击后在素材库里选中该资产。见 [TODO](./TODO.zh-CN.md)。
-- FFmpeg / ComfyUI 的进度以后可继续增加其他 `CUSTOM` 事件。
 
 **c) 停止对话**
 
@@ -302,9 +301,9 @@ Main 进程（Local Core）
 - 这会中止 pi 这一轮（Chat HTTP 走 stream 的 abort controller）、正在跑的工具（`LoomTool.execute` 的 `AbortSignal`）、FFmpeg 子进程、VLM/Audio/embedding/rerank 的 `fetch`，以及 MCP `callTool`。
 - 中止的这一轮仍追加到 JSONL。用户按下停止时，这一轮的正文会写明是主动取消，下一轮能把它和异常退出区分开。Stop 不会映射成 Chat 的 `RUN_ERROR`。
 
-**d) 从某条消息分支**
+**d) 从之前的提问分支**
 
-- 当前会话可以从任意一轮续聊，或用该前缀开新会话。开新会话时原 transcript 不动。
+- 同一步：从之前某条用户提问续聊当前会话，或用该前缀开新会话。不必回退已经写下的文件。开新会话时原 transcript 不动。
 - 现在存储是线性只追加 JSONL。见 [TODO](./TODO.zh-CN.md)。
 
 ---
@@ -329,4 +328,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，在 `convertToLlm` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`AgUiAdapter` 把 `LoomAgentEvent` 翻成 AG-UI，pi 协议不外泄。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：「问→答→工具」主链路已完成；资产工具已经保留稳定调用 ID 和结构化结果。Stop 会中止这一轮和正在跑的工具。thinking 映射、对话里的资产引用、输入框贴资产、以及从某条消息续聊/开新会话，都暂时后置。
+- **当前范围**：「问→答→工具」主链路已完成；资产工具已经保留稳定调用 ID 和结构化结果。Stop 会中止这一轮和正在跑的工具。模型的思考过程会显示在对话里。对话里的资产引用、输入框贴资产、以及从某条消息续聊/开新会话，都暂时后置。

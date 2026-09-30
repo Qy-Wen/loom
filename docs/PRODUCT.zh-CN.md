@@ -344,7 +344,7 @@ POST /graph/query
 
 后续根据实际场景逐步引入：
 
-- **Skills：** 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。
+- **Skills：** 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [TODO](./TODO.zh-CN.md)。
 - **多 Agent**：按真实创作角色拆分协作与编排。
 - **沙箱**：工作区工具做路径 jail；隔离执行高风险工具与生成任务。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。

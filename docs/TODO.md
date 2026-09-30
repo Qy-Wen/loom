@@ -12,13 +12,14 @@ The retrieve path is done (Hybrid Search, Audio write-ups, optional Rerank). Com
 
 ---
 
-## Step 1: Stop conversation
+## Step 1: Branch from a previous question
 
-CopilotChat Stop must abort the pi run and in-flight tools, not only unsubscribe the UI. See [AGENT](./AGENT.md) §6.3c.
+One step with branching. From an earlier user question, continue this session or fork a new one, like Cursor. Do not revert files the agent already wrote. See [AGENT](./AGENT.md) §6.3d.
 
-- [x] Call `LoomAgent.abort()` when the AG-UI run unsubscribes
-- [x] Honor `AbortSignal` in Chat, bash, FFmpeg, VLM/Audio HTTP, embedding/rerank, and MCP
-- [x] Persist the aborted turn; do not treat Stop as a Chat error. FFmpeg progress waits
+- [ ] Continue: later turns drop or park; the model sees the prefix through that question
+- [ ] Fork: new session with the same prefix; the original transcript stays
+- [ ] Leave workspace files as they are; no checkpoint restore
+- [ ] Today the store is linear append-only JSONL
 
 ## Step 2: Chat asset refs
 
@@ -28,13 +29,13 @@ Attach library assets in the composer (not only implicit `ui_selection`). Click 
 - [ ] Render refs from those chips and from `search_assets` / `inspect_asset`; click selects in the library
 - [ ] Key by `asset_id`, never an absolute path
 
-## Step 3: Branch from a message
+## Step 3: Skills
 
-Continue the current session from any turn, or fork a new session from that prefix. See [AGENT](./AGENT.md) §6.3d.
+Load `SKILL.md` from the open library into the creative Agent. See [AGENT](./AGENT.md).
 
-- [ ] Continue: later turns drop or park; the model sees the prefix through that message
-- [ ] Fork: new session with the same prefix; the original transcript stays
-- [ ] Today the store is linear append-only JSONL
+- [ ] Read Agent Skills (`SKILL.md`, agentskills.io) from the library. Do not vendor `packages/coding-agent`
+- [ ] Put a matching skill's text in the system prompt, or expose it as a tool the agent reads on demand
+- [ ] Keep the current simple Agent. Do not switch the runtime to the pi harness
 
 ---
 
@@ -43,10 +44,7 @@ Continue the current session from any turn, or fork a new session from that pref
 - **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).
 - **Dedicated ASR:** OpenAI-compatible `POST /v1/audio/transcriptions`. Prefer the Audio understanding slot. See [MEDIA](./RAG/MEDIA.md).
 - **CLIP / image vectors:** embed the image without going through text; later if needed
-- **Thinking:** surface model reasoning in chat. Add thinking events to `LoomAgentEvent`, map to AG-UI `THINKING_*`, drop redacted text, keep `thoughtSignature` off the frontend protocol. See [AGENT](./AGENT.md).
-- **Skills:** load Agent Skills (`SKILL.md`, agentskills.io) into the creative Agent. Pi's harness already has the format; do not vendor `packages/coding-agent`. See [AGENT](./AGENT.md).
 - **Multi-agent:** split collaboration and orchestration by genuine creative roles. See [PRODUCT](./PRODUCT.md) §10.
 - **Sandbox:** path jail for workspace tools, plus a process sandbox for high-risk tools and generation jobs. See [PRODUCT](./PRODUCT.md) §10.
 - **Evals:** Agent behavior, tool calls, and retrieval quality. Compaction rate and prompt-cache hit already live in `packages/agent/evals/`; Hybrid Search has a minimal unit set. See [PRODUCT](./PRODUCT.md) §10 and [AGENT](./AGENT.md).
-- **FFmpeg progress:** stream protocol-level progress for long jobs (kill is Step 1)
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
