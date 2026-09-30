@@ -8,7 +8,7 @@ import {
 	type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
 import { createContext, useContext, useLayoutEffect, useMemo, useRef } from "react";
-import type { LoomTranscriptMessage } from "@loom/agent";
+import type { HarnessContextUsage, LoomTranscriptMessage } from "@loom/agent";
 import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 
@@ -91,7 +91,25 @@ function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 			messages={messages}
 			scrollView={SessionScrollView}
 			messageView={SessionMessageView}
+			input={{ showDisclaimer: false }}
 		/>
+	);
+}
+
+function formatTokens(tokens: number): string {
+	if (tokens >= 1_000_000) return `${(tokens / 1_000_000).toFixed(1)}M`;
+	if (tokens >= 1_000) return `${Math.round(tokens / 1_000)}k`;
+	return String(tokens);
+}
+
+/** Context usage indicator, e.g. 12.5%/1.0M; "?" after compaction until the next response. */
+function ContextIndicator({ context }: { context: HarnessContextUsage | null }): React.JSX.Element | null {
+	if (!context) return null;
+	const percent = context.percent !== null ? `${context.percent.toFixed(1)}%` : "?";
+	return (
+		<div className="session-context-usage" title="Share of the model context window in use">
+			{percent}/{formatTokens(context.window)}
+		</div>
 	);
 }
 
@@ -99,15 +117,20 @@ function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 export function SessionChat({
 	threadId,
 	messages,
+	context,
 }: {
 	threadId: string;
 	messages: LoomTranscriptMessage[];
+	context: HarnessContextUsage | null;
 }): React.JSX.Element {
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
 
 	return (
 		<StoredMessagesContext.Provider value={stored}>
-			<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} />
+			<div className="session-chat-shell">
+				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} />
+				<ContextIndicator context={context} />
+			</div>
 		</StoredMessagesContext.Provider>
 	);
 }

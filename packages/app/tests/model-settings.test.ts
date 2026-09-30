@@ -3,6 +3,7 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
+import { buildChatModels, DEFAULT_CHAT_CONTEXT_WINDOW } from "@loom/agent";
 import {
 	ModelSettingsStore,
 	applySettingsDraft,
@@ -119,5 +120,32 @@ describe("ModelSettingsStore", () => {
 			apiKey: "sk-from-env",
 			model: "deepseek-v4-flash",
 		});
+	});
+});
+
+describe("chat context window", () => {
+	it("carries the saved context window into the endpoint", () => {
+		const file = emptySettingsFile();
+		file.chat = { baseUrl: "https://a", apiKey: "k", model: "m", enabled: true, contextWindow: 200000 };
+		assert.equal(resolveChatEndpoint(file, env, true)?.contextWindow, 200000);
+		const { model } = buildChatModels({ baseUrl: "https://a", model: "m", contextWindow: 200000 });
+		assert.equal(model.contextWindow, 200000);
+	});
+
+	it("falls back to 128k without a context window", () => {
+		const file = emptySettingsFile();
+		file.chat = { baseUrl: "https://a", apiKey: "k", model: "m", enabled: true };
+		const chat = resolveChatEndpoint(file, env, true)!;
+		assert.equal(chat.contextWindow, undefined);
+		const { model } = buildChatModels(chat);
+		assert.equal(model.contextWindow, DEFAULT_CHAT_CONTEXT_WINDOW);
+		assert.equal(model.contextWindow, 128000);
+	});
+
+	it("drops invalid context window values", () => {
+		const file = parseSettingsFile({ chat: { baseUrl: "https://a", apiKey: "k", model: "m", contextWindow: -5 } });
+		assert.equal(file.chat.contextWindow, undefined);
+		const saved = applySettingsDraft(emptySettingsFile(), draft({ baseUrl: "https://a", model: "m", enabled: true, contextWindow: 0 }));
+		assert.equal(saved.chat.contextWindow, undefined);
 	});
 });

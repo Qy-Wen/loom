@@ -45,6 +45,8 @@ export type LoomAgentEvent =
 	| { type: "thinking_start" }
 	| { type: "thinking_delta"; delta: string }
 	| { type: "thinking_end" }
+	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
+	| { type: "compaction_end"; reason: "manual" | "threshold" | "overflow"; status: "completed" | "declined" | "aborted" | "failed" }
 	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "error"; message: string }
@@ -56,6 +58,8 @@ export interface LoomChatEndpoint {
 	baseUrl: string;
 	apiKey?: string;
 	model: string;
+	/** Model context window in tokens; defaults to 128k when unset. */
+	contextWindow?: number;
 }
 
 export interface LoomAgentOptions {
