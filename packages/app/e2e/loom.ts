@@ -1,5 +1,7 @@
 import { existsSync } from "node:fs";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
+import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base, chromium, expect, type Page } from "@playwright/test";
@@ -21,20 +23,34 @@ export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronAppli
 			if (!existsSync(main)) {
 				throw new Error("Build the app first: pnpm --filter @loom/app build");
 			}
-			const app = await electron.launch({
-				executablePath: require("electron") as string,
-				args: [appRoot],
-				env: {
-					...process.env,
-					LOOM_E2E: "1",
-					ELECTRON_DISABLE_SECURITY_WARNINGS: "1",
-				},
-			});
-			await use(app);
-			await app.evaluate(({ app: electronApp }) => {
-				electronApp.exit(0);
-			}).catch(() => undefined);
-			await app.close().catch(() => undefined);
+			const e2eRoot = await mkdtemp(join(tmpdir(), "loom-e2e-"));
+			try {
+				const libraryRoot = join(e2eRoot, "library");
+				const userData = join(e2eRoot, "user-data");
+				await mkdir(libraryRoot);
+				await mkdir(userData);
+				await writeFile(join(userData, "last-library.json"), JSON.stringify({ rootPath: libraryRoot }));
+				const app = await electron.launch({
+					executablePath: require("electron") as string,
+					args: [appRoot],
+					env: {
+						...process.env,
+						LOOM_E2E: "1",
+						LOOM_E2E_USER_DATA: userData,
+						ELECTRON_DISABLE_SECURITY_WARNINGS: "1",
+					},
+				});
+				try {
+					await use(app);
+				} finally {
+					await app.evaluate(({ app: electronApp }) => {
+						electronApp.exit(0);
+					}).catch(() => undefined);
+					await app.close().catch(() => undefined);
+				}
+			} finally {
+				await rm(e2eRoot, { recursive: true, force: true });
+			}
 		},
 		{ scope: "worker" },
 	],

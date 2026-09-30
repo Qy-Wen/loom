@@ -13,7 +13,7 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
-import { createWorkspaceTools, type LoomAgentOptions } from "@loom/agent";
+import { HarnessSessionManager, type LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
@@ -98,9 +98,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const localCore = new LocalCore();
-const workspaceTools = createWorkspaceTools();
 const BUILTIN_TOOLS = [
-	...workspaceTools.tools,
 	...createAssetTools(localCore, {
 		embedAsset: embedAssetWithSettings,
 		embeddingProvider: embeddingProviderFromSettings,
@@ -120,8 +118,22 @@ let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
+let mcpReady = false;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
+// Keep the single manager and LocalCore on the same root across overlapping open requests.
+let libraryTransition: Promise<void> = Promise.resolve();
+let openingLibrary = false;
+let pendingLibraryChanges: LibraryChange[] = [];
+const agentManager = new HarnessSessionManager(AGENT_OPTIONS, (usage) => {
+	void agentStats?.record(usage);
+});
+
+function sendLibraryChange(change: LibraryChange): void {
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) window.webContents.send(IPC.libraryChanged, change);
+	}
+}
 
 const MIME_TYPES: Record<string, string> = {
 	".aac": "audio/aac",
@@ -388,15 +400,12 @@ function registerIpc(): void {
 		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
 	});
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
-	ipcMain.handle(IPC.listSessions, () => localCore.listSessions());
-	ipcMain.handle(IPC.createSession, () => localCore.createSession());
-	ipcMain.handle(IPC.openSession, (_event, id: string) => localCore.openSession(id));
-	ipcMain.handle(IPC.getSession, (_event, id: string) => localCore.getSession(id));
-	ipcMain.handle(IPC.archiveSession, async (_event, id: string) => {
-		await localCore.archiveSession(id);
-		agentServer?.dropSession(id);
-	});
-	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => localCore.unarchiveSession(id));
+	ipcMain.handle(IPC.listSessions, () => agentManager.listSessions());
+	ipcMain.handle(IPC.createSession, () => agentManager.createSession());
+	ipcMain.handle(IPC.openSession, (_event, id: string) => agentManager.openSession(id));
+	ipcMain.handle(IPC.getSession, (_event, id: string) => agentManager.getSession(id));
+	ipcMain.handle(IPC.archiveSession, (_event, id: string) => agentManager.archiveSession(id));
+	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => agentManager.unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {
 		if (!modelSettings) throw new Error("Settings store not started");
 		return modelSettings.view();
@@ -429,14 +438,11 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
 		if (!modelSettings) throw new Error("Settings store not started");
 		const file = await modelSettings.update(draft);
-		agentServer?.setChat(resolveChatEndpoint(file, process.env, false));
+		await agentManager.setChat(resolveChatEndpoint(file, process.env, false));
 		return settingsView(file);
 	});
 
-	ipcMain.handle(IPC.deleteSession, async (_event, id: string) => {
-		await localCore.deleteSession(id);
-		agentServer?.dropSession(id);
-	});
+	ipcMain.handle(IPC.deleteSession, (_event, id: string) => agentManager.deleteSession(id));
 
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
@@ -484,11 +490,10 @@ function registerIpc(): void {
 	});
 
 	localCore.subscribeLibrary((change: LibraryChange) => {
-		for (const window of BrowserWindow.getAllWindows()) {
-			if (!window.isDestroyed()) window.webContents.send(IPC.libraryChanged, change);
-		}
+		if (openingLibrary) pendingLibraryChanges.push(change);
+		else sendLibraryChange(change);
 	});
-	localCore.subscribeSessions((sessions) => {
+	agentManager.subscribeSessions((sessions) => {
 		for (const window of BrowserWindow.getAllWindows()) {
 			if (!window.isDestroyed()) window.webContents.send(IPC.sessionsChanged, sessions);
 		}
@@ -512,13 +517,8 @@ app
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
-		agentServer = await startAgentServer({
-			...AGENT_OPTIONS,
-			chat: await modelSettings.chat(),
-			tools: [...BUILTIN_TOOLS],
-		}, localCore, getUiSelection, (usage) => {
-			void agentStats?.record(usage);
-		});
+		await agentManager.setChat(await modelSettings.chat());
+		agentServer = await startAgentServer(agentManager, getUiSelection);
 		registerAssetProtocol();
 		registerIpc();
 		await restoreLastLibrary();
@@ -548,11 +548,13 @@ app.on("will-quit", (event) => {
 	agentServer = null;
 	const host = mcpHost;
 	mcpHost = null;
-	void Promise.allSettled([
-		localCore.close(),
+	void libraryTransition.then(() => Promise.allSettled([
 		server?.close() ?? Promise.resolve(),
+		agentManager.close(),
+	])).then(() => Promise.allSettled([
+		localCore.close(),
 		host?.close() ?? Promise.resolve(),
-	]).finally(() => {
+	])).finally(() => {
 		app.quit();
 	});
 });
@@ -578,15 +580,33 @@ async function rerankProviderFromSettings(): Promise<RerankProvider | undefined>
 }
 
 async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
-	const snapshot = await localCore.openLibrary(rootPath);
-	if (snapshot.rootPath) {
-		workspaceTools.setCwd(snapshot.rootPath);
-		await lastLibrary?.remember(snapshot.rootPath);
+	if (shutdownStarted) throw new Error("App is shutting down");
+	const previous = libraryTransition;
+	let releaseTransition!: () => void;
+	libraryTransition = new Promise<void>((resolve) => { releaseTransition = resolve; });
+	await previous;
+	openingLibrary = true;
+	try {
+		// Old asset tools must settle while LocalCore still points at the old library.
+		await agentManager.close();
+		const snapshot = await localCore.openLibrary(rootPath);
+		if (snapshot.rootPath) {
+			agentManager.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
+			await agentManager.openLibrary(snapshot.rootPath, { deferRecovery: !mcpReady });
+			await lastLibrary?.remember(snapshot.rootPath);
+		}
+		setUiSelection(null);
+		return snapshot;
+	} catch (error) {
+		await agentManager.close();
+		throw error;
+	} finally {
+		openingLibrary = false;
+		const changes = pendingLibraryChanges;
+		pendingLibraryChanges = [];
+		releaseTransition();
+		for (const change of changes) sendLibraryChange(change);
 	}
-	setUiSelection(null);
-	agentServer?.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
-	agentServer?.resetSessions();
-	return snapshot;
 }
 
 async function restoreLastLibrary(): Promise<void> {
@@ -632,12 +652,12 @@ async function setMcpServerLive(draft: McpServerDraft) {
 	if (!id) return { id: "", tools: [], error: "Each MCP server needs an id" };
 	if (!draft.enabled) {
 		await mcpHost.dropServer(id);
-		applyMcpTools();
+		await syncAgentTools();
 		return { id, tools: [] };
 	}
 	try {
 		const status = await mcpHost.upsertServer({ ...configFromDraft(draft), enabled: true });
-		applyMcpTools();
+		await syncAgentTools();
 		return status;
 	} catch (error) {
 		const message = error instanceof Error ? error.message : String(error);
@@ -645,8 +665,10 @@ async function setMcpServerLive(draft: McpServerDraft) {
 	}
 }
 
-function applyMcpTools(): void {
-	agentServer?.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
+/** Push the full tool list (built-in library/FFmpeg plus live MCP tools) to the agent manager. */
+async function syncAgentTools(): Promise<void> {
+	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
+	mcpReady = true;
 }
 
 function mcpConfigPath(): string {
@@ -667,7 +689,7 @@ async function reconnectMcp(configs: Awaited<ReturnType<McpSettingsStore["load"]
 	mcpHost = new McpHost();
 	await mcpHost.connect(configs);
 	if (shutdownStarted || !mcpHost) return;
-	applyMcpTools();
+	await syncAgentTools();
 	if (previous) await previous.close();
 }
 
@@ -677,6 +699,7 @@ async function attachConfiguredMcp(): Promise<void> {
 		await reconnectMcp(await mcpSettings.load());
 	} catch (error) {
 		console.error("Failed to read MCP config", error);
+		await syncAgentTools();
 	}
 }
 

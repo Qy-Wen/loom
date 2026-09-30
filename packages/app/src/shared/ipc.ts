@@ -12,13 +12,12 @@ import type {
 	PropertySnapshot,
 	PropertyType,
 	PropertyValue,
-	SessionRecord,
-	SessionSummary,
 	TextEmbedStatus,
 	ImageVlmStatus,
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
+import type { HarnessSessionRecord as SessionRecord, HarnessSessionSummary as SessionSummary } from "@loom/agent";
 import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";

@@ -20,9 +20,9 @@ describe("LibraryPaths", () => {
 	});
 
 	it("ignores Loom metadata and Finder metadata only", () => {
-		assert.equal(paths.sessions, join(root, ".loom", "sessions"));
 		assert.equal(paths.isIgnoredPath(join(root, ".loom", "metadata.db")), true);
 		assert.equal(paths.isIgnoredPath(join(root, ".loom", "sessions", "chat.jsonl")), true);
+		assert.equal(paths.isIgnoredPath(join(root, ".loom", "harness-sessions", "chat.jsonl")), true);
 		assert.equal(paths.isIgnoredPath(join(root, ".DS_Store")), true);
 		assert.equal(paths.isIgnoredPath(join(root, "nested", ".DS_Store")), true);
 		assert.equal(paths.isIgnoredPath(join(root, "hero.jpg")), false);

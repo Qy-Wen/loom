@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type {
 	Asset,
 	AssetEnrichment,
@@ -8,13 +8,12 @@ import type {
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
-	LoomTranscriptMessage,
-	SessionSummary,
 	TextEmbedStatus,
 	ImageVlmStatus,
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
+import type { HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
@@ -92,6 +91,8 @@ export function SidePanel({
 		: [];
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [sessionId, setSessionId] = useState<string | null>(null);
+	const sessionIdRef = useRef<string | null>(null);
+	sessionIdRef.current = sessionId;
 	const [sessionMessages, setSessionMessages] = useState<LoomTranscriptMessage[]>([]);
 	const [sessionBusy, setSessionBusy] = useState(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
@@ -104,8 +105,20 @@ export function SidePanel({
 			setSessionError(null);
 			return;
 		}
+		let active = true;
 		void syncSessions();
-		return window.loom.onSessionsChanged(setSessions);
+		const unsubscribe = window.loom.onSessionsChanged((list) => {
+			setSessions(list);
+			const current = sessionIdRef.current;
+			if (!current || !list.some((session) => session.id === current)) return;
+			void window.loom.getSession(current).then((record) => {
+				if (active && sessionIdRef.current === current) setSessionMessages(record.messages);
+			}).catch(() => undefined);
+		});
+		return () => {
+			active = false;
+			unsubscribe();
+		};
 	}, [libraryRoot]);
 
 	async function refreshSessions(): Promise<SessionSummary[]> {

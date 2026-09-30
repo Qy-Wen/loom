@@ -1,5 +1,5 @@
 import type { Message, ToolCall } from "@ag-ui/core";
-import type { LoomTranscriptMessage } from "@loom/core";
+import type { LoomTranscriptMessage } from "@loom/agent";
 
 export function transcriptText(content: unknown): string {
 	if (typeof content === "string") return content;

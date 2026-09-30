@@ -3,9 +3,8 @@ import type { LoomUserAttachment } from "./attachments.ts";
 /**
  * Loom's own Agent interface.
  *
- * Business code depends ONLY on this file — never on `@vendor/pi-agent` directly.
- * `pi-adapter.ts` is the single place that translates between this interface and
- * the vendored pi agent. If pi is ever replaced, only the adapter changes.
+ * Application code depends on this small boundary, never on the vendored
+ * harness session or tool types directly.
  */
 
 export type LoomToolContentPart =
@@ -63,24 +62,11 @@ export interface LoomAgentOptions {
 	systemPrompt?: string;
 	/** OpenAI-compatible Chat slot. Missing or incomplete until the user configures Settings. */
 	chat?: LoomChatEndpoint;
+	/** Loom-owned tools; native workspace tools are installed by the Harness manager. */
 	tools?: LoomTool[];
-	initialMessages?: LoomTranscriptMessage[];
 }
 
 export interface LoomPromptOptions {
 	attachments?: LoomUserAttachment[];
-}
-
-export interface LoomAgent {
-	subscribe(listener: (event: LoomAgentEvent) => void): () => void;
-	prompt(input: string, options?: LoomPromptOptions): Promise<void>;
-	/**
-	 * Abort the current run. Idle agents ignore this.
-	 * `"user"` means the user pressed Stop; that reason is written into the turn
-	 * so the next prompt can tell it from an error.
-	 */
-	abort(reason?: "user"): void;
-	getMessages(): LoomTranscriptMessage[];
-	addTools(tools: LoomTool[]): void;
-	setSystemPrompt(systemPrompt: string): void;
+	onEvent?: (event: LoomAgentEvent) => void;
 }

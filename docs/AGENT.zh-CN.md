@@ -3,7 +3,7 @@
 # Agent 技术方案（Agent Architecture）
 
 > 记录 Loom 的 Agent 层怎么实现：引入边界、解耦、合并上游更新、user 消息 attachments、前端交互协议（AG-UI）。
-> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，待办见 [TODO.md](./TODO.zh-CN.md)。
+> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，运行时边界见 [Pi Harness 接入范围](./PI-HARNESS.md)，待办见 [TODO.md](./TODO.zh-CN.md)。
 
 ---
 
@@ -31,16 +31,7 @@ pi 的 agent 相关代码分三层，Loom 的处理方式不同：
 
 `pi-ai` 不 vendor 的原因：体量大且七成是厂商适配、拖着一堆重量级 SDK（`@anthropic-ai/sdk` / `openai` / `@google/genai` / `@aws-sdk/*`）。
 
-**关键接缝：`StreamFn`。** agent 与 ai 之间唯一的运行时耦合点——agent loop 通过 `streamFn` 调用模型：
-
-```typescript
-const agent = new Agent({
-  initialState: { systemPrompt, model },
-  streamFn: models.streamSimple.bind(models),  // ← agent ↔ ai 的唯一接缝
-});
-```
-
-因此 `pi-ai` 可随时替换：将来若要深入模型层，只需局部 vendor `pi-ai/api` + 单个 provider，无需现在整包搬。
+**模型接缝：** `HarnessSessionManager` 用 `pi-ai` 构建当前 Chat 模型，再交给 `AgentHarness` lane。Loom 沿用 OpenAI 兼容的 Chat 设置，不 vendor `pi-ai`；见 [Pi Harness 接入范围](./PI-HARNESS.md)。
 
 ---
 
@@ -59,8 +50,10 @@ packages/agent/                 # @loom/agent
 ├── tsconfig.json
 ├── src/
 │   ├── index.ts
-│   ├── types.ts                # LoomAgent 接口（稳定，业务只依赖这里）
-│   └── pi-adapter.ts           # 唯一 import #vendor/pi-agent 的地方
+│   ├── types.ts                # Loom 自有工具、事件、设置
+│   ├── harness-session-manager.ts # Harness 会话/运行时持有者
+│   ├── pi-adapter.ts           # pi-ai Chat 模型及附件转换
+│   └── pi-tools.ts             # 原生工作区工具和 Loom 工具适配
 ├── scripts/try-agent.ts        # 冒烟测试
 └── vendor-pi-agent/
     ├── UPSTREAM                # 记录同步自哪个上游 commit / tag
@@ -127,31 +120,25 @@ vendor 进来的 agent 仍需要 chord / pi-ai / pi-telemetry（及 diff / ignor
 
 ---
 
-## 4. 解耦：单一 adapter 入口
+## 4. 解耦：Loom Agent 边界
 
-> 核心原则：**Loom 的其余代码永远不 import `#vendor/pi-agent`，只 import 自己的 adapter。**
+> 核心原则：**Loom 的其余代码不 import `#vendor/pi-agent`，只使用 `@loom/agent` 暴露的 `HarnessSessionManager` 和 Loom 自有工具/事件类型。**
 
 ```
-Loom 业务代码
-      │  只依赖 Loom 自己的接口（packages/agent/src/types.ts）
-      ↓
-packages/agent/src/
-  ├── types.ts        # LoomAgent 接口：prompt / subscribe …（你拥有）
-  └── pi-adapter.ts   # 唯一 import #vendor/pi-agent 的文件，做 pi ↔ Loom 翻译
-        │
-        ↓
-   vendor-pi-agent/   # 上游源码 + 魔改
+Loom 业务代码 → @loom/agent
+                ├── types.ts                  # 工具、事件、设置
+                ├── harness-session-manager.ts # 会话与 AgentHarness
+                ├── pi-adapter.ts             # pi-ai Chat 模型与消息折叠
+                └── pi-tools.ts               # 原生工具及 Loom 工具适配
+                                 ↓
+                          vendor-pi-agent/
 ```
 
-约束落地：
-
-1. **Vendor 边界**：只有 `pi-adapter.ts` 和 `pi-tools.ts` 允许 `import ... from "#vendor/pi-agent"`。（后续可用 ESLint `no-restricted-imports` 强制。）
-2. **接口归 Loom**：`types.ts` 定义 `LoomAgent`，adapter 把它翻译成 pi 的 `Agent` API。将来换掉 pi，只改 adapter，上层不动。
-3. **引用方式**：用 node 原生的 `imports` 字段（`package.json` 里 `"#vendor/pi-agent": "./vendor-pi-agent/src/index.ts"`）+ tsconfig `paths` 同名映射。选 `#` subpath imports 而非 TS 路径别名，是因为前者 typecheck 与运行时都认，无需打包步骤。
+只有 `harness-session-manager.ts`、`pi-adapter.ts`、`pi-tools.ts` 引用 `#vendor/pi-agent`；应用只使用 Loom 导出的接口。Node 原生 `imports` 字段将 `#vendor/pi-agent` 和 `#vendor/pi-agent/node` 映射到 `vendor-pi-agent/`，tsconfig 对应配置保持一致。
 
 ### 注册工具（无需改上游源码）
 
-- **工作区工具**：用 `NodeExecutionEnv` 包一层 pi 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
+- **工作区工具**：原生使用 Pi Harness 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` 与 `NodeExecutionEnv`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
 - **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
@@ -166,7 +153,7 @@ packages/agent/src/
 
 ### 5.1 落盘的 user 消息
 
-JSONL / `state.messages` 用旁路字段。发出去之后这条 user 不再改。
+Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 不再改。
 
 ```json
 {
@@ -192,7 +179,7 @@ JSONL / `state.messages` 用旁路字段。发出去之后这条 user 不再改�
 
 ### 5.2 折给 Chat API
 
-Chat 目前是 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。因此 `pi-adapter` 的 `convertToLlm` 把用户原文和所有 attachment **拼成一段字符串**。图如果以后 VLM 要用，仍走 `content` 里的 image part；系统注入永远不做成第二个 text part。
+Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。图如果以后 VLM 要用，仍走 `content` 里的 image part；系统注入永远不做成第二个 text part。
 
 折法固定。HTTP 里没有 `attachments` 字段。
 
@@ -214,9 +201,9 @@ System prompt 加一句**不变**的规则：user 消息里可能有 `<ui_select
 
 ---
 
-## 6. 前端协议：CopilotKit + AG-UI，不暴露 pi 的 AgentEvent
+## 6. 前端协议：CopilotKit + AG-UI，不暴露 Pi 运行事件
 
-pi 的「协议」只是一个**进程内的 TypeScript 事件流**（`session.subscribe()` 暴露的 `AgentEvent` discriminated union），不规定 JSON 格式或传输方式。换协议 = 再写一个消费者：订阅 `AgentEvent`，翻译成 AG-UI，通过 SSE 发给前端。
+Pi Harness 发出进程内运行事件；`HarnessSessionManager` 对外提供较小的 `LoomAgentEvent` 流。两者都不是前端协议：`LoomAgUiAgent` 把 Loom 事件转换为 AG-UI，通过 SSE 发给前端。
 
 ### 6.1 接缝位置
 
@@ -230,7 +217,7 @@ pi 的「协议」只是一个**进程内的 TypeScript 事件流**（`session.s
 | ② React hooks | `useCopilotAction`（工具→自定义组件/generative UI）、`useCoAgent`（shared state）、`useCopilotReadable`（UI 状态喂给 agent） | **工作台里更有用** |
 | ③ 现成 UI 组件 | `CopilotChat`（`@copilotkit/react-core/v2`）聊天框 | ⭐ 自己写工作台 UI 时替掉，但 ①② 继续用 |
 
-即：深化成重工作台时，只换掉③的聊天框（几十行），后端（① runtime + AgUiAdapter）一行不改；generative UI / shared state 这些工作台核心能力反而能继续复用②。最坏情况完全弃用 CopilotKit，也因 AG-UI 是标准协议而不伤后端。
+即：深化成重工作台时，只换掉③的聊天框（几十行），后端（① runtime + `LoomAgUiAgent`）无需修改；generative UI / shared state 这些工作台核心能力反而能继续复用②。最坏情况完全弃用 CopilotKit，也因 AG-UI 是标准协议而不伤后端。
 
 ```
 Renderer 进程
@@ -241,15 +228,15 @@ Main 进程（Local Core）
 ┌────────────────────────────────────────────┐
 │ localhost HTTP server                        │
 │   └ CopilotKit runtime 端点                  │
-│        └ AgUiAdapter（Loom 写，唯一耦合点）   │  LoomAgentEvent ↔ AG-UI
-│             └ @loom/agent（pi agent loop）    │
+│        └ LoomAgUiAgent（AG-UI 接缝）          │  LoomAgentEvent → AG-UI
+│             └ HarnessSessionManager         │  @loom/agent
 └────────────────────────────────────────────┘
-   │ streamFn
+   │ pi-ai
    ↓
 大模型（DeepSeek…）
 ```
 
-`@loom/agent` 暴露的 `LoomAgentEvent`（进而 pi 的 `AgentEvent`）**永远停留在 main 进程内部**，对外只暴露 AG-UI。将来把 Local Core 从 main 抽成独立 localhost 服务、或把 pi 换成自研 agent，只要仍产出 AG-UI，前端零改动。
+Pi Harness 事件与 `LoomAgentEvent` **都只停留在 main 进程内部**，对外只暴露 AG-UI。将来把 Local Core 从 main 抽成独立 localhost 服务、或把 pi 换成自研 agent，只要仍产出 AG-UI，前端零改动。
 
 **实现要点**（已跑通）：
 
@@ -257,8 +244,8 @@ Main 进程（Local Core）
 - `@ag-ui/{client,core}` 用 **0.0.59**，与 `@copilotkit/runtime` 1.73.0 的依赖版本一致。
 - Node 端点用 v2 `createCopilotNodeListener`；不用已 deprecated 的 v1 endpoint。
 - 前端直接用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`，无需 `@copilotkit/react-ui`。
-- runtime 每次 run 会 clone 注册的 agent；需覆盖 `clone()`，把 adapter 的 agent 配置带到实例副本。
-- 会话 transcript 以只追加的 JSONL 落在当前库 `.loom/sessions/`。adapter 第一次碰到某个 thread id 时用 `initialMessages` 恢复，每轮结束后再 append 新增消息。从任意消息续聊 / 开新会话以后再做，见 [TODO](./TODO.zh-CN.md)。
+- runtime 每次 run 会 clone 注册的 AG-UI agent；`LoomAgUiAgent.clone()` 保留共享的 `HarnessSessionManager` 和运行中操作映射。
+- `HarnessSessionManager` 持有会话句柄，用 Pi `JsonlSessionRepo` 将新对话持久化在 `<library>/.loom/harness-sessions/`，从活跃路径读取历史。旧 v1 数据仍在 `<library>/.loom/sessions/`，不触碰。分支 UI 以后做，见 [TODO](./TODO.zh-CN.md)。
 
 **server 落地要点**（都是标准做法，一次写好即忘）：
 
@@ -268,7 +255,7 @@ Main 进程（Local Core）
 
 ### 6.2 事件映射
 
-`AgUiAdapter` 消费 `@loom/agent` 的 `LoomAgentEvent`（它已是 pi `AgentEvent` 的精简子集），翻译成 AG-UI：
+`LoomAgUiAgent` 消费 `@loom/agent` 的 `LoomAgentEvent`，翻译成 AG-UI：
 
 | `LoomAgentEvent` | AG-UI event |
 |---|---|
@@ -280,9 +267,9 @@ Main 进程（Local Core）
 | `error` | 发 `loom-error-*` 提示条 + `RUN_ERROR`（key 错、Chat 连不上、没配设置）。按系统告警渲染，不走模型气泡。 |
 | `agent_end` | `RUN_FINISHED` |
 
-### 6.3 v1 不做、但架构留好位置
+### 6.3 已保留的行为与后续产品交互
 
-这些都不在 v1 实现。`AgUiAdapter` 里预留处理入口，以免后续改动伤筋动骨。
+Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的产品交互延后。
 
 **a) thinking / reasoning**
 
@@ -297,14 +284,14 @@ Main 进程（Local Core）
 
 **c) 停止对话**
 
-- CopilotChat 的 Stop 会退订 AG-UI 流，并调用 `LoomAgent.abort()`。
-- 这会中止 pi 这一轮（Chat HTTP 走 stream 的 abort controller）、正在跑的工具（`LoomTool.execute` 的 `AbortSignal`）、FFmpeg 子进程、VLM/Audio/embedding/rerank 的 `fetch`，以及 MCP `callTool`。
-- 中止的这一轮仍追加到 JSONL。用户按下停止时，这一轮的正文会写明是主动取消，下一轮能把它和异常退出区分开。Stop 不会映射成 Chat 的 `RUN_ERROR`。
+- CopilotChat 的 Stop 会退订 AG-UI 流，并通过 `HarnessSessionManager.abort()` 请求取消。
+- Harness 取消活跃操作；中止信号传给工作区/素材库/MCP 工具、FFmpeg 子进程与模型请求。
+- 用户主动 Stop 作为取消记录在 Harness 会话中，可与错误区分；不映射成 Chat `RUN_ERROR`。
 
 **d) 从之前的提问分支**
 
 - 同一步：从之前某条用户提问续聊当前会话，或用该前缀开新会话。不必回退已经写下的文件。开新会话时原 transcript 不动。
-- 现在存储是线性只追加 JSONL。见 [TODO](./TODO.zh-CN.md)。
+- Harness 已存储会话树；导航与 fork 的产品 UI 留待后续。见 [TODO](./TODO.zh-CN.md)。
 
 ---
 
@@ -324,8 +311,8 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **vendor 一个包**：`pi-agent`（源码级、可魔改）。
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
-- **解耦**：业务只依赖 `packages/agent/src/types.ts`，`pi-adapter.ts`（通过 `#vendor/pi-agent`）是唯一 vendor 入口。
-- **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，在 `convertToLlm` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
-- **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`AgUiAdapter` 把 `LoomAgentEvent` 翻成 AG-UI，pi 协议不外泄。
+- **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
+- **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，由 `toProviderMessages` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
+- **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：「问→答→工具」主链路已完成；资产工具已经保留稳定调用 ID 和结构化结果。Stop 会中止这一轮和正在跑的工具。模型的思考过程会显示在对话里。对话里的资产引用、输入框贴资产、以及从某条消息续聊/开新会话，都暂时后置。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。资产引用、输入框贴资产及分支 UI 后置；自动阈值压缩暂关，溢出恢复仍保留。

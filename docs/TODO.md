@@ -2,24 +2,22 @@
 
 # TODO
 
-> Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design, [AGENT.md](./AGENT.md) for the Agent architecture, [SETTINGS.md](./SETTINGS.md) for model endpoints, and [RAG](./RAG/RAG.md) for retrieval.
+> Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design, [AGENT.md](./AGENT.md) for the Agent architecture, [Pi Harness integration scope (Chinese)](./PI-HARNESS.md), [SETTINGS.md](./SETTINGS.md) for model endpoints, and [RAG](./RAG/RAG.md) for retrieval.
 > Only the next steps are detailed; later work stays at summary level.
 > Creation tools (ComfyUI and later) attach as MCP servers. Loom-owned tools stay the library: search, FFmpeg, and workspace tools. Files land in the library via write/bash; the watcher indexes them. Path jail and sandbox come later.
 
 ---
 
-The retrieve path is done (Hybrid Search, Audio write-ups, optional Rerank). Completed steps are in the [ARCHIVE](./archive/ARCHIVE.md).
-
----
+Automatic threshold compaction remains later work. Do not add prompt-template or steering UI merely because vendor APIs exist.
 
 ## Step 1: Branch from a previous question
 
-One step with branching. From an earlier user question, continue this session or fork a new one, like Cursor. Do not revert files the agent already wrote. See [AGENT](./AGENT.md) §6.3d.
+Use the harness session tree to continue from an earlier user question in the current session or fork a new session. Do not revert files the agent already wrote. See [AGENT](./AGENT.md) §6.3d.
 
-- [ ] Continue: later turns drop or park; the model sees the prefix through that question
-- [ ] Fork: new session with the same prefix; the original transcript stays
+- [ ] Continue: switch the active path; preserve the old path in the tree; decide whether to expose a way back
+- [ ] Fork: new session from the selected prefix; leave the original session intact
+- [ ] Decide whether selecting a question includes it in context or restores it to the composer for editing before implementing the UI
 - [ ] Leave workspace files as they are; no checkpoint restore
-- [ ] Today the store is linear append-only JSONL
 
 ## Step 2: Chat asset refs
 
@@ -31,16 +29,16 @@ Attach library assets in the composer (not only implicit `ui_selection`). Click 
 
 ## Step 3: Skills
 
-Load `SKILL.md` from the open library into the creative Agent. See [AGENT](./AGENT.md).
+Load `SKILL.md` from the open library into the creative Agent running on pi harness. See [AGENT](./AGENT.md).
 
 - [ ] Read Agent Skills (`SKILL.md`, agentskills.io) from the library. Do not vendor `packages/coding-agent`
 - [ ] Put a matching skill's text in the system prompt, or expose it as a tool the agent reads on demand
-- [ ] Keep the current simple Agent. Do not switch the runtime to the pi harness
 
 ---
 
 ## Later
 
+- **Automatic threshold compaction:** configure the real Chat context window, verify when threshold compaction triggers, and ensure summaries retain attachment meaning; deferred from the Harness cutover.
 - **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).
 - **Dedicated ASR:** OpenAI-compatible `POST /v1/audio/transcriptions`. Prefer the Audio understanding slot. See [MEDIA](./RAG/MEDIA.md).
 - **CLIP / image vectors:** embed the image without going through text; later if needed

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { SessionSummary } from "@loom/core";
+import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
 
 interface SessionBarProps {
 	sessions: SessionSummary[];

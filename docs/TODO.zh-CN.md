@@ -2,24 +2,22 @@
 
 # TODO
 
-> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./AGENT.zh-CN.md)，模型端点见 [SETTINGS.md](./SETTINGS.zh-CN.md)，检索见 [RAG](./RAG/RAG.zh-CN.md)。
+> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./AGENT.zh-CN.md)，[Pi Harness 接入范围](./PI-HARNESS.md)，模型端点见 [SETTINGS.md](./SETTINGS.zh-CN.md)，检索见 [RAG](./RAG/RAG.zh-CN.md)。
 > 只详细列最近几步，后续只做概述。
 > 创作工具（ComfyUI 以及以后的）以 MCP server 挂上。Loom 自管库：检索、FFmpeg、工作区工具。文件用 write/bash 落到库里，watcher 负责索引。路径 jail 和沙箱以后再加。
 
 ---
 
-检索回路已完成（Hybrid Search、音频说明、可选 Rerank）。已完成步骤见 [ARCHIVE](./archive/ARCHIVE.zh-CN.md)。
-
----
+自动阈值压缩仍列在后续；提示词模板与插话队列暂不因 vendor 提供 API 就强行加入产品。
 
 ## 第一步：从之前的提问分支
 
-和分支一起做。从之前某条用户提问续聊当前会话，或开一条新会话，像 Cursor。不必回退 Agent 已经改过的文件。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
+基于 harness 会话树，从历史用户提问续聊当前会话或开新会话；不回退 Agent 已经改过的文件。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
 
-- [ ] 续聊：该提问之后的轮次丢掉或收起；模型上下文是到该提问为止的前缀
-- [ ] 开新会话：同一前缀；原 transcript 不动
+- [ ] 续聊：切换当前路径，旧路径留在树中；是否提供切回入口待定
+- [ ] 开新会话：复制选中位置的前缀；原会话保持不变
+- [ ] 做界面前确定选中问题时是把它留在上下文里，还是放回输入框供编辑
 - [ ] 工作区里已经写下的文件保持现状，不做检查点回退
-- [ ] 现在存储是线性只追加 JSONL
 
 ## 第二步：对话资产引用
 
@@ -31,16 +29,16 @@
 
 ## 第三步：Skills
 
-把当前素材库里的 `SKILL.md` 接到创作 Agent。见 [AGENT](./AGENT.zh-CN.md)。
+把当前素材库里的 `SKILL.md` 接到运行在 pi harness 上的创作 Agent。见 [AGENT](./AGENT.zh-CN.md)。
 
 - [ ] 从素材库读取 Agent Skills（`SKILL.md`，agentskills.io）。不 vendor `packages/coding-agent`
 - [ ] 命中的技能正文放进系统提示，或做成 Agent 按需读取的工具
-- [ ] 继续用现在的 simple Agent，不把运行时换成 pi harness
 
 ---
 
 ## 后续（概述）
 
+- **自动阈值压缩：** 配置真实 Chat 上下文窗口，验证阈值压缩触发时机及摘要对附件语义的保留；不阻塞 Harness 切换。
 - **进程内 OCR（可选）：** RapidOCR + ONNX，CPU，可开关，默认关。不一定做。优先 VLM。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 - **专用 ASR：** OpenAI 兼容 `POST /v1/audio/transcriptions`。优先 Audio 理解槽位。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。
 - **CLIP / 图片向量：** 不经文字、直接嵌图；需要时再做

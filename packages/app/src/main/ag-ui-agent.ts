@@ -1,36 +1,23 @@
 /**
  * AgUiAdapter — the single coupling point between Loom's agent and AG-UI.
  *
- * Wraps `@loom/agent` (LoomAgent) as an AG-UI `AbstractAgent`, so CopilotKit's
- * runtime can drive it. Translates `LoomAgentEvent` → AG-UI `BaseEvent`
+ * Wraps the shared HarnessSessionManager as an AG-UI `AbstractAgent`, so
+ * CopilotKit's runtime can drive it. Translates `LoomAgentEvent` → AG-UI `BaseEvent`
  * (see AGENT.md §6.2). `LoomAgentEvent` never leaves this file.
  */
 import { AbstractAgent, type RunAgentInput } from "@ag-ui/client";
 import { type BaseEvent, EventType } from "@ag-ui/core";
 import {
-	createLoomAgent,
 	toolResultText,
 	uiSelectionToAttach,
-	type LoomAgent as LoomAgentInstance,
-	type LoomAgentOptions,
-	type LoomChatEndpoint,
-	type LoomTool,
-	type LoomTranscriptMessage,
+	DEFAULT_SESSION_TITLE,
+	titleFromUserText,
+	type HarnessSessionManager,
+	type LoomAgentEvent,
 	type UiSelectionFields,
 } from "@loom/agent";
-import { DEFAULT_SESSION_TITLE, titleFromUserText } from "@loom/core";
 import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
-import { usageFromMessage } from "../shared/agent-stats.ts";
 import { Observable } from "rxjs";
-
-type LoomAgentFactory = (options: LoomAgentOptions) => LoomAgentInstance;
-
-export interface AgentSessionStore {
-	openSession(id: string): Promise<{ title: string; messages: LoomTranscriptMessage[] }>;
-	appendSessionMessages(id: string, messages: LoomTranscriptMessage[]): Promise<void>;
-	setSessionName(id: string, title: string): Promise<void>;
-	resetSessionHandles(): void;
-}
 
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${Date.now()}-${idCounter++}`;
@@ -60,89 +47,34 @@ function latestUserText(input: RunAgentInput): string {
 }
 
 export class LoomAgUiAgent extends AbstractAgent {
-	private agentOptions: LoomAgentOptions;
-	private createAgent: LoomAgentFactory;
-	private store: AgentSessionStore | undefined;
+	private manager: HarnessSessionManager;
 	private getUiSelection: (() => UiSelectionFields | null) | undefined;
-	private onUsage: ((usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) | undefined;
-	/** One pi-backed conversation per AG-UI thread; clones share this map. */
-	private sessions = new Map<string, LoomAgentInstance>();
-	private titles = new Map<string, string>();
 	/** In-flight prompt per thread, so Stop and the next run can abort it. */
-	private inflight = new Map<string, { abort: (reason?: "user") => void; done: Promise<void> }>();
+	private inflight = new Map<string, { abort: (reason?: "user") => Promise<void>; done: Promise<void> }>();
 
-	constructor(
-		options: LoomAgentOptions,
-		createAgent: LoomAgentFactory = createLoomAgent,
-		store?: AgentSessionStore,
-		getUiSelection?: () => UiSelectionFields | null,
-		onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void,
-	) {
+	constructor(manager: HarnessSessionManager, getUiSelection?: () => UiSelectionFields | null) {
 		super({ agentId: "loom" });
-		this.agentOptions = options;
-		this.createAgent = createAgent;
-		this.store = store;
+		this.manager = manager;
 		this.getUiSelection = getUiSelection;
-		this.onUsage = onUsage;
 	}
 
-	// CopilotKit's runner clones the registered agent per run; the base clone()
-	// only copies known base fields, so carry our own config across (mirrors
-	// how HttpAgent.clone() preserves url/headers).
+	// CopilotKit clones the registered agent per run; keep the shared manager
+	// and in-flight map across clones so Stop can reach the active run.
 	override clone(): this {
 		const cloned = super.clone() as this;
-		cloned.agentOptions = this.agentOptions;
-		cloned.createAgent = this.createAgent;
-		cloned.store = this.store;
+		cloned.manager = this.manager;
 		cloned.getUiSelection = this.getUiSelection;
-		cloned.onUsage = this.onUsage;
-		cloned.sessions = this.sessions;
-		cloned.titles = this.titles;
 		cloned.inflight = this.inflight;
 		return cloned;
-	}
-
-	resetSessions(): void {
-		this.sessions.clear();
-		this.titles.clear();
-		this.store?.resetSessionHandles();
-	}
-
-	addTools(tools: LoomTool[]): void {
-		if (!tools.length) return;
-		const current = this.agentOptions.tools ?? [];
-		if (!this.agentOptions.tools) this.agentOptions.tools = current;
-		current.push(...tools);
-		for (const session of this.sessions.values()) session.addTools(tools);
-	}
-
-	setTools(tools: LoomTool[]): void {
-		this.agentOptions.tools = [...tools];
-		this.resetSessions();
-	}
-
-	setSystemPrompt(systemPrompt: string): void {
-		this.agentOptions.systemPrompt = systemPrompt;
-		for (const session of this.sessions.values()) session.setSystemPrompt(systemPrompt);
-	}
-
-	setChat(chat: LoomChatEndpoint | undefined): void {
-		this.agentOptions.chat = chat;
-		this.resetSessions();
-	}
-
-	dropSession(id: string): void {
-		this.sessions.delete(id);
-		this.titles.delete(id);
 	}
 
 	/**
 	 * CopilotKit Stop calls this. The base implementation does nothing, so the
 	 * run Observable stays subscribed and tools keep running. Detach unsubscribes
-	 * `run()`, which aborts the in-flight Loom agent.
+	 * `run()`, which aborts the in-flight Harness run.
 	 */
 	override abortRun(): void {
-		if (this.threadId) this.inflight.get(this.threadId)?.abort("user");
+		if (this.threadId) void this.inflight.get(this.threadId)?.abort("user");
 		void this.detachActiveRun();
 	}
 
@@ -150,13 +82,15 @@ export class LoomAgUiAgent extends AbstractAgent {
 		return new Observable<BaseEvent>((subscriber) => {
 			const emit = (event: BaseEvent) => subscriber.next(event);
 			let cancelled = false;
-			let loom: LoomAgentInstance | undefined;
+			let prompting = false;
 			let resolveInflight = (): void => undefined;
 			const inflightDone = new Promise<void>((resolve) => {
 				resolveInflight = resolve;
 			});
 			const handle = {
-				abort: (reason?: "user") => loom?.abort(reason),
+				abort: async (reason?: "user") => {
+					if (prompting) await this.manager.abort(input.threadId, reason);
+				},
 				done: inflightDone,
 			};
 			const previous = this.inflight.get(input.threadId);
@@ -216,7 +150,6 @@ export class LoomAgUiAgent extends AbstractAgent {
 				emit({ type: EventType.REASONING_END, messageId: thinkingId } as BaseEvent);
 			};
 
-			let unsubscribe = (): void => undefined;
 			let started = false;
 			let failed = false;
 			const startRun = () => {
@@ -249,129 +182,120 @@ export class LoomAgUiAgent extends AbstractAgent {
 			void (async () => {
 				try {
 					if (previous) {
-						previous.abort();
+						await previous.abort();
 						await previous.done;
 					}
 					if (cancelled) return;
-					loom = await this.loadAgent(input.threadId);
-					if (cancelled) {
-						loom.abort();
-						return;
-					}
-					await this.ensureTitle(input.threadId, latestUserText(input));
-					if (cancelled) {
-						loom.abort();
-						return;
-					}
-				const agent = loom;
-				const before = agent.getMessages().length;
-				unsubscribe = agent.subscribe((event) => {
-					switch (event.type) {
-						case "agent_start":
-							startRun();
-							break;
-						case "error":
-							fail(event.message);
-							break;
-
-						case "thinking_start":
-							openThinking();
-							break;
-						case "thinking_delta":
-							openThinking();
-							emit({
-								type: EventType.REASONING_MESSAGE_CONTENT,
-								messageId: thinkingId,
-								delta: event.delta,
-							} as BaseEvent);
-							break;
-						case "thinking_end":
-							closeThinking();
-							break;
-
-						case "text":
-							closeThinking();
-							openText();
-							emit({
-								type: EventType.TEXT_MESSAGE_CONTENT,
-								messageId,
-								delta: event.delta,
-							} as BaseEvent);
-							break;
-
-						case "tool_start": {
-							closeThinking();
-							emit({
-								type: EventType.TOOL_CALL_START,
-								toolCallId: event.toolCallId,
-								toolCallName: event.name,
-								parentMessageId: parentForTool(),
-							} as BaseEvent);
-							emit({
-								type: EventType.TOOL_CALL_ARGS,
-								toolCallId: event.toolCallId,
-								delta: JSON.stringify(event.args ?? {}),
-							} as BaseEvent);
-							break;
-						}
-
-						case "tool_end": {
-							emit({
-								type: EventType.TOOL_CALL_END,
-								toolCallId: event.toolCallId,
-							} as BaseEvent);
-							emit({
-								type: EventType.TOOL_CALL_RESULT,
-								messageId: nextId("tool-result"),
-								toolCallId: event.toolCallId,
-								content: toolResultText(event.result.content),
-								role: "tool",
-							} as BaseEvent);
-							if (event.result.details !== undefined) {
-								emit({
-									type: EventType.CUSTOM,
-									name: "loom.tool_result",
-									value: {
-										toolCallId: event.toolCallId,
-										toolName: event.name,
-										isError: event.isError,
-										details: event.result.details,
-									},
-								} as BaseEvent);
+					const session = await this.manager.openSession(input.threadId);
+					if (cancelled) return;
+					await this.ensureTitle(input.threadId, session.title, latestUserText(input));
+					if (cancelled) return;
+					const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, session.messages);
+					prompting = true;
+					await this.manager.prompt(input.threadId, latestUserText(input), {
+						...(attachment ? { attachments: [attachment] } : {}),
+						onEvent: (event: LoomAgentEvent) => {
+							if (cancelled) {
+								if (event.type === "agent_start") void handle.abort();
+								return;
 							}
-							break;
-						}
+							switch (event.type) {
+								case "agent_start":
+									startRun();
+									break;
+								case "error":
+									fail(event.message);
+									break;
 
-						case "agent_end":
-							if (failed) break;
-							closeThinking();
-							closeText();
-							emit({
-								type: EventType.RUN_FINISHED,
-								threadId: input.threadId,
-								runId: input.runId,
-							} as BaseEvent);
-							break;
-					}
-				});
+								case "thinking_start":
+									openThinking();
+									break;
+								case "thinking_delta":
+									openThinking();
+									emit({
+										type: EventType.REASONING_MESSAGE_CONTENT,
+										messageId: thinkingId,
+										delta: event.delta,
+									} as BaseEvent);
+									break;
+								case "thinking_end":
+									closeThinking();
+									break;
 
-				const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, agent.getMessages());
-				await agent
-					.prompt(latestUserText(input), attachment ? { attachments: [attachment] } : undefined)
-					.then(async () => {
-						if (!failed) {
-							this.recordUsage(agent.getMessages().slice(before));
-							await this.persist(input.threadId, agent, before);
-						}
-						if (!cancelled) subscriber.complete();
-					})
-					.catch((err) => {
-						fail(err);
-						if (!cancelled) subscriber.complete();
+								case "text":
+									closeThinking();
+									openText();
+									emit({
+										type: EventType.TEXT_MESSAGE_CONTENT,
+										messageId,
+										delta: event.delta,
+									} as BaseEvent);
+									break;
+
+								case "tool_start": {
+									closeThinking();
+									emit({
+										type: EventType.TOOL_CALL_START,
+										toolCallId: event.toolCallId,
+										toolCallName: event.name,
+										parentMessageId: parentForTool(),
+									} as BaseEvent);
+									emit({
+										type: EventType.TOOL_CALL_ARGS,
+										toolCallId: event.toolCallId,
+										delta: JSON.stringify(event.args ?? {}),
+									} as BaseEvent);
+									break;
+								}
+
+								case "tool_end": {
+									emit({
+										type: EventType.TOOL_CALL_END,
+										toolCallId: event.toolCallId,
+									} as BaseEvent);
+									emit({
+										type: EventType.TOOL_CALL_RESULT,
+										messageId: nextId("tool-result"),
+										toolCallId: event.toolCallId,
+										content: toolResultText(event.result.content),
+										role: "tool",
+									} as BaseEvent);
+									if (event.result.details !== undefined) {
+										emit({
+											type: EventType.CUSTOM,
+											name: "loom.tool_result",
+											value: {
+												toolCallId: event.toolCallId,
+												toolName: event.name,
+												isError: event.isError,
+												details: event.result.details,
+											},
+										} as BaseEvent);
+									}
+									break;
+								}
+
+								case "agent_end":
+									if (failed) break;
+									closeThinking();
+									closeText();
+									emit({
+										type: EventType.RUN_FINISHED,
+										threadId: input.threadId,
+										runId: input.runId,
+									} as BaseEvent);
+									break;
+							}
+						},
 					});
-				} catch (err) {
-					fail(err);
+					prompting = false;
 					if (!cancelled) subscriber.complete();
+				} catch (err) {
+					prompting = false;
+					if (!cancelled) {
+						fail(err);
+						subscriber.complete();
+					}
 				} finally {
 					releaseInflight();
 				}
@@ -379,58 +303,15 @@ export class LoomAgUiAgent extends AbstractAgent {
 
 			return () => {
 				cancelled = true;
-				unsubscribe();
-				loom?.abort();
+				void handle.abort();
 			};
 		});
 	}
 
-	private async loadAgent(threadId: string): Promise<LoomAgentInstance> {
-		const existing = this.sessions.get(threadId);
-		if (existing) return existing;
-
-		let initialMessages: LoomTranscriptMessage[] | undefined;
-		if (this.store) {
-			try {
-				const record = await this.store.openSession(threadId);
-				initialMessages = record.messages;
-				this.titles.set(threadId, record.title);
-			} catch {
-				this.titles.set(threadId, DEFAULT_SESSION_TITLE);
-			}
-		}
-
-		const loom = this.createAgent({ ...this.agentOptions, initialMessages });
-		this.sessions.set(threadId, loom);
-		return loom;
-	}
-
-	private recordUsage(messages: LoomTranscriptMessage[]): void {
-		if (!this.onUsage) return;
-		for (const message of messages) {
-			const usage = usageFromMessage(message);
-			if (usage) this.onUsage(usage);
-		}
-	}
-
-	private async persist(threadId: string, loom: LoomAgentInstance, before: number): Promise<void> {
-		if (!this.store) return;
-		const messages = loom.getMessages();
-		const added = messages.slice(before);
+	private async ensureTitle(threadId: string, title: string, text: string): Promise<void> {
+		if (!text.trim() || title !== DEFAULT_SESSION_TITLE) return;
 		try {
-			await this.store.appendSessionMessages(threadId, added);
-		} catch {
-			// Persistence must not fail the chat run.
-		}
-	}
-
-	private async ensureTitle(threadId: string, text: string): Promise<void> {
-		if (!this.store || !text.trim()) return;
-		if ((this.titles.get(threadId) ?? DEFAULT_SESSION_TITLE) !== DEFAULT_SESSION_TITLE) return;
-		const next = titleFromUserText(text);
-		try {
-			await this.store.setSessionName(threadId, next);
-			this.titles.set(threadId, next);
+			await this.manager.setSessionName(threadId, titleFromUserText(text));
 		} catch {
 			// Title is best-effort and must not block the run.
 		}

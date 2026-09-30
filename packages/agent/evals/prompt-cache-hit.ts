@@ -3,8 +3,11 @@
  *
  *   pnpm --filter @loom/agent eval:prompt-cache-hit
  */
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { createLoomAgent, uiSelectionToAttach, type LoomTranscriptMessage, type UiSelectionFields } from "../src/index.ts";
+import { HarnessSessionManager, uiSelectionToAttach, type LoomTranscriptMessage, type UiSelectionFields } from "../src/index.ts";
 
 export type UsageSnapshot = {
 	/** Uncached prompt tokens (`prompt_tokens - cacheRead - cacheWrite` in pi-ai). */
@@ -113,29 +116,35 @@ export async function runPromptCacheHit(
 	turns: PromptCacheTurn[],
 	chat: { baseUrl: string; apiKey?: string; model: string },
 ): Promise<PromptCacheHitResult> {
-	const agent = createLoomAgent({
-		systemPrompt: paddedSystemPrompt(),
-		chat,
-		tools: [],
-	});
-	const usages: UsageSnapshot[] = [];
-	const hits: CacheHit[] = [];
+	const library = await mkdtemp(join(tmpdir(), "loom-prompt-cache-"));
+	const manager = new HarnessSessionManager({ systemPrompt: paddedSystemPrompt(), chat });
+	try {
+		await manager.openLibrary(library);
+		const session = await manager.createSession();
+		const usages: UsageSnapshot[] = [];
+		const hits: CacheHit[] = [];
 
-	for (const turn of turns) {
-		const attachment = uiSelectionToAttach(turn.selection ?? null, agent.getMessages());
-		await agent.prompt(turn.user, attachment ? { attachments: [attachment] } : undefined);
-		const usage = lastAssistantUsage(agent.getMessages());
-		if (!usage) throw new Error(`No usage on assistant message after: ${turn.user}`);
-		hits.push(cacheHitFromUsage(usage));
-		usages.push(usage);
+		for (const turn of turns) {
+			const before = await manager.getSession(session.id);
+			const attachment = uiSelectionToAttach(turn.selection ?? null, before.messages);
+			await manager.prompt(session.id, turn.user, attachment ? { attachments: [attachment] } : undefined);
+			const after = await manager.getSession(session.id);
+			const usage = lastAssistantUsage(after.messages);
+			if (!usage) throw new Error(`No usage on assistant message after: ${turn.user}`);
+			hits.push(cacheHitFromUsage(usage));
+			usages.push(usage);
+		}
+
+		return {
+			name,
+			usages,
+			hits,
+			meanHit: mean(hits.map((row) => row.hit)),
+		};
+	} finally {
+		await manager.close();
+		await rm(library, { recursive: true, force: true });
 	}
-
-	return {
-		name,
-		usages,
-		hits,
-		meanHit: mean(hits.map((row) => row.hit)),
-	};
 }
 
 export function sameSelectionTurns(): PromptCacheTurn[] {

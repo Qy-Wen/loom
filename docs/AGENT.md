@@ -3,7 +3,7 @@
 # Agent Architecture
 
 > This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, user-message attachments, and the frontend interaction protocol (AG-UI).
-> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning and [TODO.md](./TODO.md) for the roadmap.
+> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [Pi Harness integration scope](./PI-HARNESS.md) for the runtime boundary, and [TODO.md](./TODO.md) for the roadmap.
 
 ---
 
@@ -31,16 +31,7 @@ Pi's Agent-related code has three layers, handled differently by Loom:
 
 `pi-ai` is not vendored because it is large, mostly provider glue, and brings heavyweight SDKs such as `@anthropic-ai/sdk`, `openai`, `@google/genai`, and `@aws-sdk/*`.
 
-**Key seam: `StreamFn`.** This is the only runtime coupling between the Agent and AI layers. The agent loop calls the model through `streamFn`:
-
-```typescript
-const agent = new Agent({
-  initialState: { systemPrompt, model },
-  streamFn: models.streamSimple.bind(models), // sole Agent ↔ AI seam
-});
-```
-
-`pi-ai` can therefore be replaced later. Deeper model work would require vendoring only `pi-ai/api` and one provider rather than importing the whole package today.
+**Model seam:** `HarnessSessionManager` builds the selected Chat model with `pi-ai` and passes it to `AgentHarness` lanes. Loom configures OpenAI-compatible Chat requests without vendoring `pi-ai`; see [Pi Harness integration scope](./PI-HARNESS.md).
 
 ---
 
@@ -59,8 +50,10 @@ packages/agent/                 # @loom/agent
 ├── tsconfig.json
 ├── src/
 │   ├── index.ts
-│   ├── types.ts                # stable LoomAgent interface used by application code
-│   └── pi-adapter.ts           # only module importing #vendor/pi-agent
+│   ├── types.ts                # Loom-owned tools, events, and settings
+│   ├── harness-session-manager.ts # Harness session/runtime owner
+│   ├── pi-adapter.ts           # pi-ai Chat model and attachment conversion
+│   └── pi-tools.ts             # native workspace tools and Loom tool bridge
 ├── scripts/try-agent.ts        # smoke test
 └── vendor-pi-agent/
     ├── UPSTREAM                # source repository, commit, and tag
@@ -127,31 +120,25 @@ The vendored Agent still requires chord, pi-ai, pi-telemetry, diff, ignore, type
 
 ---
 
-## 4. Decoupling through one adapter boundary
+## 4. Decoupling through the Loom Agent boundary
 
-> Core rule: **the rest of Loom never imports `#vendor/pi-agent`; it imports Loom's adapter and types.**
+> Core rule: **the rest of Loom never imports `#vendor/pi-agent`; it uses the Loom-owned `HarnessSessionManager` and tool/event types from `@loom/agent`.**
 
 ```
-Loom application code
-      │  depends only on Loom interfaces (packages/agent/src/types.ts)
-      ↓
-packages/agent/src/
-  ├── types.ts        # LoomAgent: prompt, subscribe, and related contracts
-  └── pi-adapter.ts   # only #vendor/pi-agent import; translates pi ↔ Loom
-        │
-        ↓
-   vendor-pi-agent/   # upstream source plus local modifications
+Loom application code → @loom/agent
+                       ├── types.ts                 # Loom tools, events, settings
+                       ├── harness-session-manager.ts # session and AgentHarness owner
+                       ├── pi-adapter.ts            # pi-ai Chat model and message folding
+                       └── pi-tools.ts              # native tools and Loom tool bridge
+                                        ↓
+                                 vendor-pi-agent/
 ```
 
-Enforced constraints:
-
-1. **Vendor boundary:** only `pi-adapter.ts` and `pi-tools.ts` may import `#vendor/pi-agent`. ESLint `no-restricted-imports` can enforce this later.
-2. **Loom owns its interfaces:** `types.ts` defines `LoomAgent`; the adapter translates that API into pi. Replacing pi changes only the adapter.
-3. **Import mechanism:** Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
+Only `harness-session-manager.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
 
 ### Registering tools without changing upstream
 
-- **Workspace tools:** wrap pi's `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
+- **Workspace tools:** use Pi Harness's native `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work.
 - **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
 - **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
@@ -166,7 +153,7 @@ Do not put changing UI state in the system prompt (that busts the entire prefix)
 
 ### 5.1 Stored user message
 
-JSONL / `state.messages` keep a sidecar field. After send, that user row is frozen.
+Harness's persisted user message keeps a sidecar field. After send, that user row is frozen.
 
 ```json
 {
@@ -192,7 +179,7 @@ Chat UI, titles, and `userMessageText` read `content` only today. Later the bubb
 
 ### 5.2 Fold for the Chat API
 
-Chat today is OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `convertToLlm` in `pi-adapter` therefore joins the user text and every attachment into **one string**. Images stay as image parts on `content` if a later VLM turn needs them; injections never become a second text part.
+Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. Images stay as image parts on `content` if a later VLM turn needs them; injections never become a second text part.
 
 The fold is deterministic. The HTTP body never includes `attachments`.
 
@@ -214,9 +201,9 @@ The next user turn snapshots selection again. If it matches the most recent `ui_
 
 ---
 
-## 6. Frontend protocol: CopilotKit and AG-UI, without exposing pi AgentEvent
+## 6. Frontend protocol: CopilotKit and AG-UI, without exposing Pi runtime events
 
-Pi's “protocol” is only an **in-process TypeScript event stream**, the `AgentEvent` discriminated union exposed by `session.subscribe()`. It defines neither JSON nor transport. Changing frontend protocols means adding another consumer that subscribes to AgentEvent, translates it into AG-UI, and streams it to the frontend over SSE.
+Pi Harness emits in-process runtime events; `HarnessSessionManager` exposes Loom's smaller `LoomAgentEvent` stream. Neither defines the frontend transport: `LoomAgUiAgent` translates Loom events into AG-UI over SSE.
 
 ### 6.1 Seam location
 
@@ -230,7 +217,7 @@ The frontend **temporarily uses CopilotKit** for a ready-made chat UI over AG-UI
 | 2. React hooks | `useCopilotAction` for generative UI, `useCoAgent` for shared state, `useCopilotReadable` for exposing UI state | **Become more useful** in a workbench |
 | 3. Ready-made UI | `CopilotChat` from `@copilotkit/react-core/v2` | Replace with Loom's own workbench UI while retaining layers 1 and 2 |
 
-A richer workbench replaces only the chat component. The runtime and AgUiAdapter remain unchanged, while generative UI and shared state continue to use the hooks. Even abandoning CopilotKit entirely does not damage the backend because AG-UI remains the protocol boundary.
+A richer workbench replaces only the chat component. The runtime and `LoomAgUiAgent` remain unchanged, while generative UI and shared state continue to use the hooks. Even abandoning CopilotKit entirely does not damage the backend because AG-UI remains the protocol boundary.
 
 ```
 Renderer process
@@ -241,15 +228,15 @@ Main process (Local Core)
 ┌────────────────────────────────────────────┐
 │ localhost HTTP server                      │
 │   └ CopilotKit runtime endpoint            │
-│        └ AgUiAdapter (Loom's sole seam)     │  LoomAgentEvent ↔ AG-UI
-│             └ @loom/agent (pi agent loop)   │
+│        └ LoomAgUiAgent (AG-UI seam)         │  LoomAgentEvent → AG-UI
+│             └ HarnessSessionManager        │  @loom/agent
 └────────────────────────────────────────────┘
-   │ streamFn
+   │ pi-ai
    ↓
 Model (DeepSeek, ...)
 ```
 
-`LoomAgentEvent` from `@loom/agent`, and therefore pi's `AgentEvent`, **never leaves the Main process**. Only AG-UI is exposed externally. Extracting Local Core into a standalone localhost service or replacing pi with a custom Agent requires no frontend changes as long as AG-UI remains the output.
+Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG-UI is exposed externally. Extracting Local Core into a standalone localhost service or replacing pi with a custom Agent requires no frontend changes as long as AG-UI remains the output.
 
 **Verified implementation details:**
 
@@ -257,8 +244,8 @@ Model (DeepSeek, ...)
 - `@ag-ui/{client,core}` is pinned to **0.0.59**, matching `@copilotkit/runtime` 1.73.0.
 - The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
 - The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
-- Runtime clones the registered Agent for each run. The adapter overrides `clone()` so its Agent configuration and thread session map survive cloning.
-- Transcripts are append-only JSONL files in the current library `.loom/sessions/`. The adapter restores `initialMessages` the first time it sees a thread id and appends new messages after each run. Continue-from / fork-from an arbitrary message waits; see [TODO](./TODO.md).
+- Runtime clones the registered AG-UI agent for each run. `LoomAgUiAgent.clone()` keeps the shared `HarnessSessionManager` and in-flight run map.
+- `HarnessSessionManager` owns session handles and persists new conversations in `<library>/.loom/harness-sessions/` via Pi `JsonlSessionRepo`; history reads the active path. Old v1 files in `<library>/.loom/sessions/` remain untouched. UI branching is deferred; see [TODO](./TODO.md).
 
 **Server rules:**
 
@@ -268,7 +255,7 @@ Model (DeepSeek, ...)
 
 ### 6.2 Event mapping
 
-AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into AG-UI:
+`LoomAgUiAgent` consumes Loom's reduced `LoomAgentEvent` set and translates it into AG-UI:
 
 | `LoomAgentEvent` | AG-UI event |
 |---|---|
@@ -280,9 +267,9 @@ AgUiAdapter consumes Loom's reduced `LoomAgentEvent` set and translates it into 
 | `error` | A `loom-error-*` notice plus `RUN_ERROR` (bad key, unreachable Chat, missing Settings). Styled as a system alert, not a model reply. |
 | `agent_end` | `RUN_FINISHED` |
 
-### 6.3 Deferred v1 capabilities with preserved extension points
+### 6.3 Preserved behavior and deferred product capabilities
 
-These are excluded from v1. AgUiAdapter keeps extension points so adding them does not require restructuring.
+Harness provides the runtime; Loom maps existing behavior and defers only the listed product interactions.
 
 **a. Thinking/reasoning**
 
@@ -297,14 +284,14 @@ These are excluded from v1. AgUiAdapter keeps extension points so adding them do
 
 **c. Stop conversation**
 
-- CopilotChat Stop unsubscribes the AG-UI stream and calls `LoomAgent.abort()`.
-- That aborts the pi run (Chat HTTP via the stream abort controller), in-flight tools (`AbortSignal` on `LoomTool.execute`), FFmpeg child processes, VLM/Audio/embedding/rerank `fetch`, and MCP `callTool`.
-- The aborted turn is still appended to JSONL. A user Stop is written into that turn's text, so the next prompt can tell it from an error. Stop is not mapped as a Chat `RUN_ERROR`.
+- CopilotChat Stop detaches the AG-UI run and requests cancellation through `HarnessSessionManager.abort()`.
+- Harness cancels the active operation; signals propagate to in-flight workspace/library/MCP tools, FFmpeg child processes, and model requests.
+- Stop is recorded durably in the Harness session as a user cancellation, distinct from an error; it is not mapped as a Chat `RUN_ERROR`.
 
 **d. Branch from a previous question**
 
 - One step: continue this session from an earlier user question, or fork a new session from that prefix. Do not revert files already written. The original transcript stays on fork.
-- Today the store is linear append-only JSONL. See [TODO](./TODO.md).
+- Harness already stores a session tree; the UI for navigating and forking it remains deferred. See [TODO](./TODO.md).
 
 ---
 
@@ -324,8 +311,8 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **One vendored package:** pi-agent, available for source-level study and modification.
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
-- **Decoupling:** application code depends on `packages/agent/src/types.ts`; `pi-adapter.ts` is the sole vendor boundary through `#vendor/pi-agent`.
-- **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, fold to one Chat `content` string in `convertToLlm`. Clickable asset refs in the bubble wait.
-- **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; AgUiAdapter translates LoomAgentEvent without leaking pi's protocol.
+- **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
+- **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, folded by `toProviderMessages` into one Chat `content` string. Clickable asset refs in the bubble wait.
+- **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
-- **Current scope:** the question → answer → tool flow is complete; asset tools now preserve stable call IDs and structured result payloads. Stop aborts the run and in-flight tools. Model thinking is shown in the chat. Interactive asset refs in chat, composer asset attach, and branch/fork from a message remain deferred.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Interactive asset refs, composer asset attach, and branch/fork UI remain deferred. Automatic threshold compaction is disabled initially while overflow recovery remains available.
