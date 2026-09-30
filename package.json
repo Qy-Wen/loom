@@ -12,6 +12,7 @@
     "test:e2e": "pnpm --filter @loom/app test:e2e",
     "test:e2e:attach": "pnpm --filter @loom/app test:e2e:attach",
     "dev": "pnpm --filter @loom/app dev",
+    "postinstall": "node scripts/download-ffmpeg.mjs",
     "vendor:sync": "pnpm --filter @loom/agent vendor:sync",
     "vendor:ffmpeg": "node scripts/download-ffmpeg.mjs"
   },

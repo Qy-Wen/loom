@@ -9,7 +9,8 @@ See [`docs/`](./docs) for the design: [Product](./docs/PRODUCT.md), [Agent archi
 ## Development
 
 ```bash
-pnpm install
+pnpm install                          # also downloads ffmpeg and ffprobe for this machine
+pnpm vendor:ffmpeg --all              # win32-x64, darwin-arm64, and darwin-x64
 pnpm dev                              # Electron app (requires DEEPSEEK_API_KEY in .env)
 pnpm --filter @loom/agent try:agent   # Smoke test: run one agent loop
 pnpm test                             # All unit and integration tests
