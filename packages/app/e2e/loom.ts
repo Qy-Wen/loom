@@ -7,7 +7,7 @@ import { _electron as electron, type ElectronApplication } from "playwright";
 
 const require = createRequire(import.meta.url);
 const appRoot = dirname(fileURLToPath(new URL(".", import.meta.url)));
-const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9333";
+const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9344";
 const attach = Boolean(process.env.LOOM_CDP_URL?.trim());
 
 export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronApplication | null }>({

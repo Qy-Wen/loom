@@ -36,7 +36,7 @@ import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
 const ASSET_SCHEME = "loom-asset";
-const DEFAULT_CDP_PORT = "9333";
+const DEFAULT_CDP_PORT = "9344";
 
 function configureAutomation(): void {
 	if (process.env.LOOM_E2E === "1") {

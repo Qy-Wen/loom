@@ -15,7 +15,7 @@ pnpm dev                              # Electron app (requires DEEPSEEK_API_KEY 
 pnpm --filter @loom/agent try:agent   # Smoke test: run one agent loop
 pnpm test                             # All unit and integration tests
 pnpm test:e2e                         # Playwright launch (needs app build)
-pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9333)
+pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9344)
 pnpm -r typecheck
 ```
 
