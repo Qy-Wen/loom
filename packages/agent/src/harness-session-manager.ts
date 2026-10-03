@@ -16,6 +16,7 @@ import {
 	type Session,
 } from "#vendor/pi-agent";
 import { randomUUID } from "node:crypto";
+import { userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import type {
@@ -366,6 +367,7 @@ export class HarnessSessionManager {
 				systemPrompt: () => this.options.systemPrompt ?? "",
 				toProviderMessages,
 				compaction: DEFAULT_COMPACTION_SETTINGS,
+				followUpMode: "one-at-a-time",
 				entryProjectors: { loom_user_stop: () => [{ role: "user", content: STOP_NOTE, timestamp: Date.now() }] },
 			}, CONTEXT);
 			open.harness = harness;
@@ -495,6 +497,22 @@ export class HarnessSessionManager {
 			const text = Array.isArray(content) ? content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
 			emit({ type: "tool_end", toolCallId: event.toolCallId, name: event.toolName, result: { content: text, details: event.result.details }, isError: event.isError });
 		}));
+		const pendingFollowUps = new Map<string, string>();
+		unsubscribers.push(open.harness.events.on("queue_update", (event) => {
+			if (event.lane !== MAIN) return;
+			for (const item of event.queues) {
+				if (item.kind !== "followUp" || item.type !== "message" || item.message.role !== "user") continue;
+				const text = userTextFromContent(item.message.content).trim();
+				if (text) pendingFollowUps.set(item.entryId, text);
+			}
+		}));
+		unsubscribers.push(open.harness.events.on("message_end", (event) => {
+			if (event.lane !== MAIN || event.runId !== operationId || event.message.role !== "user" || !event.entryId) return;
+			const text = pendingFollowUps.get(event.entryId);
+			if (text === undefined) return;
+			pendingFollowUps.delete(event.entryId);
+			emit({ type: "follow_up_sent", text });
+		}));
 		let resolveDone!: () => void;
 		const done = new Promise<void>((resolve) => { resolveDone = resolve; });
 		const run: ActiveRun = { lane, operationId, done };
@@ -565,6 +583,25 @@ export class HarnessSessionManager {
 		const result = await run.lane.abort(CONTEXT);
 		if (!result.ok && result.error._tag !== "NoActiveOperation") throw result.error;
 		await run.done;
+	}
+
+	/** Queue a user message for the active run. It is inserted when that run would otherwise finish, and the same run continues. */
+	async followUp(id: string, text: string, options: LoomPromptOptions = {}): Promise<void> {
+		const trimmed = text.trim();
+		if (!trimmed && !options.attachments?.length) throw new Error("Follow-up is empty");
+		const run = this.running.get(id);
+		if (!run) throw new Error("No active run");
+		const message: AgentMessage = {
+			role: "user",
+			content: trimmed ? [{ type: "text", text: trimmed }] : [],
+			timestamp: Date.now(),
+			...(options.attachments?.length ? { attachments: options.attachments } : {}),
+		} as AgentMessage;
+		const queued = await run.lane.followUp(message, undefined, CONTEXT);
+		if (!queued.ok) {
+			const detail = "message" in queued.error && typeof queued.error.message === "string" ? queued.error.message : "Failed to queue follow-up";
+			throw new Error(detail);
+		}
 	}
 
 	private async cancelPreparations(): Promise<void> {

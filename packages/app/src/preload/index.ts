@@ -53,6 +53,7 @@ const api: LoomApi = {
 	createSession: () => ipcRenderer.invoke(IPC.createSession),
 	openSession: (id) => ipcRenderer.invoke(IPC.openSession, id),
 	getSession: (id) => ipcRenderer.invoke(IPC.getSession, id),
+	followUp: (id, text) => ipcRenderer.invoke(IPC.followUp, id, text),
 	archiveSession: (id) => ipcRenderer.invoke(IPC.archiveSession, id),
 	unarchiveSession: (id) => ipcRenderer.invoke(IPC.unarchiveSession, id),
 	deleteSession: (id) => ipcRenderer.invoke(IPC.deleteSession, id),

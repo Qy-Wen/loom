@@ -287,6 +287,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - CopilotChat 的 Stop 会退订 AG-UI 流，并通过 `HarnessSessionManager.abort()` 请求取消。
 - Harness 取消活跃操作；中止信号传给工作区/素材库/MCP 工具、FFmpeg 子进程与模型请求。
 - 用户主动 Stop 作为取消记录在 Harness 会话中，可与错误区分；不映射成 Chat `RUN_ERROR`。
+- 运行中按 Enter 把文本排进 `followUp`。同一 run 在本可结束时继续，一次只插入一条，等这段结束后再插入下一条。排队文本留在输入框上方，插入后离开队列并作为用户消息出现在对话里。Stop 丢掉尚未插入的 followUp。`steer` 和 `nextRun` 不使用。
 
 **d) 从之前的提问分支**
 
@@ -315,4 +316,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，由 `toProviderMessages` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。资产引用、输入框贴资产及分支 UI 后置；自动阈值压缩暂关，溢出恢复仍保留。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。资产引用、输入框贴资产及分支 UI 后置。

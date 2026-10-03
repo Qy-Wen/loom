@@ -50,6 +50,7 @@ export type LoomAgentEvent =
 	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "error"; message: string }
+	| { type: "follow_up_sent"; text: string }
 	| { type: "agent_end" };
 
 export type LoomTranscriptMessage = Record<string, unknown> & { role: string };

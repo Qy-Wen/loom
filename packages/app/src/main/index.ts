@@ -13,7 +13,7 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
-import { HarnessSessionManager, type LoomAgentOptions } from "@loom/agent";
+import { HarnessSessionManager, uiSelectionToAttach, type LoomAgentOptions } from "@loom/agent";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
@@ -404,6 +404,11 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.createSession, () => agentManager.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => agentManager.openSession(id));
 	ipcMain.handle(IPC.getSession, (_event, id: string) => agentManager.getSession(id));
+	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string) => {
+		const session = await agentManager.getSession(id);
+		const attachment = uiSelectionToAttach(getUiSelection(), session.messages);
+		await agentManager.followUp(id, text, attachment ? { attachments: [attachment] } : {});
+	});
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => agentManager.archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => agentManager.unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {

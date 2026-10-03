@@ -97,6 +97,7 @@ export const IPC = {
 	createSession: "loom:createSession",
 	openSession: "loom:openSession",
 	getSession: "loom:getSession",
+	followUp: "loom:followUp",
 	archiveSession: "loom:archiveSession",
 	unarchiveSession: "loom:unarchiveSession",
 	deleteSession: "loom:deleteSession",
@@ -161,6 +162,8 @@ export interface LoomApi {
 	createSession: () => Promise<SessionRecord>;
 	openSession: (id: string) => Promise<SessionRecord>;
 	getSession: (id: string) => Promise<SessionRecord>;
+	/** Queue text into the active run. Inserted when that run would otherwise finish. */
+	followUp: (id: string, text: string) => Promise<void>;
 	archiveSession: (id: string) => Promise<void>;
 	unarchiveSession: (id: string) => Promise<void>;
 	deleteSession: (id: string) => Promise<void>;

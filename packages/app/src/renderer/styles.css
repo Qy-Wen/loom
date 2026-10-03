@@ -1336,6 +1336,40 @@ body.resizing-columns {
 	padding-bottom: 12px !important;
 }
 
+.session-follow-up-slot {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+}
+
+.session-follow-up {
+	list-style: none;
+	margin: 0 0 6px;
+	padding: 0 2px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.session-follow-up li {
+	padding: 6px 10px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: pre-wrap;
+}
+
+.session-follow-up-label {
+	display: block;
+	margin-bottom: 2px;
+	font-size: 10px;
+	letter-spacing: 0.04em;
+	text-transform: uppercase;
+	opacity: 0.6;
+}
+
 .session-chat-scroll {
 	flex: 1;
 	min-height: 0;
