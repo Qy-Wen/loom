@@ -435,6 +435,82 @@ describe("HarnessSessionManager", () => {
 		}
 	});
 
+	it("continues the same run with a follow-up and drops a queued follow-up on Stop", async () => {
+		const arrived = [deferred<string>(), deferred<string>(), deferred<string>(), deferred<string>()];
+		const release = [deferred<void>(), deferred<void>(), deferred<void>()];
+		let requests = 0;
+		const chunk = (text: string) =>
+			`data: ${JSON.stringify({ id: "follow", object: "chat.completion.chunk", created: 0, model: "demo", choices: [{ index: 0, delta: { role: "assistant", content: text }, finish_reason: null }] })}\n\n` +
+			`data: ${JSON.stringify({ id: "follow", object: "chat.completion.chunk", created: 0, model: "demo", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\n` +
+			"data: [DONE]\n\n";
+		const server = createServer((request, response) => {
+			const index = requests++;
+			let body = "";
+			request.setEncoding("utf8");
+			request.on("data", (chunkText: string) => { body += chunkText; });
+			request.on("end", () => {
+				arrived[index]?.resolve(body);
+				const gate = release[index];
+				if (!gate) return;
+				void gate.promise.then(() => {
+					response.writeHead(200, { "content-type": "text/event-stream" });
+					const text = index === 0 ? "first answer" : index === 1 ? "after follow-up" : "after second";
+					response.end(chunk(text));
+				});
+			});
+		});
+		const baseUrl = await listen(server);
+		const root = await mkdtemp(join(tmpdir(), "loom-harness-follow-"));
+		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo" } });
+		try {
+			await manager.openLibrary(root);
+			const session = await manager.createSession();
+			await assert.rejects(manager.followUp(session.id, "too early"), /No active run/);
+			const events: LoomAgentEvent[] = [];
+			const first = manager.prompt(session.id, "start", { onEvent: (event) => events.push(event) });
+			await arrived[0]!.promise;
+			await manager.followUp(session.id, "please continue");
+			await manager.followUp(session.id, "and then this");
+			assert.match(await readFile(await sessionFile(root), "utf8"), /please continue/);
+			release[0]!.resolve();
+			const secondRequest = await arrived[1]!.promise;
+			assert.match(secondRequest, /please continue/);
+			assert.doesNotMatch(secondRequest, /and then this/);
+			assert.doesNotMatch(await arrived[0]!.promise, /please continue/);
+			assert.deepEqual(events.filter((event) => event.type === "follow_up_sent"), [{ type: "follow_up_sent", text: "please continue" }]);
+			release[1]!.resolve();
+			const thirdRequest = await arrived[2]!.promise;
+			assert.match(thirdRequest, /and then this/);
+			release[2]!.resolve();
+			await first;
+			const continued = (await manager.getSession(session.id)).messages.map((message) => ({
+				role: message.role,
+				text: JSON.stringify(message.content),
+			}));
+			assert.deepEqual(continued.map((message) => message.role), ["user", "assistant", "user", "assistant", "user", "assistant"]);
+			assert.match(continued[2]!.text, /please continue/);
+			assert.match(continued[4]!.text, /and then this/);
+			assert.deepEqual(events.filter((event) => event.type === "follow_up_sent"), [
+				{ type: "follow_up_sent", text: "please continue" },
+				{ type: "follow_up_sent", text: "and then this" },
+			]);
+
+			const stoppedEvents: LoomAgentEvent[] = [];
+			const stopped = manager.prompt(session.id, "again", { onEvent: (event) => stoppedEvents.push(event) });
+			await arrived[3]!.promise;
+			await manager.followUp(session.id, "do not keep");
+			await manager.abort(session.id, "user");
+			await stopped;
+			const stored = JSON.stringify((await manager.getSession(session.id)).messages);
+			assert.doesNotMatch(stored, /do not keep/);
+			assert.equal(stoppedEvents.some((event) => event.type === "follow_up_sent"), false);
+		} finally {
+			await manager.close();
+			await rm(root, { recursive: true, force: true });
+			await stop(server);
+		}
+	});
+
 	it("stops a hanging Chat stream, persists Stop, and shows the note on the next prompt", async () => {
 		const arrived = [deferred<string>(), deferred<string>()];
 		let requests = 0;

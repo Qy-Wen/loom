@@ -18,12 +18,12 @@ Enabled the vendor's automatic threshold compaction (16,384 tokens reserved, ~20
 - [x] Enable automatic threshold compaction and forward compaction events (overflow recovery included)
 - [x] Verify with a real model: threshold triggers and summaries retain key semantics (anchor facts recallable after compaction)
 
-## Step 2: Steering queue
+## Step 2: Follow-up while a run is active ✅
 
-Let the user interject while the agent is running (vendor's persistent `steer` / `followUp` / `nextRun` queues) instead of only Stop-and-retype. Define the interaction with existing Stop semantics and queued-message UI first. See the capability table in [PI-HARNESS](./PI-HARNESS.md).
+Enter while a run is active queues the text as vendor `followUp`. The same run continues at the checkpoint where it would otherwise finish, inserting one queued follow-up at a time and waiting until that stretch ends before inserting the next. Queued text is listed above the composer; once inserted it leaves the queue and appears as a user message. Stop still discards follow-ups that have not been inserted. `steer` and `nextRun` are unused. The queue is written into the Harness session, so a crash mid-run keeps it; a clean Stop does not.
 
-- [ ] Decide product behavior: mid-run input goes to steer or followUp; how queued messages render in the UI
-- [ ] Wire the vendor steering queues, persisted with the session across restarts
+- [x] Mid-run Enter queues `followUp`; insertion removes it from the queue and shows it in the thread, and Stop drops follow-ups that have not been inserted
+- [x] Wire the vendor follow-up queue so the same run continues, and Stop still drops unconsumed follow-ups
 
 ## Step 3: Branch from a previous question
 

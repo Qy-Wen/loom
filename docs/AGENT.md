@@ -287,6 +287,7 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 - CopilotChat Stop detaches the AG-UI run and requests cancellation through `HarnessSessionManager.abort()`.
 - Harness cancels the active operation; signals propagate to in-flight workspace/library/MCP tools, FFmpeg child processes, and model requests.
 - Stop is recorded durably in the Harness session as a user cancellation, distinct from an error; it is not mapped as a Chat `RUN_ERROR`.
+- Enter while a run is active queues the text as `followUp`. The same run continues when it would otherwise finish, one queued follow-up at a time. Queued text sits above the composer until it is inserted, then it leaves the queue and appears as a user message. Stop drops follow-ups that have not been inserted. `steer` and `nextRun` are unused.
 
 **d. Branch from a previous question**
 
@@ -315,4 +316,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, folded by `toProviderMessages` into one Chat `content` string. Clickable asset refs in the bubble wait.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Interactive asset refs, composer asset attach, and branch/fork UI remain deferred. Automatic threshold compaction is disabled initially while overflow recovery remains available.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Interactive asset refs, composer asset attach, and branch/fork UI remain deferred.

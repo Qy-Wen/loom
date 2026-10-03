@@ -290,6 +290,27 @@ export class LoomAgUiAgent extends AbstractAgent {
 									break;
 								}
 
+								case "follow_up_sent": {
+									closeThinking();
+									closeText();
+									const userId = nextId("user");
+									emit({
+										type: EventType.TEXT_MESSAGE_START,
+										messageId: userId,
+										role: "user",
+									} as BaseEvent);
+									emit({
+										type: EventType.TEXT_MESSAGE_CONTENT,
+										messageId: userId,
+										delta: event.text,
+									} as BaseEvent);
+									emit({
+										type: EventType.TEXT_MESSAGE_END,
+										messageId: userId,
+									} as BaseEvent);
+									break;
+								}
+
 								case "agent_end":
 									if (failed) break;
 									closeThinking();

@@ -18,12 +18,12 @@
 - [x] 启用自动阈值压缩并转发 compaction 事件（含溢出恢复路径）
 - [x] 真实模型验证：阈值触发、摘要对关键语义的保留（锚点事实压缩后可召回）
 
-## 第二步：插话队列
+## 第二步：运行中 followUp ✅
 
-Agent 运行中允许用户插话（vendor 的持久 `steer` / `followUp` / `nextRun` 队列），而不是只能 Stop 后重输。需先定义与现有 Stop 语义及排队消息 UI 的交互。见 [PI-HARNESS](./PI-HARNESS.md) 能力表。
+运行中按 Enter，文本进入 vendor 的 `followUp`。同一 run 在本可结束的检查点继续，一次只插入队列中的第一条，等这段结束后再插入下一条。排队文本列在输入框上方；插入后从队列移除，并作为用户消息出现在对话里。Stop 仍会丢掉尚未插入的 followUp。`steer` 和 `nextRun` 不使用。队列写进 Harness 会话，运行中崩溃可以留下；正常 Stop 不会留下。
 
-- [ ] 定产品交互：运行中输入走 steer 还是 followUp；排队消息在 UI 里怎么呈现
-- [ ] 接入 vendor 插话队列，持久化随会话恢复
+- [x] 运行中 Enter 排入 `followUp`；插入后离开队列并出现在对话里，Stop 丢掉尚未插入的 followUp
+- [x] 接入 vendor followUp，使同一 run 继续；Stop 仍丢掉尚未插入的 followUp
 
 ## 第三步：从之前的提问分支
 
