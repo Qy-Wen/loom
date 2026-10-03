@@ -132,14 +132,14 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	return (
 		<div className="session-follow-up-slot">
 			{queued.length > 0 && (
-				<ul className="session-follow-up">
-					{queued.map((item, index) => (
-						<li key={`${index}:${item.text}`}>
-							<span className="session-follow-up-label">Queued</span>
-							{item.text}
-						</li>
-					))}
-				</ul>
+				<section className="session-follow-up" aria-label="Queued">
+					<div className="session-follow-up-label">Queued</div>
+					<ol>
+						{queued.map((item, index) => (
+							<li key={`${index}:${item.text}`}>{item.text}</li>
+						))}
+					</ol>
+				</section>
 			)}
 			<CopilotChatInput
 				{...props}

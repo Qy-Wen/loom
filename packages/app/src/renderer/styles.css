@@ -1123,11 +1123,13 @@ body.resizing-columns {
 }
 
 .session-tab {
+	position: relative;
 	display: flex;
 	align-items: stretch;
 	flex: 0 1 auto;
 	min-width: 0;
-	max-width: 160px;
+	max-width: 180px;
+	border-radius: 6px;
 }
 
 .session-tab button,
@@ -1156,20 +1158,22 @@ body.resizing-columns {
 	font-weight: 620;
 }
 
-.session-tab.active > button[role="tab"]::after {
+.session-tab.active::after {
 	position: absolute;
-	right: 4px;
+	right: 6px;
 	bottom: -1px;
 	left: 8px;
 	height: 2px;
 	border-radius: 2px;
 	background: #202124;
 	content: "";
+	pointer-events: none;
 }
 
 .session-tab-close {
-	flex: 0 0 20px;
-	width: 20px;
+	flex: 0 0 18px;
+	width: 18px;
+	height: 18px;
 	padding: 0;
 	border: 0;
 	border-radius: 4px;
@@ -1178,6 +1182,11 @@ body.resizing-columns {
 	font-size: 14px;
 	line-height: 1;
 	cursor: pointer;
+}
+
+.session-tab .session-tab-close {
+	align-self: center;
+	margin-right: 4px;
 }
 
 .session-tab-new,
@@ -1198,11 +1207,24 @@ body.resizing-columns {
 	flex: 0 0 auto;
 }
 
+.session-tab:hover {
+	background: #f0f0ed;
+}
+
+.session-tab:hover > button:not(:disabled) {
+	color: #202124;
+	background: transparent;
+}
+
+.session-tab .session-tab-close:hover:not(:disabled) {
+	color: #202124;
+	background: #e2e2de;
+}
+
 .session-archived > button.active,
-.session-tab button:hover:not(:disabled),
 .session-tab-new:hover:not(:disabled),
 .session-archived > button:hover:not(:disabled),
-.session-tab-close:hover:not(:disabled) {
+.session-archived-row .session-tab-close:hover:not(:disabled) {
 	color: #202124;
 	background: #f0f0ed;
 }
@@ -1314,6 +1336,8 @@ body.resizing-columns {
 	min-width: 0;
 	height: 100%;
 	overflow: hidden;
+	/* The composer border is a shadow. Without this inset it is clipped flush with the chat. */
+	padding-bottom: 12px;
 }
 
 .session-chat-shell > .session-context-usage {
@@ -1343,31 +1367,33 @@ body.resizing-columns {
 }
 
 .session-follow-up {
-	list-style: none;
 	margin: 0 0 6px;
-	padding: 0 2px;
-	display: flex;
-	flex-direction: column;
-	gap: 4px;
-}
-
-.session-follow-up li {
-	padding: 6px 10px;
 	border: 1px solid #e5e5e2;
 	border-radius: 8px;
 	background: #fafaf9;
-	font-size: 12px;
-	line-height: 1.4;
-	white-space: pre-wrap;
+	overflow: hidden;
 }
 
 .session-follow-up-label {
-	display: block;
-	margin-bottom: 2px;
+	padding: 6px 10px 4px;
 	font-size: 10px;
 	letter-spacing: 0.04em;
 	text-transform: uppercase;
 	opacity: 0.6;
+}
+
+.session-follow-up ol {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.session-follow-up li {
+	padding: 6px 10px;
+	border-top: 1px solid #e5e5e2;
+	font-size: 12px;
+	line-height: 1.4;
+	white-space: pre-wrap;
 }
 
 .session-chat-scroll {
