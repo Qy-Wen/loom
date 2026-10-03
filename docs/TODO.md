@@ -8,33 +8,17 @@
 
 ---
 
-Do not add prompt-template UI merely because vendor APIs exist.
+Do not add prompt-template UI merely because vendor APIs exist. Completed steps are in the [archive](./archive/ARCHIVE.md).
 
-## Step 1: Automatic threshold compaction ✅
+## Step 1: Branch from a previous question
 
-Enabled the vendor's automatic threshold compaction (16,384 tokens reserved, ~20,000 tokens of recent context kept). Chat Settings gained an optional context-window field with a 128k fallback; compaction events forward to AG-UI and compaction summaries render in the transcript. Real-model verification lives in `packages/agent/evals/compaction-e2e.ts` (trigger, anchor retention, and post-compaction recall all pass).
+Use the Harness session tree to continue from an earlier user question. Selecting one edits that message in place; sending switches the active path to just before that question. The old path stays in the tree. Fork copies the prefix before that question into a new session, prefixes its title with `Fork: `, and leaves the original session unchanged. Files the agent already wrote in the library stay as they are. See [AGENT](./AGENT.md) §6.3d.
 
-- [x] Optional Chat contextWindow setting with `?? 128000` fallback
-- [x] Enable automatic threshold compaction and forward compaction events (overflow recovery included)
-- [x] Verify with a real model: threshold triggers and summaries retain key semantics (anchor facts recallable after compaction)
+- [x] Selecting a past question edits that message in place, then sends from there
+- [x] Continue: switch the active path and leave the old path in the tree
+- [x] Fork: new session from the prefix before the selected question, titled `Fork: ` plus the original title; leave the original session intact
 
-## Step 2: Follow-up while a run is active ✅
-
-Enter while a run is active queues the text as vendor `followUp`. The same run continues at the checkpoint where it would otherwise finish, inserting one queued follow-up at a time and waiting until that stretch ends before inserting the next. Queued text is listed above the composer; once inserted it leaves the queue and appears as a user message. Stop still discards follow-ups that have not been inserted. `steer` and `nextRun` are unused. The queue is written into the Harness session, so a crash mid-run keeps it; a clean Stop does not.
-
-- [x] Mid-run Enter queues `followUp`; insertion removes it from the queue and shows it in the thread, and Stop drops follow-ups that have not been inserted
-- [x] Wire the vendor follow-up queue so the same run continues, and Stop still drops unconsumed follow-ups
-
-## Step 3: Branch from a previous question
-
-Use the harness session tree to continue from an earlier user question in the current session or fork a new session. Do not revert files the agent already wrote. See [AGENT](./AGENT.md) §6.3d.
-
-- [ ] Continue: switch the active path; preserve the old path in the tree; decide whether to expose a way back
-- [ ] Fork: new session from the selected prefix; leave the original session intact
-- [ ] Decide whether selecting a question includes it in context or restores it to the composer for editing before implementing the UI
-- [ ] Leave workspace files as they are; no checkpoint restore
-
-## Step 4: Chat asset refs
+## Step 2: Chat asset refs
 
 Attach library assets in the composer (not only implicit `ui_selection`). Click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5 and §6.3b.
 
@@ -42,7 +26,7 @@ Attach library assets in the composer (not only implicit `ui_selection`). Click 
 - [ ] Render refs from those chips and from `search_assets` / `inspect_asset`; click selects in the library
 - [ ] Key by `asset_id`, never an absolute path
 
-## Step 5: Skills
+## Step 3: Skills
 
 Load `SKILL.md` from the open library into the creative Agent running on pi harness. See [AGENT](./AGENT.md).
 

@@ -95,6 +95,7 @@ export function SidePanel({
 	sessionIdRef.current = sessionId;
 	const [sessionMessages, setSessionMessages] = useState<LoomTranscriptMessage[]>([]);
 	const [sessionContext, setSessionContext] = useState<HarnessContextUsage | null>(null);
+	const [composerDraft, setComposerDraft] = useState<{ sessionId: string; text: string } | null>(null);
 	const [sessionBusy, setSessionBusy] = useState(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
 
@@ -109,6 +110,7 @@ export function SidePanel({
 			setSessionId(null);
 			setSessionMessages([]);
 			setSessionContext(null);
+			setComposerDraft(null);
 			setSessionError(null);
 			return;
 		}
@@ -268,7 +270,20 @@ export function SidePanel({
 						{sessionId ? (
 							<div className="agent-chat">
 								<ToolCallViews />
-								<SessionChat threadId={sessionId} messages={sessionMessages} context={sessionContext} />
+								<SessionChat
+									threadId={sessionId}
+									messages={sessionMessages}
+									context={sessionContext}
+									composerDraft={composerDraft?.sessionId === sessionId ? composerDraft.text : null}
+									onComposerDraftApplied={() => setComposerDraft(null)}
+									onSessionRecord={applyRecord}
+									onForked={(record, text) => {
+										setSessionId(record.id);
+										applyRecord(record);
+										setComposerDraft({ sessionId: record.id, text });
+										void window.loom.listSessions().then(setSessions).catch(() => undefined);
+									}}
+								/>
 							</div>
 						) : (
 							<div className="empty">Starting a session…</div>

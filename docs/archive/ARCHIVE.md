@@ -6,6 +6,18 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Follow-up while a run is active
+
+Enter while a run is active queues the text as vendor `followUp`. The same run continues at the checkpoint where it would otherwise finish, inserting one queued follow-up at a time and waiting until that stretch ends before inserting the next. Queued messages share one region above the composer; once inserted, a message leaves the queue and appears in the thread as a user message. Stop still discards follow-ups that have not been inserted. `steer` and `nextRun` are unused. The queue is written into the Harness session, so a crash mid-run keeps it; a clean Stop does not.
+
+---
+
+## Automatic threshold compaction
+
+Enabled the vendor's automatic threshold compaction (16,384 tokens reserved, ~20,000 tokens of recent context kept). Chat Settings gained an optional context-window field with a 128k fallback. Compaction events forward to AG-UI, and compaction summaries render in the transcript. Real-model verification lives in `packages/agent/evals/compaction-e2e.ts` (trigger, anchor retention, and post-compaction recall all pass).
+
+---
+
 ## Production chat on Pi Harness
 
 - Replaced the plain Pi `Agent` and Loom v1 transcript writer with one Harness session/runtime owner. New sessions live in each library's `.loom/harness-sessions/`; old `.loom/sessions/` files are neither read nor deleted.

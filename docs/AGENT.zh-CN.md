@@ -245,7 +245,7 @@ Pi Harness 事件与 `LoomAgentEvent` **都只停留在 main 进程内部**，�
 - Node 端点用 v2 `createCopilotNodeListener`；不用已 deprecated 的 v1 endpoint。
 - 前端直接用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`，无需 `@copilotkit/react-ui`。
 - runtime 每次 run 会 clone 注册的 AG-UI agent；`LoomAgUiAgent.clone()` 保留共享的 `HarnessSessionManager` 和运行中操作映射。
-- `HarnessSessionManager` 持有会话句柄，用 Pi `JsonlSessionRepo` 将新对话持久化在 `<library>/.loom/harness-sessions/`，从活跃路径读取历史。旧 v1 数据仍在 `<library>/.loom/sessions/`，不触碰。分支 UI 以后做，见 [TODO](./TODO.zh-CN.md)。
+- `HarnessSessionManager` 持有会话句柄，用 Pi `JsonlSessionRepo` 将新对话持久化在 `<library>/.loom/harness-sessions/`，从活跃路径读取历史。旧 v1 数据仍在 `<library>/.loom/sessions/`，不触碰。从历史提问分支见 §6.3d。
 
 **server 落地要点**（都是标准做法，一次写好即忘）：
 
@@ -291,8 +291,8 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 
 **d) 从之前的提问分支**
 
-- 同一步：从之前某条用户提问续聊当前会话，或用该前缀开新会话。不必回退已经写下的文件。开新会话时原 transcript 不动。
-- Harness 已存储会话树；导航与 fork 的产品 UI 留待后续。见 [TODO](./TODO.zh-CN.md)。
+- 选中一条历史用户提问后，在那条消息上直接改，改完就地发送。发送时当前路径切到这条提问之前，旧路径留在树里。
+- 也可以把该提问之前的前缀复制成新会话，标题在原标题前加上 `Fork: `，原会话不动。已经写下的文件不回退。
 
 ---
 
@@ -316,4 +316,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，由 `toProviderMessages` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。资产引用、输入框贴资产及分支 UI 后置。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。资产引用和输入框贴资产后置。

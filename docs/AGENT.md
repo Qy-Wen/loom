@@ -245,7 +245,7 @@ Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG
 - The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
 - The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
 - Runtime clones the registered AG-UI agent for each run. `LoomAgUiAgent.clone()` keeps the shared `HarnessSessionManager` and in-flight run map.
-- `HarnessSessionManager` owns session handles and persists new conversations in `<library>/.loom/harness-sessions/` via Pi `JsonlSessionRepo`; history reads the active path. Old v1 files in `<library>/.loom/sessions/` remain untouched. UI branching is deferred; see [TODO](./TODO.md).
+- `HarnessSessionManager` owns session handles and persists new conversations in `<library>/.loom/harness-sessions/` via Pi `JsonlSessionRepo`; history reads the active path. Old v1 files in `<library>/.loom/sessions/` remain untouched. Branching from an earlier question is in §6.3d.
 
 **Server rules:**
 
@@ -291,8 +291,8 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 
 **d. Branch from a previous question**
 
-- One step: continue this session from an earlier user question, or fork a new session from that prefix. Do not revert files already written. The original transcript stays on fork.
-- Harness already stores a session tree; the UI for navigating and forking it remains deferred. See [TODO](./TODO.md).
+- Selecting an earlier user question edits that message in place. Sending switches the active path to just before that question. The old path stays in the tree.
+- Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files already written are not reverted.
 
 ---
 
@@ -316,4 +316,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, folded by `toProviderMessages` into one Chat `content` string. Clickable asset refs in the bubble wait.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Interactive asset refs, composer asset attach, and branch/fork UI remain deferred.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Interactive asset refs and composer asset attach remain deferred.

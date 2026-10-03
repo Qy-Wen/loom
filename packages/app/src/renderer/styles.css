@@ -1372,6 +1372,7 @@ body.resizing-columns {
 	border-radius: 8px;
 	background: #fafaf9;
 	overflow: hidden;
+	pointer-events: auto;
 }
 
 .session-follow-up-label {
@@ -1394,6 +1395,127 @@ body.resizing-columns {
 	font-size: 12px;
 	line-height: 1.4;
 	white-space: pre-wrap;
+}
+
+.session-branch-note {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 0 0 6px;
+	padding: 6px 10px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	font-size: 12px;
+	line-height: 1.4;
+	/* The composer overlay ignores clicks so they reach the transcript. This note must opt back in. */
+	pointer-events: auto;
+}
+
+.session-branch-note span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.session-branch-error {
+	color: #8a2b2b;
+}
+
+.session-inline-edit {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-end;
+	gap: 6px;
+	width: 100%;
+	/* Same offset the user bubble reserves above itself. */
+	padding-top: 40px;
+}
+
+.session-inline-edit-pill {
+	display: flex;
+	align-items: flex-end;
+	gap: 2px;
+	width: min(80%, 100%);
+	box-sizing: border-box;
+	padding: 8px 8px 8px 16px;
+	border-radius: 28px;
+	background: #fff;
+	box-shadow: 0 4px 4px 0 #0000000a, 0 0 1px 0 #0000009e;
+}
+
+.session-inline-edit textarea {
+	flex: 1;
+	min-width: 0;
+	box-sizing: border-box;
+	margin: 0;
+	border: 0;
+	background: transparent;
+	padding: 12px 8px 12px 0;
+	color: inherit;
+	font: inherit;
+	font-size: 16px;
+	line-height: 24px;
+	resize: none;
+	overflow: hidden;
+	outline: none;
+}
+
+.session-inline-edit-actions {
+	display: flex;
+	align-items: center;
+	gap: 2px;
+	flex: 0 0 auto;
+	padding-bottom: 5px;
+}
+
+.session-inline-edit-actions button {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	cursor: pointer;
+}
+
+.session-inline-edit-cancel {
+	color: #444;
+	background: transparent;
+}
+
+.session-inline-edit-cancel:hover:not(:disabled) {
+	background: #f8f8f8;
+}
+
+.session-inline-edit-send {
+	color: #fff;
+	background: #000;
+}
+
+.session-inline-edit-send:hover:not(:disabled) {
+	opacity: 0.7;
+}
+
+.session-inline-edit-actions button:disabled {
+	cursor: default;
+	opacity: 1;
+}
+
+.session-inline-edit-cancel:disabled {
+	opacity: 0.5;
+}
+
+.session-inline-edit-send:disabled {
+	color: #0d0d0d;
+	background: #00000014;
+}
+
+.session-inline-edit .session-branch-note {
+	width: min(80%, 100%);
 }
 
 .session-chat-scroll {

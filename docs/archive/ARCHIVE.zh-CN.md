@@ -6,6 +6,18 @@
 
 ---
 
+## 运行中 followUp
+
+运行中按 Enter，文本进入 vendor 的 `followUp`。同一 run 在本可结束的检查点继续，一次只插入队列中的第一条，等这段结束后再插入下一条。排队消息集中在输入框上方的一个队列区里；插入后离开队列，并作为用户消息出现在对话里。Stop 仍会丢掉尚未插入的 followUp。`steer` 和 `nextRun` 不使用。队列写进 Harness 会话，运行中崩溃可以留下；正常 Stop 不会留下。
+
+---
+
+## 自动阈值压缩
+
+已启用 vendor 的自动阈值压缩（预留 16,384 token、保留约 20,000 token 近期上下文）。Chat 设置新增可选的上下文窗口，未配置时 128k 兜底。压缩事件转发到 AG-UI，transcript 里的 compaction 摘要可见。真实模型验证见 `packages/agent/evals/compaction-e2e.ts`（触发、锚点保留、压缩后召回均通过）。
+
+---
+
 ## 生产聊天切换到 Pi Harness
 
 - 用统一的 Harness 会话/运行管理器替代普通 pi `Agent` 和 Loom v1 transcript 写入。新会话位于素材库 `.loom/harness-sessions/`；旧 `.loom/sessions/` 文件不读取也不删除。
