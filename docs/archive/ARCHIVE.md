@@ -6,6 +6,18 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Image input in the chat composer
+
+The composer attaches JPEG, PNG, GIF, and WebP (up to 4, 8 MB each). A picture is an image part on the user message `content`, shown in the bubble, and sent as `image_url`. There is no vision switch and no retry. If the endpoint rejects the image, Loom shows the error and leaves that turn off the active path. The session file keeps the abandoned branch. Video and audio are not in this step. DeepSeek-V4.1-Flash accepts images and does not accept video.
+
+---
+
+## Branch from a previous question
+
+Selecting a past question edits that message in place; sending switches the active path to just before it. The old path stays in the tree. Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files the agent already wrote stay as they are. See [AGENT](../AGENT.md) §6.3d.
+
+---
+
 ## Follow-up while a run is active
 
 Enter while a run is active queues the text as vendor `followUp`. The same run continues at the checkpoint where it would otherwise finish, inserting one queued follow-up at a time and waiting until that stretch ends before inserting the next. Queued messages share one region above the composer; once inserted, a message leaves the queue and appears in the thread as a user message. Stop still discards follow-ups that have not been inserted. `steer` and `nextRun` are unused. The queue is written into the Harness session, so a crash mid-run keeps it; a clean Stop does not.

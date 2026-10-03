@@ -243,7 +243,7 @@ Pi Harness 事件与 `LoomAgentEvent` **都只停留在 main 进程内部**，�
 **实现要点**（已跑通）：
 
 - 接缝继承 `@ag-ui/client` 的 `AbstractAgent`，实现 `run(input): Observable<BaseEvent>`（RxJS）。
-- `@ag-ui/{client,core}` 用 **0.0.59**，与 `@copilotkit/runtime` 1.73.0 的依赖版本一致。
+- `@ag-ui/{client,core}` 用 **1.0.1**，与 `@copilotkit/runtime` 1.77.0 的依赖版本一致。
 - Node 端点用 v2 `createCopilotNodeListener`；不用已 deprecated 的 v1 endpoint。
 - 前端直接用 `@copilotkit/react-core/v2` 的 `CopilotKitProvider` + `CopilotChat`，无需 `@copilotkit/react-ui`。
 - runtime 每次 run 会 clone 注册的 AG-UI agent；`LoomAgUiAgent.clone()` 保留共享的 `HarnessSessionManager` 和运行中操作映射。
