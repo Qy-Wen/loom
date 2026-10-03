@@ -97,6 +97,7 @@ export const IPC = {
 	createSession: "loom:createSession",
 	openSession: "loom:openSession",
 	getSession: "loom:getSession",
+	stageComposerImages: "loom:stageComposerImages",
 	followUp: "loom:followUp",
 	branchBefore: "loom:branchBefore",
 	forkBefore: "loom:forkBefore",
@@ -164,6 +165,8 @@ export interface LoomApi {
 	createSession: () => Promise<SessionRecord>;
 	openSession: (id: string) => Promise<SessionRecord>;
 	getSession: (id: string) => Promise<SessionRecord>;
+	/** Hold composer images until the next prompt or follow-up on this session. */
+	stageComposerImages: (id: string, images: Array<{ filename: string; mimeType: string; data: string }>) => Promise<void>;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
 	followUp: (id: string, text: string) => Promise<void>;
 	/** Move the active path to just before this user question. */

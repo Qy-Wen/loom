@@ -6,6 +6,7 @@ import {
 	latestUiSelectionAssetId,
 	uiSelectionToAttach,
 } from "../src/attachments.ts";
+import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
 const clip = {
 	type: "ui_selection" as const,
@@ -65,6 +66,18 @@ describe("foldUserMessageForLlm", () => {
 			content: foldUserText("把这个处理一下", [clip]),
 		});
 		assert.match(String(foldUserMessageForLlm(message).content), /^把这个处理一下\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>$/);
+	});
+
+	it("leaves a composer image on content", () => {
+		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+		const image = { type: "image" as const, data: bytesToBase64(png), mimeType: "image/png" };
+		const message = { role: "user", content: [{ type: "text", text: "look" }, image] };
+		assert.equal(foldUserMessageForLlm(message), message);
+	});
+
+	it("rejects a file that is not a JPEG, PNG, GIF, or WebP", () => {
+		assert.equal(sniffComposerImage(new Uint8Array([0, 1, 2, 3])), undefined);
+		assert.throws(() => parseComposerImageInputs([{ filename: "x.txt", mimeType: "image/png", data: bytesToBase64(new Uint8Array([1, 2, 3, 4])) }]));
 	});
 
 	it("keeps image parts and uses a single text part for the fold", () => {

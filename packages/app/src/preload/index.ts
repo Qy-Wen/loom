@@ -53,6 +53,7 @@ const api: LoomApi = {
 	createSession: () => ipcRenderer.invoke(IPC.createSession),
 	openSession: (id) => ipcRenderer.invoke(IPC.openSession, id),
 	getSession: (id) => ipcRenderer.invoke(IPC.getSession, id),
+	stageComposerImages: (id, images) => ipcRenderer.invoke(IPC.stageComposerImages, id, images),
 	followUp: (id, text) => ipcRenderer.invoke(IPC.followUp, id, text),
 	branchBefore: (id, entryId) => ipcRenderer.invoke(IPC.branchBefore, id, entryId),
 	forkBefore: (id, entryId) => ipcRenderer.invoke(IPC.forkBefore, id, entryId),

@@ -73,5 +73,7 @@ export interface LoomAgentOptions {
 
 export interface LoomPromptOptions {
 	attachments?: LoomUserAttachment[];
+	/** Composer pictures stored on the user message `content`. */
+	images?: Array<{ data: string; mimeType: string }>;
 	onEvent?: (event: LoomAgentEvent) => void;
 }

@@ -33,6 +33,16 @@
 - [ ] 从素材库读取 Agent Skills（`SKILL.md`，agentskills.io）。不 vendor `packages/coding-agent`
 - [ ] 命中的技能正文放进系统提示，或做成 Agent 按需读取的工具
 
+## 第四步：对话框图片输入
+
+输入框可以插入 JPEG、PNG、GIF、WebP（最多 4 张，每张 8 MB），随这条 user 消息发给 Chat。视频和音频不在这一步。
+
+没有视觉开关，也不自动重试。图片以 `image_url` data URL 发出。端点拒绝时界面报错，这一轮离开当前路径。DeepSeek-V4.1-Flash 收图片，不收视频。
+
+- [x] 输入框可插入图片，气泡里能看见
+- [x] 收图片的 Chat 模型随消息带上 `image_url`
+- [x] 端点拒绝图片时界面报错，这一轮离开当前路径
+
 ---
 
 ## 后续（概述）

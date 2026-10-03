@@ -179,7 +179,9 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 ### 5.2 折给 Chat API
 
-Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。图如果以后 VLM 要用，仍走 `content` 里的 image part；系统注入永远不做成第二个 text part。
+Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。系统注入永远不做成第二个 text part。
+
+输入框插入的图是用户消息 `content` 里的图片部分（base64，JPEG/PNG/GIF/WebP）。气泡读这部分，Chat 收 `image_url`。没有设置开关，也不自动重试。端点拒绝图片时，界面报错，并把当前路径退到这条消息之前，失败的这一轮不进入后续对话。会话文件里仍留着这条离开的分支。
 
 折法固定。HTTP 里没有 `attachments` 字段。
 
@@ -313,7 +315,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
-- **User attachments**：界面选中（以及以后输入框显式贴上的资产）挂在 user 的 `attachments` 上，由 `toProviderMessages` 折成一段 Chat `content` 字符串。点击引用跳到对应资产以后再做。
+- **User attachments**：界面选中挂在 user 的 `attachments` 上。输入框图片在这条消息的 `content` 里。`toProviderMessages` 把选中折成一段文字，图片部分以 `image_url` 发出。图片被拒绝时报错，并离开当前路径。点击资产引用跳到对应资产以后再做。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
 - **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。资产引用和输入框贴资产后置。

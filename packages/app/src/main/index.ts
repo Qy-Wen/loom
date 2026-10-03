@@ -14,6 +14,7 @@ import {
 	type PropertyValue,
 } from "@loom/core";
 import { HarnessSessionManager, uiSelectionToAttach, type LoomAgentOptions } from "@loom/agent";
+import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
@@ -404,10 +405,19 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.createSession, () => agentManager.createSession());
 	ipcMain.handle(IPC.openSession, (_event, id: string) => agentManager.openSession(id));
 	ipcMain.handle(IPC.getSession, (_event, id: string) => agentManager.getSession(id));
+	ipcMain.handle(IPC.stageComposerImages, (_event, id: string, images: unknown) => {
+		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
+		stageComposerImages(id, images);
+	});
 	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string) => {
 		const session = await agentManager.getSession(id);
-		const attachment = uiSelectionToAttach(getUiSelection(), session.messages);
-		await agentManager.followUp(id, text, attachment ? { attachments: [attachment] } : {});
+		const selection = uiSelectionToAttach(getUiSelection(), session.messages);
+		const images = await takeComposerImages(id);
+		const body = text.replaceAll("\u200b", "");
+		await agentManager.followUp(id, body.trim() ? body : "", {
+			...(selection ? { attachments: [selection] } : {}),
+			...(images.length > 0 ? { images } : {}),
+		});
 	});
 	ipcMain.handle(IPC.branchBefore, (_event, id: string, entryId: string) => agentManager.branchBefore(id, entryId));
 	ipcMain.handle(IPC.forkBefore, (_event, id: string, entryId: string) => agentManager.forkBefore(id, entryId));
@@ -525,7 +535,7 @@ app
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		await agentManager.setChat(await modelSettings.chat());
-		agentServer = await startAgentServer(agentManager, getUiSelection);
+		agentServer = await startAgentServer(agentManager, getUiSelection, (id) => takeComposerImages(id));
 		registerAssetProtocol();
 		registerIpc();
 		await restoreLastLibrary();

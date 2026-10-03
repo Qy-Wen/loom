@@ -132,6 +132,10 @@ describe("chat context window", () => {
 		assert.equal(model.contextWindow, 200000);
 	});
 
+	it("lets the Chat model receive images", () => {
+		assert.deepEqual(buildChatModels({ baseUrl: "https://a", model: "m" }).model.input, ["text", "image"]);
+	});
+
 	it("falls back to 128k without a context window", () => {
 		const file = emptySettingsFile();
 		file.chat = { baseUrl: "https://a", apiKey: "k", model: "m", enabled: true };

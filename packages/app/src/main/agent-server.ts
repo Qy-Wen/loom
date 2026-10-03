@@ -6,7 +6,7 @@
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { HarnessSessionManager, UiSelectionFields } from "@loom/agent";
+import type { ComposerImageInput, HarnessSessionManager, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
 import { LoomAgUiAgent } from "./ag-ui-agent.ts";
@@ -25,11 +25,12 @@ const AGENT_ID = "loom";
 export async function startAgentServer(
 	manager: HarnessSessionManager,
 	getUiSelection?: () => UiSelectionFields | null,
+	takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
 ): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(manager, getUiSelection);
+	const agent = new LoomAgUiAgent(manager, getUiSelection, takeComposerImages);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
 	});

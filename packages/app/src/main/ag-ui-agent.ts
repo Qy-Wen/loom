@@ -12,6 +12,7 @@ import {
 	uiSelectionToAttach,
 	DEFAULT_SESSION_TITLE,
 	titleFromUserText,
+	type ComposerImageInput,
 	type HarnessSessionManager,
 	type LoomAgentEvent,
 	type UiSelectionFields,
@@ -46,16 +47,27 @@ function latestUserText(input: RunAgentInput): string {
 	return "";
 }
 
+function composerUserText(raw: string): string {
+	const stripped = raw.replaceAll("\u200b", "");
+	return stripped.trim() ? stripped : "";
+}
+
 export class LoomAgUiAgent extends AbstractAgent {
 	private manager: HarnessSessionManager;
 	private getUiSelection: (() => UiSelectionFields | null) | undefined;
+	private takeComposerImages: ((sessionId: string) => Promise<ComposerImageInput[]>) | undefined;
 	/** In-flight prompt per thread, so Stop and the next run can abort it. */
 	private inflight = new Map<string, { abort: (reason?: "user") => Promise<void>; done: Promise<void> }>();
 
-	constructor(manager: HarnessSessionManager, getUiSelection?: () => UiSelectionFields | null) {
+	constructor(
+		manager: HarnessSessionManager,
+		getUiSelection?: () => UiSelectionFields | null,
+		takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
+	) {
 		super({ agentId: "loom" });
 		this.manager = manager;
 		this.getUiSelection = getUiSelection;
+		this.takeComposerImages = takeComposerImages;
 	}
 
 	// CopilotKit clones the registered agent per run; keep the shared manager
@@ -64,6 +76,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		const cloned = super.clone() as this;
 		cloned.manager = this.manager;
 		cloned.getUiSelection = this.getUiSelection;
+		cloned.takeComposerImages = this.takeComposerImages;
 		cloned.inflight = this.inflight;
 		return cloned;
 	}
@@ -188,12 +201,16 @@ export class LoomAgUiAgent extends AbstractAgent {
 					if (cancelled) return;
 					const session = await this.manager.openSession(input.threadId);
 					if (cancelled) return;
-					await this.ensureTitle(input.threadId, session.title, latestUserText(input));
+					const text = composerUserText(latestUserText(input));
+					const images = await this.takeComposerImages?.(input.threadId) ?? [];
 					if (cancelled) return;
-					const attachment = uiSelectionToAttach(this.getUiSelection?.() ?? null, session.messages);
+					await this.ensureTitle(input.threadId, session.title, text);
+					if (cancelled) return;
+					const selection = uiSelectionToAttach(this.getUiSelection?.() ?? null, session.messages);
 					prompting = true;
-					await this.manager.prompt(input.threadId, latestUserText(input), {
-						...(attachment ? { attachments: [attachment] } : {}),
+					await this.manager.prompt(input.threadId, text, {
+						...(selection ? { attachments: [selection] } : {}),
+						...(images.length > 0 ? { images } : {}),
 						onEvent: (event: LoomAgentEvent) => {
 							if (cancelled) {
 								if (event.type === "agent_start") void handle.abort();

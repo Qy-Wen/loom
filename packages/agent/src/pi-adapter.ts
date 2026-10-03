@@ -36,7 +36,7 @@ export function buildChatModels(chat: LoomChatEndpoint) {
 			provider: CHAT_PROVIDER,
 			baseUrl,
 			reasoning: false,
-			input: ["text"],
+			input: ["text", "image"],
 			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
 			contextWindow: chat.contextWindow ?? DEFAULT_CHAT_CONTEXT_WINDOW,
 			maxTokens: 8192,
@@ -53,7 +53,7 @@ export function buildChatModels(chat: LoomChatEndpoint) {
 	return { models, model };
 }
 
-/** Keep Loom attachment sidecars on disk; fold them only for Chat requests. */
-export function toProviderMessages(messages: AgentMessage[]) {
+/** Keep Loom attachment sidecars on disk; fold them only for Chat requests. The second argument is the harness context and is unused. */
+export function toProviderMessages(messages: AgentMessage[], _context?: unknown) {
 	return convertToLlm(messages.map((message) => foldUserMessageForLlm(message)));
 }
