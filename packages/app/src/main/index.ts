@@ -409,6 +409,8 @@ function registerIpc(): void {
 		const attachment = uiSelectionToAttach(getUiSelection(), session.messages);
 		await agentManager.followUp(id, text, attachment ? { attachments: [attachment] } : {});
 	});
+	ipcMain.handle(IPC.branchBefore, (_event, id: string, entryId: string) => agentManager.branchBefore(id, entryId));
+	ipcMain.handle(IPC.forkBefore, (_event, id: string, entryId: string) => agentManager.forkBefore(id, entryId));
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => agentManager.archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => agentManager.unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {

@@ -94,11 +94,24 @@ function fingerprint(message: Message): string {
 	return `${message.role}:${content}`;
 }
 
+/** Shared opening, then a different entry: the live list is a path we already left. */
+function diverged(stored: Message[], live: Message[]): boolean {
+	const limit = Math.min(stored.length, live.length);
+	for (let index = 0; index < limit; index++) {
+		const storedId = stored[index]?.id;
+		const liveId = live[index]?.id;
+		if (!storedId || !liveId) return false;
+		if (storedId !== liveId) return true;
+	}
+	return false;
+}
+
 /** Show disk history when the live agent is empty; append new turns; avoid duplicates. */
 export function mergeChatMessages(stored: Message[], live: Message[]): Message[] {
 	if (stored.length === 0) return live;
 	if (live.length === 0) return stored;
 	if (fingerprint(stored[0]!) === fingerprint(live[0]!)) {
+		if (diverged(stored, live)) return stored;
 		return live.length >= stored.length ? live : stored;
 	}
 	return [...stored, ...live];

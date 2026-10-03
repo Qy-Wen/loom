@@ -5,7 +5,7 @@
 ## 结论与边界
 
 - **目标：** Pi Harness 负责 Agent 运行、会话树及对话持久化；Harness 会话是新对话的唯一数据源，不与 Loom 旧 JSONL 双写。保留 Loom 的素材库、FFmpeg、MCP、模型设置、AG-UI/CopilotKit 和 Electron UI。旧 Loom v1 会话不迁移、不兼容、不读取、不主动删除；已有用户文件必须原样保留。
-- **范围：** 直接在生产聊天链路切到 Harness，移除普通 pi `Agent`、旧 Core v1 repo 和逐消息写入；不先搭建并行运行链路，也不为追求“全部接入”而启用所有 vendor 功能。历史问题分支、素材引用与 Skills 的产品交互随后实现。自动阈值压缩已接入。模板不因 vendor API 加入产品。运行中的插话走 `followUp`。
+- **范围：** 直接在生产聊天链路切到 Harness，移除普通 pi `Agent`、旧 Core v1 repo 和逐消息写入；不先搭建并行运行链路，也不为追求“全部接入”而启用所有 vendor 功能。历史提问分支已接入。素材引用与 Skills 的产品交互随后实现。自动阈值压缩已接入。模板不因 vendor API 加入产品。运行中的插话走 `followUp`。
 - **来源：** Vendor 是 pi `packages/agent`，不是 `packages/coding-agent` 的 CLI/TUI。后者的 `/tree`、`/fork` 选择器不能通过创建 Harness 自动获得。见 [UPSTREAM](../packages/agent/vendor-pi-agent/UPSTREAM)、[AGENT](./AGENT.md)。
 
 ## 切换边界
@@ -39,6 +39,5 @@
 
 ## 待定产品选择
 
-- 历史问题被选中时：保留该问题直接重新生成，还是停在它之前并把文本放回输入框？旧分支要不要提供显式切回入口？见 [TODO 第一步](./TODO.zh-CN.md)。
-- Harness 可以提供底层 API，但分支 UI 和 Skills UI 并非自动获得。当前 TODO 将分支、素材引用和 Skills 排在 followUp 之后。模板不加入产品。运行中 Enter 排队为 followUp，一次插入一条，插入后离开队列并出现在对话里，Stop 丢掉尚未插入的队列。
+- Harness 可以提供底层 API，但 Skills UI 并非自动获得。其后的 TODO 是素材引用和 Skills。模板不加入产品。运行中 Enter 排队为 followUp，一次插入一条，插入后离开队列并出现在对话里，Stop 丢掉尚未插入的队列。
 - 是否在迁移时提供任何权限审批、路径限制或隔离？Harness 默认没有这些安全策略；不能把使用其工具误认为已完成沙箱。见 [tools/path-utils.ts](../packages/agent/vendor-pi-agent/src/harness/tools/path-utils.ts#L13-L15)。

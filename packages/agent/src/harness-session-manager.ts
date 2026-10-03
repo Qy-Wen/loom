@@ -34,6 +34,10 @@ const ARCHIVED = value<"open" | "archived">("loom.session", "status");
 const STOP_NOTE = "The user pressed Stop. This turn was cancelled on purpose, not because of an error.";
 const CONTEXT = BACKGROUND_CONTEXT;
 
+function failureText(error: { message?: string }, fallback: string): string {
+	return typeof error.message === "string" && error.message.length > 0 ? error.message : fallback;
+}
+
 type OpenSession = {
 	session: Session<JsonlSessionMetadata>;
 	harness?: Harness;
@@ -302,6 +306,67 @@ export class HarnessSessionManager {
 				context: this.contextUsage(entries),
 			};
 		});
+	}
+
+	/** Move the active path to just before this user question. The old tip stays in the tree. */
+	async branchBefore(id: string, entryId: string): Promise<HarnessSessionRecord> {
+		return this.retarget(id, async (open) => {
+			const entries = await open.lane.findEntries({ order: "oldestFirst" }, CONTEXT);
+			const target = entries.find((entry) => entry.id === entryId);
+			if (!target || target.type !== "message" || target.message.role !== "user") {
+				throw new Error("That question is not on the current path");
+			}
+			const navigated = await open.lane.navigateTree(target.parentId, undefined, CONTEXT);
+			if (!navigated.ok) throw new Error(failureText(navigated.error, "Could not switch path"));
+		});
+	}
+
+	/** New session with the prefix before this question. The source session stays where it is. */
+	async forkBefore(id: string, entryId: string): Promise<HarnessSessionRecord> {
+		this.assertIdle(id);
+		await this.acquire(id);
+		const metadata = await this.metadata(id);
+		const forked = await this.requireRepo().fork(metadata, {
+			scope: "branch",
+			branch: MAIN,
+			entryId,
+			position: "before",
+		}, CONTEXT);
+		this.handles.set(forked.metadata.id, { session: forked });
+		try {
+			const sourceTitle = (await this.handles.get(id)?.session.getName(CONTEXT)) ?? DEFAULT_TITLE;
+			await forked.setName(`Fork: ${sourceTitle}`, CONTEXT);
+			const record = await this.getSession(forked.metadata.id);
+			await this.notify();
+			return record;
+		} catch (error) {
+			this.handles.delete(forked.metadata.id);
+			await forked.close(CONTEXT);
+			throw error;
+		}
+	}
+
+	private assertIdle(id: string): void {
+		if (this.closing) throw new Error("Library is closing");
+		if (this.running.has(id) || this.preparing.has(id)) throw new Error("Session is busy");
+	}
+
+	private async retarget(id: string, move: (open: OpenSession & { harness: Harness; lane: AgentLane }) => Promise<void>): Promise<HarnessSessionRecord> {
+		this.assertIdle(id);
+		let finish!: () => void;
+		const done = new Promise<void>((resolve) => { finish = resolve; });
+		const preparation = { cancelled: false, done, finish };
+		this.preparing.set(id, preparation);
+		try {
+			const open = await this.ensureHarness(id);
+			if (open.recovering) await open.recovering;
+			if (!preparation.cancelled) await move(open);
+		} finally {
+			this.preparing.delete(id);
+			preparation.finish();
+		}
+		await this.notify();
+		return this.getSession(id);
 	}
 
 	async openSession(id: string): Promise<HarnessSessionRecord> {

@@ -98,6 +98,8 @@ export const IPC = {
 	openSession: "loom:openSession",
 	getSession: "loom:getSession",
 	followUp: "loom:followUp",
+	branchBefore: "loom:branchBefore",
+	forkBefore: "loom:forkBefore",
 	archiveSession: "loom:archiveSession",
 	unarchiveSession: "loom:unarchiveSession",
 	deleteSession: "loom:deleteSession",
@@ -164,6 +166,10 @@ export interface LoomApi {
 	getSession: (id: string) => Promise<SessionRecord>;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
 	followUp: (id: string, text: string) => Promise<void>;
+	/** Move the active path to just before this user question. */
+	branchBefore: (id: string, entryId: string) => Promise<SessionRecord>;
+	/** Open a new session from the prefix before this question. */
+	forkBefore: (id: string, entryId: string) => Promise<SessionRecord>;
 	archiveSession: (id: string) => Promise<void>;
 	unarchiveSession: (id: string) => Promise<void>;
 	deleteSession: (id: string) => Promise<void>;
