@@ -12,9 +12,10 @@ import {
 	type CopilotChatUserMessageProps,
 	type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
-import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createContext, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage } from "@loom/agent";
-import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
+import { bytesToBase64, COMPOSER_IMAGE_MAX_BYTES, COMPOSER_IMAGE_MAX_COUNT, sniffComposerImage, type ComposerImageMime } from "@loom/agent/composer-image";
+import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 
 const StoredMessagesContext = createContext<Message[]>([]);
@@ -47,18 +48,39 @@ const DraftContext = createContext<string | null>(null);
 const ClearForceContext = createContext<() => void>(() => {});
 const DraftAppliedContext = createContext<() => void>(() => {});
 
-type QueuedFollowUp = { text: string; seen: number };
+type QueuedFollowUp = { text: string; label?: string; seen: number };
+
+type PendingImage = {
+	id: string;
+	filename: string;
+	mimeType: ComposerImageMime;
+	data: string;
+	preview: string;
+};
+
+type ComposerActions = {
+	addFiles: (files: File[]) => void;
+	sendImageOnly: () => void;
+	hasImages: boolean;
+};
+
+const ComposerActionsContext = createContext<ComposerActions | null>(null);
 
 /**
  * Drop one queued line per new user message with the same text.
  * Survivors remember the current count, so the next render does not spend that message again.
  */
+function messageText(message: { content?: unknown }): string {
+	return transcriptText(message.content).replaceAll("\u200b", "");
+}
+
 function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]): QueuedFollowUp[] {
 	if (items.length === 0) return items;
 	const counts = new Map<string, number>();
 	for (const message of messages) {
-		if (message.role !== "user" || typeof message.content !== "string") continue;
-		counts.set(message.content, (counts.get(message.content) ?? 0) + 1);
+		if (message.role !== "user") continue;
+		const text = messageText(message);
+		counts.set(text, (counts.get(text) ?? 0) + 1);
 	}
 	const removed = new Map<string, number>();
 	const next: QueuedFollowUp[] = [];
@@ -74,15 +96,11 @@ function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]):
 		const seen = Math.max(item.seen, total);
 		if (seen === item.seen) next.push(item);
 		else {
-			next.push({ text: item.text, seen });
+			next.push({ ...item, seen });
 			changed = true;
 		}
 	}
 	return changed ? next : items;
-}
-
-function messageText(message: { content?: unknown }): string {
-	return typeof message.content === "string" ? message.content : "";
 }
 
 /** Pair visible user bubbles with transcript entry ids, in order, including identical text. */
@@ -295,7 +313,67 @@ const SessionMessageView = ((props: CopilotChatMessageViewProps) => {
 	);
 }) as typeof CopilotChatMessageView;
 
-/** Enter while a run is active queues a follow-up. Empty input keeps Stop; text restores Send. */
+const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWithoutRef<typeof CopilotChatInput.TextArea>>(function ComposerTextArea(props, ref) {
+	const actions = useContext(ComposerActionsContext);
+	return (
+		<CopilotChatInput.TextArea
+			{...props}
+			ref={ref}
+			onPaste={(event) => {
+				const files = [...event.clipboardData.files];
+				if (files.length === 0) return;
+				event.preventDefault();
+				actions?.addFiles(files);
+			}}
+			onKeyDown={(event) => {
+				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions?.hasImages && !(props.value ?? "").toString().trim()) {
+					event.preventDefault();
+					actions.sendImageOnly();
+					return;
+				}
+				props.onKeyDown?.(event);
+			}}
+		/>
+	);
+});
+
+function AddFilesButton({ onAddFile, toolsMenu: _toolsMenu, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { onAddFile?: () => void; toolsMenu?: unknown }): React.JSX.Element {
+	return (
+		<button
+			type="button"
+			{...props}
+			className={className ? `session-add-files ${className}` : "session-add-files"}
+			aria-label="Add files"
+			title="Add files"
+			onClick={(event) => {
+				props.onClick?.(event);
+				if (event.defaultPrevented) return;
+				event.preventDefault();
+				onAddFile?.();
+			}}
+		>
+			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+				<path d="M12 5v14M5 12h14" />
+			</svg>
+		</button>
+	);
+}
+
+function ImageSendButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
+	const actions = useContext(ComposerActionsContext);
+	return (
+		<CopilotChatInput.SendButton
+			{...props}
+			disabled={false}
+			onClick={(event) => {
+				event.preventDefault();
+				actions?.sendImageOnly();
+			}}
+		/>
+	);
+}
+
+/** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an image restores Send. */
 const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props }: CopilotChatInputProps) => {
 	const threadId = useContext(ThreadIdContext);
 	const visible = useContext(VisibleMessagesContext);
@@ -307,7 +385,14 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	const onDraftApplied = useContext(DraftAppliedContext);
 	const { agent } = useAgent();
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
-	const hasDraft = (value ?? "").trim().length > 0;
+	const [images, setImages] = useState<PendingImage[]>([]);
+	const [imageError, setImageError] = useState<string | null>(null);
+	const imagesRef = useRef(images);
+	imagesRef.current = images;
+	const valueRef = useRef(value);
+	valueRef.current = value;
+	const fileRef = useRef<HTMLInputElement>(null);
+	const hasDraft = (value ?? "").trim().length > 0 || images.length > 0;
 	const appliedDraft = useRef<string | null>(null);
 	const emptySeen = useRef(false);
 	const forceSeen = useRef<ForceView | null>(null);
@@ -352,38 +437,154 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		setQueued((items) => reconcileQueued(items, visible));
 	}, [isRunning, visible]);
 
+	const deliverRef = useRef<(submitted: string) => void>(() => {});
+	deliverRef.current = (submitted) => {
+		void (async () => {
+			const text = submitted.replaceAll("\u200b", "").trim() ? submitted.replaceAll("\u200b", "") : "";
+			const payload = imagesRef.current;
+			if (!text && payload.length === 0) return;
+			if (payload.length > 0) {
+				if (!threadId || typeof window.loom.stageComposerImages !== "function") {
+					setImageError(threadId ? "Restart the app to send images." : "Open a session before attaching an image.");
+					return;
+				}
+				try {
+					await window.loom.stageComposerImages(threadId, payload.map(({ filename, mimeType, data }) => ({ filename, mimeType, data })));
+				} catch (cause) {
+					setImageError(cause instanceof Error ? cause.message : "Could not attach that image.");
+					if (text) onChange?.(text);
+					return;
+				}
+			}
+			setImages([]);
+			setImageError(null);
+			if (!isRunning || !threadId) {
+				onSubmitMessage?.(text || "\u200b");
+				onChange?.("");
+				return;
+			}
+			const seen = visible.filter((message) => message.role === "user" && messageText(message) === text).length;
+			try {
+				await window.loom.followUp(threadId, text);
+				setQueued((items) => [...items, {
+					text,
+					label: text || payload.map((image) => image.filename).join(", "),
+					seen,
+				}]);
+				onChange?.("");
+			} catch {
+				setImages(payload);
+				if (text) onChange?.(text);
+			}
+		})();
+	};
+
+	async function addFiles(files: File[]): Promise<void> {
+		setImageError(null);
+		const next = [...imagesRef.current];
+		let error: string | null = null;
+		for (const file of files) {
+			if (next.length >= COMPOSER_IMAGE_MAX_COUNT) {
+				error = "Attach up to 4 images.";
+				break;
+			}
+			try {
+				const bytes = new Uint8Array(await file.arrayBuffer());
+				const mimeType = sniffComposerImage(bytes);
+				if (!mimeType) {
+					error = "Use a JPEG, PNG, GIF, or WebP image.";
+					continue;
+				}
+				if (bytes.byteLength > COMPOSER_IMAGE_MAX_BYTES) {
+					error = "Each image must be 8 MB or smaller.";
+					continue;
+				}
+				const data = bytesToBase64(bytes);
+				next.push({
+					id: crypto.randomUUID(),
+					filename: file.name || "image",
+					mimeType,
+					data,
+					preview: `data:${mimeType};base64,${data}`,
+				});
+			} catch {
+				error = "Could not read that image.";
+			}
+		}
+		setImages(next);
+		if (error) setImageError(error);
+	}
+
+	const composerActions: ComposerActions = {
+		addFiles: (files) => { void addFiles(files); },
+		sendImageOnly: () => deliverRef.current((valueRef.current ?? "").trim() || "\u200b"),
+		hasImages: images.length > 0,
+	};
+
 	return (
-		<div className="session-follow-up-slot">
+		<ComposerActionsContext.Provider value={composerActions}>
+		<div
+			className="session-follow-up-slot"
+			onDragOver={(event) => {
+				if ([...event.dataTransfer.types].includes("Files")) event.preventDefault();
+			}}
+			onDrop={(event) => {
+				const files = [...event.dataTransfer.files];
+				if (files.length === 0) return;
+				event.preventDefault();
+				void addFiles(files);
+			}}
+		>
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
+			{imageError && <div className="session-branch-note session-branch-error">{imageError}</div>}
 			{queued.length > 0 && (
 				<section className="session-follow-up" aria-label="Queued">
 					<div className="session-follow-up-label">Queued</div>
 					<ol>
 						{queued.map((item, index) => (
-							<li key={`${index}:${item.text}`}>{item.text}</li>
+							<li key={`${index}:${item.label ?? item.text}`}>{item.label || item.text}</li>
 						))}
 					</ol>
 				</section>
 			)}
+			{images.length > 0 && (
+				<div className="session-composer-images">
+					{images.map((image) => (
+						<div key={image.id} className="session-composer-image">
+							<img src={image.preview} alt={image.filename} />
+							<button type="button" aria-label={`Remove ${image.filename}`} onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}>×</button>
+						</div>
+					))}
+				</div>
+			)}
+			<input
+				ref={fileRef}
+				type="file"
+				accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
+				multiple
+				hidden
+				onChange={(event) => {
+					const files = [...event.target.files ?? []];
+					event.target.value = "";
+					if (files.length > 0) void addFiles(files);
+				}}
+			/>
 			<CopilotChatInput
 				{...props}
 				value={value}
 				isRunning={Boolean(isRunning) && !hasDraft}
 				showDisclaimer={false}
 				onChange={onChange}
+				onAddFile={() => fileRef.current?.click()}
+				addMenuButton={AddFilesButton}
+				textArea={ComposerTextArea}
+				sendButton={images.length > 0 ? ImageSendButton : undefined}
 				onSubmitMessage={(submitted) => {
-					if (!isRunning || !threadId) {
-						onSubmitMessage?.(submitted);
-						return;
-					}
-					const seen = visible.filter((message) => message.role === "user" && message.content === submitted).length;
-					void window.loom.followUp(threadId, submitted).then(
-						() => setQueued((items) => [...items, { text: submitted, seen }]),
-						() => onChange?.(submitted),
-					);
+					deliverRef.current(submitted);
 				}}
 			/>
 		</div>
+		</ComposerActionsContext.Provider>
 	);
 }) as typeof CopilotChatInput;
 
@@ -535,7 +736,7 @@ export function SessionChat({
 			<DraftContext.Provider value={composerDraft}>
 			<DraftAppliedContext.Provider value={onComposerDraftApplied}>
 			<div className="session-chat-shell">
-				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} />
+				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add files" }} />
 				<ContextIndicator context={context} />
 			</div>
 			</DraftAppliedContext.Provider>

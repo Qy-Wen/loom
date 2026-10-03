@@ -179,7 +179,9 @@ Chat UI, titles, and `userMessageText` read `content` only today. Later the bubb
 
 ### 5.2 Fold for the Chat API
 
-Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. Images stay as image parts on `content` if a later VLM turn needs them; injections never become a second text part.
+Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. Injections never become a second text part.
+
+A composer picture is an image part on the user message `content` (base64, JPEG/PNG/GIF/WebP). The bubble reads that part, and Chat receives it as `image_url`. There is no settings switch and no retry. If the endpoint rejects the image, Loom shows that error and moves the active path back to before the message, so the failed turn is not part of the conversation that continues. The session file still keeps the abandoned branch.
 
 The fold is deterministic. The HTTP body never includes `attachments`.
 
@@ -313,7 +315,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
-- **User attachments:** UI selection (and later composer chips) live on the user row as `attachments`, folded by `toProviderMessages` into one Chat `content` string. Clickable asset refs in the bubble wait.
+- **User attachments:** UI selection lives on the user row as `attachments`. Composer images live on that row's `content`. `toProviderMessages` folds the selection into one Chat text string and sends image parts as `image_url`. A rejected image is shown as an error and left off the active path. Clickable asset refs in the bubble wait.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
 - **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Interactive asset refs and composer asset attach remain deferred.

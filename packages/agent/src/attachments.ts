@@ -1,4 +1,5 @@
-/** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. */
+/** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. Composer pictures live on `content`, not here. */
+
 export type LoomAssetType = "image" | "video" | "audio" | "text" | "other";
 
 export type UiSelectionAttachment = {
@@ -28,6 +29,11 @@ export function isUiSelectionAttachment(value: unknown): value is UiSelectionAtt
 		typeof row.path === "string" &&
 		ASSET_TYPES.has(String(row.assetType))
 	);
+}
+
+/** The Chat endpoint refused a picture. The turn should be reported and left off the active path. */
+export function chatRejectedImages(message: string): boolean {
+	return /image_url|input_image|image input|do(?:es)? not support images?|multimodal|invalid content type|unknown content type|content must be (?:a )?string/i.test(message);
 }
 
 export function parseUserAttachments(value: unknown): LoomUserAttachment[] {
@@ -97,6 +103,7 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 		return "";
 	}).filter(Boolean);
 	if (blocks.length === 0) return text;
+	if (!text) return blocks.join("\n\n");
 	return `${text}\n\n${blocks.join("\n\n")}`;
 }
 
@@ -115,17 +122,14 @@ function imagePartsFromContent(content: unknown): ImagePart[] {
 	return images;
 }
 
-/** Clone a user row for the provider: one text string, plus image parts if any. */
-export function foldUserMessageForLlm<T extends { role: string; content?: unknown; attachments?: unknown }>(
-	message: T,
-): T {
+/** Clone a user row for the provider: one text string, plus image parts already on `content`. */
+export function foldUserMessageForLlm<T extends { role: string; content?: unknown; attachments?: unknown }>(message: T): T {
 	if (message.role !== "user") return message;
 	const attachments = parseUserAttachments(message.attachments);
 	if (attachments.length === 0) return message;
 	const folded = foldUserText(userTextFromContent(message.content), attachments);
 	const images = imagePartsFromContent(message.content);
-	if (images.length === 0) {
-		return { ...message, content: folded };
-	}
+	if (images.length === 0) return { ...message, content: folded };
+	if (!folded) return { ...message, content: images };
 	return { ...message, content: [{ type: "text", text: folded }, ...images] };
 }

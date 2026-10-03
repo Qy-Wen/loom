@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./composer-image": "./src/composer-image.ts"
   },
   "imports": {
     "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts",

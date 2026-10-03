@@ -33,6 +33,16 @@ Load `SKILL.md` from the open library into the creative Agent running on pi harn
 - [ ] Read Agent Skills (`SKILL.md`, agentskills.io) from the library. Do not vendor `packages/coding-agent`
 - [ ] Put a matching skill's text in the system prompt, or expose it as a tool the agent reads on demand
 
+## Step 4: Image input in the chat composer
+
+The composer can attach JPEG, PNG, GIF, and WebP images (up to 4, 8 MB each) and send them with that user message. Video and audio stay out of this step.
+
+There is no vision switch and no retry. The picture goes out as an `image_url` data URL. If the endpoint rejects it, Loom shows the error and leaves that turn off the active path. DeepSeek-V4.1-Flash accepts images and does not accept video.
+
+- [x] The composer can attach an image, and the bubble shows it
+- [x] A Chat model that accepts images receives an `image_url` part with the message
+- [x] If the endpoint rejects the image, that error is shown and the turn stays off the active path
+
 ---
 
 ## Later

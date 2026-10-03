@@ -60,6 +60,25 @@ test("toAgUiMessages shows thinking and drops redacted text and signatures", () 
 	assert.equal(JSON.stringify(messages).includes("secret"), false);
 });
 
+test("toAgUiMessages shows a composer image on the user bubble", () => {
+	const messages = toAgUiMessages([
+		{
+			id: "u1",
+			role: "user",
+			content: [{ type: "text", text: "look" }, { type: "image", data: "abc", mimeType: "image/png" }],
+		},
+	]);
+	assert.deepEqual(messages[0]?.content, [
+		{ type: "text", text: "look" },
+		{ type: "image", source: { type: "data", value: "abc", mimeType: "image/png" } },
+	]);
+	const stored = messages;
+	const live = [{ id: "u1", role: "user" as const, content: "look" }, { id: "a1", role: "assistant" as const, content: "ok" }];
+	const merged = mergeChatMessages(stored, live);
+	assert.deepEqual(merged[0]?.content, stored[0]?.content);
+	assert.equal(merged[1]?.content, "ok");
+});
+
 test("mergeChatMessages keeps stored history when live is empty and appends new turns", () => {
 	const stored = toAgUiMessages([
 		{ role: "user", content: "old" },

@@ -53,7 +53,7 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 	for (const [index, message] of messages.entries()) {
 		const id = typeof message.id === "string" && message.id ? message.id : `loom-${index}`;
 		if (message.role === "user") {
-			out.push({ id, role: "user", content: transcriptText(message.content) });
+			out.push({ id, role: "user", content: userBubbleContent(message) });
 			continue;
 		}
 		if (message.role === "assistant") {
@@ -89,9 +89,41 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 	return out;
 }
 
+function contentImageParts(content: unknown): Array<{ type: "image"; source: { type: "data"; value: string; mimeType: string } }> {
+	if (!Array.isArray(content)) return [];
+	const images = [];
+	for (const part of content) {
+		if (typeof part !== "object" || part === null) continue;
+		const record = part as { type?: unknown; data?: unknown; mimeType?: unknown };
+		if (record.type !== "image" || typeof record.data !== "string" || typeof record.mimeType !== "string") continue;
+		images.push({ type: "image" as const, source: { type: "data" as const, value: record.data, mimeType: record.mimeType } });
+	}
+	return images;
+}
+
+function userBubbleContent(message: LoomTranscriptMessage): string | Array<{ type: "text"; text: string } | { type: "image"; source: { type: "data"; value: string; mimeType: string } }> {
+	const text = transcriptText(message.content).replaceAll("\u200b", "");
+	const images = contentImageParts(message.content);
+	if (images.length === 0) return text;
+	return [...(text ? [{ type: "text" as const, text }] : []), ...images];
+}
+
+function textOf(message: Message): string {
+	const content = "content" in message ? message.content : "";
+	return transcriptText(content).replaceAll("\u200b", "");
+}
+
 function fingerprint(message: Message): string {
-	const content = "content" in message && typeof message.content === "string" ? message.content : "";
-	return `${message.role}:${content}`;
+	return `${message.role}:${textOf(message)}`;
+}
+
+function overlayComposerImages(stored: Message[], live: Message[]): Message[] {
+	return live.map((message, index) => {
+		const prior = stored[index];
+		if (!prior || prior.role !== "user" || message.role !== "user") return message;
+		if (!Array.isArray(prior.content) || textOf(prior) !== textOf(message)) return message;
+		return { ...message, content: prior.content };
+	});
 }
 
 /** Shared opening, then a different entry: the live list is a path we already left. */
@@ -112,7 +144,8 @@ export function mergeChatMessages(stored: Message[], live: Message[]): Message[]
 	if (live.length === 0) return stored;
 	if (fingerprint(stored[0]!) === fingerprint(live[0]!)) {
 		if (diverged(stored, live)) return stored;
-		return live.length >= stored.length ? live : stored;
+		const chosen = live.length >= stored.length ? live : stored;
+		return chosen === live ? overlayComposerImages(stored, live) : stored;
 	}
 	return [...stored, ...live];
 }

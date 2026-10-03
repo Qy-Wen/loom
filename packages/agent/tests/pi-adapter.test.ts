@@ -8,6 +8,7 @@ import { describe, it } from "node:test";
 import { AgentHarness, BACKGROUND_CONTEXT, JsonlSessionRepo } from "#vendor/pi-agent";
 import { NodeExecutionEnv } from "#vendor/pi-agent/node";
 import { Type } from "@earendil-works/pi-ai";
+import { bytesToBase64 } from "../src/composer-image.ts";
 import { HarnessSessionManager } from "../src/harness-session-manager.ts";
 import { buildChatModels, chatEndpointReady, toProviderMessages } from "../src/pi-adapter.ts";
 import type { LoomAgentEvent } from "../src/types.ts";
@@ -178,6 +179,45 @@ describe("HarnessSessionManager", () => {
 			} finally {
 				await reopened.close();
 			}
+		} finally {
+			await manager.close();
+			await rm(root, { recursive: true, force: true });
+			await stop(server);
+		}
+	});
+
+	it("drops a rejected image turn from the active path and reports the error", async () => {
+		const bodies: string[] = [];
+		const server = createServer(async (request, response) => {
+			const chunks: Buffer[] = [];
+			for await (const chunk of request) chunks.push(Buffer.from(chunk));
+			bodies.push(Buffer.concat(chunks).toString("utf8"));
+			if (bodies.length === 1) {
+				response.writeHead(400, { "content-type": "application/json" });
+				response.end(JSON.stringify({ error: { message: "unknown content type image_url", type: "invalid_request_error" } }));
+				return;
+			}
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.write('data: {"id":"img","object":"chat.completion.chunk","created":0,"model":"demo","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}\n\n');
+			response.write('data: {"id":"img","object":"chat.completion.chunk","created":0,"model":"demo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n');
+			response.end("data: [DONE]\n\n");
+		});
+		const baseUrl = await listen(server);
+		const root = await mkdtemp(join(tmpdir(), "loom-harness-image-"));
+		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo" } });
+		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+		const image = { data: bytesToBase64(png), mimeType: "image/png" };
+		try {
+			await manager.openLibrary(root);
+			const session = await manager.createSession();
+			await assert.rejects(() => manager.prompt(session.id, "look", { images: [image] }), /image_url/);
+			assert.equal(bodies.length, 1);
+			assert.match(bodies[0] ?? "", /image_url/);
+			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), []);
+			await manager.prompt(session.id, "next");
+			assert.equal(bodies.length, 2);
+			assert.doesNotMatch(bodies[1] ?? "", /image_url/);
+			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), ["user", "assistant"]);
 		} finally {
 			await manager.close();
 			await rm(root, { recursive: true, force: true });

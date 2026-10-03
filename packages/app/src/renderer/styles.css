@@ -1366,6 +1366,69 @@ body.resizing-columns {
 	min-width: 0;
 }
 
+.session-add-files {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 36px;
+	height: 36px;
+	margin: 0 0 0 4px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: #444;
+	cursor: pointer;
+}
+
+.session-add-files:hover {
+	background: #f2f2f0;
+}
+
+.session-add-files:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.session-composer-images {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	margin: 0 0 8px;
+	pointer-events: auto;
+}
+
+.session-composer-image {
+	position: relative;
+	width: 64px;
+	height: 64px;
+}
+
+.session-composer-image img {
+	width: 64px;
+	height: 64px;
+	object-fit: cover;
+	border-radius: 12px;
+	background: #f4f4f2;
+}
+
+.session-composer-image button {
+	position: absolute;
+	top: 2px;
+	right: 2px;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: #fff;
+	color: #202124;
+	font-size: 14px;
+	line-height: 18px;
+	box-shadow: 0 0 1px #0000009e;
+	cursor: pointer;
+}
+
 .session-follow-up {
 	margin: 0 0 6px;
 	border: 1px solid #e5e5e2;

@@ -16,7 +16,7 @@ import {
 	type Session,
 } from "#vendor/pi-agent";
 import { randomUUID } from "node:crypto";
-import { userTextFromContent } from "./attachments.ts";
+import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import type {
@@ -36,6 +36,14 @@ const CONTEXT = BACKGROUND_CONTEXT;
 
 function failureText(error: { message?: string }, fallback: string): string {
 	return typeof error.message === "string" && error.message.length > 0 ? error.message : fallback;
+}
+
+function userPromptContent(text: string, options: { attachments?: unknown[]; images?: ReadonlyArray<{ data: string; mimeType: string }> }, emptyError: string) {
+	const parts: Array<{ type: "text"; text: string } | { type: "image"; data: string; mimeType: string }> = [];
+	if (text) parts.push({ type: "text", text });
+	for (const image of options.images ?? []) parts.push({ type: "image", data: image.data, mimeType: image.mimeType });
+	if (parts.length === 0 && !options.attachments?.length) throw new Error(emptyError);
+	return parts.length > 0 ? parts : [{ type: "text" as const, text: "" }];
 }
 
 type OpenSession = {
@@ -571,8 +579,11 @@ export class HarnessSessionManager {
 				if (text) pendingFollowUps.set(item.entryId, text);
 			}
 		}));
+		let userEntryId: string | undefined;
 		unsubscribers.push(open.harness.events.on("message_end", (event) => {
-			if (event.lane !== MAIN || event.runId !== operationId || event.message.role !== "user" || !event.entryId) return;
+			if (event.lane !== MAIN || event.message.role !== "user" || !event.entryId) return;
+			userEntryId = event.entryId;
+			if (event.runId !== operationId) return;
 			const text = pendingFollowUps.get(event.entryId);
 			if (text === undefined) return;
 			pendingFollowUps.delete(event.entryId);
@@ -583,9 +594,10 @@ export class HarnessSessionManager {
 		const run: ActiveRun = { lane, operationId, done };
 		this.running.set(id, run);
 		try {
+			const content = userPromptContent(text, options, "Prompt is empty");
 			const message: AgentMessage = {
 				role: "user",
-				content: [{ type: "text", text }],
+				content,
 				timestamp: Date.now(),
 				...(options.attachments?.length ? { attachments: options.attachments } : {}),
 			} as AgentMessage;
@@ -604,7 +616,17 @@ export class HarnessSessionManager {
 				if (!stopped.ok && stopped.error._tag !== "NoActiveOperation") throw stopped.error;
 				throw new Error(`Chat run is waiting for unsupported ${outcome.value.reason}`);
 			}
-			if (outcome.value.outcome.status === "failed") throw new Error(outcome.value.outcome.error?.message ?? "Chat request failed");
+			if (outcome.value.outcome.status === "failed") {
+				const failed = outcome.value.outcome.error?.message ?? "Chat request failed";
+				if (chatRejectedImages(failed) && userEntryId) {
+					const entries = await lane.findEntries({ order: "oldestFirst" }, CONTEXT);
+					const target = entries.find((entry) => entry.id === userEntryId);
+					if (target && target.type === "message") {
+						await lane.navigateTree(target.parentId, undefined, CONTEXT);
+					}
+				}
+				throw new Error(failed);
+			}
 			emit({ type: "agent_end" });
 		} finally {
 			for (const unsubscribe of unsubscribers) unsubscribe();
@@ -653,12 +675,12 @@ export class HarnessSessionManager {
 	/** Queue a user message for the active run. It is inserted when that run would otherwise finish, and the same run continues. */
 	async followUp(id: string, text: string, options: LoomPromptOptions = {}): Promise<void> {
 		const trimmed = text.trim();
-		if (!trimmed && !options.attachments?.length) throw new Error("Follow-up is empty");
+		const content = userPromptContent(trimmed, options, "Follow-up is empty");
 		const run = this.running.get(id);
 		if (!run) throw new Error("No active run");
 		const message: AgentMessage = {
 			role: "user",
-			content: trimmed ? [{ type: "text", text: trimmed }] : [],
+			content,
 			timestamp: Date.now(),
 			...(options.attachments?.length ? { attachments: options.attachments } : {}),
 		} as AgentMessage;
