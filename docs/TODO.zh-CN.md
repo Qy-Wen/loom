@@ -10,15 +10,7 @@
 
 提示词模板暂不因 vendor 提供 API 就强行加入产品。已完成的步骤见 [归档](./archive/ARCHIVE.zh-CN.md)。
 
-## 第一步：从之前的提问分支
-
-基于 Harness 会话树，从某条历史用户提问接着聊。选中后在那条消息上直接改，改完就地发送。发送时当前路径切到这条提问之前，旧路径留在树里。也可以把该提问之前的前缀复制成一个新会话，标题前加上 `Fork: `，原会话不动。已经写进素材库的文件保持原样。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
-
-- [x] 选中一条历史提问：在那条消息上直接改，改完就地发送
-- [x] 续聊：切换当前路径，旧路径留在树中
-- [x] 开新会话：复制选中位置之前的前缀，标题前加 `Fork: `；原会话保持不变
-
-## 第二步：对话资产引用
+## 第一步：对话资产引用
 
 输入框可贴库内资产（不只是隐式 `ui_selection`）。对话里的 `asset_id` 引用可点并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5 和 §6.3b。
 
@@ -26,22 +18,12 @@
 - [ ] 画出这些芯片以及 `search_assets` / `inspect_asset` 的引用；点击后在素材库里选中
 - [ ] 用 `asset_id` 当键，不用绝对路径
 
-## 第三步：Skills
+## 第二步：Skills
 
 把当前素材库里的 `SKILL.md` 接到运行在 pi harness 上的创作 Agent。见 [AGENT](./AGENT.zh-CN.md)。
 
 - [ ] 从素材库读取 Agent Skills（`SKILL.md`，agentskills.io）。不 vendor `packages/coding-agent`
 - [ ] 命中的技能正文放进系统提示，或做成 Agent 按需读取的工具
-
-## 第四步：对话框图片输入
-
-输入框可以插入 JPEG、PNG、GIF、WebP（最多 4 张，每张 8 MB），随这条 user 消息发给 Chat。视频和音频不在这一步。
-
-没有视觉开关，也不自动重试。图片以 `image_url` data URL 发出。端点拒绝时界面报错，这一轮离开当前路径。DeepSeek-V4.1-Flash 收图片，不收视频。
-
-- [x] 输入框可插入图片，气泡里能看见
-- [x] 收图片的 Chat 模型随消息带上 `image_url`
-- [x] 端点拒绝图片时界面报错，这一轮离开当前路径
 
 ---
 
@@ -52,5 +34,6 @@
 - **CLIP / 图片向量：** 不经文字、直接嵌图；需要时再做
 - **多 Agent：** 按真实创作角色拆分协作与编排。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
 - **沙箱：** 工作区工具的路径 jail，以及高风险工具和生成任务的进程隔离。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
+- **Human in the loop：** 高风险操作执行前，由用户确认。
 - **评测：** Agent 行为、工具调用、检索效果。压缩率和 prompt-cache 命中率已在 `packages/agent/evals/`；Hybrid Search 有最小单测集。见 [PRODUCT](./PRODUCT.zh-CN.md) §10 和 [AGENT](./AGENT.zh-CN.md)。
 - **发布：** 小红书/抖音等平台适配

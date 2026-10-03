@@ -243,7 +243,7 @@ Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG
 **Verified implementation details:**
 
 - The seam extends `AbstractAgent` from `@ag-ui/client` and implements `run(input): Observable<BaseEvent>` with RxJS.
-- `@ag-ui/{client,core}` is pinned to **0.0.59**, matching `@copilotkit/runtime` 1.73.0.
+- `@ag-ui/{client,core}` is pinned to **1.0.1**, matching `@copilotkit/runtime` 1.77.0.
 - The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
 - The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
 - Runtime clones the registered AG-UI agent for each run. `LoomAgUiAgent.clone()` keeps the shared `HarnessSessionManager` and in-flight run map.
