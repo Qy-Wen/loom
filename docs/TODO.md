@@ -12,7 +12,11 @@
 
 Split collaboration by genuine creative roles, not a generic orchestrator. See [PRODUCT](./PRODUCT.md) §10.
 
-- [ ] Add a second Agent only when two roles would otherwise fight in one loop (for example retrieve vs create)
+The user-facing chat Agent talks, plans, and transforms (FFmpeg). Nested specialists:
+
+- [ ] Retrieve Agent: search and inspect the library; return asset ids and passages
+- [ ] Create Agent: generate from a brief and asset ids via MCP; do not search the library
+- [ ] Run independent calls in parallel in the first version (the harness already schedules parallel tools). A child cannot spawn another child
 
 ## Step 2: Process sandbox
 

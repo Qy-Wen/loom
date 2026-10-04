@@ -12,7 +12,11 @@
 
 按真实创作角色拆协作，不要上一个泛泛的编排器。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
 
-- [ ] 只有两个角色会在同一 loop 里打架时才加第二个 Agent（例如检索 vs 生成）
+主对话 Agent 对人、做计划、做变换（FFmpeg）。底下两个专职：
+
+- [ ] 检索 Agent：搜库、看素材；只回 `asset_id` 和段落
+- [ ] 生成 Agent：用 brief 和 `asset_id` 走 MCP 生成；不搜库
+- [ ] 第一版就并行：同一轮里互不依赖的调用一起跑（沿用 Harness 已有的并行工具）。子 Agent 不能再派生子 Agent
 
 ## 第二步：进程沙箱
 

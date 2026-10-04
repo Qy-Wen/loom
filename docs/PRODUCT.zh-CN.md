@@ -345,7 +345,7 @@ POST /graph/query
 后续根据实际场景逐步引入：
 
 - **Skills：** 已做 — 从 `<library>/.agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./AGENT.zh-CN.md)。
-- **多 Agent**：按真实创作角色拆分协作与编排。
+- **多 Agent**：按真实创作角色拆协作（检索 vs 生成），不要上一个泛泛的编排器。
 - **沙箱**：隔离执行高风险工具与生成任务。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。

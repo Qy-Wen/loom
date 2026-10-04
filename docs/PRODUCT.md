@@ -345,7 +345,7 @@ Future publishing extension:
 Introduce these progressively when real scenarios require them:
 
 - **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
-- **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
+- **Multi-Agent:** divide collaboration by genuine creative roles (retrieve vs create), not a generic orchestrator.
 - **Sandboxing:** isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
