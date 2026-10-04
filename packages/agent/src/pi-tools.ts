@@ -9,6 +9,7 @@ import {
 } from "#vendor/pi-agent";
 import { NodeExecutionEnv } from "#vendor/pi-agent/node";
 import { Type } from "@earendil-works/pi-ai";
+import { processReadImage } from "./read-image.ts";
 import type { LoomTool, LoomToolContentPart, LoomToolResult } from "./types.ts";
 
 export interface WorkspaceTools {
@@ -20,7 +21,7 @@ export interface WorkspaceTools {
 export function createWorkspaceTools(cwd = process.cwd()): WorkspaceTools {
 	const toolContext = { env: new NodeExecutionEnv({ cwd }) };
 	return {
-		tools: [createReadTool(), createBashTool(), createEditTool(), createWriteTool()],
+		tools: [createReadTool({ imageProcessor: processReadImage }), createBashTool(), createEditTool(), createWriteTool()],
 		toolContext,
 		setCwd(next) {
 			toolContext.env.cwd = next;

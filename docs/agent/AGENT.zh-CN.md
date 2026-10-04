@@ -139,7 +139,7 @@ Loom 业务代码 → @loom/agent
 
 ### 注册工具（无需改上游源码）
 
-- **工作区工具**：原生使用 Pi Harness 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` 与 `NodeExecutionEnv`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。
+- **工作区工具**：原生使用 Pi Harness 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` 与 `NodeExecutionEnv`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。`read` 把 JPEG、PNG、GIF、WebP 附给模型；边长超过 2000 或 base64 超过约 4.5MB 时先缩小。BMP 等先转成 PNG。
 - **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
