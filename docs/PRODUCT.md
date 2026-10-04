@@ -350,7 +350,7 @@ Introduce these progressively when real scenarios require them:
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.
-- **Evals:** evaluate Agent behavior, tool calls, and retrieval quality. See [TODO](./TODO.md).
+- **Evals:** done — Agent behavior, tool calls, and retrieval quality. See [EVALS](./AGENT/EVALS.md).
 - **Chat asset refs:** done — attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5.
 - **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
 - **Observability:** record run traces, tool calls, latency, and token usage.

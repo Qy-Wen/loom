@@ -51,7 +51,7 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 - Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. If the Rerank slot is on, send those passages as `documents`. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps RRF. TEI-native `texts` waits.
 - A hit can return the child passage and optionally the parent text
 - Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
-- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank)
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../AGENT/EVALS.md).
 
 ---
 

@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Agent and retrieval evals
+
+In-repo gold sets, no second repository. Retrieval and Agent/tool gold, CI stub vs live slots. See [EVALS](../AGENT/EVALS.md).
+
+---
+
 ## Library skills
 
 On library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`. See [AGENT](../AGENT.md) and [agentskills.io](https://agentskills.io/specification).

@@ -51,7 +51,7 @@
 - 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。Rerank 槽位开着时，这些段落作为 `documents` 再发。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。失败或槽位空着就保持 RRF。TEI 原生 `texts` 以后再说。
 - 命中可返回子段落，并可带上父切片正文
 - 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
-- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../AGENT/EVALS.zh-CN.md)。
 
 ---
 

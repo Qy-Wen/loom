@@ -350,7 +350,7 @@ POST /graph/query
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
 - **MCP 设置页**：已做 — 设置 → MCP tab。
-- **Evals**：评测 Agent、工具调用与检索效果。见 [TODO](./TODO.zh-CN.md)。
+- **Evals**：已做 — 评测 Agent、工具调用与检索效果。见 [EVALS](./AGENT/EVALS.zh-CN.md)。
 - **对话资产引用：** 已做 — 输入框可贴库内资产；对话里的 `asset_id` 引用可点，并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5。
 - **从某条消息分支：** 已做 — 当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
 - **可观测性**：记录运行轨迹、工具调用、耗时与 token。

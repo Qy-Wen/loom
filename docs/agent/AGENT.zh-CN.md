@@ -3,7 +3,7 @@
 # Agent 技术方案（Agent Architecture）
 
 > 记录 Loom 的 Agent 层怎么实现：引入边界、解耦、合并上游更新、user 消息 attachments、前端交互协议（AG-UI）。
-> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，运行时边界见 [Pi Harness 接入范围](./PI-HARNESS.md)，待办见 [TODO.md](./TODO.zh-CN.md)。
+> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，运行时边界见 [Pi Harness 接入范围](./PI-HARNESS.md)，评测见 [EVALS.md](./EVALS.zh-CN.md)，待办见 [TODO.md](./TODO.zh-CN.md)。
 
 ---
 
@@ -302,12 +302,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 
 ## 7. Evals
 
-评测在 `packages/agent/evals/`。压缩率（`compaction-rate.ts`）是压缩后 / 压缩前的上下文 token。Prompt-cache 命中率（`prompt-cache-hit.ts`）以 Chat usage 为准：`cacheRead / (input + cacheRead + cacheWrite)`（接口 `prompt_tokens` 拆开后）。更完整的 Agent / 工具 / 检索评测以后再做，见 [TODO](./TODO.zh-CN.md)。
-
-```bash
-pnpm --filter @loom/agent eval:compaction-rate
-pnpm --filter @loom/agent eval:prompt-cache-hit
-```
+金标放在本仓库。CI 用假 Chat / 假向量，`--live` 打 `.env` 里的 Chat 和 Embedding 槽位。命令、指标和不做的事项见 [EVALS.md](./EVALS.zh-CN.md)。
 
 ---
 
@@ -319,5 +314,5 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
 - **User attachments**：库高亮（`ui_selection`）和输入框芯片（`asset_ref`）都挂在 user 的 `attachments` 上，以 `assetId` 为键。外部文件先拷进 `Inbox/`。`toProviderMessages` 把每条附件折成一段文字。历史上 `content` 里的图片部分仍按 `image_url` 发出。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
-- **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
+- **Evals：** 压缩率、prompt-cache 命中率、仓内 Agent/工具金标、检索 Recall@k / nDCG。见 [EVALS.md](./EVALS.zh-CN.md)。
 - **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。
