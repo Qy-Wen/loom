@@ -197,6 +197,29 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(manager.prompts.map(({ text }) => text), ["latest question", "follow up"]);
 	});
 
+	it("maps tool_pending once and ignores the later tool_start", async () => {
+		const manager = new FakeManager([
+			{ type: "agent_start" },
+			{ type: "tool_pending", toolCallId: "call-1", name: "write", args: { path: "note.md", content: "hi" } },
+			{ type: "tool_start", toolCallId: "call-1", name: "write", args: { path: "note.md", content: "hi" } },
+			{ type: "tool_end", toolCallId: "call-1", name: "write", result: { content: "ok" }, isError: false },
+			{ type: "agent_end" },
+		]);
+		const events = await lastValueFrom(new LoomAgUiAgent(manager.asManager()).run(runInput()).pipe(toArray()));
+		assert.deepEqual(eventTypes(events), [
+			EventType.RUN_STARTED,
+			EventType.TEXT_MESSAGE_START,
+			EventType.TEXT_MESSAGE_END,
+			EventType.TOOL_CALL_START,
+			EventType.TOOL_CALL_ARGS,
+			EventType.TOOL_CALL_END,
+			EventType.TOOL_CALL_RESULT,
+			EventType.RUN_FINISHED,
+		]);
+		assert.equal((events[3] as unknown as { toolCallName: string }).toolCallName, "write");
+		assert.equal((events[4] as unknown as { delta: string }).delta, '{"path":"note.md","content":"hi"}');
+	});
+
 	it("maps retries and tool progress to activity rows that clear when the step ends", async () => {
 		const manager = new FakeManager([
 			{ type: "agent_start" },

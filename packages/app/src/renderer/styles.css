@@ -1351,9 +1351,45 @@ body.resizing-columns {
 	padding-bottom: 12px;
 }
 
-.session-chat-shell > .session-context-usage {
+.session-chat-shell > .session-chat-footer {
 	grid-row: 2;
-	padding: 1px 6px 0;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	min-width: 0;
+	padding: 1px 6px 4px;
+}
+
+.session-permission {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+	color: #5c5f64;
+	font-size: 11px;
+}
+
+.session-permission-label {
+	flex: 0 0 auto;
+	user-select: none;
+}
+
+.session-permission select {
+	min-width: 0;
+	max-width: 180px;
+	padding: 1px 4px;
+	border: 1px solid #e5e5e2;
+	border-radius: 4px;
+	background: #fff;
+	color: inherit;
+	font: inherit;
+}
+
+.session-chat-footer > .session-context-usage {
+	flex: 0 0 auto;
+	margin-left: auto;
+	padding: 0;
 	text-align: right;
 	font-size: 11px;
 	opacity: 0.7;
@@ -1882,6 +1918,26 @@ body.resizing-columns {
 
 .tool-call-status {
 	flex: 0 0 auto;
+}
+
+.tool-call-gate {
+	display: flex;
+	gap: 6px;
+	margin: 6px 0 0 13px;
+}
+
+.tool-call-gate button {
+	padding: 2px 8px;
+	border: 1px solid #d0d0cc;
+	border-radius: 5px;
+	background: #fff;
+	color: #202124;
+	font: inherit;
+	cursor: pointer;
+}
+
+.tool-call-gate button:hover {
+	background: #f2f2f0;
 }
 
 .tool-call-body {

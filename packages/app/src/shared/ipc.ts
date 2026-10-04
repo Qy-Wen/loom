@@ -17,7 +17,12 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { HarnessSessionRecord as SessionRecord, HarnessSessionSummary as SessionSummary } from "@loom/agent";
+import type {
+	AgentPermissionLevel,
+	HarnessSessionRecord as SessionRecord,
+	HarnessSessionSummary as SessionSummary,
+	ToolGateDecision,
+} from "@loom/agent";
 import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
@@ -123,6 +128,9 @@ export const IPC = {
 	getAgentStats: "loom:getAgentStats",
 	resetAgentStats: "loom:resetAgentStats",
 	setUiSelection: "loom:setUiSelection",
+	getAgentPermission: "loom:getAgentPermission",
+	setAgentPermission: "loom:setAgentPermission",
+	resolveToolGate: "loom:resolveToolGate",
 } as const;
 
 export interface LoomApi {
@@ -206,6 +214,9 @@ export interface LoomApi {
 	getAgentStats: () => Promise<AgentStatsView>;
 	resetAgentStats: () => Promise<AgentStatsView>;
 	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;
+	getAgentPermission: () => Promise<AgentPermissionLevel>;
+	setAgentPermission: (level: AgentPermissionLevel) => Promise<AgentPermissionLevel>;
+	resolveToolGate: (toolCallId: string, decision: ToolGateDecision) => Promise<boolean>;
 }
 
 declare global {

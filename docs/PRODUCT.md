@@ -199,7 +199,7 @@ Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md).
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Path jail and a process sandbox are deferred.
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full; Full intercepts no tools. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Path jail and a process sandbox are deferred.
 
 ### 6.1 FFmpeg — first Agent tools
 
@@ -353,4 +353,5 @@ Introduce these progressively when real scenarios require them:
 - **Evals:** done — Agent behavior, tool calls, and retrieval quality. See [EVALS](./AGENT/EVALS.md).
 - **Chat asset refs:** done — attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5.
 - **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
+- **Human in the loop:** done — confirm `write` / `edit` (and optionally `bash`) from the chat footer. See [AGENT](./AGENT.md) §6.3e.
 - **Observability:** record run traces, tool calls, latency, and token usage.

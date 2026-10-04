@@ -19,6 +19,7 @@ import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
+import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { InlineMessageBody, appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, paintInlineEditor, placeCaretAtStart, readInlineEditor, rememberComposerAsset } from "./inline-asset-text.tsx";
 
 const StoredMessagesContext = createContext<Message[]>([]);
@@ -1095,7 +1096,10 @@ export function SessionChat({
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
 			<div className="session-chat-shell">
 				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
-				<ContextIndicator context={context} />
+				<div className="session-chat-footer">
+					<AgentPermissionSelect />
+					<ContextIndicator context={context} />
+				</div>
 			</div>
 			</ComposerAttachAppliedContext.Provider>
 			</ComposerAttachContext.Provider>

@@ -48,6 +48,7 @@ export type LoomAgentEvent =
 	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
 	| { type: "compaction_end"; reason: "manual" | "threshold" | "overflow"; status: "completed" | "declined" | "aborted" | "failed" }
 	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
+	| { type: "tool_pending"; toolCallId: string; name: string; args: unknown }
 	| { type: "tool_progress"; toolCallId: string; name: string; text: string }
 	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
 	| { type: "retry_scheduled"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }

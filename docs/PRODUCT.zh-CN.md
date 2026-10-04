@@ -199,7 +199,7 @@ Level 2 先做切过的 **Markdown** embedding。规则见 [TEXT](./RAG/TEXT.zh-
 
 ## 6. Agent 工具与创作层
 
-Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。路径 jail 和进程沙箱以后再加。
+Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。对话权限为 Basic、Standard（默认）、Full；Full 不拦截任何工具。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。路径 jail 和进程沙箱以后再加。
 
 ### 6.1 FFmpeg — 第一批 Agent Tools
 
@@ -353,4 +353,5 @@ POST /graph/query
 - **Evals**：已做 — 评测 Agent、工具调用与检索效果。见 [EVALS](./AGENT/EVALS.zh-CN.md)。
 - **对话资产引用：** 已做 — 输入框可贴库内资产；对话里的 `asset_id` 引用可点，并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5。
 - **从某条消息分支：** 已做 — 当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
+- **Human in the loop：** 已做 — 对话底部确认 `write` / `edit`（以及可选的 `bash`）。见 [AGENT](./AGENT.zh-CN.md) §6.3e。
 - **可观测性**：记录运行轨迹、工具调用、耗时与 token。

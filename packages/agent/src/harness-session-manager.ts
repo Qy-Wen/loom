@@ -20,6 +20,14 @@ import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
+import {
+	DEFAULT_AGENT_PERMISSION,
+	ToolApprovalQueue,
+	parseAgentPermissionLevel,
+	toolNeedsApproval,
+	type AgentPermissionLevel,
+	type ToolGateDecision,
+} from "./tool-permission.ts";
 import type {
 	LoomAgentEvent,
 	LoomAgentOptions,
@@ -74,7 +82,14 @@ function hasReportedUsage(message: AgentMessage): boolean {
 	return calculateContextTokens(usage as Parameters<typeof calculateContextTokens>[0]) > 0;
 }
 
-type ActiveRun = { lane: AgentLane; operationId: string; reason?: "user"; cancelRequested?: boolean; done: Promise<void> };
+type ActiveRun = {
+	lane: AgentLane;
+	operationId: string;
+	reason?: "user";
+	cancelRequested?: boolean;
+	done: Promise<void>;
+	emit: (event: LoomAgentEvent) => void;
+};
 
 export interface HarnessSessionSummary {
 	id: string;
@@ -109,6 +124,8 @@ export class HarnessSessionManager {
 	private readonly operations = new Map<string, Promise<void>>();
 	private readonly preparing = new Map<string, { cancelled: boolean; done: Promise<void>; finish: () => void }>();
 	private readonly running = new Map<string, ActiveRun>();
+	private permissionLevel: AgentPermissionLevel = DEFAULT_AGENT_PERMISSION;
+	private readonly toolApprovals = new ToolApprovalQueue();
 	private closing = false;
 	private readonly listeners = new Set<(sessions: HarnessSessionSummary[]) => void>();
 	private transition: Promise<void> = Promise.resolve();
@@ -119,6 +136,44 @@ export class HarnessSessionManager {
 	constructor(options: LoomAgentOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) {
 		this.options = { ...options, tools: [...(options.tools ?? [])] };
 		this.onUsage = onUsage;
+	}
+
+	getPermissionLevel(): AgentPermissionLevel {
+		return this.permissionLevel;
+	}
+
+	setPermissionLevel(level: AgentPermissionLevel): void {
+		this.permissionLevel = parseAgentPermissionLevel(level);
+		if (this.permissionLevel === "full") this.toolApprovals.approveAll();
+	}
+
+	/** Approve or skip a gated tool that is waiting in `before_tool`. */
+	resolveToolGate(toolCallId: string, decision: ToolGateDecision): boolean {
+		return this.toolApprovals.resolve(toolCallId, decision);
+	}
+
+	private sessionIdForRun(runId: string): string | undefined {
+		for (const [sessionId, run] of this.running) {
+			if (run.operationId === runId) return sessionId;
+		}
+		return undefined;
+	}
+
+	private async beforeTool(
+		event: { runId: string; toolCallId: string; toolName: string; args: Record<string, unknown> },
+		context: { abortSignal?: AbortSignal },
+	): Promise<{ block?: { reason: string } } | undefined> {
+		if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
+		const sessionId = this.sessionIdForRun(event.runId);
+		const run = sessionId ? this.running.get(sessionId) : undefined;
+		if (!run || !sessionId) {
+			return { block: { reason: "Tool confirmation is unavailable." } };
+		}
+		run.emit({ type: "tool_pending", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
+		const decision = await this.toolApprovals.wait(sessionId, event.toolCallId, context.abortSignal);
+		if (decision === "approve") return undefined;
+		if (decision === "reject") return { block: { reason: "The user skipped this tool." } };
+		return { block: { reason: "The user pressed Stop. This turn was cancelled on purpose, not because of an error." } };
 	}
 
 	private async serializeTransition<T>(operation: () => Promise<T>): Promise<T> {
@@ -464,6 +519,7 @@ export class HarnessSessionManager {
 			}, CONTEXT);
 			open.harness = harness;
 			open.lane = await harness.lane(MAIN, CONTEXT);
+			harness.hooks.on("before_tool", (event, context) => this.beforeTool(event, context), { id: "loom.tool_permission" });
 			const stored = (await open.session.getValue(laneConfig(MAIN), CONTEXT))?.value;
 			if (stored?.model.provider !== model.provider || stored.model.modelId !== model.id) {
 				await open.lane.setModel({ provider: model.provider, modelId: model.id }, CONTEXT);
@@ -664,7 +720,7 @@ export class HarnessSessionManager {
 		}));
 		let resolveDone!: () => void;
 		const done = new Promise<void>((resolve) => { resolveDone = resolve; });
-		const run: ActiveRun = { lane, operationId, done };
+		const run: ActiveRun = { lane, operationId, done, emit };
 		this.running.set(id, run);
 		try {
 			const content = userPromptContent(text, options, "Prompt is empty");
@@ -715,6 +771,7 @@ export class HarnessSessionManager {
 	}
 
 	async abort(id: string, reason?: "user"): Promise<void> {
+		this.toolApprovals.abortSession(id);
 		const preparation = this.preparing.get(id);
 		if (preparation) preparation.cancelled = true;
 		const pending = this.handles.get(id);
@@ -807,6 +864,7 @@ export class HarnessSessionManager {
 
 	private async closeLibrary(): Promise<void> {
 		this.closing = true;
+		this.toolApprovals.abortAll();
 		try {
 			for (const preparation of this.preparing.values()) preparation.cancelled = true;
 			await this.stopRecovery();

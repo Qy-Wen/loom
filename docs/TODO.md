@@ -8,17 +8,6 @@
 
 ---
 
-Do not add prompt-template UI merely because vendor APIs exist. Completed steps are in the [archive](./archive/ARCHIVE.md).
-
-## Step 1: Human in the loop
-
-The user confirms a high-risk operation before it runs.
-
-- [ ] Pause high-risk tool calls until the user approves or rejects them
-- [ ] Show what would run, then resume or skip that call from the same turn
-
----
-
 ## Later
 
 - **In-process OCR (optional):** RapidOCR + ONNX on CPU, behind a switch, off by default. Not required. Prefer VLM. See [MEDIA](./RAG/MEDIA.md).

@@ -214,6 +214,7 @@ export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string
 		chat: { ...chat, model: chat.model || "eval" },
 		tools: MOCK_TOOLS,
 	});
+	manager.setPermissionLevel("full");
 	try {
 		await manager.openLibrary(library);
 		const scores: AgentScore[] = [];
