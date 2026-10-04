@@ -24,6 +24,7 @@ import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { CopyableError } from "./panel/copyable-error.tsx";
+import { runActivityRenderers } from "./panel/run-activity.tsx";
 import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview } from "./workbench/asset-preview.tsx";
@@ -669,7 +670,7 @@ export function App(): React.JSX.Element {
 	}
 
 	return (
-		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId}>
+		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
 				<header className="topbar">
 					<span className="brand">Loom</span>

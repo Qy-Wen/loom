@@ -1915,6 +1915,46 @@ body.resizing-columns {
 	background: linear-gradient(to bottom, rgb(242 242 240 / 0), #f2f2f0);
 }
 
+.run-activity {
+	margin: 8px 0;
+	padding: 7px 10px 8px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	color: #5c5f64;
+	font-size: 12px;
+}
+
+.run-activity-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.run-activity-label {
+	color: #3f4246;
+	font-weight: 600;
+}
+
+.run-activity-meta {
+	color: #8a8d91;
+}
+
+.run-activity-detail,
+.run-activity-output {
+	margin: 6px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.run-activity-output {
+	max-height: 8em;
+	overflow: auto;
+	font-size: 11px;
+	line-height: 1.35;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
 .tool-call-result {
 	margin: 0;
 	overflow: visible;

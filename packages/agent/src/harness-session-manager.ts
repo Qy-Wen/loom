@@ -35,6 +35,17 @@ const ARCHIVED = value<"open" | "archived">("loom.session", "status");
 const STOP_NOTE = "The user pressed Stop. This turn was cancelled on purpose, not because of an error.";
 const CONTEXT = BACKGROUND_CONTEXT;
 
+function toolContentText(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (!Array.isArray(content)) return "";
+	return content
+		.filter((part): part is { type: "text"; text: string } => {
+			return typeof part === "object" && part !== null && (part as { type?: unknown }).type === "text" && typeof (part as { text?: unknown }).text === "string";
+		})
+		.map((part) => part.text)
+		.join("\n");
+}
+
 function failureText(error: { message?: string }, fallback: string): string {
 	return typeof error.message === "string" && error.message.length > 0 ? error.message : fallback;
 }
@@ -572,10 +583,64 @@ export class HarnessSessionManager {
 		unsubscribers.push(open.harness.events.on("tool_start", (event) => {
 			if (event.lane === MAIN && event.runId === operationId) emit({ type: "tool_start", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
 		}));
+		const progressTimers = new Map<string, ReturnType<typeof setTimeout>>();
+		const latestProgress = new Map<string, { name: string; text: string }>();
+		const progressDue = new Map<string, number>();
+		const emitProgress = (toolCallId: string) => {
+			const latest = latestProgress.get(toolCallId);
+			if (!latest) return;
+			progressDue.set(toolCallId, Date.now() + 200);
+			emit({ type: "tool_progress", toolCallId, name: latest.name, text: latest.text });
+		};
+		const clearProgress = (toolCallId: string) => {
+			const timer = progressTimers.get(toolCallId);
+			if (timer) clearTimeout(timer);
+			progressTimers.delete(toolCallId);
+			latestProgress.delete(toolCallId);
+			progressDue.delete(toolCallId);
+		};
+		unsubscribers.push(open.harness.events.on("tool_update", (event) => {
+			if (event.lane !== MAIN || event.runId !== operationId) return;
+			const text = toolContentText(event.partialResult.content);
+			if (!text) return;
+			latestProgress.set(event.toolCallId, { name: event.toolName, text });
+			const due = progressDue.get(event.toolCallId) ?? 0;
+			const wait = due - Date.now();
+			if (wait <= 0) {
+				const pending = progressTimers.get(event.toolCallId);
+				if (pending) clearTimeout(pending);
+				progressTimers.delete(event.toolCallId);
+				emitProgress(event.toolCallId);
+				return;
+			}
+			if (progressTimers.has(event.toolCallId)) return;
+			progressTimers.set(event.toolCallId, setTimeout(() => {
+				progressTimers.delete(event.toolCallId);
+				emitProgress(event.toolCallId);
+			}, wait));
+		}));
+		unsubscribers.push(open.harness.events.on("retry_scheduled", (event) => {
+			if (event.lane !== MAIN || event.runId !== operationId) return;
+			emit({
+				type: "retry_scheduled",
+				attempt: event.attempt,
+				maxAttempts: event.maxAttempts,
+				delayMs: event.delayMs,
+				errorMessage: event.errorMessage,
+			});
+		}));
+		unsubscribers.push(open.harness.events.on("retry_start", (event) => {
+			if (event.lane === MAIN && event.runId === operationId) emit({ type: "retry_start", attempt: event.attempt });
+		}));
+		unsubscribers.push(open.harness.events.on("retry_end", (event) => {
+			if (event.lane !== MAIN || event.runId !== operationId) return;
+			emit({ type: "retry_end", success: event.success, ...(event.finalError ? { errorMessage: event.finalError } : {}) });
+		}));
 		unsubscribers.push(open.harness.events.on("tool_end", (event) => {
 			if (event.lane !== MAIN || event.runId !== operationId) return;
 			const content = event.result.content;
 			const text = Array.isArray(content) ? content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
+			clearProgress(event.toolCallId);
 			emit({ type: "tool_end", toolCallId: event.toolCallId, name: event.toolName, result: { content: text, details: event.result.details }, isError: event.isError });
 		}));
 		const pendingFollowUps = new Map<string, string>();
@@ -637,6 +702,7 @@ export class HarnessSessionManager {
 			}
 			emit({ type: "agent_end" });
 		} finally {
+			for (const timer of progressTimers.values()) clearTimeout(timer);
 			for (const unsubscribe of unsubscribers) unsubscribe();
 			try {
 				if (run.reason === "user") await lane.appendCustomEntry("loom_user_stop", undefined, CONTEXT);

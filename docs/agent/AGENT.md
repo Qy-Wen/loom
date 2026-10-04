@@ -267,7 +267,9 @@ Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG
 | `text` delta | `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` |
 | `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`, `REASONING_MESSAGE_*`, `REASONING_END` |
 | `tool_start` | `TOOL_CALL_START` and `TOOL_CALL_ARGS`, preserving pi's stable `toolCallId` |
+| `tool_progress` | `ACTIVITY_SNAPSHOT` `loom.tool_progress`, replaced in place; hidden when the call ends |
 | `tool_end` | `TOOL_CALL_END` and `TOOL_CALL_RESULT`; structured `details` also emits `CUSTOM loom.tool_result` |
+| `retry_scheduled` / `retry_start` / `retry_end` | `ACTIVITY_SNAPSHOT` `loom.retry`. The row shows the wait, then clears |
 | `error` | A `loom-error-*` notice plus `RUN_ERROR` (bad key, unreachable Chat, missing Settings). Styled as a system alert, not a model reply. |
 | `agent_end` | `RUN_FINISHED` |
 
