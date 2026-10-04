@@ -18,6 +18,7 @@ import {
 import { randomUUID } from "node:crypto";
 import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
+import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import type {
 	LoomAgentEvent,
@@ -91,6 +92,7 @@ export class HarnessSessionManager {
 	private root: string | undefined;
 	private repo: JsonlSessionRepo | undefined;
 	private workspace: WorkspaceTools | undefined;
+	private skills: Skill[] = [];
 	private readonly handles = new Map<string, OpenSession>();
 	private readonly creating = new Set<Promise<HarnessSessionRecord>>();
 	private readonly operations = new Map<string, Promise<void>>();
@@ -125,6 +127,11 @@ export class HarnessSessionManager {
 			await this.closeLibrary();
 			this.root = resolve(root);
 			this.workspace = createWorkspaceTools(this.root);
+			const loaded = await loadLibrarySkills(this.workspace.toolContext.env, this.root, CONTEXT);
+			this.skills = loaded.skills;
+			for (const diagnostic of loaded.diagnostics) {
+				console.warn(`Skill ${diagnostic.path}: ${diagnostic.message}`);
+			}
 			this.repo = new JsonlSessionRepo({
 				fileSystem: this.workspace.toolContext.env,
 				sessionsRoot: join(this.root, ".loom", "harness-sessions"),
@@ -437,7 +444,8 @@ export class HarnessSessionManager {
 				model,
 				tools,
 				toolContext: workspace.toolContext,
-				systemPrompt: () => this.options.systemPrompt ?? "",
+				systemPrompt: () => systemPromptWithSkills(this.options.systemPrompt ?? "", this.skills),
+				resources: { skills: this.skills },
 				toProviderMessages,
 				compaction: DEFAULT_COMPACTION_SETTINGS,
 				followUpMode: "one-at-a-time",
@@ -746,6 +754,7 @@ export class HarnessSessionManager {
 			this.repo = undefined;
 			this.root = undefined;
 			this.workspace = undefined;
+			this.skills = [];
 		} finally {
 			this.closing = false;
 		}

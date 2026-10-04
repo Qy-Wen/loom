@@ -9,7 +9,7 @@
 
 ## 1. Goal and positioning
 
-- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Skills, multi-agent, path jail, and a process sandbox are deferred; see [TODO](./TODO.md).
+- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Skills load from the open library's `.agents/skills/`. Multi-agent, path jail, and a process sandbox are deferred; see [TODO](./TODO.md).
 - Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
@@ -128,13 +128,14 @@ The vendored Agent still requires chord, pi-ai, pi-telemetry, diff, ignore, type
 Loom application code → @loom/agent
                        ├── types.ts                 # Loom tools, events, settings
                        ├── harness-session-manager.ts # session and AgentHarness owner
+                       ├── library-skills.ts        # Agent Skills from the open library
                        ├── pi-adapter.ts            # pi-ai Chat model and message folding
                        └── pi-tools.ts              # native tools and Loom tool bridge
                                         ↓
                                  vendor-pi-agent/
 ```
 
-Only `harness-session-manager.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
+Only `harness-session-manager.ts`, `library-skills.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
 
 ### Registering tools without changing upstream
 
@@ -142,6 +143,7 @@ Only `harness-session-manager.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#v
 - **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
 - **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
+- **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
 
 ---
 
@@ -318,4 +320,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments:** Library highlight (`ui_selection`) and composer chips (`asset_ref`) live on the user row as `attachments`, keyed by `assetId`. External files are copied into `Inbox/` first. `toProviderMessages` folds every attachment into one Chat text string. Historical image parts on `content` still send as `image_url`. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand.

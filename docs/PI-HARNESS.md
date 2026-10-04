@@ -5,7 +5,7 @@
 ## 结论与边界
 
 - **目标：** Pi Harness 负责 Agent 运行、会话树及对话持久化；Harness 会话是新对话的唯一数据源，不与 Loom 旧 JSONL 双写。保留 Loom 的素材库、FFmpeg、MCP、模型设置、AG-UI/CopilotKit 和 Electron UI。旧 Loom v1 会话不迁移、不兼容、不读取、不主动删除；已有用户文件必须原样保留。
-- **范围：** 直接在生产聊天链路切到 Harness，移除普通 pi `Agent`、旧 Core v1 repo 和逐消息写入；不先搭建并行运行链路，也不为追求“全部接入”而启用所有 vendor 功能。历史提问分支已接入。素材引用与 Skills 的产品交互随后实现。自动阈值压缩已接入。模板不因 vendor API 加入产品。运行中的插话走 `followUp`。
+- **范围：** 直接在生产聊天链路切到 Harness，移除普通 pi `Agent`、旧 Core v1 repo 和逐消息写入；不先搭建并行运行链路，也不为追求“全部接入”而启用所有 vendor 功能。历史提问分支已接入。素材引用与 Skills 已接入。自动阈值压缩已接入。模板不因 vendor API 加入产品。运行中的插话走 `followUp`。
 - **来源：** Vendor 是 pi `packages/agent`，不是 `packages/coding-agent` 的 CLI/TUI。后者的 `/tree`、`/fork` 选择器不能通过创建 Harness 自动获得。见 [UPSTREAM](../packages/agent/vendor-pi-agent/UPSTREAM)、[AGENT](./AGENT.md)。
 
 ## 切换边界
@@ -20,7 +20,7 @@
 | **运行恢复与取消** | Harness 记录操作状态；`AgentHarness.create()` 返回未完成操作清单但**不自动续跑**。需定义应用启动/重连时如何处理 open operation、Stop 如何对应持久取消，以及与 AG-UI 断连的关系。见 [runtime/harness.ts](../packages/agent/vendor-pi-agent/src/harness/runtime/harness.ts#L374-L408)、[agent-harness.ts](../packages/agent/vendor-pi-agent/src/harness/agent-harness.ts#L538-L565)。 |
 | **自动压缩 / 导航摘要** | Vendor 的自动阈值压缩默认开启：预留 16,384 token，保留约 20,000 token 近期上下文；另有手动 `compact()`，导航摘要需显式开启。Loom 此次切换暂不启用自动阈值压缩：真实模型上下文窗口、阈值触发时机和附件摘要语义在后续工作中验证；此次切换仍须验证溢出恢复。见 [compaction.ts](../packages/agent/vendor-pi-agent/src/harness/compaction/compaction.ts#L146-L161)、[agent-harness.ts](../packages/agent/vendor-pi-agent/src/harness/agent-harness.ts#L550-L559)。 |
 | **重试 / 工具调度 / 插话队列** | 默认开启可重试错误的重试（最多 3 次额外重试）及并行工具；提供持久 `steer`、`followUp`、`nextRun` 队列。Loom 接入的是 `followUp`：运行中 Enter 排队，同一 run 在本可结束时继续，一次只插入一条；输入框上方列出排队文本，插入后离开队列并出现在对话里，Stop 丢掉尚未插入的队列。`steer` 与 `nextRun` 未接入。见 [runtime/harness.ts](../packages/agent/vendor-pi-agent/src/harness/runtime/harness.ts#L59-L72)、[config.ts](../packages/agent/vendor-pi-agent/src/harness/config.ts#L1-L4)。 |
-| **Skills / 提示词模板** | 有 `SKILL.md` 加载器、`resources`、显式 `lane.skill()`/`promptFromTemplate()` 和系统提示词格式化工具；**不会自动扫描素材库、注入提示词或产生 UI 命令**。见 [skills.ts](../packages/agent/vendor-pi-agent/src/harness/skills.ts#L38-L77)、[harness/types.ts](../packages/agent/vendor-pi-agent/src/harness/types.ts#L43-L80)、[agent-harness.ts](../packages/agent/vendor-pi-agent/src/harness/agent-harness.ts#L518-L535)。 |
+| **Skills / 提示词模板** | 有 `SKILL.md` 加载器、`resources`、显式 `lane.skill()`/`promptFromTemplate()` 和系统提示词格式化工具。Loom 打开库时扫描 `<library>/.agents/skills/`，把目录写入系统提示；正文由模型用 `read` 加载。不扫整库，不做技能斜杠命令。模板不加入产品。见 [AGENT](./AGENT.md)、[skills.ts](../packages/agent/vendor-pi-agent/src/harness/skills.ts#L38-L77)。 |
 | **Hooks / 事件 / 统计 / 遥测** | 提供请求、工具、上下文、压缩、导航钩子，运行事件及会话 usage；钩子需应用注册。遥测未注入 context 时为 no-op。需把事件和用量映射到 AG-UI 与 Loom 原有累计统计；不必为没有场景的 hook 编写空实现。见 [agent-harness.ts](../packages/agent/vendor-pi-agent/src/harness/agent-harness.ts#L255-L332)、[agent-harness.ts](../packages/agent/vendor-pi-agent/src/harness/agent-harness.ts#L586-L611)、[harness/context.ts](../packages/agent/vendor-pi-agent/src/harness/context.ts#L27-L36)。 |
 
 ## 迁移时必须保留的 Loom 行为
@@ -39,5 +39,5 @@
 
 ## 待定产品选择
 
-- Harness 可以提供底层 API，但 Skills UI 并非自动获得。其后的 TODO 是素材引用和 Skills。模板不加入产品。运行中 Enter 排队为 followUp，一次插入一条，插入后离开队列并出现在对话里，Stop 丢掉尚未插入的队列。
+- Harness 可以提供底层 API，但 Skills UI 并非自动获得。Skills 只加载当前库 `.agents/skills/` 的目录，不做斜杠命令。模板不加入产品。运行中 Enter 排队为 followUp，一次插入一条，插入后离开队列并出现在对话里，Stop 丢掉尚未插入的队列。
 - 是否在迁移时提供任何权限审批、路径限制或隔离？Harness 默认没有这些安全策略；不能把使用其工具误认为已完成沙箱。见 [tools/path-utils.ts](../packages/agent/vendor-pi-agent/src/harness/tools/path-utils.ts#L13-L15)。

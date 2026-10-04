@@ -6,6 +6,27 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Library skills
+
+On library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`. See [AGENT](../AGENT.md) and [agentskills.io](https://agentskills.io/specification).
+
+---
+
+## Chat asset refs
+
+The composer attaches library files as inline chips. Each chip is an `asset_ref` (`assetId`, library-relative `path`, `assetType`). The library highlight when the user sends is a separate `ui_selection` with the same fields. Click a chip or a `search_assets` / `inspect_asset` `asset_id` to select that file without leaving the Agent tab. See [AGENT](../AGENT.md) §5 and §6.3b.
+
+- Drag from the library, right-click Add to chat, or + → Library file. External file and Finder drops copy into `Inbox/` first (reuse if already in the library). New composer attaches are chips, not `image_url`; historical image parts on `content` still send as `image_url`.
+- Fold writes `<asset_ref>` where the chip sat. A leftover highlight is `<ui_selection>`. At send, look up the live path by `assetId`. Older rows stay frozen. Next-turn highlight skip looks only at the latest `ui_selection`.
+
+---
+
+## Library cut and drag
+
+Files and folders move inside the library without minting a new `asset_id`. Cut (menu or Cmd/Ctrl+X) plus Paste, or drag onto another folder (or the tree background for the library root). Copy still duplicates. A folder cannot move into itself. Same-name collisions pick a unique name.
+
+---
+
 ## Image input in the chat composer
 
 The composer attaches JPEG, PNG, GIF, and WebP (up to 4, 8 MB each). A picture is an image part on the user message `content`, shown in the bubble, and sent as `image_url`. There is no vision switch and no retry. If the endpoint rejects the image, Loom shows the error and leaves that turn off the active path. The session file keeps the abandoned branch. Video and audio are not in this step. DeepSeek-V4.1-Flash accepts images and does not accept video.
