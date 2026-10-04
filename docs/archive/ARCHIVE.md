@@ -269,7 +269,7 @@ Live force field on the SVG canvas. Positions stay in the session.
 
 ## ✅ Image VLM
 
-On-demand image write-up via the VLM slot, then the existing text embedding path. Not a CLIP image vector. Import does not run it.
+On-demand image write-up via the VLM slot, then the existing text embedding path. Import does not run it.
 
 - OpenAI-compatible `POST /v1/chat/completions` with `image_url` (data URI). Local and remote share `baseUrl`, optional key, and `model`. Loom does not load or run the model
 - JPEG / PNG / WebP / BMP only. Caption / tags Markdown in `image_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
@@ -279,7 +279,7 @@ On-demand image write-up via the VLM slot, then the existing text embedding path
 
 ## ✅ Video VLM
 
-On-demand file-level write-up via the same VLM slot, then the text embedding path. Import does not run it. Scene chunks and soundtrack ASR wait.
+On-demand file-level write-up via the same VLM slot, then the text embedding path. Import does not run it. Scene chunks wait.
 
 - Prefer native `video_url` (data URI, up to 32 MB) on OpenAI-compatible `POST /v1/chat/completions`. If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs as `image_url`. Loom does not load or run the model
 - avi / m4v / mkv / mov / mp4 / webm. Caption / tags Markdown in `video_vlm`; mtime skip on rename/move; changing the VLM model invalidates the write-up
@@ -299,7 +299,7 @@ On-demand file-level write-up via the same VLM slot, then the text embedding pat
 
 ## ✅ Audio understanding
 
-On-demand file-level write-up for standalone audio via the Audio slot, then the text embedding path. Import does not run it. Dedicated Whisper and CLAP wait.
+On-demand file-level write-up for standalone audio via the Audio slot, then the text embedding path. Import does not run it.
 
 - OpenAI-compatible `POST /v1/chat/completions` with an audio part. Hosted Qwen-Omni uses `input_audio` + `modalities: ["text"]` + `stream: true`. The VLM slot stays vision-only. Loom does not load or run the model
 - FFmpeg converts locally if the endpoint rejects the original; size cap like video. Markdown in `audio_writeup`; mtime skip; changing the Audio model invalidates the write-up

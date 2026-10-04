@@ -47,7 +47,7 @@ Level 4  Deep Analysis              可选
 | 0 | 文件系统元数据：path、size、hash、mtime、type | 免费 | 自动（导入即有） |
 | 1 | FFprobe（时长/分辨率/编码）、EXIF、文本内容提取 | 本地计算 | 自动或按需 |
 | 2 | Markdown 切片 embedding；图 / 视频 / 音频先转成文字再切，见 [MEDIA](./MEDIA.zh-CN.md) | 可选，HTTP provider（本地服务或远程 API key） | 用户选择 |
-| 3 | VLM 给图片写 caption / 标签，给视频写文件级说明（native video 或抽帧）；Audio 槽位给音频写文件级说明；专用 OCR / Whisper 以后 | 可能收费 | 用户选择 |
+| 3 | VLM 给图片写 caption / 标签，给视频写文件级说明（native video 或抽帧）；Audio 槽位给音频写文件级说明 | 可能收费 | 用户选择 |
 | 4 | 深度分析：分段、质量评分、风格标签等 | 可能收费 | 用户选择 |
 
 - Level 1 写入按 `asset_id` 关联的 `asset_metadata`。失效判断用固定列；各类型字段放在带 `kind` 的 JSON 里（`image` / `video` / `audio` / `text`）。
@@ -58,4 +58,4 @@ Level 4  Deep Analysis              可选
 
 ## 媒体
 
-图 / 视频 / 音频的结论见 [MEDIA.md](./MEDIA.zh-CN.md)。图片是 VLM 写说明再文本 embedding。视频同一条路：端点允许就 native video，否则抽帧。音频走 Audio 槽位写说明（理解，不是只用 Whisper），再走同一套文本 embedding。进程内 OCR + ONNX 是可选项，默认不做。镜头切块、专用 ASR、CLIP / CLAP 向量以后再做。
+图 / 视频 / 音频的结论见 [MEDIA.md](./MEDIA.zh-CN.md)。图片是 VLM 写说明再文本 embedding。视频同一条路：端点允许就 native video，否则抽帧。音频走 Audio 槽位写说明，再走同一套文本 embedding。镜头切块以后再做。

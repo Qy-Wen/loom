@@ -199,7 +199,7 @@ Level 2 先做切过的 **Markdown** embedding。规则见 [TEXT](./RAG/TEXT.zh-
 
 ## 6. Agent 工具与创作层
 
-Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。对话权限为 Basic、Standard（默认）、Full；Full 不拦截任何工具。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。路径 jail 和进程沙箱以后再加。
+Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。对话权限为 Basic、Standard（默认）、Full；Full 不拦截任何工具。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。进程沙箱以后再加。
 
 ### 6.1 FFmpeg — 第一批 Agent Tools
 
@@ -346,7 +346,7 @@ POST /graph/query
 
 - **Skills：** 已做 — 从 `<library>/.agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./AGENT.zh-CN.md)。
 - **多 Agent**：按真实创作角色拆分协作与编排。
-- **沙箱**：工作区工具做路径 jail；隔离执行高风险工具与生成任务。
+- **沙箱**：隔离执行高风险工具与生成任务。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
 - **MCP 设置页**：已做 — 设置 → MCP tab。

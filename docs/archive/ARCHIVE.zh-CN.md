@@ -269,7 +269,7 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 
 ## ✅ 图片 VLM
 
-按需用 VLM 槽位给图写说明，再走已有的文本 embedding。不是 CLIP 图片向量。导入不跑。
+按需用 VLM 槽位给图写说明，再走已有的文本 embedding。导入不跑。
 
 - OpenAI 兼容 `POST /v1/chat/completions`，消息里带 `image_url`（data URI）。本地和远程同一套 `baseUrl` + 可选 key + `model`。Loom 不加载、不运行模型
 - 只做 JPEG / PNG / WebP / BMP。caption / 标签 Markdown 落在 `image_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
@@ -279,7 +279,7 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 
 ## ✅ 视频 VLM
 
-按需用同一套 VLM 槽位给视频写文件级说明，再走文本 embedding。导入不跑。镜头切块和音轨 ASR 以后再做。
+按需用同一套 VLM 槽位给视频写文件级说明，再走文本 embedding。导入不跑。镜头切块以后再做。
 
 - 优先 OpenAI 兼容 `POST /v1/chat/completions` 的 native `video_url`（data URI，不超过 32 MB）。端点拒收或文件更大时，FFmpeg 抽 1–3 张临时 JPEG 再当 `image_url`。Loom 不加载、不运行模型
 - avi / m4v / mkv / mov / mp4 / webm。caption / 标签 Markdown 落在 `video_vlm`；mtime 没变的 rename/move 不重算；换 VLM 模型则说明作废
@@ -299,7 +299,7 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 
 ## ✅ 音频理解
 
-按需用 Audio 槽位给独立音频写文件级说明，再走文本 embedding。导入不跑。专用 Whisper 和 CLAP 以后再做。
+按需用 Audio 槽位给独立音频写文件级说明，再走文本 embedding。导入不跑。
 
 - OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。托管 Qwen-Omni 发 `input_audio` + `modalities: ["text"]` + `stream: true`。VLM 槽位仍只做视觉。Loom 不加载、不运行模型
 - 端点拒收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Markdown 落在 `audio_writeup`；mtime 没变不重跑；换 Audio 模型则说明作废
