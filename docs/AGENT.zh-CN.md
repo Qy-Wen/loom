@@ -9,7 +9,7 @@
 
 ## 1. 目标与定位
 
-- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。Skills、多 Agent、路径 jail 和进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
+- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。Skills 从当前库的 `.agents/skills/` 加载。多 Agent、路径 jail 和进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
 - 素材库检索就是 RAG：Hybrid Search 返回文本段落（图 / 视频也是先写成字再切），Agent 用这些切片来回答或动手，而不是把整库塞进 prompt。见 [RAG](./RAG/RAG.zh-CN.md)。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。
@@ -128,13 +128,14 @@ vendor 进来的 agent 仍需要 chord / pi-ai / pi-telemetry（及 diff / ignor
 Loom 业务代码 → @loom/agent
                 ├── types.ts                  # 工具、事件、设置
                 ├── harness-session-manager.ts # 会话与 AgentHarness
+                ├── library-skills.ts         # 从当前库加载 Agent Skills
                 ├── pi-adapter.ts             # pi-ai Chat 模型与消息折叠
                 └── pi-tools.ts               # 原生工具及 Loom 工具适配
                                  ↓
                           vendor-pi-agent/
 ```
 
-只有 `harness-session-manager.ts`、`pi-adapter.ts`、`pi-tools.ts` 引用 `#vendor/pi-agent`；应用只使用 Loom 导出的接口。Node 原生 `imports` 字段将 `#vendor/pi-agent` 和 `#vendor/pi-agent/node` 映射到 `vendor-pi-agent/`，tsconfig 对应配置保持一致。
+只有 `harness-session-manager.ts`、`library-skills.ts`、`pi-adapter.ts`、`pi-tools.ts` 引用 `#vendor/pi-agent`；应用只使用 Loom 导出的接口。Node 原生 `imports` 字段将 `#vendor/pi-agent` 和 `#vendor/pi-agent/node` 映射到 `vendor-pi-agent/`，tsconfig 对应配置保持一致。
 
 ### 注册工具（无需改上游源码）
 
@@ -142,6 +143,7 @@ Loom 业务代码 → @loom/agent
 - **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
+- **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
 
 ---
 
@@ -318,4 +320,4 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **User attachments**：库高亮（`ui_selection`）和输入框芯片（`asset_ref`）都挂在 user 的 `attachments` 上，以 `assetId` 为键。外部文件先拷进 `Inbox/`。`toProviderMessages` 把每条附件折成一段文字。历史上 `content` 里的图片部分仍按 `image_url` 发出。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。

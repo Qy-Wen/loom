@@ -6,6 +6,27 @@
 
 ---
 
+## 素材库 Skills
+
+打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。见 [AGENT](../AGENT.zh-CN.md) 和 [agentskills.io](https://agentskills.io/specification)。
+
+---
+
+## 对话资产引用
+
+输入框以行内芯片贴库内文件。每张芯片是一条 `asset_ref`（`assetId`、库内相对 `path`、`assetType`）。发送时的库高亮是另一条字段相同的 `ui_selection`。点击芯片或 `search_assets` / `inspect_asset` 的 `asset_id` 会选中该文件，并留在 Agent 页。见 [AGENT](../AGENT.zh-CN.md) §5 和 §6.3b。
+
+- 从素材库拖入、右键 Add to chat，或 + → Library file。External file 和从访达拖入会先拷进 `Inbox/`（已在库内则复用）。输入框新贴的都是芯片，不发 `image_url`；历史上 `content` 里的图片部分仍按 `image_url` 发出。
+- 折的时候在芯片位置写 `<asset_ref>`。剩下的高亮写成 `<ui_selection>`。发送时按 `assetId` 查当前路径。旧行不改。下一轮是否省略高亮，只看最近一条 `ui_selection`。
+
+---
+
+## 素材库剪切与拖动
+
+库内移动文件和文件夹，不换 `asset_id`。剪切（菜单或 Cmd/Ctrl+X）再粘贴，或拖到另一个文件夹（拖到文件树空白处则到库根目录）。复制仍会生成副本。文件夹不能拖进自己。目标已有同名时换成唯一文件名。
+
+---
+
 ## 对话框图片输入
 
 输入框可插入 JPEG、PNG、GIF、WebP（最多 4 张，每张 8 MB）。图片是用户消息 `content` 里的图片部分，气泡里能看见，并以 `image_url` 发给 Chat。没有视觉开关，也不自动重试。端点拒绝时界面报错，这一轮离开当前路径。会话文件里仍留着这条离开的分支。视频和音频不在这一步。DeepSeek-V4.1-Flash 收图片，不收视频。

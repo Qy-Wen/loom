@@ -344,13 +344,13 @@ Future publishing extension:
 
 Introduce these progressively when real scenarios require them:
 
-- **Skills:** load Agent Skills (`SKILL.md`) into the creative Agent. Do not vendor pi's coding-agent shell. See [TODO](./TODO.md).
+- **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
 - **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
 - **Sandboxing:** path jail for workspace tools; isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.
 - **Evals:** evaluate Agent behavior, tool calls, and retrieval quality. See [TODO](./TODO.md).
-- **Chat asset refs:** attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [TODO](./TODO.md).
-- **Branch from a message:** continue or fork a session from any turn. See [TODO](./TODO.md).
+- **Chat asset refs:** done — attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5.
+- **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
 - **Observability:** record run traces, tool calls, latency, and token usage.

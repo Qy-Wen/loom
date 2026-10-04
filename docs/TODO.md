@@ -10,20 +10,21 @@
 
 Do not add prompt-template UI merely because vendor APIs exist. Completed steps are in the [archive](./archive/ARCHIVE.md).
 
-## Step 1: Chat asset refs
+## Step 1: Evals
 
-Attach library assets in the composer as `asset_ref` (implicit library highlight stays `ui_selection`). Click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5 and §6.3b.
+Agent behavior, tool calls, and retrieval quality. Compaction rate and prompt-cache hit already live in `packages/agent/evals/`; Hybrid Search has a minimal unit set. See [PRODUCT](./PRODUCT.md) §10 and [AGENT](./AGENT.md).
 
-- [x] Composer chips on the user `attachments` sidecar; fold still goes to Chat as today
-- [x] Render refs from those chips and from `search_assets` / `inspect_asset`; click selects in the library
-- [x] Key by `asset_id`, never an absolute path
+- [ ] Add evals for Agent behavior and tool calls
+- [ ] Add evals for retrieval quality beyond the Hybrid Search unit set
 
-## Step 2: Skills
+---
 
-Load `SKILL.md` from the open library into the creative Agent running on pi harness. See [AGENT](./AGENT.md).
+## Step 2: Human in the loop
 
-- [ ] Read Agent Skills (`SKILL.md`, agentskills.io) from the library. Do not vendor `packages/coding-agent`
-- [ ] Put a matching skill's text in the system prompt, or expose it as a tool the agent reads on demand
+The user confirms a high-risk operation before it runs.
+
+- [ ] Pause high-risk tool calls until the user approves or rejects them
+- [ ] Show what would run, then resume or skip that call from the same turn
 
 ---
 
@@ -33,7 +34,6 @@ Load `SKILL.md` from the open library into the creative Agent running on pi harn
 - **Dedicated ASR:** OpenAI-compatible `POST /v1/audio/transcriptions`. Prefer the Audio understanding slot. See [MEDIA](./RAG/MEDIA.md).
 - **CLIP / image vectors:** embed the image without going through text; later if needed
 - **Multi-agent:** split collaboration and orchestration by genuine creative roles. See [PRODUCT](./PRODUCT.md) §10.
+- **LangGraph:** add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
 - **Sandbox:** path jail for workspace tools, plus a process sandbox for high-risk tools and generation jobs. See [PRODUCT](./PRODUCT.md) §10.
-- **Human in the loop:** the user confirms a high-risk operation before it runs.
-- **Evals:** Agent behavior, tool calls, and retrieval quality. Compaction rate and prompt-cache hit already live in `packages/agent/evals/`; Hybrid Search has a minimal unit set. See [PRODUCT](./PRODUCT.md) §10 and [AGENT](./AGENT.md).
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
