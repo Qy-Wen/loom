@@ -78,9 +78,6 @@ export function LibrarySidebar({
 					{opening ? "…" : "Open"}
 				</button>
 			</div>
-			{library.rootPath && (
-				<div className="library-path" title={library.rootPath}>{library.rootPath}</div>
-			)}
 
 			<div className="file-heading">
 				<span>Files</span>

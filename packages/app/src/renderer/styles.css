@@ -167,15 +167,6 @@ body {
 	white-space: nowrap;
 }
 
-.library-path {
-	overflow: hidden;
-	padding: 0 12px 12px;
-	color: #8b8e93;
-	font-size: 11px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .open-button,
 .primary-button {
 	border: 1px solid #cacac6;
@@ -268,7 +259,11 @@ body {
 }
 
 .folder-chevron {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	width: 16px;
+	height: 16px;
 	flex: 0 0 auto;
 	padding: 0;
 	border: 0;
@@ -279,11 +274,18 @@ body {
 	cursor: pointer;
 }
 
+.folder-chevron.expanded {
+	transform: rotate(90deg);
+}
+
 .folder-symbol {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	width: 18px;
+	height: 16px;
 	flex: 0 0 auto;
 	color: #787c82;
-	font-size: 13px;
 }
 
 .folder-row.selected,

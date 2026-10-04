@@ -247,12 +247,12 @@ function FolderTreeRow({
 				style={{ paddingLeft: 7 + depth * 14 }}
 			>
 				<button
-					className="folder-chevron"
+					className={`folder-chevron${collapsed ? "" : " expanded"}`}
 					type="button"
 					aria-label={collapsed ? "Expand folder" : "Collapse folder"}
 					onClick={openFolder}
 				>
-					{collapsed ? "›" : "⌄"}
+					›
 				</button>
 				{renaming ? (
 					<div className="rename-editor">
@@ -292,7 +292,11 @@ function FolderTreeRow({
 							rowProps.onFolderContextMenu(folder.relativePath);
 						}}
 					>
-						<span className="folder-symbol">▰</span>
+						<span className="folder-symbol" aria-hidden="true">
+							<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+								<path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2c.5 0 .9.2 1.2.6l.9 1.2c.3.4.7.6 1.2.6H19.5A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" />
+							</svg>
+						</span>
 						<span className="asset-name">{folder.name}</span>
 					</button>
 				)}
