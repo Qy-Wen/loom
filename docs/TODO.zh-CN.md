@@ -12,7 +12,7 @@
 
 ## 第一步：对话资产引用
 
-输入框可贴库内资产（不只是隐式 `ui_selection`）。对话里的 `asset_id` 引用可点并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5 和 §6.3b。
+输入框可贴库内资产（`asset_ref`；隐式库高亮仍是 `ui_selection`）。对话里的 `asset_id` 引用可点并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5 和 §6.3b。
 
 - [x] 输入框芯片走 user 的 `attachments` 旁路；折进 Chat 的办法不变
 - [x] 画出这些芯片以及 `search_assets` / `inspect_asset` 的引用；点击后在素材库里选中

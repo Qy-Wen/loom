@@ -171,35 +171,35 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 }
 ```
 
-没有选中就不写 `ui_selection`（`attachments` 若因此为空则整段省略）。不要存 `none` 占位。
+没有选中且输入框没有芯片时省略 `attachments`。不要存 `none` 占位。
 
-发送时从当前库选中快照（`assetId`、库内相对 `path`、`assetType`）。Graph 上的边不算选中。输入框也可以显式贴库内文件：从素材库拖到输入框，或右键文件选 Add to chat。每张芯片是另一条 `ui_selection`，以 `assetId` 为键，`path` 保持库内相对路径。payload 里不要放发送时间这类每轮都变的字段。
+发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式贴库内文件：从素材库拖到输入框，右键文件选 Add to chat，或点 + 菜单的 Library file。External file 和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再贴同一张芯片。每张芯片是一条 `asset_ref`，以 `assetId` 为键，`path` 保持库内相对路径。字段与 `ui_selection` 相同，只是 `type` 不同。发送时按 `assetId` 查当前库，写入此刻的 `path` / `assetType`。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
 
-芯片排在文字里，可以插在词与词之间。`content` 记下这个位置，折的时候把 `<ui_selection>` 写在那里。没有放进文字里的选中，仍接在原文后面。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
+芯片排在文字里，可以插在词与词之间。`content` 记下这个位置，折的时候把 `<asset_ref>` 写在那里。旧 transcript 里芯片若存成 `ui_selection`，仍折成 `<ui_selection>`。没有出现在芯片里的库高亮，接在原文后面，写成 `<ui_selection>`。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
 
 ### 5.2 折给 Chat API
 
 Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。系统注入永远不做成第二个 text part。
 
-输入框插入的图是用户消息 `content` 里的图片部分（base64，JPEG/PNG/GIF/WebP）。气泡读这部分，Chat 收 `image_url`。没有设置开关，也不自动重试。端点拒绝图片时，界面报错，并把当前路径退到这条消息之前，失败的这一轮不进入后续对话。会话文件里仍留着这条离开的分支。
+已经落在 user 行 `content` 里的旧图片部分仍按 `image_url` 发出。输入框新贴的都是库芯片，不发像素。要看图/视频/音频，由 agent 自己调 `describe_image` / `describe_video` / `describe_audio` 或 `read`。旧图片部分被拒绝时，界面报错，并把当前路径退到这条消息之前。
 
 折法固定。HTTP 里没有 `attachments` 字段。
 
 ```
 把这个处理一下
 
-<ui_selection>
+<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video
-</ui_selection>
+</asset_ref>
 ```
 
-未选中：只折用户原文，不要拼 `<ui_selection>none</ui_selection>`。
+剩下的库高亮用同样三个字段，包在 `<ui_selection>` 里。未选中：只折用户原文，不要拼 `<ui_selection>none</ui_selection>`。
 
-System prompt 加一句**不变**的规则：user 消息里可能有 `<ui_selection>`，表示发送时界面选中的库文件；用户说「这个 / 它」又没点名时用它；点了别的路径就听用户的。
+System prompt 加一句**不变**的规则：user 消息里可能有 `<asset_ref>`（输入框里贴的库文件）和 `<ui_selection>`（发送时素材库里选中的文件）；用户说「这个 / 它」又没点名时用它们；点了别的路径就听用户的。
 
-下一轮再快照选中。若与 transcript 里**最近一条** `ui_selection` 的 `assetId` 相同，本轮不挂 attachment、也不折——历史上还有那一块。没有更早的 `ui_selection`，或换了文件，再按上面挂并折。旧行不改。同一轮的 tool 循环共用发送时那份快照。
+下一轮再快照库高亮。若与 transcript 里**最近一条** `ui_selection` 的 `assetId` 相同，本轮不挂这条 attachment、也不折——历史上还有那一块。先前的 `asset_ref` 即使是同一文件，也不压制下一轮的隐式 `ui_selection`。没有更早的 `ui_selection`，或换了文件，再按上面挂并折。旧行不改。同一轮的 tool 循环共用发送时那份快照。同一轮发送里，若芯片里已经有这个 `assetId`，就不再挂隐式 `ui_selection`。
 
 ---
 
@@ -315,7 +315,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
-- **User attachments**：界面选中和输入框贴上的库内文件都挂在 user 的 `attachments` 上，以 `assetId` 为键。输入框图片在这条消息的 `content` 里。`toProviderMessages` 把每条选中折成一段文字，图片部分以 `image_url` 发出。图片被拒绝时报错，并离开当前路径。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
+- **User attachments**：库高亮（`ui_selection`）和输入框芯片（`asset_ref`）都挂在 user 的 `attachments` 上，以 `assetId` 为键。外部文件先拷进 `Inbox/`。`toProviderMessages` 把每条附件折成一段文字。历史上 `content` 里的图片部分仍按 `image_url` 发出。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
 - **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。

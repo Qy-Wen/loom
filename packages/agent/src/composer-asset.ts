@@ -1,6 +1,6 @@
-/** Composer chips: library assets staged for the next user message. They become `ui_selection` attachments. */
+/** Composer chips: library assets staged for the next user message. They become `asset_ref` attachments. */
 
-import { type LoomAssetType, type UiSelectionAttachment } from "./attachments.ts";
+import { type AssetRefAttachment, type LoomAssetType, type LoomUserAttachment } from "./attachments.ts";
 
 const ASSET_TYPES = new Set<string>(["image", "video", "audio", "text", "other"]);
 
@@ -13,10 +13,10 @@ export function isRelativeLibraryPath(path: string): boolean {
 	return true;
 }
 
-export function parseComposerAssetInputs(value: unknown): UiSelectionAttachment[] {
+export function parseComposerAssetInputs(value: unknown): AssetRefAttachment[] {
 	if (value == null) return [];
 	if (!Array.isArray(value)) throw new Error("Composer assets must be a list");
-	const out: UiSelectionAttachment[] = [];
+	const out: AssetRefAttachment[] = [];
 	const seen = new Set<string>();
 	for (const item of value) {
 		if (typeof item !== "object" || item === null) throw new Error("Composer asset is invalid");
@@ -30,7 +30,7 @@ export function parseComposerAssetInputs(value: unknown): UiSelectionAttachment[
 		if (seen.has(assetId)) continue;
 		seen.add(assetId);
 		out.push({
-			type: "ui_selection",
+			type: "asset_ref",
 			assetId,
 			path,
 			assetType: assetType as LoomAssetType,
@@ -81,17 +81,17 @@ export function composerLayoutText(text: string): string {
 }
 
 /** Library chips already stored on a user message. Rows that are not relative refs are skipped. */
-export function storedAssetRefs(value: unknown): UiSelectionAttachment[] {
+export function storedAssetRefs(value: unknown): LoomUserAttachment[] {
 	if (!Array.isArray(value)) return [];
-	const out: UiSelectionAttachment[] = [];
+	const out: LoomUserAttachment[] = [];
 	for (const item of value) {
 		if (typeof item !== "object" || item === null) continue;
 		const row = item as Record<string, unknown>;
-		if (row.type !== "ui_selection") continue;
+		const kind = row.type === "ui_selection" ? "ui_selection" : row.type === "asset_ref" ? "asset_ref" : null;
+		if (!kind) continue;
 		try {
-			const parsed = parseComposerAssetInputs([row]);
-			const first = parsed[0];
-			if (first) out.push(first);
+			const first = parseComposerAssetInputs([{ ...row, type: "asset_ref" }])[0];
+			if (first) out.push(kind === "asset_ref" ? first : { ...first, type: "ui_selection" });
 		} catch {
 			// Leave a bad row off the chip list.
 		}

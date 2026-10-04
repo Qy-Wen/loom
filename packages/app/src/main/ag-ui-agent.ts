@@ -15,7 +15,7 @@ import {
 	type ComposerImageInput,
 	type HarnessSessionManager,
 	type LoomAgentEvent,
-	type UiSelectionAttachment,
+	type AssetRefAttachment,
 	type UiSelectionFields,
 } from "@loom/agent";
 import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
@@ -57,7 +57,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 	private manager: HarnessSessionManager;
 	private getUiSelection: (() => UiSelectionFields | null) | undefined;
 	private takeComposerImages: ((sessionId: string) => Promise<ComposerImageInput[]>) | undefined;
-	private takeComposerAssets: ((sessionId: string) => Promise<UiSelectionAttachment[]>) | undefined;
+	private takeComposerAssets: ((sessionId: string) => Promise<AssetRefAttachment[]>) | undefined;
 	/** In-flight prompt per thread, so Stop and the next run can abort it. */
 	private inflight = new Map<string, { abort: (reason?: "user") => Promise<void>; done: Promise<void> }>();
 
@@ -65,7 +65,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		manager: HarnessSessionManager,
 		getUiSelection?: () => UiSelectionFields | null,
 		takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
-		takeComposerAssets?: (sessionId: string) => Promise<UiSelectionAttachment[]>,
+		takeComposerAssets?: (sessionId: string) => Promise<AssetRefAttachment[]>,
 	) {
 		super({ agentId: "loom" });
 		this.manager = manager;

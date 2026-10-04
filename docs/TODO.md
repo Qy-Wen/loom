@@ -12,7 +12,7 @@ Do not add prompt-template UI merely because vendor APIs exist. Completed steps 
 
 ## Step 1: Chat asset refs
 
-Attach library assets in the composer (not only implicit `ui_selection`). Click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5 and §6.3b.
+Attach library assets in the composer as `asset_ref` (implicit library highlight stays `ui_selection`). Click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5 and §6.3b.
 
 - [x] Composer chips on the user `attachments` sidecar; fold still goes to Chat as today
 - [x] Render refs from those chips and from `search_assets` / `inspect_asset`; click selects in the library

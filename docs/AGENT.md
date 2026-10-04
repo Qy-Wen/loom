@@ -171,35 +171,35 @@ Harness's persisted user message keeps a sidecar field. After send, that user ro
 }
 ```
 
-When nothing is selected, omit `ui_selection` (omit `attachments` if it would be empty). Do not store a `none` placeholder.
+When nothing is selected and the composer has no chips, omit `attachments`. Do not store a `none` placeholder.
 
-Snapshot at send time from the current library selection (`assetId`, workspace-relative `path`, `assetType`). Graph edges are not a selection. The composer can also attach library files explicitly: drag one from the library onto the input, or right-click a file and choose Add to chat. Each chip is another `ui_selection` row, keyed by `assetId`, with a library-relative `path`. Do not put timestamps or other per-request noise in the payload.
+Snapshot at send time from the current library highlight (`assetId`, workspace-relative `path`, `assetType`) as one `ui_selection` row. Graph edges are not a selection. The composer can also attach library files explicitly: drag one from the library onto the input, right-click a file and choose Add to chat, or use the + menu (Library file). External file and Finder drops copy into `Inbox/` first (or reuse the asset if the file is already in the library), then attach the same chip. Each chip is an `asset_ref` row, keyed by `assetId`, with a library-relative `path`. Same fields as `ui_selection`; different `type`. At send, look up the live library row by `assetId` and write the current `path` / `assetType`. Older rows stay frozen. Do not put timestamps or other per-request noise in the payload.
 
-A chip sits in the text, including between words. `content` stores that position, and the fold writes the `<ui_selection>` block there. A selection that was not placed in the text is still appended after the text. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
+A chip sits in the text, including between words. `content` stores that position, and the fold writes the `<asset_ref>` block there. Older transcripts that stored chips as `ui_selection` still fold as `<ui_selection>`. An implicit library highlight that was not already in the chips is appended after the text as `<ui_selection>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
 
 ### 5.2 Fold for the Chat API
 
 Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. Injections never become a second text part.
 
-A composer picture is an image part on the user message `content` (base64, JPEG/PNG/GIF/WebP). The bubble reads that part, and Chat receives it as `image_url`. There is no settings switch and no retry. If the endpoint rejects the image, Loom shows that error and moves the active path back to before the message, so the failed turn is not part of the conversation that continues. The session file still keeps the abandoned branch.
+A composer picture that is already on a stored user row’s `content` still goes out as `image_url`. New attaches from the composer are library chips, not image parts. The agent reads pixels only if it calls `describe_image` / `describe_video` / `describe_audio` or `read`. If a historical image part is rejected, Loom shows that error and moves the active path back to before the message.
 
 The fold is deterministic. The HTTP body never includes `attachments`.
 
 ```
 把这个处理一下
 
-<ui_selection>
+<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video
-</ui_selection>
+</asset_ref>
 ```
 
-Empty selection: fold is the user text only. Do not append `<ui_selection>none</ui_selection>`.
+A leftover library highlight uses the same three fields inside `<ui_selection>`. Empty: fold is the user text only. Do not append `<ui_selection>none</ui_selection>`.
 
-System prompt gets one **fixed** sentence: a user message may include a `<ui_selection>` block for the file selected when they sent that message; use it for “this” / “the file” when they do not name a path; if they name a different path, prefer that.
+System prompt gets one **fixed** sentence: a user message may include `<asset_ref>` blocks for library files placed in the message, and a `<ui_selection>` block for the file selected in the library when they sent it; use those blocks for “this” / “the file” when they do not name a path; if they name a different path, prefer that.
 
-The next user turn snapshots selection again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit the attachment and the fold — history still has that block. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot.
+The next user turn snapshots the library highlight again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit that attachment and the fold — history still has that block. A prior `asset_ref` of the same file does not suppress the next implicit `ui_selection`. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot. On the same send, skip the implicit `ui_selection` when that `assetId` is already among the chips.
 
 ---
 
@@ -315,7 +315,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
-- **User attachments:** UI selection and composer library chips live on the user row as `attachments`, keyed by `assetId`. Composer images live on that row's `content`. `toProviderMessages` folds every selection into one Chat text string and sends image parts as `image_url`. A rejected image is shown as an error and left off the active path. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
+- **User attachments:** Library highlight (`ui_selection`) and composer chips (`asset_ref`) live on the user row as `attachments`, keyed by `assetId`. External files are copied into `Inbox/` first. `toProviderMessages` folds every attachment into one Chat text string. Historical image parts on `content` still send as `image_url`. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
 - **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on.

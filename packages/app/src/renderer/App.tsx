@@ -17,7 +17,7 @@ import type {
 	AudioWriteupStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
-import type { UiSelectionAttachment } from "@loom/agent";
+import type { AssetRefAttachment } from "@loom/agent";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
@@ -80,7 +80,7 @@ export function App(): React.JSX.Element {
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [sidePanel, setSidePanel] = useState<SidePanelTab>("agent");
-	const [composerAttach, setComposerAttach] = useState<UiSelectionAttachment | null>(null);
+	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
 	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
@@ -361,7 +361,7 @@ export function App(): React.JSX.Element {
 				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 				setSidePanel("agent");
 				setComposerAttach({
-					type: "ui_selection",
+					type: "asset_ref",
 					assetId: asset.assetId,
 					path: asset.relativePath,
 					assetType: asset.type,

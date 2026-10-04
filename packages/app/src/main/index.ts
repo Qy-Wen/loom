@@ -14,7 +14,8 @@ import {
 	type PropertyValue,
 } from "@loom/core";
 import { HarnessSessionManager, promptAttachments, type LoomAgentOptions } from "@loom/agent";
-import { stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
+import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
+import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
@@ -25,7 +26,7 @@ import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
@@ -415,10 +416,47 @@ function registerIpc(): void {
 		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
 		stageComposerAssets(id, assets);
 	});
+	ipcMain.handle(IPC.pickComposerLibraryAssets, async (event): Promise<UiSelectionDraft[]> => {
+		const snapshot = await localCore.getLibrarySnapshot();
+		if (!snapshot.rootPath) throw new Error("Open a library first.");
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const options = {
+			title: "Library file",
+			defaultPath: snapshot.rootPath,
+			properties: ["openFile", "multiSelections"] as Array<"openFile" | "multiSelections">,
+		};
+		const result = owner
+			? await dialog.showOpenDialog(owner, options)
+			: await dialog.showOpenDialog(options);
+		if (result.canceled || result.filePaths.length === 0) return [];
+		return composerAssetsFromPickedFiles(snapshot.rootPath, result.filePaths, snapshot.assets);
+	});
+	ipcMain.handle(IPC.importComposerFiles, async (_event, filePaths: unknown): Promise<UiSelectionDraft[]> => {
+		if (!Array.isArray(filePaths) || filePaths.some((path) => typeof path !== "string")) {
+			throw new Error("Composer files must be a list of paths");
+		}
+		const snapshot = await localCore.getLibrarySnapshot();
+		if (!snapshot.rootPath) throw new Error("Open a library first.");
+		return draftsFromAssets(await localCore.importExternalFiles(filePaths));
+	});
+	ipcMain.handle(IPC.pickComposerExternalFiles, async (event): Promise<UiSelectionDraft[]> => {
+		const snapshot = await localCore.getLibrarySnapshot();
+		if (!snapshot.rootPath) throw new Error("Open a library first.");
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const options = {
+			title: "External file",
+			properties: ["openFile", "multiSelections"] as Array<"openFile" | "multiSelections">,
+		};
+		const result = owner
+			? await dialog.showOpenDialog(owner, options)
+			: await dialog.showOpenDialog(options);
+		if (result.canceled || result.filePaths.length === 0) return [];
+		return draftsFromAssets(await localCore.importExternalFiles(result.filePaths));
+	});
 	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string) => {
 		const session = await agentManager.getSession(id);
 		const images = await takeComposerImages(id);
-		const chips = await takeComposerAssets(id);
+		const chips = await takeLiveComposerAssets(id);
 		const attachments = promptAttachments(chips, getUiSelection(), session.messages);
 		const body = text.replaceAll("\u200b", "");
 		await agentManager.followUp(id, body.trim() ? body : "", {
@@ -546,7 +584,7 @@ app
 			agentManager,
 			getUiSelection,
 			(id) => takeComposerImages(id),
-			(id) => takeComposerAssets(id),
+			(id) => takeLiveComposerAssets(id),
 		);
 		registerAssetProtocol();
 		registerIpc();
@@ -587,6 +625,13 @@ app.on("will-quit", (event) => {
 		app.quit();
 	});
 });
+
+async function takeLiveComposerAssets(sessionId: string) {
+	const chips = await takeComposerAssets(sessionId);
+	if (chips.length === 0) return chips;
+	const snapshot = await localCore.getLibrarySnapshot();
+	return composerAssetsAtSend(chips, snapshot.assets);
+}
 
 async function embedAssetWithSettings(assetId: string, signal?: AbortSignal) {
 	const provider = await embeddingProviderFromSettings();

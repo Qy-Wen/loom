@@ -10,11 +10,20 @@ import {
 import { assetRefMarker, composerLayoutText, parseComposerAssetInputs, storedAssetRefs } from "../src/composer-asset.ts";
 import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
-const clip = {
-	type: "ui_selection" as const,
+const fields = {
 	assetId: "asset-1",
 	path: "clips/hero.mp4",
 	assetType: "video" as const,
+};
+
+const selection = {
+	type: "ui_selection" as const,
+	...fields,
+};
+
+const chip = {
+	type: "asset_ref" as const,
+	...fields,
 };
 
 describe("uiSelectionToAttach", () => {
@@ -23,19 +32,26 @@ describe("uiSelectionToAttach", () => {
 	});
 
 	it("attaches the first selection in a thread", () => {
-		assert.deepEqual(uiSelectionToAttach(clip, []), clip);
+		assert.deepEqual(uiSelectionToAttach(fields, []), selection);
 	});
 
 	it("skips when the latest transcript selection is the same asset", () => {
 		assert.equal(
-			uiSelectionToAttach(clip, [{ attachments: [clip] }, { role: "assistant" }]),
+			uiSelectionToAttach(fields, [{ attachments: [selection] }, { role: "assistant" }]),
 			undefined,
 		);
 	});
 
 	it("attaches again after the selection changes", () => {
-		const next = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		assert.deepEqual(uiSelectionToAttach(next, [{ attachments: [clip] }]), next);
+		const next = { assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(
+			uiSelectionToAttach(next, [{ attachments: [selection] }]),
+			{ type: "ui_selection", ...next },
+		);
+	});
+
+	it("does not treat a composer chip as the last implicit selection", () => {
+		assert.deepEqual(uiSelectionToAttach(fields, [{ attachments: [chip] }]), selection);
 	});
 });
 
@@ -43,43 +59,59 @@ describe("latestUiSelectionAssetId", () => {
 	it("walks back past user rows that skipped injection", () => {
 		assert.equal(
 			latestUiSelectionAssetId([
-				{ attachments: [clip] },
+				{ attachments: [selection] },
 				{ attachments: undefined },
 			]),
 			"asset-1",
 		);
 	});
+
+	it("ignores composer chips", () => {
+		assert.equal(latestUiSelectionAssetId([{ attachments: [chip] }]), undefined);
+	});
 });
 
 describe("promptAttachments", () => {
 	it("keeps an explicit chip and skips the same implicit selection", () => {
-		assert.deepEqual(promptAttachments([clip], clip, []), [clip]);
+		assert.deepEqual(promptAttachments([chip], fields, []), [chip]);
 	});
 
 	it("appends a different implicit selection after the chips", () => {
-		const selected = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		assert.deepEqual(promptAttachments([clip], selected, []), [clip, selected]);
+		const selected = { assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(promptAttachments([chip], selected, []), [chip, { type: "ui_selection", ...selected }]);
 	});
 
 	it("still omits an implicit selection already in the transcript", () => {
-		const selected = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		assert.deepEqual(promptAttachments([], selected, [{ attachments: [selected] }]), []);
+		const selected = { assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(
+			promptAttachments([], selected, [{ attachments: [{ type: "ui_selection", ...selected }] }]),
+			[],
+		);
 	});
 });
 
 describe("composer asset chips", () => {
 	it("accepts a library-relative chip and ignores a duplicate id", () => {
-		assert.deepEqual(parseComposerAssetInputs([clip, { ...clip }]), [clip]);
+		assert.deepEqual(parseComposerAssetInputs([chip, { ...chip }]), [chip]);
+	});
+
+	it("stores a composer input as asset_ref even if the row said ui_selection", () => {
+		assert.deepEqual(parseComposerAssetInputs([selection]), [chip]);
+	});
+
+	it("reads stored chips of either type", () => {
+		const older = { ...selection, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(storedAssetRefs([chip, older]), [chip, older]);
 	});
 
 	it("rejects an absolute path", () => {
-		assert.throws(() => parseComposerAssetInputs([{ ...clip, path: "/tmp/hero.mp4" }]));
-		assert.throws(() => parseComposerAssetInputs([{ ...clip, path: "C:\\clips\\hero.mp4" }]));
-		assert.deepEqual(storedAssetRefs([{ ...clip, path: "/tmp/hero.mp4" }]), []);
+		assert.throws(() => parseComposerAssetInputs([{ ...chip, path: "/tmp/hero.mp4" }]));
+		assert.throws(() => parseComposerAssetInputs([{ ...chip, path: "C:\\clips\\hero.mp4" }]));
+		assert.deepEqual(storedAssetRefs([{ ...chip, path: "/tmp/hero.mp4" }]), []);
 	});
 
 	it("layout text is one space per chip, without the hidden id", () => {
-		assert.equal(composerLayoutText(`hello${assetRefMarker(clip.assetId)}world`), "hello world");
+		assert.equal(composerLayoutText(`hello${assetRefMarker(chip.assetId)}world`), "hello world");
 	});
 });
 
@@ -89,29 +121,35 @@ describe("foldUserMessageForLlm", () => {
 		assert.equal(foldUserMessageForLlm(message), message);
 	});
 
-	it("folds selection into one string and keeps the stored row's attachments", () => {
+	it("folds an implicit selection into one string and keeps the stored row's attachments", () => {
 		const message = {
 			role: "user",
 			content: [{ type: "text", text: "把这个处理一下" }],
-			attachments: [clip],
+			attachments: [selection],
 		};
 		assert.deepEqual(foldUserMessageForLlm(message), {
 			...message,
-			content: foldUserText("把这个处理一下", [clip]),
+			content: foldUserText("把这个处理一下", [selection]),
 		});
 		assert.match(String(foldUserMessageForLlm(message).content), /^把这个处理一下\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>$/);
 	});
 
 	it("folds a chip where it sits in the text", () => {
-		const text = `看一下${assetRefMarker(clip.assetId)}这段`;
-		assert.equal(foldUserText(text, [clip]), `看一下\n\n${foldUserText("", [clip])}\n\n这段`);
+		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
+		assert.equal(foldUserText(text, [chip]), `看一下\n\n${foldUserText("", [chip])}\n\n这段`);
+		assert.match(foldUserText(text, [chip]), /<asset_ref>\npath: clips\/hero\.mp4/);
+	});
+
+	it("still folds an old stored chip as ui_selection", () => {
+		const text = `看一下${assetRefMarker(selection.assetId)}这段`;
+		assert.match(foldUserText(text, [selection]), /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
 	});
 
 	it("appends a selection that was not placed in the text", () => {
-		const other = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		const text = `看一下${assetRefMarker(clip.assetId)}这段`;
-		const folded = foldUserText(text, [clip, other]);
-		assert.match(folded, /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
+		const other = { type: "ui_selection" as const, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
+		const folded = foldUserText(text, [chip, other]);
+		assert.match(folded, /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4/);
 		assert.match(folded, /这段\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>$/);
 	});
 
@@ -132,10 +170,10 @@ describe("foldUserMessageForLlm", () => {
 		const folded = foldUserMessageForLlm({
 			role: "user",
 			content: [{ type: "text", text: "look" }, image],
-			attachments: [clip],
+			attachments: [chip],
 		});
 		assert.deepEqual(folded.content, [
-			{ type: "text", text: foldUserText("look", [clip]) },
+			{ type: "text", text: foldUserText("look", [chip]) },
 			image,
 		]);
 	});

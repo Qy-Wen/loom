@@ -4,33 +4,49 @@ import { splitInlineAssetRefs } from "./composer-asset.ts";
 
 export type LoomAssetType = "image" | "video" | "audio" | "text" | "other";
 
-export type UiSelectionAttachment = {
-	type: "ui_selection";
-	assetId: string;
-	path: string;
-	assetType: LoomAssetType;
-};
-
-export type LoomUserAttachment = UiSelectionAttachment;
-
 export type UiSelectionFields = {
 	assetId: string;
 	path: string;
 	assetType: LoomAssetType;
 };
 
+/** The library file highlighted when the user sent the message. At most one per turn. */
+export type UiSelectionAttachment = UiSelectionFields & {
+	type: "ui_selection";
+};
+
+/** A library file the user placed in the composer. Several per turn, keyed by assetId. */
+export type AssetRefAttachment = UiSelectionFields & {
+	type: "asset_ref";
+};
+
+export type LoomUserAttachment = UiSelectionAttachment | AssetRefAttachment;
+
 const ASSET_TYPES = new Set<string>(["image", "video", "audio", "text", "other"]);
 
-export function isUiSelectionAttachment(value: unknown): value is UiSelectionAttachment {
-	if (typeof value !== "object" || value === null) return false;
-	const row = value as Record<string, unknown>;
+function isAssetFields(row: Record<string, unknown>): row is Record<string, unknown> & UiSelectionFields {
 	return (
-		row.type === "ui_selection" &&
 		typeof row.assetId === "string" &&
 		row.assetId.trim() !== "" &&
 		typeof row.path === "string" &&
 		ASSET_TYPES.has(String(row.assetType))
 	);
+}
+
+export function isUiSelectionAttachment(value: unknown): value is UiSelectionAttachment {
+	if (typeof value !== "object" || value === null) return false;
+	const row = value as Record<string, unknown>;
+	return row.type === "ui_selection" && isAssetFields(row);
+}
+
+export function isAssetRefAttachment(value: unknown): value is AssetRefAttachment {
+	if (typeof value !== "object" || value === null) return false;
+	const row = value as Record<string, unknown>;
+	return row.type === "asset_ref" && isAssetFields(row);
+}
+
+export function isLoomUserAttachment(value: unknown): value is LoomUserAttachment {
+	return isUiSelectionAttachment(value) || isAssetRefAttachment(value);
 }
 
 /** The Chat endpoint refused a picture. The turn should be reported and left off the active path. */
@@ -40,7 +56,7 @@ export function chatRejectedImages(message: string): boolean {
 
 export function parseUserAttachments(value: unknown): LoomUserAttachment[] {
 	if (!Array.isArray(value)) return [];
-	return value.filter(isUiSelectionAttachment);
+	return value.filter(isLoomUserAttachment);
 }
 
 function messageAttachments(message: unknown): unknown {
@@ -74,16 +90,16 @@ export function uiSelectionToAttach(
 	};
 }
 
-/** Explicit composer chips, then the implicit selection when it is not already included. */
+/** Explicit composer chips (`asset_ref`), then the implicit library highlight (`ui_selection`) when it is not already included. */
 export function promptAttachments(
-	chips: readonly UiSelectionAttachment[],
+	chips: readonly AssetRefAttachment[],
 	selection: UiSelectionFields | null | undefined,
 	messages: readonly unknown[],
-): UiSelectionAttachment[] {
-	const out: UiSelectionAttachment[] = [];
+): LoomUserAttachment[] {
+	const out: LoomUserAttachment[] = [];
 	const seen = new Set<string>();
 	for (const chip of chips) {
-		if (!isUiSelectionAttachment(chip) || seen.has(chip.assetId)) continue;
+		if (!isAssetRefAttachment(chip) || seen.has(chip.assetId)) continue;
 		seen.add(chip.assetId);
 		out.push(chip);
 	}
@@ -107,13 +123,27 @@ export function userTextFromContent(content: unknown): string {
 }
 
 export function formatUiSelectionBlock(attachment: UiSelectionAttachment): string {
+	return formatAssetBlock("ui_selection", attachment);
+}
+
+export function formatAssetRefBlock(attachment: AssetRefAttachment): string {
+	return formatAssetBlock("asset_ref", attachment);
+}
+
+function formatAssetBlock(tag: LoomUserAttachment["type"], attachment: UiSelectionFields): string {
 	return (
-		`<ui_selection>\n` +
+		`<${tag}>\n` +
 		`path: ${attachment.path}\n` +
 		`asset_id: ${attachment.assetId}\n` +
 		`type: ${attachment.assetType}\n` +
-		`</ui_selection>`
+		`</${tag}>`
 	);
+}
+
+function formatAttachmentBlock(attachment: LoomUserAttachment): string {
+	return attachment.type === "asset_ref"
+		? formatAssetRefBlock(attachment)
+		: formatUiSelectionBlock(attachment);
 }
 
 function appendSelectionBlock(text: string, block: string): string {
@@ -122,11 +152,11 @@ function appendSelectionBlock(text: string, block: string): string {
 	return `${base}\n\n${block}\n\n`;
 }
 
-/** Fold selections into one string. A chip marker expands where it sits; other selections are appended. */
+/** Fold selections into one string. A chip marker expands where it sits; other attachments are appended. */
 export function foldUserText(text: string, attachments: readonly LoomUserAttachment[]): string {
-	const byId = new Map<string, UiSelectionAttachment>();
+	const byId = new Map<string, LoomUserAttachment>();
 	for (const row of attachments) {
-		if (row.type === "ui_selection") byId.set(row.assetId, row);
+		if (!byId.has(row.assetId)) byId.set(row.assetId, row);
 	}
 	const used = new Set<string>();
 	let out = "";
@@ -138,11 +168,11 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 		const row = byId.get(part.assetId);
 		if (!row) continue;
 		used.add(part.assetId);
-		out = appendSelectionBlock(out, formatUiSelectionBlock(row));
+		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
 	for (const row of attachments) {
-		if (row.type !== "ui_selection" || used.has(row.assetId)) continue;
-		out = appendSelectionBlock(out, formatUiSelectionBlock(row));
+		if (used.has(row.assetId)) continue;
+		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
 	return out.replace(/\n+$/, "");
 }

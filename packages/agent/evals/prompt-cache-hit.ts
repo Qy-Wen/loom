@@ -87,7 +87,7 @@ export function paddedSystemPrompt(): string {
 	cachedPaddedSystemPrompt =
 		`${pad}\n` +
 		"You are Loom. Reply with one short sentence. Do not call tools. " +
-		"A user message may include a <ui_selection> block for the library file selected when they sent that message.";
+		"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it.";
 	return cachedPaddedSystemPrompt;
 }
 
