@@ -255,3 +255,34 @@ test("Library creates, renames, copies, and pastes folders and files", async () 
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Library copies an outside file into Inbox and reuses a file already in the library", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-import-"));
+	const outside = await mkdtemp(join(tmpdir(), "loom-import-src-"));
+	const core = new LocalCore();
+	try {
+		await mkdir(join(root, ".loom"));
+		await writeFile(join(root, "cover.jpg"), "already in library");
+		await writeFile(join(outside, "shot.png"), "external image");
+		const opened = await core.openLibrary(root);
+		const cover = opened.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.ok(cover);
+
+		const [imported, reused] = await core.importExternalFiles([
+			join(outside, "shot.png"),
+			join(root, "cover.jpg"),
+		]);
+		assert.equal(imported.relativePath, "Inbox/shot.png");
+		assert.equal(imported.type, "image");
+		assert.equal(reused.assetId, cover.assetId);
+		assert.equal(reused.relativePath, "cover.jpg");
+
+		const again = await core.importExternalFiles([join(outside, "shot.png")]);
+		assert.equal(again[0].relativePath, "Inbox/shot 2.png");
+		assert.notEqual(again[0].assetId, imported.assetId);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+		await rm(outside, { recursive: true, force: true });
+	}
+});

@@ -1,33 +1,33 @@
-import type { UiSelectionAttachment } from "@loom/agent";
+import type { LoomUserAttachment } from "@loom/agent";
 import { splitInlineAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { AssetThumbnail, createAssetThumbnailElement } from "../assets/asset-thumbnail.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
 
-const knownAssets = new Map<string, UiSelectionAttachment>();
+const knownAssets = new Map<string, LoomUserAttachment>();
 
-export function rememberComposerAsset(asset: UiSelectionAttachment): void {
+export function rememberComposerAsset(asset: LoomUserAttachment): void {
 	knownAssets.set(asset.assetId, asset);
 }
 
-export function lookupComposerAsset(assetId: string): UiSelectionAttachment | undefined {
+export function lookupComposerAsset(assetId: string): LoomUserAttachment | undefined {
 	return knownAssets.get(assetId);
 }
 
-export function resolveComposerAsset(assetId: string, assets: readonly UiSelectionAttachment[]): UiSelectionAttachment {
+export function resolveComposerAsset(assetId: string, assets: readonly LoomUserAttachment[]): LoomUserAttachment {
 	return assets.find((asset) => asset.assetId === assetId)
 		?? knownAssets.get(assetId)
-		?? { type: "ui_selection", assetId, path: "file", assetType: "other" };
+		?? { type: "asset_ref", assetId, path: "file", assetType: "other" };
 }
 
-function assetLabel(asset: UiSelectionAttachment): string {
+function assetLabel(asset: LoomUserAttachment): string {
 	return asset.path.split("/").pop() || asset.path;
 }
 
-function chipPreview(asset: UiSelectionAttachment) {
+function chipPreview(asset: LoomUserAttachment) {
 	return { assetId: asset.assetId, filename: assetLabel(asset), type: asset.assetType };
 }
 
-export function AssetChip({ asset, onRemove }: { asset: UiSelectionAttachment; onRemove?: () => void }): React.JSX.Element {
+export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRemove?: () => void }): React.JSX.Element {
 	const openAsset = useOpenAsset();
 	const label = assetLabel(asset);
 	return (
@@ -48,7 +48,7 @@ export function AssetChip({ asset, onRemove }: { asset: UiSelectionAttachment; o
 }
 
 /** User text with library chips in the positions the user placed them. */
-export function InlineMessageBody({ text, assets }: { text: string; assets: readonly UiSelectionAttachment[] }): React.JSX.Element {
+export function InlineMessageBody({ text, assets }: { text: string; assets: readonly LoomUserAttachment[] }): React.JSX.Element {
 	const parts = splitInlineAssetRefs(text);
 	const used = new Set<string>();
 	const nodes: React.JSX.Element[] = [];
@@ -163,7 +163,7 @@ export function rangeFromPoint(x: number, y: number): Range | null {
 	return doc.caretRangeFromPoint?.(x, y) ?? null;
 }
 
-function chipElement(asset: UiSelectionAttachment, openAsset: (assetId: string) => void): HTMLSpanElement {
+function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => void): HTMLSpanElement {
 	const chip = document.createElement("span");
 	chip.className = "session-asset-chip";
 	chip.contentEditable = "false";
@@ -201,7 +201,7 @@ function chipElement(asset: UiSelectionAttachment, openAsset: (assetId: string) 
 	return chip;
 }
 
-export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly UiSelectionAttachment[], openAsset: (assetId: string) => void): void {
+export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openAsset: (assetId: string) => void): void {
 	const chips = [...root.querySelectorAll<HTMLElement>("[data-asset-id]")];
 	root.replaceChildren();
 	for (const chip of chips) chip.remove();
@@ -219,7 +219,7 @@ export function paintInlineEditor(root: HTMLElement, text: string, assets: reado
 }
 
 /** Insert a chip at the drop point. Returns false when the point is outside the editor. */
-export function insertChipAtPoint(root: HTMLElement, asset: UiSelectionAttachment, x: number, y: number, openAsset: (assetId: string) => void): boolean {
+export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, x: number, y: number, openAsset: (assetId: string) => void): boolean {
 	const range = rangeFromPoint(x, y);
 	if (!range || (range.startContainer !== root && !root.contains(range.startContainer))) return false;
 	const host = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
@@ -240,7 +240,7 @@ export function insertChipAtPoint(root: HTMLElement, asset: UiSelectionAttachmen
 }
 
 /** Append a chip at the end of the editor. Returns false when that asset is already in the text. */
-export function appendChip(root: HTMLElement, asset: UiSelectionAttachment, openAsset: (assetId: string) => void): HTMLElement | null {
+export function appendChip(root: HTMLElement, asset: LoomUserAttachment, openAsset: (assetId: string) => void): HTMLElement | null {
 	const existing = root.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(asset.assetId)}"]`);
 	if (existing) {
 		focusInlineEditor(root, existing);

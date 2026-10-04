@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { copyFile, cp, mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join } from "node:path";
+import { basename, dirname, extname, join, resolve } from "node:path";
 import {
 	assetTypeFromPath,
 	type Asset,
@@ -11,6 +11,7 @@ import { statAssetFile, statVolumeId } from "./file-identity.ts";
 import { diffLibraryAssets, LibraryHandlers } from "./handlers.ts";
 import {
 	assertEntryName,
+	COMPOSER_INBOX_FOLDER,
 	copyFilename,
 	joinRelative,
 	parentRelative,
@@ -230,6 +231,54 @@ export class Library {
 		} finally {
 			if (watching) await this.resumeWatcher();
 		}
+	}
+
+	/**
+	 * Copy files from outside the library into `Inbox/`, or reuse a file already in the library.
+	 * Does not run VLM or embeddings.
+	 */
+	async importExternalFiles(absolutePaths: string[]): Promise<Asset[]> {
+		const paths = this.requirePaths();
+		await this.ensureInbox();
+		const imported: Asset[] = [];
+		const seen = new Set<string>();
+		for (const raw of absolutePaths) {
+			const absolutePath = resolve(raw);
+			let info: Awaited<ReturnType<typeof stat>>;
+			try {
+				info = await stat(absolutePath);
+			} catch {
+				throw new Error(`${basename(absolutePath)} could not be read.`);
+			}
+			if (!info.isFile()) throw new Error(`${basename(absolutePath)} is not a file.`);
+			if (paths.isIgnoredPath(absolutePath)) throw new Error(`${basename(absolutePath)} cannot be imported.`);
+
+			try {
+				const relativePath = paths.toRelativePath(absolutePath);
+				const existing = await this.indexFile(relativePath);
+				if (existing) {
+					if (!seen.has(existing.assetId)) {
+						seen.add(existing.assetId);
+						imported.push(existing);
+					}
+					continue;
+				}
+			} catch {
+				// Outside the library: copy into Inbox.
+			}
+
+			const extension = extname(absolutePath);
+			const stem = assertEntryName(basename(absolutePath, extension) || "file");
+			const filename = await this.uniqueFilename(COMPOSER_INBOX_FOLDER, stem, extension);
+			const destRelative = joinRelative(COMPOSER_INBOX_FOLDER, filename);
+			await copyFile(absolutePath, paths.toAbsolutePath(destRelative));
+			const asset = await this.indexFile(destRelative);
+			if (!asset) throw new Error(`Failed to import ${basename(absolutePath)}`);
+			if (seen.has(asset.assetId)) continue;
+			seen.add(asset.assetId);
+			imported.push(asset);
+		}
+		return imported;
 	}
 
 	async copyFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
@@ -452,6 +501,16 @@ export class Library {
 			if ((error as NodeJS.ErrnoException).code === "ENOENT") return false;
 			throw error;
 		}
+	}
+
+	private async ensureInbox(): Promise<void> {
+		if (await this.pathExists(COMPOSER_INBOX_FOLDER)) {
+			await this.requireDirectory(COMPOSER_INBOX_FOLDER);
+			this.trackFolder(COMPOSER_INBOX_FOLDER);
+			return;
+		}
+		await mkdir(this.folderAbsolute(COMPOSER_INBOX_FOLDER));
+		this.trackFolder(COMPOSER_INBOX_FOLDER);
 	}
 
 	private async requireDirectory(relativePath: string): Promise<void> {

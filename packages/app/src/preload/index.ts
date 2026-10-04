@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from "electron";
+import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { LibraryChange } from "@loom/core";
 import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
@@ -55,6 +55,10 @@ const api: LoomApi = {
 	getSession: (id) => ipcRenderer.invoke(IPC.getSession, id),
 	stageComposerImages: (id, images) => ipcRenderer.invoke(IPC.stageComposerImages, id, images),
 	stageComposerAssets: (id, assets) => ipcRenderer.invoke(IPC.stageComposerAssets, id, assets),
+	pickComposerLibraryAssets: () => ipcRenderer.invoke(IPC.pickComposerLibraryAssets),
+	importComposerFiles: (filePaths) => ipcRenderer.invoke(IPC.importComposerFiles, filePaths),
+	pickComposerExternalFiles: () => ipcRenderer.invoke(IPC.pickComposerExternalFiles),
+	pathForFile: (file) => webUtils.getPathForFile(file),
 	followUp: (id, text) => ipcRenderer.invoke(IPC.followUp, id, text),
 	branchBefore: (id, entryId) => ipcRenderer.invoke(IPC.branchBefore, id, entryId),
 	forkBefore: (id, entryId) => ipcRenderer.invoke(IPC.forkBefore, id, entryId),

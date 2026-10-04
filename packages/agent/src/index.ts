@@ -10,6 +10,7 @@ export type {
 } from "./types.ts";
 export { toolResultText } from "./types.ts";
 export type {
+	AssetRefAttachment,
 	LoomAssetType,
 	LoomUserAttachment,
 	UiSelectionAttachment,
@@ -18,7 +19,9 @@ export type {
 export {
 	foldUserMessageForLlm,
 	foldUserText,
+	formatAssetRefBlock,
 	formatUiSelectionBlock,
+	isAssetRefAttachment,
 	isUiSelectionAttachment,
 	latestUiSelectionAssetId,
 	parseUserAttachments,

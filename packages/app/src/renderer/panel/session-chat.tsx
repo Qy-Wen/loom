@@ -13,9 +13,8 @@ import {
 	type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
 import { createContext, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
-import type { HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage, UiSelectionAttachment } from "@loom/agent";
+import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 import { composerLayoutText, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
-import { bytesToBase64, COMPOSER_IMAGE_MAX_BYTES, COMPOSER_IMAGE_MAX_COUNT, sniffComposerImage, type ComposerImageMime } from "@loom/agent/composer-image";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
@@ -27,7 +26,7 @@ const VisibleMessagesContext = createContext<Message[]>([]);
 const ThreadIdContext = createContext("");
 const EntryIdsContext = createContext<ReadonlyMap<string, string>>(new Map());
 const TranscriptContext = createContext<readonly LoomTranscriptMessage[]>([]);
-const ComposerAttachContext = createContext<UiSelectionAttachment | null>(null);
+const ComposerAttachContext = createContext<AssetRefAttachment | null>(null);
 const ComposerAttachAppliedContext = createContext<() => void>(() => {});
 
 type ForceView = {
@@ -57,20 +56,13 @@ const DraftAppliedContext = createContext<() => void>(() => {});
 
 type QueuedFollowUp = { text: string; label?: string; seen: number };
 
-type PendingImage = {
-	id: string;
-	filename: string;
-	mimeType: ComposerImageMime;
-	data: string;
-	preview: string;
-};
-
 type ComposerActions = {
-	addFiles: (files: File[]) => void;
+	importFiles: (files: File[]) => void;
+	pickLibrary: () => void;
+	pickExternal: () => void;
 	sendImageOnly: () => void;
-	hasImages: boolean;
 	hasAssets: boolean;
-	assets: readonly UiSelectionAttachment[];
+	assets: readonly LoomUserAttachment[];
 	bindEditor: (editor: HTMLDivElement | null) => void;
 	openAsset: (assetId: string) => void;
 	syncAssets: () => void;
@@ -211,7 +203,7 @@ function InlineEdit({
 	onSend,
 }: {
 	text: string;
-	assets: readonly UiSelectionAttachment[];
+	assets: readonly LoomUserAttachment[];
 	busy: boolean;
 	error: string | null;
 	onCancel: () => void;
@@ -315,7 +307,7 @@ function InlineEdit({
 	);
 }
 
-function messageAssets(entryId: string | undefined, transcript: readonly LoomTranscriptMessage[]): UiSelectionAttachment[] {
+function messageAssets(entryId: string | undefined, transcript: readonly LoomTranscriptMessage[]): LoomUserAttachment[] {
 	if (!entryId) return [];
 	const message = transcript.find((row) => row.id === entryId);
 	return storedAssetRefs(message && "attachments" in message ? message.attachments : undefined);
@@ -462,7 +454,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 				const files = [...event.clipboardData.files];
 				if (files.length > 0) {
 					event.preventDefault();
-					actions?.addFiles(files);
+					actions?.importFiles(files);
 					return;
 				}
 				const pasted = event.clipboardData.getData("text/plain");
@@ -472,7 +464,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 			}}
 			onKeyDown={(event) => {
 				const words = stripInlineAssetRefs(String(props.value ?? "")).trim();
-				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && (actions?.hasImages || actions?.hasAssets) && !words) {
+				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions?.hasAssets && !words) {
 					event.preventDefault();
 					actions.sendImageOnly();
 					return;
@@ -483,25 +475,68 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 	);
 });
 
-function AddFilesButton({ onAddFile, toolsMenu: _toolsMenu, className, ...props }: React.ButtonHTMLAttributes<HTMLButtonElement> & { onAddFile?: () => void; toolsMenu?: unknown }): React.JSX.Element {
+function AddFilesButton({ className, disabled }: { className?: string; disabled?: boolean; onAddFile?: () => void; toolsMenu?: unknown }): React.JSX.Element {
+	const actions = useContext(ComposerActionsContext);
+	const rootRef = useRef<HTMLDivElement>(null);
+	const [open, setOpen] = useState(false);
+
+	useEffect(() => {
+		if (!open) return;
+		const onPointer = (event: PointerEvent) => {
+			if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+		};
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("pointerdown", onPointer);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("pointerdown", onPointer);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
+
 	return (
-		<button
-			type="button"
-			{...props}
-			className={className ? `session-add-files ${className}` : "session-add-files"}
-			aria-label="Add files"
-			title="Add files"
-			onClick={(event) => {
-				props.onClick?.(event);
-				if (event.defaultPrevented) return;
-				event.preventDefault();
-				onAddFile?.();
-			}}
-		>
-			<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
-				<path d="M12 5v14M5 12h14" />
-			</svg>
-		</button>
+		<div ref={rootRef} className="session-add-files-wrap">
+			<button
+				type="button"
+				className={className ? `session-add-files ${className}` : "session-add-files"}
+				disabled={disabled}
+				aria-label="Add"
+				aria-expanded={open}
+				aria-haspopup="menu"
+				title="Add"
+				onClick={(event) => {
+					event.preventDefault();
+					event.stopPropagation();
+					setOpen((current) => !current);
+				}}
+			>
+				<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+					<path d="M12 5v14M5 12h14" />
+				</svg>
+			</button>
+			{open && (
+				<div className="session-add-files-menu" role="menu">
+					<button
+						type="button"
+						role="menuitem"
+						onClick={() => {
+							setOpen(false);
+							actions?.pickLibrary();
+						}}
+					>Library file</button>
+					<button
+						type="button"
+						role="menuitem"
+						onClick={() => {
+							setOpen(false);
+							actions?.pickExternal();
+						}}
+					>External file</button>
+				</div>
+			)}
+		</div>
 	);
 }
 
@@ -533,20 +568,16 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	const onComposerAttachApplied = useContext(ComposerAttachAppliedContext);
 	const { agent } = useAgent();
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
-	const [images, setImages] = useState<PendingImage[]>([]);
-	const [assets, setAssets] = useState<UiSelectionAttachment[]>([]);
+	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
 	const [imageError, setImageError] = useState<string | null>(null);
-	const imagesRef = useRef(images);
-	imagesRef.current = images;
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
 	const valueRef = useRef(value);
 	valueRef.current = value;
-	const fileRef = useRef<HTMLInputElement>(null);
 	const transcript = useContext(TranscriptContext);
 	const editorRef = useRef<HTMLDivElement | null>(null);
 	const openAsset = useOpenAsset();
-	const hasDraft = editableText(value ?? "") || images.length > 0 || assets.length > 0;
+	const hasDraft = editableText(value ?? "") || assets.length > 0;
 	const appliedDraft = useRef<string | null>(null);
 	const emptySeen = useRef(false);
 	const forceSeen = useRef<ForceView | null>(null);
@@ -660,21 +691,17 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		void (async () => {
 			const raw = (editorRef.current ? readInlineEditor(editorRef.current) : submitted).replaceAll("\u200b", "");
 			const text = stripInlineAssetRefs(raw).trim() || inlineAssetIds(raw).length > 0 ? raw : "";
-			const payload = imagesRef.current;
 			const assetPayload = assetsRef.current;
-			if (!text && payload.length === 0 && assetPayload.length === 0) return;
-			if ((payload.length > 0 && typeof window.loom.stageComposerImages !== "function") || (assetPayload.length > 0 && typeof window.loom.stageComposerAssets !== "function")) {
+			if (!text && assetPayload.length === 0) return;
+			if (assetPayload.length > 0 && typeof window.loom.stageComposerAssets !== "function") {
 				setImageError(threadId ? "Restart the app to send attachments." : "Open a session before attaching a file.");
 				return;
 			}
-			if (!threadId && (payload.length > 0 || assetPayload.length > 0)) {
+			if (!threadId && assetPayload.length > 0) {
 				setImageError("Open a session before attaching a file.");
 				return;
 			}
 			try {
-				if (payload.length > 0) {
-					await window.loom.stageComposerImages(threadId, payload.map(({ filename, mimeType, data }) => ({ filename, mimeType, data })));
-				}
 				if (assetPayload.length > 0) {
 					await window.loom.stageComposerAssets(threadId, assetPayload.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
 				}
@@ -683,7 +710,6 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				if (text) onChange?.(text);
 				return;
 			}
-			setImages([]);
 			setAssets([]);
 			setImageError(null);
 			if (!isRunning || !threadId) {
@@ -693,53 +719,117 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			}
 			const seen = visible.filter((message) => message.role === "user" && messageText(message) === text).length;
 			const visibleText = stripInlineAssetRefs(text).trim();
-			const label = visibleText || [...payload.map((image) => image.filename), ...assetPayload.map((asset) => asset.path.split("/").pop() || asset.path)].join(", ");
+			const label = visibleText || assetPayload.map((asset) => asset.path.split("/").pop() || asset.path).join(", ");
 			try {
 				await window.loom.followUp(threadId, text);
 				setQueued((items) => [...items, { text, label, seen }]);
 				onChange?.("");
 			} catch {
-				setImages(payload);
 				setAssets(assetPayload);
 				if (text) onChange?.(text);
 			}
 		})();
 	};
 
-	async function addFiles(files: File[]): Promise<void> {
-		setImageError(null);
-		const next = [...imagesRef.current];
-		let error: string | null = null;
+	async function importDroppedFiles(files: File[]): Promise<void> {
+		if (typeof window.loom.importComposerFiles !== "function" || typeof window.loom.pathForFile !== "function") {
+			setImageError("Restart the app to attach a file.");
+			return;
+		}
+		const paths: string[] = [];
 		for (const file of files) {
-			if (next.length >= COMPOSER_IMAGE_MAX_COUNT) {
-				error = "Attach up to 4 images.";
-				break;
-			}
 			try {
-				const bytes = new Uint8Array(await file.arrayBuffer());
-				const mimeType = sniffComposerImage(bytes);
-				if (!mimeType) {
-					error = "Use a JPEG, PNG, GIF, or WebP image.";
-					continue;
-				}
-				if (bytes.byteLength > COMPOSER_IMAGE_MAX_BYTES) {
-					error = "Each image must be 8 MB or smaller.";
-					continue;
-				}
-				const data = bytesToBase64(bytes);
-				next.push({
-					id: crypto.randomUUID(),
-					filename: file.name || "image",
-					mimeType,
-					data,
-					preview: `data:${mimeType};base64,${data}`,
-				});
+				const path = window.loom.pathForFile(file);
+				if (path) paths.push(path);
 			} catch {
-				error = "Could not read that image.";
+				// Skip files without a local path.
 			}
 		}
-		setImages(next);
-		if (error) setImageError(error);
+		if (paths.length === 0) {
+			setImageError("Could not read that file.");
+			return;
+		}
+		try {
+			const picked = await window.loom.importComposerFiles(paths);
+			if (picked.length === 0) return;
+			appendAssets(picked.map((asset) => ({
+				type: "asset_ref",
+				assetId: asset.assetId,
+				path: asset.path,
+				assetType: asset.assetType,
+			})));
+		} catch (cause) {
+			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+		}
+	}
+
+	function appendAssets(items: LoomUserAttachment[]): void {
+		const parsed = parseComposerAssetInputs(items);
+		if (parsed.length === 0) return;
+		setImageError(null);
+		const editor = editorRef.current;
+		for (const asset of parsed) {
+			rememberComposerAsset(asset);
+			if (editor) appendChip(editor, asset, openAsset);
+		}
+		setAssets((current) => {
+			const next = [...current];
+			for (const asset of parsed) {
+				if (!next.some((item) => item.assetId === asset.assetId)) next.push(asset);
+			}
+			return next;
+		});
+		if (editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
+		const last = parsed.at(-1);
+		const activate = () => {
+			const current = editorRef.current;
+			if (!current?.isConnected || !last) return;
+			const node = current.querySelector(`[data-asset-id="${CSS.escape(last.assetId)}"]`);
+			focusInlineEditor(current, node);
+		};
+		requestAnimationFrame(() => {
+			activate();
+			window.setTimeout(activate, 0);
+			window.setTimeout(activate, 50);
+		});
+	}
+
+	async function pickLibraryFiles(): Promise<void> {
+		if (typeof window.loom.pickComposerLibraryAssets !== "function") {
+			setImageError("Restart the app to attach a library file.");
+			return;
+		}
+		try {
+			const picked = await window.loom.pickComposerLibraryAssets();
+			if (picked.length === 0) return;
+			appendAssets(picked.map((asset) => ({
+				type: "asset_ref",
+				assetId: asset.assetId,
+				path: asset.path,
+				assetType: asset.assetType,
+			})));
+		} catch (cause) {
+			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+		}
+	}
+
+	async function pickExternalFiles(): Promise<void> {
+		if (typeof window.loom.pickComposerExternalFiles !== "function") {
+			setImageError("Restart the app to attach a file.");
+			return;
+		}
+		try {
+			const picked = await window.loom.pickComposerExternalFiles();
+			if (picked.length === 0) return;
+			appendAssets(picked.map((asset) => ({
+				type: "asset_ref",
+				assetId: asset.assetId,
+				path: asset.path,
+				assetType: asset.assetType,
+			})));
+		} catch (cause) {
+			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+		}
 	}
 
 	function placeAsset(value: unknown, x: number, y: number): void {
@@ -759,9 +849,10 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	}
 
 	const composerActions: ComposerActions = {
-		addFiles: (files) => { void addFiles(files); },
+		importFiles: (files) => { void importDroppedFiles(files); },
+		pickLibrary: () => { void pickLibraryFiles(); },
+		pickExternal: () => { void pickExternalFiles(); },
 		sendImageOnly: () => deliverRef.current((valueRef.current ?? "").trim() || "\u200b"),
-		hasImages: images.length > 0,
 		hasAssets: assets.length > 0,
 		assets,
 		bindEditor: (editor) => {
@@ -774,7 +865,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				setAssets([]);
 				return;
 			}
-			const next: UiSelectionAttachment[] = [];
+			const next: LoomUserAttachment[] = [];
 			const seen = new Set<string>();
 			for (const node of editor.querySelectorAll<HTMLElement>("[data-asset-id]")) {
 				const id = node.dataset.assetId;
@@ -809,7 +900,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				const files = [...event.dataTransfer.files];
 				if (files.length === 0) return;
 				event.preventDefault();
-				void addFiles(files);
+				void importDroppedFiles(files);
 			}}
 		>
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
@@ -824,39 +915,20 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 					</ol>
 				</section>
 			)}
-			<input
-				ref={fileRef}
-				type="file"
-				accept="image/jpeg,image/png,image/gif,image/webp,.jpg,.jpeg,.png,.gif,.webp"
-				multiple
-				hidden
-				onChange={(event) => {
-					const files = [...event.target.files ?? []];
-					event.target.value = "";
-					if (files.length > 0) void addFiles(files);
-				}}
-			/>
-			<div className={images.length > 0 ? "session-composer-box" : undefined}>
-				{images.length > 0 && (
-					<div className="session-composer-images">
-						{images.map((image) => (
-							<div key={image.id} className="session-composer-image">
-								<img src={image.preview} alt={image.filename} />
-								<button type="button" aria-label={`Remove ${image.filename}`} onClick={() => setImages((current) => current.filter((item) => item.id !== image.id))}>×</button>
-							</div>
-						))}
-					</div>
-				)}
+			<div>
 				<CopilotChatInput
 					{...props}
 					value={value}
 					isRunning={Boolean(isRunning) && !hasDraft}
 					showDisclaimer={false}
 					onChange={onChange}
-					onAddFile={() => fileRef.current?.click()}
+					toolsMenu={[
+						{ label: "Add library file", action: () => { void pickLibraryFiles(); } },
+						{ label: "Add external file", action: () => { void pickExternalFiles(); } },
+					]}
 					addMenuButton={AddFilesButton}
 					textArea={ComposerTextArea}
-					sendButton={images.length > 0 || assets.length > 0 ? ImageSendButton : undefined}
+					sendButton={assets.length > 0 ? ImageSendButton : undefined}
 					onSubmitMessage={(submitted) => {
 						deliverRef.current(submitted);
 					}}
@@ -929,7 +1001,7 @@ export function SessionChat({
 	context: HarnessContextUsage | null;
 	composerDraft: string | null;
 	onComposerDraftApplied: () => void;
-	composerAttach: UiSelectionAttachment | null;
+	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	onSessionRecord: (record: HarnessSessionRecord) => void;
 	onForked: (record: HarnessSessionRecord, draft: string) => void;
@@ -1022,7 +1094,7 @@ export function SessionChat({
 			<ComposerAttachContext.Provider value={composerAttach}>
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
 			<div className="session-chat-shell">
-				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add files" }} />
+				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
 				<ContextIndicator context={context} />
 			</div>
 			</ComposerAttachAppliedContext.Provider>

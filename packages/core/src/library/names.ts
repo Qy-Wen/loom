@@ -44,3 +44,6 @@ export function wouldNestInside(sourceFolder: string, destFolder: string): boole
 export function copyFilename(stem: string, extension: string, copyNumber: number): string {
 	return `${stem} copy${copyNumber === 1 ? "" : ` ${copyNumber}`}${extension}`;
 }
+
+/** Chat imports of files from outside the library land here. */
+export const COMPOSER_INBOX_FOLDER = "Inbox";

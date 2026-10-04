@@ -13,7 +13,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage, UiSelectionAttachment } from "@loom/agent";
+import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
@@ -54,7 +54,7 @@ interface SidePanelProps {
 	onAnalyze: () => void;
 	onSelectAsset: (assetId: string) => void;
 	onOpenAsset: (assetId: string) => void;
-	composerAttach: UiSelectionAttachment | null;
+	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	onCreateRelation: (toAssetId: string, type: string) => Promise<void>;
 	onRemoveRelation: (relationId: string) => Promise<void>;

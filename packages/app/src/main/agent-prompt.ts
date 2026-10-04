@@ -11,8 +11,8 @@ const BASE_SYSTEM_PROMPT =
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
 	"MCP tools are named server__tool and attach after configured servers connect. " +
-	"A user message may include a <ui_selection> block for a library file, placed where the user referred to it. " +
-	"Use it when they say this/the file without naming one. If they name a different path, prefer that.";
+	"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it. " +
+	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that.";
 
 /** System prompt for the open asset library. `null` means no library is open. */
 export function systemPromptForLibrary(rootPath: string | null): string {

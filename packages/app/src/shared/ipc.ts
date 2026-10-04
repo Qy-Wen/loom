@@ -100,6 +100,9 @@ export const IPC = {
 	getSession: "loom:getSession",
 	stageComposerImages: "loom:stageComposerImages",
 	stageComposerAssets: "loom:stageComposerAssets",
+	pickComposerLibraryAssets: "loom:pickComposerLibraryAssets",
+	importComposerFiles: "loom:importComposerFiles",
+	pickComposerExternalFiles: "loom:pickComposerExternalFiles",
 	followUp: "loom:followUp",
 	branchBefore: "loom:branchBefore",
 	forkBefore: "loom:forkBefore",
@@ -171,6 +174,13 @@ export interface LoomApi {
 	stageComposerImages: (id: string, images: Array<{ filename: string; mimeType: string; data: string }>) => Promise<void>;
 	/** Hold composer library chips until the next prompt or follow-up on this session. */
 	stageComposerAssets: (id: string, assets: Array<{ assetId: string; path: string; assetType: string }>) => Promise<void>;
+	/** Open a file dialog inside the library and return indexed assets as composer chips. */
+	pickComposerLibraryAssets: () => Promise<UiSelectionDraft[]>;
+	/** Copy files into Inbox (or reuse if they are already in the library) and return composer chips. */
+	importComposerFiles: (filePaths: string[]) => Promise<UiSelectionDraft[]>;
+	/** Open a file dialog anywhere, import into Inbox, and return composer chips. */
+	pickComposerExternalFiles: () => Promise<UiSelectionDraft[]>;
+	pathForFile: (file: File) => string;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
 	followUp: (id: string, text: string) => Promise<void>;
 	/** Move the active path to just before this user question. */
