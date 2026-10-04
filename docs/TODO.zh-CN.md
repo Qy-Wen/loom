@@ -10,16 +10,7 @@
 
 提示词模板暂不因 vendor 提供 API 就强行加入产品。已完成的步骤见 [归档](./archive/ARCHIVE.zh-CN.md)。
 
-## 第一步：评测
-
-Agent 行为、工具调用、检索效果。压缩率和 prompt-cache 命中率已在 `packages/agent/evals/`；Hybrid Search 有最小单测集。见 [PRODUCT](./PRODUCT.zh-CN.md) §10 和 [AGENT](./AGENT.zh-CN.md)。
-
-- [ ] 补上 Agent 行为和工具调用评测
-- [ ] 在 Hybrid Search 单测之外补检索效果评测
-
----
-
-## 第二步：Human in the loop
+## 第一步：Human in the loop
 
 高风险操作执行前，由用户确认。
 

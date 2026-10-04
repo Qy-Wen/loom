@@ -19,6 +19,8 @@
     "eval:compaction-rate": "node --experimental-strip-types --env-file=../../.env evals/compaction-rate.ts",
     "eval:compaction-e2e": "node --experimental-strip-types --env-file=../../.env evals/compaction-e2e.ts",
     "eval:prompt-cache-hit": "node --experimental-strip-types --env-file=../../.env evals/prompt-cache-hit.ts",
+    "eval:agent-tools": "node --experimental-strip-types evals/agent-tools.ts",
+    "eval:agent-tools:live": "node --experimental-strip-types --env-file=../../.env evals/agent-tools.ts --live",
     "vendor:sync": "./vendor-pi-agent/sync.sh"
   },
   "dependencies": {

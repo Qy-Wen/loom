@@ -10,16 +10,7 @@
 
 Do not add prompt-template UI merely because vendor APIs exist. Completed steps are in the [archive](./archive/ARCHIVE.md).
 
-## Step 1: Evals
-
-Agent behavior, tool calls, and retrieval quality. Compaction rate and prompt-cache hit already live in `packages/agent/evals/`; Hybrid Search has a minimal unit set. See [PRODUCT](./PRODUCT.md) §10 and [AGENT](./AGENT.md).
-
-- [ ] Add evals for Agent behavior and tool calls
-- [ ] Add evals for retrieval quality beyond the Hybrid Search unit set
-
----
-
-## Step 2: Human in the loop
+## Step 1: Human in the loop
 
 The user confirms a high-risk operation before it runs.
 

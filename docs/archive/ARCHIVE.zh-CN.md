@@ -6,6 +6,12 @@
 
 ---
 
+## Agent 与检索评测
+
+金标放在本仓库，不另开仓库。检索和 Agent/工具金标，CI 假槽位、现场真实槽位。见 [EVALS](../AGENT/EVALS.zh-CN.md)。
+
+---
+
 ## 素材库 Skills
 
 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。见 [AGENT](../AGENT.zh-CN.md) 和 [agentskills.io](https://agentskills.io/specification)。

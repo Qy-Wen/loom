@@ -3,7 +3,7 @@
 # Agent Architecture
 
 > This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, user-message attachments, and the frontend interaction protocol (AG-UI).
-> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [Pi Harness integration scope](./PI-HARNESS.md) for the runtime boundary, and [TODO.md](./TODO.md) for the roadmap.
+> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [Pi Harness integration scope](./PI-HARNESS.md) for the runtime boundary, [EVALS.md](./EVALS.md) for how Agent and retrieval are scored, and [TODO.md](./TODO.md) for the roadmap.
 
 ---
 
@@ -302,12 +302,7 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 
 ## 7. Evals
 
-Evals live in `packages/agent/evals/`. Compaction rate (`compaction-rate.ts`) is context tokens after compact / tokens before. Prompt-cache hit rate (`prompt-cache-hit.ts`) is `cacheRead / (input + cacheRead + cacheWrite)` from Chat usage (the API's `prompt_tokens` split). Broader Agent / tool / retrieval evals wait; see [TODO](./TODO.md).
-
-```bash
-pnpm --filter @loom/agent eval:compaction-rate
-pnpm --filter @loom/agent eval:prompt-cache-hit
-```
+In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat and Embedding slots. Commands, metrics, and out-of-scope items: [EVALS.md](./EVALS.md).
 
 ---
 
@@ -319,5 +314,5 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
 - **User attachments:** Library highlight (`ui_selection`) and composer chips (`asset_ref`) live on the user row as `attachments`, keyed by `assetId`. External files are copied into `Inbox/` first. `toProviderMessages` folds every attachment into one Chat text string. Historical image parts on `content` still send as `image_url`. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
-- **Evals:** compaction rate and prompt-cache hit rate exist; broader Agent / tool / retrieval evals wait on [TODO](./TODO.md). Retrieval unit evals stay with Hybrid Search.
+- **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).
 - **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand.

@@ -1,7 +1,8 @@
 export const CHILD_TOKEN_LIMIT = 512;
 export const CHILD_TOKEN_OVERLAP = 64;
 export const PARENT_TOKEN_LIMIT = 2048;
-export const EMBED_BATCH_SIZE = 32;
+/** Hosted embeddings (DashScope v4, Qianfan) cap a request at 10–16 inputs. */
+export const EMBED_BATCH_SIZE = 8;
 
 export type TextChunkRole = "parent" | "child";
 export type TextEmbedJobStatus = "embedding" | "ready" | "failed";
