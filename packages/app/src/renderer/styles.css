@@ -291,6 +291,15 @@ body {
 	background: #dde6f7;
 }
 
+.folder-row.cut,
+.asset-row.cut {
+	opacity: 0.45;
+}
+
+.folder-row.drop-target {
+	background: #d7e4d2;
+}
+
 .rename-row {
 	cursor: default;
 }

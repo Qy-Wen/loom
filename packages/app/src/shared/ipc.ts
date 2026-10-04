@@ -26,6 +26,7 @@ export type AssetContextAction =
 	| "add_to_chat"
 	| "rename"
 	| "duplicate"
+	| "cut"
 	| "copy"
 	| "paste"
 	| "new_folder"
@@ -34,6 +35,7 @@ export type AssetContextAction =
 	| "trash";
 export type FolderContextAction =
 	| "rename"
+	| "cut"
 	| "copy"
 	| "paste"
 	| "new_folder"
@@ -64,10 +66,12 @@ export const IPC = {
 	renameAsset: "loom:renameAsset",
 	duplicateAsset: "loom:duplicateAsset",
 	copyAssetsInto: "loom:copyAssetsInto",
+	moveAssetsInto: "loom:moveAssetsInto",
 	createFolder: "loom:createFolder",
 	createMarkdownFile: "loom:createMarkdownFile",
 	renameFolder: "loom:renameFolder",
 	copyFolderInto: "loom:copyFolderInto",
+	moveFolderInto: "loom:moveFolderInto",
 	copyAssetPath: "loom:copyAssetPath",
 	copyFolderPath: "loom:copyFolderPath",
 	revealAsset: "loom:revealAsset",
@@ -132,10 +136,12 @@ export interface LoomApi {
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
 	copyAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
+	moveAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
 	createFolder: (parentRelativePath: string) => Promise<string>;
 	createMarkdownFile: (parentRelativePath: string) => Promise<Asset>;
 	renameFolder: (relativePath: string, name: string) => Promise<string>;
 	copyFolderInto: (sourceFolder: string, destFolder: string) => Promise<string>;
+	moveFolderInto: (sourceFolder: string, destFolder: string) => Promise<string>;
 	copyAssetPath: (assetId: string) => Promise<void>;
 	copyFolderPath: (relativePath: string) => Promise<void>;
 	revealAsset: (assetId: string) => Promise<void>;

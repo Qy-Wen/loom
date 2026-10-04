@@ -19,6 +19,7 @@ import type {
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import type { AssetRefAttachment } from "@loom/agent";
 import { sortAssets } from "./assets/asset-utils.ts";
+import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
@@ -33,8 +34,8 @@ const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: []
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 type LibraryClipboard =
-	| { kind: "assets"; assetIds: string[] }
-	| { kind: "folder"; relativePath: string };
+	| { kind: "assets"; assetIds: string[]; mode: "copy" | "cut" }
+	| { kind: "folder"; relativePath: string; mode: "copy" | "cut" };
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
 	return [...properties].sort((a, b) => a.name.localeCompare(b.name));
@@ -306,10 +307,18 @@ export function App(): React.JSX.Element {
 
 	function copySelection(): void {
 		if (selectedFolder) {
-			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder });
+			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder, mode: "copy" });
 			return;
 		}
-		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId] });
+		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId], mode: "copy" });
+	}
+
+	function cutSelection(): void {
+		if (selectedFolder) {
+			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder, mode: "cut" });
+			return;
+		}
+		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId], mode: "cut" });
 	}
 
 	function revealCreatedFolder(relativePath: string): void {
@@ -340,12 +349,39 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			if (libraryClipboard.kind === "assets") {
-				const copied = await window.loom.copyAssetsInto(libraryClipboard.assetIds, destFolder);
-				if (copied[0]) selectAsset(copied[0].assetId);
+				const run = libraryClipboard.mode === "cut" ? window.loom.moveAssetsInto : window.loom.copyAssetsInto;
+				const next = await run(libraryClipboard.assetIds, destFolder);
+				if (next[0]) selectAsset(next[0].assetId);
 			} else {
-				const created = await window.loom.copyFolderInto(libraryClipboard.relativePath, destFolder);
+				const run = libraryClipboard.mode === "cut" ? window.loom.moveFolderInto : window.loom.copyFolderInto;
+				const created = await run(libraryClipboard.relativePath, destFolder);
 				setSelectedFolder(created);
 				setSelectedAssetId(null);
+			}
+			if (libraryClipboard.mode === "cut") setLibraryClipboard(null);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function dropLibraryItem(destFolder: string, item: LibraryDrag): Promise<void> {
+		if (!canDropLibraryItem(destFolder, item)) return;
+		setError(null);
+		try {
+			if (item.kind === "asset") {
+				const moved = await window.loom.moveAssetsInto([item.assetId], destFolder);
+				if (moved[0]) selectAsset(moved[0].assetId);
+			} else {
+				const moved = await window.loom.moveFolderInto(item.relativePath, destFolder);
+				setSelectedFolder(moved);
+				setSelectedAssetId(null);
+				setCollapsedFolders((current) => {
+					const next = new Set(current);
+					next.delete(moved);
+					const parent = parentFolder(moved);
+					if (parent) next.delete(parent);
+					return next;
+				});
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -372,7 +408,9 @@ export function App(): React.JSX.Element {
 				const duplicate = await window.loom.duplicateAsset(asset.assetId);
 				selectAsset(duplicate.assetId);
 			} else if (action === "copy") {
-				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId] });
+				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId], mode: "copy" });
+			} else if (action === "cut") {
+				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId], mode: "cut" });
 			} else if (action === "paste") {
 				await pasteInto(parentFolder(asset.relativePath));
 			} else if (action === "new_folder") {
@@ -398,7 +436,9 @@ export function App(): React.JSX.Element {
 			if (action === "rename") {
 				setRenamingFolder(relativePath);
 			} else if (action === "copy") {
-				setLibraryClipboard({ kind: "folder", relativePath });
+				setLibraryClipboard({ kind: "folder", relativePath, mode: "copy" });
+			} else if (action === "cut") {
+				setLibraryClipboard({ kind: "folder", relativePath, mode: "cut" });
 			} else if (action === "paste") {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
@@ -448,6 +488,9 @@ export function App(): React.JSX.Element {
 		if (mod && event.key.toLowerCase() === "c") {
 			event.preventDefault();
 			copySelection();
+		} else if (mod && event.key.toLowerCase() === "x") {
+			event.preventDefault();
+			cutSelection();
 		} else if (mod && event.key.toLowerCase() === "v") {
 			event.preventDefault();
 			void pasteInto(pasteDestination());
@@ -669,6 +712,8 @@ export function App(): React.JSX.Element {
 						renamingAssetId={renamingAssetId}
 						renamingFolder={renamingFolder}
 						collapsedFolders={collapsedFolders}
+						cutAssetIds={libraryClipboard?.kind === "assets" && libraryClipboard.mode === "cut" ? libraryClipboard.assetIds : []}
+						cutFolder={libraryClipboard?.kind === "folder" && libraryClipboard.mode === "cut" ? libraryClipboard.relativePath : null}
 						onOpenLibrary={() => void openLibrary()}
 						onToggleFolder={toggleFolder}
 						onSelectAsset={selectAsset}
@@ -679,6 +724,7 @@ export function App(): React.JSX.Element {
 						onRenameAsset={renameAsset}
 						onRenameFolder={renameFolder}
 						onCancelRename={cancelRename}
+						onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
 						onKeyDown={onLibraryKeyDown}
 					/>
 

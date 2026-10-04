@@ -1,4 +1,12 @@
 import type { Asset, LibrarySnapshot } from "@loom/core";
+import {
+	activeLibraryDrag,
+	canDropLibraryItem,
+	endLibraryDrag,
+	hasLibraryDrag,
+	readLibraryDrag,
+	type LibraryDrag,
+} from "../assets/asset-drag.ts";
 import { FileTree } from "./file-tree.tsx";
 
 interface LibrarySidebarProps {
@@ -9,6 +17,8 @@ interface LibrarySidebarProps {
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	collapsedFolders: Set<string>;
+	cutAssetIds: readonly string[];
+	cutFolder: string | null;
 	onOpenLibrary: () => void;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectAsset: (assetId: string) => void;
@@ -19,6 +29,7 @@ interface LibrarySidebarProps {
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onCancelRename: () => void;
+	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
 	onKeyDown: (event: React.KeyboardEvent) => void;
 }
 
@@ -30,6 +41,8 @@ export function LibrarySidebar({
 	renamingAssetId,
 	renamingFolder,
 	collapsedFolders,
+	cutAssetIds,
+	cutFolder,
 	onOpenLibrary,
 	onToggleFolder,
 	onSelectAsset,
@@ -40,9 +53,17 @@ export function LibrarySidebar({
 	onRenameAsset,
 	onRenameFolder,
 	onCancelRename,
+	onDropIntoFolder,
 	onKeyDown,
 }: LibrarySidebarProps): React.JSX.Element {
 	const empty = library.assets.length === 0 && library.folders.length === 0;
+
+	function acceptRootDrop(event: React.DragEvent): boolean {
+		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
+		event.preventDefault();
+		event.dataTransfer.dropEffect = "move";
+		return true;
+	}
 
 	return (
 		<aside className="library-sidebar" tabIndex={0} onKeyDown={onKeyDown}>
@@ -70,6 +91,15 @@ export function LibrarySidebar({
 			) : (
 				<div
 					className="asset-list"
+					onDragOver={(event) => {
+						acceptRootDrop(event);
+					}}
+					onDrop={(event) => {
+						if (!acceptRootDrop(event)) return;
+						const item = readLibraryDrag(event.dataTransfer);
+						endLibraryDrag();
+						if (item) onDropIntoFolder("", item);
+					}}
 					onContextMenu={(event) => {
 						if (event.target !== event.currentTarget) return;
 						event.preventDefault();
@@ -94,6 +124,8 @@ export function LibrarySidebar({
 							selectedFolder={selectedFolder}
 							renamingAssetId={renamingAssetId}
 							renamingFolder={renamingFolder}
+							cutAssetIds={cutAssetIds}
+							cutFolder={cutFolder}
 							onToggleFolder={onToggleFolder}
 							onSelectFolder={onSelectFolder}
 							onFolderContextMenu={onFolderContextMenu}
@@ -102,6 +134,7 @@ export function LibrarySidebar({
 							onAssetContextMenu={onAssetContextMenu}
 							onRenameAsset={onRenameAsset}
 							onCancelRename={onCancelRename}
+							onDropIntoFolder={onDropIntoFolder}
 						/>
 					)}
 				</div>

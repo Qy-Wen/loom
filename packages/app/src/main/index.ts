@@ -259,6 +259,7 @@ function registerIpc(): void {
 				{ type: "separator" },
 				{ label: "Rename", click: () => "rename" },
 				{ label: "Duplicate", click: () => "duplicate" },
+				{ label: "Cut", click: () => "cut" },
 				{ label: "Copy", click: () => "copy" },
 				{ label: "Paste", enabled: canPaste, click: () => "paste" },
 				{ type: "separator" },
@@ -278,6 +279,7 @@ function registerIpc(): void {
 				{ label: "New Folder", click: () => "new_folder" },
 				{ type: "separator" },
 				{ label: "Rename", click: () => "rename" },
+				{ label: "Cut", click: () => "cut" },
 				{ label: "Copy", click: () => "copy" },
 				{ label: "Paste", enabled: canPaste, click: () => "paste" },
 				{ type: "separator" },
@@ -312,6 +314,10 @@ function registerIpc(): void {
 		return localCore.copyAssetsInto(assetIds, destFolder);
 	});
 
+	ipcMain.handle(IPC.moveAssetsInto, (_event, assetIds: string[], destFolder: string) => {
+		return localCore.moveAssetsInto(assetIds, destFolder);
+	});
+
 	ipcMain.handle(IPC.createFolder, (_event, parentRelativePath: string) => {
 		return localCore.createFolder(parentRelativePath);
 	});
@@ -326,6 +332,10 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.copyFolderInto, (_event, sourceFolder: string, destFolder: string) => {
 		return localCore.copyFolderInto(sourceFolder, destFolder);
+	});
+
+	ipcMain.handle(IPC.moveFolderInto, (_event, sourceFolder: string, destFolder: string) => {
+		return localCore.moveFolderInto(sourceFolder, destFolder);
 	});
 
 	ipcMain.handle(IPC.copyAssetPath, async (_event, assetId: string): Promise<void> => {

@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
-import { writeAssetDrag } from "../assets/asset-drag.ts";
+import {
+	activeLibraryDrag,
+	canDropLibraryItem,
+	endLibraryDrag,
+	hasLibraryDrag,
+	readLibraryDrag,
+	writeLibraryDrag,
+	type LibraryDrag,
+} from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
 
@@ -66,10 +74,12 @@ interface AssetTreeRowProps {
 	depth: number;
 	selected: boolean;
 	renaming: boolean;
+	cut: boolean;
 	onSelect: () => void;
 	onContextMenu: () => void;
 	onRename: (stem: string) => Promise<void>;
 	onCancelRename: () => void;
+	onDropFolder: (destFolder: string | null) => void;
 }
 
 function AssetTreeRow({
@@ -77,10 +87,12 @@ function AssetTreeRow({
 	depth,
 	selected,
 	renaming,
+	cut,
 	onSelect,
 	onContextMenu,
 	onRename,
 	onCancelRename,
+	onDropFolder,
 }: AssetTreeRowProps): React.JSX.Element {
 	const rowRef = useRef<HTMLElement | null>(null);
 	const [stem, setStem] = useState(() => filenameStem(asset.filename));
@@ -132,11 +144,17 @@ function AssetTreeRow({
 			ref={(el) => {
 				rowRef.current = el;
 			}}
-			className={`asset-row ${selected ? "selected" : ""}`}
+			className={`asset-row ${selected ? "selected" : ""}${cut ? " cut" : ""}`}
 			style={{ paddingLeft: 7 + depth * 14 }}
 			type="button"
 			draggable
-			onDragStart={(event) => writeAssetDrag(event.dataTransfer, asset)}
+			onDragStart={(event) => {
+				writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
+			}}
+			onDragEnd={() => {
+				endLibraryDrag();
+				onDropFolder(null);
+			}}
 			onClick={onSelect}
 			onContextMenu={(event) => {
 				event.preventDefault();
@@ -155,11 +173,15 @@ interface FolderTreeRowProps {
 	collapsed: boolean;
 	selected: boolean;
 	renaming: boolean;
+	cut: boolean;
+	dropFolder: string | null;
 	collapsedFolders: Set<string>;
 	selectedAssetId: string | null;
 	selectedFolder: string | null;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
+	cutAssetIds: readonly string[];
+	cutFolder: string | null;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectFolder: (relativePath: string) => void;
 	onFolderContextMenu: (relativePath: string) => void;
@@ -168,6 +190,8 @@ interface FolderTreeRowProps {
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
+	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
+	onDropFolder: (destFolder: string | null) => void;
 }
 
 function FolderTreeRow({
@@ -176,6 +200,8 @@ function FolderTreeRow({
 	collapsed,
 	selected,
 	renaming,
+	cut,
+	dropFolder,
 	...rowProps
 }: FolderTreeRowProps): React.JSX.Element {
 	const [name, setName] = useState(folder.name);
@@ -192,9 +218,32 @@ function FolderTreeRow({
 	}
 
 	return (
-		<div>
+		<div
+			onDragOver={(event) => {
+				if (!hasLibraryDrag(event.dataTransfer)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				if (!canDropLibraryItem(folder.relativePath, activeLibraryDrag())) {
+					event.dataTransfer.dropEffect = "none";
+					return;
+				}
+				event.dataTransfer.dropEffect = "move";
+				rowProps.onDropFolder(folder.relativePath);
+			}}
+			onDrop={(event) => {
+				if (!hasLibraryDrag(event.dataTransfer)) return;
+				event.preventDefault();
+				event.stopPropagation();
+				const item = readLibraryDrag(event.dataTransfer);
+				endLibraryDrag();
+				rowProps.onDropFolder(null);
+				if (item && canDropLibraryItem(folder.relativePath, item)) {
+					rowProps.onDropIntoFolder(folder.relativePath, item);
+				}
+			}}
+		>
 			<div
-				className={`folder-row ${selected ? "selected" : ""}`}
+				className={`folder-row ${selected ? "selected" : ""}${cut ? " cut" : ""}${dropFolder === folder.relativePath ? " drop-target" : ""}`}
 				style={{ paddingLeft: 7 + depth * 14 }}
 			>
 				<button
@@ -229,6 +278,14 @@ function FolderTreeRow({
 					<button
 						className="folder-main"
 						type="button"
+						draggable
+						onDragStart={(event) => {
+							writeLibraryDrag(event.dataTransfer, { kind: "folder", relativePath: folder.relativePath });
+						}}
+						onDragEnd={() => {
+							endLibraryDrag();
+							rowProps.onDropFolder(null);
+						}}
 						onClick={openFolder}
 						onContextMenu={(event) => {
 							event.preventDefault();
@@ -249,6 +306,9 @@ function FolderTreeRow({
 					selectedFolder={rowProps.selectedFolder}
 					renamingAssetId={rowProps.renamingAssetId}
 					renamingFolder={rowProps.renamingFolder}
+					cutAssetIds={rowProps.cutAssetIds}
+					cutFolder={rowProps.cutFolder}
+					dropFolder={dropFolder}
 					onToggleFolder={rowProps.onToggleFolder}
 					onSelectFolder={rowProps.onSelectFolder}
 					onFolderContextMenu={rowProps.onFolderContextMenu}
@@ -257,6 +317,8 @@ function FolderTreeRow({
 					onAssetContextMenu={rowProps.onAssetContextMenu}
 					onRenameAsset={rowProps.onRenameAsset}
 					onCancelRename={rowProps.onCancelRename}
+					onDropIntoFolder={rowProps.onDropIntoFolder}
+					onDropFolder={rowProps.onDropFolder}
 				/>
 			)}
 		</div>
@@ -271,6 +333,9 @@ interface FileTreeRowsProps {
 	selectedFolder: string | null;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
+	cutAssetIds: readonly string[];
+	cutFolder: string | null;
+	dropFolder: string | null;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectFolder: (relativePath: string) => void;
 	onFolderContextMenu: (relativePath: string) => void;
@@ -279,6 +344,8 @@ interface FileTreeRowsProps {
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
+	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
+	onDropFolder: (destFolder: string | null) => void;
 }
 
 function FileTreeRows({
@@ -289,6 +356,9 @@ function FileTreeRows({
 	selectedFolder,
 	renamingAssetId,
 	renamingFolder,
+	cutAssetIds,
+	cutFolder,
+	dropFolder,
 	onToggleFolder,
 	onSelectFolder,
 	onFolderContextMenu,
@@ -297,6 +367,8 @@ function FileTreeRows({
 	onAssetContextMenu,
 	onRenameAsset,
 	onCancelRename,
+	onDropIntoFolder,
+	onDropFolder,
 }: FileTreeRowsProps): React.JSX.Element {
 	const folders = [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
 	const assets = sortAssets(node.assets);
@@ -311,11 +383,15 @@ function FileTreeRows({
 					collapsed={collapsedFolders.has(folder.relativePath)}
 					selected={folder.relativePath === selectedFolder}
 					renaming={folder.relativePath === renamingFolder}
+					cut={cutFolder === folder.relativePath}
+					dropFolder={dropFolder}
 					collapsedFolders={collapsedFolders}
 					selectedAssetId={selectedAssetId}
 					selectedFolder={selectedFolder}
 					renamingAssetId={renamingAssetId}
 					renamingFolder={renamingFolder}
+					cutAssetIds={cutAssetIds}
+					cutFolder={cutFolder}
 					onToggleFolder={onToggleFolder}
 					onSelectFolder={onSelectFolder}
 					onFolderContextMenu={onFolderContextMenu}
@@ -324,6 +400,8 @@ function FileTreeRows({
 					onAssetContextMenu={onAssetContextMenu}
 					onRenameAsset={onRenameAsset}
 					onCancelRename={onCancelRename}
+					onDropIntoFolder={onDropIntoFolder}
+					onDropFolder={onDropFolder}
 				/>
 			))}
 			{assets.map((asset) => (
@@ -333,20 +411,30 @@ function FileTreeRows({
 					depth={depth}
 					selected={asset.assetId === selectedAssetId}
 					renaming={asset.assetId === renamingAssetId}
+					cut={cutAssetIds.includes(asset.assetId)}
 					onSelect={() => onSelectAsset(asset.assetId)}
 					onContextMenu={() => onAssetContextMenu(asset)}
 					onRename={(stem) => onRenameAsset(asset, stem)}
 					onCancelRename={onCancelRename}
+					onDropFolder={onDropFolder}
 				/>
 			))}
 		</>
 	);
 }
 
-export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth"> {
+export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder"> {
 	library: LibrarySnapshot;
 }
 
 export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Element {
-	return <FileTreeRows node={buildFileTree(library)} {...props} />;
+	const [dropFolder, setDropFolder] = useState<string | null>(null);
+	return (
+		<FileTreeRows
+			node={buildFileTree(library)}
+			{...props}
+			dropFolder={dropFolder}
+			onDropFolder={setDropFolder}
+		/>
+	);
 }

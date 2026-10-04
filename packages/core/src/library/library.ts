@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { copyFile, cp, mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { basename, extname, join, resolve } from "node:path";
 import {
 	assetTypeFromPath,
 	type Asset,
@@ -91,7 +91,6 @@ export class Library {
 	}
 
 	async renameAsset(assetId: string, requestedStem: string): Promise<Asset> {
-		const paths = this.requirePaths();
 		const asset = await this.requireAsset(assetId);
 		const stem = requestedStem.trim();
 		if (!stem || stem === "." || stem === ".." || /[\\/\0]/.test(stem)) {
@@ -101,43 +100,8 @@ export class Library {
 		const extension = extname(asset.filename);
 		const filename = `${stem}${extension}`;
 		if (filename === asset.filename) return asset;
-
-		const oldPath = paths.toAbsolutePath(asset.relativePath);
-		const parent = dirname(asset.relativePath);
-		const relativePath = parent === "." ? filename : `${parent}/${filename}`;
-		const newPath = paths.toAbsolutePath(relativePath);
-
-		const oldInfo = await statAssetFile(oldPath);
-		try {
-			const targetInfo = await statAssetFile(newPath);
-			if (targetInfo.fileSystemId === null || oldInfo.fileSystemId === null || targetInfo.fileSystemId !== oldInfo.fileSystemId) {
-				throw new Error(`A file named “${filename}” already exists`);
-			}
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-		}
-
-		// Reserve the new path before fs.rename so watcher add/unlink events keep
-		// the same asset id rather than briefly creating a second identity.
-		const reserved: Asset = { ...asset, filename, relativePath, fileSystemId: oldInfo.fileSystemId };
-		await this.handlers.upsertAsset(reserved);
-		try {
-			await rename(oldPath, newPath);
-		} catch (error) {
-			await this.handlers.upsertAsset(asset);
-			throw error;
-		}
-
-		const info = await statAssetFile(newPath);
-		const renamed: Asset = {
-			...reserved,
-			size: info.size,
-			modifiedAt: info.modifiedAt,
-			fileSystemId: info.fileSystemId,
-		};
-		await this.handlers.upsertAsset(renamed);
-		this.emit({ type: "upsert", asset: renamed });
-		return renamed;
+		const parent = parentRelative(asset.relativePath);
+		return this.relocateAsset(asset, joinRelative(parent, filename));
 	}
 
 	async duplicateAsset(assetId: string): Promise<Asset> {
@@ -187,6 +151,21 @@ export class Library {
 		const copied: Asset[] = [];
 		for (const assetId of assetIds) copied.push(await this.copyAssetInto(assetId, destFolder));
 		return copied;
+	}
+
+	async moveAssetInto(assetId: string, destFolder: string): Promise<Asset> {
+		const source = await this.requireAsset(assetId);
+		await this.requireDirectory(destFolder);
+		if (parentRelative(source.relativePath) === destFolder) return source;
+		const extension = extname(source.filename);
+		const filename = await this.uniqueFilename(destFolder, basename(source.filename, extension), extension);
+		return this.relocateAsset(source, joinRelative(destFolder, filename));
+	}
+
+	async moveAssetsInto(assetIds: string[], destFolder: string): Promise<Asset[]> {
+		const moved: Asset[] = [];
+		for (const assetId of assetIds) moved.push(await this.moveAssetInto(assetId, destFolder));
+		return moved;
 	}
 
 	async createFolder(parentRelativePath: string, requestedName?: string): Promise<string> {
@@ -297,6 +276,30 @@ export class Library {
 		await cp(this.folderAbsolute(sourceFolder), this.folderAbsolute(destRelative), { recursive: true });
 		await this.indexTree(destRelative);
 		return destRelative;
+	}
+
+	async moveFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
+		if (!sourceFolder) throw new Error("Cannot move the library root");
+		await this.requireDirectory(sourceFolder);
+		await this.requireDirectory(destFolder);
+		if (wouldNestInside(sourceFolder, destFolder)) {
+			throw new Error("Cannot move a folder into itself");
+		}
+		if (parentRelative(sourceFolder) === destFolder) return sourceFolder;
+
+		const desired = posixBasename(sourceFolder);
+		const name = await this.pathExists(joinRelative(destFolder, desired))
+			? await this.uniqueName(destFolder, desired)
+			: desired;
+		const nextPath = joinRelative(destFolder, name);
+		const watching = await this.pauseWatcher();
+		try {
+			await renameRetry(this.folderAbsolute(sourceFolder), this.folderAbsolute(nextPath));
+			await this.rewriteFolderPrefix(sourceFolder, nextPath);
+			return nextPath;
+		} finally {
+			if (watching) await this.resumeWatcher();
+		}
 	}
 
 	getFolderFilePath(relativePath: string): string {
@@ -599,6 +602,45 @@ export class Library {
 			if (!previousFolders.has(folder)) this.emit({ type: "folder_upsert", relativePath: folder });
 		}
 		for (const file of files) await this.indexFile(file.relativePath);
+	}
+
+	private async relocateAsset(asset: Asset, relativePath: string): Promise<Asset> {
+		if (relativePath === asset.relativePath) return asset;
+		const paths = this.requirePaths();
+		const filename = posixBasename(relativePath);
+		const oldPath = paths.toAbsolutePath(asset.relativePath);
+		const newPath = paths.toAbsolutePath(relativePath);
+		const oldInfo = await statAssetFile(oldPath);
+		try {
+			const targetInfo = await statAssetFile(newPath);
+			if (targetInfo.fileSystemId === null || oldInfo.fileSystemId === null || targetInfo.fileSystemId !== oldInfo.fileSystemId) {
+				throw new Error(`A file named “${filename}” already exists`);
+			}
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+		}
+
+		// Reserve the new path before fs.rename so watcher add/unlink events keep
+		// the same asset id rather than briefly creating a second identity.
+		const reserved: Asset = { ...asset, filename, relativePath, fileSystemId: oldInfo.fileSystemId };
+		await this.handlers.upsertAsset(reserved);
+		try {
+			await rename(oldPath, newPath);
+		} catch (error) {
+			await this.handlers.upsertAsset(asset);
+			throw error;
+		}
+
+		const info = await statAssetFile(newPath);
+		const moved: Asset = {
+			...reserved,
+			size: info.size,
+			modifiedAt: info.modifiedAt,
+			fileSystemId: info.fileSystemId,
+		};
+		await this.handlers.upsertAsset(moved);
+		this.emit({ type: "upsert", asset: moved });
+		return moved;
 	}
 
 	private async requireAsset(assetId: string): Promise<Asset> {

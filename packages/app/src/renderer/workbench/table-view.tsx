@@ -6,7 +6,7 @@ import type {
 	PropertyType,
 	PropertyValue,
 } from "@loom/core";
-import { writeAssetDrag } from "../assets/asset-drag.ts";
+import { endLibraryDrag, writeLibraryDrag } from "../assets/asset-drag.ts";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { comparePropertyValues, displayPropertyValue } from "./table-values.ts";
 
@@ -219,7 +219,12 @@ export function TableView({
 								className={asset.assetId === selectedAssetId ? "selected" : ""}
 								key={asset.assetId}
 								draggable
-								onDragStart={(event) => writeAssetDrag(event.dataTransfer, asset)}
+								onDragStart={(event) => {
+									writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
+								}}
+								onDragEnd={() => {
+									endLibraryDrag();
+								}}
 								onClick={() => onSelectAsset(asset.assetId)}
 							>
 								<td title={asset.relativePath}>

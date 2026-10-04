@@ -158,6 +158,14 @@ export class LocalCore {
 		return this.library.copyFolderInto(sourceFolder, destFolder);
 	}
 
+	moveAssetsInto(assetIds: string[], destFolder: string): Promise<Asset[]> {
+		return this.library.moveAssetsInto(assetIds, destFolder);
+	}
+
+	moveFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
+		return this.library.moveFolderInto(sourceFolder, destFolder);
+	}
+
 	importExternalFiles(absolutePaths: string[]): Promise<Asset[]> {
 		return this.library.importExternalFiles(absolutePaths);
 	}
