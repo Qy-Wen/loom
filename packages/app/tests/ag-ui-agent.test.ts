@@ -197,6 +197,33 @@ describe("LoomAgUiAgent", () => {
 		assert.deepEqual(manager.prompts.map(({ text }) => text), ["latest question", "follow up"]);
 	});
 
+	it("maps retries and tool progress to activity rows that clear when the step ends", async () => {
+		const manager = new FakeManager([
+			{ type: "agent_start" },
+			{ type: "retry_scheduled", attempt: 2, maxAttempts: 4, delayMs: 1000, errorMessage: "overloaded" },
+			{ type: "retry_start", attempt: 2 },
+			{ type: "retry_end", success: true },
+			{ type: "tool_start", toolCallId: "call-1", name: "bash", args: { command: "echo hi" } },
+			{ type: "tool_progress", toolCallId: "call-1", name: "bash", text: "hi" },
+			{ type: "tool_end", toolCallId: "call-1", name: "bash", result: { content: "hi" }, isError: false },
+			{ type: "agent_end" },
+		]);
+		const events = await lastValueFrom(new LoomAgUiAgent(manager.asManager()).run(runInput()).pipe(toArray()));
+		const activities = events.filter((event) => event.type === EventType.ACTIVITY_SNAPSHOT) as unknown as Array<{
+			messageId: string;
+			activityType: string;
+			content: { phase?: string; hidden?: boolean; text?: string; attempt?: number; delayMs?: number };
+		}>;
+		assert.deepEqual(activities.map((event) => [event.activityType, event.messageId, event.content.phase ?? event.content.hidden, event.content.text ?? event.content.attempt]), [
+			["loom.retry", "loom-retry", "wait", 2],
+			["loom.retry", "loom-retry", "running", 2],
+			["loom.retry", "loom-retry", "done", 0],
+			["loom.tool_progress", "loom-tool-call-1", false, "hi"],
+			["loom.tool_progress", "loom-tool-call-1", true, ""],
+		]);
+		assert.equal(activities[0]?.content.delayMs, 1000);
+	});
+
 	it("passes the UI selection once, then skips the same asset", async () => {
 		const selection = { assetId: "asset-1", path: "clips/hero.mp4", assetType: "video" as const };
 		let current: UiSelectionFields = selection;

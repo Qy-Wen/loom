@@ -267,7 +267,9 @@ Pi Harness 事件与 `LoomAgentEvent` **都只停留在 main 进程内部**，�
 | `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
 | `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`、`REASONING_MESSAGE_*`、`REASONING_END` |
 | `tool_start` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，保留 pi 的稳定 `toolCallId` |
+| `tool_progress` | `ACTIVITY_SNAPSHOT` `loom.tool_progress`，同一条原地更新；调用结束时收起 |
 | `tool_end` | `TOOL_CALL_END` + `TOOL_CALL_RESULT`；结构化 `details` 另发 `CUSTOM loom.tool_result` |
+| `retry_scheduled` / `retry_start` / `retry_end` | `ACTIVITY_SNAPSHOT` `loom.retry`。等待时显示，结束后收起 |
 | `error` | 发 `loom-error-*` 提示条 + `RUN_ERROR`（key 错、Chat 连不上、没配设置）。按系统告警渲染，不走模型气泡。 |
 | `agent_end` | `RUN_FINISHED` |
 

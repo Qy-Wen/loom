@@ -214,6 +214,27 @@ export class LoomAgUiAgent extends AbstractAgent {
 					if (cancelled) return;
 					const attachments = promptAttachments(chips, this.getUiSelection?.() ?? null, session.messages);
 					prompting = true;
+					let retryVisible = false;
+					let retryMaxAttempts = 0;
+					let retryError: string | undefined;
+					const toolProgress = new Set<string>();
+					const retryActivity = (content: { phase: "wait" | "running" | "done"; attempt: number; maxAttempts?: number; delayMs?: number; errorMessage?: string }) => {
+						retryVisible = content.phase !== "done";
+						emit({
+							type: EventType.ACTIVITY_SNAPSHOT,
+							messageId: "loom-retry",
+							activityType: "loom.retry",
+							content,
+						} as BaseEvent);
+					};
+					const toolActivity = (toolCallId: string, content: { name: string; text: string; hidden: boolean }) => {
+						emit({
+							type: EventType.ACTIVITY_SNAPSHOT,
+							messageId: `loom-tool-${toolCallId}`,
+							activityType: "loom.tool_progress",
+							content,
+						} as BaseEvent);
+					};
 					await this.manager.prompt(input.threadId, text, {
 						...(attachments.length > 0 ? { attachments } : {}),
 						...(images.length > 0 ? { images } : {}),
@@ -270,6 +291,29 @@ export class LoomAgUiAgent extends AbstractAgent {
 									} as BaseEvent);
 									break;
 
+								case "retry_scheduled":
+									retryMaxAttempts = event.maxAttempts;
+									retryError = event.errorMessage;
+									retryActivity({
+										phase: "wait",
+										attempt: event.attempt,
+										maxAttempts: event.maxAttempts,
+										delayMs: event.delayMs,
+										errorMessage: event.errorMessage,
+									});
+									break;
+								case "retry_start":
+									retryActivity({
+										phase: "running",
+										attempt: event.attempt,
+										maxAttempts: retryMaxAttempts || undefined,
+										errorMessage: retryError,
+									});
+									break;
+								case "retry_end":
+									if (retryVisible) retryActivity({ phase: "done", attempt: 0 });
+									break;
+
 								case "tool_start": {
 									closeThinking();
 									emit({
@@ -286,7 +330,15 @@ export class LoomAgUiAgent extends AbstractAgent {
 									break;
 								}
 
+								case "tool_progress":
+									toolProgress.add(event.toolCallId);
+									toolActivity(event.toolCallId, { name: event.name, text: event.text, hidden: false });
+									break;
+
 								case "tool_end": {
+									if (toolProgress.delete(event.toolCallId)) {
+										toolActivity(event.toolCallId, { name: event.name, text: "", hidden: true });
+									}
 									emit({
 										type: EventType.TOOL_CALL_END,
 										toolCallId: event.toolCallId,
@@ -335,6 +387,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								}
 
 								case "agent_end":
+									if (retryVisible) retryActivity({ phase: "done", attempt: 0 });
 									if (failed) break;
 									closeThinking();
 									closeText();
