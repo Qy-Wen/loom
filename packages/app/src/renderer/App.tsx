@@ -17,6 +17,7 @@ import type {
 	AudioWriteupStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
+import type { UiSelectionAttachment } from "@loom/agent";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
@@ -79,6 +80,7 @@ export function App(): React.JSX.Element {
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [sidePanel, setSidePanel] = useState<SidePanelTab>("agent");
+	const [composerAttach, setComposerAttach] = useState<UiSelectionAttachment | null>(null);
 	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
@@ -355,7 +357,16 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null);
-			if (action === "rename") {
+			if (action === "add_to_chat") {
+				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+				setSidePanel("agent");
+				setComposerAttach({
+					type: "ui_selection",
+					assetId: asset.assetId,
+					path: asset.relativePath,
+					assetType: asset.type,
+				});
+			} else if (action === "rename") {
 				setRenamingAssetId(asset.assetId);
 			} else if (action === "duplicate") {
 				const duplicate = await window.loom.duplicateAsset(asset.assetId);
@@ -766,6 +777,9 @@ export function App(): React.JSX.Element {
 							selectAsset(assetId);
 							setSidePanel("details");
 						}}
+						onOpenAsset={selectAsset}
+						composerAttach={composerAttach}
+						onComposerAttachApplied={() => setComposerAttach(null)}
 						onCreateRelation={(toAssetId, type) => {
 							if (!selectedAsset) return Promise.resolve();
 							return createRelation(selectedAsset.assetId, toAssetId, type);

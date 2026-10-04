@@ -4,8 +4,10 @@ import {
 	foldUserMessageForLlm,
 	foldUserText,
 	latestUiSelectionAssetId,
+	promptAttachments,
 	uiSelectionToAttach,
 } from "../src/attachments.ts";
+import { assetRefMarker, composerLayoutText, parseComposerAssetInputs, storedAssetRefs } from "../src/composer-asset.ts";
 import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
 const clip = {
@@ -49,6 +51,38 @@ describe("latestUiSelectionAssetId", () => {
 	});
 });
 
+describe("promptAttachments", () => {
+	it("keeps an explicit chip and skips the same implicit selection", () => {
+		assert.deepEqual(promptAttachments([clip], clip, []), [clip]);
+	});
+
+	it("appends a different implicit selection after the chips", () => {
+		const selected = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(promptAttachments([clip], selected, []), [clip, selected]);
+	});
+
+	it("still omits an implicit selection already in the transcript", () => {
+		const selected = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(promptAttachments([], selected, [{ attachments: [selected] }]), []);
+	});
+});
+
+describe("composer asset chips", () => {
+	it("accepts a library-relative chip and ignores a duplicate id", () => {
+		assert.deepEqual(parseComposerAssetInputs([clip, { ...clip }]), [clip]);
+	});
+
+	it("rejects an absolute path", () => {
+		assert.throws(() => parseComposerAssetInputs([{ ...clip, path: "/tmp/hero.mp4" }]));
+		assert.throws(() => parseComposerAssetInputs([{ ...clip, path: "C:\\clips\\hero.mp4" }]));
+		assert.deepEqual(storedAssetRefs([{ ...clip, path: "/tmp/hero.mp4" }]), []);
+	});
+
+	it("layout text is one space per chip, without the hidden id", () => {
+		assert.equal(composerLayoutText(`hello${assetRefMarker(clip.assetId)}world`), "hello world");
+	});
+});
+
 describe("foldUserMessageForLlm", () => {
 	it("leaves content alone when there are no attachments", () => {
 		const message = { role: "user", content: [{ type: "text", text: "hello" }] };
@@ -66,6 +100,19 @@ describe("foldUserMessageForLlm", () => {
 			content: foldUserText("把这个处理一下", [clip]),
 		});
 		assert.match(String(foldUserMessageForLlm(message).content), /^把这个处理一下\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>$/);
+	});
+
+	it("folds a chip where it sits in the text", () => {
+		const text = `看一下${assetRefMarker(clip.assetId)}这段`;
+		assert.equal(foldUserText(text, [clip]), `看一下\n\n${foldUserText("", [clip])}\n\n这段`);
+	});
+
+	it("appends a selection that was not placed in the text", () => {
+		const other = { ...clip, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		const text = `看一下${assetRefMarker(clip.assetId)}这段`;
+		const folded = foldUserText(text, [clip, other]);
+		assert.match(folded, /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
+		assert.match(folded, /这段\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>$/);
 	});
 
 	it("leaves a composer image on content", () => {

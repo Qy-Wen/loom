@@ -13,7 +13,8 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
-import { HarnessSessionManager, uiSelectionToAttach, type LoomAgentOptions } from "@loom/agent";
+import { HarnessSessionManager, promptAttachments, type LoomAgentOptions } from "@loom/agent";
+import { stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
@@ -64,19 +65,16 @@ function popupContextMenu<T extends string>(
 ): Promise<T | null> {
 	const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
 	return new Promise((resolveAction) => {
-		let resolved = false;
-		const choose = (action: T) => {
-			if (resolved) return;
-			resolved = true;
-			resolveAction(action);
-		};
+		let chosen: T | null = null;
 		const menu = Menu.buildFromTemplate(
 			items.map((item) => {
 				if ("label" in item) {
 					return {
 						label: item.label,
 						enabled: item.enabled,
-						click: () => choose(item.click()),
+						click: () => {
+							chosen = item.click();
+						},
 					};
 				}
 				return { type: "separator" as const };
@@ -85,7 +83,9 @@ function popupContextMenu<T extends string>(
 		menu.popup({
 			window: owner,
 			callback: () => {
-				if (!resolved) resolveAction(null);
+				owner?.focus();
+				event.sender.focus();
+				resolveAction(chosen);
 			},
 		});
 	});
@@ -252,6 +252,8 @@ function registerIpc(): void {
 		async (event, assetId: string, canPaste: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
 			return popupContextMenu<AssetContextAction>(event, [
+				{ label: "Add to chat", click: () => "add_to_chat" },
+				{ type: "separator" },
 				{ label: "New Folder", click: () => "new_folder" },
 				{ type: "separator" },
 				{ label: "Rename", click: () => "rename" },
@@ -409,13 +411,18 @@ function registerIpc(): void {
 		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
 		stageComposerImages(id, images);
 	});
+	ipcMain.handle(IPC.stageComposerAssets, (_event, id: string, assets: unknown) => {
+		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
+		stageComposerAssets(id, assets);
+	});
 	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string) => {
 		const session = await agentManager.getSession(id);
-		const selection = uiSelectionToAttach(getUiSelection(), session.messages);
 		const images = await takeComposerImages(id);
+		const chips = await takeComposerAssets(id);
+		const attachments = promptAttachments(chips, getUiSelection(), session.messages);
 		const body = text.replaceAll("\u200b", "");
 		await agentManager.followUp(id, body.trim() ? body : "", {
-			...(selection ? { attachments: [selection] } : {}),
+			...(attachments.length > 0 ? { attachments } : {}),
 			...(images.length > 0 ? { images } : {}),
 		});
 	});
@@ -535,7 +542,12 @@ app
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		await agentManager.setChat(await modelSettings.chat());
-		agentServer = await startAgentServer(agentManager, getUiSelection, (id) => takeComposerImages(id));
+		agentServer = await startAgentServer(
+			agentManager,
+			getUiSelection,
+			(id) => takeComposerImages(id),
+			(id) => takeComposerAssets(id),
+		);
 		registerAssetProtocol();
 		registerIpc();
 		await restoreLastLibrary();
