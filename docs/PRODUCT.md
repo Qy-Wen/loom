@@ -199,7 +199,7 @@ Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md).
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full; Full intercepts no tools. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Path jail and a process sandbox are deferred.
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full; Full intercepts no tools. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. A process sandbox is deferred.
 
 ### 6.1 FFmpeg — first Agent tools
 
@@ -346,7 +346,7 @@ Introduce these progressively when real scenarios require them:
 
 - **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
 - **Multi-Agent:** divide collaboration and orchestration by genuine creative roles.
-- **Sandboxing:** path jail for workspace tools; isolate high-risk tools and generation jobs.
+- **Sandboxing:** isolate high-risk tools and generation jobs.
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.

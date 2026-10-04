@@ -9,7 +9,7 @@
 
 ## 1. 目标与定位
 
-- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。Skills 从当前库的 `.agents/skills/` 加载。多 Agent、路径 jail 和进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
+- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。Skills 从当前库的 `.agents/skills/` 加载。多 Agent 和进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
 - 素材库检索就是 RAG：Hybrid Search 返回文本段落（图 / 视频也是先写成字再切），Agent 用这些切片来回答或动手，而不是把整库塞进 prompt。见 [RAG](./RAG/RAG.zh-CN.md)。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。

@@ -32,8 +32,7 @@ The user or the Agent requests one image. Import does not run it.
 
 - **VLM:** the existing VLM slot. Wire is OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes `image_url` (a data URI for a local file). Local servers and remote APIs are the same form; hosted APIs usually need a key, local servers often omit it. Loom does not load or run the model.
 - **Output:** caption / tags; visible text in the image may go into that write-up. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
-- **Do not embed the image itself.** CLIP / SigLIP image vectors wait.
-- **OCR:** not in-process in the first version; the VLM reads the words. Local CPU OCR is optional — see the placeholder below. Skipping it does not block VLM.
+- **Do not embed the image itself.** The retrieve path is the Markdown, then text embeddings.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the VLM model invalidates the write-up. Changing the embedding model invalidates the chunk vectors.
 
 Shape:
@@ -43,28 +42,7 @@ Shape:
 ...
 ## Tags
 ...
-## Text
-... only if optional OCR is on ...
 ```
-
----
-
-## Optional: in-process OCR
-
-Not required. Prefer VLM. Add this if poster / screenshot / scan text needs to be more stable, or if the VLM is offline.
-
-```
-Image
-  ├─ required: HTTP VLM (GPU / remote) → caption / tags
-  └─ optional: in-process RapidOCR + ONNX Runtime (CPU) → text / bbox / score
-           ↓
-        same Markdown → Embedding slot
-```
-
-- **Runtime:** `onnxruntime-node` plus RapidOCR det / cls / rec small ONNX. No Python. No separate OCR HTTP server. Models stay out of git; if built, download into app user data on first use.
-- **Resources:** CPU only, so it does not contend with the VLM GPU. Ship only the current-platform runtime.
-- **Product:** a switch. Off by default. Turning it on does not mean the whole library runs automatically.
-- **Store:** if built, a table keyed by `asset_id` for lines (text / bbox / score), folded into Markdown `## Text`. Not a blob in `asset_metadata`.
 
 ---
 
@@ -77,7 +55,7 @@ On-demand file-level write-up, same VLM slot as images. Do not run on the whole 
 1. **Native video** when the endpoint accepts it: OpenAI-compatible `POST /v1/chat/completions` with a `video_url` data URI (files up to 32 MB). Models such as Qwen3-VL can do this. Loom stays an HTTP client; it does not decode video in-process except as needed to attach the request. A 400/413/415/422/5xx from native is remembered per endpoint+model for the process, then frames are used.
 2. **Frames as `image_url`** when native is skipped or rejected: FFmpeg extracts 1–3 temp JPEGs (about 10% / 50% / 90% of duration; fewer for short clips). They are not library assets.
 
-One Markdown write-up per file in this step. Scene chunks, per-shot captions, soundtrack understanding, and frame OCR wait. The longer-term unit is still segmented index, not one vector for the file:
+One Markdown write-up per file in this step. Scene chunks, per-shot captions, and soundtrack understanding wait. The longer-term unit is still segmented index, not one vector for the file:
 
 ```
 video.mp4
@@ -99,8 +77,7 @@ Standalone audio files. On-demand file-level write-up, same idea as image VLM: o
 
 - **Audio slot:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes an audio part. Local and remote are the same fields. There is no built-in default vendor. Loom does not load or run the model. LM Studio cannot take audio on `/v1/chat/completions`. Qianfan compatible chat has no audio part. Hosted Qwen-Omni is DashScope compatible-mode (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Local OpenAI-compatible audio servers still try `audio_url` then `input_audio`.
 - **Output:** caption / tags; speech goes under Transcript when present. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
-- **Do not embed the waveform.** CLAP-style acoustic vectors wait; they do not use the text Embedding slot.
-- **ASR:** not a separate `/v1/audio/transcriptions` path in this step. Prefer the Audio understanding model, as image OCR prefers VLM. Dedicated Whisper waits.
+- **Do not embed the waveform.** The retrieve path is the Markdown, then text embeddings.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the Audio model invalidates the write-up. Changing the embedding model invalidates the chunk vectors.
 - FFmpeg converts locally when the file is not a form the endpoint accepts. Keep a size cap like video (data URI, up to 32 MB). Over that cap, compact to 16 kHz mono MP3. DashScope-looking URLs send Omni first (`input_audio`, stream, text-only modalities). Other URLs try `audio_url`, then `input_audio`, then Omni. DashScope’s encoded-audio cap is 10 MB. Video soundtracks later reuse this slot. Do not build a second pipeline.
 - **Store:** `audio_writeup` keyed by `asset_id`. Details Caption and `describe_audio`; then `embed_asset` folds the Markdown into `text_chunks`. Empty Embedding slot still keeps the text. No sidecar `.md`.
