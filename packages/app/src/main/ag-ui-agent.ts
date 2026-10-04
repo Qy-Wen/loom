@@ -218,6 +218,23 @@ export class LoomAgUiAgent extends AbstractAgent {
 					let retryMaxAttempts = 0;
 					let retryError: string | undefined;
 					const toolProgress = new Set<string>();
+					const startedTools = new Set<string>();
+					const startToolCall = (toolCallId: string, name: string, args: unknown) => {
+						if (startedTools.has(toolCallId)) return;
+						startedTools.add(toolCallId);
+						closeThinking();
+						emit({
+							type: EventType.TOOL_CALL_START,
+							toolCallId,
+							toolCallName: name,
+							parentMessageId: parentForTool(),
+						} as BaseEvent);
+						emit({
+							type: EventType.TOOL_CALL_ARGS,
+							toolCallId,
+							delta: JSON.stringify(args ?? {}),
+						} as BaseEvent);
+					};
 					const retryActivity = (content: { phase: "wait" | "running" | "done"; attempt: number; maxAttempts?: number; delayMs?: number; errorMessage?: string }) => {
 						retryVisible = content.phase !== "done";
 						emit({
@@ -314,21 +331,13 @@ export class LoomAgUiAgent extends AbstractAgent {
 									if (retryVisible) retryActivity({ phase: "done", attempt: 0 });
 									break;
 
-								case "tool_start": {
-									closeThinking();
-									emit({
-										type: EventType.TOOL_CALL_START,
-										toolCallId: event.toolCallId,
-										toolCallName: event.name,
-										parentMessageId: parentForTool(),
-									} as BaseEvent);
-									emit({
-										type: EventType.TOOL_CALL_ARGS,
-										toolCallId: event.toolCallId,
-										delta: JSON.stringify(event.args ?? {}),
-									} as BaseEvent);
+								case "tool_pending":
+									startToolCall(event.toolCallId, event.name, event.args);
 									break;
-								}
+
+								case "tool_start":
+									startToolCall(event.toolCallId, event.name, event.args);
+									break;
 
 								case "tool_progress":
 									toolProgress.add(event.toolCallId);

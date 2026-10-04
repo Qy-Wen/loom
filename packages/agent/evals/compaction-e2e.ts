@@ -60,6 +60,7 @@ export async function runCompactionE2E(
 		systemPrompt: "You are Loom. Answer briefly in one sentence. Do not call tools.",
 		chat: { ...chat, contextWindow: window },
 	});
+	manager.setPermissionLevel("full");
 	const events: LoomAgentEvent[] = [];
 	try {
 		await manager.openLibrary(library);

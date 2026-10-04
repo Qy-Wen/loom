@@ -6,6 +6,12 @@
 
 ---
 
+## Human in the loop
+
+write / edit 在工具卡片上等 Approve / Skip。对话底部：Basic、Standard（默认）、Full。Full 不拦截任何工具。存在应用 userData，不进库。FFmpeg 和 MCP 不拦。见 [AGENT](../AGENT.zh-CN.md) §6.3e。
+
+---
+
 ## Agent 与检索评测
 
 金标放在本仓库，不另开仓库。检索和 Agent/工具金标，CI 假槽位、现场真实槽位。见 [EVALS](../AGENT/EVALS.zh-CN.md)。

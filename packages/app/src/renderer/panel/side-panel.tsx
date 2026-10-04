@@ -21,6 +21,7 @@ import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
+import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider } from "./asset-open.tsx";
 import { ToolCallViews } from "./tool-call-views.tsx";
 
@@ -276,6 +277,7 @@ export function SidePanel({
 						{sessionError && <div className="session-error">{sessionError}</div>}
 						{sessionId ? (
 							<AssetOpenProvider onOpen={onOpenAsset}>
+							<AgentPermissionProvider>
 							<div className="agent-chat">
 								<ToolCallViews />
 								<SessionChat
@@ -295,6 +297,7 @@ export function SidePanel({
 									}}
 								/>
 							</div>
+							</AgentPermissionProvider>
 							</AssetOpenProvider>
 						) : (
 							<div className="empty">Starting a session…</div>

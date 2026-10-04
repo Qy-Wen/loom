@@ -266,7 +266,8 @@ Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG
 | `agent_start` | `RUN_STARTED` |
 | `text` delta | `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` |
 | `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`, `REASONING_MESSAGE_*`, `REASONING_END` |
-| `tool_start` | `TOOL_CALL_START` and `TOOL_CALL_ARGS`, preserving pi's stable `toolCallId` |
+| `tool_pending` | `TOOL_CALL_START` and `TOOL_CALL_ARGS` while the call waits for approval |
+| `tool_start` | Same pair; skipped if `tool_pending` already started that `toolCallId` |
 | `tool_progress` | `ACTIVITY_SNAPSHOT` `loom.tool_progress`, replaced in place; hidden when the call ends |
 | `tool_end` | `TOOL_CALL_END` and `TOOL_CALL_RESULT`; structured `details` also emits `CUSTOM loom.tool_result` |
 | `retry_scheduled` / `retry_start` / `retry_end` | `ACTIVITY_SNAPSHOT` `loom.retry`. The row shows the wait, then clears |
@@ -300,6 +301,12 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 - Selecting an earlier user question edits that message in place. Sending switches the active path to just before that question. The old path stays in the tree.
 - Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files already written are not reverted.
 
+**e. Tool permission**
+
+- Chat footer dropdown: **Basic**, **Standard** (default), **Full**. Stored in app userData `agent-permission.json`, not in the library.
+- `basic` waits on `write` / `edit` / `bash`. `standard` waits on `write` / `edit`. `full` intercepts nothing, including in-flight waits (they continue). FFmpeg and MCP are not gated.
+- Pi `before_tool` (hook id `loom.tool_permission`) emits `tool_pending` and pauses until Approve or Skip on that tool card. Stop aborts the wait. Evals set `full` so they cannot hang.
+
 ---
 
 ## 7. Evals
@@ -316,5 +323,6 @@ In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat a
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
 - **User attachments:** Library highlight (`ui_selection`) and composer chips (`asset_ref`) live on the user row as `attachments`, keyed by `assetId`. External files are copied into `Inbox/` first. `toProviderMessages` folds every attachment into one Chat text string. Historical image parts on `content` still send as `image_url`. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
+- **Tool permission:** three levels in the chat footer. Default **Standard** confirms `write` / `edit`; **Full** intercepts no tools.
 - **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand. Write/edit (and optionally bash) wait for approval unless the session is on Full.

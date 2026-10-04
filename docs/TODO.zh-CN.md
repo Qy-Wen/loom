@@ -8,17 +8,6 @@
 
 ---
 
-提示词模板暂不因 vendor 提供 API 就强行加入产品。已完成的步骤见 [归档](./archive/ARCHIVE.zh-CN.md)。
-
-## 第一步：Human in the loop
-
-高风险操作执行前，由用户确认。
-
-- [ ] 高风险工具调用先暂停，等用户批准或拒绝
-- [ ] 展示将要执行的内容，同一轮里恢复或跳过该调用
-
----
-
 ## 后续（概述）
 
 - **进程内 OCR（可选）：** RapidOCR + ONNX，CPU，可开关，默认关。不一定做。优先 VLM。见 [MEDIA](./RAG/MEDIA.zh-CN.md)。

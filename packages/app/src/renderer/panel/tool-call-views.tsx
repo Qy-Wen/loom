@@ -1,6 +1,8 @@
 import { useState } from "react";
 import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
+import { toolNeedsApproval, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
+import { useAgentPermission } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
 
 /** Register a chat renderer so tool results are visible in CopilotChat. */
@@ -11,20 +13,27 @@ export function ToolCallViews(): null {
 	return null;
 }
 
+const decidedCalls = new Set<string>();
+
 function ToolCallCard({
 	name,
 	status,
 	parameters,
 	result,
+	toolCallId,
 }: {
 	name: string;
 	status: string;
 	parameters?: unknown;
 	result?: unknown;
+	toolCallId?: string;
 }) {
 	const openAsset = useOpenAsset();
+	const { level } = useAgentPermission();
 	const [open, setOpen] = useState(false);
+	const [acted, setActed] = useState(false);
 	const done = status === "complete";
+	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "") && toolNeedsApproval(level, name);
 	const refs = done ? assetRefsFromTool(name, result) : null;
 	const body = refs ? "" : formatToolBody(parameters, done ? result : undefined);
 	const faded = !open && hasMoreThanPreview(body);
@@ -39,8 +48,14 @@ function ToolCallCard({
 			>
 				<span className="tool-call-chevron" aria-hidden="true" />
 				<span className="tool-call-name">{name}</span>
-				<span className="tool-call-status">{done ? "done" : status}</span>
+				<span className="tool-call-status">{waiting ? "waiting" : done ? "done" : status}</span>
 			</button>
+			{waiting && toolCallId ? (
+				<div className="tool-call-gate">
+					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed); }}>Approve</button>
+					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed); }}>Skip</button>
+				</div>
+			) : null}
 			{refs ? (
 				<div className="tool-call-refs">
 					{refs.length === 0 ? <span className="tool-call-refs-empty">No assets</span> : refs.map((ref) => (
@@ -57,6 +72,16 @@ function ToolCallCard({
 			) : null}
 		</div>
 	);
+}
+
+async function decide(
+	toolCallId: string,
+	decision: ToolGateDecision,
+	setActed: (acted: boolean) => void,
+): Promise<void> {
+	decidedCalls.add(toolCallId);
+	setActed(true);
+	await window.loom.resolveToolGate(toolCallId, decision);
 }
 
 function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: string) => void }): React.JSX.Element {

@@ -13,7 +13,13 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
-import { HarnessSessionManager, promptAttachments, type LoomAgentOptions } from "@loom/agent";
+import {
+	HarnessSessionManager,
+	parseAgentPermissionLevel,
+	promptAttachments,
+	type LoomAgentOptions,
+	type ToolGateDecision,
+} from "@loom/agent";
 import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
@@ -35,6 +41,7 @@ import { createHttpRerankProvider } from "./rerank-provider.ts";
 import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
+import { AgentPermissionStore } from "./agent-permission-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
@@ -118,6 +125,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 let modelSettings: ModelSettingsStore | null = null;
 let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
+let agentPermission: AgentPermissionStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let mcpReady = false;
@@ -506,6 +514,18 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.setUiSelection, (_event, raw: unknown) => {
 		setUiSelection(parseUiSelectionDraft(raw));
 	});
+	ipcMain.handle(IPC.getAgentPermission, (): string => agentManager.getPermissionLevel());
+	ipcMain.handle(IPC.setAgentPermission, async (_event, raw: unknown) => {
+		if (!agentPermission) throw new Error("Permission store not started");
+		const level = await agentPermission.save(parseAgentPermissionLevel(raw));
+		agentManager.setPermissionLevel(level);
+		return level;
+	});
+	ipcMain.handle(IPC.resolveToolGate, (_event, toolCallId: unknown, decision: unknown) => {
+		if (typeof toolCallId !== "string" || !toolCallId.trim()) throw new Error("Tool call is missing");
+		if (decision !== "approve" && decision !== "reject") throw new Error("Tool decision is invalid");
+		return agentManager.resolveToolGate(toolCallId, decision as ToolGateDecision);
+	});
 
 	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
 		if (!modelSettings) throw new Error("Settings store not started");
@@ -585,6 +605,8 @@ app
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
+		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
+		agentManager.setPermissionLevel(await agentPermission.load());
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the

@@ -87,6 +87,9 @@ const api: LoomApi = {
 	getAgentStats: () => ipcRenderer.invoke(IPC.getAgentStats),
 	resetAgentStats: () => ipcRenderer.invoke(IPC.resetAgentStats),
 	setUiSelection: (selection) => ipcRenderer.invoke(IPC.setUiSelection, selection),
+	getAgentPermission: () => ipcRenderer.invoke(IPC.getAgentPermission),
+	setAgentPermission: (level) => ipcRenderer.invoke(IPC.setAgentPermission, level),
+	resolveToolGate: (toolCallId, decision) => ipcRenderer.invoke(IPC.resolveToolGate, toolCallId, decision),
 };
 
 contextBridge.exposeInMainWorld("loom", api);

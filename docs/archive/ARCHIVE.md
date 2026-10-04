@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Human in the loop
+
+Write and edit wait for Approve / Skip on the tool card. Chat footer: Basic, Standard (default), Full. Full intercepts no tools. Stored in app userData, not the library. FFmpeg and MCP are not gated. See [AGENT](../AGENT.md) §6.3e.
+
+---
+
 ## Agent and retrieval evals
 
 In-repo gold sets, no second repository. Retrieval and Agent/tool gold, CI stub vs live slots. See [EVALS](../AGENT/EVALS.md).

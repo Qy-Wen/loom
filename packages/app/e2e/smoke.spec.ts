@@ -6,6 +6,8 @@ test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
 	await expect(loomPage.getByRole("button", { name: "Agent" })).toBeVisible();
 	await expect(loomPage.getByRole("button", { name: "Settings" })).toBeVisible();
+	await loomPage.getByRole("button", { name: "Agent" }).click();
+	await expect(loomPage.getByRole("combobox", { name: "Agent permission" })).toBeVisible();
 });
 
 test("creates a persisted Harness session without Chat", async ({ loomPage }) => {

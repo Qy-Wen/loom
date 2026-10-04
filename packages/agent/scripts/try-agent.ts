@@ -36,6 +36,7 @@ async function main() {
 			},
 		],
 	});
+	manager.setPermissionLevel("full");
 
 	try {
 		await manager.openLibrary(library);

@@ -266,7 +266,8 @@ Pi Harness 事件与 `LoomAgentEvent` **都只停留在 main 进程内部**，�
 | `agent_start` | `RUN_STARTED` |
 | `text` (delta) | `TEXT_MESSAGE_START` / `TEXT_MESSAGE_CONTENT` / `TEXT_MESSAGE_END` |
 | `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`、`REASONING_MESSAGE_*`、`REASONING_END` |
-| `tool_start` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，保留 pi 的稳定 `toolCallId` |
+| `tool_pending` | `TOOL_CALL_START` + `TOOL_CALL_ARGS`，调用在批准前停住 |
+| `tool_start` | 同一对事件；若 `tool_pending` 已经为该 `toolCallId` 发过则跳过 |
 | `tool_progress` | `ACTIVITY_SNAPSHOT` `loom.tool_progress`，同一条原地更新；调用结束时收起 |
 | `tool_end` | `TOOL_CALL_END` + `TOOL_CALL_RESULT`；结构化 `details` 另发 `CUSTOM loom.tool_result` |
 | `retry_scheduled` / `retry_start` / `retry_end` | `ACTIVITY_SNAPSHOT` `loom.retry`。等待时显示，结束后收起 |
@@ -300,6 +301,12 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - 选中一条历史用户提问后，在那条消息上直接改，改完就地发送。发送时当前路径切到这条提问之前，旧路径留在树里。
 - 也可以把该提问之前的前缀复制成新会话，标题在原标题前加上 `Fork: `，原会话不动。已经写下的文件不回退。
 
+**e) 工具权限**
+
+- 对话底部下拉：**Basic**、**Standard**（默认）、**Full**。存在应用 userData 的 `agent-permission.json`，不进库。
+- `basic` 拦截 `write` / `edit` / `bash`。`standard` 拦截 `write` / `edit`。`full` 不拦截任何工具，进行中的等待也会放行。FFmpeg 和 MCP 这一步不拦。
+- Pi `before_tool`（hook id `loom.tool_permission`）发出 `tool_pending`，工具卡片上 Approve / Skip 之后才继续。Stop 会取消这次等待。评测设成 `full`，避免挂死。
+
 ---
 
 ## 7. Evals
@@ -316,5 +323,6 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
 - **User attachments**：库高亮（`ui_selection`）和输入框芯片（`asset_ref`）都挂在 user 的 `attachments` 上，以 `assetId` 为键。外部文件先拷进 `Inbox/`。`toProviderMessages` 把每条附件折成一段文字。历史上 `content` 里的图片部分仍按 `image_url` 发出。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
+- **工具权限：** 对话底部三级。默认 **Standard** 确认 `write` / `edit`；**Full** 不拦截任何工具。
 - **Evals：** 压缩率、prompt-cache 命中率、仓内 Agent/工具金标、检索 Recall@k / nDCG。见 [EVALS.md](./EVALS.zh-CN.md)。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。除非选 Full，否则 write/edit（以及可选的 bash）先等批准。

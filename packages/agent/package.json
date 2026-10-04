@@ -6,7 +6,8 @@
   "exports": {
     ".": "./src/index.ts",
     "./composer-image": "./src/composer-image.ts",
-    "./composer-asset": "./src/composer-asset.ts"
+    "./composer-asset": "./src/composer-asset.ts",
+    "./tool-permission": "./src/tool-permission.ts"
   },
   "imports": {
     "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts",

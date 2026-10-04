@@ -118,6 +118,7 @@ export async function runPromptCacheHit(
 ): Promise<PromptCacheHitResult> {
 	const library = await mkdtemp(join(tmpdir(), "loom-prompt-cache-"));
 	const manager = new HarnessSessionManager({ systemPrompt: paddedSystemPrompt(), chat });
+	manager.setPermissionLevel("full");
 	try {
 		await manager.openLibrary(library);
 		const session = await manager.createSession();
