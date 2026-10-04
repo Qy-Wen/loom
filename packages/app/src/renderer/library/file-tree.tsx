@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
-import { assetPreviewUrl, extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
+import { writeAssetDrag } from "../assets/asset-drag.ts";
+import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
+import { extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
 
 interface FolderNode {
 	name: string;
@@ -57,40 +59,6 @@ function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 		ensureFolder(parts.join("/")).assets.push(asset);
 	}
 	return root;
-}
-
-function AssetThumbnail({ asset }: { asset: Asset }): React.JSX.Element {
-	const [failed, setFailed] = useState(false);
-	const url = assetPreviewUrl(asset);
-
-	if (!failed && asset.type === "image") {
-		return (
-			<span className="asset-thumbnail media-thumbnail">
-				<img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />
-			</span>
-		);
-	}
-	if (!failed && asset.type === "video") {
-		return (
-			<span className="asset-thumbnail media-thumbnail video-thumbnail">
-				<video
-					src={url}
-					muted
-					preload="metadata"
-					onLoadedMetadata={(event) => {
-						const video = event.currentTarget;
-						if (video.duration > 0) video.currentTime = Math.min(0.1, video.duration / 2);
-					}}
-					onError={() => setFailed(true)}
-				/>
-			</span>
-		);
-	}
-
-	const label = asset.type === "audio"
-		? "♪"
-		: extensionOf(asset.filename).slice(1, 4).toUpperCase() || asset.type[0].toUpperCase();
-	return <span className={`asset-thumbnail asset-badge type-${asset.type}`}>{label}</span>;
 }
 
 interface AssetTreeRowProps {
@@ -167,6 +135,8 @@ function AssetTreeRow({
 			className={`asset-row ${selected ? "selected" : ""}`}
 			style={{ paddingLeft: 7 + depth * 14 }}
 			type="button"
+			draggable
+			onDragStart={(event) => writeAssetDrag(event.dataTransfer, asset)}
 			onClick={onSelect}
 			onContextMenu={(event) => {
 				event.preventDefault();

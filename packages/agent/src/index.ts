@@ -22,9 +22,19 @@ export {
 	isUiSelectionAttachment,
 	latestUiSelectionAssetId,
 	parseUserAttachments,
+	promptAttachments,
 	uiSelectionToAttach,
 	userTextFromContent,
 } from "./attachments.ts";
+export {
+	assetRefMarker,
+	composerLayoutText,
+	inlineAssetIds,
+	isRelativeLibraryPath,
+	parseComposerAssetInputs,
+	splitInlineAssetRefs,
+	stripInlineAssetRefs,
+} from "./composer-asset.ts";
 export {
 	bytesToBase64,
 	COMPOSER_IMAGE_MAX_BYTES,

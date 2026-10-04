@@ -13,7 +13,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
+import type { HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage, UiSelectionAttachment } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
@@ -21,6 +21,7 @@ import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
+import { AssetOpenProvider } from "./asset-open.tsx";
 import { ToolCallViews } from "./tool-call-views.tsx";
 
 export type SidePanelTab = "agent" | "details";
@@ -52,6 +53,9 @@ interface SidePanelProps {
 	analyzing: boolean;
 	onAnalyze: () => void;
 	onSelectAsset: (assetId: string) => void;
+	onOpenAsset: (assetId: string) => void;
+	composerAttach: UiSelectionAttachment | null;
+	onComposerAttachApplied: () => void;
 	onCreateRelation: (toAssetId: string, type: string) => Promise<void>;
 	onRemoveRelation: (relationId: string) => Promise<void>;
 }
@@ -81,6 +85,9 @@ export function SidePanel({
 	assets,
 	relationTypes,
 	onSelectAsset,
+	onOpenAsset,
+	composerAttach,
+	onComposerAttachApplied,
 	onCreateRelation,
 	onRemoveRelation,
 	analyzing,
@@ -268,6 +275,7 @@ export function SidePanel({
 						/>
 						{sessionError && <div className="session-error">{sessionError}</div>}
 						{sessionId ? (
+							<AssetOpenProvider onOpen={onOpenAsset}>
 							<div className="agent-chat">
 								<ToolCallViews />
 								<SessionChat
@@ -276,6 +284,8 @@ export function SidePanel({
 									context={sessionContext}
 									composerDraft={composerDraft?.sessionId === sessionId ? composerDraft.text : null}
 									onComposerDraftApplied={() => setComposerDraft(null)}
+									composerAttach={composerAttach}
+									onComposerAttachApplied={onComposerAttachApplied}
 									onSessionRecord={applyRecord}
 									onForked={(record, text) => {
 										setSessionId(record.id);
@@ -285,6 +295,7 @@ export function SidePanel({
 									}}
 								/>
 							</div>
+							</AssetOpenProvider>
 						) : (
 							<div className="empty">Starting a session…</div>
 						)}

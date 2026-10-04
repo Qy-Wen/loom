@@ -1354,6 +1354,7 @@ body.resizing-columns {
 .agent-chat [data-testid="copilot-input-overlay"] {
 	position: relative;
 	inset: auto;
+	pointer-events: auto;
 }
 
 .agent-chat [data-testid="copilot-scroll-content"] {
@@ -1364,6 +1365,12 @@ body.resizing-columns {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
+	pointer-events: auto;
+	cursor: text;
+}
+
+.session-follow-up-slot [data-copilotkit] {
+	pointer-events: auto;
 }
 
 .session-add-files {
@@ -1388,6 +1395,181 @@ body.resizing-columns {
 .session-add-files:disabled {
 	opacity: 0.4;
 	cursor: default;
+}
+
+.session-composer-box {
+	border-radius: 28px;
+	background: #fff;
+	box-shadow: 0 4px 4px 0 #0000000a, 0 0 1px 0 #0000009e;
+}
+
+.session-composer-box .copilotKitInput {
+	background: transparent;
+	box-shadow: none;
+}
+
+.session-composer-box .session-asset-chips,
+.session-composer-box .session-composer-images {
+	margin: 0;
+	padding: 12px 16px 0;
+}
+
+.session-asset-chips {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 0;
+	pointer-events: auto;
+}
+
+.session-inline-input {
+	position: relative;
+	box-sizing: border-box;
+	min-height: 24px;
+	white-space: pre-wrap;
+	word-break: break-word;
+	outline: none;
+	background: transparent;
+	cursor: text;
+	caret-color: currentColor;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.session-inline-input:focus {
+	caret-animation: manual;
+	animation: session-caret-blink 1.06s linear infinite;
+}
+
+@keyframes session-caret-blink {
+	0%, 50% { caret-color: currentColor; }
+	50.01%, 100% { caret-color: transparent; }
+}
+
+.session-inline-input[data-empty="true"]::before {
+	content: attr(data-placeholder);
+	position: absolute;
+	color: #00000077;
+	pointer-events: none;
+	user-select: none;
+}
+
+.session-user-bubble {
+	display: inline-block;
+	max-width: 80%;
+	padding: 8px 14px;
+	border-radius: 18px;
+	background: #f4f4f2;
+	cursor: text;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.session-user-bubble .session-asset-chips {
+	justify-content: flex-start;
+}
+
+.session-user-text {
+	white-space: pre-wrap;
+	word-break: break-word;
+	cursor: text;
+}
+
+.session-asset-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 220px;
+	margin: -2px 4px 0;
+	padding: 1px 4px 1px 1px;
+	border-radius: 6px;
+	background: #f4f4f2;
+	vertical-align: middle;
+	line-height: 1;
+	user-select: none;
+	-webkit-user-select: none;
+}
+
+.session-user-bubble .session-asset-chip {
+	background: #fff;
+}
+
+.session-asset-chip .asset-thumbnail {
+	width: 22px;
+	height: 22px;
+	border-radius: 5px;
+}
+
+.session-asset-chip .video-thumbnail::after {
+	border-top-width: 3px;
+	border-bottom-width: 3px;
+	border-left-width: 5px;
+}
+
+.session-asset-chip .asset-badge {
+	font-size: 7px;
+}
+
+.session-asset-chip .type-audio {
+	font-size: 11px;
+}
+
+.session-asset-chip-remove {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	flex: 0 0 auto;
+	width: 16px;
+	height: 16px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 999px;
+	background: transparent;
+	color: #5c5f64;
+	cursor: pointer;
+	transition: background 0.12s ease, color 0.12s ease;
+}
+
+.session-asset-chip-remove:hover {
+	background: rgb(0 0 0 / 10%);
+	color: #202124;
+}
+
+.session-asset-chip-remove:active {
+	background: rgb(0 0 0 / 16%);
+}
+
+.session-asset-chip-remove:focus-visible {
+	outline: 2px solid #7896c8;
+	outline-offset: 1px;
+}
+
+.asset-ref {
+	min-width: 0;
+	max-width: 180px;
+	padding: 0;
+	overflow: hidden;
+	border: 0;
+	background: none;
+	color: #1a56db;
+	font: inherit;
+	text-decoration: underline;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.tool-call-refs {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px;
+	margin: 6px 0 0 13px;
+}
+
+.tool-call-refs-empty {
+	color: #6b6b66;
+	font-size: 12px;
 }
 
 .session-composer-images {
@@ -1508,6 +1690,7 @@ body.resizing-columns {
 	box-shadow: 0 4px 4px 0 #0000000a, 0 0 1px 0 #0000009e;
 }
 
+.session-inline-edit .session-inline-input,
 .session-inline-edit textarea {
 	flex: 1;
 	min-width: 0;

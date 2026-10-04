@@ -21,6 +21,13 @@ export function filenameStem(filename: string): string {
 	return extension ? filename.slice(0, -extension.length) : filename;
 }
 
-export function assetPreviewUrl(asset: Asset): string {
-	return `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`;
+export function assetPreviewUrl(asset: { assetId: string; modifiedAt?: number }): string {
+	const id = encodeURIComponent(asset.assetId);
+	return asset.modifiedAt != null ? `loom-asset://asset/${id}?v=${asset.modifiedAt}` : `loom-asset://asset/${id}`;
+}
+
+/** Same badge letters the library tree uses for audio / text / other. */
+export function assetBadgeLabel(filename: string, type: Asset["type"]): string {
+	if (type === "audio") return "♪";
+	return extensionOf(filename).slice(1, 4).toUpperCase() || type[0].toUpperCase();
 }

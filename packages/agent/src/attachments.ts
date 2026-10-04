@@ -1,3 +1,5 @@
+import { splitInlineAssetRefs } from "./composer-asset.ts";
+
 /** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. Composer pictures live on `content`, not here. */
 
 export type LoomAssetType = "image" | "video" | "audio" | "text" | "other";
@@ -72,6 +74,24 @@ export function uiSelectionToAttach(
 	};
 }
 
+/** Explicit composer chips, then the implicit selection when it is not already included. */
+export function promptAttachments(
+	chips: readonly UiSelectionAttachment[],
+	selection: UiSelectionFields | null | undefined,
+	messages: readonly unknown[],
+): UiSelectionAttachment[] {
+	const out: UiSelectionAttachment[] = [];
+	const seen = new Set<string>();
+	for (const chip of chips) {
+		if (!isUiSelectionAttachment(chip) || seen.has(chip.assetId)) continue;
+		seen.add(chip.assetId);
+		out.push(chip);
+	}
+	const implicit = uiSelectionToAttach(selection, messages);
+	if (implicit && !seen.has(implicit.assetId)) out.push(implicit);
+	return out;
+}
+
 export function userTextFromContent(content: unknown): string {
 	if (typeof content === "string") return content;
 	if (!Array.isArray(content)) return content == null ? "" : String(content);
@@ -96,15 +116,35 @@ export function formatUiSelectionBlock(attachment: UiSelectionAttachment): strin
 	);
 }
 
+function appendSelectionBlock(text: string, block: string): string {
+	const base = text.replace(/[ \t\n]+$/g, "");
+	if (!base) return `${block}\n\n`;
+	return `${base}\n\n${block}\n\n`;
+}
+
+/** Fold selections into one string. A chip marker expands where it sits; other selections are appended. */
 export function foldUserText(text: string, attachments: readonly LoomUserAttachment[]): string {
-	if (attachments.length === 0) return text;
-	const blocks = attachments.map((row) => {
-		if (row.type === "ui_selection") return formatUiSelectionBlock(row);
-		return "";
-	}).filter(Boolean);
-	if (blocks.length === 0) return text;
-	if (!text) return blocks.join("\n\n");
-	return `${text}\n\n${blocks.join("\n\n")}`;
+	const byId = new Map<string, UiSelectionAttachment>();
+	for (const row of attachments) {
+		if (row.type === "ui_selection") byId.set(row.assetId, row);
+	}
+	const used = new Set<string>();
+	let out = "";
+	for (const part of splitInlineAssetRefs(text)) {
+		if (part.type === "text") {
+			out += part.text;
+			continue;
+		}
+		const row = byId.get(part.assetId);
+		if (!row) continue;
+		used.add(part.assetId);
+		out = appendSelectionBlock(out, formatUiSelectionBlock(row));
+	}
+	for (const row of attachments) {
+		if (row.type !== "ui_selection" || used.has(row.assetId)) continue;
+		out = appendSelectionBlock(out, formatUiSelectionBlock(row));
+	}
+	return out.replace(/\n+$/, "");
 }
 
 type ImagePart = { type: "image"; data: string; mimeType: string };

@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
+import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
+import { useOpenAsset } from "./asset-open.tsx";
 
 /** Register a chat renderer so tool results are visible in CopilotChat. */
 export function ToolCallViews(): null {
@@ -20,9 +22,11 @@ function ToolCallCard({
 	parameters?: unknown;
 	result?: unknown;
 }) {
+	const openAsset = useOpenAsset();
 	const [open, setOpen] = useState(false);
 	const done = status === "complete";
-	const body = formatToolBody(parameters, done ? result : undefined);
+	const refs = done ? assetRefsFromTool(name, result) : null;
+	const body = refs ? "" : formatToolBody(parameters, done ? result : undefined);
 	const faded = !open && hasMoreThanPreview(body);
 
 	return (
@@ -37,7 +41,13 @@ function ToolCallCard({
 				<span className="tool-call-name">{name}</span>
 				<span className="tool-call-status">{done ? "done" : status}</span>
 			</button>
-			{body ? (
+			{refs ? (
+				<div className="tool-call-refs">
+					{refs.length === 0 ? <span className="tool-call-refs-empty">No assets</span> : refs.map((ref) => (
+						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
+					))}
+				</div>
+			) : body ? (
 				<div
 					className="tool-call-body"
 					onClick={open ? undefined : () => setOpen(true)}
@@ -46,6 +56,19 @@ function ToolCallCard({
 				</div>
 			) : null}
 		</div>
+	);
+}
+
+function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: string) => void }): React.JSX.Element {
+	return (
+		<button
+			type="button"
+			className="asset-ref"
+			title={asset.path}
+			onClick={() => onOpen(asset.assetId)}
+		>
+			{asset.filename}
+		</button>
 	);
 }
 

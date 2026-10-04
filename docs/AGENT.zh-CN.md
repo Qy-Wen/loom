@@ -173,9 +173,9 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 没有选中就不写 `ui_selection`（`attachments` 若因此为空则整段省略）。不要存 `none` 占位。
 
-发送时从当前库选中快照（`assetId`、库内相对 `path`、`assetType`）。Graph 上的边不算选中。以后输入框可以显式贴上资产（同一套旁路字段，可以不止一个）。payload 里不要放发送时间这类每轮都变的字段。
+发送时从当前库选中快照（`assetId`、库内相对 `path`、`assetType`）。Graph 上的边不算选中。输入框也可以显式贴库内文件：从素材库拖到输入框，或右键文件选 Add to chat。每张芯片是另一条 `ui_selection`，以 `assetId` 为键，`path` 保持库内相对路径。payload 里不要放发送时间这类每轮都变的字段。
 
-聊天、标题、`userMessageText` 现在只读 `content`。以后气泡也要画出这些附件，点击即选中对应资产。
+芯片排在文字里，可以插在词与词之间。`content` 记下这个位置，折的时候把 `<ui_selection>` 写在那里。没有放进文字里的选中，仍接在原文后面。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
 
 ### 5.2 折给 Chat API
 
@@ -282,7 +282,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 
 - pi 的 `AgentToolResult` 天然分两条通道：`content`（给模型看的文字）与 `details`（供 UI 渲染的结构化数据）。
 - Loom 现在保留两条通道：文字映射为 `TOOL_CALL_RESULT`，结构化 details 发出 `CUSTOM loom.tool_result`。
-- `search_assets` 与 `inspect_asset` 分别使用 `asset_list` 和 `asset_detail` 数据。当前聊天壳负责传输，以后渲染可点的 `asset_id` 引用，点击后在素材库里选中该资产。见 [TODO](./TODO.zh-CN.md)。
+- `search_assets` 与 `inspect_asset` 分别使用 `asset_list` 和 `asset_detail` 数据。聊天把这些文件画成链接，以 `asset_id` 为键。点击后在素材库里选中，不离开 Agent 标签。
 
 **c) 停止对话**
 
@@ -315,7 +315,7 @@ pnpm --filter @loom/agent eval:prompt-cache-hit
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
-- **User attachments**：界面选中挂在 user 的 `attachments` 上。输入框图片在这条消息的 `content` 里。`toProviderMessages` 把选中折成一段文字，图片部分以 `image_url` 发出。图片被拒绝时报错，并离开当前路径。点击资产引用跳到对应资产以后再做。
+- **User attachments**：界面选中和输入框贴上的库内文件都挂在 user 的 `attachments` 上，以 `assetId` 为键。输入框图片在这条消息的 `content` 里。`toProviderMessages` 把每条选中折成一段文字，图片部分以 `image_url` 发出。图片被拒绝时报错，并离开当前路径。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **Evals：** 已有压缩率和 prompt-cache 命中率；更完整的 Agent / 工具 / 检索评测见 [TODO](./TODO.zh-CN.md)。检索单测仍挂在 Hybrid Search。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。资产引用和输入框贴资产后置。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。
