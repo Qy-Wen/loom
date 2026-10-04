@@ -250,6 +250,20 @@ test("Library creates, renames, copies, and pastes folders and files", async () 
 		assert.equal(markdown.type, "text");
 		assert.equal((await core.createMarkdownFile("")).relativePath, "Untitled 2.md");
 		assert.equal((await core.createMarkdownFile("briefs")).relativePath, "briefs/Untitled.md");
+
+		const movedCover = await core.moveAssetsInto([cover.assetId], "New Folder");
+		assert.equal(movedCover[0].assetId, cover.assetId);
+		assert.equal(movedCover[0].relativePath, "New Folder/cover.jpg");
+		assert.equal((await core.getLibrarySnapshot()).assets.some((asset) => asset.relativePath === "cover.jpg"), false);
+
+		const nested = await core.moveFolderInto("briefs/New Folder", "New Folder 2");
+		assert.equal(nested, "New Folder 2/New Folder");
+		await assert.rejects(() => core.moveFolderInto("New Folder 2", "New Folder 2/New Folder"), /into itself/);
+		const movedBriefs = await core.moveFolderInto("briefs", "New Folder 2");
+		assert.equal(movedBriefs, "New Folder 2/briefs");
+		const afterMove = await core.getLibrarySnapshot();
+		assert.equal(afterMove.assets.find((asset) => asset.relativePath === "New Folder/cover.jpg")?.assetId, cover.assetId);
+		assert.equal(afterMove.assets.find((asset) => asset.relativePath === "New Folder 2/briefs/brief.md")?.assetId, brief.assetId);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

@@ -14,11 +14,14 @@ const api: LoomApi = {
 	renameAsset: (assetId, stem) => ipcRenderer.invoke(IPC.renameAsset, assetId, stem),
 	duplicateAsset: (assetId) => ipcRenderer.invoke(IPC.duplicateAsset, assetId),
 	copyAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.copyAssetsInto, assetIds, destFolder),
+	moveAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.moveAssetsInto, assetIds, destFolder),
 	createFolder: (parentRelativePath) => ipcRenderer.invoke(IPC.createFolder, parentRelativePath),
 	createMarkdownFile: (parentRelativePath) => ipcRenderer.invoke(IPC.createMarkdownFile, parentRelativePath),
 	renameFolder: (relativePath, name) => ipcRenderer.invoke(IPC.renameFolder, relativePath, name),
 	copyFolderInto: (sourceFolder, destFolder) =>
 		ipcRenderer.invoke(IPC.copyFolderInto, sourceFolder, destFolder),
+	moveFolderInto: (sourceFolder, destFolder) =>
+		ipcRenderer.invoke(IPC.moveFolderInto, sourceFolder, destFolder),
 	copyAssetPath: (assetId) => ipcRenderer.invoke(IPC.copyAssetPath, assetId),
 	copyFolderPath: (relativePath) => ipcRenderer.invoke(IPC.copyFolderPath, relativePath),
 	revealAsset: (assetId) => ipcRenderer.invoke(IPC.revealAsset, assetId),
