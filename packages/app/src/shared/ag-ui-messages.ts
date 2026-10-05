@@ -126,14 +126,20 @@ function overlayComposerImages(stored: Message[], live: Message[]): Message[] {
 	});
 }
 
-/** Shared opening, then a different entry: the live list is a path we already left. */
+/**
+ * Same ids, then a different successor: the live list is a path we already left.
+ * A new session's first disk reload uses harness ids while the stream uses its own,
+ * so a mismatch before any shared id is not a branch.
+ */
 function diverged(stored: Message[], live: Message[]): boolean {
 	const limit = Math.min(stored.length, live.length);
+	let matched = false;
 	for (let index = 0; index < limit; index++) {
 		const storedId = stored[index]?.id;
 		const liveId = live[index]?.id;
 		if (!storedId || !liveId) return false;
-		if (storedId !== liveId) return true;
+		if (storedId !== liveId) return matched;
+		matched = true;
 	}
 	return false;
 }

@@ -103,6 +103,12 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 		{ id: "a1", role: "assistant" as const, content: "reply" },
 	];
 	assert.equal(mergeChatMessages(branched, stale)[1]?.id, "a2");
+	const reloaded = [{ id: "entry-1", role: "user" as const, content: "bicycles" }];
+	const streaming = [
+		{ id: "ck-1", role: "user" as const, content: "bicycles" },
+		{ id: "ck-2", role: "assistant" as const, content: "looking" },
+	];
+	assert.equal(mergeChatMessages(reloaded, streaming).at(-1)?.content, "looking");
 });
 
 test("chat error message ids are distinct from model replies", () => {

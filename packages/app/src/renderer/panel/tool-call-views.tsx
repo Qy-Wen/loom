@@ -35,7 +35,7 @@ function ToolCallCard({
 	const done = status === "complete";
 	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "") && toolNeedsApproval(level, name);
 	const refs = done ? assetRefsFromTool(name, result) : null;
-	const body = refs ? "" : formatToolBody(parameters, done ? result : undefined);
+	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? result : undefined);
 	const faded = !open && hasMoreThanPreview(body);
 
 	return (
@@ -56,18 +56,19 @@ function ToolCallCard({
 					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed); }}>Skip</button>
 				</div>
 			) : null}
-			{refs ? (
-				<div className="tool-call-refs">
-					{refs.length === 0 ? <span className="tool-call-refs-empty">No assets</span> : refs.map((ref) => (
-						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
-					))}
-				</div>
-			) : body ? (
+			{body ? (
 				<div
 					className="tool-call-body"
 					onClick={open ? undefined : () => setOpen(true)}
 				>
 					<pre className="tool-call-result">{body}</pre>
+				</div>
+			) : null}
+			{refs ? (
+				<div className="tool-call-refs">
+					{refs.length === 0 ? <span className="tool-call-refs-empty">No assets</span> : refs.map((ref) => (
+						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
+					))}
 				</div>
 			) : null}
 		</div>
