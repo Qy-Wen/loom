@@ -30,4 +30,5 @@ High-risk work (bash, FFmpeg, generation jobs) runs isolated from the rest of th
 
 - **Observability:** per-run tool / latency / token traces via pi-telemetry (spans exist, currently no-op). Do not add a second tracing stack. Lifetime Stats already exist.
 - **LangGraph:** add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
+- **Memory:** remember user preferences and creative conventions across sessions so later chats can use them.
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms

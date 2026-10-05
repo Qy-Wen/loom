@@ -87,7 +87,8 @@ export function paddedSystemPrompt(): string {
 	cachedPaddedSystemPrompt =
 		`${pad}\n` +
 		"You are Loom. Reply with one short sentence. Do not call tools. " +
-		"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it.";
+		"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
+		"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task.";
 	return cachedPaddedSystemPrompt;
 }
 

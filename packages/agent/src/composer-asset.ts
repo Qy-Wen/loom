@@ -145,11 +145,26 @@ export function assetRefBlocks(text: string): AssetRefAttachment[] {
 	return out;
 }
 
-/** Chips parsed from the text, then sidecar rows whose asset is not already in the text. */
+/** Chips that sit in the user text. A sidecar attachment only fills in a chip the text already names. */
 export function displayAssetRefs(text: string, stored: readonly LoomUserAttachment[]): LoomUserAttachment[] {
-	const placed = assetRefBlocks(text);
-	const ids = new Set(placed.map((row) => row.assetId));
-	return [...placed, ...stored.filter((row) => !ids.has(row.assetId))];
+	const byId = new Map<string, LoomUserAttachment>();
+	for (const row of stored) {
+		if (!byId.has(row.assetId)) byId.set(row.assetId, row);
+	}
+	const blocks = new Map(assetRefBlocks(text).map((row) => [row.assetId, row]));
+	const out: LoomUserAttachment[] = [];
+	const seen = new Set<string>();
+	for (const part of splitStoredAssetText(text)) {
+		if (part.type !== "asset" || seen.has(part.assetId)) continue;
+		seen.add(part.assetId);
+		out.push(byId.get(part.assetId) ?? blocks.get(part.assetId) ?? {
+			type: "asset_ref",
+			assetId: part.assetId,
+			path: "file",
+			assetType: "other",
+		});
+	}
+	return out;
 }
 
 export function inlineAssetIds(text: string): string[] {
