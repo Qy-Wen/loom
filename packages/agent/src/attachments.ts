@@ -176,6 +176,16 @@ function appendSelectionBlock(text: string, block: string): string {
 	return `${base}\n\n${block}\n\n`;
 }
 
+/** App-attached context, in the same user message but outside the words the user typed. */
+function formatImplicitContext(rows: readonly LoomUserAttachment[]): string {
+	const intro =
+		rows.length === 1
+			? "The user had this file selected in the library. This may or may not be related to the current task."
+			: "The user had these files selected in the library. This may or may not be related to the current task.";
+	const body = rows.map((row) => formatAttachmentBlock(row)).join("\n\n");
+	return `<system-reminder>\n${intro}\n\n${body}\n</system-reminder>`;
+}
+
 /** Fold selections into one string. A chip marker expands where it sits; other attachments are appended. */
 export function foldUserText(text: string, attachments: readonly LoomUserAttachment[]): string {
 	const byId = new Map<string, LoomUserAttachment>();
@@ -194,10 +204,16 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 		used.add(part.assetId);
 		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
+	const implicit: LoomUserAttachment[] = [];
 	for (const row of attachments) {
 		if (used.has(row.assetId)) continue;
+		if (row.type === "ui_selection") {
+			implicit.push(row);
+			continue;
+		}
 		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
+	if (implicit.length > 0) out = appendSelectionBlock(out, formatImplicitContext(implicit));
 	return out.replace(/\n+$/, "");
 }
 

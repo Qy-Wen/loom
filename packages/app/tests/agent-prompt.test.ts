@@ -8,6 +8,7 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /working directory, is D:\\library/);
 		assert.match(prompt, /read, edit, write, and bash/);
 		assert.match(prompt, /<asset_ref>/);
+		assert.match(prompt, /<system-reminder>/);
 		assert.match(prompt, /<ui_selection>/);
 		assert.match(prompt, /Do not invent asset ids or paths/);
 	});

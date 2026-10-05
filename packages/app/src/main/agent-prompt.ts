@@ -12,7 +12,8 @@ const BASE_SYSTEM_PROMPT =
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
-	"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it. " +
+	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
+	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
 	"When your reply names a library file a tool result identified, put an <asset_ref> block there and copy that result's path, asset_id, and type. Use the same shape as a user <asset_ref> block. Do not invent asset ids or paths.";
 

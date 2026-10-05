@@ -3,6 +3,7 @@
 1. At the current stage, keep the architecture clear and simple and keep modules well decoupled. If that cannot be maintained, aggressive and backward-incompatible refactoring is allowed.
 2. When a decision is uncertain, ask me instead of making the decision privately and continuing.
 3. Keep documentation concise and clear. Omit discussion history unless it is necessary; record final conclusions instead.
+4. When writing code, account for both macOS and Windows.
 
 Use `/Users/jeffwen/projects/agent/`(mac) 'D:\Projects\agent-study'(win) as a reference. It contains source code for many agent projects:
 

@@ -135,7 +135,10 @@ describe("foldUserMessageForLlm", () => {
 			...message,
 			content: foldUserText("把这个处理一下", [selection]),
 		});
-		assert.match(String(foldUserMessageForLlm(message).content), /^把这个处理一下\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>$/);
+		assert.match(
+			String(foldUserMessageForLlm(message).content),
+			/^把这个处理一下\n\n<system-reminder>\nThe user had this file selected in the library\. This may or may not be related to the current task\.\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>\n<\/system-reminder>$/,
+		);
 	});
 
 	it("folds a chip where it sits in the text", () => {
@@ -147,6 +150,7 @@ describe("foldUserMessageForLlm", () => {
 	it("still folds an old stored chip as ui_selection", () => {
 		const text = `看一下${assetRefMarker(selection.assetId)}这段`;
 		assert.match(foldUserText(text, [selection]), /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
+		assert.equal(foldUserText(text, [selection]).includes("<system-reminder>"), false);
 	});
 
 	it("stores a placed chip in the text and keeps a different selection on attachments", () => {
@@ -168,14 +172,17 @@ describe("foldUserMessageForLlm", () => {
 		);
 		const sent = foldUserMessageForLlm({ role: "user", content: stored, attachments: [other] });
 		assert.equal(String(sent.content).match(/<asset_ref>/g)?.length, 1);
-		assert.match(String(sent.content), /<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>$/);
+		assert.match(
+			String(sent.content),
+			/这段\n\n<system-reminder>\nThe user had this file selected in the library\. This may or may not be related to the current task\.\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>\n<\/system-reminder>$/,
+		);
 		assert.deepEqual(splitStoredAssetText(stored), [
 			{ type: "text", text: "看一下" },
 			{ type: "asset", assetId: chip.assetId },
 			{ type: "text", text: "这段" },
 		]);
 		assert.deepEqual(assetRefBlocks(stored), [chip]);
-		assert.deepEqual(displayAssetRefs(stored, [other]).map((row) => row.assetId), [chip.assetId, other.assetId]);
+		assert.deepEqual(displayAssetRefs(stored, [other]).map((row) => row.assetId), [chip.assetId]);
 		assert.deepEqual(
 			splitStoredAssetText(text).map((part) => part.type === "asset" ? part.assetId : part.text),
 			["看一下", chip.assetId, "这段"],
@@ -187,7 +194,10 @@ describe("foldUserMessageForLlm", () => {
 		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
 		const folded = foldUserText(text, [chip, other]);
 		assert.match(folded, /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4/);
-		assert.match(folded, /这段\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>$/);
+		assert.match(
+			folded,
+			/这段\n\n<system-reminder>\nThe user had this file selected in the library\. This may or may not be related to the current task\.\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>\n<\/system-reminder>$/,
+		);
 	});
 
 	it("leaves a composer image on content", () => {

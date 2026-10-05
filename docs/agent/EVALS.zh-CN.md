@@ -52,7 +52,7 @@ Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。�
 | CI 假 Chat | `eval:agent-tools` | 脚本化 HTTP Chat。不联网。 |
 | 现场 | `eval:agent-tools:live` | `.env` 里的真实 Chat 槽位。有一条失败就退出。 |
 
-现场 harness 会打开一份临时库，文件和检索金标相同；系统提示对齐产品：`search_assets` / `inspect_asset`、`<asset_ref>` / `<ui_selection>`，已经点名的库文件不要用 bash/write/edit 去查。空库、或系统提示里没有这些块，不能当 Agent 评测。
+现场 harness 会打开一份临时库，文件和检索金标相同；系统提示对齐产品：`search_assets` / `inspect_asset`、`<asset_ref>` / `<system-reminder>` / `<ui_selection>`，已经点名的库文件不要用 bash/write/edit 去查。空库、或系统提示里没有这些块，不能当 Agent 评测。
 
 ---
 

@@ -52,7 +52,7 @@ Scoring is in `agent-score.ts` over `tool_start` events plus concatenated `text`
 | CI stub | `eval:agent-tools` | Scripted HTTP Chat. No network. |
 | Live | `eval:agent-tools:live` | Real Chat slot from `.env`. Fail if any task fails. |
 
-The live harness opens a temp library with the retrieval gold files, and uses a system prompt that matches product: `search_assets` / `inspect_asset`, `<asset_ref>` / `<ui_selection>`, no bash/write/edit to look up an already identified library file. Empty library or a prompt that omits those blocks is not a valid Agent eval.
+The live harness opens a temp library with the retrieval gold files, and uses a system prompt that matches product: `search_assets` / `inspect_asset`, `<asset_ref>` / `<system-reminder>` / `<ui_selection>`, no bash/write/edit to look up an already identified library file. Empty library or a prompt that omits those blocks is not a valid Agent eval.
 
 ---
 
