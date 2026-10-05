@@ -6,6 +6,12 @@
 
 ---
 
+## 自动记忆
+
+当前库的事实在 `<library>/.agents/memory/MEMORY.md`。打开库时建好这个目录，不收成素材。会话读入一次，放在 skill 目录后面，这一轮保持冻结。`auto_memory` 立刻增、改、删。大约 2000 字，超出则报错并带上现有条目。做法仍写成 skill。检索专职和生成专职没有这个工具。见 [MEMORY](../agent/MEMORY.zh-CN.md)。
+
+---
+
 ## 多 Agent
 
 主对话负责说话、计划和变换。`run_retrieve_agent` 搜库、看素材。`run_create_agent` 用一段 brief 走 MCP 生成，不搜库。需要 `asset_id` 时写进 brief。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。见 [AGENT](../AGENT.zh-CN.md)。

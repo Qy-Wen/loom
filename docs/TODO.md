@@ -8,15 +8,7 @@
 
 ---
 
-## Step 1: Auto memory
-
-Remember user preferences and creative conventions across sessions. See [MEMORY](./agent/MEMORY.md).
-
-- [x] Keep the notes in the open library's `.agents/memory/`. Create that folder when the library opens if it is missing. Do not index it as assets. A small always-on note goes in the system prompt, frozen when the session starts. Writes during the session persist; the next session reads them. Facts only. Procedures stay in skills
-- [x] The agent adds, replaces, and removes entries with a tool. The tool result shows the live notes. The system prompt snapshot stays frozen until the next session
-- [ ] Recall that depends on the current message is appended in that same user message, inside `<system-reminder>`, with the library highlight. No second user message. Nothing selected and nothing recalled: no reminder
-
-## Step 2: Process sandbox
+## Step 1: Process sandbox
 
 High-risk work (bash, FFmpeg, generation jobs) runs isolated from the rest of the machine.
 

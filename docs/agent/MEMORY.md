@@ -1,8 +1,8 @@
 **English** | [简体中文](./MEMORY.zh-CN.md)
 
-# Auto memory
+# Memory
 
-> How the chat Agent remembers user preferences and creative conventions across sessions. Skills stay the place for procedures. Roadmap: [TODO](../TODO.md).
+> How the chat Agent remembers user preferences and creative conventions across sessions. Skills stay the place for procedures.
 
 ---
 
@@ -27,11 +27,3 @@ Read the file when a session starts and append that snapshot after the existing 
 The parent chat Agent gets an `auto_memory` tool with `add`, `replace`, and `remove`. `replace` and `remove` match one entry by a unique substring. The tool result shows the live notes. Retrieve and create specialists do not get this tool.
 
 This tool is not `write` or `edit`, so Standard permission does not ask for approval. If an add or replace would pass 2,000 characters, the tool returns an error and the current entries. The agent shortens or removes entries itself. Do not drop entries silently.
-
----
-
-## 4. Recall for the current message
-
-Not in the first slice. The whole note is already in the system prompt, so there is nothing else to retrieve.
-
-Later, text found for this message is appended in that same user message, inside `<system-reminder>`, together with the library highlight. Do not send a second user message. If nothing is selected and nothing was recalled, do not add the reminder.
