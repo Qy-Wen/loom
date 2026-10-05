@@ -1,4 +1,4 @@
-/** Composer chips: library assets staged for the next user message. They become `asset_ref` attachments. */
+/** Composer chips: library assets the user placed in the next message. They are stored as `<asset_ref>` blocks in the text. */
 
 import { type AssetRefAttachment, type LoomAssetType, type LoomUserAttachment } from "./attachments.ts";
 
@@ -40,6 +40,7 @@ export function parseComposerAssetInputs(value: unknown): AssetRefAttachment[] {
 }
 
 const ASSET_REF = /\u2060loom-asset:([^\u2060]+)\u2060/g;
+const ASSET_BLOCK = /<asset_ref>\npath: ([^\n]*)\nasset_id: ([^\n]+)\ntype: (image|video|audio|text|other)\n<\/asset_ref>/g;
 
 export type InlineAssetPart =
 	| { type: "text"; text: string }
@@ -66,18 +67,105 @@ export function splitInlineAssetRefs(text: string): InlineAssetPart[] {
 	return parts;
 }
 
+type StoredAssetHit = { index: number; length: number; assetId: string; block: boolean };
+
+function validAssetBlock(match: RegExpMatchArray): boolean {
+	const path = match[1] ?? "";
+	const assetType = match[3] ?? "";
+	return isRelativeLibraryPath(path) && ASSET_TYPES.has(assetType);
+}
+
+function nextStoredAsset(text: string, from: number): StoredAssetHit | null {
+	const marker = new RegExp(ASSET_REF.source, "g");
+	marker.lastIndex = from;
+	const markerMatch = marker.exec(text);
+	const markerHit = markerMatch?.[1] != null && markerMatch.index >= from
+		? { index: markerMatch.index, length: markerMatch[0].length, assetId: markerMatch[1], block: false }
+		: null;
+	const block = new RegExp(ASSET_BLOCK.source, "g");
+	let searchFrom = from;
+	while (searchFrom < text.length) {
+		block.lastIndex = searchFrom;
+		const match = block.exec(text);
+		if (!match || match.index < searchFrom) break;
+		if (!validAssetBlock(match) || !match[2]) {
+			searchFrom = match.index + 1;
+			continue;
+		}
+		const hit = { index: match.index, length: match[0].length, assetId: match[2], block: true };
+		if (!markerHit || hit.index <= markerHit.index) return hit;
+		break;
+	}
+	return markerHit;
+}
+
+/**
+ * Markers and already-expanded `<asset_ref>` blocks, in place.
+ * Blank lines the fold inserts around a block are not part of the chip.
+ */
+export function splitStoredAssetText(text: string): InlineAssetPart[] {
+	const parts: InlineAssetPart[] = [];
+	let cursor = 0;
+	while (cursor < text.length) {
+		const hit = nextStoredAsset(text, cursor);
+		if (!hit) {
+			const rest = text.slice(cursor);
+			if (rest) parts.push({ type: "text", text: rest });
+			break;
+		}
+		let before = text.slice(cursor, hit.index);
+		let end = hit.index + hit.length;
+		if (hit.block) {
+			before = before.replace(/\n{1,2}$/, "");
+			const lead = /^\n{1,2}/.exec(text.slice(end));
+			if (lead) end += lead[0].length;
+		}
+		if (before) parts.push({ type: "text", text: before });
+		parts.push({ type: "asset", assetId: hit.assetId });
+		cursor = end;
+	}
+	return parts;
+}
+
+/** Replace each `<asset_ref>` block. Return null to leave that block unchanged. */
+export function replaceAssetRefBlocks(text: string, replace: (block: AssetRefAttachment) => string | null): string {
+	return text.replace(new RegExp(ASSET_BLOCK.source, "g"), (raw, path: string, assetId: string, assetType: string) => {
+		if (!isRelativeLibraryPath(path) || !ASSET_TYPES.has(assetType)) return raw;
+		const next = replace({ type: "asset_ref", assetId, path, assetType: assetType as LoomAssetType });
+		return next ?? raw;
+	});
+}
+export function assetRefBlocks(text: string): AssetRefAttachment[] {
+	const out: AssetRefAttachment[] = [];
+	for (const match of text.matchAll(new RegExp(ASSET_BLOCK.source, "g"))) {
+		if (!validAssetBlock(match) || !match[1] || !match[2] || !match[3]) continue;
+		const assetType = match[3] as LoomAssetType;
+		out.push({ type: "asset_ref", assetId: match[2], path: match[1], assetType });
+	}
+	return out;
+}
+
+/** Chips parsed from the text, then sidecar rows whose asset is not already in the text. */
+export function displayAssetRefs(text: string, stored: readonly LoomUserAttachment[]): LoomUserAttachment[] {
+	const placed = assetRefBlocks(text);
+	const ids = new Set(placed.map((row) => row.assetId));
+	return [...placed, ...stored.filter((row) => !ids.has(row.assetId))];
+}
+
 export function inlineAssetIds(text: string): string[] {
 	return splitInlineAssetRefs(text).flatMap((part) => part.type === "asset" ? [part.assetId] : []);
 }
 
-/** Words only, for titles and labels. Chip markers are removed. */
+/** Words only, for titles and labels. Chip markers and stored `<asset_ref>` blocks are removed. */
 export function stripInlineAssetRefs(text: string): string {
-	return text.replace(new RegExp(ASSET_REF.source, "g"), "");
+	return text
+		.replace(new RegExp(ASSET_REF.source, "g"), "")
+		.replace(new RegExp(ASSET_BLOCK.source, "g"), "");
 }
 
-/** Copilot measures this string for wrap. One space per chip, no hidden ids. */
+/** Copilot measures this string for wrap. One space per chip, whether it is a marker or an `<asset_ref>` block. */
 export function composerLayoutText(text: string): string {
-	return splitInlineAssetRefs(text).map((part) => (part.type === "text" ? part.text : " ")).join("");
+	return splitStoredAssetText(text).map((part) => (part.type === "text" ? part.text : " ")).join("");
 }
 
 /** Library chips already stored on a user message. Rows that are not relative refs are skipped. */

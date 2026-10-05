@@ -153,7 +153,7 @@ Loom 业务代码 → @loom/agent
 
 > 系统注入上下文的 transcript 合同（先做 UI 选中）。气泡只显示 `content`。前缀缓存要求：同一条已落盘的 user，折进 Chat `content` 的字符串每次请求必须一样。
 
-不要把会变的 UI 状态写进 system prompt（整段前缀都会废）。不要做 `get_selection` 工具。不要把折好的字写进 `content` 再在界面上剥。
+不要把会变的 UI 状态写进 system prompt（整段前缀都会废）。不要做 `get_selection` 工具。用户放进输入框的文件，发送时就已经展开写在 `content` 里。库里的高亮仍放在 `attachments`，只在组装 Chat 请求时再折。
 
 ### 5.1 落盘的 user 消息
 
@@ -177,22 +177,28 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 没有选中且输入框没有芯片时省略 `attachments`。不要存 `none` 占位。
 
-发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式贴库内文件：从素材库拖到输入框，右键文件选 Add to chat，或点 + 菜单的 Library file。External file 和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再贴同一张芯片。每张芯片是一条 `asset_ref`，以 `assetId` 为键，`path` 保持库内相对路径。字段与 `ui_selection` 相同，只是 `type` 不同。发送时按 `assetId` 查当前库，写入此刻的 `path` / `assetType`。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
+发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式放入库内文件：从素材库拖到输入框，右键文件选 Add to chat，或点 + 菜单的 Library file。External file 和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再放入同一张芯片。发送时按 `assetId` 查当前库，把此刻的 `path` / `assetType` 写进块里。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
 
-芯片排在文字里，可以插在词与词之间。`content` 记下这个位置，折的时候把 `<asset_ref>` 写在那里。旧 transcript 里芯片若存成 `ui_selection`，仍折成 `<ui_selection>`。没有出现在芯片里的库高亮，接在原文后面，写成 `<ui_selection>`。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
+芯片排在文字里，可以插在词与词之间。输入框读出文字时就在这个位置写上 `<asset_ref>` 块，聊天消息和落盘的 `content` 都是这串字。不再另存一条 `attachments`。气泡把这块解析回芯片。旧 transcript 里若还有看不见的标记加上 `asset_ref` 或 `ui_selection` 行，请求时仍按原样折；存成 `ui_selection` 的芯片仍折成 `<ui_selection>`。没有出现在芯片里的库高亮，接在原文后面，写成 `<ui_selection>`。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
+
+```
+看一下<asset_ref>
+path: clips/hero.mp4
+asset_id: a1b2c3d4-…
+type: video
+</asset_ref>这段
+```
 
 ### 5.2 折给 Chat API
 
-Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。系统注入永远不做成第二个 text part。
+Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。主动放入的芯片在 `content` 里已经是这块，折的时候留在原位，只在后面补上剩下的 `<ui_selection>`。系统注入永远不做成第二个 text part。
 
 已经落在 user 行 `content` 里的旧图片部分仍按 `image_url` 发出。输入框新贴的都是库芯片，不发像素。要看图/视频/音频，由 agent 自己调 `describe_image` / `describe_video` / `describe_audio` 或 `read`。旧图片部分被拒绝时，界面报错，并把当前路径退到这条消息之前。
 
 折法固定。HTTP 里没有 `attachments` 字段。
 
 ```
-把这个处理一下
-
-<asset_ref>
+把这个处理一下<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video

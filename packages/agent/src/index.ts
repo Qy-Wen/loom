@@ -17,10 +17,12 @@ export type {
 	UiSelectionFields,
 } from "./attachments.ts";
 export {
+	contentWithPlacedAssets,
 	foldUserMessageForLlm,
 	foldUserText,
 	formatAssetRefBlock,
 	formatUiSelectionBlock,
+	implicitSelectionAttachments,
 	isAssetRefAttachment,
 	isUiSelectionAttachment,
 	latestUiSelectionAssetId,
@@ -30,12 +32,16 @@ export {
 	userTextFromContent,
 } from "./attachments.ts";
 export {
+	assetRefBlocks,
 	assetRefMarker,
 	composerLayoutText,
+	displayAssetRefs,
 	inlineAssetIds,
 	isRelativeLibraryPath,
 	parseComposerAssetInputs,
+	replaceAssetRefBlocks,
 	splitInlineAssetRefs,
+	splitStoredAssetText,
 	stripInlineAssetRefs,
 } from "./composer-asset.ts";
 export {

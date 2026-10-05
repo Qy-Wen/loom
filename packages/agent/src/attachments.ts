@@ -1,4 +1,4 @@
-import { splitInlineAssetRefs } from "./composer-asset.ts";
+import { assetRefBlocks, replaceAssetRefBlocks, splitInlineAssetRefs } from "./composer-asset.ts";
 
 /** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. Composer pictures live on `content`, not here. */
 
@@ -90,6 +90,30 @@ export function uiSelectionToAttach(
 	};
 }
 
+/**
+ * Placed chips are stored already expanded inside the user text.
+ * The library highlight stays on `attachments`.
+ */
+export function contentWithPlacedAssets(text: string, chips: readonly AssetRefAttachment[]): string {
+	const byId = new Map(chips.map((chip) => [chip.assetId, chip]));
+	const refreshed = replaceAssetRefBlocks(text, (block) => {
+		const chip = byId.get(block.assetId);
+		if (!chip || (chip.path === block.path && chip.assetType === block.assetType)) return null;
+		return formatAssetRefBlock(chip);
+	});
+	if (chips.length === 0) return refreshed;
+	return foldUserText(refreshed, chips);
+}
+
+/** Same send rules as `promptAttachments`, keeping only the implicit library highlight. */
+export function implicitSelectionAttachments(
+	chips: readonly AssetRefAttachment[],
+	selection: UiSelectionFields | null | undefined,
+	messages: readonly unknown[],
+): LoomUserAttachment[] {
+	return promptAttachments(chips, selection, messages).filter((row) => row.type === "ui_selection");
+}
+
 /** Explicit composer chips (`asset_ref`), then the implicit library highlight (`ui_selection`) when it is not already included. */
 export function promptAttachments(
 	chips: readonly AssetRefAttachment[],
@@ -158,7 +182,7 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 	for (const row of attachments) {
 		if (!byId.has(row.assetId)) byId.set(row.assetId, row);
 	}
-	const used = new Set<string>();
+	const used = new Set(assetRefBlocks(text).map((row) => row.assetId));
 	let out = "";
 	for (const part of splitInlineAssetRefs(text)) {
 		if (part.type === "text") {

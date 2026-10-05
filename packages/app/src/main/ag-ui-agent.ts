@@ -11,7 +11,8 @@ import {
 	toolResultText,
 	DEFAULT_SESSION_TITLE,
 	titleFromUserText,
-	promptAttachments,
+	contentWithPlacedAssets,
+	implicitSelectionAttachments,
 	type ComposerImageInput,
 	type HarnessSessionManager,
 	type LoomAgentEvent,
@@ -212,7 +213,8 @@ export class LoomAgUiAgent extends AbstractAgent {
 					if (cancelled) return;
 					await this.ensureTitle(input.threadId, session.title, text);
 					if (cancelled) return;
-					const attachments = promptAttachments(chips, this.getUiSelection?.() ?? null, session.messages);
+					const attachments = implicitSelectionAttachments(chips, this.getUiSelection?.() ?? null, session.messages);
+					const body = contentWithPlacedAssets(text, chips);
 					prompting = true;
 					let retryVisible = false;
 					let retryMaxAttempts = 0;
@@ -252,7 +254,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 							content,
 						} as BaseEvent);
 					};
-					await this.manager.prompt(input.threadId, text, {
+					await this.manager.prompt(input.threadId, body, {
 						...(attachments.length > 0 ? { attachments } : {}),
 						...(images.length > 0 ? { images } : {}),
 						onEvent: (event: LoomAgentEvent) => {
