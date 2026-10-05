@@ -14,9 +14,9 @@ Split collaboration by genuine creative roles, not a generic orchestrator. See [
 
 The user-facing chat Agent talks, plans, and transforms (FFmpeg). Nested specialists:
 
-- [ ] Retrieve Agent: search and inspect the library; return asset ids and passages
-- [ ] Create Agent: generate from a brief and asset ids via MCP; do not search the library
-- [ ] Run independent calls in parallel in the first version (the harness already schedules parallel tools). A child cannot spawn another child
+- [x] Retrieve Agent: search and inspect the library; return asset ids and passages
+- [x] Create Agent: generate from a brief via MCP; do not search the library. Asset ids go in the brief when the task needs them
+- [x] Run independent calls in parallel in the first version (the harness already schedules parallel tools). A child cannot spawn another child
 
 ## Step 2: Process sandbox
 

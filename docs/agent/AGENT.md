@@ -9,7 +9,7 @@
 
 ## 1. Goal and positioning
 
-- Loom's Agent is a **creative-asset Agent** with pi's workspace tools (`read` / `edit` / `write` / `bash`) plus library tools (`search_assets`, `ffmpeg.*`, MCP). Skills load from the open library's `.agents/skills/`. Retrieve and Create agents, and a process sandbox, are deferred; see [TODO](./TODO.md).
+- Loom's Agent is a **creative-asset Agent**. The chat Agent talks, plans, and transforms (`read` / `edit` / `write` / `bash`, FFmpeg, describe, embed). `run_retrieve_agent` and `run_create_agent` start short-lived specialists. Skills load from the open library's `.agents/skills/`. A process sandbox is deferred; see [TODO](./TODO.md).
 - Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
@@ -128,6 +128,7 @@ The vendored Agent still requires chord, pi-ai, pi-telemetry, diff, ignore, type
 Loom application code → @loom/agent
                        ├── types.ts                 # Loom tools, events, settings
                        ├── harness-session-manager.ts # session and AgentHarness owner
+                       ├── specialist.ts            # retrieve and create child agents
                        ├── library-skills.ts        # Agent Skills from the open library
                        ├── pi-adapter.ts            # pi-ai Chat model and message folding
                        └── pi-tools.ts              # native tools and Loom tool bridge
@@ -135,13 +136,14 @@ Loom application code → @loom/agent
                                  vendor-pi-agent/
 ```
 
-Only `harness-session-manager.ts`, `library-skills.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
+Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
 
 ### Registering tools without changing upstream
 
 - **Workspace tools:** use Pi Harness's native `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work. `read` attaches JPEG, PNG, GIF, and WebP for the model, scaling anything over 2000px or about 4.5MB of base64. BMP and other decodable images are converted to PNG first.
-- **Library tools:** `search_assets`, `inspect_asset`, `ffmpeg.*`, and later `create_relationship`. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
-- **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool`. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
+- **Library tools:** the chat Agent keeps FFmpeg, `describe_*`, and `embed_asset`. `search_assets` and `inspect_asset` belong to the retrieve specialist. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
+- **Specialists:** `run_retrieve_agent` (search, inspect, `read`) and `run_create_agent` (MCP tools named `server__tool`, plus `write` / `bash`). Each call gets a fresh in-memory transcript and one goal string. Include asset ids in that string when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. Child tool cards appear in the same turn; the parent receives only the summary. Stop and the permission gate apply to the child.
+- **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` on the create specialist. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
 - **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
 
@@ -292,7 +294,7 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 **c. Stop conversation**
 
 - CopilotChat Stop detaches the AG-UI run and requests cancellation through `HarnessSessionManager.abort()`.
-- Harness cancels the active operation; signals propagate to in-flight workspace/library/MCP tools, FFmpeg child processes, and model requests.
+- Harness cancels the active operation and any specialist it started; signals propagate to in-flight workspace/library/MCP tools, FFmpeg child processes, and model requests.
 - Stop is recorded durably in the Harness session as a user cancellation, distinct from an error; it is not mapped as a Chat `RUN_ERROR`.
 - Enter while a run is active queues the text as `followUp`. The same run continues when it would otherwise finish, one queued follow-up at a time. Queued text sits above the composer until it is inserted, then it leaves the queue and appears as a user message. Stop drops follow-ups that have not been inserted. `steer` and `nextRun` are unused.
 

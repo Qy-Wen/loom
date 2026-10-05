@@ -14,9 +14,9 @@
 
 主对话 Agent 对人、做计划、做变换（FFmpeg）。底下两个专职：
 
-- [ ] 检索 Agent：搜库、看素材；只回 `asset_id` 和段落
-- [ ] 生成 Agent：用 brief 和 `asset_id` 走 MCP 生成；不搜库
-- [ ] 第一版就并行：同一轮里互不依赖的调用一起跑（沿用 Harness 已有的并行工具）。子 Agent 不能再派生子 Agent
+- [x] 检索 Agent：搜库、看素材；只回 `asset_id` 和段落
+- [x] 生成 Agent：用一段 brief 走 MCP 生成；不搜库。需要 `asset_id` 时写进 brief
+- [x] 第一版就并行：同一轮里互不依赖的调用一起跑（沿用 Harness 已有的并行工具）。子 Agent 不能再派生子 Agent
 
 ## 第二步：进程沙箱
 
