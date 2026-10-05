@@ -3,7 +3,7 @@
 # Agent Architecture
 
 > This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, user-message attachments, and the frontend interaction protocol (AG-UI).
-> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [Pi Harness integration scope](./PI-HARNESS.md) for the runtime boundary, [EVALS.md](./EVALS.md) for how Agent and retrieval are scored, and [TODO.md](./TODO.md) for the roadmap.
+> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [EVALS.md](./EVALS.md) for how Agent and retrieval are scored, and [TODO.md](./TODO.md) for the roadmap.
 
 ---
 
@@ -31,7 +31,7 @@ Pi's Agent-related code has three layers, handled differently by Loom:
 
 `pi-ai` is not vendored because it is large, mostly provider glue, and brings heavyweight SDKs such as `@anthropic-ai/sdk`, `openai`, `@google/genai`, and `@aws-sdk/*`.
 
-**Model seam:** `HarnessSessionManager` builds the selected Chat model with `pi-ai` and passes it to `AgentHarness` lanes. Loom configures OpenAI-compatible Chat requests without vendoring `pi-ai`; see [Pi Harness integration scope](./PI-HARNESS.md).
+**Model seam:** `HarnessSessionManager` builds the selected Chat model with `pi-ai` and passes it to `AgentHarness` lanes. Loom configures OpenAI-compatible Chat requests without vendoring `pi-ai`.
 
 ---
 
@@ -146,6 +146,7 @@ Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-ada
 - **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` on the create specialist. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
 - **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
+- **Memory:** `<library>/.agents/memory/MEMORY.md` holds facts for this library. The folder is created on open. `.agents` is not indexed. The session reads the note once into the system prompt, after the skills catalog. `memory` (`add` / `replace` / `remove`) writes the file immediately; that session's prompt stays frozen. Retrieve and create specialists do not get the tool. See [MEMORY](./MEMORY.md).
 
 ---
 

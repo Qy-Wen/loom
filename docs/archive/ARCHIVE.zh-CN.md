@@ -6,6 +6,12 @@
 
 ---
 
+## 多 Agent
+
+主对话负责说话、计划和变换。`run_retrieve_agent` 搜库、看素材。`run_create_agent` 用一段 brief 走 MCP 生成，不搜库。需要 `asset_id` 时写进 brief。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。见 [AGENT](../AGENT.zh-CN.md)。
+
+---
+
 ## Human in the loop
 
 write / edit 在工具卡片上等 Approve / Skip。对话底部：Basic、Standard（默认）、Full。Full 不拦截任何工具。存在应用 userData，不进库。FFmpeg 和 MCP 不拦。见 [AGENT](../AGENT.zh-CN.md) §6.3e。
@@ -29,7 +35,7 @@ write / edit 在工具卡片上等 Approve / Skip。对话底部：Basic、Stand
 输入框以行内芯片贴库内文件。每张芯片是一条 `asset_ref`（`assetId`、库内相对 `path`、`assetType`）。发送时的库高亮是另一条字段相同的 `ui_selection`。点击芯片或 `search_assets` / `inspect_asset` 的 `asset_id` 会选中该文件，并留在 Agent 页。见 [AGENT](../AGENT.zh-CN.md) §5 和 §6.3b。
 
 - 从素材库拖入、右键 Add to chat，或 + → Library file。External file 和从访达拖入会先拷进 `Inbox/`（已在库内则复用）。输入框新贴的都是芯片，不发 `image_url`；历史上 `content` 里的图片部分仍按 `image_url` 发出。
-- 折的时候在芯片位置写 `<asset_ref>`。剩下的高亮写成 `<ui_selection>`。发送时按 `assetId` 查当前路径。旧行不改。下一轮是否省略高亮，只看最近一条 `ui_selection`。
+- 折的时候在芯片位置写 `<asset_ref>`。剩下的高亮接在后面，包在 `<system-reminder>` 里，写成 `<ui_selection>`。气泡不显示这段提醒。发送时按 `assetId` 查当前路径。旧行不改。下一轮是否省略高亮，只看最近一条 `ui_selection`。
 
 ---
 

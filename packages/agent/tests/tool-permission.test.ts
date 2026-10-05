@@ -16,6 +16,8 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
 	assert.equal(toolNeedsApproval("standard", "search_assets"), false);
+	assert.equal(toolNeedsApproval("standard", "memory"), false);
+	assert.equal(toolNeedsApproval("basic", "memory"), false);
 	assert.equal(toolNeedsApproval("basic", "bash"), true);
 	assert.equal(toolNeedsApproval("full", "write"), false);
 });

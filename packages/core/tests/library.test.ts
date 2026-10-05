@@ -300,3 +300,23 @@ test("Library copies an outside file into Inbox and reuses a file already in the
 		await rm(outside, { recursive: true, force: true });
 	}
 });
+
+test("Library creates .agents/memory and does not index .agents", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-memory-dir-"));
+	const core = new LocalCore();
+	try {
+		await mkdir(join(root, ".agents", "skills", "voice"), { recursive: true });
+		await writeFile(join(root, ".agents", "skills", "voice", "SKILL.md"), "skill");
+		await mkdir(join(root, ".agents", "memory"), { recursive: true });
+		await writeFile(join(root, ".agents", "memory", "MEMORY.md"), "user prefers concise titles");
+		const opened = await core.openLibrary(root);
+		await access(join(root, ".agents", "memory"));
+		assert.equal(opened.folders.includes(".agents"), false);
+		assert.equal(opened.folders.includes(".agents/memory"), false);
+		assert.equal(opened.assets.some((asset) => asset.relativePath.includes("MEMORY.md")), false);
+		assert.equal(opened.assets.some((asset) => asset.relativePath.includes("SKILL.md")), false);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

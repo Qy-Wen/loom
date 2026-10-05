@@ -58,6 +58,7 @@ export class Library {
 
 		this.paths = new LibraryPaths(rootPath);
 		this.folders.clear();
+		await mkdir(join(this.paths.root, ".agents", "memory"), { recursive: true });
 		await this.metadata.open(this.paths);
 		await this.syncFromDisk(false);
 

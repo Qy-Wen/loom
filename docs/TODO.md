@@ -2,21 +2,19 @@
 
 # TODO
 
-> Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design, [AGENT.md](./AGENT.md) for the Agent architecture, [Pi Harness integration scope (Chinese)](./PI-HARNESS.md), [SETTINGS.md](./SETTINGS.md) for model endpoints, and [RAG](./RAG/RAG.md) for retrieval.
+> Flat roadmap checklist. See [PRODUCT.md](./PRODUCT.md) for product design, [AGENT.md](./AGENT.md) for the Agent architecture, [SETTINGS.md](./SETTINGS.md) for model endpoints, and [RAG](./RAG/RAG.md) for retrieval.
 > Only the next steps are detailed; later work stays at summary level.
 > Creation tools (ComfyUI and later) attach as MCP servers. Loom-owned tools stay the library: search, FFmpeg, and workspace tools. Files land in the library via write/bash; the watcher indexes them.
 
 ---
 
-## Step 1: Multi-agent
+## Step 1: Memory
 
-Split collaboration by genuine creative roles, not a generic orchestrator. See [PRODUCT](./PRODUCT.md) §10.
+Remember user preferences and creative conventions across sessions. See [MEMORY](./agent/MEMORY.md).
 
-The user-facing chat Agent talks, plans, and transforms (FFmpeg). Nested specialists:
-
-- [x] Retrieve Agent: search and inspect the library; return asset ids and passages
-- [x] Create Agent: generate from a brief via MCP; do not search the library. Asset ids go in the brief when the task needs them
-- [x] Run independent calls in parallel in the first version (the harness already schedules parallel tools). A child cannot spawn another child
+- [x] Keep the notes in the open library's `.agents/memory/`. Create that folder when the library opens if it is missing. Do not index it as assets. A small always-on note goes in the system prompt, frozen when the session starts. Writes during the session persist; the next session reads them. Facts only. Procedures stay in skills
+- [x] The agent adds, replaces, and removes entries with a tool. The tool result shows the live notes. The system prompt snapshot stays frozen until the next session
+- [ ] Recall that depends on the current message is appended in that same user message, inside `<system-reminder>`, with the library highlight. No second user message. Nothing selected and nothing recalled: no reminder
 
 ## Step 2: Process sandbox
 
@@ -30,5 +28,4 @@ High-risk work (bash, FFmpeg, generation jobs) runs isolated from the rest of th
 
 - **Observability:** per-run tool / latency / token traces via pi-telemetry (spans exist, currently no-op). Do not add a second tracing stack. Lifetime Stats already exist.
 - **LangGraph:** add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
-- **Memory:** remember user preferences and creative conventions across sessions so later chats can use them.
 - **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
