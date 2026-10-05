@@ -22,7 +22,7 @@ import { PropertyEditor } from "./property-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
 import { AgentPermissionProvider } from "./agent-permission.tsx";
-import { AssetOpenProvider } from "./asset-open.tsx";
+import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
 import { ToolCallViews } from "./tool-call-views.tsx";
 
 export type SidePanelTab = "agent" | "details";
@@ -277,6 +277,7 @@ export function SidePanel({
 						{sessionError && <div className="session-error">{sessionError}</div>}
 						{sessionId ? (
 							<AssetOpenProvider onOpen={onOpenAsset}>
+							<LibraryAssetsProvider assets={assets}>
 							<AgentPermissionProvider>
 							<div className="agent-chat">
 								<ToolCallViews />
@@ -298,6 +299,7 @@ export function SidePanel({
 								/>
 							</div>
 							</AgentPermissionProvider>
+							</LibraryAssetsProvider>
 							</AssetOpenProvider>
 						) : (
 							<div className="empty">Starting a session…</div>

@@ -25,7 +25,8 @@ export type SpecialistRole = "retrieve" | "create";
 export const RETRIEVE_SYSTEM_PROMPT =
 	"You search and inspect the open asset library. Use search_assets and inspect_asset. Use read only for a file you already identified. " +
 	"Do not create, edit, or delete files, and do not call generation tools. " +
-	"Reply with the asset ids and the passages that answer the task.";
+	"When you name a library file, include an <asset_ref> block with path, asset_id, and type copied from the tool result. Do not invent ids. " +
+	"Reply with those blocks and the passages that answer the task.";
 
 export const CREATE_SYSTEM_PROMPT =
 	"You generate assets from the task. Use the MCP tools. Use write or bash only to place results inside the library. " +

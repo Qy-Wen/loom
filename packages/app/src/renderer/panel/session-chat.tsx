@@ -18,6 +18,7 @@ import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, Loo
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
+import { AssistantMarkdown } from "./assistant-asset-text.tsx";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
@@ -191,7 +192,7 @@ const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
 			</div>
 		);
 	}
-	return <CopilotChatAssistantMessage {...props} />;
+	return <CopilotChatAssistantMessage {...props} markdownRenderer={AssistantMarkdown} />;
 }) as typeof CopilotChatAssistantMessage;
 
 function editableText(text: string): boolean {
