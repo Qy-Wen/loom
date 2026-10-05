@@ -67,8 +67,9 @@ Green on the switch means the URL is reachable (`GET /v1/models`). It does not p
 
 ## UI
 
-- One Settings window with three tabs: **Models**, **MCP**, **Stats**.
-- Models: five slots on one page. Empty rerank / VLM / Audio slots are allowed. The switch pings; **Save** writes Models and MCP together and closes Settings.
+- One Settings window with four tabs: **Models**, **MCP**, **Instructions**, **Stats**.
+- Models: five slots on one page. Empty rerank / VLM / Audio slots are allowed. The switch pings; **Save** writes Models, MCP, and Instructions together and closes Settings.
 - Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image and video write-ups; see [MEDIA.md](./RAG/MEDIA.md). Changing the Audio `model` invalidates existing audio write-ups.
-- MCP: add/remove servers. The form matches a Cursor `mcp.json` entry: name, then `command` + `args` (local) or `url` (remote). Env / headers / cwd sit under Advanced. The switch connects or disconnects that server. **Save** writes Models and MCP together. On app start, only enabled servers connect. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
+- MCP: add/remove servers. The form matches a Cursor `mcp.json` entry: name, then `command` + `args` (local) or `url` (remote). Env / headers / cwd sit under Advanced. The switch connects or disconnects that server. **Save** writes Models, MCP, and Instructions together. On app start, only enabled servers connect. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
+- Instructions: a free-text box, stored as app user-data `AGENTS.md`, not in the library. The next session appends it at the end of the system prompt. Empty adds nothing. The session that is already running keeps the text it started with. About 40,000 characters; Save refuses anything longer. Retrieve and create specialists do not receive it.
 - Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.

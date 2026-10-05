@@ -8,7 +8,7 @@
 
 ---
 
-## Step 1: Memory
+## Step 1: Auto memory
 
 Remember user preferences and creative conventions across sessions. See [MEMORY](./agent/MEMORY.md).
 

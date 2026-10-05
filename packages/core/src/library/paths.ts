@@ -42,7 +42,7 @@ export class LibraryPaths {
 		return value === ".loom" || value.startsWith(`.loom${sep}`);
 	}
 
-	/** Agent skills and memory. Loaded from disk, not indexed as assets. */
+	/** Agent skills and auto memory. Loaded from disk, not indexed as assets. */
 	isAgentsPath(absolutePath: string): boolean {
 		const value = relative(this.root, resolve(absolutePath));
 		return value === ".agents" || value.startsWith(`.agents${sep}`);

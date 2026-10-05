@@ -144,9 +144,9 @@ Loom 业务代码 → @loom/agent
 - **素材库工具**：主对话保留 FFmpeg、`describe_*` 和 `embed_asset`。`search_assets` 与 `inspect_asset` 归检索专职。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **专职**：`run_retrieve_agent`（检索、查看、`read`）和 `run_create_agent`（名为 `server__tool` 的 MCP，外加 `write` / `bash`）。每次调用只有一份内存里的新对话和一段任务文字。需要 `asset_id` 时写进这段文字。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。子工具卡片出现在同一轮里；父 Agent 只收到摘要。检索摘要用从工具结果抄来的 `<asset_ref>` 块点名文件。Stop 和权限确认同样作用于子 Agent。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，挂在生成专职上。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
-- **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
+- **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。设置里的 Instructions（应用用户数据里的 `AGENTS.md`）在会话开始时接到末尾，这一轮保持冻结。空着就不加。专职拿不到这段。
 - **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
-- **记忆：** `<library>/.agents/memory/MEMORY.md` 记下这个库的事实。打开库时建好这个目录。`.agents` 不收成素材。会话把笔记读进系统提示一次，放在 skill 目录后面。`memory`（`add` / `replace` / `remove`）立刻写文件；这一轮会话的系统提示保持冻结。检索专职和生成专职没有这个工具。见 [MEMORY](./MEMORY.zh-CN.md)。
+- **自动记忆：** `<library>/.agents/memory/MEMORY.md` 记下这个库的事实。打开库时建好这个目录。`.agents` 不收成素材。会话把笔记读进系统提示一次，放在 skill 目录后面。`auto_memory`（`add` / `replace` / `remove`）立刻写文件；这一轮会话的系统提示保持冻结。检索专职和生成专职没有这个工具。见 [MEMORY](./MEMORY.zh-CN.md)。
 
 ---
 

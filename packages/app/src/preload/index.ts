@@ -84,6 +84,8 @@ const api: LoomApi = {
 	getMcpSettings: () => ipcRenderer.invoke(IPC.getMcpSettings),
 	saveMcpSettings: (servers) => ipcRenderer.invoke(IPC.saveMcpSettings, servers),
 	setMcpServerLive: (server) => ipcRenderer.invoke(IPC.setMcpServerLive, server),
+	getAgentInstructions: () => ipcRenderer.invoke(IPC.getAgentInstructions),
+	saveAgentInstructions: (text) => ipcRenderer.invoke(IPC.saveAgentInstructions, text),
 	getAgentStats: () => ipcRenderer.invoke(IPC.getAgentStats),
 	resetAgentStats: () => ipcRenderer.invoke(IPC.resetAgentStats),
 	setUiSelection: (selection) => ipcRenderer.invoke(IPC.setUiSelection, selection),
@@ -93,4 +95,5 @@ const api: LoomApi = {
 };
 
 contextBridge.exposeInMainWorld("loom", api);
+
 

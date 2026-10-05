@@ -1,6 +1,6 @@
 **English** | [简体中文](./MEMORY.zh-CN.md)
 
-# Memory
+# Auto memory
 
 > How the chat Agent remembers user preferences and creative conventions across sessions. Skills stay the place for procedures. Roadmap: [TODO](../TODO.md).
 
@@ -24,7 +24,7 @@ Read the file when a session starts and append that snapshot after the existing 
 
 ## 3. Tool
 
-The parent chat Agent gets a `memory` tool with `add`, `replace`, and `remove`. `replace` and `remove` match one entry by a unique substring. The tool result shows the live notes. Retrieve and create specialists do not get this tool.
+The parent chat Agent gets an `auto_memory` tool with `add`, `replace`, and `remove`. `replace` and `remove` match one entry by a unique substring. The tool result shows the live notes. Retrieve and create specialists do not get this tool.
 
 This tool is not `write` or `edit`, so Standard permission does not ask for approval. If an add or replace would pass 2,000 characters, the tool returns an error and the current entries. The agent shortens or removes entries itself. Do not drop entries silently.
 
