@@ -28,7 +28,7 @@ export type AgentEvalResult = {
 const AGENT_EVAL_SYSTEM_PROMPT =
 	"You are Loom, an assistant for a local creative asset workspace. " +
 	"The working directory is the asset library the user has open. " +
-	"Use search_assets to retrieve assets and inspect_asset before making claims about one asset. " +
+	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids when the task needs them. You do not have search_assets or inspect_asset. " +
 	"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
 	"Do not use bash, write, or edit for looking up or inspecting a library file that is already identified.";
@@ -111,7 +111,7 @@ function finishText(response: import("node:http").ServerResponse, text: string):
 	response.end("data: [DONE]\n\n");
 }
 
-function finishTool(response: import("node:http").ServerResponse, name: string, args: Record<string, string>): void {
+function finishTool(response: import("node:http").ServerResponse, name: string, args: Record<string, unknown>): void {
 	response.writeHead(200, { "content-type": "text/event-stream" });
 	writeSse(response, {
 		id: "eval-tool",
@@ -142,19 +142,46 @@ function finishTool(response: import("node:http").ServerResponse, name: string, 
 	response.end("data: [DONE]\n\n");
 }
 
-function stubReply(messages: unknown[], response: import("node:http").ServerResponse): void {
+function requestToolNames(body: string): string[] {
+	try {
+		const tools = (JSON.parse(body) as { tools?: unknown[] }).tools ?? [];
+		return tools.flatMap((tool) => {
+			if (!tool || typeof tool !== "object") return [];
+			const row = tool as { name?: unknown; function?: { name?: unknown } };
+			const name = typeof row.function?.name === "string" ? row.function.name : row.name;
+			return typeof name === "string" ? [name] : [];
+		});
+	} catch {
+		return [];
+	}
+}
+
+function stubReply(messages: unknown[], names: readonly string[], response: import("node:http").ServerResponse): void {
 	if (hasToolResult(messages)) {
 		const user = lastUserText(messages);
 		finishText(response, /2\s*\+\s*2/.test(user) ? "4" : "Done.");
 		return;
 	}
 	const user = lastUserText(messages);
+	if (names.includes("run_retrieve_agent")) {
+		const selected = user.match(/asset_id:\s*(\S+)/i);
+		if (selected) {
+			finishTool(response, "run_retrieve_agent", { goal: user });
+			return;
+		}
+		if (/find|search|bicycle|dock|river|bike/i.test(user)) {
+			finishTool(response, "run_retrieve_agent", { goal: user });
+			return;
+		}
+		finishText(response, /2\s*\+\s*2/.test(user) ? "4" : "Ok.");
+		return;
+	}
 	const selected = user.match(/asset_id:\s*(\S+)/i);
-	if (selected) {
+	if (names.includes("inspect_asset") && selected) {
 		finishTool(response, "inspect_asset", { assetId: selected[1]!.replace(/[>"']+$/, "") });
 		return;
 	}
-	if (/find|search|bicycle|dock|river|bike/i.test(user)) {
+	if (names.includes("search_assets") && /find|search|bicycle|dock|river|bike/i.test(user)) {
 		finishTool(response, "search_assets", { query: user });
 		return;
 	}
@@ -173,7 +200,7 @@ export function startStubChat(): Promise<{ baseUrl: string; close: () => Promise
 			} catch {
 				messages = [];
 			}
-			stubReply(messages, response);
+			stubReply(messages, requestToolNames(body), response);
 		});
 	});
 	return listen(server).then((baseUrl) => ({

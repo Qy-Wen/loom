@@ -9,7 +9,7 @@
 
 ## 1. 目标与定位
 
-- Loom 的 Agent 是**创作资产 Agent**，同时挂上 pi 的工作区工具（`read` / `edit` / `write` / `bash`）和素材库工具（`search_assets`、`ffmpeg.*`、MCP）。Skills 从当前库的 `.agents/skills/` 加载。检索 / 生成 Agent 和进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
+- Loom 的 Agent 是**创作资产 Agent**。主对话负责说话、计划和变换（`read` / `edit` / `write` / `bash`、FFmpeg、describe、embed）。`run_retrieve_agent` 和 `run_create_agent` 各起一个短命专职。Skills 从当前库的 `.agents/skills/` 加载。进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
 - 素材库检索就是 RAG：Hybrid Search 返回文本段落（图 / 视频也是先写成字再切），Agent 用这些切片来回答或动手，而不是把整库塞进 prompt。见 [RAG](./RAG/RAG.zh-CN.md)。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。
@@ -128,6 +128,7 @@ vendor 进来的 agent 仍需要 chord / pi-ai / pi-telemetry（及 diff / ignor
 Loom 业务代码 → @loom/agent
                 ├── types.ts                  # 工具、事件、设置
                 ├── harness-session-manager.ts # 会话与 AgentHarness
+                ├── specialist.ts             # 检索与生成子 Agent
                 ├── library-skills.ts         # 从当前库加载 Agent Skills
                 ├── pi-adapter.ts             # pi-ai Chat 模型与消息折叠
                 └── pi-tools.ts               # 原生工具及 Loom 工具适配
@@ -135,13 +136,14 @@ Loom 业务代码 → @loom/agent
                           vendor-pi-agent/
 ```
 
-只有 `harness-session-manager.ts`、`library-skills.ts`、`pi-adapter.ts`、`pi-tools.ts` 引用 `#vendor/pi-agent`；应用只使用 Loom 导出的接口。Node 原生 `imports` 字段将 `#vendor/pi-agent` 和 `#vendor/pi-agent/node` 映射到 `vendor-pi-agent/`，tsconfig 对应配置保持一致。
+只有 `harness-session-manager.ts`、`specialist.ts`、`library-skills.ts`、`pi-adapter.ts`、`pi-tools.ts` 引用 `#vendor/pi-agent`；应用只使用 Loom 导出的接口。Node 原生 `imports` 字段将 `#vendor/pi-agent` 和 `#vendor/pi-agent/node` 映射到 `vendor-pi-agent/`，tsconfig 对应配置保持一致。
 
 ### 注册工具（无需改上游源码）
 
 - **工作区工具**：原生使用 Pi Harness 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` 与 `NodeExecutionEnv`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。`read` 把 JPEG、PNG、GIF、WebP 附给模型；边长超过 2000 或 base64 超过约 4.5MB 时先缩小。BMP 等先转成 PNG。
-- **素材库工具**：`search_assets`、`inspect_asset`、`ffmpeg.*`，以及之后的 `create_relationship`。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
-- **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
+- **素材库工具**：主对话保留 FFmpeg、`describe_*` 和 `embed_asset`。`search_assets` 与 `inspect_asset` 归检索专职。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
+- **专职**：`run_retrieve_agent`（检索、查看、`read`）和 `run_create_agent`（名为 `server__tool` 的 MCP，外加 `write` / `bash`）。每次调用只有一份内存里的新对话和一段任务文字。需要 `asset_id` 时写进这段文字。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。子工具卡片出现在同一轮里；父 Agent 只收到摘要。Stop 和权限确认同样作用于子 Agent。
+- **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，挂在生成专职上。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
 - **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
 
@@ -292,7 +294,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 **c) 停止对话**
 
 - CopilotChat 的 Stop 会退订 AG-UI 流，并通过 `HarnessSessionManager.abort()` 请求取消。
-- Harness 取消活跃操作；中止信号传给工作区/素材库/MCP 工具、FFmpeg 子进程与模型请求。
+- Harness 取消活跃操作，以及它启动的专职；中止信号传给工作区/素材库/MCP 工具、FFmpeg 子进程与模型请求。
 - 用户主动 Stop 作为取消记录在 Harness 会话中，可与错误区分；不映射成 Chat `RUN_ERROR`。
 - 运行中按 Enter 把文本排进 `followUp`。同一 run 在本可结束时继续，一次只插入一条，等这段结束后再插入下一条。排队文本留在输入框上方，插入后离开队列并作为用户消息出现在对话里。Stop 丢掉尚未插入的 followUp。`steer` 和 `nextRun` 不使用。
 

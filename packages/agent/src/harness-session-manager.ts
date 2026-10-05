@@ -2,6 +2,8 @@ import { resolve, join } from "node:path";
 import {
 	AgentHarness,
 	BACKGROUND_CONTEXT,
+	type AgentHarnessTool,
+	type ExecutionToolContext,
 	DEFAULT_COMPACTION_SETTINGS,
 	JsonlSessionRepo,
 	calculateContextTokens,
@@ -20,6 +22,16 @@ import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
+import {
+	CREATE_AGENT_TOOL,
+	RETRIEVE_AGENT_TOOL,
+	parseSpecialistArgs,
+	partitionLibraryTools,
+	runSpecialistAgent,
+	specialistDescription,
+	specialistParameters,
+	type SpecialistRole,
+} from "./specialist.ts";
 import {
 	DEFAULT_AGENT_PERMISSION,
 	ToolApprovalQueue,
@@ -89,6 +101,7 @@ type ActiveRun = {
 	cancelRequested?: boolean;
 	done: Promise<void>;
 	emit: (event: LoomAgentEvent) => void;
+	children: Set<{ abort: () => Promise<void> }>;
 };
 
 export interface HarnessSessionSummary {
@@ -163,17 +176,91 @@ export class HarnessSessionManager {
 		event: { runId: string; toolCallId: string; toolName: string; args: Record<string, unknown> },
 		context: { abortSignal?: AbortSignal },
 	): Promise<{ block?: { reason: string } } | undefined> {
-		if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
 		const sessionId = this.sessionIdForRun(event.runId);
 		const run = sessionId ? this.running.get(sessionId) : undefined;
 		if (!run || !sessionId) {
+			if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
 			return { block: { reason: "Tool confirmation is unavailable." } };
 		}
-		run.emit({ type: "tool_pending", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
+		return this.gateTool(sessionId, run.emit, event, context);
+	}
+
+	private async gateTool(
+		sessionId: string,
+		emit: (event: LoomAgentEvent) => void,
+		event: { toolCallId: string; toolName: string; args: Record<string, unknown> },
+		context: { abortSignal?: AbortSignal },
+	): Promise<{ block?: { reason: string } } | undefined> {
+		if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
+		emit({ type: "tool_pending", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
 		const decision = await this.toolApprovals.wait(sessionId, event.toolCallId, context.abortSignal);
 		if (decision === "approve") return undefined;
 		if (decision === "reject") return { block: { reason: "The user skipped this tool." } };
 		return { block: { reason: "The user pressed Stop. This turn was cancelled on purpose, not because of an error." } };
+	}
+
+	private harnessTools(): AgentHarnessTool<ExecutionToolContext>[] {
+		const workspace = this.workspace;
+		if (!workspace) return [];
+		const parent = partitionLibraryTools(this.options.tools ?? []).parent;
+		return [...workspace.tools, ...parent.map(toHarnessTool), this.specialistTool("retrieve"), this.specialistTool("create")];
+	}
+
+	private specialistTool(role: SpecialistRole): AgentHarnessTool<ExecutionToolContext> {
+		const name = role === "retrieve" ? RETRIEVE_AGENT_TOOL : CREATE_AGENT_TOOL;
+		return {
+			name,
+			label: name,
+			description: specialistDescription(role),
+			parameters: specialistParameters(),
+			replay: "never",
+			execute: (toolCallId, args, onUpdate, _toolContext, invocation, context) => {
+				return this.runSpecialist(role, toolCallId, args, onUpdate, invocation.operationId, context.abortSignal);
+			},
+		};
+	}
+
+	private async runSpecialist(
+		role: SpecialistRole,
+		_toolCallId: string,
+		args: unknown,
+		onUpdate: (partial: { content: Array<{ type: "text"; text: string }>; details: undefined }) => void,
+		operationId: string,
+		abortSignal?: AbortSignal,
+	): Promise<{ content: Array<{ type: "text"; text: string }>; details: undefined }> {
+		const sessionId = this.sessionIdForRun(operationId);
+		const run = sessionId ? this.running.get(sessionId) : undefined;
+		const workspace = this.workspace;
+		const chat = this.options.chat;
+		if (!run || !sessionId || !workspace) throw new Error("Tool confirmation is unavailable.");
+		if (!chatEndpointReady(chat)) throw new Error("Chat is not configured. Set base URL and model in Settings.");
+		const parsed = parseSpecialistArgs(args);
+		const names = role === "retrieve" ? ["read"] : ["write", "bash"];
+		const native = workspace.tools.filter((tool) => names.includes(tool.name));
+		const grouped = partitionLibraryTools(this.options.tools ?? []);
+		const library = (role === "retrieve" ? grouped.retrieve : grouped.create).map(toHarnessTool);
+		const child: { abort: () => Promise<void> } = { abort: () => Promise.resolve() };
+		run.children.add(child);
+		try {
+			const summary = await runSpecialistAgent({
+				role,
+				goal: parsed.goal,
+				cwd: workspace.toolContext.env.cwd,
+				chat,
+				tools: [...native, ...library],
+				abortSignal,
+				onTool: (event) => {
+					run.emit(event);
+					if (event.type === "tool_start") onUpdate({ content: [{ type: "text", text: event.name }], details: undefined });
+				},
+				onUsage: this.onUsage,
+				beforeTool: (event, context) => this.gateTool(sessionId, run.emit, event, context),
+				registerAbort: (abort) => { child.abort = abort; },
+			});
+			return { content: [{ type: "text", text: summary }], details: undefined };
+		} finally {
+			run.children.delete(child);
+		}
 	}
 
 	private async serializeTransition<T>(operation: () => Promise<T>): Promise<T> {
@@ -503,7 +590,7 @@ export class HarnessSessionManager {
 			if (!chatEndpointReady(chat)) throw new Error("Chat is not configured. Set base URL and model in Settings.");
 			const { models, model } = buildChatModels(chat);
 			const workspace = this.workspace!;
-			const tools = [...workspace.tools, ...(this.options.tools ?? []).map(toHarnessTool)];
+			const tools = this.harnessTools();
 			const { harness, open: pending } = await AgentHarness.create({
 				session: open.session,
 				models,
@@ -720,7 +807,7 @@ export class HarnessSessionManager {
 		}));
 		let resolveDone!: () => void;
 		const done = new Promise<void>((resolve) => { resolveDone = resolve; });
-		const run: ActiveRun = { lane, operationId, done, emit };
+		const run: ActiveRun = { lane, operationId, done, emit, children: new Set() };
 		this.running.set(id, run);
 		try {
 			const content = userPromptContent(text, options, "Prompt is empty");
@@ -798,6 +885,7 @@ export class HarnessSessionManager {
 		}
 		if (reason) run.reason = reason;
 		run.cancelRequested = true;
+		await Promise.allSettled([...run.children].map((child) => child.abort()));
 		const result = await run.lane.abort(CONTEXT);
 		if (!result.ok && result.error._tag !== "NoActiveOperation") throw result.error;
 		await run.done;
@@ -835,7 +923,7 @@ export class HarnessSessionManager {
 			for (const [id, open] of this.handles) {
 				if (!open.harness || !open.lane) continue;
 				if (!open.recovering) await this.abort(id);
-				const all = [...this.workspace!.tools, ...tools.map(toHarnessTool)];
+				const all = this.harnessTools();
 				await open.harness.setTools(all, CONTEXT);
 				await open.lane.setActiveTools(all.map((tool) => tool.name), CONTEXT);
 			}
