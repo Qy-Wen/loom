@@ -15,7 +15,8 @@ import {
 import { createContext, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
-import { composerLayoutText, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
+import { contentWithPlacedAssets } from "@loom/agent/attachments";
+import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
@@ -194,7 +195,11 @@ const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
 }) as typeof CopilotChatAssistantMessage;
 
 function editableText(text: string): boolean {
-	return stripInlineAssetRefs(text).trim().length > 0 || inlineAssetIds(text).length > 0;
+	return splitStoredAssetText(text).some((part) => part.type === "asset" || part.text.trim().length > 0);
+}
+
+function placedChips(rows: readonly LoomUserAttachment[]): AssetRefAttachment[] {
+	return rows.filter((row): row is AssetRefAttachment => row.type === "asset_ref");
 }
 
 function InlineEdit({
@@ -215,7 +220,7 @@ function InlineEdit({
 	const openAsset = useOpenAsset();
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const editorRef = useRef<HTMLDivElement>(null);
-	const chips = inlineAssetIds(text).length > 0;
+	const chips = splitStoredAssetText(text).some((part) => part.type === "asset");
 	const [draft, setDraft] = useState(text);
 	const fit = (el: HTMLTextAreaElement) => {
 		el.style.height = "auto";
@@ -322,7 +327,7 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 	const transcript = useContext(TranscriptContext);
 	const text = messageText(props.message);
 	const entryId = entryIds.get(props.message.id);
-	const assets = messageAssets(entryId, transcript);
+	const assets = displayAssetRefs(text, messageAssets(entryId, transcript));
 	const inline = assets.length > 0 || inlineAssetIds(text).length > 0;
 	const canEdit = Boolean(branch && entryId && editableText(text) && !branch.busy);
 	if (branch && entryId && branch.editingId === entryId) {
@@ -334,9 +339,10 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 				error={branch.error}
 				onCancel={() => branch.cancelEdit()}
 				onSend={(next) => {
-					void branch.commitEdit(next).then((installed) => {
+					const body = contentWithPlacedAssets(next, placedChips(assets));
+					void branch.commitEdit(body).then((installed) => {
 						if (!installed) return;
-						branch.deliver(installed, next);
+						branch.deliver(installed, body);
 					});
 				}}
 			/>
@@ -593,21 +599,21 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	branch?.bindDeliver((installed, text) => {
 		agent.setMessages(installed);
 		void (async () => {
-			const ids = [...new Set(inlineAssetIds(text))];
-			if (ids.length > 0 && threadId && typeof window.loom.stageComposerAssets === "function") {
-				const chips = ids.flatMap((id) => {
+			const chips = placedChips([
+				...assetRefBlocks(text),
+				...inlineAssetIds(text).flatMap((id) => {
 					const known = assetsRef.current.find((asset) => asset.assetId === id) ?? lookupComposerAsset(id);
-					return known ? [known] : [];
-				});
-				if (chips.length > 0) {
-					try {
-						await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
-					} catch (cause) {
-						setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
-					}
+					return known && known.type === "asset_ref" ? [known] : [];
+				}),
+			]);
+			if (chips.length > 0 && threadId && typeof window.loom.stageComposerAssets === "function") {
+				try {
+					await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				} catch (cause) {
+					setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
 				}
 			}
-			onSubmitMessage?.(text);
+			onSubmitMessage?.(contentWithPlacedAssets(text, chips));
 		})();
 	});
 
@@ -699,7 +705,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	deliverRef.current = (submitted) => {
 		void (async () => {
 			const raw = (editorRef.current ? readInlineEditor(editorRef.current) : submitted).replaceAll("\u200b", "");
-			const text = stripInlineAssetRefs(raw).trim() || inlineAssetIds(raw).length > 0 ? raw : "";
+			const text = editableText(raw) ? raw : "";
 			const assetPayload = assetsRef.current;
 			if (!text && assetPayload.length === 0) return;
 			if (assetPayload.length > 0 && typeof window.loom.stageComposerAssets !== "function") {
@@ -721,17 +727,18 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			}
 			setAssets([]);
 			setImageError(null);
+			const body = contentWithPlacedAssets(text, placedChips(assetPayload));
 			if (!isRunning || !threadId) {
-				onSubmitMessage?.(text || "\u200b");
+				onSubmitMessage?.(body || "\u200b");
 				onChange?.("");
 				return;
 			}
-			const seen = visible.filter((message) => message.role === "user" && messageText(message) === text).length;
-			const visibleText = stripInlineAssetRefs(text).trim();
+			const seen = visible.filter((message) => message.role === "user" && messageText(message) === body).length;
+			const visibleText = stripInlineAssetRefs(body).trim();
 			const label = visibleText || assetPayload.map((asset) => asset.path.split("/").pop() || asset.path).join(", ");
 			try {
-				await window.loom.followUp(threadId, text);
-				setQueued((items) => [...items, { text, label, seen }]);
+				await window.loom.followUp(threadId, body);
+				setQueued((items) => [...items, { text: body, label, seen }]);
 				onChange?.("");
 			} catch {
 				setAssets(assetPayload);

@@ -1,5 +1,6 @@
 import type { Message, ToolCall } from "@ag-ui/core";
 import type { LoomTranscriptMessage } from "@loom/agent";
+import { splitStoredAssetText } from "@loom/agent/composer-asset";
 
 export function transcriptText(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -113,15 +114,25 @@ function textOf(message: Message): string {
 	return transcriptText(content).replaceAll("\u200b", "");
 }
 
+/** Words plus placed asset ids, so a stored `<asset_ref>` block matches an older composer marker. */
+function comparableUserText(text: string): string {
+	const parts = splitStoredAssetText(text);
+	const words = parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("").replace(/\s+/g, " ").trim();
+	const ids = parts.flatMap((part) => part.type === "asset" ? [part.assetId] : []).sort();
+	return `${words}\0${ids.join(",")}`;
+}
+
 function fingerprint(message: Message): string {
-	return `${message.role}:${textOf(message)}`;
+	const text = textOf(message);
+	return `${message.role}:${message.role === "user" ? comparableUserText(text) : text}`;
 }
 
 function overlayComposerImages(stored: Message[], live: Message[]): Message[] {
 	return live.map((message, index) => {
 		const prior = stored[index];
 		if (!prior || prior.role !== "user" || message.role !== "user") return message;
-		if (!Array.isArray(prior.content) || textOf(prior) !== textOf(message)) return message;
+		if (comparableUserText(textOf(prior)) !== comparableUserText(textOf(message))) return message;
+		if (textOf(prior) === textOf(message) && !Array.isArray(prior.content)) return message;
 		return { ...message, content: prior.content };
 	});
 }

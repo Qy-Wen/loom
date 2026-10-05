@@ -12,7 +12,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import { EVAL_FILES } from "../../core/evals/library.ts";
-import { promptAttachments, type AssetRefAttachment } from "../src/attachments.ts";
+import { contentWithPlacedAssets, implicitSelectionAttachments, type AssetRefAttachment } from "../src/attachments.ts";
 import { HarnessSessionManager } from "../src/harness-session-manager.ts";
 import type { LoomAgentEvent, LoomTool } from "../src/types.ts";
 import { answerFromEvents, callsFromEvents, scoreAgentTask, type AgentScore } from "./agent-score.ts";
@@ -217,8 +217,8 @@ async function runTask(
 	const events: LoomAgentEvent[] = [];
 	const before = await manager.getSession(session.id);
 	const chips: AssetRefAttachment[] = (task.chips ?? []).map((chip) => ({ type: "asset_ref", ...chip }));
-	const attachments = promptAttachments(chips, task.selection ?? null, before.messages);
-	await manager.prompt(session.id, task.user, {
+	const attachments = implicitSelectionAttachments(chips, task.selection ?? null, before.messages);
+	await manager.prompt(session.id, contentWithPlacedAssets(task.user, chips), {
 		attachments: attachments.length > 0 ? attachments : undefined,
 		onEvent: (event) => events.push(event),
 	});

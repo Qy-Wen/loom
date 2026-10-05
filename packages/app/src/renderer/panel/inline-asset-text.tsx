@@ -1,5 +1,6 @@
 import type { LoomUserAttachment } from "@loom/agent";
-import { splitInlineAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
+import { formatAssetRefBlock } from "@loom/agent/attachments";
+import { splitStoredAssetText } from "@loom/agent/composer-asset";
 import { AssetThumbnail, createAssetThumbnailElement } from "../assets/asset-thumbnail.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
 
@@ -49,7 +50,7 @@ export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRe
 
 /** User text with library chips in the positions the user placed them. */
 export function InlineMessageBody({ text, assets }: { text: string; assets: readonly LoomUserAttachment[] }): React.JSX.Element {
-	const parts = splitInlineAssetRefs(text);
+	const parts = splitStoredAssetText(text);
 	const used = new Set<string>();
 	const nodes: React.JSX.Element[] = [];
 	parts.forEach((part, index) => {
@@ -71,8 +72,9 @@ export function InlineMessageBody({ text, assets }: { text: string; assets: read
 }
 
 export function readInlineEditor(root: HTMLElement): string {
-	const text = serializeInline(root).replace(/\n+$/, "");
-	if (stripInlineAssetRefs(text).trim() === "" && !text.includes("\u2060")) return "";
+	const text = serializeInline(root).replace(/\n+$/, "").replaceAll("\u200b", "");
+	const parts = splitStoredAssetText(text);
+	if (!parts.some((part) => part.type === "asset" || part.text.trim())) return "";
 	return text;
 }
 
@@ -127,7 +129,12 @@ function serializeInline(node: Node): string {
 		if (!(child instanceof HTMLElement)) continue;
 		const assetId = child.dataset.assetId;
 		if (assetId) {
-			out += `\u2060loom-asset:${assetId}\u2060`;
+			const known = lookupComposerAsset(assetId);
+			const path = child.dataset.assetPath || known?.path;
+			const assetType = child.dataset.assetType || known?.assetType;
+			if (path && (assetType === "image" || assetType === "video" || assetType === "audio" || assetType === "text" || assetType === "other")) {
+				out += formatAssetRefBlock({ type: "asset_ref", assetId, path, assetType });
+			}
 			lineStart = false;
 			continue;
 		}
@@ -168,6 +175,8 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	chip.className = "session-asset-chip";
 	chip.contentEditable = "false";
 	chip.dataset.assetId = asset.assetId;
+	chip.dataset.assetPath = asset.path;
+	chip.dataset.assetType = asset.assetType;
 	const label = assetLabel(asset);
 	chip.append(createAssetThumbnailElement(chipPreview(asset)));
 	const name = document.createElement("button");
@@ -205,7 +214,7 @@ export function paintInlineEditor(root: HTMLElement, text: string, assets: reado
 	const chips = [...root.querySelectorAll<HTMLElement>("[data-asset-id]")];
 	root.replaceChildren();
 	for (const chip of chips) chip.remove();
-	for (const part of splitInlineAssetRefs(text)) {
+	for (const part of splitStoredAssetText(text)) {
 		if (part.type === "text") {
 			if (part.text) root.append(document.createTextNode(part.text));
 			continue;

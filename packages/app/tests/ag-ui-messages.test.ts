@@ -111,6 +111,24 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 	assert.equal(mergeChatMessages(reloaded, streaming).at(-1)?.content, "looking");
 });
 
+test("mergeChatMessages treats a stored asset block and the composer marker as one turn", () => {
+	const stored = toAgUiMessages([
+		{
+			role: "user",
+			content: "<asset_ref>\npath: clips/hero.png\nasset_id: asset-1\ntype: image\n</asset_ref>\n\n这是啥",
+		},
+		{ role: "assistant", content: "一只金毛" },
+	]);
+	const live = [
+		{ id: "ck-1", role: "user" as const, content: "\u2060loom-asset:asset-1\u2060这是啥" },
+		{ id: "ck-2", role: "assistant" as const, content: "一只金毛" },
+	];
+	const merged = mergeChatMessages(stored, live);
+	assert.equal(merged.length, 2);
+	assert.match(String(merged[0] && "content" in merged[0] ? merged[0].content : ""), /<asset_ref>/);
+	assert.equal(merged[1] && "content" in merged[1] ? merged[1].content : "", "一只金毛");
+});
+
 test("chat error message ids are distinct from model replies", () => {
 	assert.equal(isChatErrorMessageId("loom-error-1"), true);
 	assert.equal(isChatErrorMessageId("msg-1"), false);

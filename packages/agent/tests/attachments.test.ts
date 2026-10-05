@@ -1,13 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	contentWithPlacedAssets,
 	foldUserMessageForLlm,
 	foldUserText,
+	implicitSelectionAttachments,
 	latestUiSelectionAssetId,
 	promptAttachments,
 	uiSelectionToAttach,
 } from "../src/attachments.ts";
-import { assetRefMarker, composerLayoutText, parseComposerAssetInputs, storedAssetRefs } from "../src/composer-asset.ts";
+import { assetRefBlocks, assetRefMarker, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/composer-asset.ts";
 import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
 const fields = {
@@ -112,6 +114,8 @@ describe("composer asset chips", () => {
 
 	it("layout text is one space per chip, without the hidden id", () => {
 		assert.equal(composerLayoutText(`hello${assetRefMarker(chip.assetId)}world`), "hello world");
+		const block = "<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>";
+		assert.equal(composerLayoutText(`hello${block}world`), "hello world");
 	});
 });
 
@@ -143,6 +147,39 @@ describe("foldUserMessageForLlm", () => {
 	it("still folds an old stored chip as ui_selection", () => {
 		const text = `看一下${assetRefMarker(selection.assetId)}这段`;
 		assert.match(foldUserText(text, [selection]), /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
+	});
+
+	it("stores a placed chip in the text and keeps a different selection on attachments", () => {
+		const other = { type: "ui_selection" as const, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
+		const stored = contentWithPlacedAssets(text, [chip]);
+		assert.match(stored, /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/asset_ref>\n\n这段$/);
+		assert.equal(stored.includes("\u2060"), false);
+		assert.deepEqual(implicitSelectionAttachments([chip], other, []), [other]);
+		assert.deepEqual(implicitSelectionAttachments([chip], fields, []), []);
+		assert.equal(contentWithPlacedAssets(stored, [chip]), stored);
+		assert.equal(stripInlineAssetRefs(stored).replace(/\s+/g, " ").trim(), "看一下 这段");
+		const inline = `看一下<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>这段`;
+		assert.equal(contentWithPlacedAssets(inline, [chip]), inline);
+		const moved = { ...chip, path: "clips/moved.mp4" };
+		assert.equal(
+			contentWithPlacedAssets(inline, [moved]),
+			`看一下<asset_ref>\npath: clips/moved.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>这段`,
+		);
+		const sent = foldUserMessageForLlm({ role: "user", content: stored, attachments: [other] });
+		assert.equal(String(sent.content).match(/<asset_ref>/g)?.length, 1);
+		assert.match(String(sent.content), /<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>$/);
+		assert.deepEqual(splitStoredAssetText(stored), [
+			{ type: "text", text: "看一下" },
+			{ type: "asset", assetId: chip.assetId },
+			{ type: "text", text: "这段" },
+		]);
+		assert.deepEqual(assetRefBlocks(stored), [chip]);
+		assert.deepEqual(displayAssetRefs(stored, [other]).map((row) => row.assetId), [chip.assetId, other.assetId]);
+		assert.deepEqual(
+			splitStoredAssetText(text).map((part) => part.type === "asset" ? part.assetId : part.text),
+			["看一下", chip.assetId, "这段"],
+		);
 	});
 
 	it("appends a selection that was not placed in the text", () => {

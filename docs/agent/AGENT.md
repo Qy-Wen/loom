@@ -153,7 +153,7 @@ Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-ada
 
 > Transcript contract for system-injected context (UI selection first). Chat bubbles show `content` only. Prefix cache requires the folded Chat `content` for a stored user message to be identical on every later request.
 
-Do not put changing UI state in the system prompt (that busts the entire prefix). Do not add a `get_selection` tool. Do not persist the fold inside `content` and then strip it for display.
+Do not put changing UI state in the system prompt (that busts the entire prefix). Do not add a `get_selection` tool. A file the user placed in the composer is stored already expanded in `content`. The library highlight stays on `attachments` and is folded only when building the Chat request.
 
 ### 5.1 Stored user message
 
@@ -177,22 +177,28 @@ Harness's persisted user message keeps a sidecar field. After send, that user ro
 
 When nothing is selected and the composer has no chips, omit `attachments`. Do not store a `none` placeholder.
 
-Snapshot at send time from the current library highlight (`assetId`, workspace-relative `path`, `assetType`) as one `ui_selection` row. Graph edges are not a selection. The composer can also attach library files explicitly: drag one from the library onto the input, right-click a file and choose Add to chat, or use the + menu (Library file). External file and Finder drops copy into `Inbox/` first (or reuse the asset if the file is already in the library), then attach the same chip. Each chip is an `asset_ref` row, keyed by `assetId`, with a library-relative `path`. Same fields as `ui_selection`; different `type`. At send, look up the live library row by `assetId` and write the current `path` / `assetType`. Older rows stay frozen. Do not put timestamps or other per-request noise in the payload.
+Snapshot at send time from the current library highlight (`assetId`, workspace-relative `path`, `assetType`) as one `ui_selection` row. Graph edges are not a selection. The composer can also place library files explicitly: drag one from the library onto the input, right-click a file and choose Add to chat, or use the + menu (Library file). External file and Finder drops copy into `Inbox/` first (or reuse the asset if the file is already in the library), then place the same chip. At send, look up the live library row by `assetId` and write the current `path` / `assetType` into the block. Older rows stay frozen. Do not put timestamps or other per-request noise in the payload.
 
-A chip sits in the text, including between words. `content` stores that position, and the fold writes the `<asset_ref>` block there. Older transcripts that stored chips as `ui_selection` still fold as `<ui_selection>`. An implicit library highlight that was not already in the chips is appended after the text as `<ui_selection>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
+A chip sits in the text, including between words. The composer writes the `<asset_ref>` block at that position, and that string is what gets stored and sent. The chip is not also an `attachments` row. The bubble parses the block back into a chip. Older transcripts that stored an invisible marker plus an `asset_ref` or `ui_selection` row still fold at request time; a chip that was stored as `ui_selection` still folds as `<ui_selection>`. An implicit library highlight that was not already in the chips is appended after the text as `<ui_selection>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
+
+```
+看一下<asset_ref>
+path: clips/hero.mp4
+asset_id: a1b2c3d4-…
+type: video
+</asset_ref>这段
+```
 
 ### 5.2 Fold for the Chat API
 
-Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. Injections never become a second text part.
+Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. A placed chip is already that block inside `content`, so the fold leaves it where it sits and only appends a leftover `<ui_selection>`. Injections never become a second text part.
 
 A composer picture that is already on a stored user row’s `content` still goes out as `image_url`. New attaches from the composer are library chips, not image parts. The agent reads pixels only if it calls `describe_image` / `describe_video` / `describe_audio` or `read`. If a historical image part is rejected, Loom shows that error and moves the active path back to before the message.
 
 The fold is deterministic. The HTTP body never includes `attachments`.
 
 ```
-把这个处理一下
-
-<asset_ref>
+把这个处理一下<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video

@@ -247,6 +247,22 @@ describe("LoomAgUiAgent", () => {
 		assert.equal(activities[0]?.content.delayMs, 1000);
 	});
 
+	it("stores a placed chip in the prompt text, and a different selection on attachments", async () => {
+		const chip = { type: "asset_ref" as const, assetId: "asset-1", path: "clips/hero.mp4", assetType: "video" as const };
+		const manager = new FakeManager();
+		const adapter = new LoomAgUiAgent(
+			manager.asManager(),
+			() => ({ assetId: "asset-2", path: "notes/brief.md", assetType: "text" }),
+			undefined,
+			async () => [chip],
+		);
+		await lastValueFrom(adapter.run(runInput("thread-1", `看一下\u2060loom-asset:${chip.assetId}\u2060这段`)).pipe(toArray()));
+		const prompt = manager.prompts[0];
+		assert.match(prompt?.text ?? "", /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/asset_ref>\n\n这段$/);
+		assert.deepEqual(prompt?.attachments, [{ type: "ui_selection", assetId: "asset-2", path: "notes/brief.md", assetType: "text" }]);
+		assert.equal(manager.records.get("thread-1")?.title.includes("<asset_ref>"), false);
+	});
+
 	it("passes the UI selection once, then skips the same asset", async () => {
 		const selection = { assetId: "asset-1", path: "clips/hero.mp4", assetType: "video" as const };
 		let current: UiSelectionFields = selection;

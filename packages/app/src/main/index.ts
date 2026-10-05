@@ -16,7 +16,8 @@ import {
 import {
 	HarnessSessionManager,
 	parseAgentPermissionLevel,
-	promptAttachments,
+	contentWithPlacedAssets,
+	implicitSelectionAttachments,
 	type LoomAgentOptions,
 	type ToolGateDecision,
 } from "@loom/agent";
@@ -475,9 +476,10 @@ function registerIpc(): void {
 		const session = await agentManager.getSession(id);
 		const images = await takeComposerImages(id);
 		const chips = await takeLiveComposerAssets(id);
-		const attachments = promptAttachments(chips, getUiSelection(), session.messages);
-		const body = text.replaceAll("\u200b", "");
-		await agentManager.followUp(id, body.trim() ? body : "", {
+		const attachments = implicitSelectionAttachments(chips, getUiSelection(), session.messages);
+		const raw = text.replaceAll("\u200b", "");
+		const body = contentWithPlacedAssets(raw.trim() ? raw : "", chips);
+		await agentManager.followUp(id, body, {
 			...(attachments.length > 0 ? { attachments } : {}),
 			...(images.length > 0 ? { images } : {}),
 		});

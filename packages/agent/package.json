@@ -6,6 +6,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./composer-image": "./src/composer-image.ts",
+    "./attachments": "./src/attachments.ts",
     "./composer-asset": "./src/composer-asset.ts",
     "./tool-permission": "./src/tool-permission.ts"
   },

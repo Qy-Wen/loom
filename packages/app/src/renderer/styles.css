@@ -1663,10 +1663,6 @@ body.resizing-columns {
 	-webkit-user-select: none;
 }
 
-.session-user-bubble .session-asset-chip {
-	background: #fff;
-}
-
 .session-asset-chip .asset-thumbnail {
 	width: 22px;
 	height: 22px;
