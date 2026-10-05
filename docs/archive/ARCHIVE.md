@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Auto memory
+
+Facts for the open library live in `<library>/.agents/memory/MEMORY.md`. The folder is created on open and is not indexed. A session reads the note once, after the skills catalog, and keeps that snapshot. `auto_memory` adds, replaces, and removes entries immediately. About 2,000 characters; past that, the tool returns an error and the current entries. Procedures stay in skills. Retrieve and create specialists do not get the tool. See [MEMORY](../agent/MEMORY.md).
+
+---
+
 ## Multi-agent
 
 The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and inspects the library. `run_create_agent` generates from a brief via MCP and does not search. Asset ids go in the brief when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. See [AGENT](../AGENT.md).
