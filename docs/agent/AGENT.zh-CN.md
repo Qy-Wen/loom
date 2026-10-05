@@ -3,7 +3,7 @@
 # Agent 技术方案（Agent Architecture）
 
 > 记录 Loom 的 Agent 层怎么实现：引入边界、解耦、合并上游更新、user 消息 attachments、前端交互协议（AG-UI）。
-> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，运行时边界见 [Pi Harness 接入范围](./PI-HARNESS.md)，评测见 [EVALS.md](./EVALS.zh-CN.md)，待办见 [TODO.md](./TODO.zh-CN.md)。
+> 产品定位见 [PRODUCT.md](./PRODUCT.zh-CN.md) §6/§7，评测见 [EVALS.md](./EVALS.zh-CN.md)，待办见 [TODO.md](./TODO.zh-CN.md)。
 
 ---
 
@@ -31,7 +31,7 @@ pi 的 agent 相关代码分三层，Loom 的处理方式不同：
 
 `pi-ai` 不 vendor 的原因：体量大且七成是厂商适配、拖着一堆重量级 SDK（`@anthropic-ai/sdk` / `openai` / `@google/genai` / `@aws-sdk/*`）。
 
-**模型接缝：** `HarnessSessionManager` 用 `pi-ai` 构建当前 Chat 模型，再交给 `AgentHarness` lane。Loom 沿用 OpenAI 兼容的 Chat 设置，不 vendor `pi-ai`；见 [Pi Harness 接入范围](./PI-HARNESS.md)。
+**模型接缝：** `HarnessSessionManager` 用 `pi-ai` 构建当前 Chat 模型，再交给 `AgentHarness` lane。Loom 沿用 OpenAI 兼容的 Chat 设置，不 vendor `pi-ai`。
 
 ---
 
@@ -146,6 +146,7 @@ Loom 业务代码 → @loom/agent
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，挂在生成专职上。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
 - **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
+- **记忆：** `<library>/.agents/memory/MEMORY.md` 记下这个库的事实。打开库时建好这个目录。`.agents` 不收成素材。会话把笔记读进系统提示一次，放在 skill 目录后面。`memory`（`add` / `replace` / `remove`）立刻写文件；这一轮会话的系统提示保持冻结。检索专职和生成专职没有这个工具。见 [MEMORY](./MEMORY.zh-CN.md)。
 
 ---
 

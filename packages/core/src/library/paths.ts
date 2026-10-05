@@ -42,8 +42,14 @@ export class LibraryPaths {
 		return value === ".loom" || value.startsWith(`.loom${sep}`);
 	}
 
+	/** Agent skills and memory. Loaded from disk, not indexed as assets. */
+	isAgentsPath(absolutePath: string): boolean {
+		const value = relative(this.root, resolve(absolutePath));
+		return value === ".agents" || value.startsWith(`.agents${sep}`);
+	}
+
 	/** Files that are implementation/OS metadata rather than user assets. */
 	isIgnoredPath(absolutePath: string): boolean {
-		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store";
+		return this.isLoomPath(absolutePath) || this.isAgentsPath(absolutePath) || basename(absolutePath) === ".DS_Store";
 	}
 }

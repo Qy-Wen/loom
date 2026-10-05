@@ -21,6 +21,7 @@ import { randomUUID } from "node:crypto";
 import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
+import { createMemoryTool, ensureLibraryMemoryDir, readLibraryMemory, systemPromptWithMemory } from "./library-memory.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import {
 	CREATE_AGENT_TOOL,
@@ -203,7 +204,14 @@ export class HarnessSessionManager {
 		const workspace = this.workspace;
 		if (!workspace) return [];
 		const parent = partitionLibraryTools(this.options.tools ?? []).parent;
-		return [...workspace.tools, ...parent.map(toHarnessTool), this.specialistTool("retrieve"), this.specialistTool("create")];
+		const root = this.root;
+		return [
+			...workspace.tools,
+			...parent.map(toHarnessTool),
+			...(root ? [createMemoryTool(root)] : []),
+			this.specialistTool("retrieve"),
+			this.specialistTool("create"),
+		];
 	}
 
 	private specialistTool(role: SpecialistRole): AgentHarnessTool<ExecutionToolContext> {
@@ -280,6 +288,7 @@ export class HarnessSessionManager {
 			await this.closeLibrary();
 			this.root = resolve(root);
 			this.workspace = createWorkspaceTools(this.root);
+			await ensureLibraryMemoryDir(this.root);
 			const loaded = await loadLibrarySkills(this.workspace.toolContext.env, this.root, CONTEXT);
 			this.skills = loaded.skills;
 			for (const diagnostic of loaded.diagnostics) {
@@ -591,13 +600,14 @@ export class HarnessSessionManager {
 			const { models, model } = buildChatModels(chat);
 			const workspace = this.workspace!;
 			const tools = this.harnessTools();
+			const memorySnapshot = await readLibraryMemory(this.root!);
 			const { harness, open: pending } = await AgentHarness.create({
 				session: open.session,
 				models,
 				model,
 				tools,
 				toolContext: workspace.toolContext,
-				systemPrompt: () => systemPromptWithSkills(this.options.systemPrompt ?? "", this.skills),
+				systemPrompt: () => systemPromptWithMemory(systemPromptWithSkills(this.options.systemPrompt ?? "", this.skills), memorySnapshot),
 				resources: { skills: this.skills },
 				toProviderMessages,
 				compaction: DEFAULT_COMPACTION_SETTINGS,

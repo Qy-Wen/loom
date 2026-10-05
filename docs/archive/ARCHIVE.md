@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Multi-agent
+
+The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and inspects the library. `run_create_agent` generates from a brief via MCP and does not search. Asset ids go in the brief when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. See [AGENT](../AGENT.md).
+
+---
+
 ## Human in the loop
 
 Write and edit wait for Approve / Skip on the tool card. Chat footer: Basic, Standard (default), Full. Full intercepts no tools. Stored in app userData, not the library. FFmpeg and MCP are not gated. See [AGENT](../AGENT.md) §6.3e.
@@ -29,7 +35,7 @@ On library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`).
 The composer attaches library files as inline chips. Each chip is an `asset_ref` (`assetId`, library-relative `path`, `assetType`). The library highlight when the user sends is a separate `ui_selection` with the same fields. Click a chip or a `search_assets` / `inspect_asset` `asset_id` to select that file without leaving the Agent tab. See [AGENT](../AGENT.md) §5 and §6.3b.
 
 - Drag from the library, right-click Add to chat, or + → Library file. External file and Finder drops copy into `Inbox/` first (reuse if already in the library). New composer attaches are chips, not `image_url`; historical image parts on `content` still send as `image_url`.
-- Fold writes `<asset_ref>` where the chip sat. A leftover highlight is `<ui_selection>`. At send, look up the live path by `assetId`. Older rows stay frozen. Next-turn highlight skip looks only at the latest `ui_selection`.
+- Fold writes `<asset_ref>` where the chip sat. A leftover highlight is appended inside `<system-reminder>` as `<ui_selection>`. The bubble does not show that reminder. At send, look up the live path by `assetId`. Older rows stay frozen. Next-turn highlight skip looks only at the latest `ui_selection`.
 
 ---
 
