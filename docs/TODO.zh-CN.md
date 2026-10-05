@@ -10,9 +10,9 @@
 
 ## 第一步：进程沙箱
 
-高风险工作（bash、FFmpeg、生成任务）和机器其余部分隔开。
+bash 和 FFmpeg 跑在沙箱里。生成任务走 MCP，不套这层。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 
-- [ ] 隔离这些进程，避免换一条 argv 就碰到不该碰的文件
+- [x] 隔离 bash 和 FFmpeg，避免换一条 argv 就碰到范围外的文件
 
 ---
 

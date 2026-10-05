@@ -280,7 +280,7 @@ export function SidePanel({
 							<LibraryAssetsProvider assets={assets}>
 							<AgentPermissionProvider>
 							<div className="agent-chat">
-								<ToolCallViews />
+								<ToolCallViews libraryRoot={libraryRoot} />
 								<SessionChat
 									threadId={sessionId}
 									messages={sessionMessages}

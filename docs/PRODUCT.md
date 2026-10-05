@@ -199,7 +199,7 @@ Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md).
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full; Full intercepts no tools. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. A process sandbox is deferred.
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Permission and the process sandbox: [PERMISSION](./AGENT/PERMISSION.md).
 
 ### 6.1 FFmpeg — first Agent tools
 
@@ -346,12 +346,12 @@ Introduce these progressively when real scenarios require them:
 
 - **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
 - **Multi-Agent:** done — chat Agent plus retrieve and create specialists. Independent calls in one turn run together. See [AGENT](./AGENT.md).
-- **Sandboxing:** isolate high-risk tools and generation jobs.
+- **Sandboxing:** bash and FFmpeg are in. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./AGENT/PERMISSION.md).
 - **LangGraph:** orchestrate complex and recoverable creative workflows.
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.
 - **Evals:** done — Agent behavior, tool calls, and retrieval quality. See [EVALS](./AGENT/EVALS.md).
 - **Chat asset refs:** done — attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5.
 - **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
-- **Human in the loop:** done — confirm `write` / `edit` (and optionally `bash`) from the chat footer. See [AGENT](./AGENT.md) §6.3e.
+- **Human in the loop:** done — Standard confirms `write` / `edit` outside the open library; Basic also confirms `bash` and the FFmpeg tools that write. See [PERMISSION](./AGENT/PERMISSION.md).
 - **Observability:** record run traces, tool calls, latency, and token usage.

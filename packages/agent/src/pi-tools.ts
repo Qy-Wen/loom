@@ -1,4 +1,4 @@
-/** Native Pi harness tools. cwd follows the open library; paths are otherwise unrestricted. */
+/** Native Pi harness tools. cwd is the open library. bash is sandboxed; read, edit, and write stay in-process. */
 import {
 	createBashTool,
 	createEditTool,
@@ -8,6 +8,7 @@ import {
 	type ExecutionToolContext,
 } from "#vendor/pi-agent";
 import { NodeExecutionEnv } from "#vendor/pi-agent/node";
+import { prepareSandboxedBash } from "@loom/core/sandbox";
 import { Type } from "@earendil-works/pi-ai";
 import { processReadImage } from "./read-image.ts";
 import type { LoomTool, LoomToolContentPart, LoomToolResult } from "./types.ts";
@@ -21,7 +22,12 @@ export interface WorkspaceTools {
 export function createWorkspaceTools(cwd = process.cwd()): WorkspaceTools {
 	const toolContext = { env: new NodeExecutionEnv({ cwd }) };
 	return {
-		tools: [createReadTool({ imageProcessor: processReadImage }), createBashTool(), createEditTool(), createWriteTool()],
+		tools: [
+			createReadTool({ imageProcessor: processReadImage }),
+			createBashTool({ prepare: (execution) => prepareSandboxedBash(execution) }),
+			createEditTool(),
+			createWriteTool(),
+		],
 		toolContext,
 		setCwd(next) {
 			toolContext.env.cwd = next;

@@ -212,12 +212,16 @@ describe("LoomAgUiAgent", () => {
 			EventType.TEXT_MESSAGE_END,
 			EventType.TOOL_CALL_START,
 			EventType.TOOL_CALL_ARGS,
+			EventType.ACTIVITY_SNAPSHOT,
+			EventType.ACTIVITY_SNAPSHOT,
 			EventType.TOOL_CALL_END,
 			EventType.TOOL_CALL_RESULT,
 			EventType.RUN_FINISHED,
 		]);
 		assert.equal((events[3] as unknown as { toolCallName: string }).toolCallName, "write");
 		assert.equal((events[4] as unknown as { delta: string }).delta, '{"path":"note.md","content":"hi"}');
+		assert.deepEqual((events[5] as unknown as { content: unknown }).content, { toolCallId: "call-1", pending: true });
+		assert.deepEqual((events[6] as unknown as { content: unknown }).content, { toolCallId: "call-1", pending: false });
 	});
 
 	it("maps retries and tool progress to activity rows that clear when the step ends", async () => {

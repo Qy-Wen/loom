@@ -26,6 +26,9 @@ importers:
       '@earendil-works/pi-telemetry':
         specifier: 0.85.1
         version: 0.85.1
+      '@loom/core':
+        specifier: workspace:*
+        version: link:../core
       '@silvia-odwyer/photon-node':
         specifier: 0.3.4
         version: 0.3.4
@@ -57,6 +60,9 @@ importers:
       '@ag-ui/core':
         specifier: 1.0.1
         version: 1.0.1(zod@3.25.76)
+      '@anthropic-ai/sandbox-runtime':
+        specifier: 0.0.78
+        version: 0.0.78
       '@copilotkit/react-core':
         specifier: 1.77.0
         version: 1.77.0(@cfworker/json-schema@4.1.1)(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(graphql@16.14.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)(zod@3.25.76)
@@ -151,6 +157,9 @@ importers:
 
   packages/core:
     dependencies:
+      '@anthropic-ai/sandbox-runtime':
+        specifier: 0.0.78
+        version: 0.0.78
       '@ladybugdb/wasm-core':
         specifier: 0.20.4
         version: 0.20.4
@@ -328,6 +337,11 @@ packages:
 
   '@antfu/install-pkg@2.1.0':
     resolution: {integrity: sha512-sdg9NxU3zR4Mnawfbc/x6GB5Wf17WYud5qOuEuxXjaKpYpMkISSJEjItGebXJ2bQ4DIcly4NYH23mtkGJjvKUw==}
+
+  '@anthropic-ai/sandbox-runtime@0.0.78':
+    resolution: {integrity: sha512-YAIcybXTp7MZkBjasnkR1E3yxnf7u6kUkyW0vZrtsAZ9tyJGMaugWETmquPZs0YvW0sR0VnZeMfS0gsN/wQiVQ==}
+    engines: {node: '>=20.11.0'}
+    hasBin: true
 
   '@anthropic-ai/sdk@0.123.0':
     resolution: {integrity: sha512-Y9oX9mPNGZClHQOFqrWRk43Srcu/UHuPq3rfxxOq7JgW0gi+lJA2MAOK4Ul3k/+AUrwRWFJvd0tK3oC0Pw25dw==}
@@ -1227,6 +1241,9 @@ packages:
     resolution: {integrity: sha512-oxMK4vllB9RK5NQ2l1pq1IfOf2AvnEuj/vYGDj0H2nMtmtZpKtCwt/l00GEO6xjGfpBNAvjovvYdCm50dRQkpQ==}
     engines: {node: '>=20'}
     hasBin: true
+
+  '@pondwader/socks5-server@1.0.10':
+    resolution: {integrity: sha512-bQY06wzzR8D2+vVCUoBsr5QS2U6UgPUQRmErNwtsuI6vLcyRKkafjkr3KxbtGFf9aBBIV2mcvlsKD1UYaIV+sg==}
 
   '@preact/signals-core@1.14.4':
     resolution: {integrity: sha512-HNB6HYeYKhQbJ1aKl+YRjrS4+QWHLKX6qKoUsfS/m0vqzsVaEBiZiaKbG/e+NKk2ch5ALQr/ihWaMHxiCuuWHA==}
@@ -2301,6 +2318,10 @@ packages:
 
   comma-separated-tokens@2.0.3:
     resolution: {integrity: sha512-Fu4hJdvzeylCfQPp9SGWidpzrMs7tTrlu6Vb8XGaRGck8QSNZJJp538Wrb60Lax4fPwR64ViY468OIUTbRlGZg==}
+
+  commander@12.1.0:
+    resolution: {integrity: sha512-Vw8qHK3bZM9y/P10u3Vib8o/DdkvA2OtPtZvD871QKjy74Wj1WSKFILMPRPSdUSx5RFK1arlJzEtA4PkFgnbuA==}
+    engines: {node: '>=18'}
 
   commander@15.0.0:
     resolution: {integrity: sha512-z67u4ZhzCL/Tydu1lJARtEZYWbWaN7oYLHbsuzocr6y4N6WZAagG3RQ4FW61V1/0+jImpj293XfrcYnd1qxtPg==}
@@ -3607,6 +3628,10 @@ packages:
     resolution: {integrity: sha512-dRB78srN/l6gqWulah9SrxeYnxeddIG30+GOqK/9OlLVyLg3HPnr6SqOWTWOXKRwC2eGYCkZ59NNuSgvSrpgOA==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
+  node-forge@1.4.0:
+    resolution: {integrity: sha512-LarFH0+6VfriEhqMMcLX2F7SwSXeWwnEAJEsYm5QKWchiVYVvJyV9v7UDvUv+w5HO23ZpQTXDv/GxdDdMyOuoQ==}
+    engines: {node: '>= 6.13.0'}
+
   node-releases@2.0.56:
     resolution: {integrity: sha512-x0InOIyzgdk+eyaWaRJFH5snEtiImgBgblZ2CyPrLmqqcuMQkEvcDPHbzqbD8eDsSeJbVOjn+crzyzHaM4D+/A==}
     engines: {node: '>=18'}
@@ -4685,6 +4710,13 @@ snapshots:
     dependencies:
       package-manager-detector: 1.8.0
       tinyexec: 1.3.1
+
+  '@anthropic-ai/sandbox-runtime@0.0.78':
+    dependencies:
+      '@pondwader/socks5-server': 1.0.10
+      commander: 12.1.0
+      node-forge: 1.4.0
+      zod: 3.25.76
 
   '@anthropic-ai/sdk@0.123.0(zod@3.25.76)':
     dependencies:
@@ -5831,6 +5863,8 @@ snapshots:
     dependencies:
       playwright: 1.63.0
 
+  '@pondwader/socks5-server@1.0.10': {}
+
   '@preact/signals-core@1.14.4': {}
 
   '@protobuf-ts/protoc@2.11.1': {}
@@ -6969,6 +7003,8 @@ snapshots:
       delayed-stream: 1.0.0
 
   comma-separated-tokens@2.0.3: {}
+
+  commander@12.1.0: {}
 
   commander@15.0.0: {}
 
@@ -8746,6 +8782,8 @@ snapshots:
       data-uri-to-buffer: 4.0.1
       fetch-blob: 3.2.0
       formdata-polyfill: 4.0.10
+
+  node-forge@1.4.0: {}
 
   node-releases@2.0.56: {}
 

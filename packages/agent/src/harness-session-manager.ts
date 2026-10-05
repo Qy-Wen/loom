@@ -23,6 +23,7 @@ import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProv
 import { systemPromptWithInstructions } from "./agent-instructions.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
 import { createAutoMemoryTool, ensureLibraryAutoMemoryDir, readLibraryAutoMemory, systemPromptWithAutoMemory } from "./library-auto-memory.ts";
+import { setProcessSandboxRoot } from "@loom/core/sandbox";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import {
 	CREATE_AGENT_TOOL,
@@ -38,10 +39,10 @@ import {
 	DEFAULT_AGENT_PERMISSION,
 	ToolApprovalQueue,
 	parseAgentPermissionLevel,
-	toolNeedsApproval,
 	type AgentPermissionLevel,
 	type ToolGateDecision,
 } from "./tool-permission.ts";
+import { workspaceWriteNeedsApproval } from "./workspace-path.ts";
 import type {
 	LoomAgentEvent,
 	LoomAgentOptions,
@@ -168,6 +169,10 @@ export class HarnessSessionManager {
 		return this.toolApprovals.resolve(toolCallId, decision);
 	}
 
+	private toolCallNeedsGate(toolName: string, args: unknown): boolean {
+		return workspaceWriteNeedsApproval(this.permissionLevel, toolName, this.root, args);
+	}
+
 	private sessionIdForRun(runId: string): string | undefined {
 		for (const [sessionId, run] of this.running) {
 			if (run.operationId === runId) return sessionId;
@@ -182,7 +187,7 @@ export class HarnessSessionManager {
 		const sessionId = this.sessionIdForRun(event.runId);
 		const run = sessionId ? this.running.get(sessionId) : undefined;
 		if (!run || !sessionId) {
-			if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
+			if (!this.toolCallNeedsGate(event.toolName, event.args)) return undefined;
 			return { block: { reason: "Tool confirmation is unavailable." } };
 		}
 		return this.gateTool(sessionId, run.emit, event, context);
@@ -194,7 +199,7 @@ export class HarnessSessionManager {
 		event: { toolCallId: string; toolName: string; args: Record<string, unknown> },
 		context: { abortSignal?: AbortSignal },
 	): Promise<{ block?: { reason: string } } | undefined> {
-		if (!toolNeedsApproval(this.permissionLevel, event.toolName)) return undefined;
+		if (!this.toolCallNeedsGate(event.toolName, event.args)) return undefined;
 		emit({ type: "tool_pending", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
 		const decision = await this.toolApprovals.wait(sessionId, event.toolCallId, context.abortSignal);
 		if (decision === "approve") return undefined;
@@ -289,6 +294,7 @@ export class HarnessSessionManager {
 		return this.serializeTransition(async () => {
 			await this.closeLibrary();
 			this.root = resolve(root);
+			setProcessSandboxRoot(this.root);
 			this.workspace = createWorkspaceTools(this.root);
 			await ensureLibraryAutoMemoryDir(this.root);
 			const loaded = await loadLibrarySkills(this.workspace.toolContext.env, this.root, CONTEXT);

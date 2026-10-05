@@ -4,7 +4,8 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./sandbox": "./src/sandbox/process-sandbox.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -13,6 +14,7 @@
     "eval:retrieval:live": "node --experimental-strip-types --env-file=../../.env evals/retrieval.ts --live"
   },
   "dependencies": {
+    "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@ladybugdb/wasm-core": "0.20.4",
     "better-sqlite3": "13.0.3",
     "chokidar": "4.0.3",

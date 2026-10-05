@@ -221,6 +221,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 					let retryError: string | undefined;
 					const toolProgress = new Set<string>();
 					const startedTools = new Set<string>();
+					const gatedTools = new Set<string>();
 					const startToolCall = (toolCallId: string, name: string, args: unknown) => {
 						if (startedTools.has(toolCallId)) return;
 						startedTools.add(toolCallId);
@@ -244,6 +245,16 @@ export class LoomAgUiAgent extends AbstractAgent {
 							messageId: "loom-retry",
 							activityType: "loom.retry",
 							content,
+						} as BaseEvent);
+					};
+					const toolGate = (toolCallId: string, pending: boolean) => {
+						if (pending) gatedTools.add(toolCallId);
+						else if (!gatedTools.delete(toolCallId)) return;
+						emit({
+							type: EventType.ACTIVITY_SNAPSHOT,
+							messageId: `loom-gate-${toolCallId}`,
+							activityType: "loom.tool_gate",
+							content: { toolCallId, pending },
 						} as BaseEvent);
 					};
 					const toolActivity = (toolCallId: string, content: { name: string; text: string; hidden: boolean }) => {
@@ -335,6 +346,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 
 								case "tool_pending":
 									startToolCall(event.toolCallId, event.name, event.args);
+									toolGate(event.toolCallId, true);
 									break;
 
 								case "tool_start":
@@ -347,6 +359,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 									break;
 
 								case "tool_end": {
+									toolGate(event.toolCallId, false);
 									if (toolProgress.delete(event.toolCallId)) {
 										toolActivity(event.toolCallId, { name: event.name, text: "", hidden: true });
 									}

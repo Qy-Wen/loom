@@ -1,4 +1,6 @@
+import { useEffect } from "react";
 import type { ReactActivityMessageRenderer } from "@copilotkit/react-core/v2";
+import { setToolGatePending } from "./tool-gate-pending.ts";
 
 type RetryContent = {
 	phase: "wait" | "running" | "done";
@@ -12,6 +14,11 @@ type ToolProgressContent = {
 	name: string;
 	text: string;
 	hidden: boolean;
+};
+
+type ToolGateContent = {
+	toolCallId: string;
+	pending: boolean;
 };
 
 const acceptContent = {
@@ -47,6 +54,13 @@ function RetryActivity({ content }: { content: RetryContent }): React.JSX.Elemen
 	);
 }
 
+function ToolGateActivity({ content }: { content: ToolGateContent }): null {
+	useEffect(() => {
+		setToolGatePending(content.toolCallId, content.pending);
+	}, [content.toolCallId, content.pending]);
+	return null;
+}
+
 function ToolProgressActivity({ content }: { content: ToolProgressContent }): React.JSX.Element | null {
 	if (content.hidden || !content.text) return null;
 	return (
@@ -68,5 +82,10 @@ export const runActivityRenderers: ReactActivityMessageRenderer<unknown>[] = [
 		activityType: "loom.tool_progress",
 		content: acceptContent as ReactActivityMessageRenderer<ToolProgressContent>["content"],
 		render: ({ content }) => <ToolProgressActivity content={content as ToolProgressContent} />,
+	},
+	{
+		activityType: "loom.tool_gate",
+		content: acceptContent as ReactActivityMessageRenderer<ToolGateContent>["content"],
+		render: ({ content }) => <ToolGateActivity content={content as ToolGateContent} />,
 	},
 ];

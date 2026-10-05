@@ -4,6 +4,8 @@ import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
 import { basename, extname, join, resolve } from "node:path";
 import { Readable } from "node:stream";
+import { setProcessSandboxEnabled } from "@loom/core/sandbox";
+import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
 	type EmbeddingProvider,
@@ -32,6 +34,7 @@ import { createFfmpegTools } from "./ffmpeg-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { AgentInstructionsStore } from "./agent-instructions-store.ts";
+import { AgentSandboxStore } from "./agent-sandbox-store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
@@ -129,6 +132,7 @@ let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
 let agentPermission: AgentPermissionStore | null = null;
 let agentInstructions: AgentInstructionsStore | null = null;
+let agentSandbox: AgentSandboxStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let mcpReady = false;
@@ -238,6 +242,12 @@ function createWindow(): void {
 	} else {
 		void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 	}
+}
+
+async function applyProcessSandbox(): Promise<void> {
+	if (!agentSandbox) throw new Error("Settings store not started");
+	const setting = await agentSandbox.load();
+	await setProcessSandboxEnabled(processSandboxActive(setting, agentManager.getPermissionLevel()));
 }
 
 function registerIpc(): void {
@@ -517,6 +527,17 @@ function registerIpc(): void {
 		agentManager.setInstructions(saved);
 		return saved;
 	});
+	ipcMain.handle(IPC.getAgentSandbox, async () => {
+		if (!agentSandbox) throw new Error("Settings store not started");
+		return agentSandbox.load();
+	});
+	ipcMain.handle(IPC.saveAgentSandbox, async (_event, enabled: unknown) => {
+		if (!agentSandbox) throw new Error("Settings store not started");
+		if (typeof enabled !== "boolean") throw new Error("Sandbox setting must be on or off.");
+		const saved = await agentSandbox.save(enabled);
+		await applyProcessSandbox();
+		return saved;
+	});
 	ipcMain.handle(IPC.getAgentStats, async () => {
 		if (!agentStats) throw new Error("Settings store not started");
 		return agentStats.view();
@@ -534,6 +555,7 @@ function registerIpc(): void {
 		if (!agentPermission) throw new Error("Permission store not started");
 		const level = await agentPermission.save(parseAgentPermissionLevel(raw));
 		agentManager.setPermissionLevel(level);
+		await applyProcessSandbox();
 		return level;
 	});
 	ipcMain.handle(IPC.resolveToolGate, (_event, toolCallId: unknown, decision: unknown) => {
@@ -624,6 +646,8 @@ app
 		agentManager.setPermissionLevel(await agentPermission.load());
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
 		agentManager.setInstructions(await agentInstructions.load());
+		agentSandbox = new AgentSandboxStore(join(app.getPath("userData"), "agent-sandbox.json"));
+		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
