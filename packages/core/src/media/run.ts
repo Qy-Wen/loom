@@ -1,4 +1,5 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import { posixCommand, processSandboxEnabled, sandboxedArgv } from "../sandbox/process-sandbox.ts";
 import type { MediaProgram } from "./binaries.ts";
 import { resolveMediaBinary } from "./binaries.ts";
 
@@ -16,29 +17,72 @@ export interface RunMediaProcessResult {
 }
 
 /**
- * Single process entry for bundled ffmpeg/ffprobe. A later sandbox replaces this
- * function without changing callers.
+ * Single process entry for bundled ffmpeg/ffprobe. A turned-on sandbox wraps the
+ * child. Callers do not change.
  */
 export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
 	const signal = options.signal;
 	if (signal?.aborted) return Promise.reject(abortError(options.program));
+	if (!processSandboxEnabled()) return runDirect(options);
+	return runSandboxed(options);
+}
 
+function runDirect(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
 	const binary = resolveMediaBinary(options.program);
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
+	const child = spawn(binary, options.args, {
+		cwd: options.cwd,
+		stdio: ["ignore", "pipe", "pipe"],
+		windowsHide: true,
+	});
+	return watchChild(child, options, timeoutMs);
+}
 
+async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+	const signal = options.signal;
+	const binary = resolveMediaBinary(options.program);
+	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
+	let wrapped: Awaited<ReturnType<typeof sandboxedArgv>>;
+	try {
+		wrapped = await sandboxedArgv(posixCommand([binary, ...options.args]), options.cwd);
+	} catch (error) {
+		if (signal?.aborted) throw abortError(options.program);
+		throw error;
+	}
+	if (signal?.aborted) throw abortError(options.program);
+	const [command, ...args] = wrapped.argv;
+	if (!command) throw new Error("Sandbox refused to start: the sandbox returned no command.");
+
+	const child = spawn(command, args, {
+		cwd: wrapped.cwd,
+		env: wrapped.env,
+		shell: false,
+		detached: process.platform !== "win32",
+		stdio: ["ignore", "pipe", "pipe"],
+		windowsHide: true,
+	});
+	return watchChild(child, options, timeoutMs);
+}
+
+function watchChild(
+	child: ChildProcess,
+	options: RunMediaProcessOptions,
+	timeoutMs: number,
+): Promise<RunMediaProcessResult> {
+	const signal = options.signal;
+	const stdoutStream = child.stdout;
+	const stderrStream = child.stderr;
+	if (!stdoutStream || !stderrStream) {
+		stopChild(child);
+		return Promise.reject(new Error(`${options.program} produced no output pipes`));
+	}
 	return new Promise((resolve, reject) => {
-		const child = spawn(binary, options.args, {
-			cwd: options.cwd,
-			stdio: ["ignore", "pipe", "pipe"],
-			windowsHide: true,
-		});
-
 		let stdout = "";
 		let stderr = "";
 		let settled = false;
 
 		const onAbort = () => {
-			child.kill();
+			stopChild(child);
 		};
 
 		const finish = (error?: Error) => {
@@ -52,7 +96,7 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 		};
 
 		const timer = setTimeout(() => {
-			child.kill();
+			stopChild(child);
 			finish(new Error(`${options.program} timed out`));
 		}, timeoutMs);
 
@@ -61,12 +105,12 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 			else signal.addEventListener("abort", onAbort, { once: true });
 		}
 
-		child.stdout.setEncoding("utf8");
-		child.stderr.setEncoding("utf8");
-		child.stdout.on("data", (chunk: string) => {
+		stdoutStream.setEncoding("utf8");
+		stderrStream.setEncoding("utf8");
+		stdoutStream.on("data", (chunk: string) => {
 			stdout += chunk;
 		});
-		child.stderr.on("data", (chunk: string) => {
+		stderrStream.on("data", (chunk: string) => {
 			stderr += chunk;
 		});
 		child.on("error", (error) => finish(error));
@@ -75,6 +119,19 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 			else finish(new Error(formatProcessError(options.program, code, stderr)));
 		});
 	});
+}
+
+function stopChild(child: ChildProcess): void {
+	const pid = child.pid;
+	if (pid && process.platform !== "win32") {
+		try {
+			process.kill(-pid, "SIGTERM");
+			return;
+		} catch {
+			// Already exited, or not a process-group leader.
+		}
+	}
+	child.kill();
 }
 
 function abortError(program: MediaProgram): Error {

@@ -9,7 +9,7 @@
 
 ## 1. Goal and positioning
 
-- Loom's Agent is a **creative-asset Agent**. The chat Agent talks, plans, and transforms (`read` / `edit` / `write` / `bash`, FFmpeg, describe, embed). `run_retrieve_agent` and `run_create_agent` start short-lived specialists. Skills load from the open library's `.agents/skills/`. A process sandbox is deferred; see [TODO](./TODO.md).
+- Loom's Agent is a **creative-asset Agent**. The chat Agent talks, plans, and transforms (`read` / `edit` / `write` / `bash`, FFmpeg, describe, embed). `run_retrieve_agent` and `run_create_agent` start short-lived specialists. Skills load from the open library's `.agents/skills/`. Permission and the process sandbox: [PERMISSION](./PERMISSION.md).
 - Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
 - One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
 - Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
@@ -144,7 +144,7 @@ Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-ada
 - **Library tools:** the chat Agent keeps FFmpeg, `describe_*`, and `embed_asset`. `search_assets` and `inspect_asset` belong to the retrieve specialist. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
 - **Specialists:** `run_retrieve_agent` (search, inspect, `read`) and `run_create_agent` (MCP tools named `server__tool`, plus `write` / `bash`). Each call gets a fresh in-memory transcript and one goal string. Include asset ids in that string when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. Child tool cards appear in the same turn; the parent receives only the summary. The retrieve summary names a file with an `<asset_ref>` block copied from the tool result. Stop and the permission gate apply to the child.
 - **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` on the create specialist. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
-- **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here. Settings → Instructions (`AGENTS.md` in app user data) is appended at the end when a session starts, and stays frozen for that session. Empty instructions add nothing. Specialists do not receive them.
+- **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here. Settings → Agent instructions (`AGENTS.md` in app user data) are appended at the end when a session starts, and stay frozen for that session. Empty instructions add nothing. Specialists do not receive them.
 - **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
 - **Auto memory:** `<library>/.agents/memory/MEMORY.md` holds facts for this library. The folder is created on open. `.agents` is not indexed. The session reads the note once into the system prompt, after the skills catalog. `auto_memory` (`add` / `replace` / `remove`) writes the file immediately; that session's prompt stays frozen. Retrieve and create specialists do not get the tool. See [MEMORY](./MEMORY.md).
 
@@ -328,9 +328,7 @@ Harness provides the runtime; Loom maps existing behavior and defers only the li
 
 **e. Tool permission**
 
-- Chat footer dropdown: **Basic**, **Standard** (default), **Full**. Stored in app userData `agent-permission.json`, not in the library.
-- `basic` waits on `write` / `edit` / `bash`. `standard` waits on `write` / `edit`. `full` intercepts nothing, including in-flight waits (they continue). FFmpeg and MCP are not gated.
-- Pi `before_tool` (hook id `loom.tool_permission`) emits `tool_pending` and pauses until Approve or Skip on that tool card. Stop aborts the wait. Evals set `full` so they cannot hang.
+See [PERMISSION](./PERMISSION.md).
 
 ---
 
@@ -348,6 +346,6 @@ In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat a
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
 - **User attachments:** A placed chip is an `<asset_ref>` block in the user message `content`. The library highlight (`ui_selection`) stays on `attachments` and is folded into that string at request time, inside a `<system-reminder>`. External files are copied into `Inbox/` first. Historical image parts on `content` still send as `image_url`. A chip, a tool-result file name, and an `<asset_ref>` in an assistant reply select that asset when its id is in the open library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
-- **Tool permission:** three levels in the chat footer. Default **Standard** confirms `write` / `edit`; **Full** intercepts no tools.
+- **Tool permission and sandbox:** [PERMISSION](./PERMISSION.md).
 - **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand. Write/edit (and optionally bash) wait for approval unless the session is on Full.
+- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand. Standard asks before `write` / `edit` outside the open library. Basic also asks before `bash` and the FFmpeg tools that write a file. `get_media_info` does not ask. Full does not ask.

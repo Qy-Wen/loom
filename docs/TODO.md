@@ -10,9 +10,9 @@
 
 ## Step 1: Process sandbox
 
-High-risk work (bash, FFmpeg, generation jobs) runs isolated from the rest of the machine.
+bash and FFmpeg run in a sandbox. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./AGENT/PERMISSION.md).
 
-- [ ] Isolate those processes so a bad argv cannot touch files outside the intended scope
+- [x] Isolate bash and FFmpeg so a bad argv cannot touch files outside that scope
 
 ---
 

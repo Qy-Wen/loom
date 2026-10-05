@@ -3,24 +3,24 @@ import type { AgentStatsView } from "../../shared/agent-stats.ts";
 import { emptyMcpServerDraft, type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSlotId } from "../../shared/model-settings.ts";
 import { instructionCharacterCount, INSTRUCTIONS_CHAR_LIMIT } from "../../shared/agent-instructions.ts";
-import { SettingsInstructions } from "./settings-instructions.tsx";
+import { SettingsAgent } from "./settings-agent.tsx";
 import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsModels } from "./settings-models.tsx";
 import { SettingsStats } from "./settings-stats.tsx";
 
-type SettingsTab = "models" | "mcp" | "instructions" | "stats";
+type SettingsTab = "models" | "mcp" | "agent" | "stats";
 
 const TABS: { id: SettingsTab; label: string }[] = [
 	{ id: "models", label: "Models" },
 	{ id: "mcp", label: "MCP" },
-	{ id: "instructions", label: "Instructions" },
+	{ id: "agent", label: "Agent" },
 	{ id: "stats", label: "Stats" },
 ];
 
 const LEAD: Record<SettingsTab, string> = {
-	models: "Turn a slot on to ping it. Save writes Models, MCP, and Instructions together; it does not connect. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
-	mcp: "Same fields as a Cursor mcp.json: a name, then command + args, or a URL. Turn it on to connect. Save writes Models, MCP, and Instructions together.",
-	instructions: "Standing instructions for the chat agent, saved in the app as AGENTS.md. The next session appends them to the system prompt. An empty box adds nothing. This session keeps the text it started with.",
+	models: "Turn a slot on to ping it. Save writes Models, MCP, and Agent together; it does not connect. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
+	mcp: "Same fields as a Cursor mcp.json: a name, then command + args, or a URL. Turn it on to connect. Save writes Models, MCP, and Agent together.",
+	agent: "Process sandbox and standing instructions. Save writes Models, MCP, and Agent together.",
 	stats: "Lifetime Chat usage for this app. Prompt-cache hit rate is the number that matters for prefix stability.",
 };
 
@@ -34,6 +34,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
 	const [stats, setStats] = useState<AgentStatsView | null>(null);
 	const [instructions, setInstructions] = useState<string | null>(null);
+	const [sandboxEnabled, setSandboxEnabled] = useState<boolean | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const closeOnBackdrop = useRef(false);
@@ -56,11 +57,12 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 	useEffect(() => {
 		void (async () => {
 			try {
-				const [models, mcpView, statsView, instructionsText] = await Promise.all([
+				const [models, mcpView, statsView, instructionsText, sandbox] = await Promise.all([
 					window.loom.getModelSettings(),
 					window.loom.getMcpSettings(),
 					window.loom.getAgentStats(),
 					window.loom.getAgentInstructions(),
+					window.loom.getAgentSandbox(),
 				]);
 				setDraft({
 					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled, contextWindow: models.chat.contextWindow },
@@ -72,6 +74,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				setMcp(mcpView);
 				setStats(statsView);
 				setInstructions(instructionsText);
+				setSandboxEnabled(sandbox);
 			} catch (cause) {
 				setError(cause instanceof Error ? cause.message : String(cause));
 			}
@@ -97,7 +100,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 	}
 
 	async function saveAll(): Promise<void> {
-		if (!draft || !mcp || instructions === null || saving) return;
+		if (!draft || !mcp || instructions === null || sandboxEnabled === null || saving) return;
 		if (instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT) {
 			setError(`Instructions are over ${INSTRUCTIONS_CHAR_LIMIT} characters. Shorten them, then save.`);
 			return;
@@ -109,6 +112,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				window.loom.saveModelSettings(draft),
 				window.loom.saveMcpSettings(mcp.servers),
 				window.loom.saveAgentInstructions(instructions),
+				window.loom.saveAgentSandbox(sandboxEnabled),
 			]);
 			onClose();
 		} catch (cause) {
@@ -184,8 +188,15 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				{tab === "mcp" && (mcp
 					? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} />
 					: <div className="empty">Loading…</div>)}
-				{tab === "instructions" && (instructions !== null
-					? <SettingsInstructions value={instructions} onChange={setInstructions} />
+				{tab === "agent" && (instructions !== null && sandboxEnabled !== null
+					? (
+						<SettingsAgent
+							sandboxEnabled={sandboxEnabled}
+							instructions={instructions}
+							onSandboxChange={setSandboxEnabled}
+							onInstructionsChange={setInstructions}
+						/>
+					)
 					: <div className="empty">Loading…</div>)}
 				{tab === "stats" && (stats
 					? <SettingsStats stats={stats} resetting={saving} onReset={() => void resetStats()} />
@@ -205,7 +216,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					<button
 						className="primary-button"
 						type="submit"
-						disabled={saving || !draft || !mcp || instructions === null || instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT}
+						disabled={saving || !draft || !mcp || instructions === null || sandboxEnabled === null || instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT}
 					>
 						Save
 					</button>

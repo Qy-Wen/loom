@@ -199,7 +199,7 @@ Level 2 先做切过的 **Markdown** embedding。规则见 [TEXT](./RAG/TEXT.zh-
 
 ## 6. Agent 工具与创作层
 
-Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。对话权限为 Basic、Standard（默认）、Full；Full 不拦截任何工具。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。进程沙箱以后再加。
+Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工作区工具（`read` / `edit` / `write` / `bash`）。对话权限为 Basic、Standard（默认）、Full。创作运行时（ComfyUI 以及以后的）以 MCP server 挂上，不为每个 provider 写第一方客户端。权限和进程沙箱见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 
 ### 6.1 FFmpeg — 第一批 Agent Tools
 
@@ -346,12 +346,12 @@ POST /graph/query
 
 - **Skills：** 已做 — 从 `<library>/.agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./AGENT.zh-CN.md)。
 - **多 Agent**：已做 — 主对话加上检索和生成专职。同一轮里互不依赖的调用一起跑。见 [AGENT](./AGENT.zh-CN.md)。
-- **沙箱**：隔离执行高风险工具与生成任务。
+- **沙箱**：bash 和 FFmpeg 已进。生成任务走 MCP，不套这层。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
 - **MCP 设置页**：已做 — 设置 → MCP tab。
 - **Evals**：已做 — 评测 Agent、工具调用与检索效果。见 [EVALS](./AGENT/EVALS.zh-CN.md)。
 - **对话资产引用：** 已做 — 输入框可贴库内资产；对话里的 `asset_id` 引用可点，并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5。
 - **从某条消息分支：** 已做 — 当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
-- **Human in the loop：** 已做 — 对话底部确认 `write` / `edit`（以及可选的 `bash`）。见 [AGENT](./AGENT.zh-CN.md) §6.3e。
+- **Human in the loop：** 已做 — Standard 确认库外的 `write` / `edit`；Basic 也确认 `bash` 和会写文件的 FFmpeg 工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 - **可观测性**：记录运行轨迹、工具调用、耗时与 token。

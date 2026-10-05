@@ -21,6 +21,7 @@ import {
 } from "./names.ts";
 import { LibraryPaths } from "./paths.ts";
 import { reconcileOpenAssets, type ReconcileDiskFile } from "./reconcile.ts";
+import { releaseProcessSandbox, setProcessSandboxRoot } from "../sandbox/process-sandbox.ts";
 import { LibraryWatcher, type LibraryFileEvent } from "./watcher.ts";
 
 type LibraryListener = (change: LibraryChange) => void;
@@ -58,17 +59,24 @@ export class Library {
 
 		this.paths = new LibraryPaths(rootPath);
 		this.folders.clear();
-		await mkdir(join(this.paths.root, ".agents", "memory"), { recursive: true });
-		await this.metadata.open(this.paths);
-		await this.syncFromDisk(false);
+		const opened = this.paths.root;
+		setProcessSandboxRoot(opened);
+		try {
+			await mkdir(join(opened, ".agents", "memory"), { recursive: true });
+			await this.metadata.open(this.paths);
+			await this.syncFromDisk(false);
 
-		const watcher = new LibraryWatcher(this.paths);
-		this.watcher = watcher;
-		await watcher.start((event) => this.enqueueFileEvent(event));
+			const watcher = new LibraryWatcher(this.paths);
+			this.watcher = watcher;
+			await watcher.start((event) => this.enqueueFileEvent(event));
 
-		const snapshot = await this.getSnapshot();
-		this.emit({ type: "reset", snapshot });
-		return snapshot;
+			const snapshot = await this.getSnapshot();
+			this.emit({ type: "reset", snapshot });
+			return snapshot;
+		} catch (error) {
+			await releaseProcessSandbox(opened);
+			throw error;
+		}
 	}
 
 	async getSnapshot(): Promise<LibrarySnapshot> {
@@ -369,11 +377,13 @@ export class Library {
 	}
 
 	async close(): Promise<void> {
+		const opened = this.paths?.root;
 		await this.stopWatcher();
 		await this.updateQueue;
 		this.paths = null;
 		this.folders.clear();
 		await this.metadata.close();
+		if (opened) await releaseProcessSandbox(opened);
 	}
 
 	private async stopWatcher(): Promise<void> {

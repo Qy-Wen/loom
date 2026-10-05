@@ -41,7 +41,11 @@ test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "Models" })).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "MCP" })).toBeVisible();
+	await expect(dialog.getByRole("tab", { name: "Agent" })).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "Stats" })).toBeVisible();
+	await dialog.getByRole("tab", { name: "Agent" }).click();
+	await expect(dialog.getByRole("switch", { name: "Process sandbox" })).toBeChecked();
+	await expect(dialog.getByRole("textbox", { name: "Agent instructions" })).toBeVisible();
 	await dialog.getByRole("tab", { name: "MCP" }).click();
 	await expect(dialog.getByRole("button", { name: "Add server" })).toBeVisible();
 	await dialog.getByRole("tab", { name: "Stats" }).click();

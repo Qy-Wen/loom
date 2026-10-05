@@ -1,15 +1,16 @@
 import { useState } from "react";
 import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
-import { toolNeedsApproval, type ToolGateDecision } from "@loom/agent/tool-permission";
+import { toolCallNeedsApproval, toolPathArg, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
 import { useAgentPermission } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
+import { useToolGatePending } from "./tool-gate-pending.ts";
 
 /** Register a chat renderer so tool results are visible in CopilotChat. */
-export function ToolCallViews(): null {
+export function ToolCallViews({ libraryRoot }: { libraryRoot: string | null }): null {
 	useDefaultRenderTool({
-		render: (props) => <ToolCallCard {...props} />,
-	}, []);
+		render: (props) => <ToolCallCard {...props} libraryRoot={libraryRoot} />,
+	}, [libraryRoot]);
 	return null;
 }
 
@@ -21,19 +22,24 @@ function ToolCallCard({
 	parameters,
 	result,
 	toolCallId,
+	libraryRoot,
 }: {
 	name: string;
 	status: string;
 	parameters?: unknown;
 	result?: unknown;
 	toolCallId?: string;
+	libraryRoot: string | null;
 }) {
 	const openAsset = useOpenAsset();
 	const { level } = useAgentPermission();
+	const gatePending = useToolGatePending(toolCallId);
 	const [open, setOpen] = useState(false);
 	const [acted, setActed] = useState(false);
 	const done = status === "complete";
-	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "") && toolNeedsApproval(level, name);
+	const pathGated = level === "standard" && (name === "write" || name === "edit");
+	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "")
+		&& (gatePending || (toolCallNeedsApproval(level, name, libraryRoot, parameters) && (!pathGated || toolPathArg(parameters) !== undefined)));
 	const refs = done ? assetRefsFromTool(name, result) : null;
 	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? result : undefined);
 	const faded = !open && hasMoreThanPreview(body);

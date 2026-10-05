@@ -9,7 +9,7 @@
 
 ## 1. 目标与定位
 
-- Loom 的 Agent 是**创作资产 Agent**。主对话负责说话、计划和变换（`read` / `edit` / `write` / `bash`、FFmpeg、describe、embed）。`run_retrieve_agent` 和 `run_create_agent` 各起一个短命专职。Skills 从当前库的 `.agents/skills/` 加载。进程沙箱以后再加，见 [TODO](./TODO.zh-CN.md)。
+- Loom 的 Agent 是**创作资产 Agent**。主对话负责说话、计划和变换（`read` / `edit` / `write` / `bash`、FFmpeg、describe、embed）。`run_retrieve_agent` 和 `run_create_agent` 各起一个短命专职。Skills 从当前库的 `.agents/skills/` 加载。权限和进程沙箱见 [PERMISSION](./PERMISSION.zh-CN.md)。
 - 素材库检索就是 RAG：Hybrid Search 返回文本段落（图 / 视频也是先写成字再切），Agent 用这些切片来回答或动手，而不是把整库塞进 prompt。见 [RAG](./RAG/RAG.zh-CN.md)。
 - 目标之一是**锻炼 agent 工程能力**，因此对 agent loop 采取「源码级引入 + 按需魔改」，而不是当黑盒 SDK 用。
 - 但只对**真正的核心**做源码级引入，基础设施（模型对接、provider）用现成 npm 包，避免被无关代码淹没。
@@ -144,7 +144,7 @@ Loom 业务代码 → @loom/agent
 - **素材库工具**：主对话保留 FFmpeg、`describe_*` 和 `embed_asset`。`search_assets` 与 `inspect_asset` 归检索专职。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
 - **专职**：`run_retrieve_agent`（检索、查看、`read`）和 `run_create_agent`（名为 `server__tool` 的 MCP，外加 `write` / `bash`）。每次调用只有一份内存里的新对话和一段任务文字。需要 `asset_id` 时写进这段文字。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。子工具卡片出现在同一轮里；父 Agent 只收到摘要。检索摘要用从工具结果抄来的 `<asset_ref>` 块点名文件。Stop 和权限确认同样作用于子 Agent。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，挂在生成专职上。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
-- **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。设置里的 Instructions（应用用户数据里的 `AGENTS.md`）在会话开始时接到末尾，这一轮保持冻结。空着就不加。专职拿不到这段。
+- **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。设置 → Agent 里的说明（应用用户数据里的 `AGENTS.md`）在会话开始时接到末尾，这一轮保持冻结。空着就不加。专职拿不到这段。
 - **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
 - **自动记忆：** `<library>/.agents/memory/MEMORY.md` 记下这个库的事实。打开库时建好这个目录。`.agents` 不收成素材。会话把笔记读进系统提示一次，放在 skill 目录后面。`auto_memory`（`add` / `replace` / `remove`）立刻写文件；这一轮会话的系统提示保持冻结。检索专职和生成专职没有这个工具。见 [MEMORY](./MEMORY.zh-CN.md)。
 
@@ -328,9 +328,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 
 **e) 工具权限**
 
-- 对话底部下拉：**Basic**、**Standard**（默认）、**Full**。存在应用 userData 的 `agent-permission.json`，不进库。
-- `basic` 拦截 `write` / `edit` / `bash`。`standard` 拦截 `write` / `edit`。`full` 不拦截任何工具，进行中的等待也会放行。FFmpeg 和 MCP 这一步不拦。
-- Pi `before_tool`（hook id `loom.tool_permission`）发出 `tool_pending`，工具卡片上 Approve / Skip 之后才继续。Stop 会取消这次等待。评测设成 `full`，避免挂死。
+见 [PERMISSION](./PERMISSION.zh-CN.md)。
 
 ---
 
@@ -348,6 +346,6 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
 - **User attachments**：主动放入的芯片是 user 消息 `content` 里的 `<asset_ref>` 块。库高亮（`ui_selection`）仍挂在 `attachments` 上，请求时再折进这段文字，包在 `<system-reminder>` 里。外部文件先拷进 `Inbox/`。历史上 `content` 里的图片部分仍按 `image_url` 发出。芯片、工具结果里的文件名，以及回答里的 `<asset_ref>`，在 id 属于当前素材库时会选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
-- **工具权限：** 对话底部三级。默认 **Standard** 确认 `write` / `edit`；**Full** 不拦截任何工具。
+- **工具权限和沙箱：** [PERMISSION](./PERMISSION.zh-CN.md)。
 - **Evals：** 压缩率、prompt-cache 命中率、仓内 Agent/工具金标、检索 Recall@k / nDCG。见 [EVALS.md](./EVALS.zh-CN.md)。
-- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。除非选 Full，否则 write/edit（以及可选的 bash）先等批准。
+- **当前范围**：生产聊天和新会话存储已切到 Harness；资产工具保留稳定调用 ID 和结构化结果。Stop 取消活跃操作，思考过程显示在聊天里。运行中 Enter 排入 followUp，该 run 在本可结束时继续。自动阈值压缩已开启。可以从历史提问分支。输入框可贴库内文件，对话里的资产引用可点。Skills 只把目录放进系统提示，模型按需 `read` `SKILL.md`。Standard 在库外的 `write` / `edit` 前先问。Basic 对 `bash` 和会写文件的 FFmpeg 工具也先问。`get_media_info` 不问。Full 不问。

@@ -48,6 +48,7 @@ describe("tool permission gate", () => {
 		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo" } });
 		try {
 			await manager.openLibrary(root);
+			manager.setPermissionLevel("basic");
 			const session = await manager.createSession();
 			const events: LoomAgentEvent[] = [];
 			let resolvePending!: (id: string) => void;
@@ -89,6 +90,7 @@ describe("tool permission gate", () => {
 		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo" } });
 		try {
 			await manager.openLibrary(root);
+			manager.setPermissionLevel("basic");
 			const session = await manager.createSession();
 			const events: LoomAgentEvent[] = [];
 			let resolvePending!: (id: string) => void;
@@ -108,6 +110,52 @@ describe("tool permission gate", () => {
 		} finally {
 			await manager.close();
 			await rm(root, { recursive: true, force: true });
+			await stop(server);
+		}
+	});
+
+	it("standard writes inside the library and waits outside it", { timeout: 20_000 }, async () => {
+		let next: "inside" | "outside" | "text" = "inside";
+		const outside = join(tmpdir(), `loom-tool-gate-outside-${Date.now()}.md`);
+		const server = createServer((_request, response) => {
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			if (next === "text") {
+				response.end(sseText("done"));
+				return;
+			}
+			const writing = next;
+			next = "text";
+			response.end(writeStream(writing === "inside" ? "inside.md" : outside, writing));
+		});
+		const baseUrl = await listen(server);
+		const root = await mkdtemp(join(tmpdir(), "loom-tool-gate-std-"));
+		const manager = new HarnessSessionManager({ chat: { baseUrl, apiKey: "test", model: "demo" } });
+		try {
+			await manager.openLibrary(root);
+			const session = await manager.createSession();
+			const insideEvents: LoomAgentEvent[] = [];
+			await manager.prompt(session.id, "write inside", { onEvent: (event) => insideEvents.push(event) });
+			assert.equal(insideEvents.some((event) => event.type === "tool_pending"), false);
+			assert.equal(await readFile(join(root, "inside.md"), "utf8"), "inside");
+
+			next = "outside";
+			const outsideEvents: LoomAgentEvent[] = [];
+			let resolvePending!: (id: string) => void;
+			const pending = new Promise<string>((resolve) => { resolvePending = resolve; });
+			const run = manager.prompt(session.id, "write outside", {
+				onEvent(event) {
+					outsideEvents.push(event);
+					if (event.type === "tool_pending") resolvePending(event.toolCallId);
+				},
+			});
+			assert.equal(manager.resolveToolGate(await pending, "reject"), true);
+			await run;
+			await assert.rejects(() => readFile(outside, "utf8"));
+			assert.ok(outsideEvents.some((event) => event.type === "tool_pending"));
+		} finally {
+			await manager.close();
+			await rm(root, { recursive: true, force: true });
+			await rm(outside, { force: true });
 			await stop(server);
 		}
 	});
