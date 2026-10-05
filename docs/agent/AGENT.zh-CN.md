@@ -142,7 +142,7 @@ Loom 业务代码 → @loom/agent
 
 - **工作区工具**：原生使用 Pi Harness 的 `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` 与 `NodeExecutionEnv`。`cwd` 是打开的素材库；相对路径和绝对路径都可以。`read` 把 JPEG、PNG、GIF、WebP 附给模型；边长超过 2000 或 base64 超过约 4.5MB 时先缩小。BMP 等先转成 PNG。
 - **素材库工具**：主对话保留 FFmpeg、`describe_*` 和 `embed_asset`。`search_assets` 与 `inspect_asset` 归检索专职。`search_assets` 是 RAG 的检索步：FTS 与子切片向量做 RRF，返回段落 + `asset_id`。
-- **专职**：`run_retrieve_agent`（检索、查看、`read`）和 `run_create_agent`（名为 `server__tool` 的 MCP，外加 `write` / `bash`）。每次调用只有一份内存里的新对话和一段任务文字。需要 `asset_id` 时写进这段文字。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。子工具卡片出现在同一轮里；父 Agent 只收到摘要。Stop 和权限确认同样作用于子 Agent。
+- **专职**：`run_retrieve_agent`（检索、查看、`read`）和 `run_create_agent`（名为 `server__tool` 的 MCP，外加 `write` / `bash`）。每次调用只有一份内存里的新对话和一段任务文字。需要 `asset_id` 时写进这段文字。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。子工具卡片出现在同一轮里；父 Agent 只收到摘要。检索摘要用从工具结果抄来的 `<asset_ref>` 块点名文件。Stop 和权限确认同样作用于子 Agent。
 - **MCP 客户端**：Main 读应用用户数据里的 `mcp.json`（或 `LOOM_MCP_CONFIG`），把工具注册成 `server__tool`，挂在生成专职上。设置页 MCP tab 改这份列表。任意 MCP server 都能挂；ComfyUI 只是其中一个例子。
 - **系统提示词**：打开的素材库根目录就是工作目录。跨轮保持稳定。界面当前选中不写进这里。
 - **Skills：** 打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。
@@ -181,6 +181,8 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 芯片排在文字里，可以插在词与词之间。输入框读出文字时就在这个位置写上 `<asset_ref>` 块，聊天消息和落盘的 `content` 都是这串字。不再另存一条 `attachments`。气泡把这块解析回芯片。旧 transcript 里若还有看不见的标记加上 `asset_ref` 或 `ui_selection` 行，请求时仍按原样折；存成 `ui_selection` 的芯片仍折成 `<ui_selection>`。没有出现在芯片里的库高亮，接在原文后面，写成 `<ui_selection>`。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
 
+回答里也可以有同一块，从工具结果里抄来。气泡只在这个 `asset_id` 属于当前素材库时画文件名按钮。对不上的块，以及还在往外流的半块，都保持文字。点击同样是在素材库里选中该资产。
+
 ```
 看一下<asset_ref>
 path: clips/hero.mp4
@@ -207,7 +209,7 @@ type: video
 
 剩下的库高亮用同样三个字段，包在 `<ui_selection>` 里。未选中：只折用户原文，不要拼 `<ui_selection>none</ui_selection>`。
 
-System prompt 加一句**不变**的规则：user 消息里可能有 `<asset_ref>`（输入框里贴的库文件）和 `<ui_selection>`（发送时素材库里选中的文件）；用户说「这个 / 它」又没点名时用它们；点了别的路径就听用户的。
+System prompt 加两句**不变**的规则。user 消息里可能有 `<asset_ref>`（输入框里贴的库文件）和 `<ui_selection>`（发送时素材库里选中的文件）；用户说「这个 / 它」又没点名时用它们；点了别的路径就听用户的。回答里点名工具结果中的库文件时，在该处写 `<asset_ref>`，path、`asset_id`、type 从结果里原样抄，不要编造。
 
 下一轮再快照库高亮。若与 transcript 里**最近一条** `ui_selection` 的 `assetId` 相同，本轮不挂这条 attachment、也不折——历史上还有那一块。先前的 `asset_ref` 即使是同一文件，也不压制下一轮的隐式 `ui_selection`。没有更早的 `ui_selection`，或换了文件，再按上面挂并折。旧行不改。同一轮的 tool 循环共用发送时那份快照。同一轮发送里，若芯片里已经有这个 `assetId`，就不再挂隐式 `ui_selection`。
 
@@ -329,7 +331,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
-- **User attachments**：库高亮（`ui_selection`）和输入框芯片（`asset_ref`）都挂在 user 的 `attachments` 上，以 `assetId` 为键。外部文件先拷进 `Inbox/`。`toProviderMessages` 把每条附件折成一段文字。历史上 `content` 里的图片部分仍按 `image_url` 发出。附件芯片以及 `search_assets` / `inspect_asset` 的引用会在素材库里选中该资产。
+- **User attachments**：主动放入的芯片是 user 消息 `content` 里的 `<asset_ref>` 块。库高亮（`ui_selection`）仍挂在 `attachments` 上，请求时再折进这段文字。外部文件先拷进 `Inbox/`。历史上 `content` 里的图片部分仍按 `image_url` 发出。芯片、工具结果里的文件名，以及回答里的 `<asset_ref>`，在 id 属于当前素材库时会选中该资产。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **工具权限：** 对话底部三级。默认 **Standard** 确认 `write` / `edit`；**Full** 不拦截任何工具。
 - **Evals：** 压缩率、prompt-cache 命中率、仓内 Agent/工具金标、检索 Recall@k / nDCG。见 [EVALS.md](./EVALS.zh-CN.md)。

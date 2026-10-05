@@ -142,7 +142,7 @@ Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-ada
 
 - **Workspace tools:** use Pi Harness's native `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work. `read` attaches JPEG, PNG, GIF, and WebP for the model, scaling anything over 2000px or about 4.5MB of base64. BMP and other decodable images are converted to PNG first.
 - **Library tools:** the chat Agent keeps FFmpeg, `describe_*`, and `embed_asset`. `search_assets` and `inspect_asset` belong to the retrieve specialist. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
-- **Specialists:** `run_retrieve_agent` (search, inspect, `read`) and `run_create_agent` (MCP tools named `server__tool`, plus `write` / `bash`). Each call gets a fresh in-memory transcript and one goal string. Include asset ids in that string when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. Child tool cards appear in the same turn; the parent receives only the summary. Stop and the permission gate apply to the child.
+- **Specialists:** `run_retrieve_agent` (search, inspect, `read`) and `run_create_agent` (MCP tools named `server__tool`, plus `write` / `bash`). Each call gets a fresh in-memory transcript and one goal string. Include asset ids in that string when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. Child tool cards appear in the same turn; the parent receives only the summary. The retrieve summary names a file with an `<asset_ref>` block copied from the tool result. Stop and the permission gate apply to the child.
 - **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` on the create specialist. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
 - **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here.
 - **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
@@ -181,6 +181,8 @@ Snapshot at send time from the current library highlight (`assetId`, workspace-r
 
 A chip sits in the text, including between words. The composer writes the `<asset_ref>` block at that position, and that string is what gets stored and sent. The chip is not also an `attachments` row. The bubble parses the block back into a chip. Older transcripts that stored an invisible marker plus an `asset_ref` or `ui_selection` row still fold at request time; a chip that was stored as `ui_selection` still folds as `<ui_selection>`. An implicit library highlight that was not already in the chips is appended after the text as `<ui_selection>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
 
+An assistant reply can contain the same block, copied from a tool result. The bubble draws the filename button only when that `asset_id` is in the open library. Any other block, including one that is still streaming, stays text. The click selects that asset.
+
 ```
 看一下<asset_ref>
 path: clips/hero.mp4
@@ -207,7 +209,7 @@ type: video
 
 A leftover library highlight uses the same three fields inside `<ui_selection>`. Empty: fold is the user text only. Do not append `<ui_selection>none</ui_selection>`.
 
-System prompt gets one **fixed** sentence: a user message may include `<asset_ref>` blocks for library files placed in the message, and a `<ui_selection>` block for the file selected in the library when they sent it; use those blocks for “this” / “the file” when they do not name a path; if they name a different path, prefer that.
+System prompt gets two **fixed** sentences. A user message may include `<asset_ref>` blocks for library files placed in the message, and a `<ui_selection>` block for the file selected in the library when they sent it; use those blocks for “this” / “the file” when they do not name a path; if they name a different path, prefer that. When the reply names a library file a tool result identified, write an `<asset_ref>` block there and copy that result’s path, `asset_id`, and type. Do not invent ids or paths.
 
 The next user turn snapshots the library highlight again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit that attachment and the fold — history still has that block. A prior `asset_ref` of the same file does not suppress the next implicit `ui_selection`. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot. On the same send, skip the implicit `ui_selection` when that `assetId` is already among the chips.
 
@@ -329,7 +331,7 @@ In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat a
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
-- **User attachments:** Library highlight (`ui_selection`) and composer chips (`asset_ref`) live on the user row as `attachments`, keyed by `assetId`. External files are copied into `Inbox/` first. `toProviderMessages` folds every attachment into one Chat text string. Historical image parts on `content` still send as `image_url`. Attachment chips and `search_assets` / `inspect_asset` refs select that asset in the library.
+- **User attachments:** A placed chip is an `<asset_ref>` block in the user message `content`. The library highlight (`ui_selection`) stays on `attachments` and is folded into that string at request time. External files are copied into `Inbox/` first. Historical image parts on `content` still send as `image_url`. A chip, a tool-result file name, and an `<asset_ref>` in an assistant reply select that asset when its id is in the open library.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Tool permission:** three levels in the chat footer. Default **Standard** confirms `write` / `edit`; **Full** intercepts no tools.
 - **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).

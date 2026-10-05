@@ -1714,6 +1714,10 @@ body.resizing-columns {
 	outline-offset: 1px;
 }
 
+.assistant-asset-raw {
+	white-space: pre-wrap;
+}
+
 .asset-ref {
 	min-width: 0;
 	max-width: 180px;

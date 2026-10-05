@@ -31,6 +31,7 @@ const AGENT_EVAL_SYSTEM_PROMPT =
 	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids when the task needs them. You do not have search_assets or inspect_asset. " +
 	"A user message may include <asset_ref> blocks for library files placed in the message, and a <ui_selection> block for the file selected in the library when they sent it. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
+	"When your reply names a library file a tool result identified, put an <asset_ref> block there and copy that result's path, asset_id, and type. Use the same shape as a user <asset_ref> block. Do not invent asset ids or paths. " +
 	"Do not use bash, write, or edit for looking up or inspecting a library file that is already identified.";
 
 const MOCK_TOOLS: LoomTool[] = [
