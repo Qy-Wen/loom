@@ -31,6 +31,7 @@ import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
+import { AgentInstructionsStore } from "./agent-instructions-store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
@@ -127,6 +128,7 @@ let modelSettings: ModelSettingsStore | null = null;
 let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
 let agentPermission: AgentPermissionStore | null = null;
+let agentInstructions: AgentInstructionsStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let mcpReady = false;
@@ -504,6 +506,17 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.probeModelSlot, async (_event, draft: ModelProbeDraft) => {
 		return probeModelSlot(draft);
 	});
+	ipcMain.handle(IPC.getAgentInstructions, async () => {
+		if (!agentInstructions) throw new Error("Settings store not started");
+		return agentInstructions.load();
+	});
+	ipcMain.handle(IPC.saveAgentInstructions, async (_event, text: unknown) => {
+		if (!agentInstructions) throw new Error("Settings store not started");
+		if (typeof text !== "string") throw new Error("Instructions must be text.");
+		const saved = await agentInstructions.save(text);
+		agentManager.setInstructions(saved);
+		return saved;
+	});
 	ipcMain.handle(IPC.getAgentStats, async () => {
 		if (!agentStats) throw new Error("Settings store not started");
 		return agentStats.view();
@@ -609,6 +622,8 @@ app
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
 		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
 		agentManager.setPermissionLevel(await agentPermission.load());
+		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
+		agentManager.setInstructions(await agentInstructions.load());
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
 		// Start the localhost agent server before the window loads, so the
@@ -810,4 +825,5 @@ async function attachConfiguredMcp(): Promise<void> {
 		await syncAgentTools();
 	}
 }
+
 

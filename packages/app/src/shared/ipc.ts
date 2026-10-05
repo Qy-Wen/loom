@@ -125,6 +125,8 @@ export const IPC = {
 	getMcpSettings: "loom:getMcpSettings",
 	saveMcpSettings: "loom:saveMcpSettings",
 	setMcpServerLive: "loom:setMcpServerLive",
+	getAgentInstructions: "loom:getAgentInstructions",
+	saveAgentInstructions: "loom:saveAgentInstructions",
 	getAgentStats: "loom:getAgentStats",
 	resetAgentStats: "loom:resetAgentStats",
 	setUiSelection: "loom:setUiSelection",
@@ -211,6 +213,8 @@ export interface LoomApi {
 	getMcpSettings: () => Promise<McpSettingsView>;
 	saveMcpSettings: (servers: McpServerDraft[]) => Promise<McpSettingsView>;
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
+	getAgentInstructions: () => Promise<string>;
+	saveAgentInstructions: (text: string) => Promise<string>;
 	getAgentStats: () => Promise<AgentStatsView>;
 	resetAgentStats: () => Promise<AgentStatsView>;
 	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;

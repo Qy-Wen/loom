@@ -3,11 +3,11 @@ import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
 import type { AgentHarnessTool, ExecutionToolContext } from "#vendor/pi-agent";
 
-export const MEMORY_CHAR_LIMIT = 2000;
+export const AUTO_MEMORY_CHAR_LIMIT = 2000;
 const ENTRY_SEPARATOR = "\n§\n";
 const writes = new Map<string, Promise<unknown>>();
 
-export function libraryMemoryFile(root: string): string {
+export function libraryAutoMemoryFile(root: string): string {
 	return join(root, ".agents", "memory", "MEMORY.md");
 }
 
@@ -15,50 +15,50 @@ export function characterCount(text: string): number {
 	return [...text].length;
 }
 
-export function parseMemoryEntries(raw: string): string[] {
+export function parseAutoMemoryEntries(raw: string): string[] {
 	const trimmed = raw.replace(/^\uFEFF/, "").replace(/\r\n/g, "\n").trim();
 	if (!trimmed) return [];
 	return trimmed.split(ENTRY_SEPARATOR).map((entry) => entry.trim()).filter((entry) => entry.length > 0);
 }
 
-export function serializeMemory(entries: readonly string[]): string {
+export function serializeAutoMemory(entries: readonly string[]): string {
 	return entries.join(ENTRY_SEPARATOR);
 }
 
 /** Append the frozen note. An empty file adds nothing. */
-export function systemPromptWithMemory(base: string, memory: string): string {
-	const block = formatMemoryForSystemPrompt(memory);
+export function systemPromptWithAutoMemory(base: string, memory: string): string {
+	const block = formatAutoMemoryForSystemPrompt(memory);
 	return block ? `${base}\n\n${block}` : base;
 }
 
-export function formatMemoryForSystemPrompt(memory: string): string {
-	const entries = parseMemoryEntries(memory);
+export function formatAutoMemoryForSystemPrompt(memory: string): string {
+	const entries = parseAutoMemoryEntries(memory);
 	if (entries.length === 0) return "";
-	const stored = serializeMemory(entries);
+	const stored = serializeAutoMemory(entries);
 	return (
-		`Saved facts for this library (${characterCount(stored)}/${MEMORY_CHAR_LIMIT} characters). ` +
+		`Auto memory for this library (${characterCount(stored)}/${AUTO_MEMORY_CHAR_LIMIT} characters). ` +
 		"They may or may not be relevant to the current task. These are notes, not steps to perform.\n\n" +
 		stored
 	);
 }
 
-export async function readLibraryMemory(root: string): Promise<string> {
+export async function readLibraryAutoMemory(root: string): Promise<string> {
 	try {
-		return await readFile(libraryMemoryFile(root), "utf8");
+		return await readFile(libraryAutoMemoryFile(root), "utf8");
 	} catch (error) {
 		if (isNotFound(error)) return "";
 		throw error;
 	}
 }
 
-export async function ensureLibraryMemoryDir(root: string): Promise<void> {
+export async function ensureLibraryAutoMemoryDir(root: string): Promise<void> {
 	await mkdir(join(root, ".agents", "memory"), { recursive: true });
 }
 
-export function createMemoryTool(root: string): AgentHarnessTool<ExecutionToolContext> {
+export function createAutoMemoryTool(root: string): AgentHarnessTool<ExecutionToolContext> {
 	return {
-		name: "memory",
-		label: "memory",
+		name: "auto_memory",
+		label: "auto memory",
 		description:
 			"Save a durable fact about the user or this library, such as a preference or a convention. " +
 			"Write facts, not procedures. Procedures belong in skills. " +
@@ -72,23 +72,23 @@ export function createMemoryTool(root: string): AgentHarnessTool<ExecutionToolCo
 		replay: "never",
 		async execute(_toolCallId, args, _onUpdate, _toolContext, _invocation, context) {
 			context.abortSignal?.throwIfAborted();
-			return { content: [{ type: "text", text: await updateLibraryMemory(root, args) }], details: undefined };
+			return { content: [{ type: "text", text: await updateLibraryAutoMemory(root, args) }], details: undefined };
 		},
 	};
 }
 
-export async function updateLibraryMemory(root: string, args: unknown): Promise<string> {
-	const action = parseMemoryArgs(args);
-	return exclusive(libraryMemoryFile(root), async () => {
-		await ensureLibraryMemoryDir(root);
-		const current = parseMemoryEntries(await readLibraryMemory(root));
-		const next = applyMemoryAction(current, action);
-		await writeFile(libraryMemoryFile(root), serializeMemory(next.entries), "utf8");
+export async function updateLibraryAutoMemory(root: string, args: unknown): Promise<string> {
+	const action = parseAutoMemoryArgs(args);
+	return exclusive(libraryAutoMemoryFile(root), async () => {
+		await ensureLibraryAutoMemoryDir(root);
+		const current = parseAutoMemoryEntries(await readLibraryAutoMemory(root));
+		const next = applyAutoMemoryAction(current, action);
+		await writeFile(libraryAutoMemoryFile(root), serializeAutoMemory(next.entries), "utf8");
 		return next.message;
 	});
 }
 
-export function applyMemoryAction(
+export function applyAutoMemoryAction(
 	entries: readonly string[],
 	action: { action: "add"; content: string } | { action: "replace"; oldText: string; content: string } | { action: "remove"; oldText: string },
 ): { entries: string[]; message: string } {
@@ -107,12 +107,12 @@ export function applyMemoryAction(
 }
 
 function commit(next: string[], previous: readonly string[], label: string): { entries: string[]; message: string } {
-	const stored = serializeMemory(next);
+	const stored = serializeAutoMemory(next);
 	const count = characterCount(stored);
-	if (count > MEMORY_CHAR_LIMIT) {
-		const used = characterCount(serializeMemory(previous));
+	if (count > AUTO_MEMORY_CHAR_LIMIT) {
+		const used = characterCount(serializeAutoMemory(previous));
 		throw new Error(
-			`Memory is ${used}/${MEMORY_CHAR_LIMIT} characters. This change would be ${count}. Shorten an entry or remove one, then retry.\n\n${liveBody(previous)}`,
+			`Auto memory is ${used}/${AUTO_MEMORY_CHAR_LIMIT} characters. This change would be ${count}. Shorten an entry or remove one, then retry.\n\n${liveBody(previous)}`,
 		);
 	}
 	return { entries: next, message: liveMessage(label, next) };
@@ -125,7 +125,7 @@ function matchEntry(entries: readonly string[], oldText: string): number {
 	return hits[0] ?? 0;
 }
 
-function parseMemoryArgs(args: unknown): { action: "add"; content: string } | { action: "replace"; oldText: string; content: string } | { action: "remove"; oldText: string } {
+function parseAutoMemoryArgs(args: unknown): { action: "add"; content: string } | { action: "replace"; oldText: string; content: string } | { action: "remove"; oldText: string } {
 	const record = typeof args === "object" && args !== null ? args as { action?: unknown; content?: unknown; old_text?: unknown } : {};
 	const content = typeof record.content === "string" ? record.content.trim() : "";
 	const oldText = typeof record.old_text === "string" ? record.old_text.trim() : "";
@@ -152,9 +152,9 @@ function liveMessage(label: string, entries: readonly string[]): string {
 }
 
 function liveBody(entries: readonly string[]): string {
-	if (entries.length === 0) return `Current entries (0/${MEMORY_CHAR_LIMIT} characters):\n(none)`;
-	const stored = serializeMemory(entries);
-	return `Current entries (${characterCount(stored)}/${MEMORY_CHAR_LIMIT} characters):\n${stored}`;
+	if (entries.length === 0) return `Current entries (0/${AUTO_MEMORY_CHAR_LIMIT} characters):\n(none)`;
+	const stored = serializeAutoMemory(entries);
+	return `Current entries (${characterCount(stored)}/${AUTO_MEMORY_CHAR_LIMIT} characters):\n${stored}`;
 }
 
 function exclusive<T>(key: string, operation: () => Promise<T>): Promise<T> {

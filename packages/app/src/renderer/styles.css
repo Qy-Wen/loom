@@ -2941,6 +2941,44 @@ body.resizing-table-columns {
 	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);
 }
 
+.settings-instructions {
+	flex: 1;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+}
+
+.settings-instructions textarea {
+	flex: 1;
+	min-height: 180px;
+	resize: none;
+	padding: 8px 10px;
+	border: 1px solid #d4d4d0;
+	border-radius: 8px;
+	outline: none;
+	color: inherit;
+	background: #fff;
+	font: inherit;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.settings-instructions textarea:focus {
+	border-color: #7896c8;
+	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);
+}
+
+.settings-instructions-count {
+	color: #6f7379;
+	font-size: 12px;
+	text-align: right;
+}
+
+.settings-instructions-count.is-over {
+	color: #b42318;
+}
+
 .settings-slot textarea {
 	min-width: 0;
 	resize: vertical;

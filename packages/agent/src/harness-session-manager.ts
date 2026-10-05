@@ -20,8 +20,9 @@ import {
 import { randomUUID } from "node:crypto";
 import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
+import { systemPromptWithInstructions } from "./agent-instructions.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
-import { createMemoryTool, ensureLibraryMemoryDir, readLibraryMemory, systemPromptWithMemory } from "./library-memory.ts";
+import { createAutoMemoryTool, ensureLibraryAutoMemoryDir, readLibraryAutoMemory, systemPromptWithAutoMemory } from "./library-auto-memory.ts";
 import { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 import {
 	CREATE_AGENT_TOOL,
@@ -139,6 +140,7 @@ export class HarnessSessionManager {
 	private readonly preparing = new Map<string, { cancelled: boolean; done: Promise<void>; finish: () => void }>();
 	private readonly running = new Map<string, ActiveRun>();
 	private permissionLevel: AgentPermissionLevel = DEFAULT_AGENT_PERMISSION;
+	private instructions = "";
 	private readonly toolApprovals = new ToolApprovalQueue();
 	private closing = false;
 	private readonly listeners = new Set<(sessions: HarnessSessionSummary[]) => void>();
@@ -208,7 +210,7 @@ export class HarnessSessionManager {
 		return [
 			...workspace.tools,
 			...parent.map(toHarnessTool),
-			...(root ? [createMemoryTool(root)] : []),
+			...(root ? [createAutoMemoryTool(root)] : []),
 			this.specialistTool("retrieve"),
 			this.specialistTool("create"),
 		];
@@ -288,7 +290,7 @@ export class HarnessSessionManager {
 			await this.closeLibrary();
 			this.root = resolve(root);
 			this.workspace = createWorkspaceTools(this.root);
-			await ensureLibraryMemoryDir(this.root);
+			await ensureLibraryAutoMemoryDir(this.root);
 			const loaded = await loadLibrarySkills(this.workspace.toolContext.env, this.root, CONTEXT);
 			this.skills = loaded.skills;
 			for (const diagnostic of loaded.diagnostics) {
@@ -600,14 +602,18 @@ export class HarnessSessionManager {
 			const { models, model } = buildChatModels(chat);
 			const workspace = this.workspace!;
 			const tools = this.harnessTools();
-			const memorySnapshot = await readLibraryMemory(this.root!);
+			const autoMemorySnapshot = await readLibraryAutoMemory(this.root!);
+			const instructionsSnapshot = this.instructions;
 			const { harness, open: pending } = await AgentHarness.create({
 				session: open.session,
 				models,
 				model,
 				tools,
 				toolContext: workspace.toolContext,
-				systemPrompt: () => systemPromptWithMemory(systemPromptWithSkills(this.options.systemPrompt ?? "", this.skills), memorySnapshot),
+				systemPrompt: () => systemPromptWithInstructions(
+					systemPromptWithAutoMemory(systemPromptWithSkills(this.options.systemPrompt ?? "", this.skills), autoMemorySnapshot),
+					instructionsSnapshot,
+				),
 				resources: { skills: this.skills },
 				toProviderMessages,
 				compaction: DEFAULT_COMPACTION_SETTINGS,
@@ -958,6 +964,11 @@ export class HarnessSessionManager {
 
 	setSystemPrompt(systemPrompt: string): void {
 		this.options.systemPrompt = systemPrompt;
+	}
+
+	/** Standing instructions for sessions that have not started yet. An open session keeps its snapshot. */
+	setInstructions(instructions: string): void {
+		this.instructions = instructions;
 	}
 
 	private async closeLibrary(): Promise<void> {

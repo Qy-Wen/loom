@@ -67,8 +67,9 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 
 ## 界面
 
-- 一个设置窗口，三个 tab：**Models**、**MCP**、**Stats**。
-- Models：五个槽位在同一页。Rerank / VLM / Audio 可以空着。开关负责 ping；**Save** 同时写入 Models 和 MCP，然后关掉设置。
+- 一个设置窗口，四个 tab：**Models**、**MCP**、**Instructions**、**Stats**。
+- Models：五个槽位在同一页。Rerank / VLM / Audio 可以空着。开关负责 ping；**Save** 同时写入 Models、MCP 和 Instructions，然后关掉设置。
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [MEDIA.md](./RAG/MEDIA.zh-CN.md)。改 Audio 的 `model` 会使已有音频说明作废。
-- MCP：加减 server。表单按 Cursor `mcp.json` 来：名字，然后本地填 `command` + `args`，远程填 `url`。Env / headers / cwd 放在 Advanced。开关连接或断开那一台。**Save** 同时写入 Models 和 MCP。启动时只连已开启的 server。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
+- MCP：加减 server。表单按 Cursor `mcp.json` 来：名字，然后本地填 `command` + `args`，远程填 `url`。Env / headers / cwd 放在 Advanced。开关连接或断开那一台。**Save** 同时写入 Models、MCP 和 Instructions。启动时只连已开启的 server。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
+- Instructions：自由输入，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。大约 40000 字，超出则 Save 拒绝。检索专职和生成专职拿不到这段。
 - Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；当前 Chat 槽位没有标价。
