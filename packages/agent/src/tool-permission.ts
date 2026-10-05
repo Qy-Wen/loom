@@ -6,9 +6,9 @@ export type AgentPermissionLevel = (typeof AGENT_PERMISSION_LEVELS)[number];
 export const DEFAULT_AGENT_PERMISSION: AgentPermissionLevel = "standard";
 
 export const AGENT_PERMISSION_OPTIONS = [
-	{ value: "basic", label: "Basic" },
-	{ value: "standard", label: "Standard" },
-	{ value: "full", label: "Full" },
+	{ value: "basic", label: "Basic permission" },
+	{ value: "standard", label: "Standard permission" },
+	{ value: "full", label: "Full permission" },
 ] as const satisfies ReadonlyArray<{ value: AgentPermissionLevel; label: string }>;
 
 export type ToolGateDecision = "approve" | "reject";

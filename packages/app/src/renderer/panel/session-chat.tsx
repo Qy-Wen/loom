@@ -13,6 +13,7 @@ import {
 	type CopilotChatViewProps,
 } from "@copilotkit/react-core/v2";
 import { createContext, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 import { composerLayoutText, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
@@ -54,6 +55,7 @@ const LiveMessagesContext = createContext<readonly Message[]>([]);
 const DraftContext = createContext<string | null>(null);
 const ClearForceContext = createContext<() => void>(() => {});
 const DraftAppliedContext = createContext<() => void>(() => {});
+const ContextUsageContext = createContext<HarnessContextUsage | null>(null);
 
 type QueuedFollowUp = { text: string; label?: string; seen: number };
 
@@ -578,6 +580,12 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	const transcript = useContext(TranscriptContext);
 	const editorRef = useRef<HTMLDivElement | null>(null);
 	const openAsset = useOpenAsset();
+	const usage = useContext(ContextUsageContext);
+	const slotRef = useRef<HTMLDivElement>(null);
+	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
+	useLayoutEffect(() => {
+		setToolbar(slotRef.current?.querySelector<HTMLElement>('[data-testid="copilot-chat-input"] > [data-layout]') ?? null);
+	}, []);
 	const hasDraft = editableText(value ?? "") || assets.length > 0;
 	const appliedDraft = useRef<string | null>(null);
 	const emptySeen = useRef(false);
@@ -882,6 +890,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	return (
 		<ComposerActionsContext.Provider value={composerActions}>
 		<div
+			ref={slotRef}
 			className="session-follow-up-slot"
 			onDragOver={(event) => {
 				event.preventDefault();
@@ -917,6 +926,13 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				</section>
 			)}
 			<div>
+				{toolbar && createPortal(
+					<div className="session-composer-meta" onMouseDown={(event) => event.stopPropagation()}>
+						<AgentPermissionSelect />
+						<ContextIndicator context={usage} />
+					</div>,
+					toolbar,
+				)}
 				<CopilotChatInput
 					{...props}
 					value={value}
@@ -970,13 +986,57 @@ function formatTokens(tokens: number): string {
 	return String(tokens);
 }
 
-/** Context usage indicator, e.g. 12.5%/1.0M; "?" after compaction until the next response. */
+/** Context usage as a ring. The percent and window appear only after a click. */
 function ContextIndicator({ context }: { context: HarnessContextUsage | null }): React.JSX.Element | null {
+	const [open, setOpen] = useState(false);
+	const rootRef = useRef<HTMLDivElement>(null);
+	useEffect(() => {
+		if (!open) return;
+		const onPointer = (event: PointerEvent) => {
+			if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+		};
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("pointerdown", onPointer);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("pointerdown", onPointer);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
 	if (!context) return null;
-	const percent = context.percent !== null ? `${context.percent.toFixed(1)}%` : "?";
+	const ratio = context.percent === null ? 0 : Math.min(100, Math.max(0, context.percent)) / 100;
+	const radius = 6;
+	const circumference = 2 * Math.PI * radius;
+	const label = context.percent !== null
+		? `${context.percent.toFixed(1)}% / ${formatTokens(context.window)}`
+		: `? / ${formatTokens(context.window)}`;
 	return (
-		<div className="session-context-usage" title="Share of the model context window in use">
-			{percent}/{formatTokens(context.window)}
+		<div className="session-context-usage" ref={rootRef}>
+			{open && <span className="session-context-value">{label}</span>}
+			<button
+				type="button"
+				className="session-context-ring"
+				aria-label="Context usage"
+				aria-expanded={open}
+				onClick={() => setOpen((current) => !current)}
+			>
+				<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+					<circle cx="8" cy="8" r={radius} fill="none" stroke="currentColor" strokeWidth="1.6" opacity="0.25" />
+					<circle
+						cx="8"
+						cy="8"
+						r={radius}
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.6"
+						strokeLinecap="round"
+						strokeDasharray={`${circumference * ratio} ${circumference}`}
+						transform="rotate(-90 8 8)"
+					/>
+				</svg>
+			</button>
 		</div>
 	);
 }
@@ -1094,13 +1154,11 @@ export function SessionChat({
 			<DraftAppliedContext.Provider value={onComposerDraftApplied}>
 			<ComposerAttachContext.Provider value={composerAttach}>
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
+			<ContextUsageContext.Provider value={context}>
 			<div className="session-chat-shell">
 				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
-				<div className="session-chat-footer">
-					<AgentPermissionSelect />
-					<ContextIndicator context={context} />
-				</div>
 			</div>
+			</ContextUsageContext.Provider>
 			</ComposerAttachAppliedContext.Provider>
 			</ComposerAttachContext.Provider>
 			</DraftAppliedContext.Provider>
