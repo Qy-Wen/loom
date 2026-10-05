@@ -1336,7 +1336,7 @@ body.resizing-columns {
 
 .session-chat-shell {
 	display: grid;
-	grid-template-rows: 1fr auto;
+	grid-template-rows: minmax(0, 1fr);
 	min-height: 0;
 }
 
@@ -1351,48 +1351,76 @@ body.resizing-columns {
 	padding-bottom: 12px;
 }
 
-.session-chat-shell > .session-chat-footer {
+.session-composer-meta {
+	grid-column: 2;
 	grid-row: 2;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: 8px;
 	min-width: 0;
-	padding: 1px 6px 4px;
+	align-self: center;
 }
 
 .session-permission {
 	display: flex;
 	align-items: center;
-	gap: 6px;
 	min-width: 0;
 	color: #5c5f64;
 	font-size: 11px;
 }
 
-.session-permission-label {
-	flex: 0 0 auto;
-	user-select: none;
-}
-
 .session-permission select {
-	min-width: 0;
-	max-width: 180px;
-	padding: 1px 4px;
-	border: 1px solid #e5e5e2;
+	width: fit-content;
+	max-width: none;
+	field-sizing: content;
+	padding: 2px 22px 2px 4px;
+	border: 0;
 	border-radius: 4px;
-	background: #fff;
+	outline: none;
+	appearance: none;
+	background-color: transparent;
+	background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%235c5f64' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
+	background-repeat: no-repeat;
+	background-position: right 4px center;
 	color: inherit;
 	font: inherit;
+	cursor: pointer;
 }
 
-.session-chat-footer > .session-context-usage {
+.session-permission select:hover,
+.session-permission select:focus,
+.session-permission select:focus-visible {
+	outline: none;
+	box-shadow: none;
+}
+
+.session-permission select:hover:not([data-hold]) {
+	background-color: #f2f2f0;
+}
+
+.session-composer-meta > .session-context-usage {
+	display: flex;
+	align-items: center;
+	gap: 6px;
 	flex: 0 0 auto;
 	margin-left: auto;
+	color: #5c5f64;
+}
+
+.session-context-ring {
+	display: flex;
 	padding: 0;
-	text-align: right;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+}
+
+.session-context-value {
 	font-size: 11px;
-	opacity: 0.7;
+	line-height: 1;
+	white-space: nowrap;
 	user-select: none;
 	font-variant-numeric: tabular-nums;
 }
@@ -1420,13 +1448,61 @@ body.resizing-columns {
 	pointer-events: auto;
 }
 
+/* Plus and send stay under the text, including when the draft is one line. */
+.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] {
+	grid-template-rows: auto auto;
+	align-items: center;
+	row-gap: 4px;
+}
+
+.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(1) {
+	grid-column: 1;
+	grid-row: 2;
+}
+
+.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(2) {
+	grid-column: 1 / -1;
+	grid-row: 1;
+	min-height: 0;
+	justify-content: flex-start;
+}
+
+.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(3) {
+	grid-column: 3;
+	grid-row: 2;
+}
+
+/* Compact mode only pads the right side, because the add button used to sit on the left. */
+.session-follow-up-slot [data-testid="copilot-chat-textarea"] {
+	padding-top: 7px;
+	padding-left: 6px;
+	padding-right: 6px;
+	padding-bottom: 4px;
+	text-align: justify;
+}
+
+.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(3) > * {
+	margin-right: 6px;
+}
+
+.session-follow-up-slot [data-testid="copilot-send-button"] {
+	width: 30px;
+	height: 30px;
+}
+
+.session-follow-up-slot [data-testid="copilot-send-button"] svg {
+	width: 16px;
+	height: 16px;
+}
+
 .session-add-files {
+	position: relative;
 	display: flex;
 	align-items: center;
 	justify-content: center;
 	width: 36px;
 	height: 36px;
-	margin: 0 0 0 4px;
+	margin: 0 0 0 6px;
 	padding: 0;
 	border: 0;
 	border-radius: 999px;
@@ -1470,7 +1546,22 @@ body.resizing-columns {
 	background: #f4f4f2;
 }
 
-.session-add-files:hover {
+.session-add-files::before {
+	content: "";
+	position: absolute;
+	top: 50%;
+	left: 50%;
+	width: 30px;
+	height: 30px;
+	border-radius: 999px;
+	transform: translate(-50%, -50%);
+}
+
+.session-add-files svg {
+	position: relative;
+}
+
+.session-add-files:hover:not(:disabled)::before {
 	background: #f2f2f0;
 }
 

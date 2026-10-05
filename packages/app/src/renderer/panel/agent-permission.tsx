@@ -47,11 +47,17 @@ export function AgentPermissionSelect(): React.JSX.Element {
 	const { level, setLevel } = useAgentPermission();
 	return (
 		<label className="session-permission">
-			<span className="session-permission-label">Permission</span>
 			<select
 				aria-label="Agent permission"
 				value={level}
-				onChange={(event) => setLevel(parseAgentPermissionLevel(event.target.value))}
+				onChange={(event) => {
+					setLevel(parseAgentPermissionLevel(event.target.value));
+					event.currentTarget.dataset.hold = "true";
+					event.currentTarget.blur();
+				}}
+				onPointerMove={(event) => {
+					delete event.currentTarget.dataset.hold;
+				}}
 			>
 				{AGENT_PERMISSION_OPTIONS.map((option) => (
 					<option key={option.value} value={option.value}>{option.label}</option>
