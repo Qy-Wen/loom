@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Process sandbox
+
+`bash`, `ffmpeg`, and `ffprobe` run in a process sandbox by default. They can write the open library and the temp directory. The user profile is not readable, then the library, the temp directory, and the directories of the shell, ffmpeg, and ffprobe are allowed again. Those processes have no network. Settings → Agent can turn it off. Full permission runs them directly, and leaving Full restores the switch. `read`, `edit`, and `write` stay in-process. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](../agent/PERMISSION.md).
+
+---
+
 ## Auto memory
 
 Facts for the open library live in `<library>/.agents/memory/MEMORY.md`. The folder is created on open and is not indexed. A session reads the note once, after the skills catalog, and keeps that snapshot. `auto_memory` adds, replaces, and removes entries immediately. About 2,000 characters; past that, the tool returns an error and the current entries. Procedures stay in skills. Retrieve and create specialists do not get the tool. See [MEMORY](../agent/MEMORY.md).
@@ -20,7 +26,7 @@ The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and i
 
 ## Human in the loop
 
-Write and edit wait for Approve / Skip on the tool card. Chat footer: Basic, Standard (default), Full. Full intercepts no tools. Stored in app userData, not the library. FFmpeg and MCP are not gated. See [AGENT](../AGENT.md) §6.3e.
+Chat footer: Basic, Standard (default), Full. Stored in app userData, not the library. Standard waits on `write` / `edit` outside the open library and writes inside it directly. Basic also waits on `bash` and the FFmpeg tools that write a file. `get_media_info` does not wait. Full does not wait and does not sandbox. See [PERMISSION](../agent/PERMISSION.md).
 
 ---
 

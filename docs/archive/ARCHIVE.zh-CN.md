@@ -6,6 +6,12 @@
 
 ---
 
+## 进程沙箱
+
+`bash`、`ffmpeg`、`ffprobe` 默认跑在进程沙箱里。可写当前库和临时目录。用户目录不可读，再放开当前库、临时目录，以及 shell、ffmpeg、ffprobe 所在目录。这些进程没有网络。设置 → Agent 可以关掉。Full permission 直接跑，离开后恢复开关。`read`、`edit`、`write` 仍在进程内。生成任务走 MCP，不套这层。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
+
+---
+
 ## 自动记忆
 
 当前库的事实在 `<library>/.agents/memory/MEMORY.md`。打开库时建好这个目录，不收成素材。会话读入一次，放在 skill 目录后面，这一轮保持冻结。`auto_memory` 立刻增、改、删。大约 2000 字，超出则报错并带上现有条目。做法仍写成 skill。检索专职和生成专职没有这个工具。见 [MEMORY](../agent/MEMORY.zh-CN.md)。
@@ -20,7 +26,7 @@
 
 ## Human in the loop
 
-write / edit 在工具卡片上等 Approve / Skip。对话底部：Basic、Standard（默认）、Full。Full 不拦截任何工具。存在应用 userData，不进库。FFmpeg 和 MCP 不拦。见 [AGENT](../AGENT.zh-CN.md) §6.3e。
+对话底部：Basic、Standard（默认）、Full。存在应用 userData，不进库。Standard 对库外的 `write` / `edit` 等确认，库内直接写。Basic 再对 `bash` 和会写文件的 FFmpeg 工具确认。`get_media_info` 不确认。Full 不确认，也不进沙箱。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
 
 ---
 

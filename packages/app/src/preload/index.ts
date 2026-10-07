@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { LibraryChange } from "@loom/core";
 import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
+import { DEV_TRACE_IPC } from "../shared/dev-trace.ts";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
 
 const api: LoomApi = {
@@ -94,6 +95,9 @@ const api: LoomApi = {
 	getAgentPermission: () => ipcRenderer.invoke(IPC.getAgentPermission),
 	setAgentPermission: (level) => ipcRenderer.invoke(IPC.setAgentPermission, level),
 	resolveToolGate: (toolCallId, decision) => ipcRenderer.invoke(IPC.resolveToolGate, toolCallId, decision),
+	...(import.meta.env.DEV
+		? { openDevTrace: (): Promise<void> => ipcRenderer.invoke(DEV_TRACE_IPC.open) }
+		: {}),
 };
 
 contextBridge.exposeInMainWorld("loom", api);

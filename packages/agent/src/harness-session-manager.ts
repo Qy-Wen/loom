@@ -2,6 +2,7 @@ import { resolve, join } from "node:path";
 import {
 	AgentHarness,
 	BACKGROUND_CONTEXT,
+	withTelemetryContext,
 	type AgentHarnessTool,
 	type ExecutionToolContext,
 	DEFAULT_COMPACTION_SETTINGS,
@@ -14,12 +15,15 @@ import {
 	type AgentHarness as Harness,
 	type AgentLane,
 	type AgentMessage,
+	type Context,
 	type JsonlSessionMetadata,
 	type Session,
 } from "#vendor/pi-agent";
 import { randomUUID } from "node:crypto";
 import { chatRejectedImages, userTextFromContent } from "./attachments.ts";
 import { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW, toProviderMessages } from "./pi-adapter.ts";
+import { LoomTelemetryContext } from "./run-trace.ts";
+import { attachToolExchange, clipTraceText, TOOL_IO_LIMIT, toolArgsText, type ToolExchange } from "./trace-io.ts";
 import { systemPromptWithInstructions } from "./agent-instructions.ts";
 import { loadLibrarySkills, systemPromptWithSkills, type Skill } from "./library-skills.ts";
 import { createAutoMemoryTool, ensureLibraryAutoMemoryDir, readLibraryAutoMemory, systemPromptWithAutoMemory } from "./library-auto-memory.ts";
@@ -43,13 +47,14 @@ import {
 	type ToolGateDecision,
 } from "./tool-permission.ts";
 import { workspaceWriteNeedsApproval } from "./workspace-path.ts";
-import type {
-	LoomAgentEvent,
-	LoomAgentOptions,
-	LoomChatEndpoint,
-	LoomPromptOptions,
-	LoomTool,
-	LoomTranscriptMessage,
+import {
+	toolResultText,
+	type LoomAgentEvent,
+	type LoomAgentOptions,
+	type LoomChatEndpoint,
+	type LoomPromptOptions,
+	type LoomTool,
+	type LoomTranscriptMessage,
 } from "./types.ts";
 
 const MAIN = "main";
@@ -105,6 +110,7 @@ type ActiveRun = {
 	done: Promise<void>;
 	emit: (event: LoomAgentEvent) => void;
 	children: Set<{ abort: () => Promise<void> }>;
+	toolExchange: Map<string, ToolExchange>;
 };
 
 export interface HarnessSessionSummary {
@@ -180,6 +186,18 @@ export class HarnessSessionManager {
 		return undefined;
 	}
 
+	private noteToolArgs(run: ActiveRun, toolCallId: string, args: unknown): void {
+		const row = run.toolExchange.get(toolCallId) ?? {};
+		row.args = toolArgsText(args);
+		run.toolExchange.set(toolCallId, row);
+	}
+
+	private noteToolResult(run: ActiveRun, toolCallId: string, text: string): void {
+		const row = run.toolExchange.get(toolCallId) ?? {};
+		row.result = clipTraceText(text, TOOL_IO_LIMIT);
+		run.toolExchange.set(toolCallId, row);
+	}
+
 	private async beforeTool(
 		event: { runId: string; toolCallId: string; toolName: string; args: Record<string, unknown> },
 		context: { abortSignal?: AbortSignal },
@@ -230,7 +248,7 @@ export class HarnessSessionManager {
 			parameters: specialistParameters(),
 			replay: "never",
 			execute: (toolCallId, args, onUpdate, _toolContext, invocation, context) => {
-				return this.runSpecialist(role, toolCallId, args, onUpdate, invocation.operationId, context.abortSignal);
+				return this.runSpecialist(role, toolCallId, args, onUpdate, invocation.operationId, context);
 			},
 		};
 	}
@@ -241,7 +259,7 @@ export class HarnessSessionManager {
 		args: unknown,
 		onUpdate: (partial: { content: Array<{ type: "text"; text: string }>; details: undefined }) => void,
 		operationId: string,
-		abortSignal?: AbortSignal,
+		context: Context,
 	): Promise<{ content: Array<{ type: "text"; text: string }>; details: undefined }> {
 		const sessionId = this.sessionIdForRun(operationId);
 		const run = sessionId ? this.running.get(sessionId) : undefined;
@@ -263,8 +281,11 @@ export class HarnessSessionManager {
 				cwd: workspace.toolContext.env.cwd,
 				chat,
 				tools: [...native, ...library],
-				abortSignal,
+				abortSignal: context.abortSignal,
+				context,
 				onTool: (event) => {
+					if (event.type === "tool_start") this.noteToolArgs(run, event.toolCallId, event.args);
+					if (event.type === "tool_end") this.noteToolResult(run, event.toolCallId, toolResultText(event.result.content));
 					run.emit(event);
 					if (event.type === "tool_start") onUpdate({ content: [{ type: "text", text: event.name }], details: undefined });
 				},
@@ -721,6 +742,7 @@ export class HarnessSessionManager {
 		const lane = open.lane;
 		const operationId = randomUUID();
 		const emit = options.onEvent ?? (() => undefined);
+		const toolExchange = new Map<string, ToolExchange>();
 		const unsubscribers: Array<() => void> = [];
 		let thinkingRedacted: number | undefined;
 		unsubscribers.push(open.harness.events.on("message_update", (event) => {
@@ -746,7 +768,11 @@ export class HarnessSessionManager {
 			emit({ type: "compaction_end", reason: event.reason, status: event.status });
 		}));
 		unsubscribers.push(open.harness.events.on("tool_start", (event) => {
-			if (event.lane === MAIN && event.runId === operationId) emit({ type: "tool_start", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
+			if (event.lane !== MAIN || event.runId !== operationId) return;
+			const row = toolExchange.get(event.toolCallId) ?? {};
+			row.args = toolArgsText(event.args);
+			toolExchange.set(event.toolCallId, row);
+			emit({ type: "tool_start", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
 		}));
 		const progressTimers = new Map<string, ReturnType<typeof setTimeout>>();
 		const latestProgress = new Map<string, { name: string; text: string }>();
@@ -805,6 +831,9 @@ export class HarnessSessionManager {
 			if (event.lane !== MAIN || event.runId !== operationId) return;
 			const content = event.result.content;
 			const text = Array.isArray(content) ? content.filter((part) => part.type === "text").map((part) => part.text).join("\n") : String(content ?? "");
+			const row = toolExchange.get(event.toolCallId) ?? {};
+			row.result = clipTraceText(text, TOOL_IO_LIMIT);
+			toolExchange.set(event.toolCallId, row);
 			clearProgress(event.toolCallId);
 			emit({ type: "tool_end", toolCallId: event.toolCallId, name: event.toolName, result: { content: text, details: event.result.details }, isError: event.isError });
 		}));
@@ -829,7 +858,7 @@ export class HarnessSessionManager {
 		}));
 		let resolveDone!: () => void;
 		const done = new Promise<void>((resolve) => { resolveDone = resolve; });
-		const run: ActiveRun = { lane, operationId, done, emit, children: new Set() };
+		const run: ActiveRun = { lane, operationId, done, emit, children: new Set(), toolExchange };
 		this.running.set(id, run);
 		try {
 			const content = userPromptContent(text, options, "Prompt is empty");
@@ -839,7 +868,9 @@ export class HarnessSessionManager {
 				timestamp: Date.now(),
 				...(options.attachments?.length ? { attachments: options.attachments } : {}),
 			} as AgentMessage;
-			const accepted = await lane.accept({ kind: "prompt", operationId, prompt: message }, CONTEXT);
+			const telemetry = new LoomTelemetryContext();
+			const traced = withTelemetryContext(telemetry, CONTEXT);
+			const accepted = await lane.accept({ kind: "prompt", operationId, prompt: message }, traced);
 			if (!accepted.ok) throw accepted.error;
 			emit({ type: "agent_start" });
 			if (run.cancelRequested) {
@@ -847,8 +878,10 @@ export class HarnessSessionManager {
 				if (!cancelled.ok && cancelled.error._tag !== "NoActiveOperation") throw cancelled.error;
 				return;
 			}
-			const outcome = await lane.drive({ operationId, waitForRetry: true }, CONTEXT);
+			const outcome = await lane.drive({ operationId, waitForRetry: true }, traced);
 			if (!outcome.ok) throw outcome.error;
+			const spans = attachToolExchange(telemetry.getSpans(), toolExchange);
+			if (spans.length > 0) emit({ type: "trace", spans });
 			if (outcome.value.kind === "waiting") {
 				const stopped = await lane.abort(CONTEXT);
 				if (!stopped.ok && stopped.error._tag !== "NoActiveOperation") throw stopped.error;

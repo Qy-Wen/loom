@@ -225,6 +225,7 @@ export interface LoomApi {
 	getAgentPermission: () => Promise<AgentPermissionLevel>;
 	setAgentPermission: (level: AgentPermissionLevel) => Promise<AgentPermissionLevel>;
 	resolveToolGate: (toolCallId: string, decision: ToolGateDecision) => Promise<boolean>;
+	openDevTrace?: () => Promise<void>;
 }
 
 declare global {

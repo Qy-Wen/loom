@@ -101,6 +101,36 @@ describe("LoomAgUiAgent", () => {
 		assert.equal(manager.records.get("thread-1")?.title, "latest question");
 	});
 
+	it("forwards a prompt trace to the dev listener and leaves it out of the chat", async () => {
+		const manager = new FakeManager([
+			{ type: "agent_start" },
+			{ type: "text", delta: "ok" },
+			{
+				type: "trace",
+				spans: [{
+					id: 1,
+					parentId: null,
+					name: "pi.harness.run",
+					attributes: {},
+					status: { status: "ok" },
+					startedAt: 10,
+					endedAt: 20,
+				}],
+			},
+			{ type: "agent_end" },
+		]);
+		const seen: Array<{ threadId: string; spans: unknown[] }> = [];
+		const events = await lastValueFrom(
+			new LoomAgUiAgent(manager.asManager(), undefined, undefined, undefined, (record) => {
+				seen.push(record);
+			}).run(runInput()).pipe(toArray()),
+		);
+		assert.equal(events.some((event) => event.type === EventType.ACTIVITY_SNAPSHOT && (event as { activityType?: string }).activityType === "loom.trace"), false);
+		assert.equal(seen.length, 1);
+		assert.equal(seen[0]?.threadId, "thread-1");
+		assert.equal(seen[0]?.spans.length, 1);
+	});
+
 	it("maps thinking deltas to reasoning messages and then the reply", async () => {
 		const manager = new FakeManager([
 			{ type: "agent_start" },

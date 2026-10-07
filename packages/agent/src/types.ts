@@ -1,4 +1,5 @@
 import type { LoomUserAttachment } from "./attachments.ts";
+import type { LoomTraceSpan } from "./run-trace.ts";
 
 /**
  * Loom's own Agent interface.
@@ -56,6 +57,7 @@ export type LoomAgentEvent =
 	| { type: "retry_end"; success: boolean; errorMessage?: string }
 	| { type: "error"; message: string }
 	| { type: "follow_up_sent"; text: string }
+	| { type: "trace"; spans: LoomTraceSpan[] }
 	| { type: "agent_end" };
 
 export type LoomTranscriptMessage = Record<string, unknown> & { role: string };

@@ -3,6 +3,7 @@ import {
 	AgentHarness,
 	BACKGROUND_CONTEXT,
 	DEFAULT_COMPACTION_SETTINGS,
+	type Context,
 	MemorySessionRepo,
 	type AgentHarnessTool,
 	type ExecutionToolContext,
@@ -92,12 +93,15 @@ export async function runSpecialistAgent(options: {
 	chat: LoomChatEndpoint;
 	tools: AgentHarnessTool<ExecutionToolContext>[];
 	abortSignal?: AbortSignal;
+	/** Parent run context, so this specialist's spans nest in the same trace. */
+	context?: Context;
 	onTool: (event: LoomAgentEvent) => void;
 	onUsage?: (usage: Usage) => void;
 	beforeTool: BeforeTool;
 	registerAbort?: (abort: () => Promise<void>) => void;
 }): Promise<string> {
 	if (options.abortSignal?.aborted) throw new Error("The user pressed Stop. This turn was cancelled on purpose, not because of an error.");
+	const traced = options.context ?? CONTEXT;
 	const { models, model } = buildChatModels(options.chat);
 	const repo = new MemorySessionRepo();
 	const session = await repo.create({}, CONTEXT);
@@ -114,9 +118,9 @@ export async function runSpecialistAgent(options: {
 			toProviderMessages,
 			compaction: DEFAULT_COMPACTION_SETTINGS,
 			followUpMode: "one-at-a-time",
-		}, CONTEXT);
+		}, traced);
 		harness = created.harness;
-		const lane = await harness.lane("main", CONTEXT);
+		const lane = await harness.lane("main", traced);
 		options.registerAbort?.(async () => {
 			const stopped = await lane.abort(CONTEXT);
 			if (!stopped.ok && stopped.error._tag !== "NoActiveOperation") throw stopped.error;
@@ -159,9 +163,9 @@ export async function runSpecialistAgent(options: {
 				kind: "prompt",
 				operationId,
 				prompt: { role: "user", content: specialistUserMessage(options.goal), timestamp: Date.now() },
-			}, CONTEXT);
+			}, traced);
 			if (!accepted.ok) throw accepted.error;
-			const outcome = await lane.drive({ operationId, waitForRetry: true }, CONTEXT);
+			const outcome = await lane.drive({ operationId, waitForRetry: true }, traced);
 			if (!outcome.ok) throw outcome.error;
 			if (outcome.value.kind === "waiting") throw new Error(`Specialist is waiting for unsupported ${outcome.value.reason}`);
 			if (outcome.value.outcome.status === "failed") {

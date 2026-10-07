@@ -115,6 +115,12 @@ importers:
         specifier: 0.1.9
         version: 0.1.9
     devDependencies:
+      '@assistant-ui/react-o11y':
+        specifier: 0.0.46
+        version: 0.0.46(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      '@assistant-ui/store':
+        specifier: 0.3.17
+        version: 0.3.17(@assistant-ui/tap@0.9.21(@types/react@19.2.2)(react@19.2.0))(@types/react@19.2.2)(react@19.2.0)
       '@playwright/test':
         specifier: ^1.63.0
         version: 1.63.0
@@ -350,6 +356,38 @@ packages:
       zod: ^3.25.0 || ^4.0.0
     peerDependenciesMeta:
       zod:
+        optional: true
+
+  '@assistant-ui/react-o11y@0.0.46':
+    resolution: {integrity: sha512-XqpXwtKCENYwd0MjVSaNF9hSBtVMWeLZMOakCJd7tRDmfbsHDESIcT7mF4L/dRjMDh2eISeyV4UY04FfXE7Hlw==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+
+  '@assistant-ui/store@0.3.17':
+    resolution: {integrity: sha512-RBouDrTXM41ORMWLU9CjWH8da6g+NHNvZAecesIUdBzG3V2pAOnKsTcOfDTo8ooZXZJM5T9bG1fhPjENp2zVyg==}
+    peerDependencies:
+      '@assistant-ui/tap': ^0.9.21
+      '@types/react': '*'
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
+        optional: true
+
+  '@assistant-ui/tap@0.9.21':
+    resolution: {integrity: sha512-x7w2UCqbQSLvd9Izu4a66noSMZgZPvhQMzwRmSRE/HhAFCUJVR4ul5qwxOi2dryHkehEwRhtt9XwAGlFdZORvg==}
+    peerDependencies:
+      '@types/react': '*'
+      react: ^18 || ^19
+    peerDependenciesMeta:
+      '@types/react':
+        optional: true
+      react:
         optional: true
 
   '@aws-crypto/sha256-browser@5.2.0':
@@ -4724,6 +4762,30 @@ snapshots:
       standardwebhooks: 1.1.1
     optionalDependencies:
       zod: 3.25.76
+
+  '@assistant-ui/react-o11y@0.0.46(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)':
+    dependencies:
+      '@assistant-ui/store': 0.3.17(@assistant-ui/tap@0.9.21(@types/react@19.2.2)(react@19.2.0))(@types/react@19.2.2)(react@19.2.0)
+      '@assistant-ui/tap': 0.9.21(@types/react@19.2.2)(react@19.2.0)
+      '@radix-ui/react-primitive': 2.1.10(@types/react-dom@19.2.1(@types/react@19.2.2))(@types/react@19.2.2)(react-dom@19.2.0(react@19.2.0))(react@19.2.0)
+      react: 19.2.0
+    optionalDependencies:
+      '@types/react': 19.2.2
+    transitivePeerDependencies:
+      - '@types/react-dom'
+      - react-dom
+
+  '@assistant-ui/store@0.3.17(@assistant-ui/tap@0.9.21(@types/react@19.2.2)(react@19.2.0))(@types/react@19.2.2)(react@19.2.0)':
+    dependencies:
+      '@assistant-ui/tap': 0.9.21(@types/react@19.2.2)(react@19.2.0)
+    optionalDependencies:
+      '@types/react': 19.2.2
+      react: 19.2.0
+
+  '@assistant-ui/tap@0.9.21(@types/react@19.2.2)(react@19.2.0)':
+    optionalDependencies:
+      '@types/react': 19.2.2
+      react: 19.2.0
 
   '@aws-crypto/sha256-browser@5.2.0':
     dependencies:
