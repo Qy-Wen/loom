@@ -8,16 +8,24 @@
 
 ---
 
-## Step 1: Process sandbox
+## Step 1: Observability
 
-bash and FFmpeg run in a sandbox. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./AGENT/PERMISSION.md).
-
-- [x] Isolate bash and FFmpeg so a bad argv cannot touch files outside that scope
+One prompt's run, turn, step, tool, and model-request spans stay in memory. In development, a separate Traces window shows each prompt as a span waterfall. Click a tool or model span to read its arguments and result, or the messages sent and the reply. Each side is truncated. That window is not part of the packaged app. Do not add a second tracing stack. Lifetime Stats already exist.
 
 ---
 
-## Later
+## Step 2: LangGraph
 
-- **Observability:** per-run tool / latency / token traces via pi-telemetry (spans exist, currently no-op). Do not add a second tracing stack. Lifetime Stats already exist.
-- **LangGraph:** add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
-- **Publishing:** adapters for Xiaohongshu, Douyin, and other platforms
+Add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
+
+---
+
+## Step 3: Publishing
+
+Adapters for Xiaohongshu, Douyin, and other platforms.
+
+---
+
+## Step 4: Packaging
+
+Consider shipping installable builds for macOS and Windows.

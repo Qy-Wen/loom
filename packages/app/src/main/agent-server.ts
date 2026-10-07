@@ -9,6 +9,7 @@ import { createServer, type Server } from "node:http";
 import type { AssetRefAttachment, ComposerImageInput, HarnessSessionManager, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
+import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { LoomAgUiAgent } from "./ag-ui-agent.ts";
 
 export interface AgentServer {
@@ -27,11 +28,12 @@ export async function startAgentServer(
 	getUiSelection?: () => UiSelectionFields | null,
 	takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
 	takeComposerAssets?: (sessionId: string) => Promise<AssetRefAttachment[]>,
+	onTrace?: (record: DevTraceRecord) => void,
 ): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(manager, getUiSelection, takeComposerImages, takeComposerAssets);
+	const agent = new LoomAgUiAgent(manager, getUiSelection, takeComposerImages, takeComposerAssets, onTrace);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
 	});

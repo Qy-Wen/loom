@@ -37,6 +37,7 @@ import { AgentInstructionsStore } from "./agent-instructions-store.ts";
 import { AgentSandboxStore } from "./agent-sandbox-store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
+import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
@@ -653,11 +654,18 @@ app
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		await agentManager.setChat(await modelSettings.chat());
+		let publishDevTrace: ((record: DevTraceRecord) => void) | undefined;
+		if (import.meta.env.DEV) {
+			const devTrace = await import("./dev-trace-window.ts");
+			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"));
+			publishDevTrace = devTrace.publishDevTrace;
+		}
 		agentServer = await startAgentServer(
 			agentManager,
 			getUiSelection,
 			(id) => takeComposerImages(id),
 			(id) => takeLiveComposerAssets(id),
+			publishDevTrace,
 		);
 		registerAssetProtocol();
 		registerIpc();
@@ -666,7 +674,8 @@ app
 		void attachConfiguredMcp();
 
 		app.on("activate", () => {
-			if (BrowserWindow.getAllWindows().length === 0) createWindow();
+			const hasMain = BrowserWindow.getAllWindows().some((window) => window.getTitle() !== "Traces");
+			if (!hasMain) createWindow();
 		});
 	})
 	.catch((error) => {

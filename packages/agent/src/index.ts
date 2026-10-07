@@ -57,6 +57,7 @@ export { chatEndpointReady, buildChatModels, DEFAULT_CHAT_CONTEXT_WINDOW } from 
 export { DEFAULT_SESSION_TITLE, titleFromUserText } from "./session-title.ts";
 export { createWorkspaceTools, toHarnessTool, type WorkspaceTools } from "./pi-tools.ts";
 export { HarnessSessionManager, type HarnessSessionRecord, type HarnessSessionSummary, type HarnessContextUsage } from "./harness-session-manager.ts";
+export type { LoomTraceSpan } from "./run-trace.ts";
 export {
 	AGENT_PERMISSION_LEVELS,
 	AGENT_PERMISSION_OPTIONS,

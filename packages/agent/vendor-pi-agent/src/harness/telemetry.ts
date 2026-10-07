@@ -1,3 +1,4 @@
+import type { Usage } from "@earendil-works/pi-ai";
 import type {
 	ExactTelemetryAttributes,
 	SchemaTelemetrySpan,
@@ -144,6 +145,34 @@ export function startAiSpan<Name extends AiSpanName, const Attributes extends Ai
 	return getTelemetryContext(context).startSpan({ name, attributes }, (span) =>
 		callback(span as AiTelemetrySpan<Name>, withTelemetryContext(span, context)),
 	);
+}
+
+const AI_STOP_REASONS = ["stop", "length", "tool_use", "error", "aborted", "deferred"] as const;
+
+/** Write the settled assistant message's stop reason and token counts onto its request span. */
+export function recordAiResult(
+	span: AiTelemetrySpan<"pi.ai.request">,
+	message: { stopReason: string; usage?: Usage },
+): void {
+	const stopReason = AI_STOP_REASONS.find((reason) => reason === message.stopReason);
+	const usage = message.usage;
+	span.setAttributes({
+		...(stopReason === undefined ? {} : { "pi.ai.response.stop_reason": stopReason }),
+		...(usage === undefined
+			? {}
+			: {
+					"pi.ai.usage.input_tokens": usage.input,
+					"pi.ai.usage.output_tokens": usage.output,
+					"pi.ai.usage.cache_read_tokens": usage.cacheRead,
+					"pi.ai.usage.cache_write_tokens": usage.cacheWrite,
+					"pi.ai.usage.total_tokens": usage.totalTokens,
+					"pi.ai.usage.cost": usage.cost.total,
+					...(usage.reasoning === undefined ? {} : { "pi.ai.usage.reasoning_tokens": usage.reasoning }),
+				}),
+	});
+	if (message.stopReason === "error" || message.stopReason === "aborted") {
+		span.setStatus({ status: "error" });
+	}
 }
 
 const HOOK_NAMES = [

@@ -12,7 +12,9 @@ import {
 	prepareToolCall,
 	toolResultFromMessage,
 } from "../../execution/tools.ts";
+import type { Context } from "../../context.ts";
 import { SessionInvariantError } from "../../session/session.ts";
+import { startHarnessSpan } from "../../telemetry.ts";
 import type { JsonValue, ToolBatch, ToolCall, ToolsOperation } from "../../session/types.ts";
 import {
 	deleteValue,
@@ -356,6 +358,37 @@ async function performToolInvocation<TContext extends object | undefined>(
 	toolContext: TContext,
 	recovery: boolean,
 ): Promise<ToolOutcome> {
+	return startHarnessSpan(
+		"pi.harness.tool",
+		{
+			"pi.lane.name": lane.name,
+			"pi.operation.id": drive.operationId,
+			"pi.turn.id": batch.turnId,
+			"pi.tool.name": cleared.toolCall.name,
+			"pi.tool.call_id": cleared.toolCall.id,
+			"pi.tool.replay": call.replay,
+			"pi.tool.recovery": recovery,
+		},
+		async (span, spanContext) => {
+			const outcome = await runToolEffect(lane, drive, batch, call, cleared, toolContext, recovery, spanContext);
+			span.setAttributes({ "pi.tool.is_error": outcome.message.isError });
+			if (outcome.message.isError) span.setStatus({ status: "error" });
+			return outcome;
+		},
+		drive.context,
+	);
+}
+
+async function runToolEffect<TContext extends object | undefined>(
+	lane: Lane<TContext>,
+	drive: Drive,
+	batch: ToolBatch,
+	call: Extract<ToolCall, { status: "effect_pending" }>,
+	cleared: ClearedToolCall<TContext>,
+	toolContext: TContext,
+	recovery: boolean,
+	spanContext: Context,
+): Promise<ToolOutcome> {
 	const capability = invocationCapability(lane, drive, batch, call);
 	const progress = openToolProgress(lane, drive, batch.turnId, call.sourceIndex, call.resultEntryId);
 	let latestUpdateDelivery: Promise<void> = Promise.resolve();
@@ -389,7 +422,7 @@ async function performToolInvocation<TContext extends object | undefined>(
 			},
 			toolContext,
 			capability.invocation,
-			drive.context,
+			spanContext,
 		);
 	} catch (error) {
 		capability.expire();
@@ -423,7 +456,7 @@ async function performToolInvocation<TContext extends object | undefined>(
 				...(executed.result.usage === undefined ? {} : { usage: executed.result.usage }),
 			},
 			drive.gate,
-			drive.context,
+			spanContext,
 		);
 	} catch (error) {
 		if (!(error instanceof AbortRequested)) throw error;

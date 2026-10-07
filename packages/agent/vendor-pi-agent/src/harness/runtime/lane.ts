@@ -34,6 +34,7 @@ import type {
 import { type BranchPreparation, prepareBranchEntries } from "../compaction/branch-summarization.ts";
 import { prepareCompaction } from "../compaction/compaction.ts";
 import { awaitWithContext, type Context } from "../context.ts";
+import { startHarnessSpan } from "../telemetry.ts";
 import { toolResultFromMessage } from "../execution/tools.ts";
 import type { HookRegistry } from "../hooks.ts";
 import { formatPromptTemplateInvocation } from "../prompt-templates.ts";
@@ -214,6 +215,41 @@ function capturedModel(operation: Operation): ModelIdentity | undefined {
 			return state.summaryContext.configuration.model;
 		default:
 			return undefined;
+	}
+}
+
+function runSpanOutcome(result: DriveResult): "completed" | "aborted" | "failed" | "suspended" | undefined {
+	if (!result.ok) return "failed";
+	if (result.value.kind === "waiting") return "suspended";
+	const status = result.value.outcome.status;
+	if (status === "completed" || status === "aborted" || status === "failed") return status;
+	return "failed";
+}
+
+function structuralSpanOutcome(result: DriveResult): "completed" | "declined" | "aborted" | "failed" | undefined {
+	if (!result.ok) return "failed";
+	if (result.value.kind === "waiting") return undefined;
+	const status = result.value.outcome.status;
+	if (status === "completed" || status === "declined" || status === "aborted" || status === "failed") return status;
+	return undefined;
+}
+
+function noteDriveError(
+	span: {
+		setAttributes(attributes: { "pi.error.code": string; "pi.error.type": string }): void;
+		setStatus(status: { status: "error"; error?: { name: string; message: string } }): void;
+	},
+	result: DriveResult,
+): void {
+	if (!result.ok) {
+		span.setStatus({ status: "error", error: { name: result.error.name, message: result.error.message } });
+		return;
+	}
+	if (result.value.kind !== "settled" || result.value.outcome.error === undefined) return;
+	const error = result.value.outcome.error;
+	span.setAttributes({ "pi.error.code": error.code, "pi.error.type": "OperationError" });
+	if (result.value.outcome.status === "failed") {
+		span.setStatus({ status: "error", error: { name: "OperationError", message: error.message } });
 	}
 }
 
@@ -923,7 +959,59 @@ export class Lane<TContext extends object | undefined> implements AgentLane {
 			return Result.err(new Closed({ message: this.closedError.message }));
 		}
 		this.assertOpen();
+		const current = this.state.operation;
+		const same = current !== null && current.meta.operationId === options.operationId;
+		const intent = same ? current.meta.intent.kind : "run";
+		const recovery = same && current.state.at !== "starting";
+		const start = {
+			"pi.session.id": this.session.metadata.id,
+			"pi.lane.name": this.name,
+			"pi.operation.id": options.operationId,
+			"pi.operation.recovery": recovery,
+		} as const;
+		if (intent === "compaction") {
+			return startHarnessSpan(
+				"pi.harness.compaction",
+				{ ...start, "pi.operation.kind": "compaction" },
+				async (span, spanContext) => {
+					const result = await this.driveInstalled(options, spanContext);
+					const outcome = structuralSpanOutcome(result);
+					if (outcome !== undefined) span.setAttributes({ "pi.operation.outcome": outcome });
+					noteDriveError(span, result);
+					return result;
+				},
+				context,
+			);
+		}
+		if (intent === "navigation") {
+			return startHarnessSpan(
+				"pi.harness.navigation",
+				{ ...start, "pi.operation.kind": "navigation" },
+				async (span, spanContext) => {
+					const result = await this.driveInstalled(options, spanContext);
+					const outcome = structuralSpanOutcome(result);
+					if (outcome !== undefined) span.setAttributes({ "pi.operation.outcome": outcome });
+					noteDriveError(span, result);
+					return result;
+				},
+				context,
+			);
+		}
+		return startHarnessSpan(
+			"pi.harness.run",
+			{ ...start, "pi.operation.kind": "run" },
+			async (span, spanContext) => {
+				const result = await this.driveInstalled(options, spanContext);
+				const outcome = runSpanOutcome(result);
+				if (outcome !== undefined) span.setAttributes({ "pi.operation.outcome": outcome });
+				noteDriveError(span, result);
+				return result;
+			},
+			context,
+		);
+	}
 
+	private async driveInstalled(options: DriveOptions, context: Context): Promise<DriveResult> {
 		for (;;) {
 			const claim = await this.command<DriveClaim>(async (state, reader) => {
 				const signal = context.abortSignal;

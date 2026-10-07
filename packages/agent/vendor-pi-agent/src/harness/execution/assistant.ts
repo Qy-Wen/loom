@@ -11,6 +11,7 @@ import type {
 } from "@earendil-works/pi-ai";
 import type { AgentMessage, ThinkingLevel } from "../../types.ts";
 import { type Context, getTelemetryContext } from "../context.ts";
+import { formatAssistantReply, formatModelRequest, noteSpanIO } from "../span-io.ts";
 import type { SettledAssistantMessage } from "../session/types.ts";
 import type { AgentHarnessStreamOptions } from "../types.ts";
 import { AbortRequested } from "./effect-gate.ts";
@@ -143,6 +144,7 @@ export async function streamHarnessAssistant(
 		requestContext = await config.transformContext(requestContext, context);
 	}
 
+	const sent = formatModelRequest(requestContext.systemPrompt, requestContext.messages);
 	const providerMessages = await config.toProviderMessages(requestContext.messages, context);
 	const aiContext: AiContext = {
 		systemPrompt: requestContext.systemPrompt,
@@ -164,12 +166,19 @@ export async function streamHarnessAssistant(
 	);
 
 	const afterResponse = config.afterResponse;
-	return consumeAssistantStream(
-		stream,
-		config.observer,
-		afterResponse === undefined
-			? undefined
-			: (message, afterContext) => afterResponse(message, metadata, afterContext),
-		context,
-	);
+	try {
+		const message = await consumeAssistantStream(
+			stream,
+			config.observer,
+			afterResponse === undefined
+				? undefined
+				: (reply, afterContext) => afterResponse(reply, metadata, afterContext),
+			context,
+		);
+		noteSpanIO(context, sent, formatAssistantReply(message));
+		return message;
+	} catch (error) {
+		noteSpanIO(context, sent, "");
+		throw error;
+	}
 }

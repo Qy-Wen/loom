@@ -693,9 +693,16 @@ export function App(): React.JSX.Element {
 						>Graph</button>
 					</nav>
 					<div className="topbar-spacer" />
-					<button className="topbar-settings" type="button" onClick={() => setSettingsOpen(true)}>
-						Settings
-					</button>
+					<div className="topbar-actions">
+						{import.meta.env.DEV ? (
+							<button className="topbar-settings" type="button" onClick={() => void window.loom.openDevTrace?.()}>
+								Traces
+							</button>
+						) : null}
+						<button className="topbar-settings" type="button" onClick={() => setSettingsOpen(true)}>
+							Settings
+						</button>
+					</div>
 				</header>
 
 				{error && (

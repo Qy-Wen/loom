@@ -20,6 +20,7 @@ import {
 	type UiSelectionFields,
 } from "@loom/agent";
 import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
+import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { Observable } from "rxjs";
 
 let idCounter = 0;
@@ -59,6 +60,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 	private getUiSelection: (() => UiSelectionFields | null) | undefined;
 	private takeComposerImages: ((sessionId: string) => Promise<ComposerImageInput[]>) | undefined;
 	private takeComposerAssets: ((sessionId: string) => Promise<AssetRefAttachment[]>) | undefined;
+	private onTrace: ((record: DevTraceRecord) => void) | undefined;
 	/** In-flight prompt per thread, so Stop and the next run can abort it. */
 	private inflight = new Map<string, { abort: (reason?: "user") => Promise<void>; done: Promise<void> }>();
 
@@ -67,12 +69,14 @@ export class LoomAgUiAgent extends AbstractAgent {
 		getUiSelection?: () => UiSelectionFields | null,
 		takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
 		takeComposerAssets?: (sessionId: string) => Promise<AssetRefAttachment[]>,
+		onTrace?: (record: DevTraceRecord) => void,
 	) {
 		super({ agentId: "loom" });
 		this.manager = manager;
 		this.getUiSelection = getUiSelection;
 		this.takeComposerImages = takeComposerImages;
 		this.takeComposerAssets = takeComposerAssets;
+		this.onTrace = onTrace;
 	}
 
 	// CopilotKit clones the registered agent per run; keep the shared manager
@@ -83,6 +87,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 		cloned.getUiSelection = this.getUiSelection;
 		cloned.takeComposerImages = this.takeComposerImages;
 		cloned.takeComposerAssets = this.takeComposerAssets;
+		cloned.onTrace = this.onTrace;
 		cloned.inflight = this.inflight;
 		return cloned;
 	}
@@ -407,6 +412,17 @@ export class LoomAgUiAgent extends AbstractAgent {
 										type: EventType.TEXT_MESSAGE_END,
 										messageId: userId,
 									} as BaseEvent);
+									break;
+								}
+
+								case "trace": {
+									const at = Date.now();
+									this.onTrace?.({
+										id: `${input.threadId}:${at}:${idCounter++}`,
+										threadId: input.threadId,
+										at,
+										spans: event.spans,
+									});
 									break;
 								}
 

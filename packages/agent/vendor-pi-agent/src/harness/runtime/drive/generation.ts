@@ -1,7 +1,9 @@
 import type { Api, Model, Tool } from "@earendil-works/pi-ai";
 import type { AgentMessage } from "../../../types.ts";
 import { type Context, getTelemetryContext, withAbortSignal } from "../../context.ts";
+import { AbortRequested } from "../../execution/effect-gate.ts";
 import { type HarnessAssistantStreamConfig, streamHarnessAssistant } from "../../execution/assistant.ts";
+import { recordAiResult, startAiSpan, startHarnessSpan } from "../../telemetry.ts";
 import { applyStreamOptionsPatch } from "../../hooks.ts";
 import { SessionInvariantError } from "../../session/session.ts";
 import {
@@ -171,63 +173,103 @@ async function publishGenerationIntent<TContext extends object | undefined>(
 	);
 }
 
+function assistantStepOutcome(stopReason: string): "succeeded" | "failed" | "aborted" | "deferred" {
+	if (stopReason === "error") return "failed";
+	if (stopReason === "aborted") return "aborted";
+	if (stopReason === "deferred") return "deferred";
+	return "succeeded";
+}
+
 async function performGeneration<TContext extends object | undefined>(
 	lane: Lane<TContext>,
 	drive: Drive,
 	intent: AssistantEffectPendingOperation,
 	prepared: PreparedGeneration,
+	parent: Context,
 ): Promise<SettledAssistantMessage> {
-	const response = openAssistantResponse(lane, drive, intent.responseEntryId);
-	try {
-		return await streamHarnessAssistant(
-			prepared.messages,
-			{
-				model: prepared.model,
-				systemPrompt: prepared.systemPrompt,
-				tools: prepared.tools,
-				thinkingLevel: intent.generationContext.configuration.thinkingLevel,
-				streamOptions: prepared.streamOptions,
-				transformContext: async (requestContext, context) => {
-					const result = await lane.hooks.runWithGate(
-						"transform_context",
-						{ lane: lane.name, runId: drive.operationId, ...requestContext },
-						drive.gate,
-						context,
-					);
-					return {
-						messages: result?.messages ?? requestContext.messages,
-						systemPrompt: result?.systemPrompt ?? requestContext.systemPrompt,
-					};
-				},
-				toProviderMessages: prepared.toProviderMessages,
-				beforePayload: async (payload, requestModel, context) => {
-					const result = await lane.hooks.runWithGate(
-						"before_payload",
-						{ lane: lane.name, runId: drive.operationId, model: requestModel, payload },
-						drive.gate,
-						context,
-					);
-					return result?.payload;
-				},
-				afterResponse: response.afterResponse,
-				request: (aiContext, options, context) => {
-					const admitted = withAbortSignal(drive.gate.signal, context);
-					return drive.gate.admit(() =>
-						lane.models.streamSimple(prepared.model, aiContext, {
-							...options,
-							sessionId: `${lane.session.metadata.id}:${lane.name}`,
-							signal: admitted.abortSignal,
-							telemetryContext: getTelemetryContext(admitted),
-						}),
-					);
-				},
-				observer: response.observer,
-			},
-			drive.context,
-		);
-	} finally {
-		await response.close();
-	}
+	return startHarnessSpan(
+		"pi.harness.step",
+		{
+			"pi.lane.name": lane.name,
+			"pi.operation.id": drive.operationId,
+			"pi.step.kind": "assistant",
+			"pi.step.attempt": intent.attempt,
+		},
+		async (stepSpan, stepContext) => {
+			const response = openAssistantResponse(lane, drive, intent.responseEntryId);
+			try {
+				const settled = await startAiSpan(
+					"pi.ai.request",
+					{
+						"pi.ai.operation": "stream",
+						"pi.ai.provider": prepared.model.provider,
+						"pi.ai.model": prepared.model.id,
+						"pi.ai.api": prepared.model.api,
+						"pi.ai.streaming": true,
+					},
+					async (aiSpan, aiContext) => {
+						const message = await streamHarnessAssistant(
+							prepared.messages,
+							{
+								model: prepared.model,
+								systemPrompt: prepared.systemPrompt,
+								tools: prepared.tools,
+								thinkingLevel: intent.generationContext.configuration.thinkingLevel,
+								streamOptions: prepared.streamOptions,
+								transformContext: async (requestContext, context) => {
+									const result = await lane.hooks.runWithGate(
+										"transform_context",
+										{ lane: lane.name, runId: drive.operationId, ...requestContext },
+										drive.gate,
+										context,
+									);
+									return {
+										messages: result?.messages ?? requestContext.messages,
+										systemPrompt: result?.systemPrompt ?? requestContext.systemPrompt,
+									};
+								},
+								toProviderMessages: prepared.toProviderMessages,
+								beforePayload: async (payload, requestModel, context) => {
+									const result = await lane.hooks.runWithGate(
+										"before_payload",
+										{ lane: lane.name, runId: drive.operationId, model: requestModel, payload },
+										drive.gate,
+										context,
+									);
+									return result?.payload;
+								},
+								afterResponse: response.afterResponse,
+								request: (requestContext, options, context) => {
+									const admitted = withAbortSignal(drive.gate.signal, context);
+									return drive.gate.admit(() =>
+										lane.models.streamSimple(prepared.model, requestContext, {
+											...options,
+											sessionId: `${lane.session.metadata.id}:${lane.name}`,
+											signal: admitted.abortSignal,
+											telemetryContext: getTelemetryContext(admitted),
+										}),
+									);
+								},
+								observer: response.observer,
+							},
+							aiContext,
+						);
+						recordAiResult(aiSpan, message);
+						return message;
+					},
+					stepContext,
+				);
+				stepSpan.setAttributes({ "pi.step.outcome": assistantStepOutcome(settled.stopReason) });
+				return settled;
+			} catch (error) {
+				stepSpan.setAttributes({ "pi.step.outcome": error instanceof AbortRequested ? "aborted" : "failed" });
+				throw error;
+			} finally {
+				await response.close();
+			}
+		},
+		parent,
+	);
 }
 
 /** Advance one durable assistant retry wait according to this pass's local wait policy. */
@@ -289,14 +331,25 @@ export async function runGeneration<TContext extends object | undefined>(
 ): Promise<ProcedureResult> {
 	if (generation.at === "assistant.retry_wait") return runRetryWait(lane, drive, generation);
 
-	const prepared = await prepareGeneration(lane, drive, generation);
-	if (prepared.kind === "configuration_failure") {
-		return publishConfigurationFailure(lane, drive, generation, prepared.error);
-	}
-	if (prepared.kind === "cancel_requested") return { kind: "continue" };
+	return startHarnessSpan(
+		"pi.harness.turn",
+		{
+			"pi.lane.name": lane.name,
+			"pi.operation.id": drive.operationId,
+			"pi.turn.id": generation.generationContext.stepId,
+		},
+		async (_span, turnContext) => {
+			const prepared = await prepareGeneration(lane, drive, generation);
+			if (prepared.kind === "configuration_failure") {
+				return publishConfigurationFailure(lane, drive, generation, prepared.error);
+			}
+			if (prepared.kind === "cancel_requested") return { kind: "continue" };
 
-	const intent = await publishGenerationIntent(lane, drive, generation, prepared);
-	if (intent.kind === "cancel_requested") return { kind: "continue" };
-	const response = await performGeneration(lane, drive, intent.value, prepared);
-	return publishResponse(lane, drive, intent.value, response);
+			const intent = await publishGenerationIntent(lane, drive, generation, prepared);
+			if (intent.kind === "cancel_requested") return { kind: "continue" };
+			const response = await performGeneration(lane, drive, intent.value, prepared, turnContext);
+			return publishResponse(lane, drive, intent.value, response);
+		},
+		drive.context,
+	);
 }

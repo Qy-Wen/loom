@@ -11,6 +11,8 @@ import { generateBranchSummaryWithRequest } from "../../compaction/branch-summar
 import type { CompactionPreparation, CompactResult, SummaryRequest } from "../../compaction/compaction.ts";
 import { compactWithRequest, prepareCompaction, shouldCompact } from "../../compaction/compaction.ts";
 import { type Context, getTelemetryContext, withAbortSignal } from "../../context.ts";
+import { formatAssistantReply, formatModelRequest, noteSpanIO } from "../../span-io.ts";
+import { recordAiResult, startAiSpan, startHarnessSpan } from "../../telemetry.ts";
 import { AbortRequested } from "../../execution/effect-gate.ts";
 import { applyStreamOptionsPatch } from "../../hooks.ts";
 import { insertEntry, insertUsage } from "../../session/commit.ts";
@@ -804,6 +806,47 @@ async function performStructuralAttempt<TContext extends object | undefined>(
 	| { kind: "error"; error: OperationError; retryable: boolean }
 	| { kind: "cancel_requested" }
 > {
+	const kind = summaryKind(effect.task);
+	return startHarnessSpan(
+		"pi.harness.step",
+		{
+			"pi.lane.name": lane.name,
+			"pi.operation.id": drive.operationId,
+			"pi.step.kind": kind,
+			"pi.step.attempt": effect.attempt,
+			...(kind === "compaction" ? { "pi.compaction.reason": compactionReason(effect.task) } : {}),
+		},
+		async (stepSpan, stepContext) => {
+			const produced = await performStructuralModel(lane, drive, effect, model, preparation, stepContext);
+			stepSpan.setAttributes({
+				"pi.step.outcome":
+					produced.kind === "cancel_requested"
+						? "aborted"
+						: produced.kind === "error"
+							? produced.retryable
+								? "retry"
+								: "failed"
+							: "succeeded",
+			});
+			return produced;
+		},
+		drive.context,
+	);
+}
+
+async function performStructuralModel<TContext extends object | undefined>(
+	lane: Lane<TContext>,
+	drive: Drive,
+	effect: SummaryEffectPendingOperation,
+	model: Model<Api>,
+	preparation: CompactionPreparation | BranchPreparation,
+	parent: Context,
+): Promise<
+	| { kind: "compaction"; result: CompactResult; retryable: boolean }
+	| { kind: "branch_summary"; result: BranchSummaryResult; retryable: boolean }
+	| { kind: "error"; error: OperationError; retryable: boolean }
+	| { kind: "cancel_requested" }
+> {
 	let requestIndex = 0;
 	let lastResponse: AssistantMessage | undefined;
 	const request: SummaryRequest = async (aiContext, options, requestContext) => {
@@ -840,20 +883,43 @@ async function performStructuralAttempt<TContext extends object | undefined>(
 		const admittedContext = withAbortSignal(drive.gate.signal, requestContext);
 		let response: AssistantMessage;
 		try {
-			response = await drive.gate.admit(() =>
-				lane.models.completeSimple(
-					model,
-					aiContext,
-					requestStreamOptions(options, streamOptions, admittedContext, async (payload, requestModel) => {
-						const hook = await lane.hooks.runWithGate(
-							"before_payload",
-							{ lane: lane.name, runId: drive.operationId, model: requestModel, payload },
-							drive.gate,
-							admittedContext,
+			response = await startAiSpan(
+				"pi.ai.request",
+				{
+					"pi.ai.operation": "stream",
+					"pi.ai.provider": model.provider,
+					"pi.ai.model": model.id,
+					"pi.ai.api": model.api,
+					"pi.ai.streaming": false,
+				},
+				async (aiSpan, aiContextSpan) => {
+					const sent = formatModelRequest(aiContext.systemPrompt ?? "", aiContext.messages);
+					const admitted = withAbortSignal(drive.gate.signal, aiContextSpan);
+					try {
+						const message = await drive.gate.admit(() =>
+							lane.models.completeSimple(
+								model,
+								aiContext,
+								requestStreamOptions(options, streamOptions, admitted, async (payload, requestModel) => {
+									const hook = await lane.hooks.runWithGate(
+										"before_payload",
+										{ lane: lane.name, runId: drive.operationId, model: requestModel, payload },
+										drive.gate,
+										admitted,
+									);
+									return hook?.payload;
+								}),
+							),
 						);
-						return hook?.payload;
-					}),
-				),
+						recordAiResult(aiSpan, message);
+						noteSpanIO(aiContextSpan, sent, formatAssistantReply(message));
+						return message;
+					} catch (error) {
+						noteSpanIO(aiContextSpan, sent, "");
+						throw error;
+					}
+				},
+				admittedContext,
 			);
 		} catch (error) {
 			if (!(error instanceof AbortRequested)) throw error;
@@ -878,7 +944,7 @@ async function performStructuralAttempt<TContext extends object | undefined>(
 					thinkingLevel: effect.summaryContext.configuration.thinkingLevel,
 				},
 				request,
-				drive.context,
+				parent,
 			);
 			if (!result.ok) {
 				return {
@@ -901,7 +967,7 @@ async function performStructuralAttempt<TContext extends object | undefined>(
 			preparation,
 			{ customInstructions: effect.task.customInstructions },
 			request,
-			drive.context,
+			parent,
 		);
 		if (!result.ok) {
 			return {

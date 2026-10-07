@@ -8,16 +8,24 @@
 
 ---
 
-## 第一步：进程沙箱
+## 第一步：可观测性
 
-bash 和 FFmpeg 跑在沙箱里。生成任务走 MCP，不套这层。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
-
-- [x] 隔离 bash 和 FFmpeg，避免换一条 argv 就碰到范围外的文件
+一次提问的 run、turn、step、tool、模型请求记在内存里。开发时单独开一个 Traces 窗口看瀑布图。点工具或模型 span 可看参数和返回值，或发给模型的消息和回复。每一边会截断。打包后没有这个窗口。不要另做一套追踪。累计 Stats 已有。
 
 ---
 
-## 后续（概述）
+## 第二步：LangGraph
 
-- **可观测性：** 按次的工具 / 耗时 / token 轨迹，用 pi-telemetry（span 已有，目前 no-op）。不要另做一套追踪。累计 Stats 已有。
-- **LangGraph：** 在现有对话 Agent 之外加一条受控流程，用固定步骤执行任务。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
-- **发布：** 小红书/抖音等平台适配
+在现有对话 Agent 之外加一条受控流程，用固定步骤执行任务。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。
+
+---
+
+## 第三步：发布
+
+小红书、抖音等平台适配。
+
+---
+
+## 第四步：打包
+
+考虑做成可安装的包，覆盖 macOS 和 Windows。
