@@ -167,6 +167,82 @@ function AssetTreeRow({
 	);
 }
 
+function AssetIconTile({
+	asset,
+	selected,
+	renaming,
+	cut,
+	onSelect,
+	onContextMenu,
+	onRename,
+	onCancelRename,
+	onDropFolder,
+}: Omit<AssetTreeRowProps, "depth">): React.JSX.Element {
+	const tileRef = useRef<HTMLElement | null>(null);
+	const [stem, setStem] = useState(() => filenameStem(asset.filename));
+	const cancelled = useRef(false);
+
+	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
+	useEffect(() => {
+		cancelled.current = false;
+	}, [renaming]);
+	useEffect(() => {
+		if (!selected) return;
+		tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [selected, asset.assetId]);
+
+	return (
+		<div className={`asset-icon${selected ? " selected" : ""}${cut ? " cut" : ""}`}>
+			<button
+				ref={(el) => {
+					tileRef.current = el;
+				}}
+				className="asset-icon-button"
+				type="button"
+				draggable={!renaming}
+				onDragStart={(event) => {
+					writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
+				}}
+				onDragEnd={() => {
+					endLibraryDrag();
+					onDropFolder(null);
+				}}
+				onClick={onSelect}
+				onContextMenu={(event) => {
+					event.preventDefault();
+					onContextMenu();
+				}}
+			>
+				<AssetThumbnail asset={asset} />
+			</button>
+			{renaming ? (
+				<input
+					className="asset-icon-rename"
+					autoFocus
+					value={stem}
+					onChange={(event) => setStem(event.target.value)}
+					onFocus={(event) => event.currentTarget.select()}
+					onKeyDown={(event) => {
+						if (event.key === "Enter") event.currentTarget.blur();
+						if (event.key === "Escape") {
+							cancelled.current = true;
+							onCancelRename();
+							event.currentTarget.blur();
+						}
+					}}
+					onBlur={() => {
+						if (!cancelled.current) void onRename(stem);
+					}}
+				/>
+			) : (
+				<span className="asset-icon-name" title={asset.relativePath}>{asset.filename}</span>
+			)}
+		</div>
+	);
+}
+
+export type FileDisplay = "list" | "icons";
+
 interface FolderTreeRowProps {
 	folder: FolderNode;
 	depth: number;
@@ -192,6 +268,7 @@ interface FolderTreeRowProps {
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
 	onDropFolder: (destFolder: string | null) => void;
+	fileDisplay: FileDisplay;
 }
 
 function FolderTreeRow({
@@ -323,6 +400,7 @@ function FolderTreeRow({
 					onCancelRename={rowProps.onCancelRename}
 					onDropIntoFolder={rowProps.onDropIntoFolder}
 					onDropFolder={rowProps.onDropFolder}
+					fileDisplay={rowProps.fileDisplay}
 				/>
 			)}
 		</div>
@@ -350,6 +428,7 @@ interface FileTreeRowsProps {
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
 	onDropFolder: (destFolder: string | null) => void;
+	fileDisplay: FileDisplay;
 }
 
 function FileTreeRows({
@@ -373,6 +452,7 @@ function FileTreeRows({
 	onCancelRename,
 	onDropIntoFolder,
 	onDropFolder,
+	fileDisplay,
 }: FileTreeRowsProps): React.JSX.Element {
 	const folders = [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
 	const assets = sortAssets(node.assets);
@@ -396,6 +476,7 @@ function FileTreeRows({
 					renamingFolder={renamingFolder}
 					cutAssetIds={cutAssetIds}
 					cutFolder={cutFolder}
+					fileDisplay={fileDisplay}
 					onToggleFolder={onToggleFolder}
 					onSelectFolder={onSelectFolder}
 					onFolderContextMenu={onFolderContextMenu}
@@ -408,7 +489,26 @@ function FileTreeRows({
 					onDropFolder={onDropFolder}
 				/>
 			))}
-			{assets.map((asset) => (
+			{fileDisplay === "icons" ? (
+				assets.length > 0 ? (
+					<div className="asset-icon-grid" style={{ marginLeft: depth * 14 }}>
+						{assets.map((asset) => (
+							<AssetIconTile
+								key={asset.assetId}
+								asset={asset}
+								selected={asset.assetId === selectedAssetId}
+								renaming={asset.assetId === renamingAssetId}
+								cut={cutAssetIds.includes(asset.assetId)}
+								onSelect={() => onSelectAsset(asset.assetId)}
+								onContextMenu={() => onAssetContextMenu(asset)}
+								onRename={(stem) => onRenameAsset(asset, stem)}
+								onCancelRename={onCancelRename}
+								onDropFolder={onDropFolder}
+							/>
+						))}
+					</div>
+				) : null
+			) : assets.map((asset) => (
 				<AssetTreeRow
 					key={asset.assetId}
 					asset={asset}

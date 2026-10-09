@@ -680,7 +680,6 @@ export function App(): React.JSX.Element {
 							type="button"
 							onClick={() => setWorkbenchView("library")}
 						>Library</button>
-						<button type="button" disabled>Gallery</button>
 						<button
 							className={workbenchView === "table" ? "active" : ""}
 							type="button"

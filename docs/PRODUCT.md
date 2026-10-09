@@ -278,7 +278,7 @@ The Agent closes the loop from retrieval through creation, indexing, and provena
 
 Visual direction: **Obsidian + Finder + Lightroom + Cursor**.
 
-The layout uses a left asset library, central workbench, and right Agent/Details panel, with Files, Gallery, Table, and Graph work views.
+The layout uses a left asset library, central workbench, and right Agent/Details panel, with Files, Table, and Graph work views. The file tree can show a list or icons.
 
 See [UI.md](./UI.md) for layout, panel responsibilities, and view design.
 
