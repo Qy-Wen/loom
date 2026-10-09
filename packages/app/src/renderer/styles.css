@@ -437,9 +437,17 @@ body.resizing-columns {
 	background: #fff;
 }
 
+.file-heading-title,
 .file-heading-tools {
 	display: flex;
 	align-items: center;
+}
+
+.file-heading-title {
+	gap: 6px;
+}
+
+.file-heading-tools {
 	gap: 8px;
 }
 
@@ -461,9 +469,43 @@ body.resizing-columns {
 	cursor: pointer;
 }
 
-.file-display button.active {
+.file-display button.active,
+.file-heading-tools > button.active {
 	background: #dde6f7;
 	color: #243044;
+}
+
+.file-heading-tools > button {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #85888e;
+	cursor: pointer;
+}
+
+.file-search {
+	padding: 0 10px 6px;
+}
+
+.file-search input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 4px 6px;
+	border: 1px solid #d5d5d1;
+	border-radius: 5px;
+	background: #fff;
+	color: #243044;
+	font-size: 12px;
+}
+
+.file-search input:focus {
+	outline: 2px solid #7896c8;
+	border-color: transparent;
 }
 
 .asset-icon-grid {
