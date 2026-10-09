@@ -19,23 +19,12 @@ import {
 	type AssetRefAttachment,
 	type UiSelectionFields,
 } from "@loom/agent";
-import { CHAT_ERROR_ID_PREFIX } from "../shared/chat-error.ts";
+import { CHAT_ERROR_ID_PREFIX, formatChatError } from "../shared/chat-error.ts";
 import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { Observable } from "rxjs";
 
 let idCounter = 0;
 const nextId = (prefix: string): string => `${prefix}-${Date.now()}-${idCounter++}`;
-
-export function formatChatError(cause: unknown): string {
-	const raw = cause instanceof Error ? cause.message : String(cause);
-	if (/Chat is not configured/i.test(raw)) {
-		return "Set a base URL and model in Settings.";
-	}
-	if (/401|unauthorized|invalid api key|incorrect api key|authentication/i.test(raw)) {
-		return `API key was rejected. Check the Chat key in Settings.\n${raw}`;
-	}
-	return raw.trim() || "The Chat endpoint did not return a reply.";
-}
 
 /** Pull the latest user text out of the AG-UI run input. */
 function latestUserText(input: RunAgentInput): string {

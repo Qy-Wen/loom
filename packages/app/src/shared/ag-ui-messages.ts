@@ -1,6 +1,7 @@
 import type { Message, ToolCall } from "@ag-ui/core";
 import type { LoomTranscriptMessage } from "@loom/agent";
 import { splitStoredAssetText } from "@loom/agent/composer-asset";
+import { CHAT_ERROR_ID_PREFIX, formatChatError } from "./chat-error.ts";
 
 export function transcriptText(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -48,25 +49,71 @@ function assistantToolCalls(content: unknown): ToolCall[] {
 	return calls;
 }
 
+function assistantStop(message: LoomTranscriptMessage): string | undefined {
+	return typeof message.stopReason === "string" ? message.stopReason : undefined;
+}
+
+/** Failed or cancelled assistant rows with nothing to show. Retries persist one of these per attempt. */
+function isBlankTerminalAssistant(message: LoomTranscriptMessage): boolean {
+	const stop = assistantStop(message);
+	if (message.role !== "assistant") return false;
+	if (stop !== "error" && stop !== "aborted" && stop !== "deferred") return false;
+	if (transcriptText(message.content).trim()) return false;
+	if (visibleThinking(message.content)) return false;
+	if (assistantToolCalls(message.content).length > 0) return false;
+	return true;
+}
+
+function pushAssistant(out: Message[], message: LoomTranscriptMessage, id: string): void {
+	const thinking = visibleThinking(message.content);
+	if (thinking) out.push({ id: `${id}-thinking`, role: "reasoning", content: thinking });
+	const toolCalls = assistantToolCalls(message.content);
+	out.push({
+		id,
+		role: "assistant",
+		content: transcriptText(message.content),
+		...(toolCalls.length ? { toolCalls } : {}),
+	});
+}
+
 /** Map persisted pi/Loom transcript messages into AG-UI chat messages. */
 export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 	const out: Message[] = [];
-	for (const [index, message] of messages.entries()) {
+	for (let index = 0; index < messages.length; index++) {
+		const message = messages[index]!;
 		const id = typeof message.id === "string" && message.id ? message.id : `loom-${index}`;
 		if (message.role === "user") {
 			out.push({ id, role: "user", content: userBubbleContent(message) });
 			continue;
 		}
+		if (message.role === "assistant" && isBlankTerminalAssistant(message)) {
+			let end = index;
+			while (end + 1 < messages.length && isBlankTerminalAssistant(messages[end + 1]!)) end++;
+			const next = messages[end + 1];
+			const recovered = next?.role === "assistant" && !isBlankTerminalAssistant(next);
+			if (!recovered) {
+				let failure = messages[end]!;
+				for (let cursor = end; cursor >= index; cursor--) {
+					if (assistantStop(messages[cursor]!) === "error") {
+						failure = messages[cursor]!;
+						break;
+					}
+				}
+				if (assistantStop(failure) === "error") {
+					const failureId = typeof failure.id === "string" && failure.id ? failure.id : `loom-${end}`;
+					const detail = typeof failure.errorMessage === "string" ? failure.errorMessage : "";
+					out.push({
+						id: `${CHAT_ERROR_ID_PREFIX}${failureId}`,
+						role: "assistant",
+						content: formatChatError(detail),
+					});
+				}
+			}
+			index = end;
+			continue;
+		}
 		if (message.role === "assistant") {
-			const thinking = visibleThinking(message.content);
-			if (thinking) out.push({ id: `${id}-thinking`, role: "reasoning", content: thinking });
-			const toolCalls = assistantToolCalls(message.content);
-			out.push({
-				id,
-				role: "assistant",
-				content: transcriptText(message.content),
-				...(toolCalls.length ? { toolCalls } : {}),
-			});
+			pushAssistant(out, message, id);
 			continue;
 		}
 		if (message.role === "compactionSummary") {
