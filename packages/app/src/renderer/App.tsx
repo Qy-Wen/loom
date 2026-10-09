@@ -23,7 +23,7 @@ import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
-import { CopyableError } from "./panel/copyable-error.tsx";
+import { ErrorToast } from "./panel/error-toast.tsx";
 import { runActivityRenderers } from "./panel/run-activity.tsx";
 import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
@@ -252,7 +252,7 @@ export function App(): React.JSX.Element {
 		});
 	}, [selectedAsset]);
 	const relationTypes = useMemo(
-		() => [...new Set(graphEdges.map((edge) => edge.type).filter((type) => type !== "GENERATED_FROM"))].sort(),
+		() => [...new Set(graphEdges.map((edge) => edge.type))].sort(),
 		[graphEdges],
 	);
 
@@ -690,11 +690,7 @@ export function App(): React.JSX.Element {
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
-				{error && (
-					<div className="error-banner">
-						<CopyableError text={error} />
-					</div>
-				)}
+				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 
 				<div className="shell" ref={shellRef} style={shellStyle}>
 					<LibrarySidebar
@@ -824,10 +820,7 @@ export function App(): React.JSX.Element {
 						onOpenAsset={selectAsset}
 						composerAttach={composerAttach}
 						onComposerAttachApplied={() => setComposerAttach(null)}
-						onCreateRelation={(toAssetId, type) => {
-							if (!selectedAsset) return Promise.resolve();
-							return createRelation(selectedAsset.assetId, toAssetId, type);
-						}}
+						onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
 						onRemoveRelation={removeRelation}
 					/>
 				</div>

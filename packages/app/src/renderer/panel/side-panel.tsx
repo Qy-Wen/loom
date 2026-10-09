@@ -19,6 +19,7 @@ import { displayPropertyValue } from "../workbench/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
+import { SuggestInput } from "./suggest-input.tsx";
 import { TagEditor } from "./tag-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
@@ -55,7 +56,7 @@ interface SidePanelProps {
 	onOpenAsset: (assetId: string) => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
-	onCreateRelation: (toAssetId: string, type: string) => Promise<void>;
+	onCreateRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
 	onRemoveRelation: (relationId: string) => Promise<void>;
 }
 
@@ -403,7 +404,7 @@ function RelationsEditor({
 	relations: AssetRelationsResult;
 	relationTypes: string[];
 	onSelect: (assetId: string) => void;
-	onCreate: (toAssetId: string, type: string) => Promise<void>;
+	onCreate: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
 	onRemove: (relationId: string) => Promise<void>;
 }): React.JSX.Element {
 	const others = assets
@@ -416,21 +417,36 @@ function RelationsEditor({
 		(link) => link.relationType === "GENERATED_FROM" && link.direction === "in",
 	);
 	const customGroups = groupCustomLinks(relations.links);
-	const [form, setForm] = useState<{ type: string; toAssetId: string } | null>(null);
+	const [form, setForm] = useState<{ type: string; toAssetId: string; direction: "out" | "in" } | null>(null);
+	const [typeOpen, setTypeOpen] = useState(false);
+	const [assetQuery, setAssetQuery] = useState("");
+	const [assetOpen, setAssetOpen] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
+	const assetQueryNormalized = assetQuery.trim().toLowerCase();
+	const assetMatches = others.filter((item) => {
+		if (!assetQueryNormalized) return true;
+		return item.filename.toLowerCase().includes(assetQueryNormalized)
+			|| item.relativePath.toLowerCase().includes(assetQueryNormalized);
+	});
+	const selectedAsset = others.find((item) => item.assetId === form?.toAssetId);
 
 	useEffect(() => {
 		setForm(null);
+		setTypeOpen(false);
+		setAssetQuery("");
+		setAssetOpen(false);
 		setError(null);
 	}, [asset?.assetId]);
 
 	async function submit(): Promise<void> {
-		if (!form?.type.trim() || !form.toAssetId || saving) return;
+		if (!asset || !form?.type.trim() || !form.toAssetId || saving) return;
 		setSaving(true);
 		setError(null);
+		const fromAssetId = form.direction === "out" ? asset.assetId : form.toAssetId;
+		const toAssetId = form.direction === "out" ? form.toAssetId : asset.assetId;
 		try {
-			await onCreate(form.toAssetId, form.type);
+			await onCreate(fromAssetId, toAssetId, form.type);
 			setForm(null);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -447,9 +463,13 @@ function RelationsEditor({
 					<button
 						className="icon-button"
 						type="button"
+						aria-label="Add relation"
 						title="Add relation"
 						onClick={() => {
-							setForm({ type: relationTypes[0] ?? "", toAssetId: others[0]?.assetId ?? "" });
+							setForm({ type: "", toAssetId: "", direction: "out" });
+							setTypeOpen(false);
+							setAssetQuery("");
+							setAssetOpen(false);
 							setError(null);
 						}}
 					>+</button>
@@ -457,28 +477,69 @@ function RelationsEditor({
 			</div>
 			{asset && form && (
 				<div className="property-definition-form relation-form">
-					<input
-						autoFocus
-						list="details-relation-types"
-						placeholder="Relationship type"
-						value={form.type}
-						onChange={(event) => setForm({ ...form, type: event.target.value })}
-					/>
-					<datalist id="details-relation-types">
-						{relationTypes.map((type) => (
-							<option key={type} value={type} />
-						))}
-					</datalist>
-					<select
-						value={form.toAssetId}
-						onChange={(event) => setForm({ ...form, toAssetId: event.target.value })}
-					>
-						{others.map((item) => (
-							<option key={item.assetId} value={item.assetId}>
-								{item.filename}
-							</option>
-						))}
-					</select>
+					<div className="relation-type-row">
+						<SuggestInput
+							autoFocus
+							openOnFocus={false}
+							value={form.type}
+							open={typeOpen}
+							suggestions={relationTypes}
+							labelFor={(type) => type === "GENERATED_FROM" ? "Generated from" : type}
+							placeholder="Relationship type"
+							showLabel="Show relationship types"
+							hideLabel="Hide relationship types"
+							onChange={(type) => setForm({ ...form, type })}
+							onOpenChange={setTypeOpen}
+						/>
+						<button
+							type="button"
+							className="relation-direction"
+							aria-label={form.direction === "out" ? "This file points to the other" : "The other file points to this"}
+							onClick={() => setForm({ ...form, direction: form.direction === "out" ? "in" : "out" })}
+						>{form.direction === "out" ? "→" : "←"}</button>
+					</div>
+					<div className="relation-asset-picker">
+						<button
+							type="button"
+							className="relation-asset-toggle"
+							aria-expanded={assetOpen}
+							onClick={() => setAssetOpen((current) => !current)}
+						>
+							<span>{selectedAsset?.filename ?? "Choose a file"}</span>
+						</button>
+						{assetOpen && (
+							<div className="relation-asset-menu">
+								<input
+									autoFocus
+									placeholder="Search files"
+									value={assetQuery}
+									onChange={(event) => setAssetQuery(event.target.value)}
+									onKeyDown={(event) => {
+										if (event.key === "Escape") setAssetOpen(false);
+									}}
+								/>
+								<ul>
+									{assetMatches.map((item) => (
+										<li key={item.assetId}>
+											<button
+												type="button"
+												className={item.assetId === form.toAssetId ? "selected" : undefined}
+												title={item.relativePath}
+												onClick={() => {
+													setForm({ ...form, toAssetId: item.assetId });
+													setAssetOpen(false);
+													setAssetQuery("");
+												}}
+											>
+												{item.filename}
+											</button>
+										</li>
+									))}
+								</ul>
+								{assetMatches.length === 0 && <div className="empty no-padding">No matching files.</div>}
+							</div>
+						)}
+					</div>
 					{error && <div className="relation-form-error">{error}</div>}
 					<div className="property-form-actions">
 						<button type="button" onClick={() => { setForm(null); setError(null); }}>Cancel</button>

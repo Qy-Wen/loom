@@ -223,7 +223,7 @@ export function GraphView({
 			setHover(null);
 			if (!targetId) return;
 			setPendingLink({ fromId: start.fromId, toId: targetId });
-			setTypeDraft(live.current.relationTypes[0] ?? "");
+			setTypeDraft(live.current.relationTypes.find((type) => type !== "GENERATED_FROM") ?? "");
 			setTypeError(null);
 		};
 		window.addEventListener("pointermove", onMove);
