@@ -31,6 +31,10 @@ interface TableViewProps {
 	canEditProperties: boolean;
 	onSelectAsset: (assetId: string) => void;
 	onCreateProperty: (name: string, type: PropertyType) => Promise<void>;
+	onUpdateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<void>;
+	onRemoveProperty: (propertyId: string) => Promise<void>;
+	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
+	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 }
 
 export function TableView({
@@ -41,11 +45,13 @@ export function TableView({
 	canEditProperties,
 	onSelectAsset,
 	onCreateProperty,
+	onUpdateProperty,
+	onRemoveProperty,
+	onSetPropertyValue,
+	onRemovePropertyValue,
 }: TableViewProps): React.JSX.Element {
 	const [query, setQuery] = useState("");
-	const [addingProperty, setAddingProperty] = useState(false);
-	const [propertyName, setPropertyName] = useState("");
-	const [propertyType, setPropertyType] = useState<PropertyType>("text");
+	const [fieldForm, setFieldForm] = useState<FieldForm | null>(null);
 	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
 		try {
 			const stored = JSON.parse(localStorage.getItem("loom.table.columnWidths") ?? "{}");
@@ -136,12 +142,20 @@ export function TableView({
 		});
 	}
 
-	async function addProperty(): Promise<void> {
-		if (!propertyName.trim()) return;
-		await onCreateProperty(propertyName, propertyType);
-		setPropertyName("");
-		setPropertyType("text");
-		setAddingProperty(false);
+	async function saveField(): Promise<void> {
+		if (!fieldForm?.name.trim()) return;
+		if (fieldForm.mode === "create") await onCreateProperty(fieldForm.name, fieldForm.type);
+		else if (fieldForm.propertyId) await onUpdateProperty(fieldForm.propertyId, fieldForm.name, fieldForm.type);
+		setFieldForm(null);
+	}
+
+	async function deleteField(): Promise<void> {
+		if (fieldForm?.mode !== "edit") return;
+		const property = properties.find((item) => item.propertyId === fieldForm.propertyId);
+		if (!property) return;
+		if (!window.confirm(`Delete property “${property.name}” and all its values?`)) return;
+		await onRemoveProperty(property.propertyId);
+		setFieldForm(null);
 	}
 
 	return (
@@ -158,34 +172,40 @@ export function TableView({
 					<button
 						type="button"
 						disabled={!canEditProperties}
-						onClick={() => setAddingProperty((current) => !current)}
+						onClick={() => setFieldForm({ mode: "create", name: "", type: "text" })}
 					>+ Add field</button>
 				</div>
 			</div>
-			{addingProperty && (
+			{fieldForm && (
 				<div className="table-property-form">
 					<input
 						autoFocus
 						placeholder="Field name"
-						value={propertyName}
-						onChange={(event) => setPropertyName(event.target.value)}
+						value={fieldForm.name}
+						onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })}
 						onKeyDown={(event) => {
-							if (event.key === "Enter") void addProperty().catch(() => undefined);
-							if (event.key === "Escape") setAddingProperty(false);
+							if (event.key === "Enter") void saveField().catch(() => undefined);
+							if (event.key === "Escape") setFieldForm(null);
 						}}
 					/>
-					<select value={propertyType} onChange={(event) => setPropertyType(event.target.value as PropertyType)}>
+					<select
+						value={fieldForm.type}
+						onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value as PropertyType })}
+					>
 						<option value="text">Text</option>
 						<option value="number">Number</option>
 						<option value="boolean">Checkbox</option>
 						<option value="date">Date</option>
 					</select>
-					<button type="button" onClick={() => setAddingProperty(false)}>Cancel</button>
+					<button type="button" onClick={() => setFieldForm(null)}>Cancel</button>
 					<button
 						type="button"
-						disabled={!propertyName.trim()}
-						onClick={() => void addProperty().catch(() => undefined)}
-					>Add</button>
+						disabled={!fieldForm.name.trim()}
+						onClick={() => void saveField().catch(() => undefined)}
+					>{fieldForm.mode === "create" ? "Add" : "Save"}</button>
+					{fieldForm.mode === "edit" && (
+						<button type="button" className="danger" onClick={() => void deleteField().catch(() => undefined)}>Delete</button>
+					)}
 				</div>
 			)}
 			<div className="asset-table-scroll">
@@ -209,6 +229,12 @@ export function TableView({
 									onSort={changeSort}
 									onResize={beginColumnResize}
 									onResetWidth={resetColumnWidth}
+									onEdit={canEditProperties ? () => setFieldForm({
+										mode: "edit",
+										propertyId: property.propertyId,
+										name: property.name,
+										type: property.type,
+									}) : undefined}
 								/>
 							))}
 						</tr>
@@ -235,12 +261,14 @@ export function TableView({
 								<td>{formatBytes(asset.size)}</td>
 								<td>{new Date(asset.modifiedAt).toLocaleDateString()}</td>
 								{properties.map((property) => (
-									<td key={property.propertyId}>
-										{displayPropertyValue(
-											values.get(`${asset.assetId}:${property.propertyId}`),
-											property.type,
-										)}
-									</td>
+									<PropertyCell
+										key={property.propertyId}
+										property={property}
+										value={values.get(`${asset.assetId}:${property.propertyId}`)}
+										disabled={!canEditProperties}
+										onSet={(value) => onSetPropertyValue(asset.assetId, property.propertyId, value)}
+										onClear={() => onRemovePropertyValue(asset.assetId, property.propertyId)}
+									/>
 								))}
 							</tr>
 						))}
@@ -252,6 +280,13 @@ export function TableView({
 	);
 }
 
+type FieldForm = {
+	mode: "create" | "edit";
+	propertyId?: string;
+	name: string;
+	type: PropertyType;
+};
+
 interface SortableHeaderProps {
 	label: string;
 	column: SortKey;
@@ -260,6 +295,7 @@ interface SortableHeaderProps {
 	onSort: (column: SortKey) => void;
 	onResize: (column: SortKey, event: ReactPointerEvent<HTMLSpanElement>) => void;
 	onResetWidth: (column: SortKey) => void;
+	onEdit?: () => void;
 }
 
 function SortableHeader({
@@ -270,12 +306,18 @@ function SortableHeader({
 	onSort,
 	onResize,
 	onResetWidth,
+	onEdit,
 }: SortableHeaderProps): React.JSX.Element {
 	return (
 		<th>
-			<button type="button" onClick={() => onSort(column)}>
-				{label}{active === column ? (direction === "asc" ? " ↑" : " ↓") : ""}
-			</button>
+			<div className="table-head">
+				<button type="button" onClick={() => onSort(column)}>
+					{label}{active === column ? (direction === "asc" ? " ↑" : " ↓") : ""}
+				</button>
+				{onEdit && (
+					<button type="button" className="text-button" onClick={onEdit}>Edit</button>
+				)}
+			</div>
 			<span
 				className="column-resize-handle"
 				role="separator"
@@ -301,4 +343,84 @@ function sortValue(
 	if (key === "size") return asset.size;
 	if (key === "modifiedAt") return asset.modifiedAt;
 	return values.get(`${asset.assetId}:${key.slice("property:".length)}`);
+}
+
+function PropertyCell({
+	property,
+	value,
+	disabled,
+	onSet,
+	onClear,
+}: {
+	property: PropertyDefinition;
+	value: PropertyValue | undefined;
+	disabled: boolean;
+	onSet: (value: PropertyValue) => Promise<void>;
+	onClear: () => Promise<void>;
+}): React.JSX.Element {
+	const [draft, setDraft] = useState(value === undefined ? "" : String(value));
+	useEffect(() => setDraft(value === undefined ? "" : String(value)), [value]);
+
+	function stopRow(event: { stopPropagation: () => void }): void {
+		event.stopPropagation();
+	}
+
+	if (disabled) {
+		return <td>{displayPropertyValue(value, property.type)}</td>;
+	}
+
+	if (property.type === "boolean") {
+		return (
+			<td className="property-cell" onClick={stopRow} onDragStart={stopRow}>
+				<label className="property-boolean">
+					<input
+						type="checkbox"
+						checked={value === true}
+						aria-label={property.name}
+						onChange={(event) => {
+							void onSet(event.target.checked).catch(() => undefined);
+						}}
+					/>
+					{value === undefined ? "—" : value ? "Yes" : "No"}
+				</label>
+				{value !== undefined && (
+					<button type="button" className="text-button" aria-label={`Clear ${property.name}`} onClick={() => void onClear().catch(() => undefined)}>×</button>
+				)}
+			</td>
+		);
+	}
+
+	async function commit(): Promise<void> {
+		const trimmed = draft.trim();
+		if (!trimmed) {
+			if (value !== undefined) await onClear();
+			return;
+		}
+		if (property.type === "number") {
+			const next = Number(trimmed);
+			if (!Number.isFinite(next)) {
+				setDraft(value === undefined ? "" : String(value));
+				return;
+			}
+			if (next !== value) await onSet(next);
+			return;
+		}
+		if (draft !== value) await onSet(property.type === "date" ? trimmed : draft);
+	}
+
+	return (
+		<td className="property-cell" onClick={stopRow} onDragStart={stopRow}>
+			<input
+				type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"}
+				value={draft}
+				aria-label={property.name}
+				placeholder="—"
+				onChange={(event) => setDraft(event.target.value)}
+				onBlur={() => void commit().catch(() => undefined)}
+				onKeyDown={(event) => {
+					if (event.key === "Enter") event.currentTarget.blur();
+				}}
+			/>
+		</td>
+	);
 }
