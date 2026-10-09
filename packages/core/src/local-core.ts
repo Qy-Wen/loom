@@ -130,6 +130,14 @@ export class LocalCore {
 		return this.library.setFavorite(assetId, favorite);
 	}
 
+	addAssetTag(assetId: string, name: string): Promise<void> {
+		return this.library.addAssetTag(assetId, name);
+	}
+
+	removeAssetTag(assetId: string, tagId: string): Promise<void> {
+		return this.library.removeAssetTag(assetId, tagId);
+	}
+
 	getAssetFilePath(assetId: string): Promise<string | undefined> {
 		return this.library.getAssetFilePath(assetId);
 	}

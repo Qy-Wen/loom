@@ -267,6 +267,14 @@ function registerIpc(): void {
 		return localCore.setFavorite(assetId, favorite);
 	});
 
+	ipcMain.handle(IPC.addAssetTag, (_event, assetId: string, name: string): Promise<void> => {
+		return localCore.addAssetTag(assetId, name);
+	});
+
+	ipcMain.handle(IPC.removeAssetTag, (_event, assetId: string, tagId: string): Promise<void> => {
+		return localCore.removeAssetTag(assetId, tagId);
+	});
+
 	ipcMain.handle(IPC.openLibrary, async (event): Promise<LibrarySnapshot | null> => {
 		const owner = BrowserWindow.fromWebContents(event.sender);
 		const result = owner

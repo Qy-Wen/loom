@@ -47,6 +47,15 @@ function filterLibrary(library: LibrarySnapshot, query: string): LibrarySnapshot
 	return { ...library, assets, folders: [...folders] };
 }
 
+function filesForTag(library: LibrarySnapshot, tagId: string): Asset[] {
+	const byId = new Map(library.assets.map((asset) => [asset.assetId, asset]));
+	return library.assetTags.flatMap((row) => {
+		if (row.tagId !== tagId) return [];
+		const asset = byId.get(row.assetId);
+		return asset ? [asset] : [];
+	});
+}
+
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
 	opening: boolean;
@@ -111,6 +120,8 @@ export function LibrarySidebar({
 	}, [fileDisplay]);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [favoritesCollapsed, setFavoritesCollapsed] = useState(true);
+	const [tagsCollapsed, setTagsCollapsed] = useState(true);
+	const [expandedTagIds, setExpandedTagIds] = useState<Set<string>>(() => new Set());
 	const [query, setQuery] = useState("");
 	const searchRef = useRef<HTMLInputElement>(null);
 	const visible = useMemo(() => filterLibrary(library, query), [library, query]);
@@ -125,13 +136,35 @@ export function LibrarySidebar({
 			return [asset];
 		});
 	}, [library, query]);
+	const visibleTags = useMemo(() => {
+		const normalized = query.trim().toLowerCase();
+		if (!normalized) return library.tags.map((tag) => ({ tag, files: filesForTag(library, tag.tagId) }));
+		return library.tags.flatMap((tag) => {
+			const files = filesForTag(library, tag.tagId);
+			const nameHit = tag.name.toLowerCase().includes(normalized);
+			const matched = nameHit ? files : files.filter((asset) => (
+				asset.filename.toLowerCase().includes(normalized) || asset.relativePath.toLowerCase().includes(normalized)
+			));
+			return matched.length > 0 || nameHit ? [{ tag, files: matched.length > 0 ? matched : files }] : [];
+		});
+	}, [library, query]);
 	useEffect(() => {
 		if (searchOpen) searchRef.current?.focus();
 	}, [searchOpen]);
 	useEffect(() => {
 		setSearchOpen(false);
 		setQuery("");
+		setExpandedTagIds(new Set());
 	}, [library.rootPath]);
+
+	function toggleTag(tagId: string): void {
+		setExpandedTagIds((current) => {
+			const next = new Set(current);
+			if (next.has(tagId)) next.delete(tagId);
+			else next.add(tagId);
+			return next;
+		});
+	}
 
 	function acceptRootDrop(event: React.DragEvent): boolean {
 		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
@@ -274,8 +307,6 @@ export function LibrarySidebar({
 						>
 							This folder is empty.
 						</div>
-					) : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
-						<div className="empty">No matching files.</div>
 					) : (
 						<>
 						{favoriteAssets.length > 0 ? (
@@ -318,6 +349,77 @@ export function LibrarySidebar({
 								)) : null}
 							</div>
 						) : null}
+						{library.tags.length > 0 ? (
+							<div className="library-tags">
+								<button
+									type="button"
+									className="tags-label"
+									aria-expanded={queryActive || !tagsCollapsed}
+									onClick={() => setTagsCollapsed(queryActive || !tagsCollapsed)}
+								>
+									<span className={`folder-chevron${queryActive || !tagsCollapsed ? " expanded" : ""}`} aria-hidden="true">›</span>
+									<span className="tags-main">
+										<span className="tags-symbol" aria-hidden="true">
+											<svg viewBox="0 0 16 16" width="16" height="16">
+												<path fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" d="M2.5 8.2 8 2.7h5.2V8l-5.6 5.4a1.2 1.2 0 0 1-1.7 0L2.5 9.6a1 1 0 0 1 0-1.4Z" />
+												<circle cx="10.4" cy="5.2" r="0.8" fill="currentColor" stroke="none" />
+											</svg>
+										</span>
+										Tags
+									</span>
+								</button>
+								{queryActive || !tagsCollapsed ? visibleTags.map(({ tag, files }) => {
+									const open = queryActive || expandedTagIds.has(tag.tagId);
+									return (
+										<div key={tag.tagId}>
+											<div className="folder-row" style={{ paddingLeft: 21 }}>
+												<button
+													className={`folder-chevron${open ? " expanded" : ""}`}
+													type="button"
+													aria-label={open ? "Collapse tag" : "Expand tag"}
+													onClick={() => toggleTag(tag.tagId)}
+												>
+													›
+												</button>
+												<button
+													className="folder-main"
+													type="button"
+													onClick={() => toggleTag(tag.tagId)}
+												>
+													<span className="asset-name">{tag.name}</span>
+												</button>
+											</div>
+											{open ? files.map((asset) => (
+												<button
+													key={asset.assetId}
+													type="button"
+													className={`asset-row${asset.assetId === selectedAssetId ? " selected" : ""}`}
+													style={{ paddingLeft: 35 }}
+													onClick={() => onSelectAsset(asset.assetId)}
+													onContextMenu={(event) => {
+														event.preventDefault();
+														onAssetContextMenu(asset);
+													}}
+												>
+													<AssetThumbnail asset={asset} />
+													<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
+													{library.favoriteAssetIds.includes(asset.assetId) ? (
+														<span className="asset-favorite" title="Favorite">
+															<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+																<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
+															</svg>
+														</span>
+													) : null}
+												</button>
+											)) : null}
+										</div>
+									);
+								}) : null}
+							</div>
+						) : null}
+						{queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
+							<div className="empty">No matching files.</div>
+						) : (
 						<FileTree
 							library={visible}
 							fileDisplay={fileDisplay}
@@ -338,6 +440,7 @@ export function LibrarySidebar({
 							onCancelRename={onCancelRename}
 							onDropIntoFolder={onDropIntoFolder}
 						/>
+						)}
 						</>
 					)}
 				</div>

@@ -31,7 +31,7 @@ import { AssetPreview } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
 
-const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [] };
+const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 type LibraryClipboard =
@@ -47,11 +47,16 @@ function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): Li
 	if (change.type === "reset") return change.snapshot;
 	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm" || change.type === "video_vlm" || change.type === "audio_writeup") return current;
 	if (change.type === "favorites") return { ...current, favoriteAssetIds: change.assetIds };
+	if (change.type === "tags") return { ...current, tags: change.tags, assetTags: change.assetTags };
 	if (change.type === "remove") {
+		const assetTags = current.assetTags.filter((row) => row.assetId !== change.assetId);
+		const used = new Set(assetTags.map((row) => row.tagId));
 		return {
 			...current,
 			assets: current.assets.filter((asset) => asset.assetId !== change.assetId),
-			favoriteAssetIds: (current.favoriteAssetIds ?? []).filter((id) => id !== change.assetId),
+			favoriteAssetIds: current.favoriteAssetIds.filter((id) => id !== change.assetId),
+			assetTags,
+			tags: current.tags.filter((tag) => used.has(tag.tagId)),
 		};
 	}
 	if (change.type === "folder_upsert") {
@@ -580,6 +585,26 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function addTag(assetId: string, name: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.addAssetTag(assetId, name);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
+	async function removeTag(assetId: string, tagId: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.removeAssetTag(assetId, tagId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
+		}
+	}
+
 	async function createProperty(name: string, type: PropertyType): Promise<void> {
 		setError(null);
 		try {
@@ -785,6 +810,10 @@ export function App(): React.JSX.Element {
 						asset={selectedAsset}
 						properties={properties}
 						propertyValues={propertyValues}
+						tags={library.tags}
+						assetTags={library.assetTags}
+						onAddTag={addTag}
+						onRemoveTag={removeTag}
 						onChangeTab={setSidePanel}
 						onCreateProperty={createProperty}
 						onUpdateProperty={updateProperty}

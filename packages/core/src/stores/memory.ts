@@ -1,4 +1,6 @@
+import { randomUUID } from "node:crypto";
 import type { Asset } from "../model/asset.ts";
+import { normalizeTagName, tagNameKey, type AssetTag, type Tag } from "../model/tag.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import {
 	assertPropertyDefinition,
@@ -35,6 +37,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly audioWriteup = new Map<string, AudioWriteupRecord>();
 	private volumeId: string | undefined;
 	private readonly favorites = new Map<string, number>();
+	private readonly tags = new Map<string, Tag>();
+	private readonly tagIdByName = new Map<string, string>();
+	private readonly assetTags = new Map<string, Map<string, number>>();
 
 	async open(): Promise<void> {
 		this.assets.clear();
@@ -50,6 +55,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.videoVlm.clear();
 		this.audioWriteup.clear();
 		this.favorites.clear();
+		this.tags.clear();
+		this.tagIdByName.clear();
+		this.assetTags.clear();
 		this.volumeId = undefined;
 	}
 
@@ -67,6 +75,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.videoVlm.clear();
 		this.audioWriteup.clear();
 		this.favorites.clear();
+		this.tags.clear();
+		this.tagIdByName.clear();
+		this.assetTags.clear();
 		this.volumeId = undefined;
 	}
 
@@ -150,6 +161,10 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.favorites.keys()) {
 			if (!nextAssetIds.has(assetId)) this.favorites.delete(assetId);
 		}
+		for (const assetId of this.assetTags.keys()) {
+			if (!nextAssetIds.has(assetId)) this.assetTags.delete(assetId);
+		}
+		this.dropUnusedTags();
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -164,6 +179,8 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.videoVlm.delete(assetId);
 		this.audioWriteup.delete(assetId);
 		this.favorites.delete(assetId);
+		this.assetTags.delete(assetId);
+		this.dropUnusedTags();
 		this.clearTextIndex(assetId);
 	}
 
@@ -180,6 +197,56 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.favorites.set(assetId, Math.max(Date.now(), latest + 1));
 		}
 		else this.favorites.delete(assetId);
+	}
+
+	async listTags(): Promise<Tag[]> {
+		return [...this.tags.values()].sort((left, right) => left.name.localeCompare(right.name) || left.tagId.localeCompare(right.tagId));
+	}
+
+	async listAssetTags(): Promise<AssetTag[]> {
+		const rows: AssetTag[] = [];
+		for (const [assetId, links] of this.assetTags) {
+			for (const [tagId, createdAt] of links) rows.push({ assetId, tagId, createdAt });
+		}
+		rows.sort((left, right) => left.createdAt - right.createdAt || left.assetId.localeCompare(right.assetId) || left.tagId.localeCompare(right.tagId));
+		return rows;
+	}
+
+	async addAssetTag(assetId: string, name: string): Promise<void> {
+		if (!this.assets.has(assetId)) throw new Error("Asset not found");
+		const display = normalizeTagName(name);
+		const key = tagNameKey(display);
+		let tagId = this.tagIdByName.get(key);
+		if (!tagId) {
+			tagId = randomUUID();
+			const tag = { tagId, name: display };
+			this.tags.set(tagId, tag);
+			this.tagIdByName.set(key, tagId);
+		}
+		const links = this.assetTags.get(assetId) ?? new Map<string, number>();
+		if (links.has(tagId)) return;
+		const latest = Math.max(0, ...links.values());
+		links.set(tagId, Math.max(Date.now(), latest + 1));
+		this.assetTags.set(assetId, links);
+	}
+
+	async removeAssetTag(assetId: string, tagId: string): Promise<void> {
+		const links = this.assetTags.get(assetId);
+		links?.delete(tagId);
+		if (links && links.size === 0) this.assetTags.delete(assetId);
+		this.dropUnusedTags();
+	}
+
+	private dropUnusedTags(): void {
+		const used = new Set<string>();
+		for (const links of this.assetTags.values()) {
+			for (const tagId of links.keys()) used.add(tagId);
+		}
+		for (const [tagId, tag] of this.tags) {
+			if (used.has(tagId)) continue;
+			this.tags.delete(tagId);
+			this.tagIdByName.delete(tagNameKey(tag.name));
+		}
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {

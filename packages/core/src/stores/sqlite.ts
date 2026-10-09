@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
+import { normalizeTagName, type AssetTag, type Tag } from "../model/tag.ts";
 import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model/enrichment.ts";
 import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmJobStatus, VideoVlmRecord } from "../model/video-vlm.ts";
@@ -182,6 +184,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			for (const { asset_id: assetId } of existingAssetIds) {
 				if (!nextAssetIds.has(assetId)) remove.run(assetId);
 			}
+			deleteUnusedTags(database);
 		});
 		replace(assets);
 		this.rebuildFts();
@@ -191,6 +194,7 @@ export class SqliteMetadataStore implements MetadataStore {
 		const database = this.requireDatabase();
 		this.deleteFts(database, assetId);
 		database.prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
+		deleteUnusedTags(database);
 	}
 
 	async listFavoriteIds(): Promise<string[]> {
@@ -212,6 +216,48 @@ export class SqliteMetadataStore implements MetadataStore {
 			return;
 		}
 		database.prepare("DELETE FROM favorites WHERE asset_id = ?").run(assetId);
+	}
+
+	async listTags(): Promise<Tag[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT tag_id, name FROM tags ORDER BY name COLLATE NOCASE, tag_id")
+			.all() as Array<{ tag_id: string; name: string }>;
+		return rows.map((row) => ({ tagId: row.tag_id, name: row.name }));
+	}
+
+	async listAssetTags(): Promise<AssetTag[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT asset_id, tag_id, created_at FROM asset_tags ORDER BY created_at, asset_id, tag_id")
+			.all() as Array<{ asset_id: string; tag_id: string; created_at: number }>;
+		return rows.map((row) => ({ assetId: row.asset_id, tagId: row.tag_id, createdAt: row.created_at }));
+	}
+
+	async addAssetTag(assetId: string, name: string): Promise<void> {
+		const display = normalizeTagName(name);
+		const database = this.requireDatabase();
+		const asset = database.prepare("SELECT asset_id FROM assets WHERE asset_id = ?").get(assetId);
+		if (!asset) throw new Error("Asset not found");
+		const existing = database
+			.prepare("SELECT tag_id FROM tags WHERE name = ? COLLATE NOCASE")
+			.get(display) as { tag_id: string } | undefined;
+		const tagId = existing?.tag_id ?? randomUUID();
+		if (!existing) {
+			database.prepare("INSERT INTO tags (tag_id, name, created_at) VALUES (?, ?, ?)").run(tagId, display, Date.now());
+		}
+		const linked = database.prepare("SELECT 1 AS hit FROM asset_tags WHERE asset_id = ? AND tag_id = ?").get(assetId, tagId);
+		if (linked) return;
+		const latest = database
+			.prepare("SELECT COALESCE(MAX(created_at), 0) AS created_at FROM asset_tags WHERE asset_id = ?")
+			.get(assetId) as { created_at: number };
+		database
+			.prepare("INSERT INTO asset_tags (asset_id, tag_id, created_at) VALUES (?, ?, ?)")
+			.run(assetId, tagId, Math.max(Date.now(), latest.created_at + 1));
+	}
+
+	async removeAssetTag(assetId: string, tagId: string): Promise<void> {
+		const database = this.requireDatabase();
+		database.prepare("DELETE FROM asset_tags WHERE asset_id = ? AND tag_id = ?").run(assetId, tagId);
+		deleteUnusedTags(database);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {
@@ -654,6 +700,18 @@ export class SqliteMetadataStore implements MetadataStore {
 				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
 				created_at REAL NOT NULL
 			);
+			CREATE TABLE IF NOT EXISTS tags (
+				tag_id TEXT PRIMARY KEY,
+				name TEXT NOT NULL UNIQUE COLLATE NOCASE,
+				created_at REAL NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS asset_tags (
+				asset_id TEXT NOT NULL REFERENCES assets(asset_id) ON DELETE CASCADE,
+				tag_id TEXT NOT NULL REFERENCES tags(tag_id) ON DELETE CASCADE,
+				created_at REAL NOT NULL,
+				PRIMARY KEY (asset_id, tag_id)
+			);
+			CREATE INDEX IF NOT EXISTS asset_tags_tag_idx ON asset_tags(tag_id);
 			CREATE TABLE IF NOT EXISTS properties (
 				property_id TEXT PRIMARY KEY,
 				name TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -1015,6 +1073,13 @@ function toAudioWriteup(row: AudioWriteupRow): AudioWriteupRecord {
 
 function readyMarkdown(row: { status: string; markdown: string | null } | undefined): string | undefined {
 	return row?.status === "ready" ? row.markdown ?? undefined : undefined;
+}
+
+function deleteUnusedTags(database: Database.Database): void {
+	database.prepare(`
+		DELETE FROM tags
+		WHERE NOT EXISTS (SELECT 1 FROM asset_tags WHERE asset_tags.tag_id = tags.tag_id)
+	`).run();
 }
 
 function loadSqliteVec(database: Database.Database): boolean {

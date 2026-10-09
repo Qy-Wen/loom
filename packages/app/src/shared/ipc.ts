@@ -67,6 +67,8 @@ export const IPC = {
 	openLibrary: "loom:openLibrary",
 	getLibrarySnapshot: "loom:getLibrarySnapshot",
 	setFavorite: "loom:setFavorite",
+	addAssetTag: "loom:addAssetTag",
+	removeAssetTag: "loom:removeAssetTag",
 	libraryChanged: "loom:libraryChanged",
 	showAssetContextMenu: "loom:showAssetContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
@@ -145,6 +147,8 @@ export interface LoomApi {
 	openLibrary: () => Promise<LibrarySnapshot | null>;
 	getLibrarySnapshot: () => Promise<LibrarySnapshot>;
 	setFavorite: (assetId: string, favorite: boolean) => Promise<void>;
+	addAssetTag: (assetId: string, name: string) => Promise<void>;
+	removeAssetTag: (assetId: string, tagId: string) => Promise<void>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
 	showAssetContextMenu: (assetId: string, canPaste: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean) => Promise<FolderContextAction | null>;

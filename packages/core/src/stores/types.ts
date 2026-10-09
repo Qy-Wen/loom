@@ -1,4 +1,5 @@
 import type { Asset } from "../model/asset.ts";
+import type { AssetTag, Tag } from "../model/tag.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
@@ -28,6 +29,10 @@ export interface MetadataStore {
 	removeAsset(assetId: string): Promise<void>;
 	listFavoriteIds(): Promise<string[]>;
 	setFavorite(assetId: string, favorite: boolean): Promise<void>;
+	listTags(): Promise<Tag[]>;
+	listAssetTags(): Promise<AssetTag[]>;
+	addAssetTag(assetId: string, name: string): Promise<void>;
+	removeAssetTag(assetId: string, tagId: string): Promise<void>;
 	getLibraryVolumeId(): Promise<string | undefined>;
 	setLibraryVolumeId(volumeId: string): Promise<void>;
 
