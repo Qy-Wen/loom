@@ -351,7 +351,7 @@ POST /graph/query
 - **微调 / LoRA**：根据实际效果与评测结果决定是否引入。
 - **MCP 设置页**：已做 — 设置 → MCP tab。
 - **Evals**：已做 — 评测 Agent、工具调用与检索效果。见 [EVALS](./AGENT/EVALS.zh-CN.md)。
-- **对话资产引用：** 已做 — 输入框可贴库内资产；对话里的 `asset_id` 引用可点，并选中该资产。见 [AGENT](./AGENT.zh-CN.md) §5。
+- **对话资产引用：** 已做 — 输入框可贴库内资产；回答里的 `<asset_ref>` 块先按 `asset_id`、再按路径选中该文件。见 [AGENT](./AGENT.zh-CN.md) §5。
 - **从某条消息分支：** 已做 — 当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./AGENT.zh-CN.md) §6.3d。
 - **Human in the loop：** 已做 — Standard 确认库外的 `write` / `edit`；Basic 也确认 `bash` 和会写文件的 FFmpeg 工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 - **可观测性**：记录运行轨迹、工具调用、耗时与 token。

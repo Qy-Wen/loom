@@ -15,7 +15,7 @@ const BASE_SYSTEM_PROMPT =
 	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
 	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
-	"When your reply names a library file a tool result identified, put an <asset_ref> block there and copy that result's path, asset_id, and type. Use the same shape as a user <asset_ref> block. Do not invent asset ids or paths.";
+	"When your reply names a library file, write an <asset_ref> block with path, asset_id, and type on their own lines, in that order. Copy path and asset_id from the tool result or from a user <asset_ref>. Omit asset_id when you do not have one. Do not invent paths or ids.";
 
 /** System prompt for the open asset library. `null` means no library is open. */
 export function systemPromptForLibrary(rootPath: string | null): string {

@@ -1,71 +1,51 @@
-import { type AssetRefAttachment, type LoomAssetType } from "@loom/agent/attachments";
-import { isRelativeLibraryPath, replaceAssetRefBlocks } from "@loom/agent/composer-asset";
-
 /**
- * Assistant prose may contain `<asset_ref>` blocks copied from tool results.
- * A block whose id is in the open library becomes an inline link the bubble
- * draws as a button. Anything else stays visible text. An unfinished block
- * is split off so markdown does not drop the opening tag while it streams.
+ * An assistant reply names a library file with the same `<asset_ref>` block the composer stores.
+ * `asset_id` is looked up first. A miss falls back to `path`. Anything else stays visible and is not a link.
+ * An unfinished block is split off so markdown does not drop it while it streams.
  */
 export function prepareAssistantContent(
 	text: string,
-	knownFilenames: ReadonlyMap<string, string>,
+	library: ReadonlyMap<string, { path: string }>,
 ): { markdown: string; rawTail: string } {
-	const open = unclosedAssetRef(text);
+	const open = unclosedAssetBlock(text);
 	const head = open < 0 ? text : text.slice(0, open);
 	const rawTail = open < 0 ? "" : text.slice(open);
-	const link = (block: AssetRefAttachment): string | null => {
-		const filename = knownFilenames.get(block.assetId);
-		if (!filename) return null;
-		const label = linkLabel(filename);
-		return `[${label}](#loom-asset:${encodeURIComponent(block.assetId)})`;
-	};
-	const linked = replaceAttributeRefs(replaceAssetRefBlocks(head, link), link);
-	return { markdown: escapeLeftoverBlocks(linked), rawTail };
-}
-
-const ASSET_TYPES = new Set<LoomAssetType>(["image", "video", "audio", "text", "other"]);
-const ATTR_TAG = /<asset_ref\s+([^>]*?)\s*\/?>/g;
-
-function replaceAttributeRefs(text: string, replace: (block: AssetRefAttachment) => string | null): string {
-	return text.replace(ATTR_TAG, (raw, body: string) => {
-		const block = attributeBlock(body);
-		if (!block) return raw;
-		return replace(block) ?? raw;
-	});
-}
-
-function attributeBlock(source: string): AssetRefAttachment | null {
-	const attrs = new Map<string, string>();
-	for (const match of source.matchAll(/([A-Za-z_]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) {
-		attrs.set(match[1]!.toLowerCase(), match[2] ?? match[3] ?? "");
+	const byPath = new Map<string, string>();
+	for (const [assetId, asset] of library) {
+		if (!byPath.has(asset.path)) byPath.set(asset.path, assetId);
 	}
-	const path = attrs.get("path");
-	const assetId = attrs.get("asset_id");
-	const assetType = attrs.get("type");
-	if (path === undefined || !assetId || !assetType || !ASSET_TYPES.has(assetType as LoomAssetType)) return null;
-	if (!isRelativeLibraryPath(path)) return null;
-	return { type: "asset_ref", assetId, path, assetType: assetType as LoomAssetType };
+	const linked = head.replace(ASSET_BLOCK, (_raw, path: string, assetId: string | undefined) => mention(path, assetId, library, byPath));
+	return { markdown: linked, rawTail };
 }
 
-function unclosedAssetRef(text: string): number {
+const ASSET_BLOCK = /<asset_ref>\npath: ([^\n]*)\n(?:asset_id: ([^\n]*)\n)?(?:type: [^\n]*\n)?<\/asset_ref>/g;
+
+function mention(
+	path: string,
+	assetId: string | undefined,
+	library: ReadonlyMap<string, { path: string }>,
+	byPath: ReadonlyMap<string, string>,
+): string {
+	const written = path.trim();
+	const id = assetId?.trim() ?? "";
+	const live = id.length > 0 ? library.get(id) : undefined;
+	if (live) return link(live.path, "loom-asset", id);
+	const key = written.replaceAll("\\", "/");
+	const found = key.length > 0 ? byPath.get(key) : undefined;
+	if (found) return link(key, "loom-asset", found);
+	return link(written || id, "loom-missing", written || id);
+}
+
+function link(label: string, kind: "loom-asset" | "loom-missing", value: string): string {
+	return `[${linkLabel(label)}](#${kind}:${encodeURIComponent(value)})`;
+}
+
+function unclosedAssetBlock(text: string): number {
 	const open = text.lastIndexOf("<asset_ref");
 	if (open < 0) return -1;
 	const end = text.indexOf(">", open);
 	if (end < 0) return open;
-	const tag = text.slice(open, end + 1);
-	if (tag !== "<asset_ref>") return -1;
-	return text.indexOf("</asset_ref>", open) >= 0 ? -1 : open;
-}
-
-function escapeLeftoverBlocks(text: string): string {
-	return text
-		.replace(/<asset_ref>[\s\S]*?<\/asset_ref>/g, (raw) => escapeHtml(raw))
-		.replace(ATTR_TAG, (raw) => escapeHtml(raw));
-}
-
-function escapeHtml(value: string): string {
-	return value.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+	return text.indexOf("</asset_ref>", end) >= 0 ? -1 : open;
 }
 
 function linkLabel(name: string): string {

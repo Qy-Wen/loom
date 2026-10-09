@@ -180,23 +180,25 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式放入库内文件：从素材库拖到输入框，右键文件选 Add to chat，或点 + 菜单的 Library file。External file 和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再放入同一张芯片。发送时按 `assetId` 查当前库，把此刻的 `path` / `assetType` 写进块里。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
 
-芯片排在文字里，可以插在词与词之间。输入框读出文字时就在这个位置写上 `<asset_ref>` 块，聊天消息和落盘的 `content` 都是这串字。不再另存一条 `attachments`。气泡把这块解析回芯片。旧 transcript 里若还有看不见的标记加上 `asset_ref` 或 `ui_selection` 行，请求时仍按原样折；存成 `ui_selection` 的芯片仍折成 `<ui_selection>`。没有出现在芯片里的库高亮，接在原文后面，包在 `<system-reminder>` 里。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
+芯片排在文字里，可以插在词与词之间。输入框读出文字时就在这个位置写上 `<asset_ref>` 块，聊天消息和落盘的 `content` 都是这串字。不再另存一条 `attachments`。气泡把这块解析回芯片。没有出现在芯片里的库高亮，接在原文后面，包在 `<system-reminder>` 里。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
 
-回答里也可以有同一块，从工具结果里抄来。气泡只在这个 `asset_id` 属于当前素材库时画文件名按钮。对不上的块，以及还在往外流的半块，都保持文字。点击同样是在素材库里选中该资产。
+回答里用同样的 `<asset_ref>` 块点名文件。气泡先按 `asset_id` 在当前素材库里查，蓝色显示该文件现在的路径。id 空着或不在库里时再对 `path`。还是对不上，写下的路径画成红色，不能点。还没写完的块在流出时保持文字。
 
 ```
-看一下<asset_ref>
+看一下
+<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video
-</asset_ref>这段
+</asset_ref>
+这段
 ```
 
 ### 5.2 折给 Chat API
 
 Chat 使用 OpenAI 兼容 `POST /v1/chat/completions`。不少服务只接受字符串 `content`，不要多个 text part。`pi-adapter` 的 `toProviderMessages` 先把落盘 user 消息的原文和附件**拼成一段字符串**，再交给 `convertToLlm`。主动放入的芯片在 `content` 里已经是这块，折的时候留在原位，只在后面补上剩下的库高亮。系统注入永远不做成第二个 text part。
 
-已经落在 user 行 `content` 里的旧图片部分仍按 `image_url` 发出。输入框新贴的都是库芯片，不发像素。要看图/视频/音频，由 agent 自己调 `describe_image` / `describe_video` / `describe_audio` 或 `read`。旧图片部分被拒绝时，界面报错，并把当前路径退到这条消息之前。
+输入框贴的是库芯片，不发像素。要看图/视频/音频，由 agent 自己调 `describe_image` / `describe_video` / `describe_audio` 或 `read`。
 
 折法固定。HTTP 里没有 `attachments` 字段。
 
@@ -224,7 +226,7 @@ type: text
 </system-reminder>
 ```
 
-System prompt 写明：`<asset_ref>` 是用户放进文字里的文件；原文后面的 `<system-reminder>` 是应用附上的上下文。用户说「这个 / 它」又没点名时用这些块；点了别的路径就听用户的。回答里点名工具结果中的库文件时，在该处写 `<asset_ref>`，path、`asset_id`、type 从结果里原样抄，不要编造。
+System prompt 写明：`<asset_ref>` 是用户放进文字里的文件；原文后面的 `<system-reminder>` 是应用附上的上下文。用户说「这个 / 它」又没点名时用这些块；点了别的路径就听用户的。回答里点名库文件时，写同样的 `<asset_ref>` 块。`path` 和 `asset_id` 从结果里抄，没有 id 就省掉那一行，不要编造。
 
 下一轮再快照库高亮。若与 transcript 里**最近一条** `ui_selection` 的 `assetId` 相同，本轮不挂这条 attachment、也不折——历史上还有那一块。先前的 `asset_ref` 即使是同一文件，也不压制下一轮的隐式 `ui_selection`。没有更早的 `ui_selection`，或换了文件，再按上面挂并折。旧行不改。同一轮的 tool 循环共用发送时那份快照。同一轮发送里，若芯片里已经有这个 `assetId`，就不再挂隐式 `ui_selection`。
 
@@ -344,7 +346,7 @@ Harness 负责运行时；Loom 映射现有行为，下面只将明确列出的�
 - **npm 三个包**：`pi-ai` / `chord` / `pi-telemetry`，版本对齐 `UPSTREAM`。
 - **合并上游**：`vendor-clean` pristine 分支 + `git merge` 三方合并。
 - **解耦**：业务使用 `HarnessSessionManager` 与 Loom 自有工具/事件类型；只有 `@loom/agent` 引用 vendor Pi Harness。
-- **User attachments**：主动放入的芯片是 user 消息 `content` 里的 `<asset_ref>` 块。库高亮（`ui_selection`）仍挂在 `attachments` 上，请求时再折进这段文字，包在 `<system-reminder>` 里。外部文件先拷进 `Inbox/`。历史上 `content` 里的图片部分仍按 `image_url` 发出。芯片、工具结果里的文件名，以及回答里的 `<asset_ref>`，在 id 属于当前素材库时会选中该资产。
+- **User attachments**：主动放入的芯片是 user 消息 `content` 里的 `<asset_ref>` 块。库高亮（`ui_selection`）仍挂在 `attachments` 上，请求时再折进这段文字，包在 `<system-reminder>` 里。外部文件先拷进 `Inbox/`。芯片和工具结果里的文件名按 id 选中该资产。回答里的 `<asset_ref>` 块在 `asset_id` 还在当前素材库时按 id 选中该文件，否则按 `path`。
 - **前端协议**：用 CopilotKit（AG-UI）+ main 进程 localhost server；`LoomAgUiAgent` 把 `LoomAgentEvent` 翻成 AG-UI，不暴露 Pi 运行事件。
 - **工具权限和沙箱：** [PERMISSION](./PERMISSION.zh-CN.md)。
 - **Evals：** 压缩率、prompt-cache 命中率、仓内 Agent/工具金标、检索 Recall@k / nDCG。见 [EVALS.md](./EVALS.zh-CN.md)。

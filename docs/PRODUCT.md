@@ -351,7 +351,7 @@ Introduce these progressively when real scenarios require them:
 - **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
 - **MCP settings UI:** done — Settings → MCP tab.
 - **Evals:** done — Agent behavior, tool calls, and retrieval quality. See [EVALS](./AGENT/EVALS.md).
-- **Chat asset refs:** done — attach library assets in the composer; click `asset_id` citations in the thread to select that asset. See [AGENT](./AGENT.md) §5.
+- **Chat asset refs:** done — attach library assets in the composer; an `<asset_ref>` block in a reply selects that file by `asset_id`, then by path. See [AGENT](./AGENT.md) §5.
 - **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
 - **Human in the loop:** done — Standard confirms `write` / `edit` outside the open library; Basic also confirms `bash` and the FFmpeg tools that write. See [PERMISSION](./AGENT/PERMISSION.md).
 - **Observability:** record run traces, tool calls, latency, and token usage.

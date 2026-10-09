@@ -33,14 +33,12 @@ export {
 } from "./attachments.ts";
 export {
 	assetRefBlocks,
-	assetRefMarker,
 	composerLayoutText,
 	displayAssetRefs,
 	inlineAssetIds,
 	isRelativeLibraryPath,
 	parseComposerAssetInputs,
 	replaceAssetRefBlocks,
-	splitInlineAssetRefs,
 	splitStoredAssetText,
 	stripInlineAssetRefs,
 } from "./composer-asset.ts";

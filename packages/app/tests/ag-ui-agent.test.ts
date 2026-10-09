@@ -290,7 +290,8 @@ describe("LoomAgUiAgent", () => {
 			undefined,
 			async () => [chip],
 		);
-		await lastValueFrom(adapter.run(runInput("thread-1", `看一下\u2060loom-asset:${chip.assetId}\u2060这段`)).pipe(toArray()));
+		const text = "看一下\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>\n\n这段";
+		await lastValueFrom(adapter.run(runInput("thread-1", text)).pipe(toArray()));
 		const prompt = manager.prompts[0];
 		assert.match(prompt?.text ?? "", /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/asset_ref>\n\n这段$/);
 		assert.deepEqual(prompt?.attachments, [{ type: "ui_selection", assetId: "asset-2", path: "notes/brief.md", assetType: "text" }]);

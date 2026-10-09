@@ -1,6 +1,6 @@
-import { assetRefBlocks, replaceAssetRefBlocks, splitInlineAssetRefs } from "./composer-asset.ts";
+import { assetRefBlocks, replaceAssetRefBlocks } from "./composer-asset.ts";
 
-/** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. Composer pictures live on `content`, not here. */
+/** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. */
 
 export type LoomAssetType = "image" | "video" | "audio" | "text" | "other";
 
@@ -186,24 +186,10 @@ function formatImplicitContext(rows: readonly LoomUserAttachment[]): string {
 	return `<system-reminder>\n${intro}\n\n${body}\n</system-reminder>`;
 }
 
-/** Fold selections into one string. A chip marker expands where it sits; other attachments are appended. */
+/** Append a chip or library highlight the text does not already name. */
 export function foldUserText(text: string, attachments: readonly LoomUserAttachment[]): string {
-	const byId = new Map<string, LoomUserAttachment>();
-	for (const row of attachments) {
-		if (!byId.has(row.assetId)) byId.set(row.assetId, row);
-	}
 	const used = new Set(assetRefBlocks(text).map((row) => row.assetId));
-	let out = "";
-	for (const part of splitInlineAssetRefs(text)) {
-		if (part.type === "text") {
-			out += part.text;
-			continue;
-		}
-		const row = byId.get(part.assetId);
-		if (!row) continue;
-		used.add(part.assetId);
-		out = appendSelectionBlock(out, formatAttachmentBlock(row));
-	}
+	let out = text;
 	const implicit: LoomUserAttachment[] = [];
 	for (const row of attachments) {
 		if (used.has(row.assetId)) continue;
@@ -211,6 +197,7 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 			implicit.push(row);
 			continue;
 		}
+		used.add(row.assetId);
 		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
 	if (implicit.length > 0) out = appendSelectionBlock(out, formatImplicitContext(implicit));
@@ -232,14 +219,11 @@ function imagePartsFromContent(content: unknown): ImagePart[] {
 	return images;
 }
 
-/** Clone a user row for the provider: one text string, plus image parts already on `content`. */
+/** Clone a user row for the provider as one text string. Image parts on `content` are dropped. */
 export function foldUserMessageForLlm<T extends { role: string; content?: unknown; attachments?: unknown }>(message: T): T {
 	if (message.role !== "user") return message;
 	const attachments = parseUserAttachments(message.attachments);
-	if (attachments.length === 0) return message;
+	if (attachments.length === 0 && imagePartsFromContent(message.content).length === 0) return message;
 	const folded = foldUserText(userTextFromContent(message.content), attachments);
-	const images = imagePartsFromContent(message.content);
-	if (images.length === 0) return { ...message, content: folded };
-	if (!folded) return { ...message, content: images };
-	return { ...message, content: [{ type: "text", text: folded }, ...images] };
+	return { ...message, content: folded };
 }
