@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -11,6 +11,40 @@ import {
 import { FileTree, type FileDisplay } from "./file-tree.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
+
+function folderNameMatches(folder: string, query: string): boolean {
+	return (folder.split("/").at(-1) ?? folder).toLowerCase().includes(query);
+}
+
+function addFolderChain(folders: Set<string>, folder: string): void {
+	const parts = folder.split("/").filter(Boolean);
+	let current = "";
+	for (const part of parts) {
+		current = current ? `${current}/${part}` : part;
+		folders.add(current);
+	}
+}
+
+function filterLibrary(library: LibrarySnapshot, query: string): LibrarySnapshot {
+	const normalized = query.trim().toLowerCase();
+	if (!normalized) return library;
+	const named = library.folders.filter((folder) => folderNameMatches(folder, normalized));
+	const assets = library.assets.filter((asset) => (
+		asset.filename.toLowerCase().includes(normalized)
+		|| asset.relativePath.toLowerCase().includes(normalized)
+		|| named.some((folder) => asset.relativePath.startsWith(`${folder}/`))
+	));
+	const folders = new Set<string>();
+	for (const folder of named) addFolderChain(folders, folder);
+	for (const folder of library.folders) {
+		if (named.some((hit) => folder.startsWith(`${hit}/`))) addFolderChain(folders, folder);
+	}
+	for (const asset of assets) {
+		const parent = asset.relativePath.split("/").slice(0, -1).join("/");
+		if (parent) addFolderChain(folders, parent);
+	}
+	return { ...library, assets, folders: [...folders] };
+}
 
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
@@ -66,6 +100,18 @@ export function LibrarySidebar({
 	useEffect(() => {
 		localStorage.setItem(FILE_DISPLAY_KEY, fileDisplay);
 	}, [fileDisplay]);
+	const [searchOpen, setSearchOpen] = useState(false);
+	const [query, setQuery] = useState("");
+	const searchRef = useRef<HTMLInputElement>(null);
+	const visible = useMemo(() => filterLibrary(library, query), [library, query]);
+	const queryActive = query.trim().length > 0;
+	useEffect(() => {
+		if (searchOpen) searchRef.current?.focus();
+	}, [searchOpen]);
+	useEffect(() => {
+		setSearchOpen(false);
+		setQuery("");
+	}, [library.rootPath]);
 
 	function acceptRootDrop(event: React.DragEvent): boolean {
 		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
@@ -89,9 +135,13 @@ export function LibrarySidebar({
 			</div>
 
 			<div className="file-heading">
-				<span>Files</span>
+				<span className="file-heading-title">
+					<span>Files</span>
+					<span>{queryActive ? visible.assets.length : library.assets.length}</span>
+				</span>
 				<span className="file-heading-tools">
 					{library.rootPath ? (
+						<>
 						<span className="file-display" role="group" aria-label="File display">
 							<button
 								type="button"
@@ -121,10 +171,45 @@ export function LibrarySidebar({
 								</svg>
 							</button>
 						</span>
+						<button
+							type="button"
+							className={searchOpen ? "active" : ""}
+							aria-label="Search files"
+							aria-pressed={searchOpen}
+							title="Search files"
+							onClick={() => {
+								setSearchOpen((open) => {
+									if (open) setQuery("");
+									return !open;
+								});
+							}}
+						>
+							<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+								<circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
+								<path d="M10.2 10.2 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+							</svg>
+						</button>
+						</>
 					) : null}
-					<span>{library.assets.length}</span>
 				</span>
 			</div>
+			{searchOpen && library.rootPath ? (
+				<div className="file-search">
+					<input
+						ref={searchRef}
+						type="search"
+						placeholder="Filter files"
+						value={query}
+						onChange={(event) => setQuery(event.target.value)}
+						onKeyDown={(event) => {
+							if (event.key !== "Escape") return;
+							event.preventDefault();
+							setQuery("");
+							setSearchOpen(false);
+						}}
+					/>
+				</div>
+			) : null}
 			{!library.rootPath ? (
 				<div className="empty">Open a folder to start a local asset library.</div>
 			) : (
@@ -155,11 +240,13 @@ export function LibrarySidebar({
 						>
 							This folder is empty.
 						</div>
+					) : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
+						<div className="empty">No matching files.</div>
 					) : (
 						<FileTree
-							library={library}
+							library={visible}
 							fileDisplay={fileDisplay}
-							collapsedFolders={collapsedFolders}
+							collapsedFolders={queryActive ? new Set() : collapsedFolders}
 							selectedAssetId={selectedAssetId}
 							selectedFolder={selectedFolder}
 							renamingAssetId={renamingAssetId}
