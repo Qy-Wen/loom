@@ -8,6 +8,7 @@ import {
 	nearestNode,
 	nodeHitZone,
 } from "./graph-layout.ts";
+import { SuggestInput } from "../panel/suggest-input.tsx";
 import { useGraphSimulation } from "./graph-simulation.ts";
 
 interface GraphViewProps {
@@ -77,6 +78,7 @@ export function GraphView({
 	const [pendingLink, setPendingLink] = useState<PendingLink | null>(null);
 	const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 	const [typeDraft, setTypeDraft] = useState("");
+	const [typeOpen, setTypeOpen] = useState(false);
 	const [typeError, setTypeError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [activeDrag, setActiveDrag] = useState<"move" | "link" | null>(null);
@@ -223,7 +225,8 @@ export function GraphView({
 			setHover(null);
 			if (!targetId) return;
 			setPendingLink({ fromId: start.fromId, toId: targetId });
-			setTypeDraft(live.current.relationTypes.find((type) => type !== "GENERATED_FROM") ?? "");
+			setTypeDraft(live.current.relationTypes[0] ?? "");
+			setTypeOpen(false);
 			setTypeError(null);
 		};
 		window.addEventListener("pointermove", onMove);
@@ -502,27 +505,31 @@ export function GraphView({
 				)}
 			</div>
 			{pendingLink && (
-				<div className="graph-type-dialog" role="dialog" aria-label="Create relation">
+				<div
+					className="graph-type-dialog"
+					role="dialog"
+					aria-label="Create relation"
+					onKeyDown={(event) => {
+						if (event.key === "Enter") void confirmLink();
+					}}
+				>
 					<div className="graph-type-dialog-title">
 						Relate {assetsById.get(pendingLink.fromId)?.filename ?? "asset"}
 						{" → "}
 						{assetsById.get(pendingLink.toId)?.filename ?? "asset"}
 					</div>
-					<input
+					<SuggestInput
 						autoFocus
-						list="graph-relation-types"
-						placeholder="Relationship type"
+						openOnFocus={false}
 						value={typeDraft}
-						onChange={(event) => setTypeDraft(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") void confirmLink();
-						}}
+						open={typeOpen}
+						suggestions={relationTypes}
+						placeholder="Relationship type"
+						showLabel="Show relationship types"
+						hideLabel="Hide relationship types"
+						onChange={setTypeDraft}
+						onOpenChange={setTypeOpen}
 					/>
-					<datalist id="graph-relation-types">
-						{relationTypes.map((type) => (
-							<option key={type} value={type} />
-						))}
-					</datalist>
 					{typeError && <div className="graph-type-error">{typeError}</div>}
 					<div className="property-form-actions">
 						<button type="button" onClick={() => { setPendingLink(null); setTypeError(null); }}>

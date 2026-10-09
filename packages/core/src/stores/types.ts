@@ -63,24 +63,20 @@ export interface MetadataStore {
 	searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]>;
 }
 
-/** Output → source. `fromAssetId` is the generated file. */
-export const GENERATED_FROM = "GENERATED_FROM";
+/** Ordinary relation type written when a convenience tool saves a derived file. Output → source. */
+export const PROVENANCE_RELATION_TYPE = "Generated from";
 
-/** Ladybug table for user-defined edge labels. Not a user-facing type. */
+/** Ladybug table for every edge. Not a user-facing type. */
 export const RELATED = "RELATED";
 
 const MAX_RELATION_TYPE_LENGTH = 64;
 
-/** Trim and reject empty / reserved labels. `GENERATED_FROM` stays FFmpeg-only. */
+/** Trim and reject empty labels. `RELATED` is the storage table, not a type name. */
 export function normalizeRelationType(type: string): string {
 	const value = type.trim();
 	if (!value) throw new Error("Relationship type is required");
 	if (value.length > MAX_RELATION_TYPE_LENGTH) throw new Error("Relationship type is too long");
-	const reserved = value.toUpperCase();
-	if (reserved === GENERATED_FROM) {
-		throw new Error("GENERATED_FROM is reserved for FFmpeg provenance");
-	}
-	if (reserved === RELATED) throw new Error("RELATED is reserved");
+	if (value.toUpperCase() === RELATED) throw new Error("RELATED is reserved");
 	return value;
 }
 

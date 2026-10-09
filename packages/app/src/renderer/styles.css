@@ -976,6 +976,11 @@ body.resizing-columns {
 	font-size: 12px;
 }
 
+.graph-type-dialog .suggest > input {
+	width: 100%;
+	padding-right: 22px;
+}
+
 .graph-type-dialog input:focus {
 	border-color: #7896c8;
 	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);

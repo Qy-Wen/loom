@@ -54,7 +54,7 @@ import type {
 import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import {
-	GENERATED_FROM,
+	PROVENANCE_RELATION_TYPE,
 	normalizeRelationType,
 	type AssetRelation,
 	type GraphStore,
@@ -414,33 +414,25 @@ export class LocalCore {
 
 	async listAssetRelations(assetId: string): Promise<AssetRelationsResult> {
 		const relations = await this.graphStore.listRelations(assetId);
-		const generatedFrom: AssetRelationView[] = [];
-		const generated: AssetRelationView[] = [];
 		const links: AssetLinkView[] = [];
 		for (const relation of relations) {
 			const outgoing = relation.fromAssetId === assetId;
 			const otherId = outgoing ? relation.toAssetId : relation.fromAssetId;
 			const other = await this.metadataStore.getAsset(otherId);
 			if (!other) continue;
-			const view = toRelationView(other);
 			links.push({
 				relationId: relation.relationId,
 				relationType: relation.type,
 				direction: outgoing ? "out" : "in",
-				asset: view,
+				asset: toRelationView(other),
 			});
-			if (relation.type !== GENERATED_FROM) continue;
-			if (outgoing) generatedFrom.push(view);
-			else generated.push(view);
 		}
-		generatedFrom.sort(compareRelationView);
-		generated.sort(compareRelationView);
 		links.sort((a, b) => (
 			a.relationType.localeCompare(b.relationType)
 			|| a.direction.localeCompare(b.direction)
 			|| compareRelationView(a.asset, b.asset)
 		));
-		return { generatedFrom, generated, links };
+		return { links };
 	}
 
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined> {
@@ -578,12 +570,7 @@ export class LocalCore {
 			if (!outputRel) continue;
 			const output = await this.library.indexFile(outputRel);
 			if (!output || output.assetId === source.assetId) continue;
-			await this.graphStore.upsertRelation({
-				relationId: `${output.assetId}:${source.assetId}:${GENERATED_FROM}`,
-				fromAssetId: output.assetId,
-				toAssetId: source.assetId,
-				type: GENERATED_FROM,
-			});
+			await this.createRelation(output.assetId, source.assetId, PROVENANCE_RELATION_TYPE);
 		}
 	}
 

@@ -66,8 +66,6 @@ export interface AssetLinkView {
 }
 
 export interface AssetRelationsResult {
-	generatedFrom: AssetRelationView[];
-	generated: AssetRelationView[];
 	links: AssetLinkView[];
 }
 

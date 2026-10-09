@@ -17,8 +17,7 @@ describe("assetRefsFromTool", () => {
 			assetRefsFromTool("inspect_asset", {
 				...clip,
 				kind: "asset_detail",
-				generated: [{ assetId: "asset-2", filename: "still.png", relativePath: "stills/still.png", type: "image" }],
-				links: [{ asset: { assetId: "asset-1", filename: "hero.mp4", relativePath: "clips/hero.mp4", type: "video" } }],
+				links: [{ asset: { assetId: "asset-2", filename: "still.png", relativePath: "stills/still.png", type: "image" } }],
 			}),
 			[
 				{ assetId: "asset-1", path: "clips/hero.mp4", filename: "hero.mp4" },

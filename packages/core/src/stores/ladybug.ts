@@ -4,7 +4,7 @@ import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Connection, Database, QueryResult } from "@ladybugdb/wasm-core";
 import type { LibraryPaths } from "../library/paths.ts";
-import { GENERATED_FROM, RELATED, type AssetRelation, type GraphStore } from "./types.ts";
+import { RELATED, type AssetRelation, type GraphStore } from "./types.ts";
 const require = createRequire(import.meta.url);
 
 interface WasmModule {
@@ -57,7 +57,6 @@ export class LadybugGraphStore implements GraphStore {
 			await this.run(`IMPORT DATABASE '${toCypherPath(paths.graphDb)}'`);
 		}
 		await this.run("CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id))");
-		await this.run(`CREATE REL TABLE IF NOT EXISTS ${GENERATED_FROM}(FROM Asset TO Asset, relation_id STRING)`);
 		await this.run(`CREATE REL TABLE IF NOT EXISTS ${RELATED}(FROM Asset TO Asset, relation_id STRING, type STRING)`);
 	}
 
@@ -89,18 +88,6 @@ export class LadybugGraphStore implements GraphStore {
 			id: relation.relationId,
 			type: relation.type,
 		};
-		if (relation.type === GENERATED_FROM) {
-			await this.run(`
-				MATCH (a:Asset {asset_id: $from})-[r:${GENERATED_FROM}]->(b:Asset {asset_id: $to})
-				DELETE r
-			`, params);
-			await this.run(`
-				MATCH (a:Asset {asset_id: $from}), (b:Asset {asset_id: $to})
-				MERGE (a)-[r:${GENERATED_FROM} {relation_id: $id}]->(b)
-			`, params);
-			await this.persist();
-			return;
-		}
 		await this.run(`
 			MATCH (a:Asset {asset_id: $from})-[r:${RELATED} {type: $type}]->(b:Asset {asset_id: $to})
 			DELETE r
@@ -114,19 +101,17 @@ export class LadybugGraphStore implements GraphStore {
 
 	async listRelations(assetId: string): Promise<AssetRelation[]> {
 		const rows = await this.run(`
-			MATCH (a:Asset)-[r]->(b:Asset)
+			MATCH (a:Asset)-[r:${RELATED}]->(b:Asset)
 			WHERE a.asset_id = $id OR b.asset_id = $id
-			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id,
-				label(r) AS label, r.type AS rel_type
+			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id, r.type AS rel_type
 		`, { id: assetId });
 		return toRelations(rows);
 	}
 
 	async listAllRelations(): Promise<AssetRelation[]> {
 		const rows = await this.run(`
-			MATCH (a:Asset)-[r]->(b:Asset)
-			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id,
-				label(r) AS label, r.type AS rel_type
+			MATCH (a:Asset)-[r:${RELATED}]->(b:Asset)
+			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id, r.type AS rel_type
 		`);
 		return toRelations(rows);
 	}
@@ -185,7 +170,7 @@ function toRelations(rows: Record<string, unknown>[]): AssetRelation[] {
 			relationId: String(row.relation_id ?? ""),
 			fromAssetId: String(row.from_id ?? ""),
 			toAssetId: String(row.to_id ?? ""),
-			type: String(row.rel_type ?? row.label ?? ""),
+			type: String(row.rel_type ?? ""),
 		}))
 		.filter((relation) => relation.relationId && relation.fromAssetId && relation.toAssetId && relation.type)
 		.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));

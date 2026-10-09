@@ -32,7 +32,7 @@ import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
-const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
+const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 type LibraryClipboard =
 	| { kind: "assets"; assetIds: string[]; mode: "copy" | "cut" }

@@ -41,8 +41,6 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 			Object.fromEntries(detail.properties.map((property) => [property.name, property.value])),
 			{ Rating: 4.5, Status: "Published" },
 		);
-		assert.deepEqual(detail.generatedFrom, []);
-		assert.deepEqual(detail.generated, []);
 		assert.deepEqual(detail.links, []);
 		assert.equal(JSON.stringify(detail).includes(root), false);
 

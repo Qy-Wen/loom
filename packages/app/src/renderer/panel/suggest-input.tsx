@@ -9,7 +9,6 @@ interface SuggestInputProps {
 	openOnFocus?: boolean;
 	showLabel: string;
 	hideLabel: string;
-	labelFor?: (value: string) => string;
 	onChange: (value: string) => void;
 	onOpenChange: (open: boolean) => void;
 }
@@ -23,17 +22,12 @@ export function SuggestInput({
 	openOnFocus = true,
 	showLabel,
 	hideLabel,
-	labelFor,
 	onChange,
 	onOpenChange,
 }: SuggestInputProps): React.JSX.Element {
 	const rootRef = useRef<HTMLDivElement>(null);
 	const query = value.trim().toLowerCase();
-	const matches = suggestions.filter((item) => {
-		if (!query) return true;
-		const label = labelFor?.(item) ?? item;
-		return item.toLowerCase().includes(query) || label.toLowerCase().includes(query);
-	});
+	const matches = suggestions.filter((item) => !query || item.toLowerCase().includes(query));
 
 	useEffect(() => {
 		if (!open) return;
@@ -59,7 +53,9 @@ export function SuggestInput({
 					if (openOnFocus && suggestions.length > 0) onOpenChange(true);
 				}}
 				onKeyDown={(event) => {
-					if (event.key === "Escape") onOpenChange(false);
+					if (event.key !== "Escape" || !open) return;
+					event.stopPropagation();
+					onOpenChange(false);
 				}}
 			/>
 			{suggestions.length > 0 && (
@@ -85,7 +81,7 @@ export function SuggestInput({
 									onOpenChange(false);
 								}}
 							>
-								{labelFor?.(item) ?? item}
+								{item}
 							</button>
 						</li>
 					))}
