@@ -3,17 +3,12 @@ import { useMemo } from "react";
 import { prepareAssistantContent } from "../../shared/assistant-asset-refs.ts";
 import { useLibraryAssets, useOpenAsset } from "./asset-open.tsx";
 
-/** Assistant markdown, with library `<asset_ref>` blocks drawn as filename buttons. */
+/** Assistant markdown. An `<asset_ref>` block links by asset id, then by path. */
 export const AssistantMarkdown: typeof CopilotChatAssistantMessage.MarkdownRenderer = ({ content, ...props }) => {
 	const library = useLibraryAssets();
-	const names = useMemo(() => {
-		const map = new Map<string, string>();
-		for (const [id, asset] of library) map.set(id, asset.filename);
-		return map;
-	}, [library]);
 	const { markdown, rawTail } = useMemo(
-		() => prepareAssistantContent(content ?? "", names),
-		[content, names],
+		() => prepareAssistantContent(content ?? "", library),
+		[content, library],
 	);
 	return (
 		<>
@@ -32,12 +27,15 @@ export const AssistantMarkdown: typeof CopilotChatAssistantMessage.MarkdownRende
 function AssistantAssetLink({ href, children }: { href?: string; children?: React.ReactNode }) {
 	const openAsset = useOpenAsset();
 	const library = useLibraryAssets();
+	if (href?.startsWith("#loom-missing:")) {
+		return <span className="asset-path asset-path-missing">{children}</span>;
+	}
 	if (href?.startsWith("#loom-asset:")) {
-		const assetId = decodeAssetId(href.slice("#loom-asset:".length));
+		const assetId = decodeHref(href.slice("#loom-asset:".length));
 		const asset = library.get(assetId);
-		if (!asset) return <span>{children}</span>;
+		if (!asset) return <span className="asset-path asset-path-missing">{children}</span>;
 		return (
-			<button type="button" className="asset-ref" title={asset.path} onClick={() => openAsset(assetId)}>
+			<button type="button" className="asset-ref asset-path" title={asset.path} onClick={() => openAsset(assetId)}>
 				{children}
 			</button>
 		);
@@ -45,7 +43,7 @@ function AssistantAssetLink({ href, children }: { href?: string; children?: Reac
 	return <a href={href}>{children}</a>;
 }
 
-function decodeAssetId(value: string): string {
+function decodeHref(value: string): string {
 	try {
 		return decodeURIComponent(value);
 	} catch {

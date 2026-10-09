@@ -9,7 +9,7 @@ import {
 	promptAttachments,
 	uiSelectionToAttach,
 } from "../src/attachments.ts";
-import { assetRefBlocks, assetRefMarker, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/composer-asset.ts";
+import { assetRefBlocks, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/composer-asset.ts";
 import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
 const fields = {
@@ -97,13 +97,13 @@ describe("composer asset chips", () => {
 		assert.deepEqual(parseComposerAssetInputs([chip, { ...chip }]), [chip]);
 	});
 
-	it("stores a composer input as asset_ref even if the row said ui_selection", () => {
-		assert.deepEqual(parseComposerAssetInputs([selection]), [chip]);
+	it("rejects a ui_selection row as a composer chip", () => {
+		assert.throws(() => parseComposerAssetInputs([selection]));
 	});
 
-	it("reads stored chips of either type", () => {
-		const older = { ...selection, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		assert.deepEqual(storedAssetRefs([chip, older]), [chip, older]);
+	it("reads stored asset_ref chips and skips a library highlight", () => {
+		const highlight = { ...selection, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
+		assert.deepEqual(storedAssetRefs([chip, highlight]), [chip]);
 	});
 
 	it("rejects an absolute path", () => {
@@ -112,8 +112,7 @@ describe("composer asset chips", () => {
 		assert.deepEqual(storedAssetRefs([{ ...chip, path: "/tmp/hero.mp4" }]), []);
 	});
 
-	it("layout text is one space per chip, without the hidden id", () => {
-		assert.equal(composerLayoutText(`hello${assetRefMarker(chip.assetId)}world`), "hello world");
+	it("layout text is one space per chip", () => {
 		const block = "<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>";
 		assert.equal(composerLayoutText(`hello${block}world`), "hello world");
 	});
@@ -141,24 +140,19 @@ describe("foldUserMessageForLlm", () => {
 		);
 	});
 
-	it("folds a chip where it sits in the text", () => {
-		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
-		assert.equal(foldUserText(text, [chip]), `看一下\n\n${foldUserText("", [chip])}\n\n这段`);
-		assert.match(foldUserText(text, [chip]), /<asset_ref>\npath: clips\/hero\.mp4/);
-	});
-
-	it("still folds an old stored chip as ui_selection", () => {
-		const text = `看一下${assetRefMarker(selection.assetId)}这段`;
-		assert.match(foldUserText(text, [selection]), /^看一下\n\n<ui_selection>\npath: clips\/hero\.mp4/);
-		assert.equal(foldUserText(text, [selection]).includes("<system-reminder>"), false);
+	it("keeps a chip already in the text and appends one that is missing", () => {
+		const sitting = "看一下\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>\n\n这段";
+		assert.equal(foldUserText(sitting, [chip]), sitting);
+		assert.equal(
+			foldUserText("看一下这段", [chip]),
+			"看一下这段\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>",
+		);
 	});
 
 	it("stores a placed chip in the text and keeps a different selection on attachments", () => {
 		const other = { type: "ui_selection" as const, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
-		const stored = contentWithPlacedAssets(text, [chip]);
-		assert.match(stored, /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/asset_ref>\n\n这段$/);
-		assert.equal(stored.includes("\u2060"), false);
+		const stored = "看一下\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>\n\n这段";
+		assert.equal(contentWithPlacedAssets(stored, [chip]), stored);
 		assert.deepEqual(implicitSelectionAttachments([chip], other, []), [other]);
 		assert.deepEqual(implicitSelectionAttachments([chip], fields, []), []);
 		assert.equal(contentWithPlacedAssets(stored, [chip]), stored);
@@ -184,14 +178,14 @@ describe("foldUserMessageForLlm", () => {
 		assert.deepEqual(assetRefBlocks(stored), [chip]);
 		assert.deepEqual(displayAssetRefs(stored, [other]).map((row) => row.assetId), [chip.assetId]);
 		assert.deepEqual(
-			splitStoredAssetText(text).map((part) => part.type === "asset" ? part.assetId : part.text),
+			splitStoredAssetText(stored).map((part) => part.type === "asset" ? part.assetId : part.text),
 			["看一下", chip.assetId, "这段"],
 		);
 	});
 
 	it("appends a selection that was not placed in the text", () => {
 		const other = { type: "ui_selection" as const, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
-		const text = `看一下${assetRefMarker(chip.assetId)}这段`;
+		const text = "看一下\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>\n\n这段";
 		const folded = foldUserText(text, [chip, other]);
 		assert.match(folded, /^看一下\n\n<asset_ref>\npath: clips\/hero\.mp4/);
 		assert.match(
@@ -200,11 +194,11 @@ describe("foldUserMessageForLlm", () => {
 		);
 	});
 
-	it("leaves a composer image on content", () => {
+	it("drops an image part and keeps the text", () => {
 		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 		const image = { type: "image" as const, data: bytesToBase64(png), mimeType: "image/png" };
 		const message = { role: "user", content: [{ type: "text", text: "look" }, image] };
-		assert.equal(foldUserMessageForLlm(message), message);
+		assert.deepEqual(foldUserMessageForLlm(message), { ...message, content: "look" });
 	});
 
 	it("rejects a file that is not a JPEG, PNG, GIF, or WebP", () => {
@@ -212,16 +206,13 @@ describe("foldUserMessageForLlm", () => {
 		assert.throws(() => parseComposerImageInputs([{ filename: "x.txt", mimeType: "image/png", data: bytesToBase64(new Uint8Array([1, 2, 3, 4])) }]));
 	});
 
-	it("keeps image parts and uses a single text part for the fold", () => {
+	it("folds attachments into one string and drops image parts", () => {
 		const image = { type: "image" as const, data: "abc", mimeType: "image/png" };
 		const folded = foldUserMessageForLlm({
 			role: "user",
 			content: [{ type: "text", text: "look" }, image],
 			attachments: [chip],
 		});
-		assert.deepEqual(folded.content, [
-			{ type: "text", text: foldUserText("look", [chip]) },
-			image,
-		]);
+		assert.equal(folded.content, foldUserText("look", [chip]));
 	});
 });

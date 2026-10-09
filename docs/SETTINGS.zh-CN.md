@@ -14,7 +14,7 @@
 
 | 槽位 | 用途 | 报文 |
 |---|---|---|
-| Chat | Agent 循环 | OpenAI 兼容 `POST /v1/chat/completions`。和其它槽位一样填 `baseUrl`、可选 API key、`model`。输入框新贴的是库引用，不发 `image_url`。历史上 user 行里的图片部分仍按 `image_url` 发出；端点拒绝时界面报错，这一轮不留在当前路径上。不写死 DeepSeek。 |
+| Chat | Agent 循环 | OpenAI 兼容 `POST /v1/chat/completions`。和其它槽位一样填 `baseUrl`、可选 API key、`model`。输入框贴的是库引用，不发 `image_url`。不写死 DeepSeek。 |
 | Text embedding | 文本 RAG 索引 | OpenAI 兼容 `POST /v1/embeddings` |
 | Rerank | Hybrid Search 融合后再排一次 | Cohere/Jina `POST /v1/rerank`（`query` + `documents`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`。可选。 |
 | VLM | 图片 caption / 标签；视频文件级说明 | 和 Chat 一样走 OpenAI 兼容 `POST /v1/chat/completions`。图片用 `image_url`。视频能 native 就带 video 部分；否则 FFmpeg 抽帧再当 `image_url`。只做视觉。 |

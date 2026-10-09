@@ -8,9 +8,10 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /working directory, is D:\\library/);
 		assert.match(prompt, /read, edit, write, and bash/);
 		assert.match(prompt, /<asset_ref>/);
+		assert.match(prompt, /Omit asset_id when you do not have one/);
 		assert.match(prompt, /<system-reminder>/);
 		assert.match(prompt, /<ui_selection>/);
-		assert.match(prompt, /Do not invent asset ids or paths/);
+		assert.match(prompt, /Do not invent paths or ids/);
 	});
 
 	it("refuses to invent a directory when no library is open", () => {

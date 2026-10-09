@@ -1849,6 +1849,20 @@ body.resizing-columns {
 	cursor: pointer;
 }
 
+.asset-path {
+	max-width: none;
+	overflow: visible;
+	text-overflow: unset;
+	white-space: pre-wrap;
+	word-break: break-all;
+}
+
+.asset-path-missing {
+	color: #c5221f;
+	text-decoration: none;
+	cursor: text;
+}
+
 .tool-call-refs {
 	display: flex;
 	flex-wrap: wrap;

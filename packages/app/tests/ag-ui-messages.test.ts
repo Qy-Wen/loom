@@ -60,7 +60,7 @@ test("toAgUiMessages shows thinking and drops redacted text and signatures", () 
 	assert.equal(JSON.stringify(messages).includes("secret"), false);
 });
 
-test("toAgUiMessages shows a composer image on the user bubble", () => {
+test("toAgUiMessages shows user text and skips an image part", () => {
 	const messages = toAgUiMessages([
 		{
 			id: "u1",
@@ -68,14 +68,10 @@ test("toAgUiMessages shows a composer image on the user bubble", () => {
 			content: [{ type: "text", text: "look" }, { type: "image", data: "abc", mimeType: "image/png" }],
 		},
 	]);
-	assert.deepEqual(messages[0]?.content, [
-		{ type: "text", text: "look" },
-		{ type: "image", source: { type: "data", value: "abc", mimeType: "image/png" } },
-	]);
-	const stored = messages;
+	assert.equal(messages[0]?.content, "look");
 	const live = [{ id: "u1", role: "user" as const, content: "look" }, { id: "a1", role: "assistant" as const, content: "ok" }];
-	const merged = mergeChatMessages(stored, live);
-	assert.deepEqual(merged[0]?.content, stored[0]?.content);
+	const merged = mergeChatMessages(messages, live);
+	assert.equal(merged[0]?.content, "look");
 	assert.equal(merged[1]?.content, "ok");
 });
 
@@ -111,16 +107,14 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 	assert.equal(mergeChatMessages(reloaded, streaming).at(-1)?.content, "looking");
 });
 
-test("mergeChatMessages treats a stored asset block and the composer marker as one turn", () => {
+test("mergeChatMessages treats spacing around a chip as the same turn", () => {
+	const block = "<asset_ref>\npath: clips/hero.png\nasset_id: asset-1\ntype: image\n</asset_ref>";
 	const stored = toAgUiMessages([
-		{
-			role: "user",
-			content: "<asset_ref>\npath: clips/hero.png\nasset_id: asset-1\ntype: image\n</asset_ref>\n\n这是啥",
-		},
+		{ role: "user", content: `${block}\n\n这是啥` },
 		{ role: "assistant", content: "一只金毛" },
 	]);
 	const live = [
-		{ id: "ck-1", role: "user" as const, content: "\u2060loom-asset:asset-1\u2060这是啥" },
+		{ id: "ck-1", role: "user" as const, content: `\n\n${block}\n\n这是啥` },
 		{ id: "ck-2", role: "assistant" as const, content: "一只金毛" },
 	];
 	const merged = mergeChatMessages(stored, live);

@@ -186,17 +186,12 @@ describe("HarnessSessionManager", () => {
 		}
 	});
 
-	it("drops a rejected image turn from the active path and reports the error", async () => {
+	it("sends a prompt as text when the caller also passed an image", async () => {
 		const bodies: string[] = [];
 		const server = createServer(async (request, response) => {
 			const chunks: Buffer[] = [];
 			for await (const chunk of request) chunks.push(Buffer.from(chunk));
 			bodies.push(Buffer.concat(chunks).toString("utf8"));
-			if (bodies.length === 1) {
-				response.writeHead(400, { "content-type": "application/json" });
-				response.end(JSON.stringify({ error: { message: "unknown content type image_url", type: "invalid_request_error" } }));
-				return;
-			}
 			response.writeHead(200, { "content-type": "text/event-stream" });
 			response.write('data: {"id":"img","object":"chat.completion.chunk","created":0,"model":"demo","choices":[{"index":0,"delta":{"role":"assistant","content":"ok"},"finish_reason":null}]}\n\n');
 			response.write('data: {"id":"img","object":"chat.completion.chunk","created":0,"model":"demo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\n');
@@ -210,14 +205,14 @@ describe("HarnessSessionManager", () => {
 		try {
 			await manager.openLibrary(root);
 			const session = await manager.createSession();
-			await assert.rejects(() => manager.prompt(session.id, "look", { images: [image] }), /image_url/);
+			await manager.prompt(session.id, "look", { images: [image] });
 			assert.equal(bodies.length, 1);
-			assert.match(bodies[0] ?? "", /image_url/);
-			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), []);
+			assert.doesNotMatch(bodies[0] ?? "", /image_url/);
+			assert.match(bodies[0] ?? "", /look/);
 			await manager.prompt(session.id, "next");
 			assert.equal(bodies.length, 2);
 			assert.doesNotMatch(bodies[1] ?? "", /image_url/);
-			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), ["user", "assistant"]);
+			assert.deepEqual((await manager.getSession(session.id)).messages.map((row) => row.role), ["user", "assistant", "user", "assistant"]);
 		} finally {
 			await manager.close();
 			await rm(root, { recursive: true, force: true });

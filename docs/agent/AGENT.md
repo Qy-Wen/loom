@@ -180,23 +180,25 @@ When nothing is selected and the composer has no chips, omit `attachments`. Do n
 
 Snapshot at send time from the current library highlight (`assetId`, workspace-relative `path`, `assetType`) as one `ui_selection` row. Graph edges are not a selection. The composer can also place library files explicitly: drag one from the library onto the input, right-click a file and choose Add to chat, or use the + menu (Library file). External file and Finder drops copy into `Inbox/` first (or reuse the asset if the file is already in the library), then place the same chip. At send, look up the live library row by `assetId` and write the current `path` / `assetType` into the block. Older rows stay frozen. Do not put timestamps or other per-request noise in the payload.
 
-A chip sits in the text, including between words. The composer writes the `<asset_ref>` block at that position, and that string is what gets stored and sent. The chip is not also an `attachments` row. The bubble parses the block back into a chip. Older transcripts that stored an invisible marker plus an `asset_ref` or `ui_selection` row still fold at request time; a chip that was stored as `ui_selection` still folds as `<ui_selection>`. An implicit library highlight that was not already in the chips is appended after the text, inside a `<system-reminder>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
+A chip sits in the text, including between words. The composer writes the `<asset_ref>` block at that position, and that string is what gets stored and sent. The chip is not also an `attachments` row. The bubble parses the block back into a chip. An implicit library highlight that was not already in the chips is appended after the text, inside a `<system-reminder>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
 
-An assistant reply can contain the same block, copied from a tool result. The bubble draws the filename button only when that `asset_id` is in the open library. Any other block, including one that is still streaming, stays text. The click selects that asset.
+An assistant reply names a library file with the same `<asset_ref>` block. The bubble looks up `asset_id` in the open library and draws that file's current path in blue. If the id is missing or not in the library, it tries `path`. If that misses too, the written path is red and does not select anything. An unfinished block stays text while it streams.
 
 ```
-看一下<asset_ref>
+看一下
+<asset_ref>
 path: clips/hero.mp4
 asset_id: a1b2c3d4-…
 type: video
-</asset_ref>这段
+</asset_ref>
+这段
 ```
 
 ### 5.2 Fold for the Chat API
 
 Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. A placed chip is already that block inside `content`, so the fold leaves it where it sits and only appends a leftover library highlight. Injections never become a second text part.
 
-A composer picture that is already on a stored user row’s `content` still goes out as `image_url`. New attaches from the composer are library chips, not image parts. The agent reads pixels only if it calls `describe_image` / `describe_video` / `describe_audio` or `read`. If a historical image part is rejected, Loom shows that error and moves the active path back to before the message.
+Composer attaches are library chips, not image parts. The agent reads pixels only if it calls `describe_image` / `describe_video` / `describe_audio` or `read`.
 
 The fold is deterministic. The HTTP body never includes `attachments`.
 
@@ -224,7 +226,7 @@ type: text
 </system-reminder>
 ```
 
-System prompt states that `<asset_ref>` blocks are files the user placed, and a `<system-reminder>` after those words is context the app attached. Use `<asset_ref>` and `<ui_selection>` for “this” / “the file” when they do not name a path; if they name a different path, prefer that. When the reply names a library file a tool result identified, write an `<asset_ref>` block there and copy that result’s path, `asset_id`, and type. Do not invent ids or paths.
+System prompt states that `<asset_ref>` blocks are files the user placed, and a `<system-reminder>` after those words is context the app attached. Use `<asset_ref>` and `<ui_selection>` for “this” / “the file” when they do not name a path; if they name a different path, prefer that. When the reply names a library file, write the same `<asset_ref>` block. Copy `path` and `asset_id`. Omit `asset_id` when it is unknown. Do not invent paths or ids.
 
 The next user turn snapshots the library highlight again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit that attachment and the fold — history still has that block. A prior `asset_ref` of the same file does not suppress the next implicit `ui_selection`. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot. On the same send, skip the implicit `ui_selection` when that `assetId` is already among the chips.
 
@@ -344,7 +346,7 @@ In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat a
 - **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
 - **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
 - **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
-- **User attachments:** A placed chip is an `<asset_ref>` block in the user message `content`. The library highlight (`ui_selection`) stays on `attachments` and is folded into that string at request time, inside a `<system-reminder>`. External files are copied into `Inbox/` first. Historical image parts on `content` still send as `image_url`. A chip, a tool-result file name, and an `<asset_ref>` in an assistant reply select that asset when its id is in the open library.
+- **User attachments:** A placed chip is an `<asset_ref>` block in the user message `content`. The library highlight (`ui_selection`) stays on `attachments` and is folded into that string at request time, inside a `<system-reminder>`. External files are copied into `Inbox/` first. A chip and a tool-result file name select that asset by id. An `<asset_ref>` block in an assistant reply selects that file by `asset_id` when the id is in the open library, otherwise by `path`.
 - **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
 - **Tool permission and sandbox:** [PERMISSION](./PERMISSION.md).
 - **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).

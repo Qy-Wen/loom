@@ -24,6 +24,7 @@ export function parseComposerAssetInputs(value: unknown): AssetRefAttachment[] {
 		const assetId = typeof row.assetId === "string" ? row.assetId.trim() : "";
 		const path = typeof row.path === "string" ? row.path : "";
 		const assetType = row.assetType;
+		if (row.type === "ui_selection") throw new Error("Composer asset is invalid");
 		if (!assetId) throw new Error("Composer asset is missing an asset id");
 		if (!isRelativeLibraryPath(path)) throw new Error("Composer asset path must stay inside the library");
 		if (typeof assetType !== "string" || !ASSET_TYPES.has(assetType)) throw new Error("Composer asset type is invalid");
@@ -39,35 +40,11 @@ export function parseComposerAssetInputs(value: unknown): AssetRefAttachment[] {
 	return out;
 }
 
-const ASSET_REF = /\u2060loom-asset:([^\u2060]+)\u2060/g;
 const ASSET_BLOCK = /<asset_ref>\npath: ([^\n]*)\nasset_id: ([^\n]+)\ntype: (image|video|audio|text|other)\n<\/asset_ref>/g;
 
 export type InlineAssetPart =
 	| { type: "text"; text: string }
 	| { type: "asset"; assetId: string };
-
-/** Marks where a library chip sits in the user text. The id is the asset id. */
-export function assetRefMarker(assetId: string): string {
-	return `\u2060loom-asset:${assetId}\u2060`;
-}
-
-/** Split user text into words and the chips placed among them. */
-export function splitInlineAssetRefs(text: string): InlineAssetPart[] {
-	const parts: InlineAssetPart[] = [];
-	const re = new RegExp(ASSET_REF.source, "g");
-	let last = 0;
-	for (const match of text.matchAll(re)) {
-		const index = match.index ?? 0;
-		if (index > last) parts.push({ type: "text", text: text.slice(last, index) });
-		const assetId = match[1];
-		if (assetId) parts.push({ type: "asset", assetId });
-		last = index + match[0].length;
-	}
-	if (last < text.length) parts.push({ type: "text", text: text.slice(last) });
-	return parts;
-}
-
-type StoredAssetHit = { index: number; length: number; assetId: string; block: boolean };
 
 function validAssetBlock(match: RegExpMatchArray): boolean {
 	const path = match[1] ?? "";
@@ -75,55 +52,26 @@ function validAssetBlock(match: RegExpMatchArray): boolean {
 	return isRelativeLibraryPath(path) && ASSET_TYPES.has(assetType);
 }
 
-function nextStoredAsset(text: string, from: number): StoredAssetHit | null {
-	const marker = new RegExp(ASSET_REF.source, "g");
-	marker.lastIndex = from;
-	const markerMatch = marker.exec(text);
-	const markerHit = markerMatch?.[1] != null && markerMatch.index >= from
-		? { index: markerMatch.index, length: markerMatch[0].length, assetId: markerMatch[1], block: false }
-		: null;
-	const block = new RegExp(ASSET_BLOCK.source, "g");
-	let searchFrom = from;
-	while (searchFrom < text.length) {
-		block.lastIndex = searchFrom;
-		const match = block.exec(text);
-		if (!match || match.index < searchFrom) break;
-		if (!validAssetBlock(match) || !match[2]) {
-			searchFrom = match.index + 1;
-			continue;
-		}
-		const hit = { index: match.index, length: match[0].length, assetId: match[2], block: true };
-		if (!markerHit || hit.index <= markerHit.index) return hit;
-		break;
-	}
-	return markerHit;
-}
-
 /**
- * Markers and already-expanded `<asset_ref>` blocks, in place.
+ * `<asset_ref>` blocks in place.
  * Blank lines the fold inserts around a block are not part of the chip.
  */
 export function splitStoredAssetText(text: string): InlineAssetPart[] {
 	const parts: InlineAssetPart[] = [];
 	let cursor = 0;
-	while (cursor < text.length) {
-		const hit = nextStoredAsset(text, cursor);
-		if (!hit) {
-			const rest = text.slice(cursor);
-			if (rest) parts.push({ type: "text", text: rest });
-			break;
-		}
-		let before = text.slice(cursor, hit.index);
-		let end = hit.index + hit.length;
-		if (hit.block) {
-			before = before.replace(/\n{1,2}$/, "");
-			const lead = /^\n{1,2}/.exec(text.slice(end));
-			if (lead) end += lead[0].length;
-		}
+	for (const match of text.matchAll(new RegExp(ASSET_BLOCK.source, "g"))) {
+		const index = match.index ?? 0;
+		if (index < cursor || !validAssetBlock(match) || !match[2]) continue;
+		const before = text.slice(cursor, index).replace(/\n{1,2}$/, "");
 		if (before) parts.push({ type: "text", text: before });
-		parts.push({ type: "asset", assetId: hit.assetId });
+		parts.push({ type: "asset", assetId: match[2] });
+		let end = index + match[0].length;
+		const lead = /^\n{1,2}/.exec(text.slice(end));
+		if (lead) end += lead[0].length;
 		cursor = end;
 	}
+	const rest = text.slice(cursor);
+	if (rest) parts.push({ type: "text", text: rest });
 	return parts;
 }
 
@@ -168,33 +116,30 @@ export function displayAssetRefs(text: string, stored: readonly LoomUserAttachme
 }
 
 export function inlineAssetIds(text: string): string[] {
-	return splitInlineAssetRefs(text).flatMap((part) => part.type === "asset" ? [part.assetId] : []);
+	return splitStoredAssetText(text).flatMap((part) => part.type === "asset" ? [part.assetId] : []);
 }
 
-/** Words only, for titles and labels. Chip markers and stored `<asset_ref>` blocks are removed. */
+/** Words only, for titles and labels. Stored `<asset_ref>` blocks are removed. */
 export function stripInlineAssetRefs(text: string): string {
-	return text
-		.replace(new RegExp(ASSET_REF.source, "g"), "")
-		.replace(new RegExp(ASSET_BLOCK.source, "g"), "");
+	return text.replace(new RegExp(ASSET_BLOCK.source, "g"), "");
 }
 
-/** Copilot measures this string for wrap. One space per chip, whether it is a marker or an `<asset_ref>` block. */
+/** Copilot measures this string for wrap. One space per `<asset_ref>` chip. */
 export function composerLayoutText(text: string): string {
 	return splitStoredAssetText(text).map((part) => (part.type === "text" ? part.text : " ")).join("");
 }
 
-/** Library chips already stored on a user message. Rows that are not relative refs are skipped. */
+/** Library chips already stored on a user message. A library highlight is not a chip. */
 export function storedAssetRefs(value: unknown): LoomUserAttachment[] {
 	if (!Array.isArray(value)) return [];
 	const out: LoomUserAttachment[] = [];
 	for (const item of value) {
 		if (typeof item !== "object" || item === null) continue;
 		const row = item as Record<string, unknown>;
-		const kind = row.type === "ui_selection" ? "ui_selection" : row.type === "asset_ref" ? "asset_ref" : null;
-		if (!kind) continue;
+		if (row.type !== "asset_ref") continue;
 		try {
-			const first = parseComposerAssetInputs([{ ...row, type: "asset_ref" }])[0];
-			if (first) out.push(kind === "asset_ref" ? first : { ...first, type: "ui_selection" });
+			const first = parseComposerAssetInputs([row])[0];
+			if (first) out.push(first);
 		} catch {
 			// Leave a bad row off the chip list.
 		}

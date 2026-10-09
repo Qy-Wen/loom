@@ -137,23 +137,8 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 	return out;
 }
 
-function contentImageParts(content: unknown): Array<{ type: "image"; source: { type: "data"; value: string; mimeType: string } }> {
-	if (!Array.isArray(content)) return [];
-	const images = [];
-	for (const part of content) {
-		if (typeof part !== "object" || part === null) continue;
-		const record = part as { type?: unknown; data?: unknown; mimeType?: unknown };
-		if (record.type !== "image" || typeof record.data !== "string" || typeof record.mimeType !== "string") continue;
-		images.push({ type: "image" as const, source: { type: "data" as const, value: record.data, mimeType: record.mimeType } });
-	}
-	return images;
-}
-
-function userBubbleContent(message: LoomTranscriptMessage): string | Array<{ type: "text"; text: string } | { type: "image"; source: { type: "data"; value: string; mimeType: string } }> {
-	const text = transcriptText(message.content).replaceAll("\u200b", "");
-	const images = contentImageParts(message.content);
-	if (images.length === 0) return text;
-	return [...(text ? [{ type: "text" as const, text }] : []), ...images];
+function userBubbleContent(message: LoomTranscriptMessage): string {
+	return transcriptText(message.content).replaceAll("\u200b", "");
 }
 
 function textOf(message: Message): string {
@@ -161,7 +146,7 @@ function textOf(message: Message): string {
 	return transcriptText(content).replaceAll("\u200b", "");
 }
 
-/** Words plus placed asset ids, so a stored `<asset_ref>` block matches an older composer marker. */
+/** Words plus placed asset ids, so spacing around a chip does not look like a new turn. */
 function comparableUserText(text: string): string {
 	const parts = splitStoredAssetText(text);
 	const words = parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("").replace(/\s+/g, " ").trim();

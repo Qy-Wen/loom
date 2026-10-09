@@ -14,7 +14,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 
 | Slot | Used for | Wire |
 |---|---|---|
-| Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Composer attaches are library refs, not `image_url`. Historical image parts on a stored user row still send as `image_url`; if the endpoint rejects them, that error is shown and the turn stays off the active path. Not a hardcoded DeepSeek provider. |
+| Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Composer attaches are library refs, not `image_url`. Not a hardcoded DeepSeek provider. |
 | Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Reorder Hybrid Search hits after RRF | Cohere/Jina `POST /v1/rerank` (`query` + `documents`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`. Optional. |
 | VLM | Image captions / tags; video file-level write-up | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. Vision only. |
