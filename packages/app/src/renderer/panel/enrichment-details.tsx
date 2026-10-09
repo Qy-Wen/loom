@@ -3,38 +3,22 @@ import { CopyableError } from "./copyable-error.tsx";
 
 interface EnrichmentDetailsProps {
 	enrichment: AssetEnrichment | undefined;
-	analyzing: boolean;
-	onAnalyze: () => void;
 }
 
 export function EnrichmentDetails({
 	enrichment,
-	analyzing,
-	onAnalyze,
-}: EnrichmentDetailsProps): React.JSX.Element {
+}: EnrichmentDetailsProps): React.JSX.Element | null {
+	if (!enrichment || (!enrichment.error && !enrichment.data)) return null;
 	return (
-		<section>
-			<div className="section-label enrichment-heading">
-				<span>Technical</span>
-				<button type="button" className="text-button" disabled={analyzing} onClick={onAnalyze}>
-					{analyzing ? "Analyzing…" : "Analyze"}
-				</button>
-			</div>
-			{enrichment ? (
-				<dl className="properties">
-					<dt>Status</dt><dd>{enrichment.status}</dd>
-					{enrichment.error && (
-						<>
-							<dt>Error</dt>
-							<dd className="copyable-error-cell"><CopyableError text={enrichment.error} /></dd>
-						</>
-					)}
-					{enrichment.data && <EnrichmentFields data={enrichment.data} />}
-				</dl>
-			) : (
-				<div className="empty no-padding">Not analyzed yet.</div>
+		<>
+			{enrichment.error && (
+				<>
+					<dt>Error</dt>
+					<dd className="copyable-error-cell"><CopyableError text={enrichment.error} /></dd>
+				</>
 			)}
-		</section>
+			{enrichment.data && <EnrichmentFields data={enrichment.data} />}
+		</>
 	);
 }
 
@@ -42,7 +26,7 @@ function EnrichmentFields({ data }: { data: EnrichmentData }): React.JSX.Element
 	if (data.kind === "image") {
 		return (
 			<>
-				<dt>Size</dt><dd>{data.width} × {data.height}</dd>
+				<dt>Dimensions</dt><dd>{data.width} × {data.height}</dd>
 				{data.orientation !== undefined && <><dt>Orientation</dt><dd>{data.orientation}</dd></>}
 				{data.camera && <><dt>Camera</dt><dd>{data.camera}</dd></>}
 				{data.capturedAt && <><dt>Captured</dt><dd>{data.capturedAt}</dd></>}
@@ -53,7 +37,7 @@ function EnrichmentFields({ data }: { data: EnrichmentData }): React.JSX.Element
 		return (
 			<>
 				<dt>Duration</dt><dd>{formatDuration(data.duration)}</dd>
-				{(data.width || data.height) && <><dt>Size</dt><dd>{data.width ?? "?"} × {data.height ?? "?"}</dd></>}
+				{(data.width || data.height) && <><dt>Dimensions</dt><dd>{data.width ?? "?"} × {data.height ?? "?"}</dd></>}
 				{data.videoCodec && <><dt>Video</dt><dd>{data.videoCodec}</dd></>}
 				{data.audioCodec && <><dt>Audio</dt><dd>{data.audioCodec}</dd></>}
 				{data.frameRate !== undefined && <><dt>FPS</dt><dd>{round(data.frameRate)}</dd></>}

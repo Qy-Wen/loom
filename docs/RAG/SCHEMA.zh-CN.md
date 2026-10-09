@@ -151,7 +151,7 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 | `error` | TEXT | 可空 | 跳过或失败原因。 |
 | `data` | TEXT | 可空 | `status = ready` 时的 JSON。 |
 
-记录缺失、`version` 与提取器不一致，或 `source_modified_at` 与 `assets.modified_at` 不同，即视为过期。打开和 reconcile 会刷新过期行。Analyze 强制重跑。重命名或移动且 `mtime` 不变时不重算。
+记录缺失、`status` 为 `failed`、`version` 与提取器不一致，或 `source_modified_at` 与 `assets.modified_at` 不同，即视为过期。打开和 reconcile 会刷新过期行。就绪记录在重命名或移动且 `mtime` 不变时不重算。
 
 `data` 按 `kind` 区分：
 

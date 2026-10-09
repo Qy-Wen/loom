@@ -151,7 +151,7 @@ Level 1 technical metadata cache. One row per asset. Extracted from the file on 
 | `error` | TEXT | nullable | Skip or failure reason. |
 | `data` | TEXT | nullable | JSON payload when `status = ready`. |
 
-A row is stale when it is missing, `version` does not match the extractor, or `source_modified_at` differs from `assets.modified_at`. Open and reconcile refresh stale rows. Analyze forces a rerun. Rename or move does not, if `mtime` is unchanged.
+A row is stale when it is missing, `status` is `failed`, `version` does not match the extractor, or `source_modified_at` differs from `assets.modified_at`. Open and reconcile refresh stale rows. Rename or move of a ready row does not, if `mtime` is unchanged.
 
 `data` is a discriminated union on `kind`:
 
