@@ -49,6 +49,8 @@ function filterLibrary(library: LibrarySnapshot, query: string): LibrarySnapshot
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
 	opening: boolean;
+	workbenchView: "library" | "table" | "graph";
+	onWorkbenchView: (view: "library" | "table" | "graph") => void;
 	selectedAssetId: string | null;
 	selectedFolder: string | null;
 	renamingAssetId: string | null;
@@ -68,11 +70,15 @@ interface LibrarySidebarProps {
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
 	onKeyDown: (event: React.KeyboardEvent) => void;
+	onOpenSettings: () => void;
+	onOpenTraces?: () => void;
 }
 
 export function LibrarySidebar({
 	library,
 	opening,
+	workbenchView,
+	onWorkbenchView,
 	selectedAssetId,
 	selectedFolder,
 	renamingAssetId,
@@ -92,6 +98,8 @@ export function LibrarySidebar({
 	onCancelRename,
 	onDropIntoFolder,
 	onKeyDown,
+	onOpenSettings,
+	onOpenTraces,
 }: LibrarySidebarProps): React.JSX.Element {
 	const empty = library.assets.length === 0 && library.folders.length === 0;
 	const [fileDisplay, setFileDisplay] = useState<FileDisplay>(() => (
@@ -124,7 +132,7 @@ export function LibrarySidebar({
 		<aside className="library-sidebar" tabIndex={0} onKeyDown={onKeyDown}>
 			<div className="library-header">
 				<div>
-					<div className="section-label">Asset Library</div>
+					<div className="section-label">Loom</div>
 					<div className="library-name" title={library.rootPath ?? undefined}>
 						{library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? "No folder open"}
 					</div>
@@ -133,6 +141,20 @@ export function LibrarySidebar({
 					{opening ? "…" : "Open"}
 				</button>
 			</div>
+
+			<nav className="library-views" aria-label="Workspace views">
+				{(["library", "table", "graph"] as const).map((view) => (
+					<button
+						key={view}
+						type="button"
+						className={workbenchView === view ? "active" : ""}
+						aria-pressed={workbenchView === view}
+						onClick={() => onWorkbenchView(view)}
+					>
+						{view === "library" ? "Library" : view === "table" ? "Table" : "Graph"}
+					</button>
+				))}
+			</nav>
 
 			<div className="file-heading">
 				<span className="file-heading-title">
@@ -211,7 +233,7 @@ export function LibrarySidebar({
 				</div>
 			) : null}
 			{!library.rootPath ? (
-				<div className="empty">Open a folder to start a local asset library.</div>
+				<div className="empty library-placeholder">Open a folder to start a local asset library.</div>
 			) : (
 				<div
 					className="asset-list"
@@ -266,6 +288,21 @@ export function LibrarySidebar({
 					)}
 				</div>
 			)}
+			<div className="library-footer">
+				{onOpenTraces ? (
+					<button type="button" aria-label="Traces" title="Traces" onClick={onOpenTraces}>
+						<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+							<path d="M2 12.5h12M3.5 10.5 6.2 7l2.2 2.2 3.6-4.7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
+						</svg>
+					</button>
+				) : null}
+				<button type="button" aria-label="Settings" title="Settings" onClick={onOpenSettings}>
+					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+						<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="2" />
+						<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+					</svg>
+				</button>
+			</div>
 		</aside>
 	);
 }
