@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AssetTag, Tag } from "@loom/core";
+import { SuggestInput } from "./suggest-input.tsx";
 
 interface TagEditorProps {
 	assetId: string;
@@ -11,6 +12,7 @@ interface TagEditorProps {
 
 export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEditorProps): React.JSX.Element {
 	const [name, setName] = useState("");
+	const [open, setOpen] = useState(false);
 	const byId = new Map(tags.map((tag) => [tag.tagId, tag]));
 	const applied = assetTags.flatMap((row) => {
 		if (row.assetId !== assetId) return [];
@@ -23,6 +25,7 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 		if (!next) return;
 		await onAdd(next);
 		setName("");
+		setOpen(false);
 	}
 
 	return (
@@ -51,15 +54,16 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 					void submit().catch(() => undefined);
 				}}
 			>
-				<input
+				<SuggestInput
 					value={name}
+					open={open}
+					suggestions={tags.map((tag) => tag.name)}
 					placeholder="Add a tag"
-					list="library-tags"
-					onChange={(event) => setName(event.target.value)}
+					showLabel="Show tags"
+					hideLabel="Hide tags"
+					onChange={setName}
+					onOpenChange={setOpen}
 				/>
-				<datalist id="library-tags">
-					{tags.map((tag) => <option key={tag.tagId} value={tag.name} />)}
-				</datalist>
 				<button type="submit" disabled={!name.trim()}>Add</button>
 			</form>
 		</div>
