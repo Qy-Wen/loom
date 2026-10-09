@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import type {
 	Asset,
 	AssetEnrichment,
@@ -7,8 +7,6 @@ import type {
 	AssetRelationsResult,
 	AssetTag,
 	PropertyDefinition,
-	PropertyType,
-	PropertyValue,
 	Tag,
 	TextEmbedStatus,
 	ImageVlmStatus,
@@ -17,10 +15,10 @@ import type {
 } from "@loom/core";
 import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
+import { displayPropertyValue } from "../workbench/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
-import { PropertyEditor } from "./property-editor.tsx";
 import { TagEditor } from "./tag-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
@@ -41,11 +39,6 @@ interface SidePanelProps {
 	onAddTag: (assetId: string, name: string) => Promise<void>;
 	onRemoveTag: (assetId: string, tagId: string) => Promise<void>;
 	onChangeTab: (tab: SidePanelTab) => void;
-	onCreateProperty: (name: string, type: PropertyType) => Promise<void>;
-	onUpdateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<void>;
-	onRemoveProperty: (propertyId: string) => Promise<void>;
-	onSetPropertyValue: (assetId: string, propertyId: string, value: PropertyValue) => Promise<void>;
-	onRemovePropertyValue: (assetId: string, propertyId: string) => Promise<void>;
 	enrichment: AssetEnrichment | undefined;
 	textEmbed: TextEmbedStatus | undefined;
 	embedding: boolean;
@@ -77,11 +70,6 @@ export function SidePanel({
 	onAddTag,
 	onRemoveTag,
 	onChangeTab,
-	onCreateProperty,
-	onUpdateProperty,
-	onRemoveProperty,
-	onSetPropertyValue,
-	onRemovePropertyValue,
 	enrichment,
 	textEmbed,
 	embedding,
@@ -101,9 +89,6 @@ export function SidePanel({
 	onCreateRelation,
 	onRemoveRelation,
 }: SidePanelProps): React.JSX.Element {
-	const selectedValues = asset
-		? propertyValues.filter((value) => value.assetId === asset.assetId)
-		: [];
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const sessionIdRef = useRef<string | null>(null);
@@ -327,11 +312,27 @@ export function SidePanel({
 							<dt>Modified</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
 							<dt>Asset ID</dt><dd title={asset.assetId}>{asset.assetId}</dd>
 							<EnrichmentDetails enrichment={enrichment} />
+							<PropertySummary
+								assetId={asset.assetId}
+								properties={properties}
+								propertyValues={propertyValues}
+							/>
 						</dl>
 					) : (
 						<div className="empty no-padding">Select an asset to see its properties.</div>
 					)}
 				</section>
+				{asset && (
+					<section>
+						<TagEditor
+							assetId={asset.assetId}
+							tags={tags}
+							assetTags={assetTags}
+							onAdd={(name) => onAddTag(asset.assetId, name)}
+							onRemove={(tagId) => onRemoveTag(asset.assetId, tagId)}
+						/>
+					</section>
+				)}
 				{asset && (
 					<ImageVlmDetails
 						status={imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup}
@@ -346,33 +347,6 @@ export function SidePanel({
 						onEmbed={onEmbed}
 					/>
 				)}
-				{asset && (
-					<section>
-						<TagEditor
-							assetId={asset.assetId}
-							tags={tags}
-							assetTags={assetTags}
-							onAdd={(name) => onAddTag(asset.assetId, name)}
-							onRemove={(tagId) => onRemoveTag(asset.assetId, tagId)}
-						/>
-					</section>
-				)}
-				{asset && (
-					<section>
-						<PropertyEditor
-							asset={asset}
-							properties={properties}
-							values={selectedValues}
-							onCreateProperty={onCreateProperty}
-							onUpdateProperty={onUpdateProperty}
-							onRemoveProperty={onRemoveProperty}
-							onSetValue={(propertyId, value) =>
-								onSetPropertyValue(asset.assetId, propertyId, value)}
-							onRemoveValue={(propertyId) =>
-								onRemovePropertyValue(asset.assetId, propertyId)}
-						/>
-					</section>
-				)}
 				<section className="relations-section">
 					<RelationsEditor
 						asset={asset}
@@ -386,6 +360,32 @@ export function SidePanel({
 				</section>
 			</div>
 		</aside>
+	);
+}
+
+function PropertySummary({
+	assetId,
+	properties,
+	propertyValues,
+}: {
+	assetId: string;
+	properties: PropertyDefinition[];
+	propertyValues: AssetPropertyValue[];
+}): React.JSX.Element | null {
+	const values = new Map(
+		propertyValues.filter((value) => value.assetId === assetId).map((value) => [value.propertyId, value.value]),
+	);
+	const filled = properties.filter((property) => values.has(property.propertyId));
+	if (filled.length === 0) return null;
+	return (
+		<>
+			{filled.map((property, index) => (
+				<Fragment key={property.propertyId}>
+					<dt className={index === 0 ? "file-property" : undefined}>{property.name}</dt>
+					<dd className={index === 0 ? "file-property" : undefined}>{displayPropertyValue(values.get(property.propertyId), property.type)}</dd>
+				</Fragment>
+			))}
+		</>
 	);
 }
 

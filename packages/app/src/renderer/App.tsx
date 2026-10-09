@@ -743,6 +743,10 @@ export function App(): React.JSX.Element {
 								selectedAssetId={selectedAssetId}
 								canEditProperties={library.rootPath !== null}
 								onCreateProperty={createProperty}
+								onUpdateProperty={updateProperty}
+								onRemoveProperty={removeProperty}
+								onSetPropertyValue={setPropertyValue}
+								onRemovePropertyValue={removePropertyValue}
 								onSelectAsset={(assetId) => {
 									selectAsset(assetId);
 									setSidePanel("details");
@@ -801,11 +805,6 @@ export function App(): React.JSX.Element {
 						onAddTag={addTag}
 						onRemoveTag={removeTag}
 						onChangeTab={setSidePanel}
-						onCreateProperty={createProperty}
-						onUpdateProperty={updateProperty}
-						onRemoveProperty={removeProperty}
-						onSetPropertyValue={setPropertyValue}
-						onRemovePropertyValue={removePropertyValue}
 						enrichment={enrichment}
 						textEmbed={textEmbed}
 						embedding={embedding}

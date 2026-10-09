@@ -2536,6 +2536,10 @@ body.resizing-columns {
 	color: #888b91;
 }
 
+.properties :is(dt, dd).file-property {
+	margin-top: 8px;
+}
+
 .properties dd {
 	min-width: 0;
 	margin: 0;
@@ -2782,6 +2786,10 @@ body.resizing-columns {
 	opacity: 0.45;
 }
 
+.table-property-form button.danger {
+	color: #a33434;
+}
+
 .table-property-form {
 	flex: 0 0 42px;
 	padding: 6px 12px;
@@ -2846,6 +2854,60 @@ body.resizing-columns {
 	font-weight: 650;
 	text-align: left;
 	white-space: nowrap;
+}
+
+.asset-table .table-head {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.asset-table .table-head > button:first-child {
+	flex: 1;
+	min-width: 0;
+	width: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.asset-table .table-head > .text-button {
+	flex: none;
+	width: auto;
+	padding: 6px 8px 6px 0;
+	color: #5d7194;
+	font-weight: 550;
+}
+
+.property-cell {
+	padding: 2px 6px;
+}
+
+.property-cell input {
+	width: 100%;
+	min-width: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+}
+
+.property-cell input:focus {
+	outline: 1px solid #7896c8;
+	background: #fff;
+}
+
+.property-boolean {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.property-cell .text-button {
+	padding: 0 4px;
+	border: 0;
+	background: transparent;
+	color: #888b91;
+	font-size: 12px;
 }
 
 .column-resize-handle {
