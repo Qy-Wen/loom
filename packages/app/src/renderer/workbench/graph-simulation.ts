@@ -36,6 +36,7 @@ export function useGraphSimulation(
 } {
 	const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
 	const nodesRef = useRef<SimNode[]>([]);
+	const draggingRef = useRef(false);
 	const inputRef = useRef({ ids, edges });
 	inputRef.current = { ids, edges };
 	const [, setTick] = useState(0);
@@ -57,8 +58,10 @@ export function useGraphSimulation(
 		sim.nodes(next);
 		const linkForce = sim.force("link") as ForceLink<SimNode, SimLink>;
 		linkForce.links(edges.map((edge) => ({ source: edge.fromId, target: edge.toId })));
-		sim.alpha(known.length === 0 ? 0.85 : 0.22).restart();
+		if (known.length === 0) settle(sim);
+		else sim.alpha(0.22).alphaTarget(0).restart();
 		persist(next);
+		setTick((value) => value + 1);
 	}, [idsKey, linksKey]);
 
 	useEffect(() => () => {
@@ -75,16 +78,22 @@ export function useGraphSimulation(
 			if (!node || !sim) return;
 			node.fx = x;
 			node.fy = y;
-			if (sim.alpha() < 0.2) sim.alpha(0.3).restart();
+			node.x = x;
+			node.y = y;
+			if (!draggingRef.current) {
+				draggingRef.current = true;
+				sim.alphaTarget(0.04).restart();
+			}
 		},
 		unpin: (id) => {
 			const node = nodesRef.current.find((item) => item.id === id);
 			const sim = simRef.current;
 			if (!node || !sim) return;
+			draggingRef.current = false;
 			node.fx = null;
 			node.fy = null;
+			sim.alphaTarget(0);
 			persist(nodesRef.current);
-			sim.alpha(0.3).restart();
 		},
 	};
 }
@@ -111,6 +120,18 @@ function ensureSimulation(
 		});
 	simRef.current = sim;
 	return sim;
+}
+
+/** Run the forces to rest before the first paint. A short live run freezes the nodes in a clump, and reheating on drag then throws them apart. */
+function settle(sim: Simulation<SimNode, SimLink>): void {
+	const onTick = sim.on("tick");
+	sim.on("tick", null);
+	const decay = sim.alphaDecay();
+	sim.stop();
+	sim.alphaTarget(0).alphaDecay(0.0228).alpha(1);
+	for (let i = 0; i < 320; i += 1) sim.tick();
+	sim.alphaDecay(decay).alpha(0).stop();
+	if (onTick) sim.on("tick", onTick);
 }
 
 function seedFresh(ids: string[], edges: { fromId: string; toId: string }[]): SimNode[] {
