@@ -193,6 +193,27 @@ export class SqliteMetadataStore implements MetadataStore {
 		database.prepare("DELETE FROM assets WHERE asset_id = ?").run(assetId);
 	}
 
+	async listFavoriteIds(): Promise<string[]> {
+		const rows = this.requireDatabase()
+			.prepare("SELECT asset_id FROM favorites ORDER BY created_at DESC, asset_id")
+			.all() as Array<{ asset_id: string }>;
+		return rows.map((row) => row.asset_id);
+	}
+
+	async setFavorite(assetId: string, favorite: boolean): Promise<void> {
+		const database = this.requireDatabase();
+		const asset = database.prepare("SELECT asset_id FROM assets WHERE asset_id = ?").get(assetId);
+		if (!asset) throw new Error("Asset not found");
+		if (favorite) {
+			const latest = database.prepare("SELECT COALESCE(MAX(created_at), 0) AS created_at FROM favorites").get() as { created_at: number };
+			database
+				.prepare("INSERT INTO favorites (asset_id, created_at) VALUES (?, ?) ON CONFLICT(asset_id) DO UPDATE SET created_at = excluded.created_at")
+				.run(assetId, Math.max(Date.now(), latest.created_at + 1));
+			return;
+		}
+		database.prepare("DELETE FROM favorites WHERE asset_id = ?").run(assetId);
+	}
+
 	async getLibraryVolumeId(): Promise<string | undefined> {
 		const row = this.requireDatabase()
 			.prepare("SELECT value FROM library_meta WHERE key = ?")
@@ -628,6 +649,10 @@ export class SqliteMetadataStore implements MetadataStore {
 			CREATE TABLE IF NOT EXISTS library_meta (
 				key TEXT PRIMARY KEY,
 				value TEXT NOT NULL
+			);
+			CREATE TABLE IF NOT EXISTS favorites (
+				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
+				created_at REAL NOT NULL
 			);
 			CREATE TABLE IF NOT EXISTS properties (
 				property_id TEXT PRIMARY KEY,

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -75,6 +75,7 @@ interface AssetTreeRowProps {
 	selected: boolean;
 	renaming: boolean;
 	cut: boolean;
+	favorite: boolean;
 	onSelect: () => void;
 	onContextMenu: () => void;
 	onRename: (stem: string) => Promise<void>;
@@ -88,6 +89,7 @@ function AssetTreeRow({
 	selected,
 	renaming,
 	cut,
+	favorite,
 	onSelect,
 	onContextMenu,
 	onRename,
@@ -163,6 +165,7 @@ function AssetTreeRow({
 		>
 			<AssetThumbnail asset={asset} />
 			<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
+			{favorite ? <FavoriteMark /> : null}
 		</button>
 	);
 }
@@ -172,6 +175,7 @@ function AssetIconTile({
 	selected,
 	renaming,
 	cut,
+	favorite,
 	onSelect,
 	onContextMenu,
 	onRename,
@@ -214,6 +218,7 @@ function AssetIconTile({
 				}}
 			>
 				<AssetThumbnail asset={asset} />
+				{favorite ? <FavoriteMark /> : null}
 			</button>
 			{renaming ? (
 				<input
@@ -258,6 +263,7 @@ interface FolderTreeRowProps {
 	renamingFolder: string | null;
 	cutAssetIds: readonly string[];
 	cutFolder: string | null;
+	favoriteAssetIds: ReadonlySet<string>;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectFolder: (relativePath: string) => void;
 	onFolderContextMenu: (relativePath: string) => void;
@@ -389,6 +395,7 @@ function FolderTreeRow({
 					renamingFolder={rowProps.renamingFolder}
 					cutAssetIds={rowProps.cutAssetIds}
 					cutFolder={rowProps.cutFolder}
+					favoriteAssetIds={rowProps.favoriteAssetIds}
 					dropFolder={dropFolder}
 					onToggleFolder={rowProps.onToggleFolder}
 					onSelectFolder={rowProps.onSelectFolder}
@@ -417,6 +424,7 @@ interface FileTreeRowsProps {
 	renamingFolder: string | null;
 	cutAssetIds: readonly string[];
 	cutFolder: string | null;
+	favoriteAssetIds: ReadonlySet<string>;
 	dropFolder: string | null;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectFolder: (relativePath: string) => void;
@@ -441,6 +449,7 @@ function FileTreeRows({
 	renamingFolder,
 	cutAssetIds,
 	cutFolder,
+	favoriteAssetIds,
 	dropFolder,
 	onToggleFolder,
 	onSelectFolder,
@@ -476,6 +485,7 @@ function FileTreeRows({
 					renamingFolder={renamingFolder}
 					cutAssetIds={cutAssetIds}
 					cutFolder={cutFolder}
+					favoriteAssetIds={favoriteAssetIds}
 					fileDisplay={fileDisplay}
 					onToggleFolder={onToggleFolder}
 					onSelectFolder={onSelectFolder}
@@ -499,6 +509,7 @@ function FileTreeRows({
 								selected={asset.assetId === selectedAssetId}
 								renaming={asset.assetId === renamingAssetId}
 								cut={cutAssetIds.includes(asset.assetId)}
+								favorite={favoriteAssetIds.has(asset.assetId)}
 								onSelect={() => onSelectAsset(asset.assetId)}
 								onContextMenu={() => onAssetContextMenu(asset)}
 								onRename={(stem) => onRenameAsset(asset, stem)}
@@ -516,6 +527,7 @@ function FileTreeRows({
 					selected={asset.assetId === selectedAssetId}
 					renaming={asset.assetId === renamingAssetId}
 					cut={cutAssetIds.includes(asset.assetId)}
+					favorite={favoriteAssetIds.has(asset.assetId)}
 					onSelect={() => onSelectAsset(asset.assetId)}
 					onContextMenu={() => onAssetContextMenu(asset)}
 					onRename={(stem) => onRenameAsset(asset, stem)}
@@ -527,15 +539,30 @@ function FileTreeRows({
 	);
 }
 
-export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder"> {
+export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds"> {
 	library: LibrarySnapshot;
+}
+
+function FavoriteMark(): React.JSX.Element {
+	return (
+		<span className="asset-favorite" title="Favorite">
+			<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+				<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
+			</svg>
+		</span>
+	);
 }
 
 export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Element {
 	const [dropFolder, setDropFolder] = useState<string | null>(null);
+	const favoriteAssetIds = useMemo(
+		() => new Set(library.favoriteAssetIds ?? []),
+		[library.favoriteAssetIds],
+	);
 	return (
 		<FileTreeRows
 			node={buildFileTree(library)}
+			favoriteAssetIds={favoriteAssetIds}
 			{...props}
 			dropFolder={dropFolder}
 			onDropFolder={setDropFolder}

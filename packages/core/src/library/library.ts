@@ -80,12 +80,19 @@ export class Library {
 	}
 
 	async getSnapshot(): Promise<LibrarySnapshot> {
-		if (!this.paths) return { rootPath: null, folders: [], assets: [] };
+		if (!this.paths) return { rootPath: null, folders: [], assets: [], favoriteAssetIds: [] };
 		return {
 			rootPath: this.paths.root,
 			folders: [...this.folders].sort((a, b) => a.localeCompare(b)),
 			assets: await this.metadata.listAssets(),
+			favoriteAssetIds: await this.metadata.listFavoriteIds(),
 		};
+	}
+
+	async setFavorite(assetId: string, favorite: boolean): Promise<void> {
+		if (!this.paths) throw new Error("Open a library first.");
+		await this.metadata.setFavorite(assetId, favorite);
+		this.emit({ type: "favorites", assetIds: await this.metadata.listFavoriteIds() });
 	}
 
 	subscribe(listener: LibraryListener): () => void {

@@ -126,6 +126,10 @@ export class LocalCore {
 		return this.library.getSnapshot();
 	}
 
+	setFavorite(assetId: string, favorite: boolean): Promise<void> {
+		return this.library.setFavorite(assetId, favorite);
+	}
+
 	getAssetFilePath(assetId: string): Promise<string | undefined> {
 		return this.library.getAssetFilePath(assetId);
 	}

@@ -220,6 +220,7 @@ body {
 }
 
 .folder-row {
+	gap: 1px;
 	font-weight: 520;
 	cursor: default;
 }
@@ -227,7 +228,7 @@ body {
 .folder-main {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: 5px;
 	min-width: 0;
 	flex: 1;
 	padding: 0;
@@ -359,10 +360,71 @@ body {
 .type-other { background: #858991; }
 
 .asset-name {
+	min-width: 0;
 	overflow: hidden;
 	font-size: 12px;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.favorites {
+	margin-bottom: 6px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.favorites-main {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	flex: 1;
+}
+
+.favorites-symbol {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 16px;
+	flex: 0 0 auto;
+	color: #c4a35a;
+}
+
+.favorites-label {
+	display: flex;
+	align-items: center;
+	gap: 1px;
+	width: 100%;
+	padding: 6px 7px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: 12px;
+	font-weight: 520;
+	text-align: left;
+	cursor: pointer;
+}
+
+.favorites-label:hover {
+	background: #e9e9e6;
+}
+
+.asset-favorite {
+	display: inline-flex;
+	margin-left: auto;
+	flex: 0 0 auto;
+	color: #c4a35a;
+}
+
+.asset-icon-button .asset-favorite {
+	position: absolute;
+	top: 4px;
+	right: 4px;
+	margin-left: 0;
+	filter: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
 }
 
 .resize-handle {
@@ -491,6 +553,7 @@ body.resizing-columns {
 }
 
 .asset-icon-button {
+	position: relative;
 	display: block;
 	width: 100%;
 	aspect-ratio: 1;

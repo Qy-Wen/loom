@@ -8,6 +8,7 @@ const api: LoomApi = {
 	getAgentEndpoint: () => ipcRenderer.invoke(IPC.getAgentEndpoint),
 	openLibrary: () => ipcRenderer.invoke(IPC.openLibrary),
 	getLibrarySnapshot: () => ipcRenderer.invoke(IPC.getLibrarySnapshot),
+	setFavorite: (assetId, favorite) => ipcRenderer.invoke(IPC.setFavorite, assetId, favorite),
 	showAssetContextMenu: (assetId, canPaste) => ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste),
 	showFolderContextMenu: (relativePath, canPaste) =>
 		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste),

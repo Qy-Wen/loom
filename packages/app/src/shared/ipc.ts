@@ -29,6 +29,8 @@ import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResul
 
 export type AssetContextAction =
 	| "add_to_chat"
+	| "favorite"
+	| "unfavorite"
 	| "rename"
 	| "duplicate"
 	| "cut"
@@ -64,6 +66,7 @@ export const IPC = {
 	getAgentEndpoint: "loom:getAgentEndpoint",
 	openLibrary: "loom:openLibrary",
 	getLibrarySnapshot: "loom:getLibrarySnapshot",
+	setFavorite: "loom:setFavorite",
 	libraryChanged: "loom:libraryChanged",
 	showAssetContextMenu: "loom:showAssetContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
@@ -141,6 +144,7 @@ export interface LoomApi {
 	getAgentEndpoint: () => Promise<AgentEndpoint>;
 	openLibrary: () => Promise<LibrarySnapshot | null>;
 	getLibrarySnapshot: () => Promise<LibrarySnapshot>;
+	setFavorite: (assetId: string, favorite: boolean) => Promise<void>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
 	showAssetContextMenu: (assetId: string, canPaste: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean) => Promise<FolderContextAction | null>;

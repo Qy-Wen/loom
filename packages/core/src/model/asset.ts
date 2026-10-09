@@ -24,6 +24,8 @@ export interface LibrarySnapshot {
 	/** POSIX-style paths relative to the library root. */
 	folders: string[];
 	assets: Asset[];
+	/** Favorite asset ids, newest first. */
+	favoriteAssetIds: string[];
 }
 
 export type LibraryChange =
@@ -32,6 +34,7 @@ export type LibraryChange =
 	| { type: "remove"; assetId: string }
 	| { type: "folder_upsert"; relativePath: string }
 	| { type: "folder_remove"; relativePath: string }
+	| { type: "favorites"; assetIds: string[] }
 	| { type: "error"; message: string }
 	| { type: "enrichment"; assetId: string }
 	| { type: "text_embed"; assetId: string }

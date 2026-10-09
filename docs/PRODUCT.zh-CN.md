@@ -278,7 +278,7 @@ ComfyUI / 其他创作 server
 
 整体气质：**Obsidian + Finder + Lightroom + Cursor**。
 
-采用「左侧素材库 + 中央工作区 + 右侧 Agent / Details」布局，提供 Files / Table / Graph 等工作视图。文件树可以在列表和图标之间切换。
+采用「左侧素材库 + 中央工作区 + 右侧 Agent / Details」布局，提供 Files / Table / Graph 等工作视图。文件树可以在列表和图标之间切换。收藏是当前库里的一份文件名单，按 `asset_id` 存在 `.loom/metadata.db`，显示在文件树上方，默认收起。右键文件可以加入或取消。改名和移动后星标还在。
 
 > 具体界面布局、各栏职责与多视图设计，见 [UI.md](./UI.zh-CN.md)。
 

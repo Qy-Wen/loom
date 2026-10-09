@@ -26,6 +26,8 @@ export interface MetadataStore {
 	listAssets(): Promise<Asset[]>;
 	replaceAssets(assets: Asset[]): Promise<void>;
 	removeAsset(assetId: string): Promise<void>;
+	listFavoriteIds(): Promise<string[]>;
+	setFavorite(assetId: string, favorite: boolean): Promise<void>;
 	getLibraryVolumeId(): Promise<string | undefined>;
 	setLibraryVolumeId(volumeId: string): Promise<void>;
 
