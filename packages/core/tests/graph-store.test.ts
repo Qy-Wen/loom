@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { LibraryPaths } from "../src/library/paths.ts";
 import { LadybugGraphStore } from "../src/stores/ladybug.ts";
 import { InMemoryGraphStore } from "../src/stores/memory.ts";
-import { GENERATED_FROM, normalizeRelationType, type GraphStore } from "../src/stores/types.ts";
+import { PROVENANCE_RELATION_TYPE, normalizeRelationType, type GraphStore } from "../src/stores/types.ts";
 
 async function withStore(
 	kind: "memory" | "ladybug",
@@ -25,19 +25,19 @@ async function withStore(
 
 for (const kind of ["memory", "ladybug"] as const) {
 	describe(`${kind} graph store`, () => {
-		it("upserts a unique GENERATED_FROM edge and lists both ends", async () => {
+		it("upserts a unique provenance edge and lists both ends", async () => {
 			await withStore(kind, async (store) => {
 				await store.upsertRelation({
 					relationId: "r1",
 					fromAssetId: "out",
 					toAssetId: "src",
-					type: GENERATED_FROM,
+					type: PROVENANCE_RELATION_TYPE,
 				});
 				await store.upsertRelation({
 					relationId: "r1-dup",
 					fromAssetId: "out",
 					toAssetId: "src",
-					type: GENERATED_FROM,
+					type: PROVENANCE_RELATION_TYPE,
 				});
 
 				assert.deepEqual((await store.listRelations("out")).map((item) => item.relationId), ["r1-dup"]);
@@ -80,7 +80,7 @@ for (const kind of ["memory", "ladybug"] as const) {
 					relationId: "r1",
 					fromAssetId: "out",
 					toAssetId: "src",
-					type: GENERATED_FROM,
+					type: PROVENANCE_RELATION_TYPE,
 				});
 				await store.removeAsset("src");
 				assert.deepEqual(await store.listRelations("out"), []);
@@ -91,7 +91,7 @@ for (const kind of ["memory", "ladybug"] as const) {
 }
 
 describe("ladybug graph store persist", () => {
-	it("reloads GENERATED_FROM after reopen", async () => {
+	it("reloads provenance after reopen", async () => {
 		const root = await mkdtemp(join(tmpdir(), "loom-ladybug-persist-"));
 		const paths = new LibraryPaths(root);
 		const first = new LadybugGraphStore();
@@ -101,7 +101,7 @@ describe("ladybug graph store persist", () => {
 				relationId: "r1",
 				fromAssetId: "out",
 				toAssetId: "src",
-				type: GENERATED_FROM,
+				type: PROVENANCE_RELATION_TYPE,
 			});
 			await first.upsertRelation({
 				relationId: "r2",
@@ -130,7 +130,7 @@ describe("normalizeRelationType", () => {
 	it("trims and rejects reserved labels", () => {
 		assert.equal(normalizeRelationType("  similar  "), "similar");
 		assert.throws(() => normalizeRelationType(" "), /required/);
-		assert.throws(() => normalizeRelationType("generated_from"), /reserved/);
+		assert.equal(normalizeRelationType("generated_from"), "generated_from");
 		assert.throws(() => normalizeRelationType("RELATED"), /reserved/);
 	});
 });

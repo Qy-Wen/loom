@@ -111,7 +111,7 @@ AND rating >= 4
 图数据库专门负责「关系」，有真实业务语义，而非「为了图数据库而图数据库」。
 
 ```
-(:Asset)-[:GENERATED_FROM]->(:Asset)
+(:Asset)-[:RELATED {type}]->(:Asset)
 (:Asset)-[:REFERENCE_OF]->(:Asset)
 (:Asset)-[:BELONGS_TO]->(:Project)
 (:Asset)-[:USES_CHARACTER]->(:Character)
@@ -129,14 +129,14 @@ image_A
         video_B
 ```
 
-Agent 生成产物后自动建立 provenance（溯源链）：
+封装工具保存派生文件时，会加一条普通关系。类型是 `Generated from`，派生文件指向源文件：
 
 ```
 product.png
-     │ GENERATED_FROM
+     │ Generated from
      ↓
 image_gen_01.png
-     │ GENERATED_FROM
+     │ Generated from
      ↓
 video_01.mp4
 ```
@@ -266,7 +266,7 @@ ComfyUI / 其他创作 server
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
 10. create_relationship
-        new_video --GENERATED_FROM--> source_images
+        new_video --"Generated from"--> source_images
 11. update_metadata
 ```
 

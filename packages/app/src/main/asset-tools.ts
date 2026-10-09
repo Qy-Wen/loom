@@ -98,7 +98,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "inspect_asset",
 			description:
-				"Inspect one asset by stable assetId. Returns file metadata, custom properties, relations (including GENERATED_FROM), " +
+				"Inspect one asset by stable assetId. Returns file metadata, custom properties, relations, " +
 				"a VLM or Audio write-up when the image, video, or audio has been described, text-index status, and a safe preview reference. " +
 				"Never accepts or returns an absolute filesystem path.",
 			parameters: {

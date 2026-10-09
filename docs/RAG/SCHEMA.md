@@ -405,10 +405,9 @@ CREATE TABLE IF NOT EXISTS audio_writeup (
 
 ```
 CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id));
-CREATE REL TABLE IF NOT EXISTS GENERATED_FROM(FROM Asset TO Asset, relation_id STRING);
 CREATE REL TABLE IF NOT EXISTS RELATED(FROM Asset TO Asset, relation_id STRING, type STRING);
 ```
 
-`GENERATED_FROM` is output → source, reserved for FFmpeg convenience tools. Other edge kinds use `RELATED` plus a user-defined `type` (suggested from types already used in the library). Unique `(from, to, type)` is enforced in the store, not by Ladybug. `inspect_asset` returns `generatedFrom` / `generated` plus a `links` list of every touching edge.
+Every edge is `RELATED` plus a user-defined `type` (suggested from types already used in the library). Convenience tools write `Generated from`, with the derived file pointing at its source. Unique `(from, to, type)` is enforced in the store, not by Ladybug. `inspect_asset` returns a `links` list of every touching edge.
 
 Library add/remove MERGEs or `DETACH DELETE`s the `Asset` node. Users create and delete edges from the Graph canvas or Details.

@@ -111,7 +111,7 @@ these form **Hybrid Search**. That retrieve step, plus the Agent answering or ac
 The graph database stores relationships with real product meaning rather than existing merely to include a graph database.
 
 ```
-(:Asset)-[:GENERATED_FROM]->(:Asset)
+(:Asset)-[:RELATED {type}]->(:Asset)
 (:Asset)-[:REFERENCE_OF]->(:Asset)
 (:Asset)-[:BELONGS_TO]->(:Project)
 (:Asset)-[:USES_CHARACTER]->(:Character)
@@ -129,14 +129,14 @@ image_A
         video_B
 ```
 
-Agent-created outputs automatically receive provenance:
+Convenience tools that save a derived file add an ordinary relation. The type is `Generated from`, and the derived file points at its source:
 
 ```
 product.png
-     │ GENERATED_FROM
+     │ Generated from
      ↓
 image_gen_01.png
-     │ GENERATED_FROM
+     │ Generated from
      ↓
 video_01.mp4
 ```
@@ -266,7 +266,7 @@ If a server writes outside the library, the Agent copies the file in with `bash`
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
 10. create_relationship
-        new_video --GENERATED_FROM--> source_images
+        new_video --"Generated from"--> source_images
 11. update_metadata
 ```
 

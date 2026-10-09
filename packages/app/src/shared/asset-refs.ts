@@ -57,11 +57,6 @@ export function assetRefsFromTool(name: string, result: unknown): AssetRef[] | n
 		return out;
 	}
 	pushRef(out, seen, row);
-	for (const key of ["generatedFrom", "generated"] as const) {
-		const list = row[key];
-		if (!Array.isArray(list)) continue;
-		for (const item of list) pushRef(out, seen, item);
-	}
 	const links = row.links;
 	if (Array.isArray(links)) {
 		for (const link of links) {

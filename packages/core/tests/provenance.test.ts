@@ -4,9 +4,9 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "../src/index.ts";
-import { GENERATED_FROM } from "../src/stores/types.ts";
+import { PROVENANCE_RELATION_TYPE } from "../src/stores/types.ts";
 
-test("inspect_asset exposes persisted GENERATED_FROM edges", async () => {
+test("inspect_asset exposes a provenance relation as an ordinary link", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-provenance-"));
 	const core = new LocalCore();
 	try {
@@ -19,26 +19,18 @@ test("inspect_asset exposes persisted GENERATED_FROM edges", async () => {
 		assert.ok(source);
 		assert.ok(output);
 
-		await core.graphStore.upsertRelation({
-			relationId: `${output.assetId}:${source.assetId}:${GENERATED_FROM}`,
-			fromAssetId: output.assetId,
-			toAssetId: source.assetId,
-			type: GENERATED_FROM,
-		});
+		await core.createRelation(output.assetId, source.assetId, PROVENANCE_RELATION_TYPE);
 
 		const sourceDetail = await core.inspectAsset(source.assetId);
-		assert.deepEqual(
-			sourceDetail.generated.map((item) => item.relativePath),
-			["outputs/frame.jpg"],
-		);
-		assert.deepEqual(sourceDetail.generatedFrom, []);
+		assert.equal(sourceDetail.links[0]?.relationType, PROVENANCE_RELATION_TYPE);
+		assert.equal(sourceDetail.links[0]?.direction, "in");
+		assert.equal(sourceDetail.links[0]?.asset.relativePath, "outputs/frame.jpg");
 		assert.equal(JSON.stringify(sourceDetail).includes(root), false);
 
 		const outputDetail = await core.inspectAsset(output.assetId);
-		assert.equal(outputDetail.generatedFrom[0]?.assetId, source.assetId);
-		assert.equal(outputDetail.generatedFrom[0]?.filename, "clip.mp4");
-		assert.deepEqual(outputDetail.generated, []);
-		assert.equal(outputDetail.links[0]?.relationType, GENERATED_FROM);
+		assert.equal(outputDetail.links[0]?.asset.assetId, source.assetId);
+		assert.equal(outputDetail.links[0]?.asset.filename, "clip.mp4");
+		assert.equal(outputDetail.links[0]?.relationType, PROVENANCE_RELATION_TYPE);
 		assert.equal(outputDetail.links[0]?.direction, "out");
 	} finally {
 		await core.close();
@@ -68,14 +60,14 @@ test("createRelation stores custom types and rejects reserved labels", async () 
 		assert.equal(fromDetail.links[0]?.relationType, "similar to");
 		assert.equal(fromDetail.links[0]?.direction, "out");
 		assert.equal(fromDetail.links[0]?.asset.assetId, second.assetId);
-		assert.deepEqual(fromDetail.generatedFrom, []);
-		assert.deepEqual(fromDetail.generated, []);
 
 		const toDetail = await core.inspectAsset(second.assetId);
 		assert.equal(toDetail.links[0]?.direction, "in");
 		assert.equal(toDetail.links[0]?.asset.assetId, first.assetId);
 
-		await assert.rejects(core.createRelation(first.assetId, second.assetId, "GENERATED_FROM"), /reserved/);
+		const provenance = await core.createRelation(first.assetId, second.assetId, "GENERATED_FROM");
+		assert.equal(provenance.type, "GENERATED_FROM");
+		await core.removeRelation(provenance.relationId);
 		await assert.rejects(core.createRelation(first.assetId, second.assetId, "related"), /reserved/);
 		await assert.rejects(core.createRelation(first.assetId, first.assetId, "similar to"), /itself/);
 

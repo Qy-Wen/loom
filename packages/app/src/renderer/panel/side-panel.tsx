@@ -410,13 +410,7 @@ function RelationsEditor({
 	const others = assets
 		.filter((item) => item.assetId !== asset?.assetId)
 		.sort((a, b) => a.filename.localeCompare(b.filename) || a.relativePath.localeCompare(b.relativePath));
-	const generatedFrom = relations.links.filter(
-		(link) => link.relationType === "GENERATED_FROM" && link.direction === "out",
-	);
-	const generated = relations.links.filter(
-		(link) => link.relationType === "GENERATED_FROM" && link.direction === "in",
-	);
-	const customGroups = groupCustomLinks(relations.links);
+	const relationGroups = groupLinks(relations.links);
 	const [form, setForm] = useState<{ type: string; toAssetId: string; direction: "out" | "in" } | null>(null);
 	const [typeOpen, setTypeOpen] = useState(false);
 	const [assetQuery, setAssetQuery] = useState("");
@@ -484,7 +478,6 @@ function RelationsEditor({
 							value={form.type}
 							open={typeOpen}
 							suggestions={relationTypes}
-							labelFor={(type) => type === "GENERATED_FROM" ? "Generated from" : type}
 							placeholder="Relationship type"
 							showLabel="Show relationship types"
 							hideLabel="Hide relationship types"
@@ -551,21 +544,17 @@ function RelationsEditor({
 					</div>
 				</div>
 			)}
-			{asset && (generatedFrom.length > 0 || generated.length > 0 || customGroups.length > 0) ? (
-				<>
-					<RelationGroup label="Generated from" items={generatedFrom} onSelect={onSelect} onRemove={onRemove} />
-					<RelationGroup label="Generated" items={generated} onSelect={onSelect} onRemove={onRemove} />
-					{customGroups.map((group) => (
-						<RelationGroup
-							key={group.type}
-							label={group.type}
-							items={group.items}
-							showDirection
-							onSelect={onSelect}
-							onRemove={onRemove}
-						/>
-					))}
-				</>
+			{asset && relationGroups.length > 0 ? (
+				relationGroups.map((group) => (
+					<RelationGroup
+						key={group.type}
+						label={group.type}
+						items={group.items}
+						showDirection
+						onSelect={onSelect}
+						onRemove={onRemove}
+					/>
+				))
 			) : (
 				<div className="empty no-padding">{asset ? "No relations yet." : "Select an asset to see its relations."}</div>
 			)}
@@ -612,10 +601,9 @@ function RelationGroup({
 	);
 }
 
-function groupCustomLinks(links: AssetLinkView[]): { type: string; items: AssetLinkView[] }[] {
+function groupLinks(links: AssetLinkView[]): { type: string; items: AssetLinkView[] }[] {
 	const groups = new Map<string, AssetLinkView[]>();
 	for (const link of links) {
-		if (link.relationType === "GENERATED_FROM") continue;
 		const items = groups.get(link.relationType) ?? [];
 		items.push(link);
 		groups.set(link.relationType, items);

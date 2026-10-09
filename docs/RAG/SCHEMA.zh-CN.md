@@ -405,10 +405,9 @@ CREATE TABLE IF NOT EXISTS audio_writeup (
 
 ```
 CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id));
-CREATE REL TABLE IF NOT EXISTS GENERATED_FROM(FROM Asset TO Asset, relation_id STRING);
 CREATE REL TABLE IF NOT EXISTS RELATED(FROM Asset TO Asset, relation_id STRING, type STRING);
 ```
 
-`GENERATED_FROM` 是产物 → 源文件，留给 FFmpeg 封装工具。其它边用 `RELATED` 加用户自定的 `type`（提示本库已用过的名字）。`(from, to, type)` 唯一性由 store 保证，不是 Ladybug 约束。`inspect_asset` 返回 `generatedFrom` / `generated`，以及该资产所有边的 `links`。
+每条边都是 `RELATED` 加用户自定的 `type`（提示本库已用过的名字）。封装工具写入 `Generated from`，派生文件指向源文件。`(from, to, type)` 唯一性由 store 保证，不是 Ladybug 约束。`inspect_asset` 返回该资产所有边的 `links`。
 
 库内增删会 MERGE 或 `DETACH DELETE` `Asset` 节点。用户可在 Graph 画布或 Details 里建边、删边。

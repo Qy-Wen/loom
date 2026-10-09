@@ -52,10 +52,12 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		assert.equal(frame.output, "outputs/frame.jpg");
 		await assertOutputFile(root, "outputs/frame.jpg");
 		const videoAfterFrame = await core.inspectAsset(video.assetId);
-		const frameView = videoAfterFrame.generated.find((item) => item.relativePath === "outputs/frame.jpg");
-		assert.ok(frameView);
-		const frameDetail = await core.inspectAsset(frameView.assetId);
-		assert.equal(frameDetail.generatedFrom[0]?.relativePath, VIDEO);
+		const frameLink = videoAfterFrame.links.find((item) => item.asset.relativePath === "outputs/frame.jpg");
+		assert.equal(frameLink?.relationType, "Generated from");
+		assert.equal(frameLink?.direction, "in");
+		assert.ok(frameLink);
+		const frameDetail = await core.inspectAsset(frameLink.asset.assetId);
+		assert.equal(frameDetail.links.find((item) => item.asset.relativePath === VIDEO)?.relationType, "Generated from");
 		const frameInfo = await core.getMediaInfo("outputs/frame.jpg");
 		assert.equal(frameInfo.width, videoInfo.width);
 		assert.equal(frameInfo.height, videoInfo.height);
