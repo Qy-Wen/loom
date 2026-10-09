@@ -76,6 +76,30 @@ Files the user starred. One row per asset. Deleting the asset deletes the row.
 
 ---
 
+## `tags`
+
+A label shared by files in this library. `Hero` and `hero` are one tag. Deleting the last use deletes the tag.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `tag_id` | TEXT | PRIMARY KEY | UUID. |
+| `name` | TEXT | NOT NULL UNIQUE COLLATE NOCASE | Display name, trimmed. At most 64 characters. |
+| `created_at` | REAL | NOT NULL | `Date.now()` when the tag was first used. |
+
+## `asset_tags`
+
+One row per file and tag.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `asset_id` | TEXT | NOT NULL, references `assets` ON DELETE CASCADE | File. |
+| `tag_id` | TEXT | NOT NULL, references `tags` ON DELETE CASCADE | Tag. |
+| `created_at` | REAL | NOT NULL | When it was added to this file. Chips are oldest first. |
+
+Primary key: `(asset_id, tag_id)`. Index: `asset_tags_tag_idx` on `tag_id`.
+
+---
+
 ## `properties`
 
 Library-wide custom field definitions. Values live in `asset_properties`.

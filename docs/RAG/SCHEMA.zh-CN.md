@@ -76,6 +76,30 @@
 
 ---
 
+## `tags`
+
+全库共用的标签。`Hero` 和 `hero` 是同一个。最后一个引用去掉后，这个标签也删掉。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `tag_id` | TEXT | PRIMARY KEY | UUID。 |
+| `name` | TEXT | NOT NULL UNIQUE COLLATE NOCASE | 显示名，去掉首尾空白。最多 64 个字符。 |
+| `created_at` | REAL | NOT NULL | 第一次使用时的 `Date.now()`。 |
+
+## `asset_tags`
+
+一个文件上的一个标签。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `asset_id` | TEXT | NOT NULL，引用 `assets`，ON DELETE CASCADE | 文件。 |
+| `tag_id` | TEXT | NOT NULL，引用 `tags`，ON DELETE CASCADE | 标签。 |
+| `created_at` | REAL | NOT NULL | 贴到这个文件上的时间。芯片按旧到新排。 |
+
+主键：`(asset_id, tag_id)`。索引：`asset_tags_tag_idx` 在 `tag_id` 上。
+
+---
+
 ## `properties`
 
 全库共享的自定义字段定义。取值在 `asset_properties`。

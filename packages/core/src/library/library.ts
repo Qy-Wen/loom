@@ -80,12 +80,14 @@ export class Library {
 	}
 
 	async getSnapshot(): Promise<LibrarySnapshot> {
-		if (!this.paths) return { rootPath: null, folders: [], assets: [], favoriteAssetIds: [] };
+		if (!this.paths) return { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 		return {
 			rootPath: this.paths.root,
 			folders: [...this.folders].sort((a, b) => a.localeCompare(b)),
 			assets: await this.metadata.listAssets(),
 			favoriteAssetIds: await this.metadata.listFavoriteIds(),
+			tags: await this.metadata.listTags(),
+			assetTags: await this.metadata.listAssetTags(),
 		};
 	}
 
@@ -93,6 +95,26 @@ export class Library {
 		if (!this.paths) throw new Error("Open a library first.");
 		await this.metadata.setFavorite(assetId, favorite);
 		this.emit({ type: "favorites", assetIds: await this.metadata.listFavoriteIds() });
+	}
+
+	async addAssetTag(assetId: string, name: string): Promise<void> {
+		if (!this.paths) throw new Error("Open a library first.");
+		await this.metadata.addAssetTag(assetId, name);
+		this.emit({
+			type: "tags",
+			tags: await this.metadata.listTags(),
+			assetTags: await this.metadata.listAssetTags(),
+		});
+	}
+
+	async removeAssetTag(assetId: string, tagId: string): Promise<void> {
+		if (!this.paths) throw new Error("Open a library first.");
+		await this.metadata.removeAssetTag(assetId, tagId);
+		this.emit({
+			type: "tags",
+			tags: await this.metadata.listTags(),
+			assetTags: await this.metadata.listAssetTags(),
+		});
 	}
 
 	subscribe(listener: LibraryListener): () => void {

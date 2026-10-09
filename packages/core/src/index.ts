@@ -13,6 +13,7 @@ export * from "./media/binaries.ts";
 export * from "./media/operations.ts";
 export * from "./media/policy.ts";
 export * from "./model/asset.ts";
+export * from "./model/tag.ts";
 export * from "./model/media.ts";
 export * from "./model/property.ts";
 export * from "./model/retrieval.ts";

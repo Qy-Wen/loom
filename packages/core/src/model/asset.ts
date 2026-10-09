@@ -1,4 +1,5 @@
 import { extname } from "node:path";
+import type { AssetTag, Tag } from "./tag.ts";
 
 export type AssetType = "image" | "video" | "audio" | "text" | "other";
 
@@ -26,6 +27,10 @@ export interface LibrarySnapshot {
 	assets: Asset[];
 	/** Favorite asset ids, newest first. */
 	favoriteAssetIds: string[];
+	/** Tags in the open library, sorted by name. */
+	tags: Tag[];
+	/** Tag links, oldest first. */
+	assetTags: AssetTag[];
 }
 
 export type LibraryChange =
@@ -35,6 +40,7 @@ export type LibraryChange =
 	| { type: "folder_upsert"; relativePath: string }
 	| { type: "folder_remove"; relativePath: string }
 	| { type: "favorites"; assetIds: string[] }
+	| { type: "tags"; tags: Tag[]; assetTags: AssetTag[] }
 	| { type: "error"; message: string }
 	| { type: "enrichment"; assetId: string }
 	| { type: "text_embed"; assetId: string }

@@ -362,3 +362,58 @@ test("Library favorites follow the asset id and drop when the file is gone", asy
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Library tags are shared by name and stay with the asset id", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-tags-"));
+	const core = new LocalCore();
+	let reopened: LocalCore | undefined;
+	try {
+		await writeFile(join(root, "a.jpg"), "a");
+		await writeFile(join(root, "b.jpg"), "b");
+		const opened = await core.openLibrary(root);
+		const first = opened.assets.find((asset) => asset.relativePath === "a.jpg");
+		const second = opened.assets.find((asset) => asset.relativePath === "b.jpg");
+		assert.ok(first && second);
+		assert.deepEqual(opened.tags, []);
+
+		await core.addAssetTag(first.assetId, "  Hero  ");
+		await core.addAssetTag(first.assetId, "cover");
+		await core.addAssetTag(second.assetId, "hero");
+		await assert.rejects(() => core.addAssetTag(first.assetId, "   "), /cannot be empty/);
+
+		const tagged = await core.getLibrarySnapshot();
+		assert.deepEqual(tagged.tags.map((tag) => tag.name), ["cover", "Hero"]);
+		const hero = tagged.tags.find((tag) => tag.name === "Hero");
+		const cover = tagged.tags.find((tag) => tag.name === "cover");
+		assert.ok(hero && cover);
+		assert.deepEqual(
+			tagged.assetTags.filter((row) => row.assetId === first.assetId).map((row) => row.tagId),
+			[hero.tagId, cover.tagId],
+		);
+		assert.deepEqual(
+			tagged.assetTags.filter((row) => row.assetId === second.assetId).map((row) => row.tagId),
+			[hero.tagId],
+		);
+
+		await core.removeAssetTag(second.assetId, hero.tagId);
+		assert.equal((await core.getLibrarySnapshot()).tags.some((tag) => tag.tagId === hero.tagId), true);
+		await core.removeAssetTag(first.assetId, hero.tagId);
+		const afterHero = await core.getLibrarySnapshot();
+		assert.equal(afterHero.tags.some((tag) => tag.tagId === hero.tagId), false);
+		assert.deepEqual(afterHero.assetTags.map((row) => row.tagId), [cover.tagId]);
+
+		const renamed = await core.renameAsset(first.assetId, "renamed");
+		assert.equal(renamed.assetId, first.assetId);
+		assert.deepEqual((await core.getLibrarySnapshot()).assetTags.map((row) => row.assetId), [first.assetId]);
+
+		await core.close();
+		await rm(join(root, "renamed.jpg"));
+		reopened = new LocalCore();
+		const again = await reopened.openLibrary(root);
+		assert.deepEqual(again.tags, []);
+		assert.deepEqual(again.assetTags, []);
+	} finally {
+		await Promise.all([core.close(), reopened?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});

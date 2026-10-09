@@ -5,9 +5,11 @@ import type {
 	AssetLinkView,
 	AssetPropertyValue,
 	AssetRelationsResult,
+	AssetTag,
 	PropertyDefinition,
 	PropertyType,
 	PropertyValue,
+	Tag,
 	TextEmbedStatus,
 	ImageVlmStatus,
 	VideoVlmStatus,
@@ -19,6 +21,7 @@ import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { PropertyEditor } from "./property-editor.tsx";
+import { TagEditor } from "./tag-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
 import { AgentPermissionProvider } from "./agent-permission.tsx";
@@ -33,6 +36,10 @@ interface SidePanelProps {
 	asset: Asset | null;
 	properties: PropertyDefinition[];
 	propertyValues: AssetPropertyValue[];
+	tags: Tag[];
+	assetTags: AssetTag[];
+	onAddTag: (assetId: string, name: string) => Promise<void>;
+	onRemoveTag: (assetId: string, tagId: string) => Promise<void>;
 	onChangeTab: (tab: SidePanelTab) => void;
 	onCreateProperty: (name: string, type: PropertyType) => Promise<void>;
 	onUpdateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<void>;
@@ -67,6 +74,10 @@ export function SidePanel({
 	asset,
 	properties,
 	propertyValues,
+	tags,
+	assetTags,
+	onAddTag,
+	onRemoveTag,
 	onChangeTab,
 	onCreateProperty,
 	onUpdateProperty,
@@ -344,6 +355,17 @@ export function SidePanel({
 						embedding={embedding}
 						onEmbed={onEmbed}
 					/>
+				)}
+				{asset && (
+					<section>
+						<TagEditor
+							assetId={asset.assetId}
+							tags={tags}
+							assetTags={assetTags}
+							onAdd={(name) => onAddTag(asset.assetId, name)}
+							onRemove={(tagId) => onRemoveTag(asset.assetId, tagId)}
+						/>
+					</section>
 				)}
 				{asset && (
 					<section>
