@@ -45,13 +45,13 @@ Level 4  Deep Analysis              可选
 | Level | 内容 | 成本 | 触发 |
 |-------|------|------|------|
 | 0 | 文件系统元数据：path、size、hash、mtime、type | 免费 | 自动（导入即有） |
-| 1 | FFprobe（时长/分辨率/编码）、EXIF、文本内容提取 | 本地计算 | 自动或按需 |
+| 1 | FFprobe（时长/分辨率/编码）、EXIF、文本内容提取 | 本地计算 | 自动 |
 | 2 | Markdown 切片 embedding；图 / 视频 / 音频先转成文字再切，见 [MEDIA](./MEDIA.zh-CN.md) | 可选，HTTP provider（本地服务或远程 API key） | 用户选择 |
 | 3 | VLM 给图片写 caption / 标签，给视频写文件级说明（native video 或抽帧）；Audio 槽位给音频写文件级说明 | 可能收费 | 用户选择 |
 | 4 | 深度分析：分段、质量评分、风格标签等 | 可能收费 | 用户选择 |
 
 - Level 1 写入按 `asset_id` 关联的 `asset_metadata`。失效判断用固定列；各类型字段放在带 `kind` 的 JSON 里（`image` / `video` / `audio` / `text`）。
-- Level 1 从磁盘文件提取。缺失或过期记录在 reconcile 后刷新；Analyze 强制重跑。重命名/移动不会。
+- Level 1 从磁盘文件提取。缺失、失败或过期的记录在打开和 reconcile 后刷新。就绪记录重命名/移动不会重算。
 - Level 2/3/4 的产物仍落在 SQLite（向量 + FTS + metadata），见 PRODUCT.md 第 3.2 节。
 
 ---

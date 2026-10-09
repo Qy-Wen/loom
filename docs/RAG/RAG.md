@@ -45,13 +45,13 @@ Level 4  Deep analysis               Optional
 | Level | Content | Cost | Trigger |
 |---|---|---|---|
 | 0 | Filesystem metadata: path, size, hash, mtime, type | Free | Automatic on import |
-| 1 | FFprobe (duration/resolution/codec), EXIF, text extraction | Local compute | Automatic or on demand |
+| 1 | FFprobe (duration/resolution/codec), EXIF, text extraction | Local compute | Automatic |
 | 2 | Chunked Markdown embeddings; image / video / audio become text first, then chunk; see [MEDIA](./MEDIA.md) | Optional, HTTP provider (local server or remote API key) | User-selected |
 | 3 | VLM writes captions / tags for images, and file-level video (native video or frames); Audio slot writes file-level audio | May cost money | User-selected |
 | 4 | Deep analysis: segmentation, quality scoring, style tags, and more | May cost money | User-selected |
 
 - Level 1 writes `asset_metadata` keyed by `asset_id`. Common invalidation columns stay fixed; per-type fields are a `kind` JSON payload (`image` / `video` / `audio` / `text`).
-- Level 1 is extracted from the file on disk. Missing or stale rows refresh after reconcile; Analyze forces a rerun. Rename/move does not.
+- Level 1 is extracted from the file on disk. Missing, failed, or stale rows refresh after open and reconcile. Rename/move of a ready row does not.
 - Level 2/3/4 outputs stay in SQLite (vectors, FTS, and metadata); see PRODUCT.md Section 3.2.
 
 ---

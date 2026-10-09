@@ -52,6 +52,7 @@ export interface AssetEnrichment {
 
 export function isEnrichmentStale(record: AssetEnrichment | undefined, sourceModifiedAt: number): boolean {
 	if (!record) return true;
+	if (record.status === "failed") return true;
 	if (record.version !== ENRICHMENT_VERSION) return true;
 	return record.sourceModifiedAt !== sourceModifiedAt;
 }

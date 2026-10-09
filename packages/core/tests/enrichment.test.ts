@@ -15,6 +15,16 @@ const PNG_1X1 = Buffer.from(
 	"hex",
 );
 
+async function waitForEnrichment(core: LocalCore, assetId: string) {
+	const started = Date.now();
+	while (Date.now() - started < 5_000) {
+		const record = await core.getAssetEnrichment(assetId);
+		if (record) return record;
+		await new Promise((resolve) => setTimeout(resolve, 20));
+	}
+	throw new Error("Enrichment did not finish");
+}
+
 function textAsset(assetId: string, modifiedAt = 10): Asset {
 	return {
 		assetId,
@@ -105,6 +115,26 @@ describe("EnrichmentService", () => {
 		assert.equal(record.error, "Cannot read nested/note.txt: invalid input");
 		assert.equal((await store.getAssetEnrichment(asset.assetId))?.error, record.error);
 	});
+
+	it("retries a failed extract on the next stale refresh", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = textAsset("retry");
+		await store.upsertAsset(asset);
+		let calls = 0;
+		const service = new EnrichmentService(store, async () => "/tmp/note.txt", async () => {
+			calls += 1;
+			if (calls === 1) throw new Error("ffprobe is not bundled. Run pnpm vendor:ffmpeg.");
+			return { kind: "text", text: "ok", truncated: false, charCount: 2 };
+		});
+
+		const failed = await service.refreshStale([asset]);
+		assert.equal(failed[0]?.status, "failed");
+		const retried = await service.refreshStale([asset]);
+		assert.equal(retried[0]?.status, "ready");
+		assert.equal(calls, 2);
+		assert.equal((await service.refreshStale([asset])).length, 0);
+	});
 });
 
 describe("LocalCore enrichment", () => {
@@ -116,6 +146,9 @@ describe("LocalCore enrichment", () => {
 			const snapshot = await core.openLibrary(root);
 			const asset = snapshot.assets[0];
 			assert.ok(asset);
+			const automatic = await waitForEnrichment(core, asset.assetId);
+			assert.equal(automatic.status, "ready");
+			assert.deepEqual(automatic.data, { kind: "image", width: 1, height: 1 });
 			const first = await core.analyzeAsset(asset.assetId);
 			assert.equal(first.status, "ready");
 			assert.deepEqual(first.data, { kind: "image", width: 1, height: 1 });

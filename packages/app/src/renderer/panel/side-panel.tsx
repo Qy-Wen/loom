@@ -58,8 +58,6 @@ interface SidePanelProps {
 	relations: AssetRelationsResult;
 	assets: Asset[];
 	relationTypes: string[];
-	analyzing: boolean;
-	onAnalyze: () => void;
 	onSelectAsset: (assetId: string) => void;
 	onOpenAsset: (assetId: string) => void;
 	composerAttach: AssetRefAttachment | null;
@@ -102,8 +100,6 @@ export function SidePanel({
 	onComposerAttachApplied,
 	onCreateRelation,
 	onRemoveRelation,
-	analyzing,
-	onAnalyze,
 }: SidePanelProps): React.JSX.Element {
 	const selectedValues = asset
 		? propertyValues.filter((value) => value.assetId === asset.assetId)
@@ -330,18 +326,12 @@ export function SidePanel({
 							<dt>Size</dt><dd>{formatBytes(asset.size)}</dd>
 							<dt>Modified</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
 							<dt>Asset ID</dt><dd title={asset.assetId}>{asset.assetId}</dd>
+							<EnrichmentDetails enrichment={enrichment} />
 						</dl>
 					) : (
 						<div className="empty no-padding">Select an asset to see its properties.</div>
 					)}
 				</section>
-				{asset && (
-					<EnrichmentDetails
-						enrichment={enrichment}
-						analyzing={analyzing}
-						onAnalyze={onAnalyze}
-					/>
-				)}
 				{asset && (
 					<ImageVlmDetails
 						status={imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup}

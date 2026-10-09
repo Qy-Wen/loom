@@ -105,7 +105,6 @@ export function App(): React.JSX.Element {
 	const [audioWriteup, setAudioWriteup] = useState<AudioWriteupStatus | undefined>();
 	const [relations, setRelations] = useState<AssetRelationsResult>(EMPTY_RELATIONS);
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
-	const [analyzing, setAnalyzing] = useState(false);
 	const [embedding, setEmbedding] = useState(false);
 	const [describing, setDescribing] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
@@ -539,19 +538,6 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function analyzeSelected(): Promise<void> {
-		if (!selectedAssetId) return;
-		setAnalyzing(true);
-		setError(null);
-		try {
-			setEnrichment(await window.loom.analyzeAsset(selectedAssetId));
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setAnalyzing(false);
-		}
-	}
-
 	async function describeSelected(): Promise<void> {
 		if (!selectedAssetId) return;
 		setDescribing(true);
@@ -832,8 +818,6 @@ export function App(): React.JSX.Element {
 						relations={relations}
 						assets={library.assets}
 						relationTypes={relationTypes}
-						analyzing={analyzing}
-						onAnalyze={() => void analyzeSelected()}
 						onSelectAsset={(assetId) => {
 							selectAsset(assetId);
 							setSidePanel("details");
