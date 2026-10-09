@@ -1,5 +1,6 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { DEV_TRACE_IPC, type DevTraceRecord } from "../shared/dev-trace.ts";
+import { loadAppIcon } from "./app-icon.ts";
 
 const MAX_TRACES = 40;
 const TITLE = "Traces";
@@ -42,6 +43,7 @@ export function openDevTraceWindow(): void {
 		x: origin ? origin[0] + 40 : undefined,
 		y: origin ? origin[1] + 40 : undefined,
 		title: TITLE,
+		icon: loadAppIcon(),
 		backgroundColor: "#f7f7f6",
 		webPreferences: {
 			preload: preloadPath,

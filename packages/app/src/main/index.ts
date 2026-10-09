@@ -27,6 +27,7 @@ import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from ".
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
+import { applyAppIcon, loadAppIcon } from "./app-icon.ts";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
@@ -232,6 +233,7 @@ function createWindow(): void {
 		height: 800,
 		minWidth: 860,
 		minHeight: 600,
+		icon: loadAppIcon(),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
@@ -633,6 +635,7 @@ function registerIpc(): void {
 app
 	.whenReady()
 	.then(async () => {
+		applyAppIcon();
 		// Development convenience: keep provider secrets in the workspace root.
 		// Production will source credentials from settings/keychain instead.
 		if (!app.isPackaged) {
