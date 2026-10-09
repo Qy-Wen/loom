@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
 	forceCollide,
 	forceLink,
@@ -46,11 +46,12 @@ export function useGraphSimulation(
 		[edges],
 	);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const { ids, edges } = inputRef.current;
 		const sim = ensureSimulation(simRef, () => setTick((value) => value + 1));
 		const previous = new Map(nodesRef.current.map((node) => [node.id, node]));
 		const known = ids.filter((id) => previous.has(id) || sessionPositions.has(id));
+		const hasNewcomer = ids.some((id) => !previous.has(id) && !sessionPositions.has(id));
 		const next = known.length === 0
 			? seedFresh(ids, edges)
 			: seedIncremental(ids, previous);
@@ -59,16 +60,16 @@ export function useGraphSimulation(
 		const linkForce = sim.force("link") as ForceLink<SimNode, SimLink>;
 		linkForce.links(edges.map((edge) => ({ source: edge.fromId, target: edge.toId })));
 		if (known.length === 0) settle(sim);
-		else sim.alpha(0.22).alphaTarget(0).restart();
+		else if (hasNewcomer) sim.alpha(0.22).alphaTarget(0).restart();
+		else sim.alpha(0).stop();
 		persist(next);
 		setTick((value) => value + 1);
+		return () => {
+			persist(nodesRef.current);
+			simRef.current?.stop();
+			simRef.current = null;
+		};
 	}, [idsKey, linksKey]);
-
-	useEffect(() => () => {
-		persist(nodesRef.current);
-		simRef.current?.stop();
-		simRef.current = null;
-	}, []);
 
 	return {
 		nodes: nodesRef.current,

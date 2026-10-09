@@ -672,38 +672,6 @@ export function App(): React.JSX.Element {
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
-				<header className="topbar">
-					<span className="brand">Loom</span>
-					<nav className="view-switcher" aria-label="Workspace views">
-						<button
-							className={workbenchView === "library" ? "active" : ""}
-							type="button"
-							onClick={() => setWorkbenchView("library")}
-						>Library</button>
-						<button
-							className={workbenchView === "table" ? "active" : ""}
-							type="button"
-							onClick={() => setWorkbenchView("table")}
-						>Table</button>
-						<button
-							className={workbenchView === "graph" ? "active" : ""}
-							type="button"
-							onClick={() => setWorkbenchView("graph")}
-						>Graph</button>
-					</nav>
-					<div className="topbar-spacer" />
-					<div className="topbar-actions">
-						{import.meta.env.DEV ? (
-							<button className="topbar-settings" type="button" onClick={() => void window.loom.openDevTrace?.()}>
-								Traces
-							</button>
-						) : null}
-						<button className="topbar-settings" type="button" onClick={() => setSettingsOpen(true)}>
-							Settings
-						</button>
-					</div>
-				</header>
-
 				{error && (
 					<div className="error-banner">
 						<CopyableError text={error} />
@@ -714,6 +682,8 @@ export function App(): React.JSX.Element {
 					<LibrarySidebar
 						library={library}
 						opening={opening}
+						workbenchView={workbenchView}
+						onWorkbenchView={setWorkbenchView}
 						selectedAssetId={selectedAssetId}
 						selectedFolder={selectedFolder}
 						renamingAssetId={renamingAssetId}
@@ -733,6 +703,8 @@ export function App(): React.JSX.Element {
 						onCancelRename={cancelRename}
 						onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
 						onKeyDown={onLibraryKeyDown}
+						onOpenSettings={() => setSettingsOpen(true)}
+						onOpenTraces={import.meta.env.DEV ? () => void window.loom.openDevTrace?.() : undefined}
 					/>
 
 					<div

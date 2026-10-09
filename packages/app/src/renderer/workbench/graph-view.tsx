@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Asset, AssetRelation, AssetType } from "@loom/core";
 import {
 	GRAPH_NODE_RADIUS,
@@ -106,7 +106,7 @@ export function GraphView({
 		[assets],
 	);
 
-	useEffect(() => {
+	useLayoutEffect(() => {
 		const element = canvasRef.current;
 		if (!element || nodes.length === 0 || fitted.current) return;
 		const bounds = {

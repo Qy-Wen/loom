@@ -56,6 +56,27 @@ function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.E
 	);
 }
 
+function VideoPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.Element {
+	const [status, setStatus] = useState<"pending" | "ready" | "failed">("pending");
+
+	if (status === "failed") {
+		return <PreviewFallback asset={asset} message="This file format could not be previewed by Electron." />;
+	}
+	return (
+		<div className="media-preview video-preview">
+			<video
+				className={status === "ready" ? undefined : "pending"}
+				controls={status === "ready"}
+				preload="metadata"
+				onLoadedMetadata={() => setStatus("ready")}
+				onError={() => setStatus("failed")}
+			>
+				<source src={url} />
+			</video>
+		</div>
+	);
+}
+
 export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
 	const [failed, setFailed] = useState(false);
 	const url = assetPreviewUrl(asset);
@@ -63,6 +84,9 @@ export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] 
 
 	useEffect(() => setFailed(false), [asset.assetId]);
 
+	if (asset.type === "video") {
+		return <VideoPreview key={asset.assetId} asset={asset} url={url} />;
+	}
 	if (failed) {
 		return <PreviewFallback asset={asset} message="This file format could not be previewed by Electron." />;
 	}
@@ -70,15 +94,6 @@ export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] 
 		return (
 			<div className="media-preview image-preview">
 				<img src={url} alt={asset.filename} onError={() => setFailed(true)} />
-			</div>
-		);
-	}
-	if (asset.type === "video") {
-		return (
-			<div className="media-preview video-preview">
-				<video key={url} controls preload="metadata" onError={() => setFailed(true)}>
-					<source src={url} />
-				</video>
 			</div>
 		);
 	}
