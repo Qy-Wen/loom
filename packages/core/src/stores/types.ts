@@ -63,9 +63,6 @@ export interface MetadataStore {
 	searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]>;
 }
 
-/** Ordinary relation type written when a convenience tool saves a derived file. Output → source. */
-export const PROVENANCE_RELATION_TYPE = "Generated from";
-
 /** Ladybug table for every edge. Not a user-facing type. */
 export const RELATED = "RELATED";
 

@@ -12,6 +12,8 @@ const BASE_SYSTEM_PROMPT =
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
+	"Media tools do not create relations. Call create_relation yourself when a derived file should point at its source: fromAssetId is the new file, toAssetId is the source, and type is a short label such as \"derived from\". " +
+	"Copy both asset ids from tool results. If you only have a path, retrieve it first. remove_relation takes the relationId that create_relation returned. " +
 	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
 	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +

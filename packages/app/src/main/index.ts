@@ -32,6 +32,7 @@ import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
+import { createRelationTools } from "./relation-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { AgentInstructionsStore } from "./agent-instructions-store.ts";
@@ -124,6 +125,7 @@ const BUILTIN_TOOLS = [
 		describeAudio: describeAudioWithSettings,
 	}),
 	...createFfmpegTools(localCore),
+	...createRelationTools(localCore),
 ];
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
