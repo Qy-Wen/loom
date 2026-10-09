@@ -129,14 +129,14 @@ image_A
         video_B
 ```
 
-封装工具保存派生文件时，会加一条普通关系。类型是 `Generated from`，派生文件指向源文件：
+关系由用户或 Agent 自己建立，包括用来记下派生文件从哪来：
 
 ```
 product.png
-     │ Generated from
+     │ derived from
      ↓
 image_gen_01.png
-     │ Generated from
+     │ derived from
      ↓
 video_01.mp4
 ```
@@ -266,7 +266,7 @@ ComfyUI / 其他创作 server
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
 10. create_relationship
-        new_video --"Generated from"--> source_images
+        new_video --"derived from"--> source_images
 11. update_metadata
 ```
 

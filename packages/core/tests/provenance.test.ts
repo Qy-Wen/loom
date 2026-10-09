@@ -4,9 +4,8 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "../src/index.ts";
-import { PROVENANCE_RELATION_TYPE } from "../src/stores/types.ts";
 
-test("inspect_asset exposes a provenance relation as an ordinary link", async () => {
+test("inspect_asset exposes a relation as a link on both ends", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-provenance-"));
 	const core = new LocalCore();
 	try {
@@ -19,10 +18,10 @@ test("inspect_asset exposes a provenance relation as an ordinary link", async ()
 		assert.ok(source);
 		assert.ok(output);
 
-		await core.createRelation(output.assetId, source.assetId, PROVENANCE_RELATION_TYPE);
+		await core.createRelation(output.assetId, source.assetId, "derived");
 
 		const sourceDetail = await core.inspectAsset(source.assetId);
-		assert.equal(sourceDetail.links[0]?.relationType, PROVENANCE_RELATION_TYPE);
+		assert.equal(sourceDetail.links[0]?.relationType, "derived");
 		assert.equal(sourceDetail.links[0]?.direction, "in");
 		assert.equal(sourceDetail.links[0]?.asset.relativePath, "outputs/frame.jpg");
 		assert.equal(JSON.stringify(sourceDetail).includes(root), false);
@@ -30,7 +29,7 @@ test("inspect_asset exposes a provenance relation as an ordinary link", async ()
 		const outputDetail = await core.inspectAsset(output.assetId);
 		assert.equal(outputDetail.links[0]?.asset.assetId, source.assetId);
 		assert.equal(outputDetail.links[0]?.asset.filename, "clip.mp4");
-		assert.equal(outputDetail.links[0]?.relationType, PROVENANCE_RELATION_TYPE);
+		assert.equal(outputDetail.links[0]?.relationType, "derived");
 		assert.equal(outputDetail.links[0]?.direction, "out");
 	} finally {
 		await core.close();

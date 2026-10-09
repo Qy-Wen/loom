@@ -12,6 +12,8 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /<system-reminder>/);
 		assert.match(prompt, /<ui_selection>/);
 		assert.match(prompt, /Do not invent paths or ids/);
+		assert.match(prompt, /create_relation/);
+		assert.match(prompt, /Media tools do not create relations/);
 	});
 
 	it("refuses to invent a directory when no library is open", () => {

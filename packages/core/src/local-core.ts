@@ -40,7 +40,6 @@ import { matchesPropertyFilters } from "./retrieval/filter.ts";
 import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
-import { resolveMediaPath } from "./media/policy.ts";
 import type {
 	ConvertFormatArgs,
 	CropVideoArgs,
@@ -54,7 +53,6 @@ import type {
 import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import {
-	PROVENANCE_RELATION_TYPE,
 	normalizeRelationType,
 	type AssetRelation,
 	type GraphStore,
@@ -518,23 +516,23 @@ export class LocalCore {
 	}
 
 	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.extractFrame(args, signal));
+		return this.media.extractFrame(args, signal);
 	}
 
 	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.extractClip(args, signal));
+		return this.media.extractClip(args, signal);
 	}
 
 	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.resizeVideo(args, signal));
+		return this.media.resizeVideo(args, signal);
 	}
 
 	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.cropVideo(args, signal));
+		return this.media.cropVideo(args, signal);
 	}
 
 	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runConvenience(args.path, () => this.media.convertFormat(args, signal));
+		return this.media.convertFormat(args, signal);
 	}
 
 	runFfmpeg(args: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
@@ -547,40 +545,6 @@ export class LocalCore {
 
 	async close(): Promise<void> {
 		await Promise.all([this.library.close(), this.graphStore.close()]);
-	}
-
-	private async runConvenience(
-		inputPath: string,
-		run: () => Promise<MediaJobResult>,
-	): Promise<MediaJobResult> {
-		const result = await run();
-		await this.recordGeneratedFrom(inputPath, result);
-		return result;
-	}
-
-	private async recordGeneratedFrom(inputPath: string, result: MediaJobResult): Promise<void> {
-		const sourceRel = this.libraryRelative(inputPath);
-		if (!sourceRel) return;
-		const source = await this.metadataStore.getAssetByPath(sourceRel);
-		if (!source) return;
-
-		const outputs = [...new Set(result.outputs ?? (result.output ? [result.output] : []))];
-		for (const outputPath of outputs) {
-			const outputRel = this.libraryRelative(outputPath);
-			if (!outputRel) continue;
-			const output = await this.library.indexFile(outputRel);
-			if (!output || output.assetId === source.assetId) continue;
-			await this.createRelation(output.assetId, source.assetId, PROVENANCE_RELATION_TYPE);
-		}
-	}
-
-	private libraryRelative(path: string): string | undefined {
-		try {
-			const paths = this.library.getPaths();
-			return paths.toRelativePath(resolveMediaPath(path, paths.root).absolutePath);
-		} catch {
-			return undefined;
-		}
 	}
 }
 

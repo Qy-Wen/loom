@@ -129,14 +129,14 @@ image_A
         video_B
 ```
 
-Convenience tools that save a derived file add an ordinary relation. The type is `Generated from`, and the derived file points at its source:
+Users create relationships themselves, including ones that record where a derived file came from:
 
 ```
 product.png
-     │ Generated from
+     │ derived from
      ↓
 image_gen_01.png
-     │ Generated from
+     │ derived from
      ↓
 video_01.mp4
 ```
@@ -266,7 +266,7 @@ If a server writes outside the library, the Agent copies the file in with `bash`
 8.  save_file          outputs/airpods_short_v2.mp4
 9.  index_asset
 10. create_relationship
-        new_video --"Generated from"--> source_images
+        new_video --"derived from"--> source_images
 11. update_metadata
 ```
 
