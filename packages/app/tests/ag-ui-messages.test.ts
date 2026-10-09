@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
-import { isChatErrorMessageId } from "../src/shared/chat-error.ts";
+import { formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
 	const messages = toAgUiMessages([
@@ -129,8 +129,38 @@ test("mergeChatMessages treats a stored asset block and the composer marker as o
 	assert.equal(merged[1] && "content" in merged[1] ? merged[1].content : "", "一只金毛");
 });
 
+test("toAgUiMessages collapses offline retry attempts into one request failure", () => {
+	const messages = toAgUiMessages([
+		{ id: "u1", role: "user", content: "你好" },
+		{ id: "a1", role: "assistant", content: [], stopReason: "error", errorMessage: "fetch failed" },
+		{ id: "a2", role: "assistant", content: [], stopReason: "error", errorMessage: "fetch failed" },
+		{ id: "a3", role: "assistant", content: [], stopReason: "error", errorMessage: "fetch failed" },
+		{ id: "a4", role: "assistant", content: [], stopReason: "error", errorMessage: "fetch failed" },
+	]);
+	assert.equal(messages.length, 2);
+	assert.equal(messages[1]?.id, "loom-error-a4");
+	assert.match(String(messages[1] && "content" in messages[1] ? messages[1].content : ""), /Could not reach the Chat endpoint/);
+	assert.equal(isChatErrorMessageId(messages[1]?.id), true);
+});
+
+test("toAgUiMessages drops failed attempts once a reply arrives", () => {
+	const messages = toAgUiMessages([
+		{ id: "u1", role: "user", content: "你好" },
+		{ id: "a1", role: "assistant", content: [], stopReason: "error", errorMessage: "fetch failed" },
+		{ id: "a2", role: "assistant", content: [{ type: "text", text: "在的" }], stopReason: "stop" },
+		{ id: "u2", role: "user", content: "停" },
+		{ id: "a3", role: "assistant", content: [], stopReason: "aborted" },
+	]);
+	assert.deepEqual(
+		messages.map((message) => ("content" in message ? message.content : "")),
+		["你好", "在的", "停"],
+	);
+});
+
 test("chat error message ids are distinct from model replies", () => {
 	assert.equal(isChatErrorMessageId("loom-error-1"), true);
 	assert.equal(isChatErrorMessageId("msg-1"), false);
 	assert.equal(isChatErrorMessageId(undefined), false);
+	assert.match(formatChatError("fetch failed"), /Could not reach the Chat endpoint/);
+	assert.match(formatChatError("401 Unauthorized"), /API key was rejected/);
 });
