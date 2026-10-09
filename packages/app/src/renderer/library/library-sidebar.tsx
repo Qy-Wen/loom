@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -7,7 +8,9 @@ import {
 	readLibraryDrag,
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
-import { FileTree } from "./file-tree.tsx";
+import { FileTree, type FileDisplay } from "./file-tree.tsx";
+
+const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
@@ -57,6 +60,12 @@ export function LibrarySidebar({
 	onKeyDown,
 }: LibrarySidebarProps): React.JSX.Element {
 	const empty = library.assets.length === 0 && library.folders.length === 0;
+	const [fileDisplay, setFileDisplay] = useState<FileDisplay>(() => (
+		localStorage.getItem(FILE_DISPLAY_KEY) === "icons" ? "icons" : "list"
+	));
+	useEffect(() => {
+		localStorage.setItem(FILE_DISPLAY_KEY, fileDisplay);
+	}, [fileDisplay]);
 
 	function acceptRootDrop(event: React.DragEvent): boolean {
 		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
@@ -81,7 +90,40 @@ export function LibrarySidebar({
 
 			<div className="file-heading">
 				<span>Files</span>
-				<span>{library.assets.length}</span>
+				<span className="file-heading-tools">
+					{library.rootPath ? (
+						<span className="file-display" role="group" aria-label="File display">
+							<button
+								type="button"
+								className={fileDisplay === "list" ? "active" : ""}
+								aria-label="List"
+								aria-pressed={fileDisplay === "list"}
+								title="List"
+								onClick={() => setFileDisplay("list")}
+							>
+								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+									<path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+								</svg>
+							</button>
+							<button
+								type="button"
+								className={fileDisplay === "icons" ? "active" : ""}
+								aria-label="Icons"
+								aria-pressed={fileDisplay === "icons"}
+								title="Icons"
+								onClick={() => setFileDisplay("icons")}
+							>
+								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+									<rect x="2.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+									<rect x="9.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+									<rect x="2.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+									<rect x="9.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+								</svg>
+							</button>
+						</span>
+					) : null}
+					<span>{library.assets.length}</span>
+				</span>
 			</div>
 			{!library.rootPath ? (
 				<div className="empty">Open a folder to start a local asset library.</div>
@@ -116,6 +158,7 @@ export function LibrarySidebar({
 					) : (
 						<FileTree
 							library={library}
+							fileDisplay={fileDisplay}
 							collapsedFolders={collapsedFolders}
 							selectedAssetId={selectedAssetId}
 							selectedFolder={selectedFolder}

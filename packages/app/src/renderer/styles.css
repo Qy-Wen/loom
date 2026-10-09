@@ -437,6 +437,100 @@ body.resizing-columns {
 	background: #fff;
 }
 
+.file-heading-tools {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.file-display {
+	display: inline-flex;
+	gap: 1px;
+}
+
+.file-display button {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #85888e;
+	cursor: pointer;
+}
+
+.file-display button.active {
+	background: #dde6f7;
+	color: #243044;
+}
+
+.asset-icon-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+	gap: 8px 6px;
+	padding: 4px 6px 8px;
+}
+
+.asset-icon {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.asset-icon-button {
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.asset-icon .asset-thumbnail {
+	width: 100%;
+	height: 100%;
+	border-radius: 6px;
+}
+
+.asset-icon .video-thumbnail::after {
+	border-top-width: 7px;
+	border-bottom-width: 7px;
+	border-left-width: 10px;
+}
+
+.asset-icon.selected .asset-icon-button {
+	outline: 2px solid #7896c8;
+	outline-offset: 1px;
+}
+
+.asset-icon.cut {
+	opacity: 0.45;
+}
+
+.asset-icon-name,
+.asset-icon-rename {
+	overflow: hidden;
+	color: #3f3f3d;
+	font-size: 11px;
+	line-height: 1.3;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-icon-rename {
+	width: 100%;
+	padding: 0 2px;
+	border: 1px solid #7896c8;
+	border-radius: 3px;
+	background: #fff;
+}
+
 .graph-view {
 	position: relative;
 	display: flex;
