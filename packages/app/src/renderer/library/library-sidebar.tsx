@@ -8,6 +8,7 @@ import {
 	readLibraryDrag,
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
+import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { FileTree, type FileDisplay } from "./file-tree.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
@@ -109,10 +110,21 @@ export function LibrarySidebar({
 		localStorage.setItem(FILE_DISPLAY_KEY, fileDisplay);
 	}, [fileDisplay]);
 	const [searchOpen, setSearchOpen] = useState(false);
+	const [favoritesCollapsed, setFavoritesCollapsed] = useState(true);
 	const [query, setQuery] = useState("");
 	const searchRef = useRef<HTMLInputElement>(null);
 	const visible = useMemo(() => filterLibrary(library, query), [library, query]);
 	const queryActive = query.trim().length > 0;
+	const favoriteAssets = useMemo(() => {
+		const byId = new Map(library.assets.map((asset) => [asset.assetId, asset]));
+		const normalized = query.trim().toLowerCase();
+		return (library.favoriteAssetIds ?? []).flatMap((assetId) => {
+			const asset = byId.get(assetId);
+			if (!asset) return [];
+			if (normalized && !asset.filename.toLowerCase().includes(normalized) && !asset.relativePath.toLowerCase().includes(normalized)) return [];
+			return [asset];
+		});
+	}, [library, query]);
 	useEffect(() => {
 		if (searchOpen) searchRef.current?.focus();
 	}, [searchOpen]);
@@ -265,6 +277,47 @@ export function LibrarySidebar({
 					) : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
 						<div className="empty">No matching files.</div>
 					) : (
+						<>
+						{favoriteAssets.length > 0 ? (
+							<div className="favorites">
+								<button
+									type="button"
+									className="favorites-label"
+									aria-expanded={queryActive || !favoritesCollapsed}
+									onClick={() => setFavoritesCollapsed(queryActive || !favoritesCollapsed)}
+								>
+									<span className={`folder-chevron${queryActive || !favoritesCollapsed ? " expanded" : ""}`} aria-hidden="true">›</span>
+									<span className="favorites-main">
+										<span className="favorites-symbol" aria-hidden="true">
+											<svg viewBox="0 0 16 16" width="16" height="16">
+												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
+											</svg>
+										</span>
+										Favorites
+									</span>
+								</button>
+								{queryActive || !favoritesCollapsed ? favoriteAssets.map((asset) => (
+									<button
+										key={asset.assetId}
+										type="button"
+										className={`asset-row${asset.assetId === selectedAssetId ? " selected" : ""}`}
+										onClick={() => onSelectAsset(asset.assetId)}
+										onContextMenu={(event) => {
+											event.preventDefault();
+											onAssetContextMenu(asset);
+										}}
+									>
+										<AssetThumbnail asset={asset} />
+										<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
+										<span className="asset-favorite" title="Favorite">
+											<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
+												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
+											</svg>
+										</span>
+									</button>
+								)) : null}
+							</div>
+						) : null}
 						<FileTree
 							library={visible}
 							fileDisplay={fileDisplay}
@@ -285,6 +338,7 @@ export function LibrarySidebar({
 							onCancelRename={onCancelRename}
 							onDropIntoFolder={onDropIntoFolder}
 						/>
+						</>
 					)}
 				</div>
 			)}

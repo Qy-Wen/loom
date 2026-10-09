@@ -278,7 +278,7 @@ The Agent closes the loop from retrieval through creation, indexing, and provena
 
 Visual direction: **Obsidian + Finder + Lightroom + Cursor**.
 
-The layout uses a left asset library, central workbench, and right Agent/Details panel, with Files, Table, and Graph work views. The file tree can show a list or icons.
+The layout uses a left asset library, central workbench, and right Agent/Details panel, with Files, Table, and Graph work views. The file tree can show a list or icons. Favorites are a per-library list of files, stored by `asset_id` in `.loom/metadata.db`, shown above the tree. The section starts collapsed. Right-click a file to add or remove it. Rename and move keep the star.
 
 See [UI.md](./UI.md) for layout, panel responsibilities, and view design.
 

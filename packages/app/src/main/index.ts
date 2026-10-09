@@ -263,6 +263,10 @@ function registerIpc(): void {
 		return localCore.getLibrarySnapshot();
 	});
 
+	ipcMain.handle(IPC.setFavorite, (_event, assetId: string, favorite: boolean): Promise<void> => {
+		return localCore.setFavorite(assetId, favorite);
+	});
+
 	ipcMain.handle(IPC.openLibrary, async (event): Promise<LibrarySnapshot | null> => {
 		const owner = BrowserWindow.fromWebContents(event.sender);
 		const result = owner
@@ -276,8 +280,13 @@ function registerIpc(): void {
 		IPC.showAssetContextMenu,
 		async (event, assetId: string, canPaste: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
+			const favorite = (await localCore.getLibrarySnapshot()).favoriteAssetIds.includes(assetId);
 			return popupContextMenu<AssetContextAction>(event, [
 				{ label: "Add to chat", click: () => "add_to_chat" },
+				{
+					label: favorite ? "Remove from Favorites" : "Add to Favorites",
+					click: () => favorite ? "unfavorite" : "favorite",
+				},
 				{ type: "separator" },
 				{ label: "New Folder", click: () => "new_folder" },
 				{ type: "separator" },

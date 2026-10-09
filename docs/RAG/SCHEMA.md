@@ -65,6 +65,17 @@ Current key:
 
 ---
 
+## `favorites`
+
+Files the user starred. One row per asset. Deleting the asset deletes the row.
+
+| Column | Type | Constraint | Meaning |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY, references `assets` ON DELETE CASCADE | Starred file. |
+| `created_at` | REAL | NOT NULL | When it was starred. Starring again moves it ahead of the current newest. The list is newest first. |
+
+---
+
 ## `properties`
 
 Library-wide custom field definitions. Values live in `asset_properties`.

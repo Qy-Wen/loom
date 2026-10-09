@@ -34,6 +34,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	private readonly videoVlm = new Map<string, VideoVlmRecord>();
 	private readonly audioWriteup = new Map<string, AudioWriteupRecord>();
 	private volumeId: string | undefined;
+	private readonly favorites = new Map<string, number>();
 
 	async open(): Promise<void> {
 		this.assets.clear();
@@ -48,6 +49,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.imageVlm.clear();
 		this.videoVlm.clear();
 		this.audioWriteup.clear();
+		this.favorites.clear();
 		this.volumeId = undefined;
 	}
 
@@ -64,6 +66,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.imageVlm.clear();
 		this.videoVlm.clear();
 		this.audioWriteup.clear();
+		this.favorites.clear();
 		this.volumeId = undefined;
 	}
 
@@ -144,6 +147,9 @@ export class InMemoryMetadataStore implements MetadataStore {
 		for (const assetId of this.audioWriteup.keys()) {
 			if (!nextAssetIds.has(assetId)) this.audioWriteup.delete(assetId);
 		}
+		for (const assetId of this.favorites.keys()) {
+			if (!nextAssetIds.has(assetId)) this.favorites.delete(assetId);
+		}
 	}
 
 	async removeAsset(assetId: string): Promise<void> {
@@ -157,7 +163,23 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.imageVlm.delete(assetId);
 		this.videoVlm.delete(assetId);
 		this.audioWriteup.delete(assetId);
+		this.favorites.delete(assetId);
 		this.clearTextIndex(assetId);
+	}
+
+	async listFavoriteIds(): Promise<string[]> {
+		return [...this.favorites.entries()]
+			.sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+			.map(([assetId]) => assetId);
+	}
+
+	async setFavorite(assetId: string, favorite: boolean): Promise<void> {
+		if (!this.assets.has(assetId)) throw new Error("Asset not found");
+		if (favorite) {
+			const latest = Math.max(0, ...this.favorites.values());
+			this.favorites.set(assetId, Math.max(Date.now(), latest + 1));
+		}
+		else this.favorites.delete(assetId);
 	}
 
 	async getLibraryVolumeId(): Promise<string | undefined> {

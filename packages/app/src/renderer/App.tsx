@@ -31,7 +31,7 @@ import { AssetPreview } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
 
-const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [] };
+const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { generatedFrom: [], generated: [], links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 type LibraryClipboard =
@@ -46,8 +46,13 @@ function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] 
 function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): LibrarySnapshot {
 	if (change.type === "reset") return change.snapshot;
 	if (change.type === "error" || change.type === "enrichment" || change.type === "text_embed" || change.type === "image_vlm" || change.type === "video_vlm" || change.type === "audio_writeup") return current;
+	if (change.type === "favorites") return { ...current, favoriteAssetIds: change.assetIds };
 	if (change.type === "remove") {
-		return { ...current, assets: current.assets.filter((asset) => asset.assetId !== change.assetId) };
+		return {
+			...current,
+			assets: current.assets.filter((asset) => asset.assetId !== change.assetId),
+			favoriteAssetIds: (current.favoriteAssetIds ?? []).filter((id) => id !== change.assetId),
+		};
 	}
 	if (change.type === "folder_upsert") {
 		return current.folders.includes(change.relativePath)
@@ -394,7 +399,9 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null);
-			if (action === "add_to_chat") {
+			if (action === "favorite" || action === "unfavorite") {
+				await window.loom.setFavorite(asset.assetId, action === "favorite");
+			} else if (action === "add_to_chat") {
 				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
 				setSidePanel("agent");
 				setComposerAttach({

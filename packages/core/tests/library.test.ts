@@ -320,3 +320,45 @@ test("Library creates .agents/memory and does not index .agents", async () => {
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Library favorites follow the asset id and drop when the file is gone", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-favorites-"));
+	const core = new LocalCore();
+	let reopened: LocalCore | undefined;
+	try {
+		await writeFile(join(root, "a.jpg"), "a");
+		await writeFile(join(root, "b.jpg"), "b");
+		const opened = await core.openLibrary(root);
+		assert.deepEqual(opened.favoriteAssetIds, []);
+		const first = opened.assets.find((asset) => asset.relativePath === "a.jpg");
+		const second = opened.assets.find((asset) => asset.relativePath === "b.jpg");
+		assert.ok(first && second);
+
+		await core.setFavorite(first.assetId, true);
+		await core.setFavorite(second.assetId, true);
+		assert.deepEqual((await core.getLibrarySnapshot()).favoriteAssetIds, [second.assetId, first.assetId]);
+
+		await core.setFavorite(first.assetId, true);
+		assert.deepEqual((await core.getLibrarySnapshot()).favoriteAssetIds, [first.assetId, second.assetId]);
+
+		const renamed = await core.renameAsset(second.assetId, "renamed");
+		assert.equal(renamed.assetId, second.assetId);
+		assert.equal(renamed.relativePath, "renamed.jpg");
+		assert.deepEqual((await core.getLibrarySnapshot()).favoriteAssetIds, [first.assetId, second.assetId]);
+
+		await core.setFavorite(second.assetId, false);
+		assert.deepEqual((await core.getLibrarySnapshot()).favoriteAssetIds, [first.assetId]);
+		await assert.rejects(() => core.setFavorite("missing", true), /Asset not found/);
+
+		await core.close();
+		await rm(join(root, "a.jpg"));
+		reopened = new LocalCore();
+		const again = await reopened.openLibrary(root);
+		assert.deepEqual(again.favoriteAssetIds, []);
+		assert.equal(again.assets.some((asset) => asset.assetId === first.assetId), false);
+		assert.equal(again.assets.find((asset) => asset.relativePath === "renamed.jpg")?.assetId, second.assetId);
+	} finally {
+		await Promise.all([core.close(), reopened?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});

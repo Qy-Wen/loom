@@ -65,6 +65,17 @@
 
 ---
 
+## `favorites`
+
+用户标星的文件。每个资产一行。资产删除时这一行跟着删。
+
+| 列 | 类型 | 约束 | 含义 |
+|---|---|---|---|
+| `asset_id` | TEXT | PRIMARY KEY，引用 `assets`，ON DELETE CASCADE | 被收藏的文件。 |
+| `created_at` | REAL | NOT NULL | 收藏时间。再次收藏会排到当前最新的前面。列表按新到旧排。 |
+
+---
+
 ## `properties`
 
 全库共享的自定义字段定义。取值在 `asset_properties`。
