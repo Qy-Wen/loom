@@ -1,3 +1,5 @@
+export * from "./grade/index.ts";
+export * from "./grade/store.ts";
 export * from "./enrichment/extract.ts";
 export * from "./enrichment/service.ts";
 export * from "./library/file-identity.ts";

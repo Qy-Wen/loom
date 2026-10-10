@@ -1,4 +1,5 @@
 /** Typed contract shared by Electron main, preload, and renderer. */
+import type { ImageGrade, ImageGradeRecord } from "@loom/core/grade";
 import type {
 	Asset,
 	AssetType,
@@ -144,6 +145,11 @@ export const IPC = {
 	getAgentPermission: "loom:getAgentPermission",
 	setAgentPermission: "loom:setAgentPermission",
 	resolveToolGate: "loom:resolveToolGate",
+	getImageGrade: "loom:getImageGrade",
+	previewImageGrade: "loom:previewImageGrade",
+	saveImageGrade: "loom:saveImageGrade",
+	pickGradeOutput: "loom:pickGradeOutput",
+	pickGradeLut: "loom:pickGradeLut",
 } as const;
 
 export interface LoomApi {
@@ -240,6 +246,13 @@ export interface LoomApi {
 	getAgentPermission: () => Promise<AgentPermissionLevel>;
 	setAgentPermission: (level: AgentPermissionLevel) => Promise<AgentPermissionLevel>;
 	resolveToolGate: (toolCallId: string, decision: ToolGateDecision) => Promise<boolean>;
+	getImageGrade: (assetId: string) => Promise<ImageGradeRecord | null>;
+	/** JPEG bytes, base64. Null when the grade leaves the image unchanged. */
+	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
+	saveImageGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;
+	/** Library-relative path, or null when the dialog is canceled. */
+	pickGradeOutput: (assetId: string) => Promise<string | null>;
+	pickGradeLut: () => Promise<{ path: string; name: string } | null>;
 	openDevTrace?: () => Promise<void>;
 }
 

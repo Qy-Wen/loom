@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./grade": "./src/grade/index.ts",
     "./sandbox": "./src/sandbox/process-sandbox.ts"
   },
   "scripts": {

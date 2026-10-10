@@ -10,7 +10,7 @@ const BASE_SYSTEM_PROMPT =
 	"Use describe_audio for standalone audio via the Audio slot (music, ambient sound, speech if any); it does not run automatically. " +
 	"Use embed_asset to index Markdown or a described image/video/audio (chunk + embeddings); it does not run automatically. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
-	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, and convert_format. " +
+	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, convert_format, and grade_image. " +
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
 	"Media tools do not create relations. Call create_relation yourself when a derived file should point at its source: fromAssetId is the new file, toAssetId is the source, and type is a short label such as \"derived from\". " +
 	"Copy both asset ids from tool results. If you only have a path, retrieve it first. remove_relation takes the relationId that create_relation returned. " +

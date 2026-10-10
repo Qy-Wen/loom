@@ -2,7 +2,9 @@ import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { useLocale } from "../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
+import { isGradeableImage } from "@loom/core/grade";
 import { FindBar } from "./find-bar.tsx";
+import { GradeView } from "./grade-view.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
 
 const TEXT_EXTENSIONS = new Set([
@@ -83,7 +85,17 @@ function VideoPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.
 	);
 }
 
-export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
+export function AssetPreview({
+	asset,
+	assets,
+	onGraded,
+	gradeHost = null,
+}: {
+	asset: Asset;
+	assets: Asset[];
+	onGraded?: (assetId: string) => void;
+	gradeHost?: HTMLElement | null;
+}): React.JSX.Element {
 	const { t } = useLocale();
 	const [failed, setFailed] = useState(false);
 	const url = assetPreviewUrl(asset);
@@ -91,6 +103,9 @@ export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] 
 
 	useEffect(() => setFailed(false), [asset.assetId]);
 
+	if (asset.type === "image" && isGradeableImage(asset.filename)) {
+		return <GradeView asset={asset} assets={assets} onGraded={onGraded} panelHost={gradeHost} />;
+	}
 	if (asset.type === "video") {
 		return <VideoPreview key={asset.assetId} asset={asset} url={url} />;
 	}

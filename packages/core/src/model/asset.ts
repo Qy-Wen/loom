@@ -49,7 +49,7 @@ export type LibraryChange =
 	| { type: "audio_writeup"; assetId: string };
 
 const EXTENSIONS: Record<Exclude<AssetType, "other">, ReadonlySet<string>> = {
-	image: new Set([".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".svg", ".webp"]),
+	image: new Set([".avif", ".bmp", ".gif", ".heic", ".jpeg", ".jpg", ".png", ".svg", ".tif", ".tiff", ".webp"]),
 	video: new Set([".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"]),
 	audio: new Set([".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"]),
 	text: new Set([".csv", ".html", ".json", ".md", ".pdf", ".txt"]),

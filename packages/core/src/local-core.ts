@@ -1,4 +1,8 @@
 import { randomUUID } from "node:crypto";
+import { access, copyFile, mkdir, readFile } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { readStoredGrade, writeStoredGrade } from "./grade/store.ts";
+import type { ImageGradeRecord } from "./grade/types.ts";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
@@ -45,6 +49,8 @@ import type {
 	CropVideoArgs,
 	ExtractClipArgs,
 	ExtractFrameArgs,
+	GradeImageArgs,
+	GradeImageResult,
 	MediaInfoResult,
 	MediaJobResult,
 	ResizeVideoArgs,
@@ -535,6 +541,65 @@ export class LocalCore {
 		return this.media.convertFormat(args, signal);
 	}
 
+	async gradeImage(args: GradeImageArgs, signal?: AbortSignal): Promise<GradeImageResult> {
+		const job = await this.media.gradeImage(args, signal);
+		const asset = await this.library.indexFile(job.output);
+		if (!asset) throw new Error("Could not index graded image");
+		const source = await this.metadataStore.getAssetByPath(job.input);
+		await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+			version: 1,
+			grade: job.grade,
+			sourceAssetId: source?.assetId,
+			lut: job.lut,
+		});
+		return {
+			kind: "grade_image",
+			output: job.output,
+			assetId: asset.assetId,
+			sourceAssetId: source?.assetId,
+		};
+	}
+
+	getImageGrade(assetId: string): Promise<ImageGradeRecord | undefined> {
+		return readStoredGrade(this.library.getPaths().grades, assetId);
+	}
+
+	async previewImageGrade(
+		assetId: string,
+		grade: unknown,
+		lut?: string,
+		force = false,
+		signal?: AbortSignal,
+	): Promise<string | null> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) throw new Error("Asset not found");
+		const bytes = await this.media.previewImageGrade({
+			path: asset.relativePath,
+			grade,
+			lut,
+		}, signal, force);
+		return bytes ? bytes.toString("base64") : null;
+	}
+
+	async importGradeLut(absolutePath: string): Promise<{ path: string; name: string }> {
+		const paths = this.library.getPaths();
+		const text = await readFile(absolutePath, "utf8");
+		if (!/LUT_3D_SIZE\s+\d+/i.test(text)) throw new Error("Not a 3D .cube LUT");
+		try {
+			const path = paths.toRelativePath(absolutePath);
+			return { path, name: basename(path) };
+		} catch (error) {
+			if (!(error instanceof Error) || !error.message.startsWith("Path is outside the library")) throw error;
+		}
+		const dir = join(paths.cache, "luts");
+		await mkdir(dir, { recursive: true });
+		const filename = await unusedLutFilename(dir, basename(absolutePath));
+		const dest = join(dir, filename);
+		await copyFile(absolutePath, dest);
+		const path = paths.toRelativePath(dest);
+		return { path, name: basename(path) };
+	}
+
 	runFfmpeg(args: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		return this.media.runFfmpeg(args, signal);
 	}
@@ -546,6 +611,21 @@ export class LocalCore {
 	async close(): Promise<void> {
 		await Promise.all([this.library.close(), this.graphStore.close()]);
 	}
+}
+
+async function unusedLutFilename(dir: string, originalName: string): Promise<string> {
+	const cleaned = basename(originalName).replace(/[\\/:*?"<>|\0]+/g, "-").replace(/^\.+/, "") || "look.cube";
+	const stem = cleaned.replace(/\.cube$/i, "") || "look";
+	for (let copy = 1; copy < 1000; copy += 1) {
+		const filename = `${stem}${copy === 1 ? "" : `-${copy}`}.cube`;
+		try {
+			await access(join(dir, filename));
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return filename;
+			throw error;
+		}
+	}
+	return `${stem}-${randomUUID()}.cube`;
 }
 
 function toRelationView(asset: Asset): AssetRelationView {

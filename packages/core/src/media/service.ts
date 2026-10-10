@@ -1,11 +1,22 @@
-import { access, mkdir } from "node:fs/promises";
-import { basename, dirname } from "node:path";
+import { randomUUID } from "node:crypto";
+import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
+import {
+	buildGradeImageArgs,
+	buildImageGradeFilter,
+	gradeExportExtension,
+	gradeSiblingRelative,
+	isGradeableImage,
+	normalizeImageGrade,
+	type ImageGrade,
+} from "../grade/index.ts";
 import type { Library } from "../library/library.ts";
 import type {
 	ConvertFormatArgs,
 	CropVideoArgs,
 	ExtractClipArgs,
 	ExtractFrameArgs,
+	GradeImageArgs,
 	MediaInfoResult,
 	MediaJobResult,
 	ResizeVideoArgs,
@@ -89,6 +100,47 @@ export class MediaService {
 		}, signal);
 	}
 
+	async gradeImage(
+		args: GradeImageArgs,
+		signal?: AbortSignal,
+	): Promise<{ input: string; output: string; grade: ImageGrade; lut?: string }> {
+		const prepared = this.prepareGrade(args);
+		if (!prepared.filter) throw new TypeError("Grade does not change the image");
+		const cwd = this.cwd();
+		const destination = args.output
+			? resolveMediaPath(args.output, cwd)
+			: args.beside
+				? await unusedSiblingOutput(prepared.input.path, cwd)
+				: await unusedDefaultOutput(prepared.input.path, "grade", gradedExtension(prepared.input.path), cwd);
+		await mkdir(dirname(destination.absolutePath), { recursive: true });
+		await this.run({
+			program: "ffmpeg",
+			args: buildGradeImageArgs(prepared.input.absolutePath, destination.absolutePath, prepared.filter, false),
+			cwd,
+			signal,
+		});
+		return { input: prepared.input.path, output: destination.path, grade: prepared.grade, lut: prepared.lut };
+	}
+
+	async previewImageGrade(args: GradeImageArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
+		const prepared = this.prepareGrade(args);
+		if (!prepared.filter && !force) return null;
+		const file = join(this.library.getPaths().cache, "grade-preview", `${randomUUID()}.jpg`);
+		await mkdir(dirname(file), { recursive: true });
+		try {
+			await this.run({
+				program: "ffmpeg",
+				args: buildGradeImageArgs(prepared.input.absolutePath, file, prepared.filter, true),
+				cwd: this.cwd(),
+				signal,
+				timeoutMs: 30_000,
+			});
+			return await readFile(file);
+		} finally {
+			await rm(file, { force: true }).catch(() => undefined);
+		}
+	}
+
 	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		const format = normalizeConvertFormat(args.format);
 		return this.runConvenience(args.path, args.output, "convert", format, (input, output) => {
@@ -123,6 +175,25 @@ export class MediaService {
 		return this.library.getPaths().root;
 	}
 
+	private prepareGrade(args: GradeImageArgs): { input: { path: string; absolutePath: string }; filter: string | null; grade: ImageGrade; lut?: string } {
+		const cwd = this.cwd();
+		const input = resolveMediaPath(args.path, cwd);
+		if (!isGradeableImage(input.path)) {
+			throw new TypeError("Grade supports JPEG, PNG, WebP, GIF, BMP, and TIFF");
+		}
+		const grade = normalizeImageGrade(args.grade);
+		const lut = this.resolveLut(args.lut);
+		return { input, grade, lut: lut?.path, filter: buildImageGradeFilter(grade, lut?.absolutePath) };
+	}
+
+	private resolveLut(lut: string | undefined): { path: string; absolutePath: string } | undefined {
+		if (!lut?.trim()) return undefined;
+		const resolved = resolveMediaPath(lut, this.cwd());
+		if (!resolved.path.toLowerCase().endsWith(".cube")) throw new TypeError("lut must be a .cube file");
+		const path = this.library.getPaths().toRelativePath(resolved.absolutePath);
+		return { path, absolutePath: resolved.absolutePath };
+	}
+
 	private async runConvenience(
 		inputPath: string,
 		outputPath: string | undefined,
@@ -153,6 +224,20 @@ export class MediaService {
 	}
 }
 
+async function unusedSiblingOutput(inputPath: string, cwd: string) {
+	for (let copy = 1; copy < 1000; copy += 1) {
+		const resolved = resolveMediaPath(gradeSiblingRelative(inputPath, copy), cwd);
+		if (resolved.absolutePath === resolveMediaPath(inputPath, cwd).absolutePath) continue;
+		try {
+			await access(resolved.absolutePath);
+		} catch (error) {
+			if ((error as NodeJS.ErrnoException).code === "ENOENT") return resolved;
+			throw error;
+		}
+	}
+	throw new Error("Could not choose a grade filename");
+}
+
 async function unusedDefaultOutput(inputPath: string, suffix: string, extension: string, cwd: string) {
 	const stem = sanitizeStem(basename(inputPath).replace(/\.[^.]+$/, "") || "output");
 	const ext = extension.startsWith(".") ? extension.slice(1) : extension;
@@ -174,6 +259,10 @@ async function ensureOutputParents(paths: string[], cwd: string): Promise<void> 
 	for (const path of paths) {
 		await mkdir(dirname(resolveMediaPath(path, cwd).absolutePath), { recursive: true });
 	}
+}
+
+function gradedExtension(path: string): string {
+	return gradeExportExtension(extensionOf(path));
 }
 
 function extensionOf(path: string): string {
