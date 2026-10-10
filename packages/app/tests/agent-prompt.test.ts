@@ -13,6 +13,8 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /<ui_selection>/);
 		assert.match(prompt, /Do not invent paths or ids/);
 		assert.match(prompt, /create_relation/);
+		assert.match(prompt, /list_properties/);
+		assert.match(prompt, /set_asset_property/);
 		assert.match(prompt, /Media tools do not create relations/);
 	});
 
