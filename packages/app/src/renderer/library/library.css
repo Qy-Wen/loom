@@ -15,8 +15,7 @@
 	padding-right: 0;
 }
 
-.library-collapse,
-.library-expand {
+.library-collapse {
 	display: grid;
 	place-items: center;
 	width: 26px;
@@ -29,39 +28,43 @@
 	cursor: pointer;
 }
 
-.library-collapse:hover,
-.library-expand:hover {
+.library-collapse:hover {
 	background: #e7e7e4;
 }
 
-.library-expand {
-	margin-top: 10px;
-}
-
-.library-header-actions {
-	display: flex;
-	flex-shrink: 0;
-	align-items: center;
-	gap: 4px;
-}
-
-.library-footer.rail {
-	flex-direction: column;
-	margin-top: auto;
-	padding: 6px 0;
-}
-
+.shell.library-collapsed > .library-sidebar,
 .shell.library-collapsed > .library-resize {
 	visibility: hidden;
+	overflow: hidden;
+	margin: 0;
+	padding: 0;
 	pointer-events: none;
 }
 
 .library-header {
 	display: flex;
-	align-items: center;
-	justify-content: space-between;
+	align-items: baseline;
 	gap: 8px;
-	padding: 14px 12px 6px;
+	min-width: 0;
+	padding: 12px 12px 8px;
+}
+
+.library-header .section-label {
+	flex: none;
+	font-size: 12px;
+	line-height: 1;
+}
+
+.library-header-rule {
+	flex: none;
+	align-self: center;
+	width: 1px;
+	height: 12px;
+	background: #c8c8c4;
+}
+
+.library-header .library-name {
+	line-height: 1;
 }
 
 .section-label,
@@ -74,7 +77,8 @@
 }
 
 .library-name {
-	max-width: 145px;
+	min-width: 0;
+	flex: 1;
 	overflow: hidden;
 	font-size: 14px;
 	font-weight: 620;
@@ -124,31 +128,6 @@
 	flex: 1;
 	padding: 0 6px 12px;
 	overflow-y: auto;
-}
-
-.library-footer {
-	display: flex;
-	align-items: center;
-	gap: 2px;
-	padding: 6px 8px;
-	border-top: 1px solid #e1e1de;
-}
-
-.library-footer button {
-	display: grid;
-	place-items: center;
-	width: 26px;
-	height: 26px;
-	padding: 0;
-	border: 0;
-	border-radius: 5px;
-	color: #5f6368;
-	background: transparent;
-	cursor: pointer;
-}
-
-.library-footer button:hover {
-	background: #e7e7e4;
 }
 
 .folder-row,

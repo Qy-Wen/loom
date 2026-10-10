@@ -12,8 +12,8 @@ const MIN_LIBRARY_WIDTH = 180;
 const MIN_WORKBENCH_WIDTH = 240;
 const MIN_SIDE_WIDTH = 200;
 const HANDLE_WIDTH = 10;
-const COLLAPSED_LIBRARY_WIDTH = 36;
-const COLLAPSED_LIBRARY_GAP = 5;
+const COLLAPSED_LIBRARY_WIDTH = 0;
+const COLLAPSED_LIBRARY_GAP = 0;
 const LIBRARY_COLLAPSED_KEY = "loom.layout.libraryCollapsed";
 
 type ResizeSide = "library" | "side" | "beside";

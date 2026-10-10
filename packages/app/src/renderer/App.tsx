@@ -49,7 +49,7 @@ import {
 	type TreeSelection,
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
-import { LibrarySidebar } from "./library/library-sidebar.tsx";
+import { LibraryOpenButton, LibrarySidebar, SettingsButton, SidebarToggle, TracesButton } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./panel/error-toast.tsx";
 import { runActivityRenderers } from "./panel/run-activity.tsx";
 import { AgentPanel, DetailsPanel } from "./panel/side-panel.tsx";
@@ -172,6 +172,7 @@ export function App(): React.JSX.Element {
 	const [embedding, setEmbedding] = useState(false);
 	const [describing, setDescribing] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [fullscreen, setFullscreen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const {
 		shellRef,
@@ -183,6 +184,17 @@ export function App(): React.JSX.Element {
 		resetSideWidth,
 		resetBesideWidth,
 	} = useResizableLayout();
+	useEffect(() => {
+		let alive = true;
+		void window.loom.isFullscreen().then((value) => {
+			if (alive) setFullscreen(value);
+		});
+		const stop = window.loom.onFullscreenChanged(setFullscreen);
+		return () => {
+			alive = false;
+			stop();
+		};
+	}, []);
 	const selectedAsset = useMemo(
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
 		[library.assets, selectedAssetId],
@@ -982,6 +994,12 @@ export function App(): React.JSX.Element {
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
 				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
+				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
+					{import.meta.env.DEV ? <TracesButton onOpen={() => void window.loom.openDevTrace?.()} /> : null}
+					<SettingsButton onOpen={() => setSettingsOpen(true)} />
+					<LibraryOpenButton opening={opening} onOpen={() => void openLibrary()} />
+					<SidebarToggle collapsed={libraryCollapsed} onToggle={toggleLibraryCollapsed} />
+				</div>
 
 				<div
 					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.anyBeside ? " has-beside" : ""}${panels.anyAbove ? " has-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
@@ -1013,7 +1031,6 @@ export function App(): React.JSX.Element {
 				>
 					<LibrarySidebar
 						library={library}
-						opening={opening}
 						workbenchView={workbenchView}
 						onWorkbenchView={setWorkbenchView}
 						selectedKeys={selectedKeys}
@@ -1024,7 +1041,6 @@ export function App(): React.JSX.Element {
 						cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
 						cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
 						selectionDrag={selectionDrag}
-						onOpenLibrary={() => void openLibrary()}
 						onToggleFolder={toggleFolder}
 						onSelectAsset={(assetId, mode, rows) => chooseTreeKey(assetKey(assetId), mode, rows)}
 						onSelectFolder={(relativePath, mode, rows) => chooseTreeKey(folderKey(relativePath), mode, rows)}
@@ -1036,10 +1052,7 @@ export function App(): React.JSX.Element {
 						onCancelRename={cancelRename}
 						onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
 						onKeyDown={onLibraryKeyDown}
-						onOpenSettings={() => setSettingsOpen(true)}
-						onOpenTraces={import.meta.env.DEV ? () => void window.loom.openDevTrace?.() : undefined}
 						collapsed={libraryCollapsed}
-						onToggleCollapsed={toggleLibraryCollapsed}
 					/>
 
 					<div
