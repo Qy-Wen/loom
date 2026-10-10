@@ -34,6 +34,17 @@ import { createAssetTools } from "./asset-tools.ts";
 import { createFfmpegTools } from "./ffmpeg-tools.ts";
 import { createPropertyTools } from "./property-tools.ts";
 import { createRelationTools } from "./relation-tools.ts";
+import {
+	chatSlotChanged,
+	createSettingsTools,
+	mergeMcpServers,
+	modelChangeNotes,
+	modelDraftForPatch,
+	publicMcpServer,
+	publicModelSlot,
+	type PublicSettings,
+	type SettingsPatch,
+} from "./settings-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { AgentInstructionsStore } from "./agent-instructions-store.ts";
@@ -128,6 +139,10 @@ const BUILTIN_TOOLS = [
 	...createFfmpegTools(localCore),
 	...createRelationTools(localCore),
 	...createPropertyTools(localCore),
+	...createSettingsTools({
+		read: () => readPublicSettings(),
+		apply: (patch) => applySettingsPatch(patch),
+	}),
 ];
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
@@ -846,8 +861,8 @@ async function setMcpServerLive(draft: McpServerDraft) {
 }
 
 /** Push the full tool list (built-in library/FFmpeg plus live MCP tools) to the agent manager. */
-async function syncAgentTools(): Promise<void> {
-	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
+async function syncAgentTools(options?: { preserveRuns?: boolean }): Promise<void> {
+	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])], options);
 	mcpReady = true;
 }
 
@@ -864,13 +879,68 @@ async function mcpSettingsView() {
 	};
 }
 
-async function reconnectMcp(configs: Awaited<ReturnType<McpSettingsStore["load"]>>): Promise<void> {
+async function reconnectMcp(
+	configs: Awaited<ReturnType<McpSettingsStore["load"]>>,
+	options?: { preserveRuns?: boolean },
+): Promise<void> {
 	const previous = mcpHost;
 	mcpHost = new McpHost();
 	await mcpHost.connect(configs);
 	if (shutdownStarted || !mcpHost) return;
-	await syncAgentTools();
+	await syncAgentTools(options);
 	if (previous) await previous.close();
+}
+
+function notifySettingsChanged(): void {
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) window.webContents.send(IPC.settingsChanged);
+	}
+}
+
+async function readPublicSettings(): Promise<PublicSettings> {
+	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
+	const [models, servers, sandbox, instructions] = await Promise.all([
+		modelSettings.load(),
+		mcpSettings.drafts(),
+		agentSandbox.load(),
+		agentInstructions.load(),
+	]);
+	const slots = {} as PublicSettings["models"];
+	for (const id of Object.keys(models) as Array<keyof typeof models>) slots[id] = publicModelSlot(models[id]);
+	return { models: slots, sandbox, instructions, mcp: servers.map(publicMcpServer) };
+}
+
+async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string[]; settings: PublicSettings }> {
+	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
+	const notes: string[] = [];
+	if (patch.models) {
+		const before = await modelSettings.load();
+		const file = await modelSettings.update(modelDraftForPatch(before, patch.models));
+		notes.push(...modelChangeNotes(before, file));
+		if (chatSlotChanged(before, file)) {
+			agentManager.stageChat(resolveChatEndpoint(file, process.env, false));
+			notes.push("Chat slot saved. This reply keeps the endpoint it started with. The next message uses the new slot.");
+		}
+	}
+	if (patch.sandbox !== undefined) {
+		await agentSandbox.save(patch.sandbox);
+		await applyProcessSandbox();
+		notes.push(patch.sandbox ? "Process sandbox is on. The next command uses it." : "Process sandbox is off. The next command runs directly.");
+	}
+	if (patch.instructions !== undefined) {
+		const saved = await agentInstructions.save(patch.instructions);
+		agentManager.setInstructions(saved);
+		agentManager.refreshHarness();
+		notes.push("Instructions saved. This reply keeps the text it started with. The next message appends the new text.");
+	}
+	if (patch.mcp) {
+		const next = mergeMcpServers(await mcpSettings.drafts(), patch.mcp);
+		await mcpSettings.save(next);
+		await reconnectMcp(await mcpSettings.load(), { preserveRuns: true });
+		notes.push("MCP servers saved and reconnected.");
+	}
+	notifySettingsChanged();
+	return { notes, settings: await readPublicSettings() };
 }
 
 async function attachConfiguredMcp(): Promise<void> {

@@ -82,6 +82,11 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.sessionsChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.sessionsChanged, handler);
 	},
+	onSettingsChanged: (listener) => {
+		const handler = () => listener();
+		ipcRenderer.on(IPC.settingsChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.settingsChanged, handler);
+	},
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
 	probeModelSlot: (draft) => ipcRenderer.invoke(IPC.probeModelSlot, draft),

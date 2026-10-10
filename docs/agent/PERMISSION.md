@@ -12,13 +12,13 @@ The chat footer is **Basic**, **Standard** (default), or **Full**. Stored in app
 
 | Level | Waits for Approve / Skip |
 |---|---|
-| Basic | `write`, `edit`, `bash`, and the FFmpeg tools that write a file |
-| Standard | `write` and `edit` outside the open library |
+| Basic | `write`, `edit`, `bash`, the FFmpeg tools that write a file, and `update_settings` |
+| Standard | `write` and `edit` outside the open library, and `update_settings` |
 | Full | nothing |
 
 Standard runs `write` and `edit` inside the open library without asking. A path that leaves the library still waits, including `..` and a symlink that points outside. A path that is not a string, or that cannot be resolved, also waits. Basic still asks for every `write` and `edit`.
 
-`bash` and the FFmpeg tools that write (`extract_frame`, `extract_clip`, `resize_video`, `crop_video`, `convert_format`, `run_ffmpeg`) wait only on Basic. `get_media_info` only reads, so it does not wait. MCP and `auto_memory` are not on this list. Retrieve and create specialists use the same gate. Evals set Full so they do not hang.
+`bash` and the FFmpeg tools that write (`extract_frame`, `extract_clip`, `resize_video`, `crop_video`, `convert_format`, `run_ffmpeg`) wait only on Basic. `update_settings` waits on Basic and Standard. `get_settings` only reads, so it does not wait. `get_media_info` only reads, so it does not wait. MCP and `auto_memory` are not on this list. Retrieve and create specialists use the same gate. Evals set Full so they do not hang.
 
 Stop cancels a wait. Switching to Full approves waits that are already open.
 

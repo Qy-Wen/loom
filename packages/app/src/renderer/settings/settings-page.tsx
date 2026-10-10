@@ -55,30 +55,42 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 	}, [tab]);
 
 	useEffect(() => {
-		void (async () => {
-			try {
-				const [models, mcpView, statsView, instructionsText, sandbox] = await Promise.all([
-					window.loom.getModelSettings(),
-					window.loom.getMcpSettings(),
-					window.loom.getAgentStats(),
-					window.loom.getAgentInstructions(),
-					window.loom.getAgentSandbox(),
-				]);
-				setDraft({
-					chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled, contextWindow: models.chat.contextWindow },
-					embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey, enabled: models.embedding.enabled },
-					rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey, enabled: models.rerank.enabled },
-					vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey, enabled: models.vlm.enabled },
-					audio: { baseUrl: models.audio.baseUrl, model: models.audio.model, apiKey: models.audio.apiKey, enabled: models.audio.enabled },
-				});
-				setMcp(mcpView);
-				setStats(statsView);
-				setInstructions(instructionsText);
-				setSandboxEnabled(sandbox);
-			} catch (cause) {
-				setError(cause instanceof Error ? cause.message : String(cause));
-			}
-		})();
+		let cancelled = false;
+		const load = () => {
+			void (async () => {
+				try {
+					const [models, mcpView, statsView, instructionsText, sandbox] = await Promise.all([
+						window.loom.getModelSettings(),
+						window.loom.getMcpSettings(),
+						window.loom.getAgentStats(),
+						window.loom.getAgentInstructions(),
+						window.loom.getAgentSandbox(),
+					]);
+					if (cancelled) return;
+					setDraft({
+						chat: { baseUrl: models.chat.baseUrl, model: models.chat.model, apiKey: models.chat.apiKey, enabled: models.chat.enabled, contextWindow: models.chat.contextWindow },
+						embedding: { baseUrl: models.embedding.baseUrl, model: models.embedding.model, apiKey: models.embedding.apiKey, enabled: models.embedding.enabled },
+						rerank: { baseUrl: models.rerank.baseUrl, model: models.rerank.model, apiKey: models.rerank.apiKey, enabled: models.rerank.enabled },
+						vlm: { baseUrl: models.vlm.baseUrl, model: models.vlm.model, apiKey: models.vlm.apiKey, enabled: models.vlm.enabled },
+						audio: { baseUrl: models.audio.baseUrl, model: models.audio.model, apiKey: models.audio.apiKey, enabled: models.audio.enabled },
+					});
+					setMcp(mcpView);
+					setStats(statsView);
+					setInstructions(instructionsText);
+					setSandboxEnabled(sandbox);
+				} catch (cause) {
+					if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+				}
+			})();
+		};
+		load();
+		const unsubscribe = window.loom.onSettingsChanged(() => {
+			if (!cancelled) load();
+		});
+		return () => {
+			cancelled = true;
+			unsubscribe();
+		};
 	}, []);
 
 	function patchModel(id: ModelSlotId, patch: Partial<ModelSettingsDraft[ModelSlotId]>): void {

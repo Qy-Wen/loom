@@ -16,8 +16,8 @@ import { workspaceWriteNeedsApproval } from "../src/workspace-path.ts";
 
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
-	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "convert_format", "crop_video", "edit", "extract_clip", "extract_frame", "resize_video", "run_ffmpeg", "write"]);
+	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "convert_format", "crop_video", "edit", "extract_clip", "extract_frame", "resize_video", "run_ffmpeg", "update_settings", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
@@ -42,6 +42,10 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolCallNeedsApproval("basic", "write", "/lib", { path: "notes/a.md" }), true);
 	assert.equal(toolCallNeedsApproval("full", "write", "/lib", { path: "/other/a.md" }), false);
 	assert.equal(toolCallNeedsApproval("standard", "bash", "/lib", { command: "ls" }), false);
+	assert.equal(toolCallNeedsApproval("standard", "update_settings", "/lib", {}), true);
+	assert.equal(toolCallNeedsApproval("basic", "update_settings", "/lib", {}), true);
+	assert.equal(toolCallNeedsApproval("full", "update_settings", "/lib", {}), false);
+	assert.equal(toolNeedsApproval("standard", "get_settings"), false);
 });
 
 test("standard follows a symlink out of the library", () => {

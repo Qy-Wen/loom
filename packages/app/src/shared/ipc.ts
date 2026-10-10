@@ -124,6 +124,7 @@ export const IPC = {
 	unarchiveSession: "loom:unarchiveSession",
 	deleteSession: "loom:deleteSession",
 	sessionsChanged: "loom:sessionsChanged",
+	settingsChanged: "loom:settingsChanged",
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
 	probeModelSlot: "loom:probeModelSlot",
@@ -217,6 +218,7 @@ export interface LoomApi {
 	unarchiveSession: (id: string) => Promise<void>;
 	deleteSession: (id: string) => Promise<void>;
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
+	onSettingsChanged: (listener: () => void) => () => void;
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
 	probeModelSlot: (draft: ModelProbeDraft) => Promise<ProbeResult>;

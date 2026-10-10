@@ -13,10 +13,12 @@ export const AGENT_PERMISSION_OPTIONS = [
 
 export type ToolGateDecision = "approve" | "reject";
 
-const STANDARD_TOOLS = ["write", "edit"] as const;
+/** App settings. Basic and Standard both wait. `get_settings` is not here. */
+const SETTINGS_TOOLS = ["update_settings"] as const;
+const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS] as const;
 /** Child processes that can write. `get_media_info` only reads, so it is not here. */
 const PROCESS_TOOLS = ["bash", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "run_ffmpeg"] as const;
-const BASIC_TOOLS = ["write", "edit", ...PROCESS_TOOLS] as const;
+const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...PROCESS_TOOLS] as const;
 
 export function parseAgentPermissionLevel(value: unknown): AgentPermissionLevel {
 	if (value === "basic" || value === "standard" || value === "full") return value;
