@@ -10,8 +10,9 @@ import {
 } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
+import { uiPlatform } from "../../shared/locale.ts";
 import { FileTree, type FileDisplay } from "./file-tree.tsx";
-import { visibleTreeRows, type TreeRow } from "./tree-nav.ts";
+import { assetKey, pointerMode, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 
@@ -63,17 +64,18 @@ interface LibrarySidebarProps {
 	opening: boolean;
 	workbenchView: "library" | "table" | "graph";
 	onWorkbenchView: (view: "library" | "table" | "graph") => void;
-	selectedAssetId: string | null;
-	selectedFolder: string | null;
+	selectedKeys: ReadonlySet<string>;
+	focusKey: string | null;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	collapsedFolders: Set<string>;
 	cutAssetIds: readonly string[];
-	cutFolder: string | null;
+	cutFolders: readonly string[];
+	selectionDrag: LibraryDrag | null;
 	onOpenLibrary: () => void;
 	onToggleFolder: (relativePath: string) => void;
-	onSelectAsset: (assetId: string) => void;
-	onSelectFolder: (relativePath: string) => void;
+	onSelectAsset: (assetId: string, mode: PointerMode, rows: readonly TreeRow[]) => void;
+	onSelectFolder: (relativePath: string, mode: PointerMode, rows: readonly TreeRow[]) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onFolderContextMenu: (relativePath: string) => void;
 	onLibraryContextMenu: () => void;
@@ -91,13 +93,14 @@ export function LibrarySidebar({
 	opening,
 	workbenchView,
 	onWorkbenchView,
-	selectedAssetId,
-	selectedFolder,
+	selectedKeys,
+	focusKey,
 	renamingAssetId,
 	renamingFolder,
 	collapsedFolders,
 	cutAssetIds,
-	cutFolder,
+	cutFolders,
+	selectionDrag,
 	onOpenLibrary,
 	onToggleFolder,
 	onSelectAsset,
@@ -338,8 +341,8 @@ export function LibrarySidebar({
 									<button
 										key={asset.assetId}
 										type="button"
-										className={`asset-row${asset.assetId === selectedAssetId ? " selected" : ""}`}
-										onClick={() => onSelectAsset(asset.assetId)}
+										className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
+										onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
 										onContextMenu={(event) => {
 											event.preventDefault();
 											onAssetContextMenu(asset);
@@ -400,9 +403,9 @@ export function LibrarySidebar({
 												<button
 													key={asset.assetId}
 													type="button"
-													className={`asset-row${asset.assetId === selectedAssetId ? " selected" : ""}`}
+													className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
 													style={{ paddingLeft: 35 }}
-													onClick={() => onSelectAsset(asset.assetId)}
+													onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
 													onContextMenu={(event) => {
 														event.preventDefault();
 														onAssetContextMenu(asset);
@@ -431,17 +434,18 @@ export function LibrarySidebar({
 							library={visible}
 							fileDisplay={fileDisplay}
 							collapsedFolders={queryActive ? new Set() : collapsedFolders}
-							selectedAssetId={selectedAssetId}
-							selectedFolder={selectedFolder}
+							selectedKeys={selectedKeys}
+							focusKey={focusKey}
 							renamingAssetId={renamingAssetId}
 							renamingFolder={renamingFolder}
 							cutAssetIds={cutAssetIds}
-							cutFolder={cutFolder}
+							cutFolders={cutFolders}
+							selectionDrag={selectionDrag}
 							onToggleFolder={onToggleFolder}
-							onSelectFolder={onSelectFolder}
+							onSelectFolder={(relativePath, mode) => onSelectFolder(relativePath, mode, treeRows)}
 							onFolderContextMenu={onFolderContextMenu}
 							onRenameFolder={onRenameFolder}
-							onSelectAsset={onSelectAsset}
+							onSelectAsset={(assetId, mode) => onSelectAsset(assetId, mode, treeRows)}
 							onAssetContextMenu={onAssetContextMenu}
 							onRenameAsset={onRenameAsset}
 							onCancelRename={onCancelRename}

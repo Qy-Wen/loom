@@ -11,7 +11,9 @@ import {
 } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
+import { uiPlatform } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
+import { assetKey, coversPath, folderKey, pointerMode, type PointerMode } from "./tree-nav.ts";
 
 interface FolderNode {
 	name: string;
@@ -74,23 +76,31 @@ interface AssetTreeRowProps {
 	asset: Asset;
 	depth: number;
 	selected: boolean;
+	focused: boolean;
 	renaming: boolean;
 	cut: boolean;
 	favorite: boolean;
-	onSelect: () => void;
+	selectionDrag: LibraryDrag | null;
+	onSelect: (mode: PointerMode) => void;
 	onContextMenu: () => void;
 	onRename: (stem: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropFolder: (destFolder: string | null) => void;
 }
 
+function clickMode(event: React.MouseEvent): PointerMode {
+	return pointerMode(event, uiPlatform(navigator.userAgent) === "mac");
+}
+
 function AssetTreeRow({
 	asset,
 	depth,
 	selected,
+	focused,
 	renaming,
 	cut,
 	favorite,
+	selectionDrag,
 	onSelect,
 	onContextMenu,
 	onRename,
@@ -104,9 +114,9 @@ function AssetTreeRow({
 	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
 
 	useEffect(() => {
-		if (!selected) return;
+		if (!focused) return;
 		rowRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [selected, asset.assetId]);
+	}, [focused, asset.assetId]);
 
 	if (renaming) {
 		return (
@@ -152,13 +162,14 @@ function AssetTreeRow({
 			type="button"
 			draggable
 			onDragStart={(event) => {
-				writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
+				const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
+				writeLibraryDrag(event.dataTransfer, selected && selectionDrag ? selectionDrag : single, asset);
 			}}
 			onDragEnd={() => {
 				endLibraryDrag();
 				onDropFolder(null);
 			}}
-			onClick={onSelect}
+			onClick={(event) => onSelect(clickMode(event))}
 			onContextMenu={(event) => {
 				event.preventDefault();
 				onContextMenu();
@@ -174,9 +185,11 @@ function AssetTreeRow({
 function AssetIconTile({
 	asset,
 	selected,
+	focused,
 	renaming,
 	cut,
 	favorite,
+	selectionDrag,
 	onSelect,
 	onContextMenu,
 	onRename,
@@ -192,9 +205,9 @@ function AssetIconTile({
 		cancelled.current = false;
 	}, [renaming]);
 	useEffect(() => {
-		if (!selected) return;
+		if (!focused) return;
 		tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [selected, asset.assetId]);
+	}, [focused, asset.assetId]);
 
 	return (
 		<div className={`asset-icon${selected ? " selected" : ""}${cut ? " cut" : ""}`}>
@@ -206,13 +219,14 @@ function AssetIconTile({
 				type="button"
 				draggable={!renaming}
 				onDragStart={(event) => {
-					writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
+					const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
+					writeLibraryDrag(event.dataTransfer, selected && selectionDrag ? selectionDrag : single, asset);
 				}}
 				onDragEnd={() => {
 					endLibraryDrag();
 					onDropFolder(null);
 				}}
-				onClick={onSelect}
+				onClick={(event) => onSelect(clickMode(event))}
 				onContextMenu={(event) => {
 					event.preventDefault();
 					onContextMenu();
@@ -258,18 +272,19 @@ interface FolderTreeRowProps {
 	cut: boolean;
 	dropFolder: string | null;
 	collapsedFolders: Set<string>;
-	selectedAssetId: string | null;
-	selectedFolder: string | null;
+	selectedKeys: ReadonlySet<string>;
+	focusKey: string | null;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	cutAssetIds: readonly string[];
-	cutFolder: string | null;
+	cutFolders: readonly string[];
+	selectionDrag: LibraryDrag | null;
 	favoriteAssetIds: ReadonlySet<string>;
 	onToggleFolder: (relativePath: string) => void;
-	onSelectFolder: (relativePath: string) => void;
+	onSelectFolder: (relativePath: string, mode: PointerMode) => void;
 	onFolderContextMenu: (relativePath: string) => void;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
-	onSelectAsset: (assetId: string) => void;
+	onSelectAsset: (assetId: string, mode: PointerMode) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
@@ -297,9 +312,18 @@ function FolderTreeRow({
 		setName(folder.name);
 	}, [folder.name, renaming]);
 
-	function openFolder(): void {
-		rowProps.onSelectFolder(folder.relativePath);
-		rowProps.onToggleFolder(folder.relativePath);
+	const rowRef = useRef<HTMLDivElement | null>(null);
+	const key = folderKey(folder.relativePath);
+	const focused = rowProps.focusKey === key;
+	useEffect(() => {
+		if (!focused) return;
+		rowRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [focused]);
+
+	function chooseFolder(event: React.MouseEvent): void {
+		const mode = clickMode(event);
+		rowProps.onSelectFolder(folder.relativePath, mode);
+		if (mode === "replace") rowProps.onToggleFolder(folder.relativePath);
 	}
 
 	return (
@@ -328,6 +352,7 @@ function FolderTreeRow({
 			}}
 		>
 			<div
+				ref={rowRef}
 				className={`folder-row ${selected ? "selected" : ""}${cut ? " cut" : ""}${dropFolder === folder.relativePath ? " drop-target" : ""}`}
 				style={{ paddingLeft: 7 + depth * 14 }}
 			>
@@ -335,7 +360,7 @@ function FolderTreeRow({
 					className={`folder-chevron${collapsed ? "" : " expanded"}`}
 					type="button"
 					aria-label={collapsed ? t.library.expandFolder : t.library.collapseFolder}
-					onClick={openFolder}
+					onClick={chooseFolder}
 				>
 					›
 				</button>
@@ -365,13 +390,14 @@ function FolderTreeRow({
 						type="button"
 						draggable
 						onDragStart={(event) => {
-							writeLibraryDrag(event.dataTransfer, { kind: "folder", relativePath: folder.relativePath });
+							const single: LibraryDrag = { kind: "folder", relativePath: folder.relativePath };
+							writeLibraryDrag(event.dataTransfer, selected && rowProps.selectionDrag ? rowProps.selectionDrag : single);
 						}}
 						onDragEnd={() => {
 							endLibraryDrag();
 							rowProps.onDropFolder(null);
 						}}
-						onClick={openFolder}
+						onClick={chooseFolder}
 						onContextMenu={(event) => {
 							event.preventDefault();
 							rowProps.onFolderContextMenu(folder.relativePath);
@@ -391,12 +417,13 @@ function FolderTreeRow({
 					node={folder}
 					depth={depth + 1}
 					collapsedFolders={rowProps.collapsedFolders}
-					selectedAssetId={rowProps.selectedAssetId}
-					selectedFolder={rowProps.selectedFolder}
+					selectedKeys={rowProps.selectedKeys}
+					focusKey={rowProps.focusKey}
 					renamingAssetId={rowProps.renamingAssetId}
 					renamingFolder={rowProps.renamingFolder}
 					cutAssetIds={rowProps.cutAssetIds}
-					cutFolder={rowProps.cutFolder}
+					cutFolders={rowProps.cutFolders}
+					selectionDrag={rowProps.selectionDrag}
 					favoriteAssetIds={rowProps.favoriteAssetIds}
 					dropFolder={dropFolder}
 					onToggleFolder={rowProps.onToggleFolder}
@@ -420,19 +447,20 @@ interface FileTreeRowsProps {
 	node: FolderNode;
 	depth?: number;
 	collapsedFolders: Set<string>;
-	selectedAssetId: string | null;
-	selectedFolder: string | null;
+	selectedKeys: ReadonlySet<string>;
+	focusKey: string | null;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	cutAssetIds: readonly string[];
-	cutFolder: string | null;
+	cutFolders: readonly string[];
+	selectionDrag: LibraryDrag | null;
 	favoriteAssetIds: ReadonlySet<string>;
 	dropFolder: string | null;
 	onToggleFolder: (relativePath: string) => void;
-	onSelectFolder: (relativePath: string) => void;
+	onSelectFolder: (relativePath: string, mode: PointerMode) => void;
 	onFolderContextMenu: (relativePath: string) => void;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
-	onSelectAsset: (assetId: string) => void;
+	onSelectAsset: (assetId: string, mode: PointerMode) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
@@ -445,12 +473,13 @@ function FileTreeRows({
 	node,
 	depth = 0,
 	collapsedFolders,
-	selectedAssetId,
-	selectedFolder,
+	selectedKeys,
+	focusKey,
 	renamingAssetId,
 	renamingFolder,
 	cutAssetIds,
-	cutFolder,
+	cutFolders,
+	selectionDrag,
 	favoriteAssetIds,
 	dropFolder,
 	onToggleFolder,
@@ -476,17 +505,18 @@ function FileTreeRows({
 					folder={folder}
 					depth={depth}
 					collapsed={collapsedFolders.has(folder.relativePath)}
-					selected={folder.relativePath === selectedFolder}
+					selected={selectedKeys.has(folderKey(folder.relativePath))}
 					renaming={folder.relativePath === renamingFolder}
-					cut={cutFolder === folder.relativePath}
+					cut={coversPath(cutFolders, folder.relativePath)}
 					dropFolder={dropFolder}
 					collapsedFolders={collapsedFolders}
-					selectedAssetId={selectedAssetId}
-					selectedFolder={selectedFolder}
+					selectedKeys={selectedKeys}
+					focusKey={focusKey}
 					renamingAssetId={renamingAssetId}
 					renamingFolder={renamingFolder}
 					cutAssetIds={cutAssetIds}
-					cutFolder={cutFolder}
+					cutFolders={cutFolders}
+					selectionDrag={selectionDrag}
 					favoriteAssetIds={favoriteAssetIds}
 					fileDisplay={fileDisplay}
 					onToggleFolder={onToggleFolder}
@@ -508,11 +538,13 @@ function FileTreeRows({
 							<AssetIconTile
 								key={asset.assetId}
 								asset={asset}
-								selected={asset.assetId === selectedAssetId}
+								selected={selectedKeys.has(assetKey(asset.assetId))}
+								focused={focusKey === assetKey(asset.assetId)}
 								renaming={asset.assetId === renamingAssetId}
-								cut={cutAssetIds.includes(asset.assetId)}
+								cut={cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath)}
 								favorite={favoriteAssetIds.has(asset.assetId)}
-								onSelect={() => onSelectAsset(asset.assetId)}
+								selectionDrag={selectionDrag}
+								onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
 								onContextMenu={() => onAssetContextMenu(asset)}
 								onRename={(stem) => onRenameAsset(asset, stem)}
 								onCancelRename={onCancelRename}
@@ -526,11 +558,13 @@ function FileTreeRows({
 					key={asset.assetId}
 					asset={asset}
 					depth={depth}
-					selected={asset.assetId === selectedAssetId}
+					selected={selectedKeys.has(assetKey(asset.assetId))}
+					focused={focusKey === assetKey(asset.assetId)}
 					renaming={asset.assetId === renamingAssetId}
-					cut={cutAssetIds.includes(asset.assetId)}
+					cut={cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath)}
 					favorite={favoriteAssetIds.has(asset.assetId)}
-					onSelect={() => onSelectAsset(asset.assetId)}
+					selectionDrag={selectionDrag}
+					onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
 					onContextMenu={() => onAssetContextMenu(asset)}
 					onRename={(stem) => onRenameAsset(asset, stem)}
 					onCancelRename={onCancelRename}

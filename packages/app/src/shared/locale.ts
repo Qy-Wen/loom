@@ -114,6 +114,12 @@ export const messages = defineLocale(
 			trashFolderDetail: (platform: UiPlatform) => platform === "windows"
 				? "Everything inside this folder can be recovered from the Recycle Bin."
 				: "Everything inside this folder can be recovered from the system Trash.",
+			trashItems: (count: number, platform: UiPlatform) => platform === "windows"
+				? `Move ${count} items to the Recycle Bin?`
+				: `Move ${count} items to the Trash?`,
+			trashItemsDetail: (platform: UiPlatform) => platform === "windows"
+				? "These items can be recovered from the Recycle Bin."
+				: "These items can be recovered from the system Trash.",
 			libraryFile: "Library file",
 			externalFile: "External file",
 		},
@@ -488,6 +494,8 @@ export const messages = defineLocale(
 			trashAssetDetail: (platform) => platform === "windows" ? "可以从回收站恢复这个文件。" : "可以从废纸篓恢复这个文件。",
 			trashFolder: (name, platform) => platform === "windows" ? `要将“${name}”移到回收站吗？` : `要将“${name}”移到废纸篓吗？`,
 			trashFolderDetail: (platform) => platform === "windows" ? "文件夹里的内容都可以从回收站恢复。" : "文件夹里的内容都可以从废纸篓恢复。",
+			trashItems: (count, platform) => platform === "windows" ? `要将这 ${count} 项移到回收站吗？` : `要将这 ${count} 项移到废纸篓吗？`,
+			trashItemsDetail: (platform) => platform === "windows" ? "这些项目都可以从回收站恢复。" : "这些项目都可以从废纸篓恢复。",
 			libraryFile: "素材库文件",
 			externalFile: "外部文件",
 		},

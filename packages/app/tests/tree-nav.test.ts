@@ -1,10 +1,21 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	assetKey,
+	contextSelection,
+	emptyTreeSelection,
+	extendSelection,
+	folderKey,
 	isLibraryTrashKey,
+	pointerMode,
+	pointerSelect,
+	rootLibraryItems,
+	selectVisible,
+	singleSelection,
 	treeMotion,
 	visibleTreeRows,
 	type TreeAssetRef,
+	type TreeCursor,
 	type TreeRow,
 } from "../src/renderer/library/tree-nav.ts";
 
@@ -110,6 +121,52 @@ describe("treeMotion", () => {
 			cursor: { kind: "folder", relativePath: "a/c" },
 		});
 		assert.equal(treeMotion(open, { kind: "folder", relativePath: "a" }, "Enter", false).type, "none");
+	});
+});
+
+describe("pointer selection", () => {
+	const rows = visibleTreeRows(["b", "a", "a/c"], assets, new Set(["a/c"]));
+	const a = folderKey("a");
+	const c = folderKey("a/c");
+	const z = assetKey("z");
+
+	it("toggles with the platform modifier and ranges from the anchor", () => {
+		assert.equal(pointerMode({ shiftKey: false, metaKey: true, ctrlKey: false }, true), "toggle");
+		assert.equal(pointerMode({ shiftKey: false, metaKey: false, ctrlKey: true }, true), "replace");
+		assert.equal(pointerMode({ shiftKey: false, metaKey: false, ctrlKey: true }, false), "toggle");
+		assert.equal(pointerMode({ shiftKey: true, metaKey: true, ctrlKey: false }, true), "range");
+
+		const toggled = pointerSelect(singleSelection(a), rows, z, "toggle");
+		assert.deepEqual(toggled.keys, [a, z]);
+		assert.equal(pointerSelect(toggled, rows, z, "toggle").focus, a);
+
+		const ranged = pointerSelect(singleSelection(a), rows, z, "range");
+		assert.deepEqual(ranged.keys, [a, c, z]);
+		assert.equal(ranged.anchor, a);
+		assert.equal(ranged.focus, z);
+	});
+
+	it("extends with shift and selects every visible row", () => {
+		const extended = extendSelection(singleSelection(a), rows, "ArrowDown");
+		assert.deepEqual(extended.keys, [a, c]);
+		assert.equal(extendSelection(extended, rows, "ArrowDown").focus, z);
+		assert.deepEqual(selectVisible(emptyTreeSelection, rows).keys, [a, c, z, folderKey("b"), assetKey("m")]);
+	});
+
+	it("keeps an existing selection when the context row is already inside it", () => {
+		const selection = pointerSelect(singleSelection(a), rows, z, "toggle");
+		assert.equal(contextSelection(selection, z).keys.length, 2);
+		assert.deepEqual(contextSelection(selection, folderKey("b")).keys, [folderKey("b")]);
+	});
+
+	it("drops nested items when a parent folder is selected", () => {
+		const cursors: TreeCursor[] = [
+			{ kind: "folder", relativePath: "a" },
+			{ kind: "folder", relativePath: "a/c" },
+			{ kind: "asset", assetId: "z", relativePath: "a/z.txt" },
+			{ kind: "asset", assetId: "m", relativePath: "m.txt" },
+		];
+		assert.deepEqual(rootLibraryItems(cursors), { assetIds: ["m"], folders: ["a"] });
 	});
 });
 
