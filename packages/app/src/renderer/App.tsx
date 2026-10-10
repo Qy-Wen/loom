@@ -19,9 +19,10 @@ import type {
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
+import { isGradeableImage } from "@loom/core/grade";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
-import { usePanelLayout } from "./layout/use-panel-layout.ts";
+import { usePanelLayout, type PanelId } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { PanelTabs, WorkPanel } from "./layout/work-panel.tsx";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
@@ -46,19 +47,29 @@ function meetsWindowCorner(
 	return frame.x + frame.width >= shell.clientWidth - 2 && frame.y + frame.height >= shell.clientHeight - 2;
 }
 
-function stackClass(panels: ReturnType<typeof usePanelLayout>): string {
-	const mode = panels.place("agent").mode;
-	if (panels.joined) {
-		if (panels.groupDrag) {
-			const snapping = panels.dragDock || panels.lowerFrame ? " snapping" : "";
-			return `side-stack joined group-drag${snapping}`;
-		}
-		const placed = mode === "bottom" ? " bottom-band" : mode === "float" ? " floating" : "";
-		return `side-stack joined${placed}`;
-	}
-	if (panels.bothBottom) return "side-stack bottom-band";
-	if (panels.anyBottom) return "side-stack spread";
-	if (panels.anyDocked) return "side-stack";
+type Layout = ReturnType<typeof usePanelLayout>;
+
+function groupClass(panels: Layout): string {
+	const mode = panels.place(panels.members[0] ?? "agent").mode;
+	const snapping = panels.groupDrag && (panels.dragDock || panels.lowerFrame || panels.spliceFrame) ? " snapping" : "";
+	const placed = panels.groupDrag
+		? ""
+		: mode === "bottom" ? " bottom-band"
+			: mode === "float" ? " floating"
+				: mode === "beside" ? " beside-band"
+					: mode === "above" ? " above-band"
+						: " dock-band";
+	return `side-stack joined${placed}${panels.groupDrag ? " group-drag" : ""}${snapping}`;
+}
+
+function stackClass(panels: Layout, loose: readonly PanelId[], share: boolean): string {
+	const modes = new Set(loose.map((id) => panels.place(id).mode));
+	if (share || modes.size > 1) return "side-stack spread";
+	if (modes.has("dock")) return "side-stack";
+	if (modes.has("beside")) return "side-stack beside-band";
+	if (modes.has("above")) return "side-stack above-band";
+	if (modes.has("bottom") && panels.bothBottom && !panels.joined) return "side-stack bottom-band";
+	if (modes.has("bottom")) return "side-stack spread";
 	return "side-stack floating";
 }
 type LibraryClipboard =
@@ -142,8 +153,21 @@ export function App(): React.JSX.Element {
 		beginResize,
 		resetLibraryWidth,
 		resetSideWidth,
+		resetBesideWidth,
 	} = useResizableLayout();
-	const panels = usePanelLayout(shellRef);
+	const selectedAsset = useMemo(
+		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
+		[library.assets, selectedAssetId],
+	);
+	const gradeVisible = workbenchView === "library"
+		&& selectedAsset?.type === "image"
+		&& isGradeableImage(selectedAsset.filename);
+	const panels = usePanelLayout(shellRef, gradeVisible);
+	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
+
+	useEffect(() => {
+		if (gradeVisible) panels.focus("grade");
+	}, [gradeVisible, selectedAsset?.assetId]);
 
 	useEffect(() => {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
@@ -248,11 +272,6 @@ export function App(): React.JSX.Element {
 			setRelations(EMPTY_RELATIONS);
 		});
 	}, [selectedAssetId]);
-
-	const selectedAsset = useMemo(
-		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
-		[library.assets, selectedAssetId],
-	);
 
 	useEffect(() => {
 		void window.loom.setUiSelection(
@@ -715,18 +734,97 @@ export function App(): React.JSX.Element {
 		return <div className="loading">{error ?? t.app.connecting}</div>;
 	}
 
+	const member = (id: PanelId) => panels.members.includes(id);
+	const loose = (["agent", "details", "grade"] as const).filter((id) => !member(id) && (id !== "grade" || gradeVisible));
+	const groupMode = panels.joined ? panels.place(panels.members[0]).mode : null;
+	const shareBottom = loose.filter((id) => panels.place(id).mode === "bottom").length + (groupMode === "bottom" ? 1 : 0) >= 2
+		&& !(panels.bothBottom && !panels.joined);
+	const shareBeside = loose.filter((id) => panels.place(id).mode === "beside").length + (groupMode === "beside" ? 1 : 0) >= 2
+		&& !(panels.bothBeside && !panels.joined);
+	const shareAbove = loose.filter((id) => panels.place(id).mode === "above").length + (groupMode === "above" ? 1 : 0) >= 2
+		&& !(panels.bothAbove && !panels.joined);
+	const inCluster = (id: PanelId) => shareBottom && !member(id) && panels.place(id).mode === "bottom";
+	const inBeside = (id: PanelId) => shareBeside && !member(id) && panels.place(id).mode === "beside";
+	const inAbove = (id: PanelId) => shareAbove && !member(id) && panels.place(id).mode === "above";
+	const parked = (id: PanelId) => inCluster(id) || inBeside(id) || inAbove(id);
+	const groupInCluster = shareBottom && groupMode === "bottom";
+	const groupInBeside = shareBeside && groupMode === "beside";
+	const groupInAbove = shareAbove && groupMode === "above";
+	const joinedGroup = !panels.joined ? null : (
+		<div className={groupClass(panels)} style={panels.groupStyle()}>
+			<PanelTabs layout={panels} />
+			{member("agent") && <WorkPanel id="agent" title={t.app.agent} layout={panels}>
+				<AgentPanel
+					libraryRoot={library.rootPath}
+					assets={library.assets}
+					onOpenAsset={selectAsset}
+					composerAttach={composerAttach}
+					onComposerAttachApplied={() => setComposerAttach(null)}
+				/>
+			</WorkPanel>}
+			{member("details") && <WorkPanel id="details" title={t.app.details} layout={panels}>
+				<DetailsPanel
+					asset={selectedAsset}
+					properties={properties}
+					propertyValues={propertyValues}
+					tags={library.tags}
+					assetTags={library.assetTags}
+					onAddTag={addTag}
+					onRemoveTag={removeTag}
+					enrichment={enrichment}
+					textEmbed={textEmbed}
+					embedding={embedding}
+					onEmbed={() => void embedSelected()}
+					imageVlm={imageVlm}
+					videoVlm={videoVlm}
+					audioWriteup={audioWriteup}
+					describing={describing}
+					onDescribe={() => void describeSelected()}
+					relations={relations}
+					assets={library.assets}
+					relationTypes={relationTypes}
+					onSelectAsset={(assetId) => {
+						selectAsset(assetId);
+						panels.focus("details");
+					}}
+					onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
+					onRemoveRelation={removeRelation}
+				/>
+			</WorkPanel>}
+			{member("grade") && gradeVisible && (
+				<WorkPanel id="grade" title={t.grade.panel} layout={panels}>
+					<div className="grade-panel-host" ref={setGradeHost} />
+				</WorkPanel>
+			)}
+			{groupMode === "float" && !panels.groupDrag && (
+				<>
+									<div className="work-panel-edge right" onPointerDown={(event) => panels.beginResize(panels.members[0] ?? "agent", "right", event)} />
+									<div className="work-panel-edge bottom" onPointerDown={(event) => panels.beginResize(panels.members[0] ?? "agent", "bottom", event)} />
+									<div className="work-panel-edge corner" onPointerDown={(event) => panels.beginResize(panels.members[0] ?? "agent", "corner", event)} />
+				</>
+			)}
+		</div>
+	);
+
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
 				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 
 				<div
-					className={`shell${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
+					className={`shell${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.anyBeside ? " has-beside" : ""}${panels.anyAbove ? " has-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
 					ref={shellRef}
 					style={{
 						...shellStyle,
 						...({ "--window-corner": navigator.userAgent.includes("Windows") ? "8px" : "16px" } as CSSProperties),
 						...(panels.anyBottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
+						...(panels.anyAbove ? { "--above-height": `${panels.aboveHeight}px` } : {}),
+						...(panels.spliceFrame ? {
+							"--splice-x": `${panels.spliceFrame.x}px`,
+							"--splice-y": `${panels.spliceFrame.y}px`,
+							"--splice-w": `${panels.spliceFrame.width}px`,
+							"--splice-h": `${panels.spliceFrame.height}px`,
+						} : {}),
 						...(panels.lowerFrame ? {
 							"--lower-x": `${panels.lowerFrame.x}px`,
 							"--lower-y": `${panels.lowerFrame.y}px`,
@@ -810,7 +908,7 @@ export function App(): React.JSX.Element {
 								onRemoveRelation={removeRelation}
 							/>
 						) : selectedAsset ? (
-							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} assets={library.assets} />
+							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} assets={library.assets} onGraded={selectAsset} gradeHost={gradeHost} />
 						) : (
 							<div className="welcome">
 								<div className="welcome-mark">L</div>
@@ -829,6 +927,17 @@ export function App(): React.JSX.Element {
 						)}
 					</main>
 
+					{panels.anyBeside && (
+						<div
+							className="resize-handle beside-resize"
+							role="separator"
+							aria-label={t.app.resizeAgent}
+							aria-orientation="vertical"
+							onPointerDown={(event) => beginResize("beside", event)}
+							onDoubleClick={resetBesideWidth}
+						/>
+					)}
+
 					{panels.anyDocked && (
 						<div
 							className="resize-handle side-resize"
@@ -837,6 +946,16 @@ export function App(): React.JSX.Element {
 							aria-orientation="vertical"
 							onPointerDown={(event) => beginResize("side", event)}
 							onDoubleClick={resetSideWidth}
+						/>
+					)}
+
+					{panels.anyAbove && (
+						<div
+							className="resize-handle row above-resize"
+							role="separator"
+							aria-label={t.app.resizeLower}
+							aria-orientation="horizontal"
+							onPointerDown={(event) => panels.beginAboveResize(event)}
 						/>
 					)}
 
@@ -850,12 +969,8 @@ export function App(): React.JSX.Element {
 						/>
 					)}
 
-					<div
-						className={stackClass(panels)}
-						style={panels.stackStyle()}
-					>
-						{panels.joined && <PanelTabs layout={panels} />}
-						<WorkPanel id="agent" title={t.app.agent} layout={panels}>
+					{loose.length > 0 && <div className={stackClass(panels, loose, shareBottom || shareBeside || shareAbove)}>
+						{!member("agent") && !parked("agent") && <WorkPanel id="agent" title={t.app.agent} layout={panels}>
 							<AgentPanel
 								libraryRoot={library.rootPath}
 								assets={library.assets}
@@ -863,8 +978,8 @@ export function App(): React.JSX.Element {
 								composerAttach={composerAttach}
 								onComposerAttachApplied={() => setComposerAttach(null)}
 							/>
-						</WorkPanel>
-						{(panels.bothDocked || panels.bothBottom) && !panels.joined && (
+						</WorkPanel>}
+						{(panels.bothDocked || panels.bothBottom || panels.bothBeside || panels.bothAbove) && !panels.joined && (
 							<div
 								className="resize-handle row"
 								role="separator"
@@ -873,7 +988,7 @@ export function App(): React.JSX.Element {
 								onPointerDown={(event) => panels.beginDockSplit(event)}
 							/>
 						)}
-						<WorkPanel id="details" title={t.app.details} layout={panels}>
+						{!member("details") && !parked("details") && <WorkPanel id="details" title={t.app.details} layout={panels}>
 							<DetailsPanel
 								asset={selectedAsset}
 								properties={properties}
@@ -901,15 +1016,110 @@ export function App(): React.JSX.Element {
 								onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
 								onRemoveRelation={removeRelation}
 							/>
-						</WorkPanel>
-						{panels.joined && panels.place("agent").mode === "float" && !panels.groupDrag && (
-							<>
-								<div className="work-panel-edge right" onPointerDown={(event) => panels.beginResize("agent", "right", event)} />
-								<div className="work-panel-edge bottom" onPointerDown={(event) => panels.beginResize("agent", "bottom", event)} />
-								<div className="work-panel-edge corner" onPointerDown={(event) => panels.beginResize("agent", "corner", event)} />
-							</>
+						</WorkPanel>}
+						{shareBottom && (
+							<div className="bottom-cluster">
+								{inCluster("agent") && <WorkPanel id="agent" title={t.app.agent} layout={panels}>
+									<AgentPanel
+										libraryRoot={library.rootPath}
+										assets={library.assets}
+										onOpenAsset={selectAsset}
+										composerAttach={composerAttach}
+										onComposerAttachApplied={() => setComposerAttach(null)}
+									/>
+								</WorkPanel>}
+								{inCluster("details") && <WorkPanel id="details" title={t.app.details} layout={panels}>
+									<DetailsPanel
+										asset={selectedAsset}
+										properties={properties}
+										propertyValues={propertyValues}
+										tags={library.tags}
+										assetTags={library.assetTags}
+										onAddTag={addTag}
+										onRemoveTag={removeTag}
+										enrichment={enrichment}
+										textEmbed={textEmbed}
+										embedding={embedding}
+										onEmbed={() => void embedSelected()}
+										imageVlm={imageVlm}
+										videoVlm={videoVlm}
+										audioWriteup={audioWriteup}
+										describing={describing}
+										onDescribe={() => void describeSelected()}
+										relations={relations}
+										assets={library.assets}
+										relationTypes={relationTypes}
+										onSelectAsset={(assetId) => {
+											selectAsset(assetId);
+											panels.focus("details");
+										}}
+										onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
+										onRemoveRelation={removeRelation}
+									/>
+								</WorkPanel>}
+								{inCluster("grade") && (
+									<WorkPanel id="grade" title={t.grade.panel} layout={panels}>
+										<div className="grade-panel-host" ref={setGradeHost} />
+									</WorkPanel>
+								)}
+								{groupInCluster && joinedGroup}
+							</div>
 						)}
-					</div>
+						{(shareBeside || shareAbove) && (
+							<div className={shareBeside ? "beside-cluster" : "above-cluster"}>
+								{(shareBeside ? inBeside("agent") : inAbove("agent")) && <WorkPanel id="agent" title={t.app.agent} layout={panels}>
+									<AgentPanel
+										libraryRoot={library.rootPath}
+										assets={library.assets}
+										onOpenAsset={selectAsset}
+										composerAttach={composerAttach}
+										onComposerAttachApplied={() => setComposerAttach(null)}
+									/>
+								</WorkPanel>}
+								{(shareBeside ? inBeside("details") : inAbove("details")) && <WorkPanel id="details" title={t.app.details} layout={panels}>
+									<DetailsPanel
+										asset={selectedAsset}
+										properties={properties}
+										propertyValues={propertyValues}
+										tags={library.tags}
+										assetTags={library.assetTags}
+										onAddTag={addTag}
+										onRemoveTag={removeTag}
+										enrichment={enrichment}
+										textEmbed={textEmbed}
+										embedding={embedding}
+										onEmbed={() => void embedSelected()}
+										imageVlm={imageVlm}
+										videoVlm={videoVlm}
+										audioWriteup={audioWriteup}
+										describing={describing}
+										onDescribe={() => void describeSelected()}
+										relations={relations}
+										assets={library.assets}
+										relationTypes={relationTypes}
+										onSelectAsset={(assetId) => {
+											selectAsset(assetId);
+											panels.focus("details");
+										}}
+										onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
+										onRemoveRelation={removeRelation}
+									/>
+								</WorkPanel>}
+								{gradeVisible && (shareBeside ? inBeside("grade") : inAbove("grade")) && (
+									<WorkPanel id="grade" title={t.grade.panel} layout={panels}>
+										<div className="grade-panel-host" ref={setGradeHost} />
+									</WorkPanel>
+								)}
+								{(groupInBeside || groupInAbove) && joinedGroup}
+							</div>
+						)}
+						{gradeVisible && !member("grade") && !parked("grade") && (
+							<WorkPanel id="grade" title={t.grade.panel} layout={panels}>
+								<div className="grade-panel-host" ref={setGradeHost} />
+							</WorkPanel>
+						)}
+					</div>}
+					{!groupInCluster && !groupInBeside && !groupInAbove && joinedGroup}
 				</div>
 				{settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
 			</div>

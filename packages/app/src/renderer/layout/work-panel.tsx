@@ -16,7 +16,8 @@ export function WorkPanel({
 	children: ReactNode;
 }): React.JSX.Element {
 	const place = layout.place(id);
-	const inactive = layout.joined && layout.tab !== id;
+	const grouped = layout.members.includes(id);
+	const inactive = grouped && layout.tab !== id;
 	return (
 		<section
 			className={`work-panel ${place.mode}${layout.isSnapping(id) ? " snapping" : ""}${layout.joinTarget === id ? " join-target" : ""}${inactive ? " joined-inactive" : ""}`}
@@ -29,7 +30,7 @@ export function WorkPanel({
 				onPointerDown={(event) => layout.beginDrag(id, event)}
 			>{title}</div>
 			<div className="work-panel-body">{children}</div>
-			{place.mode === "float" && !layout.joined && (
+			{place.mode === "float" && !grouped && (
 				<>
 					<div className="work-panel-edge right" onPointerDown={(event) => layout.beginResize(id, "right", event)} />
 					<div className="work-panel-edge bottom" onPointerDown={(event) => layout.beginResize(id, "bottom", event)} />
@@ -57,7 +58,7 @@ export function PanelTabs({ layout }: { layout: Layout }): React.JSX.Element {
 					data-tab={id}
 					className={`${layout.tab === id ? "active" : ""}${layout.tabReorder?.id === id ? " dragging" : ""}`}
 					onPointerDown={(event) => layout.beginTabDrag(id, event)}
-				>{id === "agent" ? t.app.agent : t.app.details}</button>
+				>{id === "agent" ? t.app.agent : id === "details" ? t.app.details : t.grade.panel}</button>
 			))}
 			{layout.tabReorder?.insertX != null && (
 				<span className="panel-tab-insert" style={{ left: layout.tabReorder.insertX }} />

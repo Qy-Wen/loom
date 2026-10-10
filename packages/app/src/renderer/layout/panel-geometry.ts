@@ -5,7 +5,12 @@ export interface FloatRect {
 	height: number;
 }
 
-export type PanelPlace = { mode: "dock" } | { mode: "bottom" } | ({ mode: "float" } & FloatRect);
+export type PanelPlace =
+	| { mode: "dock" }
+	| { mode: "bottom" }
+	| { mode: "beside" }
+	| { mode: "above" }
+	| ({ mode: "float" } & FloatRect);
 
 export const MIN_PANEL_WIDTH = 300;
 export const MIN_PANEL_HEIGHT = 200;
@@ -55,6 +60,22 @@ export function bottomBand(
 		width: Math.max(0, shell.width - x - right),
 		height: shell.height - y,
 	};
+}
+
+type Box = { left: number; top: number; right: number; bottom: number };
+
+/** Left strip of a right-hand panel, plus a little of the workbench just beside it. */
+export function pointerOnLeftEdge(clientX: number, clientY: number, box: Box): boolean {
+	if (clientY < box.top || clientY > box.bottom) return false;
+	const edge = Math.min(96, Math.max(36, (box.right - box.left) * 0.34));
+	return clientX >= box.left - 28 && clientX <= box.left + edge;
+}
+
+/** Top strip of a lower panel, plus the gap just above it. */
+export function pointerOnTopEdge(clientX: number, clientY: number, box: Box): boolean {
+	if (clientX < box.left || clientX > box.right) return false;
+	const edge = Math.min(80, Math.max(36, (box.bottom - box.top) * 0.34));
+	return clientY >= box.top - LOWER_SNAP_Y && clientY <= box.top + edge;
 }
 
 /** Snap follows the pointer. A tall window's center must not keep the snap after the cursor leaves. */
