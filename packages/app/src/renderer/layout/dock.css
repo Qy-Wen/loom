@@ -71,6 +71,16 @@ body.resizing-columns {
 	padding-left: 11px;
 }
 
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .work-panel:not(.float) .agent-chat,
+.shell.has-bottom .work-panel.dock .agent-chat,
+.shell.has-beside .work-panel.beside .agent-chat {
+	margin-left: -5px;
+}
+
+.shell.has-beside:not(.side-hidden) .work-panel.beside .agent-chat {
+	margin-right: -5px;
+}
+
 .shell.has-bottom .work-panel.dock > .work-panel-title {
 	margin-left: -5px;
 	padding-left: 17px;
