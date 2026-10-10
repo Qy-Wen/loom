@@ -58,3 +58,19 @@ export interface RunFfmpegArgs {
 	program?: "ffmpeg" | "ffprobe";
 	args: string[];
 }
+
+export interface GradeImageArgs {
+	path: string;
+	output?: string;
+	/** When `output` is omitted, write beside the source as `name_grade.ext` instead of `outputs/`. */
+	beside?: boolean;
+	grade: unknown;
+	lut?: string;
+}
+
+export interface GradeImageResult {
+	kind: "grade_image";
+	output: string;
+	assetId: string;
+	sourceAssetId?: string;
+}

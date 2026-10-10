@@ -17,7 +17,7 @@ import { workspaceWriteNeedsApproval } from "../src/workspace-path.ts";
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
 	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "convert_format", "crop_video", "edit", "extract_clip", "extract_frame", "resize_video", "run_ffmpeg", "update_settings", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "convert_format", "crop_video", "edit", "extract_clip", "extract_frame", "grade_image", "resize_video", "run_ffmpeg", "update_settings", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);

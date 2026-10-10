@@ -1,4 +1,4 @@
-import type { LocalCore, MediaJobResult } from "@loom/core";
+import { normalizeImageGrade, type LocalCore, type MediaJobResult } from "@loom/core";
 import type { LoomTool, LoomToolResult } from "@loom/agent";
 
 /**
@@ -133,6 +133,72 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			},
 		},
 		{
+			name: "grade_image",
+			description:
+				"Grade one still image with the preview panel's controls and write a new file. " +
+				"exposure is EV from -3 to 3 (0 unchanged). brightness and lightness are -1 to 1 (0 unchanged). " +
+				"hue is degrees from -180 to 180 (0 unchanged). contrast is 0 to 2 and saturation is 0 to 3 (1 unchanged). " +
+				"vibrance is -2 to 2 (0 unchanged). temperature is Kelvin from 1000 to 40000 (6500 unchanged). " +
+				"black and white are input levels from 0 to 1 (0 and 1 unchanged). " +
+				"curves maps 0..1 input to 0..1 output for rgb, r, g, and b. " +
+				"lut is an optional workspace-relative .cube applied last. " +
+				"JPEG, PNG, WebP, GIF, BMP, and TIFF only. GIF uses the first frame and writes PNG. " +
+				"Stores the recipe on the new file. Does not create a relation: call create_relation with " +
+				"fromAssetId = assetId, toAssetId = sourceAssetId, and type \"derived from\".",
+			parameters: {
+				type: "object",
+				properties: {
+					path: { type: "string" },
+					output: { type: "string" },
+					exposure: { type: "number" },
+					brightness: { type: "number" },
+					lightness: { type: "number" },
+					hue: { type: "number" },
+					contrast: { type: "number" },
+					saturation: { type: "number" },
+					vibrance: { type: "number" },
+					temperature: { type: "number" },
+					black: { type: "number" },
+					white: { type: "number" },
+					curves: {
+						type: "object",
+						properties: {
+							rgb: curvePoints,
+							r: curvePoints,
+							g: curvePoints,
+							b: curvePoints,
+						},
+						additionalProperties: false,
+					},
+					lut: { type: "string", description: "Workspace-relative .cube file." },
+				},
+				required: ["path"],
+				additionalProperties: false,
+			},
+			execute: async (rawArgs, signal) => {
+				const record = asRecord(rawArgs);
+				const grade = normalizeImageGrade({
+					exposure: record.exposure,
+					brightness: record.brightness,
+					lightness: record.lightness,
+					hue: record.hue,
+					contrast: record.contrast,
+					saturation: record.saturation,
+					vibrance: record.vibrance,
+					temperature: record.temperature,
+					black: record.black,
+					white: record.white,
+					curves: record.curves,
+				});
+				return jsonResult(await core.gradeImage({
+					path: requiredPath(rawArgs, "path"),
+					output: optionalPath(rawArgs, "output"),
+					grade,
+					lut: optionalPath(rawArgs, "lut"),
+				}, signal));
+			},
+		},
+		{
 			name: "run_ffmpeg",
 			description:
 				"Run bundled ffmpeg or ffprobe with an argv array when the other media tools are not enough. " +
@@ -162,6 +228,19 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 		},
 	];
 }
+
+const curvePoints = {
+	type: "array",
+	items: {
+		type: "object",
+		properties: {
+			x: { type: "number" },
+			y: { type: "number" },
+		},
+		required: ["x", "y"],
+		additionalProperties: false,
+	},
+};
 
 function objectSchema(properties: Record<string, unknown>, required: string[]) {
 	return { type: "object", properties, required, additionalProperties: false };

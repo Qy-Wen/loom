@@ -2,12 +2,14 @@ import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
 import { setProcessSandboxEnabled } from "@loom/core/sandbox";
 import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
+	gradeSiblingRelative,
+	isGradeExportPath,
 	type EmbeddingProvider,
 	type RerankProvider,
 	type LibraryChange,
@@ -171,6 +173,7 @@ let mcpHost: McpHost | null = null;
 let mcpReady = false;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
+let imageGradePreview: AbortController | null = null;
 // Keep the single manager and LocalCore on the same root across overlapping open requests.
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
@@ -212,6 +215,8 @@ const MIME_TYPES: Record<string, string> = {
 	".txt": "text/plain; charset=utf-8",
 	".wav": "audio/wav",
 	".webm": "video/webm",
+	".tif": "image/tiff",
+	".tiff": "image/tiff",
 	".webp": "image/webp",
 };
 
@@ -627,6 +632,79 @@ function registerIpc(): void {
 		if (decision !== "approve" && decision !== "reject") throw new Error("Tool decision is invalid");
 		return agentManager.resolveToolGate(toolCallId, decision as ToolGateDecision);
 	});
+	ipcMain.handle(IPC.getImageGrade, async (_event, assetId: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		return (await localCore.getImageGrade(assetId)) ?? null;
+	});
+	ipcMain.handle(IPC.previewImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, force: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		imageGradePreview?.abort();
+		const controller = new AbortController();
+		imageGradePreview = controller;
+		try {
+			return await localCore.previewImageGrade(
+				assetId,
+				grade,
+				typeof lut === "string" && lut.trim() ? lut : undefined,
+				force === true,
+				controller.signal,
+			);
+		} catch (error) {
+			if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return null;
+			throw error;
+		}
+	});
+	ipcMain.handle(IPC.saveImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		const source = await localCore.metadataStore.getAsset(assetId);
+		if (!source) throw new Error("Asset not found");
+		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath) : undefined;
+		const result = await localCore.gradeImage({
+			path: source.relativePath,
+			grade,
+			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
+			output: chosen,
+			beside: !chosen,
+		});
+		if (result.sourceAssetId && result.sourceAssetId !== result.assetId) {
+			await localCore.createRelation(result.assetId, result.sourceAssetId, "derived from");
+		}
+		return { assetId: result.assetId, path: result.output };
+	});
+	ipcMain.handle(IPC.pickGradeOutput, async (event, assetId: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		const snapshot = await localCore.getLibrarySnapshot();
+		if (!snapshot.rootPath) throw new Error("Open a library first.");
+		const source = await localCore.metadataStore.getAsset(assetId);
+		if (!source) throw new Error("Asset not found");
+		const suggested = freeGradeSibling(snapshot.rootPath, source.relativePath);
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t } = await uiCopy();
+		const options = {
+			title: t.grade.saveAs,
+			defaultPath: join(snapshot.rootPath, ...suggested.split("/")),
+			buttonLabel: t.common.save,
+			filters: gradeSaveFilters(extname(suggested).slice(1)),
+			properties: ["createDirectory", "showOverwriteConfirmation"] as Array<"createDirectory" | "showOverwriteConfirmation">,
+		};
+		const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
+		if (result.canceled || !result.filePath) return null;
+		return gradeOutputPath(result.filePath, source.relativePath);
+	});
+	ipcMain.handle(IPC.pickGradeLut, async (event) => {
+		const snapshot = await localCore.getLibrarySnapshot();
+		if (!snapshot.rootPath) throw new Error("Open a library first.");
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t } = await uiCopy();
+		const options = {
+			title: t.grade.importLut,
+			filters: [{ name: "3D LUT", extensions: ["cube"] }],
+			properties: ["openFile"] as Array<"openFile">,
+		};
+		const result = owner ? await dialog.showOpenDialog(owner, options) : await dialog.showOpenDialog(options);
+		if (result.canceled || result.filePaths.length === 0) return null;
+		return localCore.importGradeLut(result.filePaths[0]);
+	});
 
 	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
 		if (!modelSettings) throw new Error("Settings store not started");
@@ -970,6 +1048,64 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 	}
 	notifySettingsChanged();
 	return { notes, settings: await readPublicSettings() };
+}
+
+async function gradeOutputPath(input: string, sourceRelativePath: string): Promise<string> {
+	const snapshot = await localCore.getLibrarySnapshot();
+	if (!snapshot.rootPath) throw new Error("Open a library first.");
+	const { t } = await uiCopy();
+	let absolute = isAbsolute(input) ? input : resolve(snapshot.rootPath, ...input.replaceAll("\\", "/").split("/"));
+	if (!extname(absolute)) absolute += extname(gradeSiblingRelative(sourceRelativePath));
+	const relativePath = containedLibraryPath(snapshot.rootPath, absolute);
+	if (!relativePath) throw new Error(t.grade.saveOutside);
+	if (!isGradeExportPath(relativePath)) throw new Error(t.grade.saveType);
+	if (relativePath === sourceRelativePath) throw new Error(t.grade.saveOriginal);
+	await assertNotSourceFile(snapshot.rootPath, relativePath, sourceRelativePath, t.grade.saveOriginal);
+	return relativePath;
+}
+
+async function assertNotSourceFile(root: string, relativePath: string, sourceRelativePath: string, message: string): Promise<void> {
+	try {
+		const [chosen, source] = await Promise.all([
+			stat(join(root, ...relativePath.split("/"))),
+			stat(join(root, ...sourceRelativePath.split("/"))),
+		]);
+		if (chosen.ino === source.ino && chosen.dev === source.dev) throw new Error(message);
+	} catch (error) {
+		if (error instanceof Error && error.message === message) throw error;
+		if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+	}
+}
+
+function freeGradeSibling(root: string, sourceRelativePath: string): string {
+	for (let copy = 1; copy < 1000; copy += 1) {
+		const relativePath = gradeSiblingRelative(sourceRelativePath, copy);
+		if (!existsSync(join(root, ...relativePath.split("/")))) return relativePath;
+	}
+	return gradeSiblingRelative(sourceRelativePath, 999);
+}
+
+function containedLibraryPath(root: string, absolutePath: string): string | null {
+	const value = relative(root, resolve(absolutePath));
+	if (value === "" || value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value)) return null;
+	const posix = value.split(sep).join("/");
+	if (posix === ".loom" || posix.startsWith(".loom/") || posix === ".agents" || posix.startsWith(".agents/") || basename(posix) === ".DS_Store") {
+		return null;
+	}
+	return posix;
+}
+
+function gradeSaveFilters(extension: string): Array<{ name: string; extensions: string[] }> {
+	const filters = [
+		{ name: "PNG", extensions: ["png"] },
+		{ name: "JPEG", extensions: ["jpg", "jpeg"] },
+		{ name: "WebP", extensions: ["webp"] },
+		{ name: "TIFF", extensions: ["tiff", "tif"] },
+		{ name: "BMP", extensions: ["bmp"] },
+	];
+	const index = filters.findIndex((filter) => filter.extensions.includes(extension.toLowerCase()));
+	if (index <= 0) return filters;
+	return [filters[index], ...filters.slice(0, index), ...filters.slice(index + 1)];
 }
 
 async function attachConfiguredMcp(): Promise<void> {

@@ -105,6 +105,11 @@ const api: LoomApi = {
 	getAgentPermission: () => ipcRenderer.invoke(IPC.getAgentPermission),
 	setAgentPermission: (level) => ipcRenderer.invoke(IPC.setAgentPermission, level),
 	resolveToolGate: (toolCallId, decision) => ipcRenderer.invoke(IPC.resolveToolGate, toolCallId, decision),
+	getImageGrade: (assetId) => ipcRenderer.invoke(IPC.getImageGrade, assetId),
+	previewImageGrade: (assetId, grade, lut, force) => ipcRenderer.invoke(IPC.previewImageGrade, assetId, grade, lut, force),
+	saveImageGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveImageGrade, assetId, grade, lut, output),
+	pickGradeOutput: (assetId) => ipcRenderer.invoke(IPC.pickGradeOutput, assetId),
+	pickGradeLut: () => ipcRenderer.invoke(IPC.pickGradeLut),
 	...(import.meta.env.DEV
 		? { openDevTrace: (): Promise<void> => ipcRenderer.invoke(DEV_TRACE_IPC.open) }
 		: {}),
