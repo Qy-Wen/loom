@@ -20,12 +20,18 @@ Add a controlled-flow branch beside the chat Agent, and run tasks through fixed 
 
 ---
 
-## Step 3: Publishing
+## Step 3: Graph retrieval
+
+Retrieve by walking relations, so a search or an answer follows the graph and brings back connected files.
+
+---
+
+## Step 4: Publishing
 
 Adapters for Xiaohongshu, Douyin, and other platforms.
 
 ---
 
-## Step 4: Packaging
+## Step 5: Packaging
 
 Consider shipping installable builds for macOS and Windows.
