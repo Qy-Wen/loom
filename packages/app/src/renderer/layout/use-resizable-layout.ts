@@ -9,11 +9,13 @@ import {
 export const DEFAULT_LIBRARY_WIDTH = 240;
 export const DEFAULT_SIDE_WIDTH = 380;
 const MIN_LIBRARY_WIDTH = 180;
-const MIN_WORKBENCH_WIDTH = 320;
-const MIN_SIDE_WIDTH = 300;
+const MIN_WORKBENCH_WIDTH = 240;
+const MIN_SIDE_WIDTH = 200;
 const HANDLE_WIDTH = 10;
 
-type ResizeSide = "library" | "side";
+type ResizeSide = "library" | "side" | "beside";
+const BESIDE_KEY = "loom.layout.besideWidth";
+const DEFAULT_BESIDE_WIDTH = 300;
 
 /** Owns column drag state and persists the user's preferred sidebar widths. */
 export function useResizableLayout(): {
@@ -22,12 +24,16 @@ export function useResizableLayout(): {
 	beginResize: (side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>) => void;
 	resetLibraryWidth: () => void;
 	resetSideWidth: () => void;
+	resetBesideWidth: () => void;
 } {
 	const [libraryWidth, setLibraryWidth] = useState(() =>
 		Number(localStorage.getItem("loom.layout.libraryWidth")) || DEFAULT_LIBRARY_WIDTH,
 	);
 	const [sideWidth, setSideWidth] = useState(() =>
 		Number(localStorage.getItem("loom.layout.sideWidth")) || DEFAULT_SIDE_WIDTH,
+	);
+	const [besideWidth, setBesideWidth] = useState(() =>
+		Number(localStorage.getItem(BESIDE_KEY)) || DEFAULT_BESIDE_WIDTH,
 	);
 	const shellRef = useRef<HTMLDivElement>(null);
 
@@ -39,6 +45,10 @@ export function useResizableLayout(): {
 		localStorage.setItem("loom.layout.sideWidth", String(sideWidth));
 	}, [sideWidth]);
 
+	useEffect(() => {
+		localStorage.setItem(BESIDE_KEY, String(besideWidth));
+	}, [besideWidth]);
+
 	function beginResize(side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>): void {
 		if (event.button !== 0 || !shellRef.current) return;
 		event.preventDefault();
@@ -46,19 +56,20 @@ export function useResizableLayout(): {
 		document.body.classList.add("resizing-columns");
 
 		const onPointerMove = (moveEvent: PointerEvent) => {
+			const besideOpen = !!shellRef.current?.querySelector(".beside-resize");
+			const sideOpen = !!shellRef.current?.querySelector(".side-resize");
 			if (side === "library") {
-				const sideGap = shellRef.current?.querySelector(".side-stack") ? sideWidth + HANDLE_WIDTH : 0;
-				const maximum = Math.max(
-					MIN_LIBRARY_WIDTH,
-					Math.min(360, bounds.width - sideGap - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH),
-				);
-				setLibraryWidth(Math.min(maximum, Math.max(MIN_LIBRARY_WIDTH, moveEvent.clientX - bounds.left)));
+				const taken = (besideOpen ? besideWidth + HANDLE_WIDTH : 0) + (sideOpen ? sideWidth + HANDLE_WIDTH : 0);
+				const room = bounds.width - taken - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
+				setLibraryWidth(clampColumn(moveEvent.clientX - bounds.left, room, MIN_LIBRARY_WIDTH, 360));
+			} else if (side === "beside") {
+				const rightInset = sideOpen ? sideWidth + HANDLE_WIDTH : 0;
+				const room = bounds.width - libraryWidth - rightInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2;
+				setBesideWidth(clampColumn(bounds.right - rightInset - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
 			} else {
-				const maximum = Math.max(
-					MIN_SIDE_WIDTH,
-					Math.min(520, bounds.width - libraryWidth - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2),
-				);
-				setSideWidth(Math.min(maximum, Math.max(MIN_SIDE_WIDTH, bounds.right - moveEvent.clientX)));
+				const leftInset = besideOpen ? besideWidth + HANDLE_WIDTH : 0;
+				const room = bounds.width - libraryWidth - leftInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2;
+				setSideWidth(clampColumn(bounds.right - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
 			}
 		};
 
@@ -77,9 +88,18 @@ export function useResizableLayout(): {
 		shellStyle: {
 			"--library-width": `${libraryWidth}px`,
 			"--side-width": `${sideWidth}px`,
+			"--beside-width": `${besideWidth}px`,
 		} as CSSProperties,
 		beginResize,
 		resetLibraryWidth: () => setLibraryWidth(DEFAULT_LIBRARY_WIDTH),
 		resetSideWidth: () => setSideWidth(DEFAULT_SIDE_WIDTH),
+		resetBesideWidth: () => setBesideWidth(DEFAULT_BESIDE_WIDTH),
 	};
+}
+
+/** Uses the preferred minimum only while the other columns still leave that much room. */
+function clampColumn(proposed: number, room: number, minimum: number, cap: number): number {
+	const ceiling = Math.min(cap, Math.max(room, 0));
+	const floor = Math.min(minimum, ceiling);
+	return Math.min(Math.max(ceiling, floor), Math.max(floor, proposed));
 }

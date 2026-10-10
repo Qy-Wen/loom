@@ -89,7 +89,7 @@ body {
 	display: grid;
 	grid-template-columns:
 		var(--library-width) 10px
-		minmax(320px, 1fr) 10px
+		minmax(240px, 1fr) 10px
 		var(--side-width);
 	flex: 1;
 	min-height: 0;
@@ -99,7 +99,7 @@ body {
 .shell.side-hidden {
 	grid-template-columns:
 		var(--library-width) 10px
-		minmax(320px, 1fr);
+		minmax(240px, 1fr);
 }
 
 .shell.has-bottom {
@@ -130,6 +130,44 @@ body {
 	padding-top: 5px;
 }
 .shell.has-bottom .work-panel.dock { grid-column: 5; grid-row: 1 / -1; margin-left: -5px; padding-left: 5px; }
+
+.shell.has-bottom .bottom-cluster {
+	display: flex;
+	grid-column: 3;
+	grid-row: 3;
+	min-width: 0;
+	min-height: 0;
+	margin-top: -5px;
+	margin-left: -5px;
+	margin-right: -5px;
+	padding-top: 5px;
+}
+
+.shell.side-hidden.has-bottom .bottom-cluster { margin-right: 0; }
+
+.shell.has-bottom .bottom-cluster > .work-panel.bottom {
+	flex: 1 1 0;
+	grid-column: auto;
+	grid-row: auto;
+	min-width: 0;
+	min-height: 0;
+	margin: 0;
+	padding-top: 0;
+}
+
+.shell.has-bottom .bottom-cluster > .work-panel.bottom + .work-panel.bottom {
+	border-left: 1px solid #e4e4e0;
+}
+
+.shell > .work-panel[data-panel="grade"].dock {
+	grid-column: 5;
+	grid-row: 1;
+	min-height: 0;
+}
+
+.shell.has-bottom > .work-panel[data-panel="grade"].dock {
+	grid-row: 1 / -1;
+}
 
 .shell.lower-target::before {
 	position: absolute;
@@ -280,6 +318,55 @@ body {
 	flex: 1;
 	padding: 0 6px 12px;
 	overflow-y: auto;
+}
+
+/* Match the chat panel scrollbar (CopilotKit: 6px thumb, thin gutter). */
+.asset-list,
+.details-content,
+.grade-panel,
+.asset-list *,
+.details-content *,
+.grade-panel * {
+	scrollbar-width: thin;
+	scrollbar-color: oklch(50% 0 0) transparent;
+}
+
+.asset-list::-webkit-scrollbar,
+.details-content::-webkit-scrollbar,
+.grade-panel::-webkit-scrollbar,
+.asset-list ::-webkit-scrollbar,
+.details-content ::-webkit-scrollbar,
+.grade-panel ::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.asset-list::-webkit-scrollbar-track,
+.details-content::-webkit-scrollbar-track,
+.grade-panel::-webkit-scrollbar-track,
+.asset-list ::-webkit-scrollbar-track,
+.details-content ::-webkit-scrollbar-track,
+.grade-panel ::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.asset-list::-webkit-scrollbar-thumb,
+.details-content::-webkit-scrollbar-thumb,
+.grade-panel::-webkit-scrollbar-thumb,
+.asset-list ::-webkit-scrollbar-thumb,
+.details-content ::-webkit-scrollbar-thumb,
+.grade-panel ::-webkit-scrollbar-thumb {
+	background: oklch(50% 0 0);
+	border-radius: 9999px;
+}
+
+.asset-list::-webkit-scrollbar-thumb:hover,
+.details-content::-webkit-scrollbar-thumb:hover,
+.grade-panel::-webkit-scrollbar-thumb:hover,
+.asset-list ::-webkit-scrollbar-thumb:hover,
+.details-content ::-webkit-scrollbar-thumb:hover,
+.grade-panel ::-webkit-scrollbar-thumb:hover {
+	background: oklch(40% 0 0);
 }
 
 .library-footer {
@@ -1662,31 +1749,31 @@ body.resizing-columns {
 	background: #fff;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) {
 	margin-left: -5px;
 	padding-left: 5px;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .panel-tabs {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .panel-tabs {
 	margin-left: -5px;
 	padding-left: 13px;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .resize-handle.row,
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .work-panel:not(.float) {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .resize-handle.row,
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .work-panel:not(.float) {
 	margin-left: -5px;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .work-panel:not(.float) {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .work-panel:not(.float) {
 	padding-left: 5px;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .work-panel:not(.float) .work-panel-title {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .work-panel:not(.float) .work-panel-title {
 	margin-left: -5px;
 	padding-left: 17px;
 }
 
-.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.group-drag) > .work-panel:not(.float) .session-bar {
+.side-stack:not(.floating):not(.spread):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) > .work-panel:not(.float) .session-bar {
 	margin-left: -5px;
 	padding-left: 11px;
 }
@@ -1740,11 +1827,233 @@ body.resizing-columns {
 
 .side-stack.joined .work-panel-title { display: none; }
 
+.shell.has-bottom > .side-stack.joined.bottom-band {
+	display: flex;
+	flex-direction: column;
+	grid-column: 3;
+	grid-row: 3;
+	min-width: 0;
+	min-height: 0;
+	margin-top: -5px;
+	margin-left: -5px;
+	margin-right: -5px;
+	padding-top: 5px;
+	background: #fff;
+}
+
+.shell.side-hidden.has-bottom > .side-stack.joined.bottom-band { margin-right: 0; }
+
+.shell.has-beside {
+	grid-template-columns:
+		var(--library-width) 10px
+		minmax(240px, 1fr) 10px
+		var(--beside-width) 10px
+		var(--side-width);
+}
+
+.shell.has-beside.side-hidden {
+	grid-template-columns:
+		var(--library-width) 10px
+		minmax(240px, 1fr) 10px
+		var(--beside-width);
+}
+
+.shell.has-above {
+	grid-template-rows: minmax(0, 1fr) 10px var(--above-height);
+}
+
+.shell.has-above.has-bottom {
+	grid-template-rows: minmax(0, 1fr) 10px var(--above-height) 10px var(--bottom-height);
+}
+
+.shell.has-beside > .library-sidebar,
+.shell.has-beside > .library-resize,
+.shell.has-beside > .beside-resize,
+.shell.has-beside > .side-resize,
+.shell.has-above > .library-sidebar,
+.shell.has-above > .library-resize,
+.shell.has-above > .beside-resize,
+.shell.has-above > .side-resize {
+	grid-row: 1 / -1;
+}
+
+.shell.has-beside > .beside-resize { grid-column: 4; }
+.shell.has-beside > .side-resize { grid-column: 6; }
+
+.shell.has-beside .work-panel.beside,
+.shell.has-beside > .side-stack.beside-band,
+.shell.has-beside > .side-stack.joined.beside-band,
+.shell.has-beside .beside-cluster {
+	grid-column: 5;
+	grid-row: 1 / -1;
+	min-width: 0;
+	min-height: 0;
+}
+
+/* The side column stops above the lower band, and that band runs underneath it. */
+.shell.has-beside.has-bottom .work-panel.beside,
+.shell.has-beside.has-bottom > .side-stack.beside-band,
+.shell.has-beside.has-bottom > .side-stack.joined.beside-band,
+.shell.has-beside.has-bottom .beside-cluster,
+.shell.has-beside.has-bottom > .beside-resize {
+	grid-row: 1;
+}
+
+.shell.has-beside.has-bottom > .beside-resize {
+	margin-bottom: -5px;
+}
+
+.shell.has-beside.has-above.has-bottom .work-panel.beside,
+.shell.has-beside.has-above.has-bottom > .side-stack.beside-band,
+.shell.has-beside.has-above.has-bottom > .side-stack.joined.beside-band,
+.shell.has-beside.has-above.has-bottom .beside-cluster,
+.shell.has-beside.has-above.has-bottom > .beside-resize {
+	grid-row: 1 / 4;
+}
+
+.shell.has-beside.has-bottom:not(.has-above) .work-panel.beside,
+.shell.has-beside.has-bottom:not(.has-above) > .side-stack.beside-band,
+.shell.has-beside.has-bottom:not(.has-above) > .side-stack.joined.beside-band {
+	margin-bottom: -5px;
+	padding-bottom: 5px;
+}
+
+.shell.has-beside.has-bottom > .bottom-resize,
+.shell.has-beside.has-bottom > .side-stack.bottom-band,
+.shell.has-beside.has-bottom > .side-stack.joined.bottom-band,
+.shell.has-beside.has-bottom .bottom-cluster,
+.shell.has-beside.has-bottom .work-panel.bottom {
+	grid-column: 3 / 6;
+}
+
+.shell.has-beside .work-panel.beside,
+.shell.has-beside > .side-stack.beside-band,
+.shell.has-beside > .side-stack.joined.beside-band {
+	margin-left: -5px;
+	padding-left: 5px;
+}
+
+.shell.has-beside .work-panel.beside > .work-panel-title {
+	margin-left: -5px;
+	padding-left: 17px;
+}
+
+.shell.has-beside:not(.side-hidden) .work-panel.beside,
+.shell.has-beside:not(.side-hidden) > .side-stack.beside-band,
+.shell.has-beside:not(.side-hidden) > .side-stack.joined.beside-band {
+	margin-right: -5px;
+	padding-right: 5px;
+}
+
+.shell.has-beside:not(.side-hidden) .work-panel.beside > .work-panel-title {
+	margin-right: -5px;
+	padding-right: 17px;
+}
+
+.shell.has-beside:not(.side-hidden) .work-panel.dock,
+.shell.has-beside:not(.side-hidden) > .side-stack.joined.dock-band,
+.shell.has-beside:not(.side-hidden) > .side-stack:not(.spread):not(.floating):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag) {
+	grid-column: 7;
+	grid-row: 1 / -1;
+}
+
+.shell.has-above > .workbench { grid-column: 3; grid-row: 1; margin-bottom: -5px; padding-bottom: 5px; }
+.shell.has-above > .above-resize { grid-column: 3; grid-row: 2; margin-left: -5px; margin-right: -5px; }
+
+.shell.has-above .work-panel.above,
+.shell.has-above > .side-stack.above-band,
+.shell.has-above > .side-stack.joined.above-band,
+.shell.has-above .above-cluster {
+	grid-column: 3;
+	grid-row: 3;
+	min-width: 0;
+	min-height: 0;
+	margin-top: -5px;
+	margin-left: -5px;
+	margin-right: -5px;
+	padding-top: 5px;
+}
+
+.shell.has-above.has-bottom > .bottom-resize { grid-row: 4; }
+.shell.has-above.has-bottom .work-panel.bottom,
+.shell.has-above.has-bottom > .side-stack.bottom-band,
+.shell.has-above.has-bottom > .side-stack.joined.bottom-band,
+.shell.has-above.has-bottom .bottom-cluster { grid-row: 5; }
+
+.shell.side-hidden.has-above:not(.has-beside) .work-panel.above,
+.shell.side-hidden.has-above:not(.has-beside) > .side-stack.above-band,
+.shell.side-hidden.has-above:not(.has-beside) > .above-resize { margin-right: 0; }
+
+.beside-cluster,
+.above-cluster {
+	display: flex;
+	flex-direction: column;
+	min-width: 0;
+	min-height: 0;
+	background: #fff;
+}
+
+.beside-cluster > .work-panel,
+.beside-cluster > .side-stack.joined,
+.above-cluster > .work-panel,
+.above-cluster > .side-stack.joined {
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+}
+
+.work-panel.beside,
+.work-panel.above {
+	position: relative;
+	flex: 1 1 0;
+}
+
+.shell.splice-target::before {
+	position: absolute;
+	z-index: 40;
+	box-sizing: border-box;
+	left: var(--splice-x);
+	top: var(--splice-y);
+	width: var(--splice-w);
+	height: var(--splice-h);
+	border: 2px solid #7896c8;
+	border-radius: 0;
+	background: rgb(120 150 200 / 12%);
+	content: "";
+	pointer-events: none;
+}
+
+.shell.has-bottom > .side-stack.joined.dock-band {
+	display: flex;
+	flex-direction: column;
+	grid-column: 5;
+	grid-row: 1 / -1;
+	min-width: 0;
+	min-height: 0;
+	margin-left: -5px;
+	padding-left: 5px;
+	background: #fff;
+}
+
+.bottom-cluster > .side-stack.joined {
+	flex: 1 1 0;
+	min-width: 0;
+	min-height: 0;
+	background: #fff;
+}
+
+.bottom-cluster > .work-panel.bottom + .side-stack.joined,
+.bottom-cluster > .side-stack.joined + .work-panel.bottom {
+	border-left: 1px solid #e4e4e0;
+}
+
 .side-stack.joined .work-panel.joined-inactive { display: none; }
 
 .side-stack.joined .work-panel.float,
 .side-stack.joined .work-panel.bottom,
-.side-stack.joined .work-panel.dock {
+.side-stack.joined .work-panel.dock,
+.side-stack.joined .work-panel.beside,
+.side-stack.joined .work-panel.above {
 	position: relative;
 	flex: 1 1 0;
 	width: auto;
@@ -1872,7 +2181,7 @@ body.dragging-panel .panel-tabs button { cursor: grabbing; }
 .work-panel-title {
 	display: flex;
 	align-items: center;
-	flex: 0 0 32px;
+	flex: 0 0 36px;
 	padding: 0 12px;
 	border-bottom: 1px solid #e5e5e2;
 	color: #202124;
@@ -2234,6 +2543,7 @@ body.resizing-rows .resize-handle.row::after {
 	gap: 8px;
 	min-width: 0;
 	align-self: center;
+	margin-left: -3px;
 }
 
 .session-permission {
@@ -2318,6 +2628,10 @@ body.resizing-rows .resize-handle.row::after {
 	cursor: text;
 }
 
+.session-follow-up-slot [data-testid="copilot-chat-input"] {
+	border-radius: 14px;
+}
+
 .session-follow-up-slot [data-copilotkit] {
 	pointer-events: auto;
 }
@@ -2326,6 +2640,8 @@ body.resizing-rows .resize-handle.row::after {
 .session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] {
 	grid-template-rows: auto auto;
 	align-items: center;
+	padding: 6px 10px;
+	column-gap: 10px;
 	row-gap: 4px;
 }
 
@@ -2348,15 +2664,14 @@ body.resizing-rows .resize-handle.row::after {
 
 /* Compact mode only pads the right side, because the add button used to sit on the left. */
 .session-follow-up-slot [data-testid="copilot-chat-textarea"] {
-	padding-top: 7px;
-	padding-left: 6px;
-	padding-right: 6px;
-	padding-bottom: 4px;
-	text-align: justify;
+	padding-top: 6px;
+	padding-left: 4px;
+	padding-right: 4px;
+	padding-bottom: 3px;
 }
 
 .session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(3) > * {
-	margin-right: 6px;
+	margin-right: 4px;
 }
 
 .session-follow-up-slot [data-testid="copilot-send-button"] {
@@ -2376,7 +2691,7 @@ body.resizing-rows .resize-handle.row::after {
 	justify-content: center;
 	width: 36px;
 	height: 36px;
-	margin: 0 0 0 6px;
+	margin: 0 0 0 4px;
 	padding: 0;
 	border: 0;
 	border-radius: 999px;
@@ -2445,7 +2760,7 @@ body.resizing-rows .resize-handle.row::after {
 }
 
 .session-composer-box {
-	border-radius: 28px;
+	border-radius: 14px;
 	background: #fff;
 	box-shadow: 0 4px 4px 0 #0000000a, 0 0 1px 0 #0000009e;
 }
@@ -4413,4 +4728,6 @@ body.resizing-table-columns {
 	.brand { width: 190px; }
 	.shell { grid-template-columns: var(--library-width) 10px minmax(240px, 1fr) 10px var(--side-width); }
 	.shell.side-hidden { grid-template-columns: var(--library-width) 10px minmax(240px, 1fr); }
+	.shell.has-beside { grid-template-columns: var(--library-width) 10px minmax(240px, 1fr) 10px var(--beside-width) 10px var(--side-width); }
+	.shell.has-beside.side-hidden { grid-template-columns: var(--library-width) 10px minmax(240px, 1fr) 10px var(--beside-width); }
 }
