@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLocale } from "../locale.tsx";
 import {
 	applyFindHighlights,
 	clearFindHighlights,
@@ -15,6 +16,7 @@ export function FindBar({
 	assetId: string;
 	documentKey: string;
 }): React.JSX.Element | null {
+	const { t } = useLocale();
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [open, setOpen] = useState(false);
 	const [query, setQuery] = useState("");
@@ -106,8 +108,8 @@ export function FindBar({
 		<div className="find-bar">
 			<input
 				ref={inputRef}
-				aria-label="Find in document"
-				placeholder="Find"
+				aria-label={t.find.label}
+				placeholder={t.find.placeholder}
 				value={query}
 				onChange={(event) => {
 					setQuery(event.target.value);
@@ -117,11 +119,11 @@ export function FindBar({
 			<span className="find-bar-count">
 				{query.trim() ? `${matchCount === 0 ? 0 : activeIndex + 1}/${matchCount}` : ""}
 			</span>
-			<button type="button" aria-label="Previous match" onClick={() => move(-1)}>↑</button>
-			<button type="button" aria-label="Next match" onClick={() => move(1)}>↓</button>
+			<button type="button" aria-label={t.find.previous} onClick={() => move(-1)}>↑</button>
+			<button type="button" aria-label={t.find.next} onClick={() => move(1)}>↓</button>
 			<button
 				type="button"
-				aria-label="Close find"
+				aria-label={t.find.close}
 				onClick={() => {
 					setOpen(false);
 					clearFindHighlights();

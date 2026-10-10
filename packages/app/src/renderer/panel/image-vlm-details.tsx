@@ -1,4 +1,6 @@
 import type { AudioWriteupStatus, ImageVlmStatus, VideoVlmStatus } from "@loom/core";
+import { rawStatusLabel } from "../../shared/locale.ts";
+import { useLocale } from "../locale.tsx";
 import { CopyableError } from "./copyable-error.tsx";
 
 interface ImageVlmDetailsProps {
@@ -12,35 +14,36 @@ export function ImageVlmDetails({
 	describing,
 	onDescribe,
 }: ImageVlmDetailsProps): React.JSX.Element | null {
+	const { t } = useLocale();
 	if (!status?.supported) return null;
 	const busy = describing || status.status === "describing";
-	const label = status.stale && status.status === "ready" ? "Re-describe" : "Describe";
+	const label = status.stale && status.status === "ready" ? t.details.redescribe : t.details.describe;
 	return (
 		<section>
 			<div className="section-label enrichment-heading">
-				<span>Caption</span>
+				<span>{t.details.caption}</span>
 				<button type="button" className="text-button" disabled={busy} onClick={onDescribe}>
-					{busy ? "Describing…" : label}
+					{busy ? t.details.describing : label}
 				</button>
 			</div>
 			<dl className="properties">
-				<dt>Status</dt>
-				<dd>{formatStatus(status)}</dd>
+				<dt>{t.details.status}</dt>
+				<dd>{formatStatus(t, status)}</dd>
 				{status.modelId && (
 					<>
-						<dt>Model</dt>
+						<dt>{t.details.model}</dt>
 						<dd title={status.modelId}>{status.modelId}</dd>
 					</>
 				)}
 				{status.markdown && (
 					<>
-						<dt>Write-up</dt>
+						<dt>{t.details.writeup}</dt>
 						<dd className="vlm-markdown" title={status.markdown}>{status.markdown}</dd>
 					</>
 				)}
 				{status.error && (
 					<>
-						<dt>Error</dt>
+						<dt>{t.details.error}</dt>
 						<dd className="copyable-error-cell"><CopyableError text={status.error} /></dd>
 					</>
 				)}
@@ -49,8 +52,8 @@ export function ImageVlmDetails({
 	);
 }
 
-function formatStatus(status: ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus): string {
-	if (status.status === "idle") return "Not described";
-	if (status.stale) return `${status.status} (stale)`;
-	return status.status;
+function formatStatus(t: ReturnType<typeof useLocale>["t"], status: ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus): string {
+	if (status.status === "idle") return t.details.notDescribed;
+	const label = rawStatusLabel(t, status.status);
+	return status.stale ? t.status.stale(label) : label;
 }

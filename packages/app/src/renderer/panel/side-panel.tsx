@@ -15,6 +15,8 @@ import type {
 } from "@loom/core";
 import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
+import { assetTypeLabel } from "../../shared/locale.ts";
+import { useLocale } from "../locale.tsx";
 import { displayPropertyValue } from "../workbench/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { ImageVlmDetails } from "./image-vlm-details.tsx";
@@ -67,6 +69,7 @@ export function AgentPanel({
 	composerAttach,
 	onComposerAttachApplied,
 }: AgentPanelProps): React.JSX.Element {
+	const { t } = useLocale();
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const sessionIdRef = useRef<string | null>(null);
@@ -190,7 +193,7 @@ export function AgentPanel({
 	}
 
 	async function deleteSession(id: string): Promise<void> {
-		if (!window.confirm("Delete this session? This cannot be undone.")) return;
+		if (!window.confirm(t.sessions.deleteConfirm)) return;
 		setSessionBusy(true);
 		setSessionError(null);
 		try {
@@ -259,11 +262,11 @@ export function AgentPanel({
 							</LibraryAssetsProvider>
 							</AssetOpenProvider>
 						) : (
-							<div className="empty">Starting a session…</div>
+							<div className="empty">{t.sessions.starting}</div>
 						)}
 					</>
 				) : (
-					<div className="empty">Open a library to start a conversation.</div>
+					<div className="empty">{t.sessions.needLibrary}</div>
 				)}
 			</div>
 		</div>
@@ -294,17 +297,18 @@ export function DetailsPanel({
 	onCreateRelation,
 	onRemoveRelation,
 }: DetailsPanelProps): React.JSX.Element {
+	const { t } = useLocale();
 	return (
 		<div className="side-panel">
 			<div className="panel-content details-content active">
 				<section>
-					<div className="section-label">File</div>
+					<div className="section-label">{t.details.file}</div>
 					{asset ? (
 						<dl className="properties">
-							<dt>Type</dt><dd>{asset.type}</dd>
-							<dt>Size</dt><dd>{formatBytes(asset.size)}</dd>
-							<dt>Modified</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
-							<dt>Asset ID</dt><dd title={asset.assetId}>{asset.assetId}</dd>
+							<dt>{t.details.type}</dt><dd>{assetTypeLabel(t, asset.type)}</dd>
+							<dt>{t.details.size}</dt><dd>{formatBytes(asset.size)}</dd>
+							<dt>{t.details.modified}</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
+							<dt>{t.details.assetId}</dt><dd title={asset.assetId}>{asset.assetId}</dd>
 							<EnrichmentDetails enrichment={enrichment} />
 							<PropertySummary
 								assetId={asset.assetId}
@@ -313,7 +317,7 @@ export function DetailsPanel({
 							/>
 						</dl>
 					) : (
-						<div className="empty no-padding">Select an asset to see its properties.</div>
+						<div className="empty no-padding">{t.details.selectAsset}</div>
 					)}
 				</section>
 				{asset && (
@@ -400,6 +404,7 @@ function RelationsEditor({
 	onCreate: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
 	onRemove: (relationId: string) => Promise<void>;
 }): React.JSX.Element {
+	const { t } = useLocale();
 	const others = assets
 		.filter((item) => item.assetId !== asset?.assetId)
 		.sort((a, b) => a.filename.localeCompare(b.filename) || a.relativePath.localeCompare(b.relativePath));
@@ -445,13 +450,13 @@ function RelationsEditor({
 	return (
 		<>
 			<div className="property-heading">
-				<div className="section-label">Relations</div>
+				<div className="section-label">{t.details.relations}</div>
 				{asset && others.length > 0 && (
 					<button
 						className="icon-button"
 						type="button"
-						aria-label="Add relation"
-						title="Add relation"
+						aria-label={t.details.addRelation}
+						title={t.details.addRelation}
 						onClick={() => {
 							setForm({ type: "", toAssetId: "", direction: "out" });
 							setTypeOpen(false);
@@ -471,16 +476,16 @@ function RelationsEditor({
 							value={form.type}
 							open={typeOpen}
 							suggestions={relationTypes}
-							placeholder="Relationship type"
-							showLabel="Show relationship types"
-							hideLabel="Hide relationship types"
+							placeholder={t.details.relationshipType}
+							showLabel={t.details.showTypes}
+							hideLabel={t.details.hideTypes}
 							onChange={(type) => setForm({ ...form, type })}
 							onOpenChange={setTypeOpen}
 						/>
 						<button
 							type="button"
 							className="relation-direction"
-							aria-label={form.direction === "out" ? "This file points to the other" : "The other file points to this"}
+							aria-label={form.direction === "out" ? t.details.pointsOut : t.details.pointsIn}
 							onClick={() => setForm({ ...form, direction: form.direction === "out" ? "in" : "out" })}
 						>{form.direction === "out" ? "→" : "←"}</button>
 					</div>
@@ -491,13 +496,13 @@ function RelationsEditor({
 							aria-expanded={assetOpen}
 							onClick={() => setAssetOpen((current) => !current)}
 						>
-							<span>{selectedAsset?.filename ?? "Choose a file"}</span>
+							<span>{selectedAsset?.filename ?? t.details.chooseFile}</span>
 						</button>
 						{assetOpen && (
 							<div className="relation-asset-menu">
 								<input
 									autoFocus
-									placeholder="Search files"
+									placeholder={t.common.searchFiles}
 									value={assetQuery}
 									onChange={(event) => setAssetQuery(event.target.value)}
 									onKeyDown={(event) => {
@@ -522,18 +527,18 @@ function RelationsEditor({
 										</li>
 									))}
 								</ul>
-								{assetMatches.length === 0 && <div className="empty no-padding">No matching files.</div>}
+								{assetMatches.length === 0 && <div className="empty no-padding">{t.common.noMatchingFiles}</div>}
 							</div>
 						)}
 					</div>
 					{error && <div className="relation-form-error">{error}</div>}
 					<div className="property-form-actions">
-						<button type="button" onClick={() => { setForm(null); setError(null); }}>Cancel</button>
+						<button type="button" onClick={() => { setForm(null); setError(null); }}>{t.common.cancel}</button>
 						<button
 							type="button"
 							disabled={!form.type.trim() || !form.toAssetId || saving}
 							onClick={() => void submit()}
-						>{saving ? "Adding…" : "Add"}</button>
+						>{saving ? t.details.adding : t.common.add}</button>
 					</div>
 				</div>
 			)}
@@ -549,7 +554,7 @@ function RelationsEditor({
 					/>
 				))
 			) : (
-				<div className="empty no-padding">{asset ? "No relations yet." : "Select an asset to see its relations."}</div>
+				<div className="empty no-padding">{asset ? t.details.noRelations : t.details.selectForRelations}</div>
 			)}
 		</>
 	);
@@ -568,6 +573,7 @@ function RelationGroup({
 	onSelect: (assetId: string) => void;
 	onRemove: (relationId: string) => Promise<void>;
 }): React.JSX.Element | null {
+	const { t } = useLocale();
 	if (items.length === 0) return null;
 	return (
 		<div className="relation-group">
@@ -584,7 +590,7 @@ function RelationGroup({
 						<button
 							className="icon-button"
 							type="button"
-							title="Remove relation"
+							title={t.details.removeRelation}
 							onClick={() => void onRemove(item.relationId)}
 						>×</button>
 					</li>

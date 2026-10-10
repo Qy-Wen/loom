@@ -178,7 +178,7 @@ Harness 持久化的 user 消息保留旁路字段。发出去之后这条 user 
 
 没有选中且输入框没有芯片时省略 `attachments`。不要存 `none` 占位。
 
-发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式放入库内文件：从素材库拖到输入框，右键文件选 Add to chat，或点 + 菜单的 Library file。External file 和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再放入同一张芯片。发送时按 `assetId` 查当前库，把此刻的 `path` / `assetType` 写进块里。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
+发送时从当前库高亮快照（`assetId`、库内相对 `path`、`assetType`）写成一条 `ui_selection`。Graph 上的边不算选中。输入框也可以显式放入库内文件：从素材库拖到输入框，右键文件选「添加到对话」，或点 + 菜单的「素材库文件」。外部文件和从访达拖入会先拷进 `Inbox/`（若文件已在库内则复用），再放入同一张芯片。发送时按 `assetId` 查当前库，把此刻的 `path` / `assetType` 写进块里。旧行不改。payload 里不要放发送时间这类每轮都变的字段。
 
 芯片排在文字里，可以插在词与词之间。输入框读出文字时就在这个位置写上 `<asset_ref>` 块，聊天消息和落盘的 `content` 都是这串字。不再另存一条 `attachments`。气泡把这块解析回芯片。没有出现在芯片里的库高亮，接在原文后面，包在 `<system-reminder>` 里。标题只读文字，跳过芯片。点击芯片会在素材库里选中该资产。
 

@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useLocale } from "../locale.tsx";
 
 export type ProbeState = "idle" | "checking" | "ok" | "error";
 
@@ -47,6 +48,7 @@ function ProbeMark({ status, error }: { status: ProbeState; error?: string }): R
 }
 
 function ErrorProbe({ error }: { error: string }): React.JSX.Element {
+	const { t } = useLocale();
 	const wrapRef = useRef<HTMLSpanElement>(null);
 	const tipRef = useRef<HTMLDivElement>(null);
 	const hideTimer = useRef<number>(undefined);
@@ -105,7 +107,7 @@ function ErrorProbe({ error }: { error: string }): React.JSX.Element {
 			<button
 				type="button"
 				className="settings-probe-error"
-				aria-label="Connection error"
+				aria-label={t.settings.connectionError}
 				aria-expanded={open}
 				aria-describedby={open ? tipId : undefined}
 				onFocus={show}
@@ -128,14 +130,14 @@ function ErrorProbe({ error }: { error: string }): React.JSX.Element {
 					onMouseLeave={hideSoon}
 				>
 					<div className="settings-probe-tip-head">
-						<span>Connection failed</span>
+						<span>{t.settings.connectionFailed}</span>
 						<button
 							type="button"
 							className="settings-probe-copy"
 							onMouseDown={(event) => event.preventDefault()}
 							onClick={() => void copy()}
 						>
-							{copied ? "Copied" : "Copy"}
+							{copied ? t.common.copied : t.common.copy}
 						</button>
 					</div>
 					<pre className="settings-probe-tip-text">{error}</pre>

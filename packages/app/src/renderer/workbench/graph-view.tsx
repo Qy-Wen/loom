@@ -8,6 +8,8 @@ import {
 	nearestNode,
 	nodeHitZone,
 } from "./graph-layout.ts";
+import { assetTypeLabel } from "../../shared/locale.ts";
+import { useLocale } from "../locale.tsx";
 import { SuggestInput } from "../panel/suggest-input.tsx";
 import { useGraphSimulation } from "./graph-simulation.ts";
 
@@ -66,6 +68,7 @@ export function GraphView({
 	onCreateRelation,
 	onRemoveRelation,
 }: GraphViewProps): React.JSX.Element {
+	const { t } = useLocale();
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<PointerDrag | null>(null);
 	const fitted = useRef(false);
@@ -299,8 +302,8 @@ export function GraphView({
 	if (assets.length === 0) {
 		return (
 			<div className="welcome">
-				<h1>No assets yet</h1>
-				<p>Open a library to see every asset and its relationships on one canvas.</p>
+				<h1>{t.graph.emptyTitle}</h1>
+				<p>{t.graph.emptyBody}</p>
 			</div>
 		);
 	}
@@ -369,7 +372,7 @@ export function GraphView({
 					}
 				}}
 			>
-				<svg className="graph-world" role="img" aria-label="Asset relationship graph">
+				<svg className="graph-world" role="img" aria-label={t.graph.canvas}>
 					<g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
 						<defs>
 							<marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
@@ -494,11 +497,11 @@ export function GraphView({
 					</g>
 				</svg>
 				{legendTypes.length > 0 && (
-					<ul className="graph-legend" aria-label="Asset types">
+					<ul className="graph-legend" aria-label={t.graph.types}>
 						{legendTypes.map((type) => (
 							<li key={type}>
 								<span className="graph-legend-swatch" style={{ background: TYPE_COLOR[type] }} />
-								{type}
+								{assetTypeLabel(t, type)}
 							</li>
 						))}
 					</ul>
@@ -508,15 +511,16 @@ export function GraphView({
 				<div
 					className="graph-type-dialog"
 					role="dialog"
-					aria-label="Create relation"
+					aria-label={t.graph.createRelation}
 					onKeyDown={(event) => {
 						if (event.key === "Enter") void confirmLink();
 					}}
 				>
 					<div className="graph-type-dialog-title">
-						Relate {assetsById.get(pendingLink.fromId)?.filename ?? "asset"}
-						{" → "}
-						{assetsById.get(pendingLink.toId)?.filename ?? "asset"}
+						{t.graph.relate(
+							assetsById.get(pendingLink.fromId)?.filename ?? t.graph.asset,
+							assetsById.get(pendingLink.toId)?.filename ?? t.graph.asset,
+						)}
 					</div>
 					<SuggestInput
 						autoFocus
@@ -524,19 +528,19 @@ export function GraphView({
 						value={typeDraft}
 						open={typeOpen}
 						suggestions={relationTypes}
-						placeholder="Relationship type"
-						showLabel="Show relationship types"
-						hideLabel="Hide relationship types"
+						placeholder={t.graph.relationshipType}
+						showLabel={t.graph.showTypes}
+						hideLabel={t.graph.hideTypes}
 						onChange={setTypeDraft}
 						onOpenChange={setTypeOpen}
 					/>
 					{typeError && <div className="graph-type-error">{typeError}</div>}
 					<div className="property-form-actions">
 						<button type="button" onClick={() => { setPendingLink(null); setTypeError(null); }}>
-							Cancel
+							{t.common.cancel}
 						</button>
 						<button type="button" disabled={!typeDraft.trim() || saving} onClick={() => void confirmLink()}>
-							{saving ? "Creating…" : "Create"}
+							{saving ? t.graph.creating : t.graph.create}
 						</button>
 					</div>
 				</div>

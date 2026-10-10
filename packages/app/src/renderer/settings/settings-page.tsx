@@ -3,38 +3,31 @@ import type { AgentStatsView } from "../../shared/agent-stats.ts";
 import { emptyMcpServerDraft, type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSlotId } from "../../shared/model-settings.ts";
 import { instructionCharacterCount, INSTRUCTIONS_CHAR_LIMIT } from "../../shared/agent-instructions.ts";
+import type { GeneralSettings } from "../../shared/general-settings.ts";
+import { useLocale } from "../locale.tsx";
 import { SettingsAgent } from "./settings-agent.tsx";
+import { SettingsGeneral } from "./settings-general.tsx";
 import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsModels } from "./settings-models.tsx";
 import { SettingsStats } from "./settings-stats.tsx";
 
-type SettingsTab = "models" | "mcp" | "agent" | "stats";
+type SettingsTab = "general" | "models" | "mcp" | "agent" | "stats";
 
-const TABS: { id: SettingsTab; label: string }[] = [
-	{ id: "models", label: "Models" },
-	{ id: "mcp", label: "MCP" },
-	{ id: "agent", label: "Agent" },
-	{ id: "stats", label: "Stats" },
-];
-
-const LEAD: Record<SettingsTab, string> = {
-	models: "Turn a slot on to ping it. Save writes Models, MCP, and Agent together; it does not connect. Hosted APIs need a key; local servers often do not. Keys stay in the app, not in the library.",
-	mcp: "Same fields as a Cursor mcp.json: a name, then command + args, or a URL. Turn it on to connect. Save writes Models, MCP, and Agent together.",
-	agent: "Process sandbox and standing instructions. Save writes Models, MCP, and Agent together.",
-	stats: "Lifetime Chat usage for this app. Prompt-cache hit rate is the number that matters for prefix stability.",
-};
+const TAB_IDS: SettingsTab[] = ["general", "models", "mcp", "agent", "stats"];
 
 interface SettingsPageProps {
 	onClose: () => void;
 }
 
 export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element {
+	const { t, previewLanguage, restoreLanguage, commitLanguage } = useLocale();
 	const [tab, setTab] = useState<SettingsTab>("models");
 	const [draft, setDraft] = useState<ModelSettingsDraft | null>(null);
 	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
 	const [stats, setStats] = useState<AgentStatsView | null>(null);
 	const [instructions, setInstructions] = useState<string | null>(null);
 	const [sandboxEnabled, setSandboxEnabled] = useState<boolean | null>(null);
+	const [general, setGeneral] = useState<GeneralSettings | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const closeOnBackdrop = useRef(false);
@@ -59,12 +52,13 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 		const load = () => {
 			void (async () => {
 				try {
-					const [models, mcpView, statsView, instructionsText, sandbox] = await Promise.all([
+					const [models, mcpView, statsView, instructionsText, sandbox, generalView] = await Promise.all([
 						window.loom.getModelSettings(),
 						window.loom.getMcpSettings(),
 						window.loom.getAgentStats(),
 						window.loom.getAgentInstructions(),
 						window.loom.getAgentSandbox(),
+						window.loom.getGeneralSettings(),
 					]);
 					if (cancelled) return;
 					setDraft({
@@ -78,6 +72,7 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					setStats(statsView);
 					setInstructions(instructionsText);
 					setSandboxEnabled(sandbox);
+					setGeneral(generalView);
 				} catch (cause) {
 					if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
 				}
@@ -111,15 +106,24 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 		});
 	}
 
+	useEffect(() => {
+		if (!general) return;
+		previewLanguage(general.language);
+	}, [general?.language, previewLanguage]);
+
+	useEffect(() => restoreLanguage, [restoreLanguage]);
+
 	async function saveAll(): Promise<void> {
-		if (!draft || !mcp || instructions === null || sandboxEnabled === null || saving) return;
+		if (!draft || !mcp || !general || instructions === null || sandboxEnabled === null || saving) return;
 		if (instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT) {
-			setError(`Instructions are over ${INSTRUCTIONS_CHAR_LIMIT} characters. Shorten them, then save.`);
+			setError(t.settings.instructionsTooLong(INSTRUCTIONS_CHAR_LIMIT));
 			return;
 		}
 		setSaving(true);
 		setError(null);
 		try {
+			const saved = await window.loom.saveGeneralSettings(general);
+			commitLanguage(saved.language);
 			await Promise.all([
 				window.loom.saveModelSettings(draft),
 				window.loom.saveMcpSettings(mcp.servers),
@@ -167,24 +171,24 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 				aria-labelledby="settings-title"
 			>
 				<div className="settings-header">
-					<h2 id="settings-title">Settings</h2>
-					<button className="icon-button" type="button" onClick={onClose} aria-label="Close settings">×</button>
+					<h2 id="settings-title">{t.settings.title}</h2>
+					<button className="icon-button" type="button" onClick={onClose} aria-label={t.settings.close}>×</button>
 				</div>
-				<div className="settings-tabs" role="tablist" aria-label="Settings sections">
-					{TABS.map((item) => (
+				<div className="settings-tabs" role="tablist" aria-label={t.settings.sections}>
+					{TAB_IDS.map((id) => (
 						<button
-							key={item.id}
+							key={id}
 							type="button"
 							role="tab"
-							aria-selected={tab === item.id}
-							className={tab === item.id ? "is-active" : undefined}
-							onClick={() => setTab(item.id)}
+							aria-selected={tab === id}
+							className={tab === id ? "is-active" : undefined}
+							onClick={() => setTab(id)}
 						>
-							{item.label}
+							{t.settings.tabs[id]}
 						</button>
 					))}
 				</div>
-				<p className="settings-lead">{LEAD[tab]}</p>
+				<p className="settings-lead">{t.settings.leads[tab]}</p>
 				{error && <div className="session-error">{error}</div>}
 				<form
 					className="settings-pane-form"
@@ -194,12 +198,20 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					}}
 				>
 				<div className="settings-pane">
+				{tab === "general" && (general
+					? (
+						<SettingsGeneral
+							value={general}
+							onChange={(patch) => setGeneral((current) => current ? { ...current, ...patch } : current)}
+						/>
+					)
+					: <div className="empty">{t.common.loading}</div>)}
 				{tab === "models" && (draft
 					? <SettingsModels draft={draft} onChange={patchModel} />
-					: <div className="empty">Loading…</div>)}
+					: <div className="empty">{t.common.loading}</div>)}
 				{tab === "mcp" && (mcp
 					? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} />
-					: <div className="empty">Loading…</div>)}
+					: <div className="empty">{t.common.loading}</div>)}
 				{tab === "agent" && (instructions !== null && sandboxEnabled !== null
 					? (
 						<SettingsAgent
@@ -209,10 +221,10 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 							onInstructionsChange={setInstructions}
 						/>
 					)
-					: <div className="empty">Loading…</div>)}
+					: <div className="empty">{t.common.loading}</div>)}
 				{tab === "stats" && (stats
 					? <SettingsStats stats={stats} resetting={saving} onReset={() => void resetStats()} />
-					: <div className="empty">Loading…</div>)}
+					: <div className="empty">{t.common.loading}</div>)}
 				</div>
 				<div className="settings-actions settings-dialog-actions">
 					{tab === "mcp" && (
@@ -221,16 +233,16 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 							type="button"
 							onClick={() => patchMcp([...(mcp?.servers ?? []), emptyMcpServerDraft()])}
 						>
-							Add server
+							{t.settings.addServer}
 						</button>
 					)}
-					<button type="button" onClick={onClose}>Cancel</button>
+					<button type="button" onClick={onClose}>{t.common.cancel}</button>
 					<button
 						className="primary-button"
 						type="submit"
-						disabled={saving || !draft || !mcp || instructions === null || sandboxEnabled === null || instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT}
+						disabled={saving || !draft || !mcp || !general || instructions === null || sandboxEnabled === null || instructionCharacterCount(instructions) > INSTRUCTIONS_CHAR_LIMIT}
 					>
-						Save
+						{t.common.save}
 					</button>
 				</div>
 				</form>

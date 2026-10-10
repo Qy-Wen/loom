@@ -25,6 +25,7 @@ import type {
 } from "@loom/agent";
 import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
+import type { GeneralSettings } from "./general-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
 
 export type AssetContextAction =
@@ -133,6 +134,8 @@ export const IPC = {
 	setMcpServerLive: "loom:setMcpServerLive",
 	getAgentInstructions: "loom:getAgentInstructions",
 	saveAgentInstructions: "loom:saveAgentInstructions",
+	getGeneralSettings: "loom:getGeneralSettings",
+	saveGeneralSettings: "loom:saveGeneralSettings",
 	getAgentSandbox: "loom:getAgentSandbox",
 	saveAgentSandbox: "loom:saveAgentSandbox",
 	getAgentStats: "loom:getAgentStats",
@@ -227,6 +230,8 @@ export interface LoomApi {
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
 	getAgentInstructions: () => Promise<string>;
 	saveAgentInstructions: (text: string) => Promise<string>;
+	getGeneralSettings: () => Promise<GeneralSettings>;
+	saveGeneralSettings: (settings: GeneralSettings) => Promise<GeneralSettings>;
 	getAgentSandbox: () => Promise<boolean>;
 	saveAgentSandbox: (enabled: boolean) => Promise<boolean>;
 	getAgentStats: () => Promise<AgentStatsView>;

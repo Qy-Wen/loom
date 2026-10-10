@@ -4,6 +4,7 @@ import { toolCallNeedsApproval, toolPathArg, type ToolGateDecision } from "@loom
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
 import { useAgentPermission } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
+import { useLocale } from "../locale.tsx";
 import { useToolGatePending } from "./tool-gate-pending.ts";
 
 /** Register a chat renderer so tool results are visible in CopilotChat. */
@@ -32,6 +33,7 @@ function ToolCallCard({
 	libraryRoot: string | null;
 }) {
 	const openAsset = useOpenAsset();
+	const { t } = useLocale();
 	const { level } = useAgentPermission();
 	const gatePending = useToolGatePending(toolCallId);
 	const [open, setOpen] = useState(false);
@@ -54,12 +56,12 @@ function ToolCallCard({
 			>
 				<span className="tool-call-chevron" aria-hidden="true" />
 				<span className="tool-call-name">{name}</span>
-				<span className="tool-call-status">{waiting ? "waiting" : done ? "done" : status}</span>
+				<span className="tool-call-status">{waiting ? t.tool.waiting : done ? t.tool.done : status}</span>
 			</button>
 			{waiting && toolCallId ? (
 				<div className="tool-call-gate">
-					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed); }}>Approve</button>
-					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed); }}>Skip</button>
+					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed); }}>{t.tool.approve}</button>
+					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed); }}>{t.tool.skip}</button>
 				</div>
 			) : null}
 			{body ? (
@@ -72,7 +74,7 @@ function ToolCallCard({
 			) : null}
 			{refs ? (
 				<div className="tool-call-refs">
-					{refs.length === 0 ? <span className="tool-call-refs-empty">No assets</span> : refs.map((ref) => (
+					{refs.length === 0 ? <span className="tool-call-refs-empty">{t.tool.noAssets}</span> : refs.map((ref) => (
 						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
 					))}
 				</div>

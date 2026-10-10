@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
+import { useLocale } from "../locale.tsx";
 
 interface SessionBarProps {
 	sessions: SessionSummary[];
@@ -24,6 +25,7 @@ export function SessionBar({
 	onDelete,
 	onRefresh,
 }: SessionBarProps): React.JSX.Element {
+	const { t } = useLocale();
 	const open = sessions.filter((session) => session.status === "open");
 	const archived = sessions.filter((session) => session.status === "archived");
 	const [menuOpen, setMenuOpen] = useState(false);
@@ -40,7 +42,7 @@ export function SessionBar({
 
 	return (
 		<div className="session-bar" onPointerEnter={onRefresh}>
-			<div className="session-tabs" role="tablist" aria-label="Sessions">
+			<div className="session-tabs" role="tablist" aria-label={t.sessions.label}>
 				{open.map((session) => {
 					const selected = session.id === currentId;
 					return (
@@ -62,7 +64,7 @@ export function SessionBar({
 								type="button"
 								className="session-tab-close"
 								disabled={busy}
-								aria-label={`Close ${session.title}`}
+								aria-label={t.sessions.close(session.title)}
 								onClick={(event) => {
 									event.stopPropagation();
 									onArchive(session.id);
@@ -78,8 +80,8 @@ export function SessionBar({
 				type="button"
 				className="session-tab-new"
 				disabled={busy}
-				aria-label="New session"
-				title="New session"
+				aria-label={t.sessions.new}
+				title={t.sessions.new}
 				onClick={onCreate}
 			>
 				+
@@ -94,7 +96,7 @@ export function SessionBar({
 						aria-haspopup="menu"
 						onClick={() => setMenuOpen((openMenu) => !openMenu)}
 					>
-						Archived
+						{t.sessions.archived}
 					</button>
 					{menuOpen && (
 						<div className="session-archived-menu" role="menu">
@@ -116,7 +118,7 @@ export function SessionBar({
 										type="button"
 										className="session-tab-close"
 										disabled={busy}
-										aria-label={`Delete ${session.title}`}
+										aria-label={t.sessions.delete(session.title)}
 										onClick={() => {
 											setMenuOpen(false);
 											onDelete(session.id);

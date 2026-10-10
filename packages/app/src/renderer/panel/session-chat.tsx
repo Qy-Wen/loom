@@ -23,7 +23,8 @@ import { adoptMessageId, adoptUserEntryId, freshUserTurn, mergeChatMessages, toA
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
-import { InlineMessageBody, appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, paintInlineEditor, placeCaretAtStart, readInlineEditor, rememberComposerAsset } from "./inline-asset-text.tsx";
+import { useLocale } from "../locale.tsx";
+import { InlineMessageBody, appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, paintInlineEditor, placeCaretAtStart, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
 const StoredMessagesContext = createContext<Message[]>([]);
 const VisibleMessagesContext = createContext<Message[]>([]);
@@ -157,6 +158,7 @@ function SessionScrollView({
 	onScroll,
 	...props
 }: React.ComponentProps<typeof CopilotChat.View.ScrollView>): React.JSX.Element {
+	const { t } = useLocale();
 	const visible = useContext(VisibleMessagesContext);
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const pinned = useRef(true);
@@ -272,7 +274,7 @@ function SessionScrollView({
 						follow();
 					}}
 				>
-					Latest
+					{t.chat.latest}
 				</button>
 			) : null}
 		</div>
@@ -280,11 +282,12 @@ function SessionScrollView({
 }
 
 const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
+	const { t } = useLocale();
 	if (isChatErrorMessageId(props.message.id)) {
 		const text = typeof props.message.content === "string" ? props.message.content : "";
 		return (
 			<div className="chat-error" role="alert">
-				<div className="chat-error-label">Request failed</div>
+				<div className="chat-error-label">{t.chat.requestFailed}</div>
 				<p className="chat-error-body">{text}</p>
 			</div>
 		);
@@ -315,6 +318,8 @@ function InlineEdit({
 	onCancel: () => void;
 	onSend: (text: string) => void;
 }): React.JSX.Element {
+	const { t } = useLocale();
+	const chipLabels: ChipLabels = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
 	const openAsset = useOpenAsset();
 	const ref = useRef<HTMLTextAreaElement>(null);
 	const editorRef = useRef<HTMLDivElement>(null);
@@ -328,7 +333,7 @@ function InlineEdit({
 		if (chips) {
 			const editor = editorRef.current;
 			if (!editor) return;
-			paintInlineEditor(editor, text, assets, openAsset);
+			paintInlineEditor(editor, text, assets, openAsset, chipLabels);
 			editor.focus();
 			return;
 		}
@@ -354,7 +359,7 @@ function InlineEdit({
 						className="session-inline-input"
 						role="textbox"
 						aria-multiline="true"
-						aria-label="Edit question"
+						aria-label={t.chat.editQuestion}
 						contentEditable={!busy}
 						onInput={(event) => setDraft(readInlineEditor(event.currentTarget))}
 						onKeyDown={(event) => {
@@ -374,7 +379,7 @@ function InlineEdit({
 					ref={ref}
 					value={draft}
 					disabled={busy}
-					aria-label="Edit question"
+					aria-label={t.chat.editQuestion}
 					rows={1}
 					onChange={(event) => {
 						setDraft(event.target.value);
@@ -394,13 +399,13 @@ function InlineEdit({
 				/>
 				)}
 				<div className="session-inline-edit-actions">
-					<button type="button" className="session-inline-edit-cancel" aria-label="Cancel" title="Cancel" disabled={busy} onClick={onCancel}>
+					<button type="button" className="session-inline-edit-cancel" aria-label={t.common.cancel} title={t.common.cancel} disabled={busy} onClick={onCancel}>
 						<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 							<path d="M18 6 6 18" />
 							<path d="m6 6 12 12" />
 						</svg>
 					</button>
-					<button type="button" className="session-inline-edit-send" aria-label="Send" title="Send" disabled={busy || !editableText(draft)} onClick={send}>
+					<button type="button" className="session-inline-edit-send" aria-label={t.chat.send} title={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
 						<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 							<path d="m5 12 7-7 7 7" />
 							<path d="M12 19V5" />
@@ -420,6 +425,7 @@ function messageAssets(entryId: string | undefined, transcript: readonly LoomTra
 }
 
 const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
+	const { t } = useLocale();
 	const branch = useContext(BranchContext);
 	const entryIds = useContext(EntryIdsContext);
 	const transcript = useContext(TranscriptContext);
@@ -456,7 +462,7 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 			) : undefined}
 			onEditMessage={canEdit ? () => branch!.edit(entryId!) : undefined}
 			additionalToolbarItems={canEdit ? (
-				<CopilotChatUserMessage.ToolbarButton title="Fork" onClick={() => branch!.fork(entryId!, text)}>
+				<CopilotChatUserMessage.ToolbarButton title={t.chat.fork} onClick={() => branch!.fork(entryId!, text)}>
 					<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 						<circle cx="12" cy="18" r="3" />
 						<circle cx="6" cy="6" r="3" />
@@ -481,6 +487,9 @@ const SessionMessageView = ((props: CopilotChatMessageViewProps) => {
 }) as typeof CopilotChatMessageView;
 
 const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWithoutRef<typeof CopilotChatInput.TextArea>>(function ComposerTextArea(props, ref) {
+	const { t } = useLocale();
+	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
+	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
 	const actions = useContext(ComposerActionsContext);
 	const editorRef = useRef<HTMLDivElement>(null);
 	const composing = useRef(false);
@@ -502,7 +511,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 					const current = readInlineEditor(node);
 					if (current === next || composerLayoutText(current) === next) return;
 					if (!next && current) return;
-					paintInlineEditor(node, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId));
+					paintInlineEditor(node, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId), chipLabels.current);
 				},
 			});
 		}
@@ -516,7 +525,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 		const current = readInlineEditor(editor);
 		if (current === next) return;
 		if (next && composerLayoutText(current) === next) return;
-		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId));
+		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId), chipLabels.current);
 	}, [props.value]);
 	useEffect(() => {
 		const editor = editorRef.current;
@@ -531,7 +540,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 			role="textbox"
 			aria-multiline="true"
 			data-testid="copilot-chat-textarea"
-			data-placeholder="Type a message..."
+			data-placeholder={t.chat.placeholder}
 			data-empty={String(props.value ?? "") ? "false" : "true"}
 			contentEditable
 			suppressContentEditableWarning
@@ -583,6 +592,7 @@ const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentPropsWit
 });
 
 function AddFilesButton({ className, disabled }: { className?: string; disabled?: boolean; onAddFile?: () => void; toolsMenu?: unknown }): React.JSX.Element {
+	const { t } = useLocale();
 	const actions = useContext(ComposerActionsContext);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const [open, setOpen] = useState(false);
@@ -609,10 +619,10 @@ function AddFilesButton({ className, disabled }: { className?: string; disabled?
 				type="button"
 				className={className ? `session-add-files ${className}` : "session-add-files"}
 				disabled={disabled}
-				aria-label="Add"
+				aria-label={t.chat.add}
 				aria-expanded={open}
 				aria-haspopup="menu"
-				title="Add"
+				title={t.chat.add}
 				onClick={(event) => {
 					event.preventDefault();
 					event.stopPropagation();
@@ -632,7 +642,7 @@ function AddFilesButton({ className, disabled }: { className?: string; disabled?
 							setOpen(false);
 							actions?.pickLibrary();
 						}}
-					>Library file</button>
+					>{t.chat.libraryFile}</button>
 					<button
 						type="button"
 						role="menuitem"
@@ -640,7 +650,7 @@ function AddFilesButton({ className, disabled }: { className?: string; disabled?
 							setOpen(false);
 							actions?.pickExternal();
 						}}
-					>External file</button>
+					>{t.chat.externalFile}</button>
 				</div>
 			)}
 		</div>
@@ -663,6 +673,9 @@ function ImageSendButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): 
 
 /** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an image restores Send. */
 const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props }: CopilotChatInputProps) => {
+	const { t } = useLocale();
+	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
+	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
 	const threadId = useContext(ThreadIdContext);
 	const visible = useContext(VisibleMessagesContext);
 	const branch = useContext(BranchContext);
@@ -719,7 +732,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				try {
 					await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
 				} catch (cause) {
-					setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+					setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 				}
 			}
 			onSubmitMessage?.(contentWithPlacedAssets(text, chips));
@@ -752,7 +765,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			try {
 				rememberComposerAsset(composerAttach);
 				setAssets((current) => current.some((item) => item.assetId === assetId) ? current : [...current, composerAttach]);
-				const chip = appendChip(editor, composerAttach, openAsset);
+				const chip = appendChip(editor, composerAttach, openAsset, chipLabels.current);
 				onChange?.(composerLayoutText(readInlineEditor(editor)));
 				const activate = () => {
 					const current = editorRef.current;
@@ -768,7 +781,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 					window.setTimeout(activate, 50);
 				});
 			} catch (cause) {
-				setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 			}
 			onComposerAttachApplied();
 		};
@@ -812,11 +825,11 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			const assetPayload = assetsRef.current;
 			if (!text && assetPayload.length === 0) return;
 			if (assetPayload.length > 0 && typeof window.loom.stageComposerAssets !== "function") {
-				setImageError(threadId ? "Restart the app to send attachments." : "Open a session before attaching a file.");
+				setImageError(threadId ? t.chat.restartToSend : t.chat.openSessionFirst);
 				return;
 			}
 			if (!threadId && assetPayload.length > 0) {
-				setImageError("Open a session before attaching a file.");
+				setImageError(t.chat.openSessionFirst);
 				return;
 			}
 			try {
@@ -824,7 +837,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 					await window.loom.stageComposerAssets(threadId, assetPayload.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
 				}
 			} catch (cause) {
-				setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 				if (text) onChange?.(text);
 				return;
 			}
@@ -852,7 +865,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 
 	async function importDroppedFiles(files: File[]): Promise<void> {
 		if (typeof window.loom.importComposerFiles !== "function" || typeof window.loom.pathForFile !== "function") {
-			setImageError("Restart the app to attach a file.");
+			setImageError(t.chat.restartToAttach);
 			return;
 		}
 		const paths: string[] = [];
@@ -865,7 +878,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			}
 		}
 		if (paths.length === 0) {
-			setImageError("Could not read that file.");
+			setImageError(t.chat.readFailed);
 			return;
 		}
 		try {
@@ -878,7 +891,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
@@ -889,7 +902,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		const editor = editorRef.current;
 		for (const asset of parsed) {
 			rememberComposerAsset(asset);
-			if (editor) appendChip(editor, asset, openAsset);
+			if (editor) appendChip(editor, asset, openAsset, chipLabels.current);
 		}
 		setAssets((current) => {
 			const next = [...current];
@@ -915,7 +928,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 
 	async function pickLibraryFiles(): Promise<void> {
 		if (typeof window.loom.pickComposerLibraryAssets !== "function") {
-			setImageError("Restart the app to attach a library file.");
+			setImageError(t.chat.restartToAttachLibrary);
 			return;
 		}
 		try {
@@ -928,13 +941,13 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
 	async function pickExternalFiles(): Promise<void> {
 		if (typeof window.loom.pickComposerExternalFiles !== "function") {
-			setImageError("Restart the app to attach a file.");
+			setImageError(t.chat.restartToAttach);
 			return;
 		}
 		try {
@@ -947,7 +960,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
@@ -959,11 +972,11 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			rememberComposerAsset(asset);
 			setAssets((current) => current.some((item) => item.assetId === asset.assetId) ? current : [...current, asset]);
 			const editor = editorRef.current;
-			const placed = editor ? insertChipAtPoint(editor, asset, x, y, openAsset) : false;
+			const placed = editor ? insertChipAtPoint(editor, asset, x, y, openAsset, chipLabels.current) : false;
 			if (placed && editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
 			else onChange?.(`${valueRef.current ?? ""} `);
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : "Could not attach that file.");
+			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
@@ -1013,7 +1026,7 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 						const dropped = readAssetDrag(event.dataTransfer);
 						if (dropped) placeAsset(dropped, event.clientX, event.clientY);
 					} catch {
-						setImageError("Could not attach that file.");
+						setImageError(t.chat.attachFailed);
 					}
 					return;
 				}
@@ -1026,8 +1039,8 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
 			{imageError && <div className="session-branch-note session-branch-error">{imageError}</div>}
 			{queued.length > 0 && (
-				<section className="session-follow-up" aria-label="Queued">
-					<div className="session-follow-up-label">Queued</div>
+				<section className="session-follow-up" aria-label={t.chat.queued}>
+					<div className="session-follow-up-label">{t.chat.queued}</div>
 					<ol>
 						{queued.map((item, index) => (
 							<li key={`${index}:${item.label ?? item.text}`}>{item.label || item.text}</li>
@@ -1050,8 +1063,8 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 					showDisclaimer={false}
 					onChange={onChange}
 					toolsMenu={[
-						{ label: "Add library file", action: () => { void pickLibraryFiles(); } },
-						{ label: "Add external file", action: () => { void pickExternalFiles(); } },
+						{ label: t.chat.addLibraryFile, action: () => { void pickLibraryFiles(); } },
+						{ label: t.chat.addExternalFile, action: () => { void pickExternalFiles(); } },
 					]}
 					addMenuButton={AddFilesButton}
 					textArea={ComposerTextArea}
@@ -1107,6 +1120,7 @@ function formatTokens(tokens: number): string {
 
 /** Context usage as a ring. The percent and window appear only after a click. */
 function ContextIndicator({ context }: { context: HarnessContextUsage | null }): React.JSX.Element | null {
+	const { t } = useLocale();
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
@@ -1137,7 +1151,7 @@ function ContextIndicator({ context }: { context: HarnessContextUsage | null }):
 			<button
 				type="button"
 				className="session-context-ring"
-				aria-label="Context usage"
+				aria-label={t.chat.contextUsage}
 				aria-expanded={open}
 				onClick={() => setOpen((current) => !current)}
 			>
@@ -1186,6 +1200,7 @@ export function SessionChat({
 	onSessionRecord: (record: HarnessSessionRecord) => void;
 	onForked: (record: HarnessSessionRecord, draft: string) => void;
 }): React.JSX.Element {
+	const { t } = useLocale();
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -1307,7 +1322,7 @@ export function SessionChat({
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
 			<ContextUsageContext.Provider value={context}>
 			<div className="session-chat-shell">
-				<CopilotChat welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
+				<CopilotChat welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>
 			</ContextUsageContext.Provider>
 			</ComposerAttachAppliedContext.Provider>

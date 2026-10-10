@@ -1,4 +1,5 @@
 import type { AgentStatsView } from "../../shared/agent-stats.ts";
+import { useLocale } from "../locale.tsx";
 
 function pct(value: number): string {
 	return `${(value * 100).toFixed(1)}%`;
@@ -15,45 +16,44 @@ interface SettingsStatsProps {
 }
 
 export function SettingsStats({ stats, resetting, onReset }: SettingsStatsProps): React.JSX.Element {
+	const { t } = useLocale();
 	return (
 		<div className="settings-form">
 			<div className="settings-stat-hero">
-				<span>Prompt-cache hit rate</span>
+				<span>{t.settings.hitRate}</span>
 				<strong>{stats.promptTokens === 0 ? "—" : pct(stats.cacheHit)}</strong>
-				<p>cacheRead / (input + cacheRead + cacheWrite) from Chat usage, same as the eval.</p>
+				<p>{t.settings.hitNote}</p>
 			</div>
 			<dl className="settings-stat-grid">
 				<div>
-					<dt>Prompt tokens</dt>
+					<dt>{t.settings.promptTokens}</dt>
 					<dd>{count(stats.promptTokens)}</dd>
 				</div>
 				<div>
-					<dt>Cache read</dt>
+					<dt>{t.settings.cacheRead}</dt>
 					<dd>{count(stats.cacheRead)}</dd>
 				</div>
 				<div>
-					<dt>Uncached input</dt>
+					<dt>{t.settings.uncached}</dt>
 					<dd>{count(stats.input)}</dd>
 				</div>
 				<div>
-					<dt>Cache write</dt>
+					<dt>{t.settings.cacheWrite}</dt>
 					<dd>{count(stats.cacheWrite)}</dd>
 				</div>
 				<div>
-					<dt>Output</dt>
+					<dt>{t.settings.output}</dt>
 					<dd>{count(stats.output)}</dd>
 				</div>
 				<div>
-					<dt>Usage turns</dt>
+					<dt>{t.settings.turns}</dt>
 					<dd>{count(stats.turns)}</dd>
 				</div>
 			</dl>
-			<p className="settings-lead">
-				These are the same totals pi keeps on SessionStats.usage. Loom does not price tokens, so cost is omitted. Reasoning tokens are not reported by the current Chat slot.
-			</p>
+			<p className="settings-lead">{t.settings.statsNote}</p>
 			<div className="settings-actions">
 				<button type="button" onClick={onReset} disabled={resetting || stats.turns === 0}>
-					{resetting ? "Resetting…" : "Reset stats"}
+					{resetting ? t.settings.resetting : t.settings.reset}
 				</button>
 			</div>
 		</div>

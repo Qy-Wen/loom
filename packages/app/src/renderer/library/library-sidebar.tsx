@@ -9,6 +9,7 @@ import {
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
+import { useLocale } from "../locale.tsx";
 import { FileTree, type FileDisplay } from "./file-tree.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
@@ -111,6 +112,7 @@ export function LibrarySidebar({
 	onOpenSettings,
 	onOpenTraces,
 }: LibrarySidebarProps): React.JSX.Element {
+	const { t } = useLocale();
 	const empty = library.assets.length === 0 && library.folders.length === 0;
 	const [fileDisplay, setFileDisplay] = useState<FileDisplay>(() => (
 		localStorage.getItem(FILE_DISPLAY_KEY) === "icons" ? "icons" : "list"
@@ -179,15 +181,15 @@ export function LibrarySidebar({
 				<div>
 					<div className="section-label">Loom</div>
 					<div className="library-name" title={library.rootPath ?? undefined}>
-						{library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? "No folder open"}
+						{library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder}
 					</div>
 				</div>
 				<button className="open-button" type="button" onClick={onOpenLibrary} disabled={opening}>
-					{opening ? "…" : "Open"}
+					{opening ? "…" : t.common.open}
 				</button>
 			</div>
 
-			<nav className="library-views" aria-label="Workspace views">
+			<nav className="library-views" aria-label={t.library.views}>
 				{(["library", "table", "graph"] as const).map((view) => (
 					<button
 						key={view}
@@ -196,26 +198,26 @@ export function LibrarySidebar({
 						aria-pressed={workbenchView === view}
 						onClick={() => onWorkbenchView(view)}
 					>
-						{view === "library" ? "Library" : view === "table" ? "Table" : "Graph"}
+						{t.library[view]}
 					</button>
 				))}
 			</nav>
 
 			<div className="file-heading">
 				<span className="file-heading-title">
-					<span>Files</span>
+					<span>{t.library.files}</span>
 					<span>{queryActive ? visible.assets.length : library.assets.length}</span>
 				</span>
 				<span className="file-heading-tools">
 					{library.rootPath ? (
 						<>
-						<span className="file-display" role="group" aria-label="File display">
+						<span className="file-display" role="group" aria-label={t.library.fileDisplay}>
 							<button
 								type="button"
 								className={fileDisplay === "list" ? "active" : ""}
-								aria-label="List"
+								aria-label={t.library.list}
 								aria-pressed={fileDisplay === "list"}
-								title="List"
+								title={t.library.list}
 								onClick={() => setFileDisplay("list")}
 							>
 								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -225,9 +227,9 @@ export function LibrarySidebar({
 							<button
 								type="button"
 								className={fileDisplay === "icons" ? "active" : ""}
-								aria-label="Icons"
+								aria-label={t.library.icons}
 								aria-pressed={fileDisplay === "icons"}
-								title="Icons"
+								title={t.library.icons}
 								onClick={() => setFileDisplay("icons")}
 							>
 								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -241,9 +243,9 @@ export function LibrarySidebar({
 						<button
 							type="button"
 							className={searchOpen ? "active" : ""}
-							aria-label="Search files"
+							aria-label={t.common.searchFiles}
 							aria-pressed={searchOpen}
-							title="Search files"
+							title={t.common.searchFiles}
 							onClick={() => {
 								setSearchOpen((open) => {
 									if (open) setQuery("");
@@ -265,7 +267,7 @@ export function LibrarySidebar({
 					<input
 						ref={searchRef}
 						type="search"
-						placeholder="Filter files"
+						placeholder={t.library.filterFiles}
 						value={query}
 						onChange={(event) => setQuery(event.target.value)}
 						onKeyDown={(event) => {
@@ -278,7 +280,7 @@ export function LibrarySidebar({
 				</div>
 			) : null}
 			{!library.rootPath ? (
-				<div className="empty library-placeholder">Open a folder to start a local asset library.</div>
+				<div className="empty library-placeholder">{t.library.openFolderHint}</div>
 			) : (
 				<div
 					className="asset-list"
@@ -305,7 +307,7 @@ export function LibrarySidebar({
 								onLibraryContextMenu();
 							}}
 						>
-							This folder is empty.
+							{t.library.emptyFolder}
 						</div>
 					) : (
 						<>
@@ -324,7 +326,7 @@ export function LibrarySidebar({
 												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
 											</svg>
 										</span>
-										Favorites
+										{t.library.favorites}
 									</span>
 								</button>
 								{queryActive || !favoritesCollapsed ? favoriteAssets.map((asset) => (
@@ -340,7 +342,7 @@ export function LibrarySidebar({
 									>
 										<AssetThumbnail asset={asset} />
 										<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
-										<span className="asset-favorite" title="Favorite">
+										<span className="asset-favorite" title={t.common.favorite}>
 											<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
 												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
 											</svg>
@@ -365,7 +367,7 @@ export function LibrarySidebar({
 												<circle cx="10.4" cy="5.2" r="0.8" fill="currentColor" stroke="none" />
 											</svg>
 										</span>
-										Tags
+										{t.library.tags}
 									</span>
 								</button>
 								{queryActive || !tagsCollapsed ? visibleTags.map(({ tag, files }) => {
@@ -376,7 +378,7 @@ export function LibrarySidebar({
 												<button
 													className={`folder-chevron${open ? " expanded" : ""}`}
 													type="button"
-													aria-label={open ? "Collapse tag" : "Expand tag"}
+													aria-label={open ? t.library.collapseTag : t.library.expandTag}
 													onClick={() => toggleTag(tag.tagId)}
 												>
 													›
@@ -404,7 +406,7 @@ export function LibrarySidebar({
 													<AssetThumbnail asset={asset} />
 													<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
 													{library.favoriteAssetIds.includes(asset.assetId) ? (
-														<span className="asset-favorite" title="Favorite">
+														<span className="asset-favorite" title={t.common.favorite}>
 															<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
 																<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
 															</svg>
@@ -418,7 +420,7 @@ export function LibrarySidebar({
 							</div>
 						) : null}
 						{queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
-							<div className="empty">No matching files.</div>
+							<div className="empty">{t.common.noMatchingFiles}</div>
 						) : (
 						<FileTree
 							library={visible}
@@ -447,13 +449,13 @@ export function LibrarySidebar({
 			)}
 			<div className="library-footer">
 				{onOpenTraces ? (
-					<button type="button" aria-label="Traces" title="Traces" onClick={onOpenTraces}>
+					<button type="button" aria-label={t.library.traces} title={t.library.traces} onClick={onOpenTraces}>
 						<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
 							<path d="M2 12.5h12M3.5 10.5 6.2 7l2.2 2.2 3.6-4.7" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" />
 						</svg>
 					</button>
 				) : null}
-				<button type="button" aria-label="Settings" title="Settings" onClick={onOpenSettings}>
+				<button type="button" aria-label={t.common.settings} title={t.common.settings} onClick={onOpenSettings}>
 					<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
 						<circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" strokeWidth="2" />
 						<path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />

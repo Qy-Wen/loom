@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { useLocale } from "../locale.tsx";
 import { CopyableError } from "./copyable-error.tsx";
 
 const TOAST_MS = 5000;
@@ -17,6 +18,7 @@ interface ErrorToastProps {
 }
 
 export function ErrorToast({ text, onDismiss }: ErrorToastProps): React.JSX.Element {
+	const { t } = useLocale();
 	const onDismissRef = useRef(onDismiss);
 	onDismissRef.current = onDismiss;
 
@@ -28,7 +30,7 @@ export function ErrorToast({ text, onDismiss }: ErrorToastProps): React.JSX.Elem
 	return (
 		<div className="error-toast" role="status">
 			<CopyableError text={toastMessage(text)} />
-			<button type="button" className="error-toast-dismiss" aria-label="Dismiss" onClick={onDismiss}>×</button>
+			<button type="button" className="error-toast-dismiss" aria-label={t.app.dismiss} onClick={onDismiss}>×</button>
 		</div>
 	);
 }

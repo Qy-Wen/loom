@@ -58,7 +58,7 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 ## 存储
 
 - 落在应用用户数据目录，不进 `<library>/.loom/`。拷贝素材库时不能把 API key 一起拷走。
-- 上次打开的素材库路径记在应用用户数据 `last-library.json`。启动时目录还在就自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
+- 上次打开的素材库路径记在应用用户数据 `last-library.json`。通用设置允许时，启动会在目录还在的情况下自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
 - `<library>/.loom/config.json` 只放库级偏好。
 - 密钥留在应用用户数据，不进素材库。设置页默认掩码（`••••`），旁边眼睛可显示明文。以后可以再进系统钥匙串。
 - Chat 和 Embedding 一样由用户配置。Chat 槽位为空时，Main 可以从 `.env`（`DEEPSEEK_API_KEY` 和 DeepSeek 的 `baseUrl`）预填一次，方便现有开发环境启动。用户保存 Chat 之后，只认这个槽位。
@@ -67,10 +67,11 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 
 ## 界面
 
-- 一个设置窗口，四个 tab：**Models**、**MCP**、**Agent**、**Stats**。
-- Models：五个槽位在同一页。Rerank / VLM / Audio 可以空着。开关负责 ping；**Save** 同时写入 Models、MCP 和 Agent，然后关掉设置。
+- 一个设置窗口，五个 tab：**通用**、**模型**、**MCP**、**Agent**、**统计**。
+- 通用：界面语言（跟随系统、English、简体中文），以及启动时是否重新打开上次的素材库。语言会切换应用界面，包括右键菜单。追踪窗口仍是英文。改语言会立即预览，取消则回到已保存的语言。存在应用用户数据 `general.json`。重新打开默认开启，和之前的启动行为一致。
+- Models：五个槽位在同一页。Rerank / VLM / Audio 可以空着。开关负责 ping；**Save** 同时写入通用、Models、MCP 和 Agent，然后关掉设置。
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [MEDIA.md](./RAG/MEDIA.zh-CN.md)。改 Audio 的 `model` 会使已有音频说明作废。
-- MCP：加减 server。表单按 Cursor `mcp.json` 来：名字，然后本地填 `command` + `args`，远程填 `url`。Env / headers / cwd 放在 Advanced。开关连接或断开那一台。**Save** 同时写入 Models、MCP 和 Agent。启动时只连已开启的 server。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
-- Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。大约 40000 字，超出则 Save 拒绝。检索专职和生成专职拿不到这段。
+- MCP：加减 server。表单按 Cursor `mcp.json` 来：名字，然后本地填 `command` + `args`，远程填 `url`。Env / headers / cwd 放在 Advanced。开关连接或断开那一台。**Save** 同时写入通用、Models、MCP 和 Agent。启动时只连已开启的 server。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
+- Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。大约 40000 字，超出则 Save 拒绝。检索专职和生成专职拿不到这段。**Save** 同时写入通用、Models、MCP 和 Agent。
 - Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；当前 Chat 槽位没有标价。
 - `get_settings` 和 `update_settings` 读取并修改 Models、MCP、Agent。读取不返回 API key，也不返回 MCP 的 env / headers。写进 `update_settings` 的钥匙会保存，同时留在那条对话里。Basic 和 Standard 在写入前要确认。设置窗口开着时会重新加载。Chat 和 Instructions 从下一条消息起生效。权限档位和用量不走这两个工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。

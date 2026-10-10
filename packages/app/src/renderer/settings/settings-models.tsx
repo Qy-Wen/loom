@@ -1,34 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSlotId } from "../../shared/model-settings.ts";
+import { useLocale } from "../locale.tsx";
 import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
-
-const SLOT_LABELS: Record<ModelSlotId, { title: string; hint: string; keyHint: string }> = {
-	chat: {
-		title: "Chat",
-		hint: "Agent loop. OpenAI-compatible POST /v1/chat/completions.",
-		keyHint: "needed for llm chat",
-	},
-	embedding: {
-		title: "Text embedding",
-		hint: "Text RAG. OpenAI-compatible POST /v1/embeddings.",
-		keyHint: "optional",
-	},
-	rerank: {
-		title: "Rerank",
-		hint: "Reorder Hybrid Search hits after RRF. Qianfan POST /v2/rerank, or Bailian qwen3-rerank (Chat URL is rewritten). Optional.",
-		keyHint: "optional",
-	},
-	vlm: {
-		title: "VLM",
-		hint: "Image and video captions. OpenAI-compatible POST /v1/chat/completions; video prefers a native video part, otherwise stills as image_url. Slot is optional.",
-		keyHint: "optional",
-	},
-	audio: {
-		title: "Audio",
-		hint: "Audio file-level write-up. Hosted Omni: DashScope compatible-mode URL, API key, and a Qwen-Omni model. Not LM Studio and not Qianfan. Optional.",
-		keyHint: "optional",
-	},
-};
 
 const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
 	chat: true,
@@ -164,24 +137,25 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 		void runProbe(id, next);
 	}
 
+	const { t } = useLocale();
 	return (
 		<div className="settings-form settings-form-docked">
 			<div className="settings-form-scroll">
 			{MODEL_SLOTS.map((id) => (
-				<fieldset key={id} className="settings-slot" aria-label={SLOT_LABELS[id].title}>
+				<fieldset key={id} className="settings-slot" aria-label={t.settings.slots[id].title}>
 					<div className="settings-slot-head">
-						<span className="settings-slot-title">{SLOT_LABELS[id].title}</span>
+						<span className="settings-slot-title">{t.settings.slots[id].title}</span>
 						<SettingsSwitch
 							checked={draft[id].enabled}
-							label={`Enable ${SLOT_LABELS[id].title}`}
+							label={t.settings.enableSlot(t.settings.slots[id].title)}
 							status={probes[id].state}
 							error={probes[id].error}
 							onChange={(enabled) => patchEnabled(id, enabled)}
 						/>
 					</div>
-					<p>{SLOT_LABELS[id].hint}</p>
+					<p>{t.settings.slots[id].hint}</p>
 					<label>
-						Base URL
+						{t.settings.baseUrl}
 						<input
 							value={draft[id].baseUrl}
 							onChange={(event) => patchField(id, "baseUrl", event.target.value)}
@@ -190,7 +164,7 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 						/>
 					</label>
 					<label>
-						Model
+						{t.settings.model}
 						<input
 							value={draft[id].model}
 							onChange={(event) => patchField(id, "model", event.target.value)}
@@ -199,20 +173,20 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 						/>
 					</label>
 					<div className="settings-secret">
-						<span>API key</span>
+						<span>{t.settings.apiKey}</span>
 						<div className="settings-secret-row">
 							<input
 								type={hidden[id] ? "password" : "text"}
 								value={draft[id].apiKey ?? ""}
 								onChange={(event) => patchField(id, "apiKey", event.target.value)}
-								placeholder={SLOT_LABELS[id].keyHint}
+								placeholder={t.settings.slots[id].keyHint}
 								autoComplete="off"
-								aria-label={`${SLOT_LABELS[id].title} API key`}
+								aria-label={t.settings.apiKeyOf(t.settings.slots[id].title)}
 							/>
 							<button
 								className="settings-reveal"
 								type="button"
-								aria-label={hidden[id] ? `Show ${SLOT_LABELS[id].title} API key` : `Hide ${SLOT_LABELS[id].title} API key`}
+								aria-label={hidden[id] ? t.settings.showKey(t.settings.slots[id].title) : t.settings.hideKey(t.settings.slots[id].title)}
 								onClick={() => setHidden((current) => ({ ...current, [id]: !current[id] }))}
 							>
 								<EyeIcon open={!hidden[id]} />
@@ -221,22 +195,22 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 					</div>
 					{id === "chat" && (
 						<label>
-							Context window
+							{t.settings.contextWindow}
 							<input
 								type="text"
 								inputMode="numeric"
 								value={draft.chat.contextWindow ?? ""}
 								onChange={(event) => patchContextWindow(event.target.value)}
-								placeholder="128000 (default)"
+								placeholder={t.settings.contextPlaceholder}
 								autoComplete="off"
 							/>
 						</label>
 					)}
 					{probes[id].state === "ok" && (
-						<p className="settings-status-ok">Connected</p>
+						<p className="settings-status-ok">{t.settings.connected}</p>
 					)}
 					{probes[id].state === "checking" && (
-						<p className="settings-path">Checking…</p>
+						<p className="settings-path">{t.settings.checking}</p>
 					)}
 				</fieldset>
 			))}

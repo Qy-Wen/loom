@@ -11,6 +11,7 @@ import {
 } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
+import { useLocale } from "../locale.tsx";
 
 interface FolderNode {
 	name: string;
@@ -287,6 +288,7 @@ function FolderTreeRow({
 	dropFolder,
 	...rowProps
 }: FolderTreeRowProps): React.JSX.Element {
+	const { t } = useLocale();
 	const [name, setName] = useState(folder.name);
 	const cancelled = useRef(false);
 
@@ -332,7 +334,7 @@ function FolderTreeRow({
 				<button
 					className={`folder-chevron${collapsed ? "" : " expanded"}`}
 					type="button"
-					aria-label={collapsed ? "Expand folder" : "Collapse folder"}
+					aria-label={collapsed ? t.library.expandFolder : t.library.collapseFolder}
 					onClick={openFolder}
 				>
 					›
@@ -544,8 +546,9 @@ export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" 
 }
 
 function FavoriteMark(): React.JSX.Element {
+	const { t } = useLocale();
 	return (
-		<span className="asset-favorite" title="Favorite">
+		<span className="asset-favorite" title={t.common.favorite}>
 			<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
 				<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
 			</svg>
