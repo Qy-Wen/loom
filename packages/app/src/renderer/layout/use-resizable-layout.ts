@@ -12,6 +12,9 @@ const MIN_LIBRARY_WIDTH = 180;
 const MIN_WORKBENCH_WIDTH = 240;
 const MIN_SIDE_WIDTH = 200;
 const HANDLE_WIDTH = 10;
+const COLLAPSED_LIBRARY_WIDTH = 36;
+const COLLAPSED_LIBRARY_GAP = 5;
+const LIBRARY_COLLAPSED_KEY = "loom.layout.libraryCollapsed";
 
 type ResizeSide = "library" | "side" | "beside";
 const BESIDE_KEY = "loom.layout.besideWidth";
@@ -21,6 +24,8 @@ const DEFAULT_BESIDE_WIDTH = 300;
 export function useResizableLayout(): {
 	shellRef: React.RefObject<HTMLDivElement | null>;
 	shellStyle: CSSProperties;
+	libraryCollapsed: boolean;
+	toggleLibraryCollapsed: () => void;
 	beginResize: (side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>) => void;
 	resetLibraryWidth: () => void;
 	resetSideWidth: () => void;
@@ -35,7 +40,9 @@ export function useResizableLayout(): {
 	const [besideWidth, setBesideWidth] = useState(() =>
 		Number(localStorage.getItem(BESIDE_KEY)) || DEFAULT_BESIDE_WIDTH,
 	);
+	const [libraryCollapsed, setLibraryCollapsed] = useState(() => localStorage.getItem(LIBRARY_COLLAPSED_KEY) === "1");
 	const shellRef = useRef<HTMLDivElement>(null);
+	const libraryTaken = libraryCollapsed ? COLLAPSED_LIBRARY_WIDTH + COLLAPSED_LIBRARY_GAP : libraryWidth + HANDLE_WIDTH;
 
 	useEffect(() => {
 		localStorage.setItem("loom.layout.libraryWidth", String(libraryWidth));
@@ -48,6 +55,10 @@ export function useResizableLayout(): {
 	useEffect(() => {
 		localStorage.setItem(BESIDE_KEY, String(besideWidth));
 	}, [besideWidth]);
+
+	useEffect(() => {
+		localStorage.setItem(LIBRARY_COLLAPSED_KEY, libraryCollapsed ? "1" : "0");
+	}, [libraryCollapsed]);
 
 	function beginResize(side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>): void {
 		if (event.button !== 0 || !shellRef.current) return;
@@ -64,11 +75,11 @@ export function useResizableLayout(): {
 				setLibraryWidth(clampColumn(moveEvent.clientX - bounds.left, room, MIN_LIBRARY_WIDTH, 360));
 			} else if (side === "beside") {
 				const rightInset = sideOpen ? sideWidth + HANDLE_WIDTH : 0;
-				const room = bounds.width - libraryWidth - rightInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2;
+				const room = bounds.width - libraryTaken - rightInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
 				setBesideWidth(clampColumn(bounds.right - rightInset - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
 			} else {
 				const leftInset = besideOpen ? besideWidth + HANDLE_WIDTH : 0;
-				const room = bounds.width - libraryWidth - leftInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2;
+				const room = bounds.width - libraryTaken - leftInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
 				setSideWidth(clampColumn(bounds.right - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
 			}
 		};
@@ -86,10 +97,13 @@ export function useResizableLayout(): {
 	return {
 		shellRef,
 		shellStyle: {
-			"--library-width": `${libraryWidth}px`,
+			"--library-width": `${libraryCollapsed ? COLLAPSED_LIBRARY_WIDTH : libraryWidth}px`,
+			"--library-gap": libraryCollapsed ? `${COLLAPSED_LIBRARY_GAP}px` : `${HANDLE_WIDTH}px`,
 			"--side-width": `${sideWidth}px`,
 			"--beside-width": `${besideWidth}px`,
 		} as CSSProperties,
+		libraryCollapsed,
+		toggleLibraryCollapsed: () => setLibraryCollapsed((collapsed) => !collapsed),
 		beginResize,
 		resetLibraryWidth: () => setLibraryWidth(DEFAULT_LIBRARY_WIDTH),
 		resetSideWidth: () => setSideWidth(DEFAULT_SIDE_WIDTH),

@@ -5,7 +5,7 @@
 	--window-corner: 16px;
 	display: grid;
 	grid-template-columns:
-		var(--library-width) 10px
+		var(--library-width) var(--library-gap, 10px)
 		minmax(240px, 1fr) 10px
 		var(--side-width);
 	flex: 1;
@@ -15,7 +15,7 @@
 
 .shell.side-hidden {
 	grid-template-columns:
-		var(--library-width) 10px
+		var(--library-width) var(--library-gap, 10px)
 		minmax(240px, 1fr);
 }
 
