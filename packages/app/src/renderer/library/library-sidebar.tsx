@@ -11,6 +11,7 @@ import {
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
 import { FileTree, type FileDisplay } from "./file-tree.tsx";
+import { visibleTreeRows, type TreeRow } from "./tree-nav.ts";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 
@@ -80,7 +81,7 @@ interface LibrarySidebarProps {
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
-	onKeyDown: (event: React.KeyboardEvent) => void;
+	onKeyDown: (event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean) => void;
 	onOpenSettings: () => void;
 	onOpenTraces?: () => void;
 }
@@ -128,6 +129,10 @@ export function LibrarySidebar({
 	const searchRef = useRef<HTMLInputElement>(null);
 	const visible = useMemo(() => filterLibrary(library, query), [library, query]);
 	const queryActive = query.trim().length > 0;
+	const treeRows = useMemo(
+		() => visibleTreeRows(visible.folders, visible.assets, queryActive ? new Set() : collapsedFolders),
+		[visible, queryActive, collapsedFolders],
+	);
 	const favoriteAssets = useMemo(() => {
 		const byId = new Map(library.assets.map((asset) => [asset.assetId, asset]));
 		const normalized = query.trim().toLowerCase();
@@ -176,7 +181,7 @@ export function LibrarySidebar({
 	}
 
 	return (
-		<aside className="library-sidebar" tabIndex={0} onKeyDown={onKeyDown}>
+		<aside className="library-sidebar" tabIndex={0} onKeyDown={(event) => onKeyDown(event, treeRows, !queryActive)}>
 			<div className="library-header">
 				<div>
 					<div className="section-label">Loom</div>

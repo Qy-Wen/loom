@@ -471,6 +471,17 @@ body {
 	background: #dde6f7;
 }
 
+.folder-main:focus,
+.folder-main:focus-visible,
+.folder-chevron:focus,
+.folder-chevron:focus-visible,
+.asset-row:focus,
+.asset-row:focus-visible,
+.asset-icon-button:focus,
+.asset-icon-button:focus-visible {
+	outline: none;
+}
+
 .folder-row.cut,
 .asset-row.cut {
 	opacity: 0.45;
