@@ -691,6 +691,16 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		setToolbar(slotRef.current?.querySelector<HTMLElement>('[data-testid="copilot-chat-input"] > [data-layout]') ?? null);
 	}, []);
 	const hasDraft = editableText(value ?? "") || assets.length > 0;
+	const draftRef = useRef(draft);
+	draftRef.current = draft;
+	const onChangeRef = useRef(onChange);
+	onChangeRef.current = onChange;
+	useEffect(() => {
+		setAssets([]);
+		setQueued([]);
+		setImageError(null);
+		if (!draftRef.current) onChangeRef.current?.("");
+	}, [threadId]);
 	const appliedDraft = useRef<string | null>(null);
 	const emptySeen = useRef(false);
 	const forceSeen = useRef<ForceView | null>(null);
@@ -1065,7 +1075,16 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	const stored = useContext(StoredMessagesContext);
 	const force = useContext(ForceContext);
-	const live = props.messages ?? [];
+	const threadId = useContext(ThreadIdContext);
+	const seenThread = useRef<string | null>(null);
+	const skippedLive = useRef<readonly Message[] | null>(null);
+	const rawLive = props.messages ?? [];
+	// The agent still holds the previous thread until a new run replaces it.
+	if (seenThread.current !== threadId) {
+		if (seenThread.current !== null) skippedLive.current = rawLive;
+		seenThread.current = threadId;
+	}
+	const live = rawLive === skippedLive.current ? [] : rawLive;
 	const messages = useMemo(
 		() => (force ? force.display : mergeChatMessages(stored, live)),
 		[force, stored, live],
@@ -1184,6 +1203,14 @@ export function SessionChat({
 	onRecord.current = onSessionRecord;
 	onFork.current = onForked;
 	const clearForce = useCallback(() => setForce(null), []);
+	const { agent } = useAgent({ updates: [] });
+	// CopilotChat reconnects when its thread prop changes and repaints the window.
+	useLayoutEffect(() => {
+		agent.threadId = threadId;
+	}, [agent, threadId]);
+	useEffect(() => {
+		agent.threadId = threadId;
+	}, [agent, threadId]);
 
 	useEffect(() => {
 		editingRef.current = null;
@@ -1261,7 +1288,7 @@ export function SessionChat({
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
 			<ContextUsageContext.Provider value={context}>
 			<div className="session-chat-shell">
-				<CopilotChat key={threadId} threadId={threadId} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
+				<CopilotChat welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: "Add" }} />
 			</div>
 			</ContextUsageContext.Provider>
 			</ComposerAttachAppliedContext.Provider>

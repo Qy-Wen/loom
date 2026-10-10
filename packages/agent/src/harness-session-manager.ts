@@ -151,6 +151,7 @@ export class HarnessSessionManager {
 	private readonly toolApprovals = new ToolApprovalQueue();
 	private closing = false;
 	private readonly listeners = new Set<(sessions: HarnessSessionSummary[]) => void>();
+	private readonly summaryCache = new Map<string, { modifiedAt: number; summary: HarnessSessionSummary }>();
 	private transition: Promise<void> = Promise.resolve();
 	private recovery: { cancelled: boolean; done: Promise<void> } | undefined;
 	private deferredRecovery = false;
@@ -443,14 +444,20 @@ export class HarnessSessionManager {
 	}
 
 	private async summary(metadata: JsonlSessionMetadata, session?: Session<JsonlSessionMetadata>): Promise<HarnessSessionSummary> {
-		if (!session) return this.withSession(metadata.id, (open) => this.summary(metadata, open.session));
-		return {
+		if (!session) {
+			const cached = this.summaryCache.get(metadata.id);
+			if (cached && cached.modifiedAt === metadata.modifiedAt) return cached.summary;
+			return this.withSession(metadata.id, (open) => this.summary(metadata, open.session));
+		}
+		const summary: HarnessSessionSummary = {
 			id: metadata.id,
 			title: (await session.getName(CONTEXT)) ?? DEFAULT_TITLE,
 			status: (await session.getValue(ARCHIVED, CONTEXT))?.value ?? "open",
 			createdAt: metadata.createdAt,
 			updatedAt: Math.max(metadata.createdAt, metadata.modifiedAt),
 		};
+		this.summaryCache.set(metadata.id, { modifiedAt: metadata.modifiedAt, summary });
+		return summary;
 	}
 
 	async listSessions(): Promise<HarnessSessionSummary[]> {
@@ -491,7 +498,7 @@ export class HarnessSessionManager {
 		}
 		this.handles.set(session.metadata.id, { session });
 		const record = await this.getSession(session.metadata.id);
-		await this.notify();
+		void this.notify();
 		return record;
 	}
 
@@ -581,24 +588,28 @@ export class HarnessSessionManager {
 	}
 
 	async setSessionName(id: string, title: string): Promise<void> {
+		this.summaryCache.delete(id);
 		await this.withSession(id, ({ session }) => session.setName(title, CONTEXT));
 		await this.notify();
 	}
 
 	async archiveSession(id: string): Promise<void> {
 		await this.abort(id);
+		this.summaryCache.delete(id);
 		await this.withSession(id, ({ session }) => session.setValue(ARCHIVED, "archived", CONTEXT));
 		await this.release(id);
 		await this.notify();
 	}
 
 	async unarchiveSession(id: string): Promise<void> {
+		this.summaryCache.delete(id);
 		await this.withSession(id, ({ session }) => session.setValue(ARCHIVED, "open", CONTEXT));
 		await this.notify();
 	}
 
 	async deleteSession(id: string): Promise<void> {
 		await this.abort(id);
+		this.summaryCache.delete(id);
 		await this.release(id);
 		await this.requireRepo().delete(await this.metadata(id), CONTEXT);
 		await this.notify();
