@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adoptMessageId, adoptUserEntryId, freshUserTurn, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
+import { adoptMessageId, adoptUserEntryId, freshUserTurn, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
 import { formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
@@ -73,6 +73,15 @@ test("toAgUiMessages shows user text and skips an image part", () => {
 	const merged = mergeChatMessages(messages, live);
 	assert.equal(merged[0]?.content, "look");
 	assert.equal(merged[1]?.content, "ok");
+});
+
+test("live messages from another session stay hidden", () => {
+	const previous = [{ id: "u-old", role: "user" as const, content: "old question" }];
+	const next = [{ id: "u-new", role: "user" as const, content: "new question" }];
+	assert.deepEqual(liveMessagesForSession("session-b", "session-a", previous, null), []);
+	assert.deepEqual(liveMessagesForSession("session-b", "session-b", previous, previous), []);
+	assert.deepEqual(liveMessagesForSession("session-b", "session-b", next, previous), next);
+	assert.deepEqual(liveMessagesForSession("", "session-b", next, null), []);
 });
 
 test("mergeChatMessages keeps stored history when live is empty and appends new turns", () => {
