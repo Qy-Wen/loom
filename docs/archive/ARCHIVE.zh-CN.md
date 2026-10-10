@@ -6,6 +6,12 @@
 
 ---
 
+## 可观测性
+
+一次提问的 run、turn、step、tool、模型请求记在内存里，走 Pi 现有的追踪。开发时单独开一个 Traces 窗口看瀑布图。点工具或模型 span 可看参数和返回值，或发给模型的消息和回复。每一边会截断。打包后没有这个窗口。累计 Stats 仍在设置里。
+
+---
+
 ## 进程沙箱
 
 `bash`、`ffmpeg`、`ffprobe` 默认跑在进程沙箱里。可写当前库和临时目录。用户目录不可读，再放开当前库、临时目录，以及 shell、ffmpeg、ffprobe 所在目录。这些进程没有网络。设置 → Agent 可以关掉。Full permission 直接跑，离开后恢复开关。`read`、`edit`、`write` 仍在进程内。生成任务走 MCP，不套这层。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
