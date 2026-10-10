@@ -187,6 +187,18 @@ function diverged(stored: Message[], live: Message[]): boolean {
 	return false;
 }
 
+/**
+ * A later user message that disk does not have yet. Reasoning ids from the
+ * previous turn often differ (`think-…` versus the saved entry), which looks
+ * like a branch and would otherwise hide this turn until the run finishes.
+ */
+function continuation(stored: Message[], live: Message[]): Message[] | null {
+	const storedUsers = new Set(stored.flatMap((message) => message.role === "user" && message.id ? [message.id] : []));
+	const start = live.findIndex((message) => message.role === "user" && !!message.id && !storedUsers.has(message.id));
+	if (start < 0) return null;
+	return [...stored, ...live.slice(start)];
+}
+
 /** Replace one on-screen message id with the entry id assigned when it was saved. */
 export function adoptMessageId(messages: readonly Message[], fromId: string, entryId: string): Message[] | null {
 	const index = messages.findIndex((message) => message.id === fromId);
@@ -238,7 +250,7 @@ export function mergeChatMessages(stored: Message[], live: Message[]): Message[]
 	if (stored.length === 0) return live;
 	if (live.length === 0) return stored;
 	if (fingerprint(stored[0]!) === fingerprint(live[0]!)) {
-		if (diverged(stored, live)) return stored;
+		if (diverged(stored, live)) return continuation(stored, live) ?? stored;
 		const chosen = live.length >= stored.length ? live : stored;
 		return chosen === live ? overlayComposerImages(stored, live) : stored;
 	}

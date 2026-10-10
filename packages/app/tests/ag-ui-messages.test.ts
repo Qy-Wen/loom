@@ -108,6 +108,21 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 		{ id: "a1", role: "assistant" as const, content: "reply" },
 	];
 	assert.equal(mergeChatMessages(branched, stale)[1]?.id, "a2");
+	const storedTurn = [
+		{ id: "user-1", role: "user" as const, content: "背一首李白的诗" },
+		{ id: "asst-1-thinking", role: "reasoning" as const, content: "think" },
+		{ id: "asst-1", role: "assistant" as const, content: "望庐山瀑布" },
+	];
+	const streamingTurn = [
+		{ id: "user-1", role: "user" as const, content: "背一首李白的诗" },
+		{ id: "think-1", role: "reasoning" as const, content: "think" },
+		{ id: "asst-1", role: "assistant" as const, content: "望庐山瀑布" },
+		{ id: "user-2", role: "user" as const, content: "创建一个pdf" },
+		{ id: "think-2", role: "reasoning" as const, content: "planning" },
+		{ id: "msg-2", role: "assistant" as const, content: "looking" },
+	];
+	const continued = mergeChatMessages(storedTurn, streamingTurn);
+	assert.deepEqual(continued.map((message) => message.id), ["user-1", "asst-1-thinking", "asst-1", "user-2", "think-2", "msg-2"]);
 	const reloaded = [{ id: "entry-1", role: "user" as const, content: "bicycles" }];
 	const streaming = [
 		{ id: "ck-1", role: "user" as const, content: "bicycles" },
