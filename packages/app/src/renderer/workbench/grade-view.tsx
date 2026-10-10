@@ -192,7 +192,7 @@ export function GradeView({
 					}}
 				/>
 			</div>
-			{panelHost && createPortal(<div className="grade-panel">
+			{panelHost && createPortal(<div className="grade-panel thin-scroll">
 				<GradeSlider label={t.grade.exposure} min={-3} max={3} step={0.01} value={grade.exposure} onChange={(exposure) => edit({ ...grade, exposure })} />
 				<GradeSlider label={t.grade.brightness} min={-1} max={1} step={0.01} value={grade.brightness} onChange={(brightness) => edit({ ...grade, brightness })} />
 				<GradeSlider label={t.grade.lightness} min={-1} max={1} step={0.01} value={grade.lightness} onChange={(lightness) => edit({ ...grade, lightness })} />

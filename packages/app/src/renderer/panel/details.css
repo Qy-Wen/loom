@@ -1,0 +1,408 @@
+.details-content {
+	container: details / inline-size;
+	padding: 18px;
+	overflow-y: auto;
+}
+
+.enrichment-heading {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+}
+
+.vlm-markdown {
+	white-space: pre-wrap;
+	word-break: break-word;
+	max-height: 12em;
+	overflow: auto;
+}
+
+.details-content section + section {
+	margin-top: 24px;
+	padding-top: 18px;
+	border-top: 1px solid #e5e5e2;
+}
+
+.relation-group + .relation-group {
+	margin-top: 14px;
+}
+
+.relation-group-label {
+	margin: 10px 0 6px;
+	color: #888b91;
+	font-size: 11px;
+}
+
+.relation-form {
+	grid-template-columns: 1fr;
+}
+
+.relation-type-row {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.relation-type-row input {
+	flex: 1;
+	min-width: 0;
+}
+
+.relation-form .relation-direction {
+	flex: none;
+	width: 31px;
+	padding: 6px 0;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	color: inherit;
+	background: #fff;
+	font-size: 12px;
+	line-height: normal;
+	cursor: pointer;
+}
+
+.relation-asset-picker {
+	position: relative;
+}
+
+.relation-asset-toggle {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	width: 100%;
+	min-width: 0;
+	padding: 6px 7px;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	color: inherit;
+	background: #fff;
+	font-size: 12px;
+	line-height: normal;
+	text-align: left;
+	cursor: pointer;
+}
+
+.relation-asset-toggle span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.relation-asset-toggle::after {
+	flex: none;
+	width: 0;
+	height: 0;
+	margin-left: 8px;
+	border-right: 4px solid transparent;
+	border-left: 4px solid transparent;
+	border-top: 5px solid #666a70;
+	content: "";
+}
+
+.relation-asset-toggle[aria-expanded="true"]::after {
+	border-top: 0;
+	border-bottom: 5px solid #666a70;
+}
+
+.relation-asset-menu {
+	position: absolute;
+	z-index: 5;
+	top: calc(100% + 4px);
+	right: 0;
+	left: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	max-height: 180px;
+	padding: 4px;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	background: #fff;
+	box-shadow: 0 6px 16px rgb(0 0 0 / 8%);
+}
+
+.relation-asset-menu ul {
+	min-height: 0;
+	margin: 0;
+	padding: 0;
+	overflow: auto;
+	list-style: none;
+}
+
+.relation-asset-menu input {
+	padding: 4px 6px;
+	font-size: 12px;
+}
+
+.relation-asset-menu li button {
+	display: block;
+	width: 100%;
+	padding: 4px 6px;
+	overflow: hidden;
+	border: 0;
+	border-radius: 4px;
+	color: inherit;
+	background: transparent;
+	font-size: 12px;
+	line-height: 1.3;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.relation-asset-menu li button:hover,
+.relation-asset-menu li button.selected {
+	background: #e8eefb;
+}
+
+.relation-list {
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.relation-list li {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.relation-list li > button:first-child {
+	flex: 1;
+	min-width: 0;
+}
+
+.relation-list li > .icon-button {
+	display: inline-flex;
+	flex: 0 0 24px;
+	align-items: center;
+	justify-content: center;
+	width: 24px;
+	height: 24px;
+	padding: 0;
+	line-height: 1;
+	text-align: center;
+}
+
+.relation-list button {
+	display: block;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 6px;
+	color: inherit;
+	background: transparent;
+	text-align: left;
+	cursor: pointer;
+}
+
+.relation-list button:hover {
+	background: #f0f0ed;
+}
+
+.relation-filename {
+	display: block;
+	overflow: hidden;
+	font-size: 12px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.properties {
+	display: grid;
+	grid-template-columns: 70px minmax(0, 1fr);
+	gap: 10px;
+	margin: 14px 0 0;
+	font-size: 12px;
+}
+
+.properties dt {
+	color: #888b91;
+}
+
+.properties :is(dt, dd).file-property {
+	margin-top: 8px;
+}
+
+.properties dd {
+	min-width: 0;
+	margin: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.properties dd.copyable-error-cell {
+	overflow: visible;
+	text-overflow: unset;
+	white-space: normal;
+}
+
+.properties dd.vlm-markdown {
+	overflow: auto;
+	text-overflow: unset;
+	white-space: pre-wrap;
+}
+
+@container details (min-width: 480px) {
+	.properties {
+		grid-template-columns: 70px minmax(0, 1fr) 70px minmax(0, 1fr);
+	}
+
+	.properties :is(dt, dd).file-property {
+		margin-top: 0;
+	}
+
+	.properties dd.vlm-markdown,
+	.properties dt:has(+ dd.vlm-markdown),
+	.properties dd.copyable-error-cell,
+	.properties dt:has(+ dd.copyable-error-cell) {
+		grid-column: 1 / -1;
+	}
+}
+
+.property-heading,
+.property-field-header,
+.property-value,
+.property-form-actions,
+.table-toolbar {
+	display: flex;
+	align-items: center;
+}
+
+.property-heading,
+.property-field-header,
+.table-toolbar {
+	justify-content: space-between;
+}
+
+.icon-button,
+.text-button,
+.property-value button,
+.property-form-actions button {
+	border: 0;
+	color: #6f7379;
+	background: transparent;
+	cursor: pointer;
+}
+
+.icon-button {
+	width: 24px;
+	height: 24px;
+	border-radius: 5px;
+	font-size: 17px;
+}
+
+.icon-button:hover,
+.text-button:hover,
+.property-value button:hover,
+.property-form-actions button:hover {
+	background: #f0f0ed;
+}
+
+.property-definition-form.relation-form {
+	grid-template-columns: minmax(0, 1fr);
+}
+
+.property-definition-form {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 92px;
+	gap: 7px;
+	margin-top: 12px;
+	padding: 10px;
+	border: 1px solid #dededb;
+	border-radius: 7px;
+	background: #fafaf9;
+}
+
+.property-definition-form :is(input, select),
+.property-value > input {
+	min-width: 0;
+	padding: 6px 7px;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	outline: none;
+	color: inherit;
+	background: #fff;
+	font: inherit;
+	font-size: 12px;
+}
+
+.property-form-actions {
+	grid-column: 1 / -1;
+	justify-content: flex-end;
+	gap: 5px;
+}
+
+.property-form-actions button {
+	padding: 4px 7px;
+	border-radius: 4px;
+	font-size: 11px;
+}
+
+.property-fields {
+	display: flex;
+	flex-direction: column;
+	gap: 13px;
+	margin-top: 12px;
+}
+
+.property-field-header {
+	gap: 8px;
+	margin-bottom: 5px;
+	font-size: 11px;
+}
+
+.property-field-header > span {
+	min-width: 0;
+	overflow: hidden;
+	color: #62666c;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.property-field-header > div {
+	display: flex;
+	flex: 0 0 auto;
+	gap: 2px;
+}
+
+.text-button {
+	padding: 2px 4px;
+	border-radius: 3px;
+	font-size: 9px;
+}
+
+.text-button.danger:hover {
+	color: #a33434;
+	background: #fff0f0;
+}
+
+.property-value {
+	gap: 5px;
+}
+
+.property-value > input {
+	flex: 1;
+}
+
+.property-value > button {
+	padding: 4px;
+	border-radius: 3px;
+	font-size: 9px;
+}
+
+.boolean-value {
+	justify-content: space-between;
+	font-size: 11px;
+}
+
+.boolean-value label {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+}

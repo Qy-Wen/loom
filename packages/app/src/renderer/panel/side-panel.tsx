@@ -300,7 +300,7 @@ export function DetailsPanel({
 	const { t } = useLocale();
 	return (
 		<div className="side-panel">
-			<div className="panel-content details-content active">
+			<div className="panel-content details-content thin-scroll active">
 				<section>
 					<div className="section-label">{t.details.file}</div>
 					{asset ? (

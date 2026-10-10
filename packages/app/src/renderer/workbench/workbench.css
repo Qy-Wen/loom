@@ -1,0 +1,146 @@
+.workbench {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex-direction: column;
+	margin: 0 -5px;
+	padding: 0 5px;
+	background: #f4f4f2;
+}
+
+.file-heading-title,
+.file-heading-tools {
+	display: flex;
+	align-items: center;
+}
+
+.file-heading-title {
+	gap: 6px;
+}
+
+.file-heading-tools {
+	gap: 8px;
+}
+
+.file-display {
+	display: inline-flex;
+	gap: 1px;
+}
+
+.file-display button {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #85888e;
+	cursor: pointer;
+}
+
+.file-display button.active,
+.file-heading-tools > button.active {
+	background: #dde6f7;
+	color: #243044;
+}
+
+.file-heading-tools > button {
+	display: grid;
+	place-items: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: #85888e;
+	cursor: pointer;
+}
+
+.file-search {
+	padding: 0 10px 6px;
+}
+
+.file-search input {
+	width: 100%;
+	box-sizing: border-box;
+	padding: 4px 6px;
+	border: 1px solid #d5d5d1;
+	border-radius: 5px;
+	background: #fff;
+	color: #243044;
+	font-size: 12px;
+}
+
+.file-search input:focus {
+	outline: 2px solid #7896c8;
+	border-color: transparent;
+}
+
+.asset-icon-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+	gap: 8px 6px;
+	padding: 4px 6px 8px;
+}
+
+.asset-icon {
+	display: flex;
+	min-width: 0;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.asset-icon-button {
+	position: relative;
+	display: block;
+	width: 100%;
+	aspect-ratio: 1;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	cursor: pointer;
+}
+
+.asset-icon .asset-thumbnail {
+	width: 100%;
+	height: 100%;
+	border-radius: 6px;
+}
+
+.asset-icon .video-thumbnail::after {
+	border-top-width: 7px;
+	border-bottom-width: 7px;
+	border-left-width: 10px;
+}
+
+.asset-icon.selected .asset-icon-button {
+	outline: 2px solid #7896c8;
+	outline-offset: 1px;
+}
+
+.asset-icon.cut {
+	opacity: 0.45;
+}
+
+.asset-icon-name,
+.asset-icon-rename {
+	overflow: hidden;
+	color: #3f3f3d;
+	font-size: 11px;
+	line-height: 1.3;
+	text-align: center;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-icon-rename {
+	width: 100%;
+	padding: 0 2px;
+	border: 1px solid #7896c8;
+	border-radius: 3px;
+	background: #fff;
+}
