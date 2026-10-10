@@ -165,7 +165,12 @@
 	z-index: 4;
 	min-width: 180px;
 	max-width: 240px;
+	max-height: min(320px, calc(100vh - 140px));
 	padding: 4px;
+	overflow-x: hidden;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 	border: 1px solid #e5e5e2;
 	border-radius: 8px;
 	background: #fff;
@@ -239,7 +244,14 @@
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
-	padding: 0 10px;
+	padding: 0 18px;
+}
+
+/* Copilot's own side padding is removed so the gutter does not make the left gap larger.
+   Two pixels stay so the hairline shadow is not clipped by the chat's overflow. */
+.agent-chat [data-testid="copilot-input-overlay"] [data-copilotkit] > div {
+	padding-left: 2px;
+	padding-right: 2px;
 }
 
 .agent-chat > * {

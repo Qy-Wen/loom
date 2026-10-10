@@ -120,7 +120,6 @@ export function SessionBar({
 										disabled={busy}
 										aria-label={t.sessions.delete(session.title)}
 										onClick={() => {
-											setMenuOpen(false);
 											onDelete(session.id);
 										}}
 									>
