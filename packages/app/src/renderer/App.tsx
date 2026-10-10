@@ -26,6 +26,8 @@ import { usePanelLayout, type PanelId } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { PanelTabs, WorkPanel } from "./layout/work-panel.tsx";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
+import { isLibraryTrashKey, isTreeNavKey, treeMotion, type TreeCursor, type TreeRow } from "./library/tree-nav.ts";
+import { uiPlatform } from "../shared/locale.ts";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./panel/error-toast.tsx";
 import { runActivityRenderers } from "./panel/run-activity.tsx";
@@ -540,26 +542,103 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	function onLibraryKeyDown(event: React.KeyboardEvent): void {
+	function libraryCursor(): TreeCursor | null {
+		if (selectedFolder) return { kind: "folder", relativePath: selectedFolder };
+		if (selectedAsset) return { kind: "asset", assetId: selectedAsset.assetId, relativePath: selectedAsset.relativePath };
+		return null;
+	}
+
+	async function duplicateSelected(): Promise<void> {
+		if (!selectedAssetId) return;
+		setError(null);
+		try {
+			selectAsset((await window.loom.duplicateAsset(selectedAssetId)).assetId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function copySelectedPath(): Promise<void> {
+		setError(null);
+		try {
+			if (selectedFolder) await window.loom.copyFolderPath(selectedFolder);
+			else if (selectedAssetId) await window.loom.copyAssetPath(selectedAssetId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function revealSelected(): Promise<void> {
+		setError(null);
+		try {
+			if (selectedFolder) await window.loom.revealFolder(selectedFolder);
+			else if (selectedAssetId) await window.loom.revealAsset(selectedAssetId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function trashSelected(): Promise<void> {
+		setError(null);
+		try {
+			if (selectedFolder) {
+				if (await window.loom.trashFolder(selectedFolder)) setSelectedFolder(null);
+			} else if (selectedAssetId) {
+				if (await window.loom.trashAsset(selectedAssetId)) setSelectedAssetId(null);
+			}
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 		if (!library.rootPath) return;
 		const mod = event.metaKey || event.ctrlKey;
-		if (mod && event.key.toLowerCase() === "c") {
+		const key = event.key.toLowerCase();
+		const mac = uiPlatform(navigator.userAgent) === "mac";
+		if (event.altKey && mod && event.code === "KeyC") {
+			event.preventDefault();
+			void copySelectedPath();
+		} else if (event.altKey && mod && event.code === "KeyR") {
+			event.preventDefault();
+			void revealSelected();
+		} else if (mod && !event.altKey && key === "c") {
 			event.preventDefault();
 			copySelection();
-		} else if (mod && event.key.toLowerCase() === "x") {
+		} else if (mod && !event.altKey && key === "x") {
 			event.preventDefault();
 			cutSelection();
-		} else if (mod && event.key.toLowerCase() === "v") {
+		} else if (mod && !event.altKey && key === "v") {
 			event.preventDefault();
 			void pasteInto(pasteDestination());
+		} else if (mod && !event.altKey && !event.shiftKey && key === "d") {
+			event.preventDefault();
+			void duplicateSelected();
 		} else if (event.key === "F2") {
 			event.preventDefault();
 			if (selectedFolder) setRenamingFolder(selectedFolder);
 			else if (selectedAssetId) setRenamingAssetId(selectedAssetId);
-		} else if (mod && event.shiftKey && event.key.toLowerCase() === "n") {
+		} else if (mod && event.shiftKey && key === "n") {
 			event.preventDefault();
 			void createFolderIn(pasteDestination());
+		} else if (isLibraryTrashKey(event, mac)) {
+			event.preventDefault();
+			void trashSelected();
+		} else if (!mod && !event.altKey && !event.shiftKey && isTreeNavKey(event.key)) {
+			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+			const motion = treeMotion(rows, libraryCursor(), event.key, folding);
+			if (motion.type === "none") {
+				event.preventDefault();
+				return;
+			}
+			event.preventDefault();
+			if (motion.type === "select") {
+				if (motion.cursor.kind === "folder") selectFolder(motion.cursor.relativePath);
+				else selectAsset(motion.cursor.assetId);
+			} else {
+				toggleFolder(motion.relativePath);
+			}
 		}
 	}
 
