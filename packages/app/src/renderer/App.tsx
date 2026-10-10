@@ -17,6 +17,7 @@ import type {
 	AudioWriteupStatus,
 } from "@loom/core";
 import type { AgentEndpoint } from "../shared/ipc.ts";
+import { useLocale } from "./locale.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
@@ -109,6 +110,7 @@ function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): Li
 }
 
 export function App(): React.JSX.Element {
+	const { t } = useLocale();
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
@@ -710,7 +712,7 @@ export function App(): React.JSX.Element {
 	}
 
 	if (!endpoint) {
-		return <div className="loading">{error ?? "Connecting to Loom agent…"}</div>;
+		return <div className="loading">{error ?? t.app.connecting}</div>;
 	}
 
 	return (
@@ -770,7 +772,7 @@ export function App(): React.JSX.Element {
 					<div
 						className="resize-handle library-resize"
 						role="separator"
-						aria-label="Resize asset library"
+						aria-label={t.app.resizeLibrary}
 						aria-orientation="vertical"
 						onPointerDown={(event) => beginResize("library", event)}
 						onDoubleClick={resetLibraryWidth}
@@ -812,15 +814,15 @@ export function App(): React.JSX.Element {
 						) : (
 							<div className="welcome">
 								<div className="welcome-mark">L</div>
-								<h1>{library.rootPath ? "Choose an asset" : "Open your creative workspace"}</h1>
+								<h1>{library.rootPath ? t.app.chooseAsset : t.app.openWorkspace}</h1>
 								<p>
 									{library.rootPath
-										? "Select a file from the library to inspect it."
-										: "Your files stay local. Loom indexes and works with them in place."}
+										? t.app.selectFile
+										: t.app.filesStayLocal}
 								</p>
 								{!library.rootPath && (
 									<button className="primary-button" type="button" onClick={() => void openLibrary()} disabled={opening}>
-										{opening ? "Opening…" : "Open Folder"}
+										{opening ? t.app.opening : t.app.openFolder}
 									</button>
 								)}
 							</div>
@@ -831,7 +833,7 @@ export function App(): React.JSX.Element {
 						<div
 							className="resize-handle side-resize"
 							role="separator"
-							aria-label="Resize agent panel"
+							aria-label={t.app.resizeAgent}
 							aria-orientation="vertical"
 							onPointerDown={(event) => beginResize("side", event)}
 							onDoubleClick={resetSideWidth}
@@ -842,7 +844,7 @@ export function App(): React.JSX.Element {
 						<div
 							className="resize-handle row bottom-resize"
 							role="separator"
-							aria-label="Resize lower panel"
+							aria-label={t.app.resizeLower}
 							aria-orientation="horizontal"
 							onPointerDown={(event) => panels.beginBottomResize(event)}
 						/>
@@ -853,7 +855,7 @@ export function App(): React.JSX.Element {
 						style={panels.stackStyle()}
 					>
 						{panels.joined && <PanelTabs layout={panels} />}
-						<WorkPanel id="agent" title="Agent" layout={panels}>
+						<WorkPanel id="agent" title={t.app.agent} layout={panels}>
 							<AgentPanel
 								libraryRoot={library.rootPath}
 								assets={library.assets}
@@ -866,12 +868,12 @@ export function App(): React.JSX.Element {
 							<div
 								className="resize-handle row"
 								role="separator"
-								aria-label="Resize agent and details"
+								aria-label={t.app.resizeSplit}
 								aria-orientation="horizontal"
 								onPointerDown={(event) => panels.beginDockSplit(event)}
 							/>
 						)}
-						<WorkPanel id="details" title="Details" layout={panels}>
+						<WorkPanel id="details" title={t.app.details} layout={panels}>
 							<DetailsPanel
 								asset={selectedAsset}
 								properties={properties}

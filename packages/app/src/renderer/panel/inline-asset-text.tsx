@@ -2,7 +2,13 @@ import type { LoomUserAttachment } from "@loom/agent";
 import { formatAssetRefBlock } from "@loom/agent/attachments";
 import { splitStoredAssetText } from "@loom/agent/composer-asset";
 import { AssetThumbnail, createAssetThumbnailElement } from "../assets/asset-thumbnail.tsx";
+import { useLocale } from "../locale.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
+
+export interface ChipLabels {
+	remove: string;
+	removeNamed: (label: string) => string;
+}
 
 const knownAssets = new Map<string, LoomUserAttachment>();
 
@@ -30,6 +36,7 @@ function chipPreview(asset: LoomUserAttachment) {
 
 export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRemove?: () => void }): React.JSX.Element {
 	const openAsset = useOpenAsset();
+	const { t } = useLocale();
 	const label = assetLabel(asset);
 	return (
 		<span className="session-asset-chip" contentEditable={false}>
@@ -38,7 +45,7 @@ export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRe
 				{label}
 			</button>
 			{onRemove && (
-				<button type="button" className="session-asset-chip-remove" aria-label={`Remove ${label}`} title="Remove" onClick={onRemove}>
+				<button type="button" className="session-asset-chip-remove" aria-label={t.chat.removeNamed(label)} title={t.common.remove} onClick={onRemove}>
 					<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
 						<path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
 					</svg>
@@ -170,7 +177,7 @@ export function rangeFromPoint(x: number, y: number): Range | null {
 	return doc.caretRangeFromPoint?.(x, y) ?? null;
 }
 
-function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => void): HTMLSpanElement {
+function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => void, labels: ChipLabels): HTMLSpanElement {
 	const chip = document.createElement("span");
 	chip.className = "session-asset-chip";
 	chip.contentEditable = "false";
@@ -195,8 +202,8 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	remove.type = "button";
 	remove.tabIndex = -1;
 	remove.className = "session-asset-chip-remove";
-	remove.setAttribute("aria-label", `Remove ${label}`);
-	remove.title = "Remove";
+	remove.setAttribute("aria-label", labels.removeNamed(label));
+	remove.title = labels.remove;
 	remove.innerHTML = `<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>`;
 	remove.addEventListener("mousedown", (event) => event.preventDefault());
 	remove.addEventListener("click", (event) => {
@@ -210,7 +217,7 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	return chip;
 }
 
-export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openAsset: (assetId: string) => void): void {
+export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openAsset: (assetId: string) => void, labels: ChipLabels): void {
 	const chips = [...root.querySelectorAll<HTMLElement>("[data-asset-id]")];
 	root.replaceChildren();
 	for (const chip of chips) chip.remove();
@@ -221,14 +228,14 @@ export function paintInlineEditor(root: HTMLElement, text: string, assets: reado
 		}
 		const asset = resolveComposerAsset(part.assetId, assets);
 		rememberComposerAsset(asset);
-		root.append(chipElement(asset, openAsset));
+		root.append(chipElement(asset, openAsset, labels));
 	}
 	root.dataset.empty = text ? "false" : "true";
 	if (!text && root.contains(document.activeElement)) placeCaretAtStart(root);
 }
 
 /** Insert a chip at the drop point. Returns false when the point is outside the editor. */
-export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, x: number, y: number, openAsset: (assetId: string) => void): boolean {
+export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, x: number, y: number, openAsset: (assetId: string) => void, labels: ChipLabels): boolean {
 	const range = rangeFromPoint(x, y);
 	if (!range || (range.startContainer !== root && !root.contains(range.startContainer))) return false;
 	const host = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
@@ -237,7 +244,7 @@ export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, 
 		range.setStartAfter(existing);
 		range.collapse(true);
 	}
-	const chip = chipElement(asset, openAsset);
+	const chip = chipElement(asset, openAsset, labels);
 	range.insertNode(chip);
 	range.setStartAfter(chip);
 	range.collapse(true);
@@ -249,14 +256,14 @@ export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, 
 }
 
 /** Append a chip at the end of the editor. Returns false when that asset is already in the text. */
-export function appendChip(root: HTMLElement, asset: LoomUserAttachment, openAsset: (assetId: string) => void): HTMLElement | null {
+export function appendChip(root: HTMLElement, asset: LoomUserAttachment, openAsset: (assetId: string) => void, labels: ChipLabels): HTMLElement | null {
 	const existing = root.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(asset.assetId)}"]`);
 	if (existing) {
 		focusInlineEditor(root, existing);
 		return existing;
 	}
 	rememberComposerAsset(asset);
-	const chip = chipElement(asset, openAsset);
+	const chip = chipElement(asset, openAsset, labels);
 	const last = root.lastChild;
 	if (last && last.nodeName === "BR") root.insertBefore(chip, last);
 	else root.append(chip);

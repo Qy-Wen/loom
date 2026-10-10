@@ -1,0 +1,50 @@
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { resolveAppLanguage, type AppLanguage, type AppLanguageChoice } from "../shared/general-settings.ts";
+import { messagesFor, type Messages } from "../shared/locale.ts";
+
+interface LocaleValue {
+	language: AppLanguage;
+	t: Messages;
+	previewLanguage: (choice: AppLanguageChoice) => void;
+	restoreLanguage: () => void;
+	commitLanguage: (choice: AppLanguageChoice) => void;
+}
+
+const LocaleContext = createContext<LocaleValue | null>(null);
+
+export function LocaleProvider({ children }: { children: ReactNode }): React.JSX.Element {
+	const [choice, setChoice] = useState<AppLanguageChoice>("system");
+	const [preview, setPreview] = useState<AppLanguageChoice | null>(null);
+	const language = resolveAppLanguage(preview ?? choice, navigator.language);
+	const t = messagesFor(language);
+
+	useEffect(() => {
+		void window.loom.getGeneralSettings().then((settings) => {
+			setChoice(settings.language);
+		}).catch(() => undefined);
+	}, []);
+
+	useEffect(() => {
+		document.documentElement.lang = language;
+	}, [language]);
+
+	const previewLanguage = useCallback((next: AppLanguageChoice) => setPreview(next), []);
+	const restoreLanguage = useCallback(() => setPreview(null), []);
+	const commitLanguage = useCallback((next: AppLanguageChoice) => {
+		setChoice(next);
+		setPreview(null);
+	}, []);
+
+	const value = useMemo(
+		() => ({ language, t, previewLanguage, restoreLanguage, commitLanguage }),
+		[language, t, previewLanguage, restoreLanguage, commitLanguage],
+	);
+
+	return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;
+}
+
+export function useLocale(): LocaleValue {
+	const value = useContext(LocaleContext);
+	if (!value) throw new Error("LocaleProvider is missing");
+	return value;
+}

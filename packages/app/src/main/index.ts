@@ -54,6 +54,8 @@ import { parseByteRange } from "./byte-range.ts";
 import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
+import { parseGeneralSettings, resolveAppLanguage } from "../shared/general-settings.ts";
+import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
@@ -62,6 +64,7 @@ import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvi
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
 import { AgentPermissionStore } from "./agent-permission-store.ts";
+import { GeneralSettingsStore } from "./general-settings-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
 
@@ -86,6 +89,14 @@ configureAutomation();
 type ContextMenuItem<T extends string> =
 	| { type: "separator" }
 	| { label: string; enabled?: boolean; click: () => T };
+
+async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
+	const choice = generalSettings ? (await generalSettings.load()).language : "system";
+	return {
+		t: messagesFor(resolveAppLanguage(choice, app.getLocale())),
+		platform: uiPlatform(process.platform),
+	};
+}
 
 function popupContextMenu<T extends string>(
 	event: IpcMainInvokeEvent,
@@ -151,6 +162,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 let modelSettings: ModelSettingsStore | null = null;
 let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
+let generalSettings: GeneralSettingsStore | null = null;
 let agentPermission: AgentPermissionStore | null = null;
 let agentInstructions: AgentInstructionsStore | null = null;
 let agentSandbox: AgentSandboxStore | null = null;
@@ -308,25 +320,26 @@ function registerIpc(): void {
 		async (event, assetId: string, canPaste: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
 			const favorite = (await localCore.getLibrarySnapshot()).favoriteAssetIds.includes(assetId);
+			const { t, platform } = await uiCopy();
 			return popupContextMenu<AssetContextAction>(event, [
-				{ label: "Add to chat", click: () => "add_to_chat" },
+				{ label: t.menu.addToChat, click: () => "add_to_chat" },
 				{
-					label: favorite ? "Remove from Favorites" : "Add to Favorites",
+					label: favorite ? t.menu.removeFromFavorites : t.menu.addToFavorites,
 					click: () => favorite ? "unfavorite" : "favorite",
 				},
 				{ type: "separator" },
-				{ label: "New Folder", click: () => "new_folder" },
+				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ type: "separator" },
-				{ label: "Rename", click: () => "rename" },
-				{ label: "Duplicate", click: () => "duplicate" },
-				{ label: "Cut", click: () => "cut" },
-				{ label: "Copy", click: () => "copy" },
-				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.rename, click: () => "rename" },
+				{ label: t.menu.duplicate, click: () => "duplicate" },
+				{ label: t.menu.cut, click: () => "cut" },
+				{ label: t.common.copy, click: () => "copy" },
+				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
 				{ type: "separator" },
-				{ label: "Copy Path", click: () => "copy_path" },
-				{ label: "Show in Finder", click: () => "reveal" },
+				{ label: t.menu.copyPath, click: () => "copy_path" },
+				{ label: t.menu.reveal(platform), click: () => "reveal" },
 				{ type: "separator" },
-				{ label: "Move to Trash", click: () => "trash" },
+				{ label: t.menu.moveToTrash(platform), click: () => "trash" },
 			]);
 		},
 	);
@@ -335,18 +348,19 @@ function registerIpc(): void {
 		IPC.showFolderContextMenu,
 		async (event, relativePath: string, canPaste: boolean): Promise<FolderContextAction | null> => {
 			localCore.getFolderFilePath(relativePath);
+			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
-				{ label: "New Folder", click: () => "new_folder" },
+				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ type: "separator" },
-				{ label: "Rename", click: () => "rename" },
-				{ label: "Cut", click: () => "cut" },
-				{ label: "Copy", click: () => "copy" },
-				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.rename, click: () => "rename" },
+				{ label: t.menu.cut, click: () => "cut" },
+				{ label: t.common.copy, click: () => "copy" },
+				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
 				{ type: "separator" },
-				{ label: "Copy Path", click: () => "copy_path" },
-				{ label: "Show in Finder", click: () => "reveal" },
+				{ label: t.menu.copyPath, click: () => "copy_path" },
+				{ label: t.menu.reveal(platform), click: () => "reveal" },
 				{ type: "separator" },
-				{ label: "Move to Trash", click: () => "trash" },
+				{ label: t.menu.moveToTrash(platform), click: () => "trash" },
 			]);
 		},
 	);
@@ -354,10 +368,11 @@ function registerIpc(): void {
 	ipcMain.handle(
 		IPC.showLibraryContextMenu,
 		async (event, canPaste: boolean): Promise<LibraryContextAction | null> => {
+			const { t } = await uiCopy();
 			return popupContextMenu<LibraryContextAction>(event, [
-				{ label: "New Folder", click: () => "new_folder" },
-				{ label: "New MD File", click: () => "new_md_file" },
-				{ label: "Paste", enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.newFolder, click: () => "new_folder" },
+				{ label: t.menu.newMdFile, click: () => "new_md_file" },
+				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
 			]);
 		},
 	);
@@ -490,8 +505,9 @@ function registerIpc(): void {
 		const snapshot = await localCore.getLibrarySnapshot();
 		if (!snapshot.rootPath) throw new Error("Open a library first.");
 		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t } = await uiCopy();
 		const options = {
-			title: "Library file",
+			title: t.menu.libraryFile,
 			defaultPath: snapshot.rootPath,
 			properties: ["openFile", "multiSelections"] as Array<"openFile" | "multiSelections">,
 		};
@@ -513,8 +529,9 @@ function registerIpc(): void {
 		const snapshot = await localCore.getLibrarySnapshot();
 		if (!snapshot.rootPath) throw new Error("Open a library first.");
 		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t } = await uiCopy();
 		const options = {
-			title: "External file",
+			title: t.menu.externalFile,
 			properties: ["openFile", "multiSelections"] as Array<"openFile" | "multiSelections">,
 		};
 		const result = owner
@@ -566,6 +583,14 @@ function registerIpc(): void {
 		agentManager.setInstructions(saved);
 		return saved;
 	});
+	ipcMain.handle(IPC.getGeneralSettings, async () => {
+		if (!generalSettings) throw new Error("Settings store not started");
+		return generalSettings.load();
+	});
+	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => {
+		if (!generalSettings) throw new Error("Settings store not started");
+		return generalSettings.save(parseGeneralSettings(raw));
+	});
 	ipcMain.handle(IPC.getAgentSandbox, async () => {
 		if (!agentSandbox) throw new Error("Settings store not started");
 		return agentSandbox.load();
@@ -616,13 +641,14 @@ function registerIpc(): void {
 		const filePath = await localCore.getAssetFilePath(assetId);
 		if (!filePath) throw new Error("Asset not found");
 		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t, platform } = await uiCopy();
 		const options = {
 			type: "warning" as const,
-			buttons: ["Cancel", "Move to Trash"],
+			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
 			defaultId: 0,
 			cancelId: 0,
-			message: `Move “${basename(filePath)}” to the Trash?`,
-			detail: "The file can be recovered from the system Trash.",
+			message: t.menu.trashAsset(basename(filePath), platform),
+			detail: t.menu.trashAssetDetail(platform),
 		};
 		const result = owner
 			? await dialog.showMessageBox(owner, options)
@@ -639,13 +665,14 @@ function registerIpc(): void {
 		const folderPath = localCore.getFolderFilePath(relativePath);
 		const owner = BrowserWindow.fromWebContents(event.sender);
 		const name = relativePath.includes("/") ? relativePath.slice(relativePath.lastIndexOf("/") + 1) : relativePath;
+		const { t, platform } = await uiCopy();
 		const options = {
 			type: "warning" as const,
-			buttons: ["Cancel", "Move to Trash"],
+			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
 			defaultId: 0,
 			cancelId: 0,
-			message: `Move “${name}” to the Trash?`,
-			detail: "Everything inside this folder can be recovered from the system Trash.",
+			message: t.menu.trashFolder(name, platform),
+			detail: t.menu.trashFolderDetail(platform),
 		};
 		const result = owner
 			? await dialog.showMessageBox(owner, options)
@@ -682,6 +709,7 @@ app
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
+		generalSettings = new GeneralSettingsStore(join(app.getPath("userData"), "general.json"));
 		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
 		agentManager.setPermissionLevel(await agentPermission.load());
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
@@ -805,6 +833,7 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 }
 
 async function restoreLastLibrary(): Promise<void> {
+	if (generalSettings && !(await generalSettings.load()).reopenLastLibrary) return;
 	const rootPath = await lastLibrary?.load();
 	if (!rootPath || !(await lastLibraryStillOpenable(rootPath))) return;
 	try {

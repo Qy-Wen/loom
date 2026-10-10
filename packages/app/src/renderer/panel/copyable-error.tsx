@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from "react";
+import { useLocale } from "../locale.tsx";
 
 interface CopyableErrorProps {
 	text: string;
 }
 
 export function CopyableError({ text }: CopyableErrorProps): React.JSX.Element {
+	const { t } = useLocale();
 	const [copied, setCopied] = useState(false);
 	const timer = useRef<number>(undefined);
 
@@ -31,7 +33,7 @@ export function CopyableError({ text }: CopyableErrorProps): React.JSX.Element {
 				className="text-button copyable-error-copy"
 				onClick={() => void copy()}
 			>
-				{copied ? "Copied" : "Copy"}
+				{copied ? t.common.copied : t.common.copy}
 			</button>
 		</span>
 	);

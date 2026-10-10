@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import { useLocale } from "../locale.tsx";
 import { usePanelLayout, type PanelId } from "./use-panel-layout.ts";
 
 type Layout = ReturnType<typeof usePanelLayout>;
@@ -40,6 +41,7 @@ export function WorkPanel({
 }
 
 export function PanelTabs({ layout }: { layout: Layout }): React.JSX.Element {
+	const { t } = useLocale();
 	return (
 		<div
 			className={`panel-tabs${layout.tabReorder ? " reordering" : ""}`}
@@ -55,7 +57,7 @@ export function PanelTabs({ layout }: { layout: Layout }): React.JSX.Element {
 					data-tab={id}
 					className={`${layout.tab === id ? "active" : ""}${layout.tabReorder?.id === id ? " dragging" : ""}`}
 					onPointerDown={(event) => layout.beginTabDrag(id, event)}
-				>{id === "agent" ? "Agent" : "Details"}</button>
+				>{id === "agent" ? t.app.agent : t.app.details}</button>
 			))}
 			{layout.tabReorder?.insertX != null && (
 				<span className="panel-tab-insert" style={{ left: layout.tabReorder.insertX }} />

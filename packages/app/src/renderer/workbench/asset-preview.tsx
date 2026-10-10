@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
+import { useLocale } from "../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
 import { FindBar } from "./find-bar.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
@@ -20,16 +21,19 @@ function PreviewFallback({ asset, message }: { asset: Asset; message: string }):
 }
 
 function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.Element {
+	const { t } = useLocale();
 	const contentRef = useRef<HTMLPreElement>(null);
 	const [content, setContent] = useState<string | null>(null);
+	const [tooLarge, setTooLarge] = useState(false);
 	const [failure, setFailure] = useState<string | null>(null);
 
 	useEffect(() => {
 		const controller = new AbortController();
 		setContent(null);
 		setFailure(null);
+		setTooLarge(false);
 		if (asset.size > 2 * 1_024 * 1_024) {
-			setFailure("This text file is larger than 2 MB, so inline preview is disabled.");
+			setTooLarge(true);
 			return () => controller.abort();
 		}
 		void fetch(url, { signal: controller.signal })
@@ -46,8 +50,9 @@ function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.E
 		return () => controller.abort();
 	}, [asset.assetId, asset.size, url]);
 
+	if (tooLarge) return <PreviewFallback asset={asset} message={t.preview.tooLarge} />;
 	if (failure) return <PreviewFallback asset={asset} message={failure} />;
-	if (content === null) return <div className="preview-loading">Loading text preview…</div>;
+	if (content === null) return <div className="preview-loading">{t.preview.loadingText}</div>;
 	return (
 		<div className="text-workbench">
 			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={content} />
@@ -57,10 +62,11 @@ function TextPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.E
 }
 
 function VideoPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.Element {
+	const { t } = useLocale();
 	const [status, setStatus] = useState<"pending" | "ready" | "failed">("pending");
 
 	if (status === "failed") {
-		return <PreviewFallback asset={asset} message="This file format could not be previewed by Electron." />;
+		return <PreviewFallback asset={asset} message={t.preview.electronFailed} />;
 	}
 	return (
 		<div className="media-preview video-preview">
@@ -78,6 +84,7 @@ function VideoPreview({ asset, url }: { asset: Asset; url: string }): React.JSX.
 }
 
 export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
+	const { t } = useLocale();
 	const [failed, setFailed] = useState(false);
 	const url = assetPreviewUrl(asset);
 	const extension = extensionOf(asset.filename);
@@ -88,7 +95,7 @@ export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] 
 		return <VideoPreview key={asset.assetId} asset={asset} url={url} />;
 	}
 	if (failed) {
-		return <PreviewFallback asset={asset} message="This file format could not be previewed by Electron." />;
+		return <PreviewFallback asset={asset} message={t.preview.electronFailed} />;
 	}
 	if (asset.type === "image") {
 		return (
@@ -109,9 +116,9 @@ export function AssetPreview({ asset, assets }: { asset: Asset; assets: Asset[] 
 		);
 	}
 	if (extension === ".pdf") {
-		return <iframe className="pdf-preview" src={url} title={`Preview ${asset.filename}`} />;
+		return <iframe className="pdf-preview" src={url} title={t.preview.title(asset.filename)} />;
 	}
 	if (extension === ".md") return <MarkdownPreview asset={asset} assets={assets} url={url} />;
 	if (TEXT_EXTENSIONS.has(extension)) return <TextPreview asset={asset} url={url} />;
-	return <PreviewFallback asset={asset} message="No inline preview is available for this format yet." />;
+	return <PreviewFallback asset={asset} message={t.preview.unavailable} />;
 }

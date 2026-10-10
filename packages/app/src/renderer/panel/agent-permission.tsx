@@ -5,6 +5,7 @@ import {
 	parseAgentPermissionLevel,
 	type AgentPermissionLevel,
 } from "@loom/agent/tool-permission";
+import { useLocale } from "../locale.tsx";
 
 const AgentPermissionContext = createContext<{
 	level: AgentPermissionLevel;
@@ -45,10 +46,12 @@ export function useAgentPermission(): {
 
 export function AgentPermissionSelect(): React.JSX.Element {
 	const { level, setLevel } = useAgentPermission();
+	const { t } = useLocale();
+	const labels = { basic: t.permission.basic, standard: t.permission.standard, full: t.permission.full };
 	return (
 		<label className="session-permission">
 			<select
-				aria-label="Agent permission"
+				aria-label={t.permission.label}
 				value={level}
 				onChange={(event) => {
 					setLevel(parseAgentPermissionLevel(event.target.value));
@@ -60,7 +63,7 @@ export function AgentPermissionSelect(): React.JSX.Element {
 				}}
 			>
 				{AGENT_PERMISSION_OPTIONS.map((option) => (
-					<option key={option.value} value={option.value}>{option.label}</option>
+					<option key={option.value} value={option.value}>{labels[option.value]}</option>
 				))}
 			</select>
 		</label>

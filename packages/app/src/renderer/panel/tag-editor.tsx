@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AssetTag, Tag } from "@loom/core";
+import { useLocale } from "../locale.tsx";
 import { SuggestInput } from "./suggest-input.tsx";
 
 interface TagEditorProps {
@@ -11,6 +12,7 @@ interface TagEditorProps {
 }
 
 export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEditorProps): React.JSX.Element {
+	const { t } = useLocale();
 	const [name, setName] = useState("");
 	const [open, setOpen] = useState(false);
 	const byId = new Map(tags.map((tag) => [tag.tagId, tag]));
@@ -30,7 +32,7 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 
 	return (
 		<div className="tag-editor">
-			<div className="section-label">Tags</div>
+			<div className="section-label">{t.details.tags}</div>
 			{applied.length > 0 ? (
 				<div className="tag-chips">
 					{applied.map((tag) => (
@@ -38,7 +40,7 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 							<span className="tag-chip-name">{tag.name}</span>
 							<button
 								type="button"
-								aria-label={`Remove ${tag.name}`}
+								aria-label={t.details.removeTag(tag.name)}
 								onClick={() => void onRemove(tag.tagId).catch(() => undefined)}
 							>
 								×
@@ -58,13 +60,13 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 					value={name}
 					open={open}
 					suggestions={tags.map((tag) => tag.name)}
-					placeholder="Add a tag"
-					showLabel="Show tags"
-					hideLabel="Hide tags"
+					placeholder={t.details.addTag}
+					showLabel={t.details.showTags}
+					hideLabel={t.details.hideTags}
 					onChange={setName}
 					onOpenChange={setOpen}
 				/>
-				<button type="submit" disabled={!name.trim()}>Add</button>
+				<button type="submit" disabled={!name.trim()}>{t.common.add}</button>
 			</form>
 		</div>
 	);

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ReactActivityMessageRenderer } from "@copilotkit/react-core/v2";
+import { useLocale } from "../locale.tsx";
 import { setToolGatePending } from "./tool-gate-pending.ts";
 
 type RetryContent = {
@@ -38,11 +39,12 @@ function formatDelay(delayMs: number): string {
 }
 
 function RetryActivity({ content }: { content: RetryContent }): React.JSX.Element | null {
+	const { t } = useLocale();
 	if (content.phase === "done") return null;
-	const attempt = content.maxAttempts ? `attempt ${content.attempt} of ${content.maxAttempts}` : `attempt ${content.attempt}`;
+	const attempt = content.maxAttempts ? t.activity.attemptOf(content.attempt, content.maxAttempts) : t.activity.attempt(content.attempt);
 	const label = content.phase === "wait" && content.delayMs !== undefined
-		? `Retrying in ${formatDelay(content.delayMs)}`
-		: "Retrying";
+		? t.activity.retryingIn(formatDelay(content.delayMs))
+		: t.activity.retrying;
 	return (
 		<div className="run-activity" role="status">
 			<div className="run-activity-head">

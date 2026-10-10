@@ -8,6 +8,8 @@ import type {
 } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag } from "../assets/asset-drag.ts";
 import { formatBytes } from "../assets/asset-utils.ts";
+import { assetTypeLabel } from "../../shared/locale.ts";
+import { useLocale } from "../locale.tsx";
 import { comparePropertyValues, displayPropertyValue } from "./table-values.ts";
 
 type SortKey = "filename" | "type" | "size" | "modifiedAt" | `property:${string}`;
@@ -50,6 +52,7 @@ export function TableView({
 	onSetPropertyValue,
 	onRemovePropertyValue,
 }: TableViewProps): React.JSX.Element {
+	const { t } = useLocale();
 	const [query, setQuery] = useState("");
 	const [fieldForm, setFieldForm] = useState<FieldForm | null>(null);
 	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -80,7 +83,7 @@ export function TableView({
 		const normalizedQuery = query.trim().toLowerCase();
 		const filtered = normalizedQuery
 			? assets.filter((asset) => {
-				const searchable = [asset.filename, asset.relativePath, asset.type];
+				const searchable = [asset.filename, asset.relativePath, asset.type, assetTypeLabel(t, asset.type)];
 				for (const property of properties) {
 					const value = values.get(`${asset.assetId}:${property.propertyId}`);
 					if (value !== undefined) searchable.push(String(value));
@@ -98,7 +101,7 @@ export function TableView({
 			const comparison = comparePropertyValues(leftValue, rightValue);
 			return sortDirection === "asc" ? comparison : -comparison;
 		});
-	}, [assets, properties, query, sortDirection, sortKey, values]);
+	}, [assets, properties, query, sortDirection, sortKey, t, values]);
 
 	function changeSort(nextKey: SortKey): void {
 		if (sortKey === nextKey) setSortDirection((current) => current === "asc" ? "desc" : "asc");
@@ -153,7 +156,7 @@ export function TableView({
 		if (fieldForm?.mode !== "edit") return;
 		const property = properties.find((item) => item.propertyId === fieldForm.propertyId);
 		if (!property) return;
-		if (!window.confirm(`Delete property “${property.name}” and all its values?`)) return;
+		if (!window.confirm(t.table.deleteProperty(property.name))) return;
 		await onRemoveProperty(property.propertyId);
 		setFieldForm(null);
 	}
@@ -163,24 +166,24 @@ export function TableView({
 			<div className="table-toolbar">
 				<input
 					type="search"
-					placeholder="Filter assets and properties…"
+					placeholder={t.table.filter}
 					value={query}
 					onChange={(event) => setQuery(event.target.value)}
 				/>
 				<div className="table-toolbar-actions">
-					<span>{rows.length} assets</span>
+					<span>{t.table.assets(rows.length)}</span>
 					<button
 						type="button"
 						disabled={!canEditProperties}
 						onClick={() => setFieldForm({ mode: "create", name: "", type: "text" })}
-					>+ Add field</button>
+					>{t.table.addField}</button>
 				</div>
 			</div>
 			{fieldForm && (
 				<div className="table-property-form">
 					<input
 						autoFocus
-						placeholder="Field name"
+						placeholder={t.table.fieldName}
 						value={fieldForm.name}
 						onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })}
 						onKeyDown={(event) => {
@@ -192,19 +195,19 @@ export function TableView({
 						value={fieldForm.type}
 						onChange={(event) => setFieldForm({ ...fieldForm, type: event.target.value as PropertyType })}
 					>
-						<option value="text">Text</option>
-						<option value="number">Number</option>
-						<option value="boolean">Checkbox</option>
-						<option value="date">Date</option>
+						<option value="text">{t.table.text}</option>
+						<option value="number">{t.table.number}</option>
+						<option value="boolean">{t.table.checkbox}</option>
+						<option value="date">{t.table.date}</option>
 					</select>
-					<button type="button" onClick={() => setFieldForm(null)}>Cancel</button>
+					<button type="button" onClick={() => setFieldForm(null)}>{t.common.cancel}</button>
 					<button
 						type="button"
 						disabled={!fieldForm.name.trim()}
 						onClick={() => void saveField().catch(() => undefined)}
-					>{fieldForm.mode === "create" ? "Add" : "Save"}</button>
+					>{fieldForm.mode === "create" ? t.common.add : t.common.save}</button>
 					{fieldForm.mode === "edit" && (
-						<button type="button" className="danger" onClick={() => void deleteField().catch(() => undefined)}>Delete</button>
+						<button type="button" className="danger" onClick={() => void deleteField().catch(() => undefined)}>{t.common.delete}</button>
 					)}
 				</div>
 			)}
@@ -215,10 +218,10 @@ export function TableView({
 					</colgroup>
 					<thead>
 						<tr>
-							<SortableHeader label="Name" column="filename" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
-							<SortableHeader label="Type" column="type" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
-							<SortableHeader label="Size" column="size" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
-							<SortableHeader label="Modified" column="modifiedAt" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
+							<SortableHeader label={t.table.name} column="filename" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
+							<SortableHeader label={t.table.type} column="type" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
+							<SortableHeader label={t.table.size} column="size" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
+							<SortableHeader label={t.table.modified} column="modifiedAt" active={sortKey} direction={sortDirection} onSort={changeSort} onResize={beginColumnResize} onResetWidth={resetColumnWidth} />
 							{properties.map((property) => (
 								<SortableHeader
 									key={property.propertyId}
@@ -257,7 +260,7 @@ export function TableView({
 									<strong>{asset.filename}</strong>
 									<small>{asset.relativePath}</small>
 								</td>
-								<td>{asset.type}</td>
+								<td>{assetTypeLabel(t, asset.type)}</td>
 								<td>{formatBytes(asset.size)}</td>
 								<td>{new Date(asset.modifiedAt).toLocaleDateString()}</td>
 								{properties.map((property) => (
@@ -274,7 +277,7 @@ export function TableView({
 						))}
 					</tbody>
 				</table>
-				{rows.length === 0 && <div className="table-empty">No matching assets.</div>}
+				{rows.length === 0 && <div className="table-empty">{t.table.noMatches}</div>}
 			</div>
 		</div>
 	);
@@ -308,6 +311,7 @@ function SortableHeader({
 	onResetWidth,
 	onEdit,
 }: SortableHeaderProps): React.JSX.Element {
+	const { t } = useLocale();
 	return (
 		<th>
 			<div className="table-head">
@@ -315,13 +319,13 @@ function SortableHeader({
 					{label}{active === column ? (direction === "asc" ? " ↑" : " ↓") : ""}
 				</button>
 				{onEdit && (
-					<button type="button" className="text-button" onClick={onEdit}>Edit</button>
+					<button type="button" className="text-button" onClick={onEdit}>{t.common.edit}</button>
 				)}
 			</div>
 			<span
 				className="column-resize-handle"
 				role="separator"
-				aria-label={`Resize ${label} column`}
+				aria-label={t.table.resizeColumn(label)}
 				aria-orientation="vertical"
 				onPointerDown={(event) => onResize(column, event)}
 				onDoubleClick={(event) => {
@@ -358,6 +362,7 @@ function PropertyCell({
 	onSet: (value: PropertyValue) => Promise<void>;
 	onClear: () => Promise<void>;
 }): React.JSX.Element {
+	const { t } = useLocale();
 	const [draft, setDraft] = useState(value === undefined ? "" : String(value));
 	useEffect(() => setDraft(value === undefined ? "" : String(value)), [value]);
 
@@ -381,10 +386,10 @@ function PropertyCell({
 							void onSet(event.target.checked).catch(() => undefined);
 						}}
 					/>
-					{value === undefined ? "—" : value ? "Yes" : "No"}
+					{value === undefined ? "—" : value ? t.common.yes : t.common.no}
 				</label>
 				{value !== undefined && (
-					<button type="button" className="text-button" aria-label={`Clear ${property.name}`} onClick={() => void onClear().catch(() => undefined)}>×</button>
+					<button type="button" className="text-button" aria-label={t.table.clearValue(property.name)} onClick={() => void onClear().catch(() => undefined)}>×</button>
 				)}
 			</td>
 		);

@@ -1,4 +1,6 @@
 import type { TextEmbedStatus } from "@loom/core";
+import { rawStatusLabel } from "../../shared/locale.ts";
+import { useLocale } from "../locale.tsx";
 import { CopyableError } from "./copyable-error.tsx";
 
 interface TextEmbedDetailsProps {
@@ -12,35 +14,36 @@ export function TextEmbedDetails({
 	embedding,
 	onEmbed,
 }: TextEmbedDetailsProps): React.JSX.Element | null {
+	const { t } = useLocale();
 	if (!status?.supported) return null;
 	const busy = embedding || status.status === "embedding";
-	const label = status.stale && status.status === "ready" ? "Re-embed" : "Embed";
+	const label = status.stale && status.status === "ready" ? t.details.reembed : t.details.embed;
 	return (
 		<section>
 			<div className="section-label enrichment-heading">
-				<span>Index</span>
+				<span>{t.details.index}</span>
 				<button type="button" className="text-button" disabled={busy} onClick={onEmbed}>
-					{busy ? "Embedding…" : label}
+					{busy ? t.details.embedding : label}
 				</button>
 			</div>
 			<dl className="properties">
-				<dt>Status</dt>
-				<dd>{formatStatus(status)}</dd>
+				<dt>{t.details.status}</dt>
+				<dd>{formatStatus(t, status)}</dd>
 				{status.modelId && (
 					<>
-						<dt>Model</dt>
+						<dt>{t.details.model}</dt>
 						<dd title={status.modelId}>{status.modelId}</dd>
 					</>
 				)}
 				{(status.status !== "idle" || status.childCount > 0) && (
 					<>
-						<dt>Chunks</dt>
-						<dd>{status.childCount} child / {status.parentCount} parent</dd>
+						<dt>{t.details.chunksLabel}</dt>
+						<dd>{t.details.chunks(status.childCount, status.parentCount)}</dd>
 					</>
 				)}
 				{status.error && (
 					<>
-						<dt>Error</dt>
+						<dt>{t.details.error}</dt>
 						<dd className="copyable-error-cell"><CopyableError text={status.error} /></dd>
 					</>
 				)}
@@ -49,8 +52,8 @@ export function TextEmbedDetails({
 	);
 }
 
-function formatStatus(status: TextEmbedStatus): string {
-	if (status.status === "idle") return "Not indexed";
-	if (status.stale) return `${status.status} (stale)`;
-	return status.status;
+function formatStatus(t: ReturnType<typeof useLocale>["t"], status: TextEmbedStatus): string {
+	if (status.status === "idle") return t.details.notIndexed;
+	const label = rawStatusLabel(t, status.status);
+	return status.stale ? t.status.stale(label) : label;
 }
