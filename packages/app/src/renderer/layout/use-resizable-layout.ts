@@ -47,9 +47,10 @@ export function useResizableLayout(): {
 
 		const onPointerMove = (moveEvent: PointerEvent) => {
 			if (side === "library") {
+				const sideGap = shellRef.current?.querySelector(".side-stack") ? sideWidth + HANDLE_WIDTH : 0;
 				const maximum = Math.max(
 					MIN_LIBRARY_WIDTH,
-					Math.min(360, bounds.width - sideWidth - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH * 2),
+					Math.min(360, bounds.width - sideGap - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH),
 				);
 				setLibraryWidth(Math.min(maximum, Math.max(MIN_LIBRARY_WIDTH, moveEvent.clientX - bounds.left)));
 			} else {

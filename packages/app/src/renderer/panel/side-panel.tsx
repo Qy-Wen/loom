@@ -27,11 +27,15 @@ import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
 import { ToolCallViews } from "./tool-call-views.tsx";
 
-export type SidePanelTab = "agent" | "details";
-
-interface SidePanelProps {
+interface AgentPanelProps {
 	libraryRoot: string | null;
-	activeTab: SidePanelTab;
+	assets: Asset[];
+	onOpenAsset: (assetId: string) => void;
+	composerAttach: AssetRefAttachment | null;
+	onComposerAttachApplied: () => void;
+}
+
+interface DetailsPanelProps {
 	asset: Asset | null;
 	properties: PropertyDefinition[];
 	propertyValues: AssetPropertyValue[];
@@ -39,7 +43,6 @@ interface SidePanelProps {
 	assetTags: AssetTag[];
 	onAddTag: (assetId: string, name: string) => Promise<void>;
 	onRemoveTag: (assetId: string, tagId: string) => Promise<void>;
-	onChangeTab: (tab: SidePanelTab) => void;
 	enrichment: AssetEnrichment | undefined;
 	textEmbed: TextEmbedStatus | undefined;
 	embedding: boolean;
@@ -53,43 +56,17 @@ interface SidePanelProps {
 	assets: Asset[];
 	relationTypes: string[];
 	onSelectAsset: (assetId: string) => void;
-	onOpenAsset: (assetId: string) => void;
-	composerAttach: AssetRefAttachment | null;
-	onComposerAttachApplied: () => void;
 	onCreateRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
 	onRemoveRelation: (relationId: string) => Promise<void>;
 }
 
-export function SidePanel({
+export function AgentPanel({
 	libraryRoot,
-	activeTab,
-	asset,
-	properties,
-	propertyValues,
-	tags,
-	assetTags,
-	onAddTag,
-	onRemoveTag,
-	onChangeTab,
-	enrichment,
-	textEmbed,
-	embedding,
-	onEmbed,
-	imageVlm,
-	videoVlm,
-	audioWriteup,
-	describing,
-	onDescribe,
-	relations,
 	assets,
-	relationTypes,
-	onSelectAsset,
 	onOpenAsset,
 	composerAttach,
 	onComposerAttachApplied,
-	onCreateRelation,
-	onRemoveRelation,
-}: SidePanelProps): React.JSX.Element {
+}: AgentPanelProps): React.JSX.Element {
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [sessionId, setSessionId] = useState<string | null>(null);
 	const sessionIdRef = useRef<string | null>(null);
@@ -239,21 +216,8 @@ export function SidePanel({
 	}
 
 	return (
-		<aside className="side-panel">
-			<div className="panel-tabs">
-				<button
-					className={activeTab === "agent" ? "active" : ""}
-					type="button"
-					onClick={() => onChangeTab("agent")}
-				>Agent</button>
-				<button
-					className={activeTab === "details" ? "active" : ""}
-					type="button"
-					onClick={() => onChangeTab("details")}
-				>Details</button>
-			</div>
-
-			<div className={`panel-content agent-content ${activeTab === "agent" ? "active" : ""}`}>
+		<div className="side-panel">
+			<div className="panel-content agent-content active">
 				{libraryRoot ? (
 					<>
 						<SessionBar
@@ -302,8 +266,37 @@ export function SidePanel({
 					<div className="empty">Open a library to start a conversation.</div>
 				)}
 			</div>
+		</div>
+	);
+}
 
-			<div className={`panel-content details-content ${activeTab === "details" ? "active" : ""}`}>
+export function DetailsPanel({
+	asset,
+	properties,
+	propertyValues,
+	tags,
+	assetTags,
+	onAddTag,
+	onRemoveTag,
+	enrichment,
+	textEmbed,
+	embedding,
+	onEmbed,
+	imageVlm,
+	videoVlm,
+	audioWriteup,
+	describing,
+	onDescribe,
+	relations,
+	assets,
+	relationTypes,
+	onSelectAsset,
+	onCreateRelation,
+	onRemoveRelation,
+}: DetailsPanelProps): React.JSX.Element {
+	return (
+		<div className="side-panel">
+			<div className="panel-content details-content active">
 				<section>
 					<div className="section-label">File</div>
 					{asset ? (
@@ -360,7 +353,7 @@ export function SidePanel({
 					/>
 				</section>
 			</div>
-		</aside>
+		</div>
 	);
 }
 

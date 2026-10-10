@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
@@ -20,12 +20,14 @@ import type { AgentEndpoint } from "../shared/ipc.ts";
 import type { AssetRefAttachment } from "@loom/agent";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
+import { usePanelLayout } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
+import { PanelTabs, WorkPanel } from "./layout/work-panel.tsx";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./panel/error-toast.tsx";
 import { runActivityRenderers } from "./panel/run-activity.tsx";
-import { SidePanel, type SidePanelTab } from "./panel/side-panel.tsx";
+import { AgentPanel, DetailsPanel } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
@@ -34,6 +36,30 @@ import { TableView } from "./workbench/table-view.tsx";
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
 type WorkbenchView = "library" | "table" | "graph";
+
+function meetsWindowCorner(
+	frame: { x: number; y: number; width: number; height: number },
+	shell: HTMLElement | null,
+): boolean {
+	if (!shell) return false;
+	return frame.x + frame.width >= shell.clientWidth - 2 && frame.y + frame.height >= shell.clientHeight - 2;
+}
+
+function stackClass(panels: ReturnType<typeof usePanelLayout>): string {
+	const mode = panels.place("agent").mode;
+	if (panels.joined) {
+		if (panels.groupDrag) {
+			const snapping = panels.dragDock || panels.lowerFrame ? " snapping" : "";
+			return `side-stack joined group-drag${snapping}`;
+		}
+		const placed = mode === "bottom" ? " bottom-band" : mode === "float" ? " floating" : "";
+		return `side-stack joined${placed}`;
+	}
+	if (panels.bothBottom) return "side-stack bottom-band";
+	if (panels.anyBottom) return "side-stack spread";
+	if (panels.anyDocked) return "side-stack";
+	return "side-stack floating";
+}
 type LibraryClipboard =
 	| { kind: "assets"; assetIds: string[]; mode: "copy" | "cut" }
 	| { kind: "folder"; relativePath: string; mode: "copy" | "cut" };
@@ -91,7 +117,6 @@ export function App(): React.JSX.Element {
 	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
-	const [sidePanel, setSidePanel] = useState<SidePanelTab>("agent");
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
 	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
@@ -116,6 +141,7 @@ export function App(): React.JSX.Element {
 		resetLibraryWidth,
 		resetSideWidth,
 	} = useResizableLayout();
+	const panels = usePanelLayout(shellRef);
 
 	useEffect(() => {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
@@ -407,7 +433,7 @@ export function App(): React.JSX.Element {
 				await window.loom.setFavorite(asset.assetId, action === "favorite");
 			} else if (action === "add_to_chat") {
 				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
-				setSidePanel("agent");
+				panels.focus("agent");
 				setComposerAttach({
 					type: "asset_ref",
 					assetId: asset.assetId,
@@ -692,7 +718,27 @@ export function App(): React.JSX.Element {
 			<div className="app">
 				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 
-				<div className="shell" ref={shellRef} style={shellStyle}>
+				<div
+					className={`shell${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
+					ref={shellRef}
+					style={{
+						...shellStyle,
+						...({ "--window-corner": navigator.userAgent.includes("Windows") ? "8px" : "16px" } as CSSProperties),
+						...(panels.anyBottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
+						...(panels.lowerFrame ? {
+							"--lower-x": `${panels.lowerFrame.x}px`,
+							"--lower-y": `${panels.lowerFrame.y}px`,
+							"--lower-w": `${panels.lowerFrame.width}px`,
+							"--lower-h": `${panels.lowerFrame.height}px`,
+						} : {}),
+						...(panels.joinFrame ? {
+							"--join-x": `${panels.joinFrame.x}px`,
+							"--join-y": `${panels.joinFrame.y}px`,
+							"--join-w": `${panels.joinFrame.width}px`,
+							"--join-h": `${panels.joinFrame.height}px`,
+						} : {}),
+					}}
+				>
 					<LibrarySidebar
 						library={library}
 						opening={opening}
@@ -722,7 +768,7 @@ export function App(): React.JSX.Element {
 					/>
 
 					<div
-						className="resize-handle"
+						className="resize-handle library-resize"
 						role="separator"
 						aria-label="Resize asset library"
 						aria-orientation="vertical"
@@ -745,7 +791,7 @@ export function App(): React.JSX.Element {
 								onRemovePropertyValue={removePropertyValue}
 								onSelectAsset={(assetId) => {
 									selectAsset(assetId);
-									setSidePanel("details");
+									panels.focus("details");
 								}}
 							/>
 						) : workbenchView === "graph" ? (
@@ -756,7 +802,7 @@ export function App(): React.JSX.Element {
 								relationTypes={relationTypes}
 								onSelectAsset={(assetId) => {
 									selectAsset(assetId);
-									setSidePanel("details");
+									panels.focus("details");
 								}}
 								onCreateRelation={createRelation}
 								onRemoveRelation={removeRelation}
@@ -781,48 +827,87 @@ export function App(): React.JSX.Element {
 						)}
 					</main>
 
-					<div
-						className="resize-handle"
-						role="separator"
-						aria-label="Resize agent panel"
-						aria-orientation="vertical"
-						onPointerDown={(event) => beginResize("side", event)}
-						onDoubleClick={resetSideWidth}
-					/>
+					{panels.anyDocked && (
+						<div
+							className="resize-handle side-resize"
+							role="separator"
+							aria-label="Resize agent panel"
+							aria-orientation="vertical"
+							onPointerDown={(event) => beginResize("side", event)}
+							onDoubleClick={resetSideWidth}
+						/>
+					)}
 
-					<SidePanel
-						libraryRoot={library.rootPath}
-						activeTab={sidePanel}
-						asset={selectedAsset}
-						properties={properties}
-						propertyValues={propertyValues}
-						tags={library.tags}
-						assetTags={library.assetTags}
-						onAddTag={addTag}
-						onRemoveTag={removeTag}
-						onChangeTab={setSidePanel}
-						enrichment={enrichment}
-						textEmbed={textEmbed}
-						embedding={embedding}
-						onEmbed={() => void embedSelected()}
-						imageVlm={imageVlm}
-						videoVlm={videoVlm}
-						audioWriteup={audioWriteup}
-						describing={describing}
-						onDescribe={() => void describeSelected()}
-						relations={relations}
-						assets={library.assets}
-						relationTypes={relationTypes}
-						onSelectAsset={(assetId) => {
-							selectAsset(assetId);
-							setSidePanel("details");
-						}}
-						onOpenAsset={selectAsset}
-						composerAttach={composerAttach}
-						onComposerAttachApplied={() => setComposerAttach(null)}
-						onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
-						onRemoveRelation={removeRelation}
-					/>
+					{panels.anyBottom && (
+						<div
+							className="resize-handle row bottom-resize"
+							role="separator"
+							aria-label="Resize lower panel"
+							aria-orientation="horizontal"
+							onPointerDown={(event) => panels.beginBottomResize(event)}
+						/>
+					)}
+
+					<div
+						className={stackClass(panels)}
+						style={panels.stackStyle()}
+					>
+						{panels.joined && <PanelTabs layout={panels} />}
+						<WorkPanel id="agent" title="Agent" layout={panels}>
+							<AgentPanel
+								libraryRoot={library.rootPath}
+								assets={library.assets}
+								onOpenAsset={selectAsset}
+								composerAttach={composerAttach}
+								onComposerAttachApplied={() => setComposerAttach(null)}
+							/>
+						</WorkPanel>
+						{(panels.bothDocked || panels.bothBottom) && !panels.joined && (
+							<div
+								className="resize-handle row"
+								role="separator"
+								aria-label="Resize agent and details"
+								aria-orientation="horizontal"
+								onPointerDown={(event) => panels.beginDockSplit(event)}
+							/>
+						)}
+						<WorkPanel id="details" title="Details" layout={panels}>
+							<DetailsPanel
+								asset={selectedAsset}
+								properties={properties}
+								propertyValues={propertyValues}
+								tags={library.tags}
+								assetTags={library.assetTags}
+								onAddTag={addTag}
+								onRemoveTag={removeTag}
+								enrichment={enrichment}
+								textEmbed={textEmbed}
+								embedding={embedding}
+								onEmbed={() => void embedSelected()}
+								imageVlm={imageVlm}
+								videoVlm={videoVlm}
+								audioWriteup={audioWriteup}
+								describing={describing}
+								onDescribe={() => void describeSelected()}
+								relations={relations}
+								assets={library.assets}
+								relationTypes={relationTypes}
+								onSelectAsset={(assetId) => {
+									selectAsset(assetId);
+									panels.focus("details");
+								}}
+								onCreateRelation={(fromAssetId, toAssetId, type) => createRelation(fromAssetId, toAssetId, type)}
+								onRemoveRelation={removeRelation}
+							/>
+						</WorkPanel>
+						{panels.joined && panels.place("agent").mode === "float" && !panels.groupDrag && (
+							<>
+								<div className="work-panel-edge right" onPointerDown={(event) => panels.beginResize("agent", "right", event)} />
+								<div className="work-panel-edge bottom" onPointerDown={(event) => panels.beginResize("agent", "bottom", event)} />
+								<div className="work-panel-edge corner" onPointerDown={(event) => panels.beginResize("agent", "corner", event)} />
+							</>
+						)}
+					</div>
 				</div>
 				{settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
 			</div>
