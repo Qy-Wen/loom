@@ -177,6 +177,8 @@ export function App(): React.JSX.Element {
 		shellRef,
 		shellStyle,
 		beginResize,
+		libraryCollapsed,
+		toggleLibraryCollapsed,
 		resetLibraryWidth,
 		resetSideWidth,
 		resetBesideWidth,
@@ -982,7 +984,7 @@ export function App(): React.JSX.Element {
 				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 
 				<div
-					className={`shell${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.anyBeside ? " has-beside" : ""}${panels.anyAbove ? " has-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
+					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.anyBeside ? " has-beside" : ""}${panels.anyAbove ? " has-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
 					ref={shellRef}
 					style={{
 						...shellStyle,
@@ -1036,6 +1038,8 @@ export function App(): React.JSX.Element {
 						onKeyDown={onLibraryKeyDown}
 						onOpenSettings={() => setSettingsOpen(true)}
 						onOpenTraces={import.meta.env.DEV ? () => void window.loom.openDevTrace?.() : undefined}
+						collapsed={libraryCollapsed}
+						onToggleCollapsed={toggleLibraryCollapsed}
 					/>
 
 					<div

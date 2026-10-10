@@ -88,6 +88,8 @@ export const messages = defineLocale(
 			traces: "Traces",
 			expandFolder: "Expand folder",
 			collapseFolder: "Collapse folder",
+			collapseSidebar: "Collapse sidebar",
+			expandSidebar: "Expand sidebar",
 		},
 		menu: {
 			addToChat: "Add to chat",
@@ -476,6 +478,8 @@ export const messages = defineLocale(
 			traces: "追踪",
 			expandFolder: "展开文件夹",
 			collapseFolder: "收起文件夹",
+			collapseSidebar: "收起侧边栏",
+			expandSidebar: "展开侧边栏",
 		},
 		menu: {
 			addToChat: "添加到对话",

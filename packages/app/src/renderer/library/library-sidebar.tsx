@@ -86,6 +86,8 @@ interface LibrarySidebarProps {
 	onKeyDown: (event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean) => void;
 	onOpenSettings: () => void;
 	onOpenTraces?: () => void;
+	collapsed: boolean;
+	onToggleCollapsed: () => void;
 }
 
 export function LibrarySidebar({
@@ -115,6 +117,8 @@ export function LibrarySidebar({
 	onKeyDown,
 	onOpenSettings,
 	onOpenTraces,
+	collapsed,
+	onToggleCollapsed,
 }: LibrarySidebarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const empty = library.assets.length === 0 && library.folders.length === 0;
@@ -184,7 +188,17 @@ export function LibrarySidebar({
 	}
 
 	return (
-		<aside className="library-sidebar" tabIndex={0} onKeyDown={(event) => onKeyDown(event, treeRows, !queryActive)}>
+		<aside
+			className={collapsed ? "library-sidebar collapsed" : "library-sidebar"}
+			tabIndex={collapsed ? undefined : 0}
+			onKeyDown={collapsed ? undefined : (event) => onKeyDown(event, treeRows, !queryActive)}
+		>
+			{collapsed ? (
+				<button className="library-expand" type="button" aria-label={t.library.expandSidebar} title={t.library.expandSidebar} onClick={onToggleCollapsed}>
+					<SidebarChevron direction="right" />
+				</button>
+			) : (
+			<>
 			<div className="library-header">
 				<div>
 					<div className="section-label">Loom</div>
@@ -192,9 +206,14 @@ export function LibrarySidebar({
 						{library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder}
 					</div>
 				</div>
-				<button className="open-button" type="button" onClick={onOpenLibrary} disabled={opening}>
-					{opening ? "…" : t.common.open}
-				</button>
+				<span className="library-header-actions">
+					<button className="open-button" type="button" onClick={onOpenLibrary} disabled={opening}>
+						{opening ? "…" : t.common.open}
+					</button>
+					<button className="library-collapse" type="button" aria-label={t.library.collapseSidebar} title={t.library.collapseSidebar} onClick={onToggleCollapsed}>
+						<SidebarChevron direction="left" />
+					</button>
+				</span>
 			</div>
 
 			<nav className="library-views" aria-label={t.library.views}>
@@ -456,7 +475,9 @@ export function LibrarySidebar({
 					)}
 				</div>
 			)}
-			<div className="library-footer">
+			</>
+			)}
+			<div className={`library-footer${collapsed ? " rail" : ""}`}>
 				{onOpenTraces ? (
 					<button type="button" aria-label={t.library.traces} title={t.library.traces} onClick={onOpenTraces}>
 						<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
@@ -472,5 +493,20 @@ export function LibrarySidebar({
 				</button>
 			</div>
 		</aside>
+	);
+}
+
+function SidebarChevron({ direction }: { direction: "left" | "right" }): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+			<path
+				d={direction === "left" ? "M10 3.5 5.5 8 10 12.5" : "M6 3.5 10.5 8 6 12.5"}
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.4"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
 	);
 }

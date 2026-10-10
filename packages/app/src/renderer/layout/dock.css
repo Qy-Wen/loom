@@ -148,7 +148,7 @@ body.resizing-columns {
 
 .shell.has-beside {
 	grid-template-columns:
-		var(--library-width) 10px
+		var(--library-width) var(--library-gap, 10px)
 		minmax(240px, 1fr) 10px
 		var(--beside-width) 10px
 		var(--side-width);
@@ -156,7 +156,7 @@ body.resizing-columns {
 
 .shell.has-beside.side-hidden {
 	grid-template-columns:
-		var(--library-width) 10px
+		var(--library-width) var(--library-gap, 10px)
 		minmax(240px, 1fr) 10px
 		var(--beside-width);
 }
