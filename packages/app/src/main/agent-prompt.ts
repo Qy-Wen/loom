@@ -14,6 +14,9 @@ const BASE_SYSTEM_PROMPT =
 	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
 	"Media tools do not create relations. Call create_relation yourself when a derived file should point at its source: fromAssetId is the new file, toAssetId is the source, and type is a short label such as \"derived from\". " +
 	"Copy both asset ids from tool results. If you only have a path, retrieve it first. remove_relation takes the relationId that create_relation returned. " +
+	"Table columns are library properties. list_properties returns each column's propertyId, name, and type. " +
+	"create_property adds a column. update_property renames it or changes its type when it has no values. remove_property deletes the column and its values. " +
+	"set_asset_property writes one cell and clear_asset_property clears it. Copy assetId and propertyId from tool results. Types are text, number, boolean, and date (YYYY-MM-DD). " +
 	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
 	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
