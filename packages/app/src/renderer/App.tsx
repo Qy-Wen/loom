@@ -54,7 +54,7 @@ import { ErrorToast } from "./panel/error-toast.tsx";
 import { runActivityRenderers } from "./panel/run-activity.tsx";
 import { AgentPanel, DetailsPanel } from "./panel/side-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
-import { AssetPreview } from "./workbench/asset-preview.tsx";
+import { AssetPreview, PreviewActions } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
 
@@ -632,6 +632,24 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function togglePreviewFavorite(asset: Asset): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.setFavorite(asset.assetId, !library.favoriteAssetIds.includes(asset.assetId));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
+	async function trashPreviewed(assetId: string): Promise<void> {
+		setError(null);
+		try {
+			await window.loom.trashAsset(assetId);
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
 	async function revealSelected(): Promise<void> {
 		setError(null);
 		try {
@@ -1061,7 +1079,22 @@ export function App(): React.JSX.Element {
 								onRemoveRelation={removeRelation}
 							/>
 						) : selectedAsset ? (
-							<AssetPreview key={selectedAsset.assetId} asset={selectedAsset} assets={library.assets} onGraded={selectAsset} gradeHost={gradeHost} />
+							<AssetPreview
+								key={selectedAsset.assetId}
+								asset={selectedAsset}
+								assets={library.assets}
+								onGraded={selectAsset}
+								gradeHost={gradeHost}
+								actions={(
+									<PreviewActions
+										canEdit={selectedAsset.type === "image" && isGradeableImage(selectedAsset.filename)}
+										favorite={library.favoriteAssetIds.includes(selectedAsset.assetId)}
+										onEdit={() => panels.focus("grade")}
+										onToggleFavorite={() => void togglePreviewFavorite(selectedAsset)}
+										onDelete={() => void trashPreviewed(selectedAsset.assetId)}
+									/>
+								)}
+							/>
 						) : (
 							<div className="welcome">
 								<div className="welcome-mark">L</div>
