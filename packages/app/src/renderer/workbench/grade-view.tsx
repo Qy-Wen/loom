@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
 	IDENTITY_IMAGE_GRADE,
@@ -26,11 +26,13 @@ export function GradeView({
 	assets,
 	onGraded,
 	panelHost,
+	actions = null,
 }: {
 	asset: Asset;
 	assets: Asset[];
 	onGraded?: (assetId: string) => void;
 	panelHost: HTMLElement | null;
+	actions?: ReactNode;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const [grade, setGrade] = useState<ImageGrade>(IDENTITY_IMAGE_GRADE);
@@ -180,17 +182,20 @@ export function GradeView({
 	return (
 		<div className="grade-workbench">
 			<div className="grade-stage">
-				<img
-					src={shownUrl}
-					alt={asset.filename}
-					onError={() => {
-						if (triedFallback.current || !showOriginal) return;
-						triedFallback.current = true;
-						void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
-							if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
-						}).catch(() => undefined);
-					}}
-				/>
+				<div className="preview-stack">
+					<img
+						src={shownUrl}
+						alt={asset.filename}
+						onError={() => {
+							if (triedFallback.current || !showOriginal) return;
+							triedFallback.current = true;
+							void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
+								if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
+							}).catch(() => undefined);
+						}}
+					/>
+					{actions}
+				</div>
 			</div>
 			{panelHost && createPortal(<div className="grade-panel thin-scroll">
 				<GradeSlider label={t.grade.exposure} min={-3} max={3} step={0.01} value={grade.exposure} onChange={(exposure) => edit({ ...grade, exposure })} />
