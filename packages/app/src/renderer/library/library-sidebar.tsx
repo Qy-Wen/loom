@@ -288,7 +288,7 @@ export function LibrarySidebar({
 				<div className="empty library-placeholder">{t.library.openFolderHint}</div>
 			) : (
 				<div
-					className="asset-list"
+					className="asset-list thin-scroll"
 					onDragOver={(event) => {
 						acceptRootDrop(event);
 					}}

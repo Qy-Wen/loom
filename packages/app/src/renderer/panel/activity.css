@@ -1,0 +1,157 @@
+.tool-call {
+	margin: 8px 0;
+	padding: 7px 10px 8px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	font-size: 12px;
+	overflow: hidden;
+}
+
+.tool-call:hover {
+	background: #f2f2f0;
+}
+
+.tool-call-head {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: #7a7d82;
+	cursor: pointer;
+	text-align: left;
+	font: inherit;
+}
+
+.tool-call-chevron {
+	flex: 0 0 auto;
+	width: 0;
+	height: 0;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 5px solid #9aa0a6;
+}
+
+.tool-call.open .tool-call-chevron {
+	transform: rotate(90deg);
+}
+
+.tool-call-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: #202124;
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.tool-call-status {
+	flex: 0 0 auto;
+}
+
+.tool-call-gate {
+	display: flex;
+	gap: 6px;
+	margin: 6px 0 0 13px;
+}
+
+.tool-call-gate button {
+	padding: 2px 8px;
+	border: 1px solid #d0d0cc;
+	border-radius: 5px;
+	background: #fff;
+	color: #202124;
+	font: inherit;
+	cursor: pointer;
+}
+
+.tool-call-gate button:hover {
+	background: #f2f2f0;
+}
+
+.tool-call-body {
+	position: relative;
+	margin: 4px 0 0 13px;
+	overflow: hidden;
+}
+
+.tool-call:not(.open) .tool-call-body {
+	max-height: calc(11px * 1.35 * 4);
+	cursor: pointer;
+}
+
+.tool-call.open .tool-call-body {
+	max-height: 280px;
+	overflow: auto;
+}
+
+.tool-call.faded .tool-call-body::after {
+	content: "";
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: 1.6em;
+	pointer-events: none;
+	background: linear-gradient(to bottom, rgb(250 250 249 / 0), #fafaf9);
+}
+
+.tool-call.faded:hover .tool-call-body::after {
+	background: linear-gradient(to bottom, rgb(242 242 240 / 0), #f2f2f0);
+}
+
+.run-activity {
+	margin: 8px 0;
+	padding: 7px 10px 8px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fafaf9;
+	color: #5c5f64;
+	font-size: 12px;
+}
+
+.run-activity-head {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.run-activity-label {
+	color: #3f4246;
+	font-weight: 600;
+}
+
+.run-activity-meta {
+	color: #8a8d91;
+}
+
+.run-activity-detail,
+.run-activity-output {
+	margin: 6px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.run-activity-output {
+	max-height: 8em;
+	overflow: auto;
+	font-size: 11px;
+	line-height: 1.35;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.tool-call-result {
+	margin: 0;
+	overflow: visible;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-size: 11px;
+	line-height: 1.35;
+	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}

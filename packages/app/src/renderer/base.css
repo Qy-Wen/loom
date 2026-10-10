@@ -1,0 +1,190 @@
+html,
+body,
+#root {
+	height: 100%;
+	margin: 0;
+}
+
+* {
+	box-sizing: border-box;
+}
+
+button {
+	font: inherit;
+}
+
+body {
+	font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+	color: #202124;
+	background: #f7f7f6;
+}
+
+.app {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	min-height: 0;
+}
+
+.error-toast {
+	position: fixed;
+	z-index: 50;
+	top: 14px;
+	left: 50%;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: max-content;
+	max-width: min(460px, calc(100% - 32px));
+	padding: 7px 6px 7px 12px;
+	border: 1px solid #f0c8c4;
+	border-radius: 8px;
+	color: #8d2f2a;
+	background: #fff8f7;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+	font-size: 12px;
+	line-height: 1.4;
+	transform: translateX(-50%);
+}
+
+.error-toast .copyable-error {
+	flex: 1;
+	min-width: 0;
+	gap: 10px;
+}
+
+.error-toast .copyable-error-text {
+	white-space: normal;
+}
+
+.error-toast .copyable-error-copy,
+.error-toast-dismiss {
+	flex: none;
+	padding: 2px 4px;
+	border: 0;
+	border-radius: 4px;
+	color: #8a8d91;
+	background: transparent;
+	font-size: 11px;
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+.error-toast-dismiss {
+	font-size: 14px;
+}
+
+.error-toast .copyable-error-copy:hover,
+.error-toast-dismiss:hover {
+	color: #3f3f3f;
+	background: #f3f3f1;
+}
+
+.copyable-error {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	min-width: 0;
+}
+
+.copyable-error-text {
+	min-width: 0;
+	flex: 1;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.copyable-error-copy {
+	flex-shrink: 0;
+}
+
+.empty {
+	padding: 12px;
+	color: #92959a;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.no-padding {
+	padding: 7px 0 0;
+}
+
+.loading {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 100%;
+	color: #888;
+}
+
+.open-button,
+.primary-button {
+	border: 1px solid #cacac6;
+	border-radius: 6px;
+	color: #292a2d;
+	background: #fff;
+	cursor: pointer;
+}
+
+.open-button {
+	padding: 5px 8px;
+	font-size: 11px;
+}
+
+.open-button:hover:not(:disabled),
+.primary-button:hover:not(:disabled) {
+	background: #eeeeeb;
+}
+
+.open-button:disabled,
+.primary-button:disabled {
+	cursor: default;
+	opacity: 0.55;
+}
+
+.primary-button {
+	margin-top: 8px;
+	padding: 8px 13px;
+	font-size: 12px;
+}
+
+/* Match the chat panel scrollbar (CopilotKit: 6px thumb, thin gutter). */
+.thin-scroll,
+.thin-scroll * {
+	scrollbar-width: thin;
+	scrollbar-color: oklch(50% 0 0) transparent;
+}
+
+.thin-scroll::-webkit-scrollbar,
+.thin-scroll ::-webkit-scrollbar {
+	width: 6px;
+	height: 6px;
+}
+
+.thin-scroll::-webkit-scrollbar-track,
+.thin-scroll ::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb,
+.thin-scroll ::-webkit-scrollbar-thumb {
+	background: oklch(50% 0 0);
+	border-radius: 9999px;
+}
+
+.thin-scroll::-webkit-scrollbar-thumb:hover,
+.thin-scroll ::-webkit-scrollbar-thumb:hover {
+	background: oklch(40% 0 0);
+}
+
+.tag-add input:focus,
+.graph-type-dialog input:focus,
+.property-definition-form :is(input, select):focus,
+.property-value > input:focus,
+.settings-slot input:focus,
+.settings-slot textarea:focus,
+.settings-instructions textarea:focus {
+	border-color: #7896c8;
+	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);
+}

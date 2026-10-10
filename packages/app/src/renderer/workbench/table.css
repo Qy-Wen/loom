@@ -1,0 +1,266 @@
+.table-view {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+	flex-direction: column;
+	background: #fff;
+}
+
+.table-toolbar {
+	gap: 12px;
+	flex: 0 0 48px;
+	padding: 8px 12px;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.table-toolbar input {
+	width: min(340px, 70%);
+	padding: 6px 9px;
+	border: 1px solid #d6d6d2;
+	border-radius: 6px;
+	outline: none;
+	font: inherit;
+	font-size: 12px;
+}
+
+.table-toolbar input:focus {
+	border-color: #7896c8;
+}
+
+.table-toolbar span {
+	color: #85888e;
+	font-size: 11px;
+}
+
+.table-toolbar-actions,
+.table-property-form {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.table-toolbar-actions button,
+.table-property-form button {
+	padding: 5px 8px;
+	border: 1px solid #cececa;
+	border-radius: 5px;
+	color: #4f5359;
+	background: #fff;
+	cursor: pointer;
+	font-size: 10px;
+}
+
+.table-toolbar-actions button:hover:not(:disabled),
+.table-property-form button:hover:not(:disabled) {
+	background: #eeeeeb;
+}
+
+.table-toolbar-actions button:disabled,
+.table-property-form button:disabled {
+	cursor: default;
+	opacity: 0.45;
+}
+
+.table-property-form button.danger {
+	color: #a33434;
+}
+
+.table-property-form {
+	flex: 0 0 42px;
+	padding: 6px 12px;
+	border-bottom: 1px solid #e5e5e2;
+	background: #fafaf9;
+}
+
+.table-property-form input,
+.table-property-form select {
+	min-width: 0;
+	padding: 5px 7px;
+	border: 1px solid #d4d4d0;
+	border-radius: 5px;
+	outline: none;
+	background: #fff;
+	font: inherit;
+	font-size: 11px;
+}
+
+.table-property-form input {
+	width: min(260px, 45%);
+}
+
+.table-property-form select {
+	width: 100px;
+}
+
+.asset-table-scroll {
+	position: relative;
+	min-height: 0;
+	flex: 1;
+	overflow: auto;
+}
+
+.asset-table {
+	min-width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+	font-size: 11px;
+	table-layout: fixed;
+}
+
+.asset-table th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	padding: 0;
+	border-right: 1px solid #e8e8e5;
+	border-bottom: 1px solid #dcdcd8;
+	background: #f7f7f5;
+	text-align: left;
+}
+
+.asset-table th button {
+	width: 100%;
+	padding: 8px 10px;
+	border: 0;
+	color: #666a70;
+	background: transparent;
+	cursor: pointer;
+	font-size: 10px;
+	font-weight: 650;
+	text-align: left;
+	white-space: nowrap;
+}
+
+.asset-table .table-head {
+	display: flex;
+	align-items: center;
+	min-width: 0;
+}
+
+.asset-table .table-head > button:first-child {
+	flex: 1;
+	min-width: 0;
+	width: auto;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.asset-table .table-head > .text-button {
+	flex: none;
+	width: auto;
+	padding: 6px 8px 6px 0;
+	color: #5d7194;
+	font-weight: 550;
+}
+
+.property-cell {
+	padding: 2px 6px;
+}
+
+.property-cell input {
+	width: 100%;
+	min-width: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+}
+
+.property-cell input:focus {
+	outline: 1px solid #7896c8;
+	background: #fff;
+}
+
+.property-boolean {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.property-cell .text-button {
+	padding: 0 4px;
+	border: 0;
+	background: transparent;
+	color: #888b91;
+	font-size: 12px;
+}
+
+.column-resize-handle {
+	position: absolute;
+	top: 0;
+	right: -4px;
+	bottom: 0;
+	z-index: 2;
+	width: 9px;
+	cursor: col-resize;
+	touch-action: none;
+}
+
+.column-resize-handle::after {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: 4px;
+	width: 1px;
+	background: transparent;
+	content: "";
+}
+
+.column-resize-handle:hover::after,
+body.resizing-table-columns .column-resize-handle::after {
+	width: 2px;
+	background: #7896c8;
+}
+
+body.resizing-table-columns {
+	cursor: col-resize;
+	user-select: none;
+}
+
+.asset-table td {
+	min-width: 100px;
+	max-width: 220px;
+	padding: 7px 10px;
+	overflow: hidden;
+	border-right: 1px solid #efefec;
+	border-bottom: 1px solid #ecece9;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-table td:first-child {
+	min-width: 190px;
+}
+
+.asset-table td strong,
+.asset-table td small {
+	display: block;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.asset-table td small {
+	margin-top: 2px;
+	color: #94979c;
+	font-size: 9px;
+}
+
+.asset-table tbody tr {
+	cursor: pointer;
+}
+
+.asset-table tbody tr:hover {
+	background: #f5f7fb;
+}
+
+.asset-table tbody tr.selected {
+	background: #e8eefb;
+}
+
+.table-empty {
+	padding: 30px;
+	color: #92959a;
+	font-size: 12px;
+	text-align: center;
+}
