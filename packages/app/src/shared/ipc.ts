@@ -90,6 +90,8 @@ export const IPC = {
 	revealFolder: "loom:revealFolder",
 	trashAsset: "loom:trashAsset",
 	trashFolder: "loom:trashFolder",
+	trashLibraryItems: "loom:trashLibraryItems",
+	copyLibraryPaths: "loom:copyLibraryPaths",
 	getPropertySnapshot: "loom:getPropertySnapshot",
 	createProperty: "loom:createProperty",
 	updateProperty: "loom:updateProperty",
@@ -160,8 +162,8 @@ export interface LoomApi {
 	addAssetTag: (assetId: string, name: string) => Promise<void>;
 	removeAssetTag: (assetId: string, tagId: string) => Promise<void>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
-	showAssetContextMenu: (assetId: string, canPaste: boolean) => Promise<AssetContextAction | null>;
-	showFolderContextMenu: (relativePath: string, canPaste: boolean) => Promise<FolderContextAction | null>;
+	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean) => Promise<AssetContextAction | null>;
+	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
@@ -178,6 +180,8 @@ export interface LoomApi {
 	revealFolder: (relativePath: string) => Promise<void>;
 	trashAsset: (assetId: string) => Promise<boolean>;
 	trashFolder: (relativePath: string) => Promise<boolean>;
+	trashLibraryItems: (assetIds: string[], folders: string[]) => Promise<boolean>;
+	copyLibraryPaths: (assetIds: string[], folders: string[]) => Promise<void>;
 	getPropertySnapshot: () => Promise<PropertySnapshot>;
 	createProperty: (name: string, type: PropertyType) => Promise<PropertyDefinition>;
 	updateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<PropertyDefinition>;

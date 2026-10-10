@@ -322,7 +322,7 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showAssetContextMenu,
-		async (event, assetId: string, canPaste: boolean): Promise<AssetContextAction | null> => {
+		async (event, assetId: string, canPaste: boolean, single: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
 			const favorite = (await localCore.getLibrarySnapshot()).favoriteAssetIds.includes(assetId);
 			const { t, platform } = await uiCopy();
@@ -335,7 +335,7 @@ function registerIpc(): void {
 				{ type: "separator" },
 				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ type: "separator" },
-				{ label: t.menu.rename, click: () => "rename" },
+				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.duplicate, click: () => "duplicate" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
@@ -351,13 +351,13 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showFolderContextMenu,
-		async (event, relativePath: string, canPaste: boolean): Promise<FolderContextAction | null> => {
+		async (event, relativePath: string, canPaste: boolean, single: boolean): Promise<FolderContextAction | null> => {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
 				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ type: "separator" },
-				{ label: t.menu.rename, click: () => "rename" },
+				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
 				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
@@ -416,6 +416,16 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.moveFolderInto, (_event, sourceFolder: string, destFolder: string) => {
 		return localCore.moveFolderInto(sourceFolder, destFolder);
+	});
+
+	ipcMain.handle(IPC.copyLibraryPaths, async (_event, assetIds: string[], folders: string[]): Promise<void> => {
+		const lines: string[] = [];
+		for (const folder of folders) lines.push(localCore.getFolderFilePath(folder));
+		for (const assetId of assetIds) {
+			const filePath = await localCore.getAssetFilePath(assetId);
+			if (filePath) lines.push(filePath);
+		}
+		clipboard.writeText(lines.join("\n"));
 	});
 
 	ipcMain.handle(IPC.copyAssetPath, async (_event, assetId: string): Promise<void> => {
@@ -759,6 +769,36 @@ function registerIpc(): void {
 
 		await shell.trashItem(folderPath);
 		await localCore.forgetFolder(relativePath);
+		return true;
+	});
+
+	ipcMain.handle(IPC.trashLibraryItems, async (event, assetIds: string[], folders: string[]): Promise<boolean> => {
+		const count = assetIds.length + folders.length;
+		if (count === 0) return false;
+		const owner = BrowserWindow.fromWebContents(event.sender);
+		const { t, platform } = await uiCopy();
+		const options = {
+			type: "warning" as const,
+			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
+			defaultId: 0,
+			cancelId: 0,
+			message: t.menu.trashItems(count, platform),
+			detail: t.menu.trashItemsDetail(platform),
+		};
+		const result = owner
+			? await dialog.showMessageBox(owner, options)
+			: await dialog.showMessageBox(options);
+		if (result.response !== 1) return false;
+		for (const relativePath of folders) {
+			await shell.trashItem(localCore.getFolderFilePath(relativePath));
+			await localCore.forgetFolder(relativePath);
+		}
+		for (const assetId of assetIds) {
+			const filePath = await localCore.getAssetFilePath(assetId);
+			if (!filePath) continue;
+			await shell.trashItem(filePath);
+			await localCore.forgetAsset(assetId);
+		}
 		return true;
 	});
 

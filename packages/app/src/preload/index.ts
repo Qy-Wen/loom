@@ -11,9 +11,10 @@ const api: LoomApi = {
 	setFavorite: (assetId, favorite) => ipcRenderer.invoke(IPC.setFavorite, assetId, favorite),
 	addAssetTag: (assetId, name) => ipcRenderer.invoke(IPC.addAssetTag, assetId, name),
 	removeAssetTag: (assetId, tagId) => ipcRenderer.invoke(IPC.removeAssetTag, assetId, tagId),
-	showAssetContextMenu: (assetId, canPaste) => ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste),
-	showFolderContextMenu: (relativePath, canPaste) =>
-		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste),
+	showAssetContextMenu: (assetId, canPaste, single) =>
+		ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste, single),
+	showFolderContextMenu: (relativePath, canPaste, single) =>
+		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
 	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),
 	renameAsset: (assetId, stem) => ipcRenderer.invoke(IPC.renameAsset, assetId, stem),
 	duplicateAsset: (assetId) => ipcRenderer.invoke(IPC.duplicateAsset, assetId),
@@ -32,6 +33,8 @@ const api: LoomApi = {
 	revealFolder: (relativePath) => ipcRenderer.invoke(IPC.revealFolder, relativePath),
 	trashAsset: (assetId) => ipcRenderer.invoke(IPC.trashAsset, assetId),
 	trashFolder: (relativePath) => ipcRenderer.invoke(IPC.trashFolder, relativePath),
+	trashLibraryItems: (assetIds, folders) => ipcRenderer.invoke(IPC.trashLibraryItems, assetIds, folders),
+	copyLibraryPaths: (assetIds, folders) => ipcRenderer.invoke(IPC.copyLibraryPaths, assetIds, folders),
 	getPropertySnapshot: () => ipcRenderer.invoke(IPC.getPropertySnapshot),
 	createProperty: (name, type) => ipcRenderer.invoke(IPC.createProperty, name, type),
 	updateProperty: (propertyId, name, type) =>

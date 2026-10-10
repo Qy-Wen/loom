@@ -165,6 +165,158 @@ export function treeMotion(
 	return { type: "none" };
 }
 
+export function assetKey(assetId: string): string {
+	return `asset:${assetId}`;
+}
+
+export function folderKey(relativePath: string): string {
+	return `folder:${relativePath}`;
+}
+
+export function rowKey(row: TreeRow): string {
+	return row.kind === "asset" ? assetKey(row.assetId ?? "") : folderKey(row.relativePath);
+}
+
+export interface TreeSelection {
+	keys: readonly string[];
+	anchor: string | null;
+	focus: string | null;
+}
+
+export const emptyTreeSelection: TreeSelection = { keys: [], anchor: null, focus: null };
+
+export type PointerMode = "replace" | "toggle" | "range";
+
+/** ⌘ click on macOS, Ctrl click on Windows. Shift always selects the visible range. */
+export function pointerMode(
+	event: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+	mac: boolean,
+): PointerMode {
+	if (event.shiftKey) return "range";
+	if (mac ? event.metaKey : event.ctrlKey) return "toggle";
+	return "replace";
+}
+
+function rangeKeys(rows: readonly TreeRow[], from: string, to: string): string[] {
+	const start = rows.findIndex((row) => rowKey(row) === from);
+	const end = rows.findIndex((row) => rowKey(row) === to);
+	if (start < 0 || end < 0) return [to];
+	const [low, high] = start < end ? [start, end] : [end, start];
+	return rows.slice(low, high + 1).map(rowKey);
+}
+
+export function singleSelection(key: string): TreeSelection {
+	return { keys: [key], anchor: key, focus: key };
+}
+
+/** Right-click keeps a selection that already contains the row, and focuses that row. */
+export function contextSelection(selection: TreeSelection, targetKey: string): TreeSelection {
+	if (!selection.keys.includes(targetKey)) return singleSelection(targetKey);
+	return { ...selection, focus: targetKey };
+}
+
+export function pointerSelect(
+	selection: TreeSelection,
+	rows: readonly TreeRow[],
+	targetKey: string,
+	mode: PointerMode,
+): TreeSelection {
+	if (mode === "toggle") {
+		const keys = selection.keys.includes(targetKey)
+			? selection.keys.filter((key) => key !== targetKey)
+			: [...selection.keys, targetKey];
+		const focus = keys.includes(targetKey) ? targetKey : (keys.at(-1) ?? null);
+		return { keys, anchor: targetKey, focus };
+	}
+	if (mode === "range" && rows.some((row) => rowKey(row) === targetKey)) {
+		const anchor = selection.anchor ?? selection.focus ?? targetKey;
+		return { keys: rangeKeys(rows, anchor, targetKey), anchor, focus: targetKey };
+	}
+	return singleSelection(targetKey);
+}
+
+const EXTEND_KEYS = new Set<string>(["ArrowUp", "ArrowDown", "Home", "End"]);
+
+export function isExtendKey(key: string): key is "ArrowUp" | "ArrowDown" | "Home" | "End" {
+	return EXTEND_KEYS.has(key);
+}
+
+/** Shift plus an arrow keeps the anchor and replaces the selection with the range. */
+export function extendSelection(
+	selection: TreeSelection,
+	rows: readonly TreeRow[],
+	key: "ArrowUp" | "ArrowDown" | "Home" | "End",
+): TreeSelection {
+	if (rows.length === 0) return selection;
+	const current = rows.findIndex((row) => rowKey(row) === selection.focus);
+	let next = current;
+	if (key === "Home") next = 0;
+	else if (key === "End") next = rows.length - 1;
+	else if (current < 0) next = key === "ArrowDown" ? 0 : rows.length - 1;
+	else if (key === "ArrowDown") next = Math.min(rows.length - 1, current + 1);
+	else next = Math.max(0, current - 1);
+	const focus = rowKey(rows[next]);
+	const anchor = selection.anchor ?? selection.focus ?? focus;
+	return { keys: rangeKeys(rows, anchor, focus), anchor, focus };
+}
+
+export function selectVisible(selection: TreeSelection, rows: readonly TreeRow[]): TreeSelection {
+	if (rows.length === 0) return selection;
+	const keys = rows.map(rowKey);
+	const focus = selection.focus && keys.includes(selection.focus) ? selection.focus : keys[0];
+	const anchor = selection.anchor && keys.includes(selection.anchor) ? selection.anchor : keys[0];
+	return { keys, anchor, focus };
+}
+
+export function cursorsForKeys(keys: readonly string[], assets: readonly TreeAssetRef[]): TreeCursor[] {
+	const paths = new Map(assets.map((asset) => [asset.assetId, asset.relativePath]));
+	const cursors: TreeCursor[] = [];
+	for (const key of keys) {
+		if (key.startsWith("folder:")) {
+			cursors.push({ kind: "folder", relativePath: key.slice("folder:".length) });
+		} else if (key.startsWith("asset:")) {
+			const assetId = key.slice("asset:".length);
+			const relativePath = paths.get(assetId);
+			if (relativePath) cursors.push({ kind: "asset", assetId, relativePath });
+		}
+	}
+	return cursors;
+}
+
+/** Drop files and folders that already sit inside a selected folder. */
+export function rootLibraryItems(cursors: readonly TreeCursor[]): { assetIds: string[]; folders: string[] } {
+	const folders = cursors.flatMap((cursor) => cursor.kind === "folder" ? [cursor.relativePath] : []);
+	const keptFolders = folders.filter((folder) => !folders.some((other) => other !== folder && folder.startsWith(`${other}/`)));
+	const assetIds = cursors.flatMap((cursor) => {
+		if (cursor.kind !== "asset") return [];
+		if (keptFolders.some((folder) => cursor.relativePath.startsWith(`${folder}/`))) return [];
+		return [cursor.assetId];
+	});
+	return { assetIds, folders: keptFolders };
+}
+
+export function coversPath(folders: readonly string[], relativePath: string): boolean {
+	return folders.some((folder) => relativePath === folder || relativePath.startsWith(`${folder}/`));
+}
+
+export function withoutKey(selection: TreeSelection, key: string): TreeSelection {
+	if (!selection.keys.includes(key)) return selection;
+	const keys = selection.keys.filter((item) => item !== key);
+	const focus = selection.focus === key ? (keys[0] ?? null) : selection.focus;
+	const anchor = selection.anchor === key ? focus : selection.anchor;
+	return { keys, focus, anchor };
+}
+
+export function withoutFolder(selection: TreeSelection, relativePath: string): TreeSelection {
+	const exact = folderKey(relativePath);
+	const child = `${exact}/`;
+	const keys = selection.keys.filter((key) => key !== exact && !key.startsWith(child));
+	if (keys.length === selection.keys.length) return selection;
+	const focus = selection.focus && keys.includes(selection.focus) ? selection.focus : (keys[0] ?? null);
+	const anchor = selection.anchor && keys.includes(selection.anchor) ? selection.anchor : focus;
+	return { keys, focus, anchor };
+}
+
 /** Finder uses ⌘⌫. Explorer uses Delete. */
 export function isLibraryTrashKey(
 	event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },

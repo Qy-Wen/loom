@@ -26,7 +26,28 @@ import { usePanelLayout, type PanelId } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { PanelTabs, WorkPanel } from "./layout/work-panel.tsx";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
-import { isLibraryTrashKey, isTreeNavKey, treeMotion, type TreeCursor, type TreeRow } from "./library/tree-nav.ts";
+import {
+	assetKey,
+	contextSelection,
+	cursorsForKeys,
+	emptyTreeSelection,
+	extendSelection,
+	folderKey,
+	isExtendKey,
+	isLibraryTrashKey,
+	isTreeNavKey,
+	pointerSelect,
+	rootLibraryItems,
+	selectVisible,
+	singleSelection,
+	treeMotion,
+	withoutFolder,
+	withoutKey,
+	type PointerMode,
+	type TreeCursor,
+	type TreeRow,
+	type TreeSelection,
+} from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./panel/error-toast.tsx";
@@ -74,9 +95,11 @@ function stackClass(panels: Layout, loose: readonly PanelId[], share: boolean): 
 	if (modes.has("bottom")) return "side-stack spread";
 	return "side-stack floating";
 }
-type LibraryClipboard =
-	| { kind: "assets"; assetIds: string[]; mode: "copy" | "cut" }
-	| { kind: "folder"; relativePath: string; mode: "copy" | "cut" };
+type LibraryClipboard = {
+	mode: "copy" | "cut";
+	assetIds: string[];
+	folders: string[];
+};
 
 function sortProperties(properties: PropertyDefinition[]): PropertyDefinition[] {
 	return [...properties].sort((a, b) => a.name.localeCompare(b.name));
@@ -126,8 +149,9 @@ export function App(): React.JSX.Element {
 	const { t } = useLocale();
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
-	const [selectedAssetId, setSelectedAssetId] = useState<string | null>(null);
-	const [selectedFolder, setSelectedFolder] = useState<string | null>(null);
+	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
+	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
+	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
@@ -161,6 +185,19 @@ export function App(): React.JSX.Element {
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
 		[library.assets, selectedAssetId],
 	);
+	const selectedKeys = useMemo(() => new Set(picked.keys), [picked.keys]);
+	const selectionDrag = useMemo((): LibraryDrag | null => {
+		const items = rootLibraryItems(cursorsForKeys(picked.keys, library.assets));
+		if (items.assetIds.length + items.folders.length < 2) return null;
+		return {
+			kind: "batch",
+			assets: items.assetIds.flatMap((assetId) => {
+				const asset = library.assets.find((item) => item.assetId === assetId);
+				return asset ? [{ assetId, path: asset.relativePath }] : [];
+			}),
+			folders: items.folders,
+		};
+	}, [picked.keys, library.assets]);
 	const gradeVisible = workbenchView === "library"
 		&& selectedAsset?.type === "image"
 		&& isGradeableImage(selectedAsset.filename);
@@ -196,14 +233,15 @@ export function App(): React.JSX.Element {
 			setLibrary((current) => applyLibraryChange(current, change));
 			if (change.type === "remove") {
 				setPropertyValues((current) => current.filter((value) => value.assetId !== change.assetId));
+				setPicked((current) => withoutKey(current, assetKey(change.assetId)));
 			}
-			if (change.type === "reset") setCollapsedFolders(folderSet(change.snapshot));
+			if (change.type === "reset") {
+				setCollapsedFolders(folderSet(change.snapshot));
+				setPicked(emptyTreeSelection);
+			}
 			if (change.type === "folder_remove") {
 				const prefix = `${change.relativePath}/`;
-				setSelectedFolder((current) => {
-					if (!current) return current;
-					return current === change.relativePath || current.startsWith(prefix) ? null : current;
-				});
+				setPicked((current) => withoutFolder(current, change.relativePath));
 				setRenamingFolder((current) => {
 					if (!current) return current;
 					return current === change.relativePath || current.startsWith(prefix) ? null : current;
@@ -334,6 +372,18 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	function revealFolders(relativePaths: readonly string[]): void {
+		setCollapsedFolders((current) => {
+			const next = new Set(current);
+			for (const relativePath of relativePaths) {
+				next.delete(relativePath);
+				const parent = parentFolder(relativePath);
+				if (parent) next.delete(parent);
+			}
+			return next;
+		});
+	}
+
 	function toggleFolder(relativePath: string): void {
 		setCollapsedFolders((current) => {
 			const next = new Set(current);
@@ -344,13 +394,19 @@ export function App(): React.JSX.Element {
 	}
 
 	function selectAsset(assetId: string): void {
-		setSelectedAssetId(assetId);
-		setSelectedFolder(null);
+		setPicked(singleSelection(assetKey(assetId)));
 	}
 
 	function selectFolder(relativePath: string): void {
-		setSelectedFolder(relativePath);
-		setSelectedAssetId(null);
+		setPicked(singleSelection(folderKey(relativePath)));
+	}
+
+	function clearLibrarySelection(): void {
+		setPicked(emptyTreeSelection);
+	}
+
+	function chooseTreeKey(key: string, mode: PointerMode, rows: readonly TreeRow[]): void {
+		setPicked((current) => pointerSelect(current, rows, key, mode));
 	}
 
 	function cancelRename(): void {
@@ -358,31 +414,32 @@ export function App(): React.JSX.Element {
 		setRenamingFolder(null);
 	}
 
-	function pasteDestination(): string {
-		if (selectedFolder) return selectedFolder;
-		if (selectedAsset) return parentFolder(selectedAsset.relativePath);
-		return "";
+	function pasteDestination(selection: TreeSelection = picked): string {
+		const focus = selection.focus;
+		if (!focus) return "";
+		if (focus.startsWith("folder:")) return focus.slice("folder:".length);
+		const asset = library.assets.find((item) => item.assetId === focus.slice("asset:".length));
+		return asset ? parentFolder(asset.relativePath) : "";
 	}
 
-	function copySelection(): void {
-		if (selectedFolder) {
-			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder, mode: "copy" });
-			return;
-		}
-		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId], mode: "copy" });
+	function clipboardFor(selection: TreeSelection, mode: "copy" | "cut"): LibraryClipboard | null {
+		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
+		if (items.assetIds.length === 0 && items.folders.length === 0) return null;
+		return { mode, assetIds: items.assetIds, folders: items.folders };
 	}
 
-	function cutSelection(): void {
-		if (selectedFolder) {
-			setLibraryClipboard({ kind: "folder", relativePath: selectedFolder, mode: "cut" });
-			return;
-		}
-		if (selectedAssetId) setLibraryClipboard({ kind: "assets", assetIds: [selectedAssetId], mode: "cut" });
+	function copySelection(selection: TreeSelection = picked): void {
+		const next = clipboardFor(selection, "copy");
+		if (next) setLibraryClipboard(next);
+	}
+
+	function cutSelection(selection: TreeSelection = picked): void {
+		const next = clipboardFor(selection, "cut");
+		if (next) setLibraryClipboard(next);
 	}
 
 	function revealCreatedFolder(relativePath: string): void {
-		setSelectedFolder(relativePath);
-		setSelectedAssetId(null);
+		selectFolder(relativePath);
 		setRenamingFolder(relativePath);
 		const parent = parentFolder(relativePath);
 		setCollapsedFolders((current) => {
@@ -407,17 +464,17 @@ export function App(): React.JSX.Element {
 		if (!libraryClipboard) return;
 		setError(null);
 		try {
-			if (libraryClipboard.kind === "assets") {
-				const run = libraryClipboard.mode === "cut" ? window.loom.moveAssetsInto : window.loom.copyAssetsInto;
-				const next = await run(libraryClipboard.assetIds, destFolder);
-				if (next[0]) selectAsset(next[0].assetId);
-			} else {
-				const run = libraryClipboard.mode === "cut" ? window.loom.moveFolderInto : window.loom.copyFolderInto;
-				const created = await run(libraryClipboard.relativePath, destFolder);
-				setSelectedFolder(created);
-				setSelectedAssetId(null);
-			}
-			if (libraryClipboard.mode === "cut") setLibraryClipboard(null);
+			const move = libraryClipboard.mode === "cut";
+			const next = libraryClipboard.assetIds.length > 0
+				? await (move ? window.loom.moveAssetsInto : window.loom.copyAssetsInto)(libraryClipboard.assetIds, destFolder)
+				: [];
+			const folders: string[] = [];
+			const placeFolder = move ? window.loom.moveFolderInto : window.loom.copyFolderInto;
+			for (const folder of libraryClipboard.folders) folders.push(await placeFolder(folder, destFolder));
+			const keys = [...folders.map(folderKey), ...next.map((asset) => assetKey(asset.assetId))];
+			const focus = next[0] ? assetKey(next[0].assetId) : keys[0];
+			if (focus) setPicked({ keys, anchor: focus, focus });
+			if (move) setLibraryClipboard(null);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -427,20 +484,23 @@ export function App(): React.JSX.Element {
 		if (!canDropLibraryItem(destFolder, item)) return;
 		setError(null);
 		try {
-			if (item.kind === "asset") {
+			if (item.kind === "batch") {
+				const movedAssets = item.assets.length > 0
+					? await window.loom.moveAssetsInto(item.assets.map((asset) => asset.assetId), destFolder)
+					: [];
+				const movedFolders: string[] = [];
+				for (const folder of item.folders) movedFolders.push(await window.loom.moveFolderInto(folder, destFolder));
+				const keys = [...movedFolders.map(folderKey), ...movedAssets.map((asset) => assetKey(asset.assetId))];
+				const focus = movedAssets[0] ? assetKey(movedAssets[0].assetId) : keys[0];
+				if (focus) setPicked({ keys, anchor: focus, focus });
+				revealFolders(movedFolders);
+			} else if (item.kind === "asset") {
 				const moved = await window.loom.moveAssetsInto([item.assetId], destFolder);
 				if (moved[0]) selectAsset(moved[0].assetId);
 			} else {
 				const moved = await window.loom.moveFolderInto(item.relativePath, destFolder);
-				setSelectedFolder(moved);
-				setSelectedAssetId(null);
-				setCollapsedFolders((current) => {
-					const next = new Set(current);
-					next.delete(moved);
-					const parent = parentFolder(moved);
-					if (parent) next.delete(parent);
-					return next;
-				});
+				selectFolder(moved);
+				revealFolders([moved]);
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -448,10 +508,11 @@ export function App(): React.JSX.Element {
 	}
 
 	async function showAssetContextMenu(asset: Asset): Promise<void> {
-		selectAsset(asset.assetId);
+		const next = contextSelection(picked, assetKey(asset.assetId));
+		setPicked(next);
 		setError(null);
 		try {
-			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null);
+			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1);
 			if (action === "favorite" || action === "unfavorite") {
 				await window.loom.setFavorite(asset.assetId, action === "favorite");
 			} else if (action === "add_to_chat") {
@@ -463,26 +524,24 @@ export function App(): React.JSX.Element {
 					path: asset.relativePath,
 					assetType: asset.type,
 				});
-			} else if (action === "rename") {
+			} else if (action === "rename" && next.keys.length === 1) {
 				setRenamingAssetId(asset.assetId);
 			} else if (action === "duplicate") {
-				const duplicate = await window.loom.duplicateAsset(asset.assetId);
-				selectAsset(duplicate.assetId);
+				await duplicateSelection(next);
 			} else if (action === "copy") {
-				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId], mode: "copy" });
+				copySelection(next);
 			} else if (action === "cut") {
-				setLibraryClipboard({ kind: "assets", assetIds: [asset.assetId], mode: "cut" });
+				cutSelection(next);
 			} else if (action === "paste") {
 				await pasteInto(parentFolder(asset.relativePath));
 			} else if (action === "new_folder") {
 				await createFolderIn(parentFolder(asset.relativePath));
 			} else if (action === "copy_path") {
-				await window.loom.copyAssetPath(asset.assetId);
+				await copySelectionPaths(next);
 			} else if (action === "reveal") {
 				await window.loom.revealAsset(asset.assetId);
 			} else if (action === "trash") {
-				const removed = await window.loom.trashAsset(asset.assetId);
-				if (removed) setSelectedAssetId(null);
+				if (await trashSelection(next)) clearLibrarySelection();
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -490,27 +549,27 @@ export function App(): React.JSX.Element {
 	}
 
 	async function showFolderContextMenu(relativePath: string): Promise<void> {
-		selectFolder(relativePath);
+		const next = contextSelection(picked, folderKey(relativePath));
+		setPicked(next);
 		setError(null);
 		try {
-			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null);
-			if (action === "rename") {
+			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
+			if (action === "rename" && next.keys.length === 1) {
 				setRenamingFolder(relativePath);
 			} else if (action === "copy") {
-				setLibraryClipboard({ kind: "folder", relativePath, mode: "copy" });
+				copySelection(next);
 			} else if (action === "cut") {
-				setLibraryClipboard({ kind: "folder", relativePath, mode: "cut" });
+				cutSelection(next);
 			} else if (action === "paste") {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
 				await createFolderIn(relativePath);
 			} else if (action === "copy_path") {
-				await window.loom.copyFolderPath(relativePath);
+				await copySelectionPaths(next);
 			} else if (action === "reveal") {
 				await window.loom.revealFolder(relativePath);
 			} else if (action === "trash") {
-				const removed = await window.loom.trashFolder(relativePath);
-				if (removed) setSelectedFolder(null);
+				if (await trashSelection(next)) clearLibrarySelection();
 			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -548,21 +607,26 @@ export function App(): React.JSX.Element {
 		return null;
 	}
 
-	async function duplicateSelected(): Promise<void> {
-		if (!selectedAssetId) return;
+	async function duplicateSelection(selection: TreeSelection = picked): Promise<void> {
+		const { assetIds } = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
+		if (assetIds.length === 0) return;
 		setError(null);
 		try {
-			selectAsset((await window.loom.duplicateAsset(selectedAssetId)).assetId);
+			const created = [];
+			for (const assetId of assetIds) created.push(await window.loom.duplicateAsset(assetId));
+			const keys = created.map((asset) => assetKey(asset.assetId));
+			setPicked({ keys, anchor: keys[0], focus: keys[0] });
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
 
-	async function copySelectedPath(): Promise<void> {
+	async function copySelectionPaths(selection: TreeSelection = picked): Promise<void> {
+		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
+		if (items.assetIds.length === 0 && items.folders.length === 0) return;
 		setError(null);
 		try {
-			if (selectedFolder) await window.loom.copyFolderPath(selectedFolder);
-			else if (selectedAssetId) await window.loom.copyAssetPath(selectedAssetId);
+			await window.loom.copyLibraryPaths(items.assetIds, items.folders);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -578,17 +642,12 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function trashSelected(): Promise<void> {
-		setError(null);
-		try {
-			if (selectedFolder) {
-				if (await window.loom.trashFolder(selectedFolder)) setSelectedFolder(null);
-			} else if (selectedAssetId) {
-				if (await window.loom.trashAsset(selectedAssetId)) setSelectedAssetId(null);
-			}
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		}
+	async function trashSelection(selection: TreeSelection = picked): Promise<boolean> {
+		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
+		if (items.assetIds.length === 1 && items.folders.length === 0) return window.loom.trashAsset(items.assetIds[0]);
+		if (items.folders.length === 1 && items.assetIds.length === 0) return window.loom.trashFolder(items.folders[0]);
+		if (items.assetIds.length === 0 && items.folders.length === 0) return false;
+		return window.loom.trashLibraryItems(items.assetIds, items.folders);
 	}
 
 	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean): void {
@@ -599,10 +658,13 @@ export function App(): React.JSX.Element {
 		const mac = uiPlatform(navigator.userAgent) === "mac";
 		if (event.altKey && mod && event.code === "KeyC") {
 			event.preventDefault();
-			void copySelectedPath();
+			void copySelectionPaths();
 		} else if (event.altKey && mod && event.code === "KeyR") {
 			event.preventDefault();
 			void revealSelected();
+		} else if (mod && !event.altKey && !event.shiftKey && key === "a") {
+			event.preventDefault();
+			setPicked((current) => selectVisible(current, rows));
 		} else if (mod && !event.altKey && key === "c") {
 			event.preventDefault();
 			copySelection();
@@ -614,9 +676,10 @@ export function App(): React.JSX.Element {
 			void pasteInto(pasteDestination());
 		} else if (mod && !event.altKey && !event.shiftKey && key === "d") {
 			event.preventDefault();
-			void duplicateSelected();
+			void duplicateSelection();
 		} else if (event.key === "F2") {
 			event.preventDefault();
+			if (picked.keys.length !== 1) return;
 			if (selectedFolder) setRenamingFolder(selectedFolder);
 			else if (selectedAssetId) setRenamingAssetId(selectedAssetId);
 		} else if (mod && event.shiftKey && key === "n") {
@@ -624,7 +687,18 @@ export function App(): React.JSX.Element {
 			void createFolderIn(pasteDestination());
 		} else if (isLibraryTrashKey(event, mac)) {
 			event.preventDefault();
-			void trashSelected();
+			setError(null);
+			void trashSelection()
+				.then((removed) => {
+					if (removed) clearLibrarySelection();
+				})
+				.catch((cause) => {
+					setError(cause instanceof Error ? cause.message : String(cause));
+				});
+		} else if (!mod && !event.altKey && event.shiftKey && isExtendKey(event.key)) {
+			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
+			event.preventDefault();
+			setPicked((current) => extendSelection(current, rows, event.key as "ArrowUp" | "ArrowDown" | "Home" | "End"));
 		} else if (!mod && !event.altKey && !event.shiftKey && isTreeNavKey(event.key)) {
 			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
 			const motion = treeMotion(rows, libraryCursor(), event.key, folding);
@@ -656,7 +730,7 @@ export function App(): React.JSX.Element {
 	async function renameFolder(relativePath: string, name: string): Promise<void> {
 		setError(null);
 		try {
-			setSelectedFolder(await window.loom.renameFolder(relativePath, name));
+			selectFolder(await window.loom.renameFolder(relativePath, name));
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -792,8 +866,7 @@ export function App(): React.JSX.Element {
 			if (snapshot) {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setLibrary(snapshot);
-				setSelectedAssetId(null);
-				setSelectedFolder(null);
+				clearLibrarySelection();
 				setRenamingAssetId(null);
 				setRenamingFolder(null);
 				setLibraryClipboard(null);
@@ -923,17 +996,18 @@ export function App(): React.JSX.Element {
 						opening={opening}
 						workbenchView={workbenchView}
 						onWorkbenchView={setWorkbenchView}
-						selectedAssetId={selectedAssetId}
-						selectedFolder={selectedFolder}
+						selectedKeys={selectedKeys}
+						focusKey={picked.focus}
 						renamingAssetId={renamingAssetId}
 						renamingFolder={renamingFolder}
 						collapsedFolders={collapsedFolders}
-						cutAssetIds={libraryClipboard?.kind === "assets" && libraryClipboard.mode === "cut" ? libraryClipboard.assetIds : []}
-						cutFolder={libraryClipboard?.kind === "folder" && libraryClipboard.mode === "cut" ? libraryClipboard.relativePath : null}
+						cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
+						cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
+						selectionDrag={selectionDrag}
 						onOpenLibrary={() => void openLibrary()}
 						onToggleFolder={toggleFolder}
-						onSelectAsset={selectAsset}
-						onSelectFolder={selectFolder}
+						onSelectAsset={(assetId, mode, rows) => chooseTreeKey(assetKey(assetId), mode, rows)}
+						onSelectFolder={(relativePath, mode, rows) => chooseTreeKey(folderKey(relativePath), mode, rows)}
 						onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
 						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
 						onLibraryContextMenu={() => void showLibraryContextMenu()}
