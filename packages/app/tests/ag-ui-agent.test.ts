@@ -101,6 +101,37 @@ describe("LoomAgUiAgent", () => {
 		assert.equal(manager.records.get("thread-1")?.title, "latest question");
 	});
 
+	it("uses the saved entry id for the user bubble and the assistant reply", async () => {
+		const manager = new FakeManager([
+			{ type: "agent_start" },
+			{ type: "user_entry", entryId: "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f" },
+			{ type: "text", delta: "hello" },
+			{ type: "assistant_entry", entryId: "0192a1c0-7b40-7d88-9a02-1b2c3d4e5f60", hasToolCall: false },
+			{ type: "tool_start", toolCallId: "call-1", name: "search_assets", args: { query: "sunset" } },
+			{ type: "tool_end", toolCallId: "call-1", name: "search_assets", result: { content: "found" }, isError: false },
+			{ type: "tool_result_entry", entryId: "0192a1c0-7b42-7abc-8000-abcdef012345", toolCallId: "call-1" },
+			{ type: "follow_up_sent", text: "next", entryId: "0192a1c0-7b41-7abc-8000-abcdef012345" },
+			{ type: "agent_end" },
+		]);
+		const events = await lastValueFrom(new LoomAgUiAgent(manager.asManager()).run(runInput()).pipe(toArray()));
+		const userEntry = events.find((event) => event.type === EventType.CUSTOM && (event as { name?: string }).name === "loom.user_entry");
+		assert.deepEqual((userEntry as { value?: { entryId: string } } | undefined)?.value, { entryId: "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f" });
+		const starts = events.filter((event) => event.type === EventType.TEXT_MESSAGE_START);
+		const assistantStart = starts[0] as { messageId?: string; role?: string };
+		const assistantEnd = events.find((event) => event.type === EventType.TEXT_MESSAGE_END) as { messageId?: string };
+		assert.equal(assistantStart?.role, "assistant");
+		assert.equal(assistantEnd?.messageId, assistantStart?.messageId);
+		const adopted = events.filter((event) => event.type === EventType.CUSTOM && (event as { name?: string }).name === "loom.adopt_entry");
+		assert.deepEqual(adopted.map((event) => (event as { value?: { fromId: string; entryId: string } }).value), [
+			{ fromId: assistantStart?.messageId, entryId: "0192a1c0-7b40-7d88-9a02-1b2c3d4e5f60" },
+			{ fromId: (events.find((event) => event.type === EventType.TOOL_CALL_RESULT) as { messageId?: string } | undefined)?.messageId, entryId: "0192a1c0-7b42-7abc-8000-abcdef012345" },
+		]);
+		const toolStart = events.find((event) => event.type === EventType.TOOL_CALL_START) as { parentMessageId?: string };
+		assert.equal(toolStart?.parentMessageId, "0192a1c0-7b40-7d88-9a02-1b2c3d4e5f60");
+		assert.equal((starts[1] as { messageId?: string; role?: string }).messageId, "0192a1c0-7b41-7abc-8000-abcdef012345");
+		assert.equal((starts[1] as { role?: string }).role, "user");
+	});
+
 	it("forwards a prompt trace to the dev listener and leaves it out of the chat", async () => {
 		const manager = new FakeManager([
 			{ type: "agent_start" },

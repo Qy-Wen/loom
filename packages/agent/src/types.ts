@@ -42,6 +42,9 @@ export interface LoomTool<TArgs = unknown, TDetails = unknown> {
 /** Events Loom surfaces to callers. A deliberately small, engine-agnostic subset. */
 export type LoomAgentEvent =
 	| { type: "agent_start" }
+	| { type: "user_entry"; entryId: string }
+	| { type: "assistant_entry"; entryId: string; hasToolCall: boolean }
+	| { type: "tool_result_entry"; entryId: string; toolCallId: string }
 	| { type: "text"; delta: string }
 	| { type: "thinking_start" }
 	| { type: "thinking_delta"; delta: string }
@@ -56,7 +59,7 @@ export type LoomAgentEvent =
 	| { type: "retry_start"; attempt: number }
 	| { type: "retry_end"; success: boolean; errorMessage?: string }
 	| { type: "error"; message: string }
-	| { type: "follow_up_sent"; text: string }
+	| { type: "follow_up_sent"; text: string; entryId: string }
 	| { type: "trace"; spans: LoomTraceSpan[] }
 	| { type: "agent_end" };
 

@@ -1,4 +1,4 @@
-import type { Message } from "@ag-ui/core";
+import { EventType, type Message } from "@ag-ui/core";
 import {
 	CopilotChat,
 	CopilotChatAssistantMessage,
@@ -19,7 +19,7 @@ import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
-import { mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
+import { adoptMessageId, adoptUserEntryId, freshUserTurn, mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
@@ -36,7 +36,7 @@ const ComposerAttachAppliedContext = createContext<() => void>(() => {});
 type ForceView = {
 	installedIds: string[];
 	display: Message[];
-	sentText: string;
+	priorStoredIds: string[];
 };
 
 type BranchActions = {
@@ -702,9 +702,10 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		if (!draftRef.current) onChangeRef.current?.("");
 	}, [threadId]);
 	const appliedDraft = useRef<string | null>(null);
-	const emptySeen = useRef(false);
-	const forceSeen = useRef<ForceView | null>(null);
+	const stored = useContext(StoredMessagesContext);
+	const handoff = useRef<ReadonlySet<string> | null>(null);
 	branch?.bindDeliver((installed, text) => {
+		handoff.current = new Set(live.flatMap((message) => message.id ? [message.id] : []));
 		agent.setMessages(installed);
 		void (async () => {
 			const chips = placedChips([
@@ -778,21 +779,15 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	}, [composerAttach]);
 
 	useEffect(() => {
-		if (forceSeen.current !== force) {
-			forceSeen.current = force;
-			emptySeen.current = false;
-		}
-		if (!force) return;
-		if (force.installedIds.length === 0) {
-			if (live.length === 0) emptySeen.current = true;
-			if (!emptySeen.current) return;
-			if (live[0]?.role === "user" && messageText(live[0]) === force.sentText) clearForce();
+		if (!force) {
+			handoff.current = null;
 			return;
 		}
-		if (!hasPrefixIds(live, force.installedIds)) return;
-		const extra = live.slice(force.installedIds.length);
-		if (extra.some((message) => message.role === "user" && messageText(message) === force.sentText)) clearForce();
-	}, [clearForce, force, live]);
+		const beforeIds = handoff.current;
+		const prefixReady = force.installedIds.length === 0 || hasPrefixIds(live, force.installedIds);
+		const liveSent = !!beforeIds && prefixReady && freshUserTurn(live.slice(force.installedIds.length), beforeIds);
+		if (liveSent || freshUserTurn(stored, new Set(force.priorStoredIds))) clearForce();
+	}, [clearForce, force, live, stored]);
 
 	useEffect(() => {
 		if (!isRunning) {
@@ -1197,6 +1192,8 @@ export function SessionChat({
 	const [busy, setBusy] = useState(false);
 	const [force, setForce] = useState<ForceView | null>(null);
 	const editingRef = useRef<string | null>(null);
+	const storedIds = useRef<string[]>([]);
+	storedIds.current = stored.flatMap((message) => message.id ? [message.id] : []);
 	const deliverRef = useRef<(installed: Message[], text: string) => void>(() => {});
 	const onRecord = useRef(onSessionRecord);
 	const onFork = useRef(onForked);
@@ -1211,6 +1208,27 @@ export function SessionChat({
 	useEffect(() => {
 		agent.threadId = threadId;
 	}, [agent, threadId]);
+	useEffect(() => {
+		const subscription = agent.subscribe({
+			onCustomEvent({ event, messages }) {
+				const value = event.value;
+				const entryId = value && typeof value === "object" && "entryId" in value && typeof value.entryId === "string" ? value.entryId : "";
+				if (!entryId) return;
+				if (event.name === "loom.user_entry") {
+					const next = adoptUserEntryId(messages, entryId);
+					if (!next) return;
+					return { messages: next };
+				}
+				if (event.name !== "loom.adopt_entry") return;
+				const fromId = value && typeof value === "object" && "fromId" in value && typeof value.fromId === "string" ? value.fromId : "";
+				if (!fromId) return;
+				const next = adoptMessageId(messages, fromId, entryId);
+				if (!next) return;
+				return { messages: next };
+			},
+		});
+		return () => subscription.unsubscribe();
+	}, [agent]);
 
 	useEffect(() => {
 		editingRef.current = null;
@@ -1255,6 +1273,7 @@ export function SessionChat({
 		async commitEdit(text) {
 			const entryId = editingRef.current;
 			if (!entryId) return null;
+			const priorStoredIds = storedIds.current;
 			setBusy(true);
 			setError(null);
 			try {
@@ -1263,7 +1282,7 @@ export function SessionChat({
 				const display: Message[] = [...installed, { id: "loom-branch-pending", role: "user", content: text }];
 				editingRef.current = null;
 				setEditingId(null);
-				setForce({ installedIds: installed.map((message) => message.id), display, sentText: text });
+				setForce({ installedIds: installed.map((message) => message.id), display, priorStoredIds });
 				onRecord.current(record);
 				return installed;
 			} catch (cause) {

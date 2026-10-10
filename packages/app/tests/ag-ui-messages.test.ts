@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
+import { adoptMessageId, adoptUserEntryId, freshUserTurn, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
 import { formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
@@ -149,6 +149,29 @@ test("toAgUiMessages drops failed attempts once a reply arrives", () => {
 		messages.map((message) => ("content" in message ? message.content : "")),
 		["你好", "在的", "停"],
 	);
+});
+
+test("a saved user entry id replaces the on-screen id and is visible as a new turn", () => {
+	const previous = [
+		{ id: "old-user", role: "user" as const, content: "first" },
+		{ id: "old-assistant", role: "assistant" as const, content: "reply" },
+	];
+	const before = new Set(previous.map((message) => message.id));
+	assert.equal(freshUserTurn(previous, before), false);
+	const adopted = adoptUserEntryId([
+		...previous,
+		{ id: "local-user", role: "user", content: "edited" },
+	], "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f");
+	assert.equal(adopted?.[adopted.length - 1]?.id, "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f");
+	assert.equal(adoptUserEntryId(adopted ?? [], "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f"), null);
+	const renamed = adoptMessageId([
+		{ id: "msg-1", role: "assistant", content: "hello" },
+		{ id: "tool-result-1", role: "tool", content: "ok", toolCallId: "call-1" },
+	], "tool-result-1", "0192a1c0-7b42-7abc-8000-abcdef012345");
+	assert.equal(renamed?.[1]?.id, "0192a1c0-7b42-7abc-8000-abcdef012345");
+	assert.equal(renamed?.[0]?.id, "msg-1");
+	assert.equal(adoptMessageId(renamed ?? [], "missing", "0192a1c0-7b42-7abc-8000-abcdef012345"), null);
+	assert.equal(freshUserTurn(adopted ?? [], before), true);
 });
 
 test("chat error message ids are distinct from model replies", () => {

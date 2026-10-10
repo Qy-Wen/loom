@@ -117,9 +117,23 @@ export class LoomAgUiAgent extends AbstractAgent {
 			// the whole run makes CopilotChat paint all text, then dump every tool.
 			let messageId = "";
 			let textOpen = false;
-			const openText = (id = nextId("msg")) => {
-				if (textOpen) return;
-				messageId = id;
+			const toolResultIds = new Map<string, string>();
+			const pendingToolEntries = new Map<string, string>();
+			const adoptEntry = (fromId: string, entryId: string) => {
+				if (!fromId || fromId === entryId) return;
+				emit({
+					type: EventType.CUSTOM,
+					name: "loom.adopt_entry",
+					value: { fromId, entryId },
+				} as BaseEvent);
+			};
+			const openText = (id?: string) => {
+				const next = id || (textOpen ? messageId : nextId("msg"));
+				if (textOpen) {
+					if (messageId === next) return;
+					closeText();
+				}
+				messageId = next;
 				textOpen = true;
 				emit({
 					type: EventType.TEXT_MESSAGE_START,
@@ -271,6 +285,40 @@ export class LoomAgUiAgent extends AbstractAgent {
 								case "agent_start":
 									startRun();
 									break;
+								case "user_entry":
+									startRun();
+									emit({
+										type: EventType.CUSTOM,
+										name: "loom.user_entry",
+										value: { entryId: event.entryId },
+									} as BaseEvent);
+									break;
+								case "assistant_entry": {
+									closeThinking();
+									if (textOpen) closeText();
+									if (!messageId) {
+										if (!event.hasToolCall) break;
+										openText(event.entryId);
+										closeText();
+										break;
+									}
+									if (messageId === event.entryId) break;
+									const fromId = messageId;
+									messageId = event.entryId;
+									adoptEntry(fromId, event.entryId);
+									break;
+								}
+								case "tool_result_entry": {
+									const fromId = toolResultIds.get(event.toolCallId);
+									if (!fromId) {
+										pendingToolEntries.set(event.toolCallId, event.entryId);
+										break;
+									}
+									if (fromId === event.entryId) break;
+									toolResultIds.set(event.toolCallId, event.entryId);
+									adoptEntry(fromId, event.entryId);
+									break;
+								}
 								case "error":
 									fail(event.message);
 									break;
@@ -361,9 +409,13 @@ export class LoomAgUiAgent extends AbstractAgent {
 										type: EventType.TOOL_CALL_END,
 										toolCallId: event.toolCallId,
 									} as BaseEvent);
+									const savedResultId = pendingToolEntries.get(event.toolCallId);
+									pendingToolEntries.delete(event.toolCallId);
+									const resultId = savedResultId || nextId("tool-result");
+									toolResultIds.set(event.toolCallId, resultId);
 									emit({
 										type: EventType.TOOL_CALL_RESULT,
-										messageId: nextId("tool-result"),
+										messageId: resultId,
 										toolCallId: event.toolCallId,
 										content: toolResultText(event.result.content),
 										role: "tool",
@@ -386,7 +438,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								case "follow_up_sent": {
 									closeThinking();
 									closeText();
-									const userId = nextId("user");
+									const userId = event.entryId;
 									emit({
 										type: EventType.TEXT_MESSAGE_START,
 										messageId: userId,

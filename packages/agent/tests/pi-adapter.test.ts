@@ -512,7 +512,7 @@ describe("HarnessSessionManager", () => {
 			assert.match(secondRequest, /please continue/);
 			assert.doesNotMatch(secondRequest, /and then this/);
 			assert.doesNotMatch(await arrived[0]!.promise, /please continue/);
-			assert.deepEqual(events.filter((event) => event.type === "follow_up_sent"), [{ type: "follow_up_sent", text: "please continue" }]);
+			assert.deepEqual(events.filter((event) => event.type === "follow_up_sent").map((event) => event.type === "follow_up_sent" ? event.text : ""), ["please continue"]);
 			release[1]!.resolve();
 			const thirdRequest = await arrived[2]!.promise;
 			assert.match(thirdRequest, /and then this/);
@@ -525,10 +525,23 @@ describe("HarnessSessionManager", () => {
 			assert.deepEqual(continued.map((message) => message.role), ["user", "assistant", "user", "assistant", "user", "assistant"]);
 			assert.match(continued[2]!.text, /please continue/);
 			assert.match(continued[4]!.text, /and then this/);
-			assert.deepEqual(events.filter((event) => event.type === "follow_up_sent"), [
-				{ type: "follow_up_sent", text: "please continue" },
-				{ type: "follow_up_sent", text: "and then this" },
-			]);
+			const record = await manager.getSession(session.id);
+			const sent = events.filter((event) => event.type === "follow_up_sent");
+			assert.deepEqual(sent.map((event) => event.type === "follow_up_sent" ? event.text : ""), ["please continue", "and then this"]);
+			const storedUsers = record.messages.filter((message) => message.role === "user");
+			assert.deepEqual(sent.map((event) => event.type === "follow_up_sent" ? event.entryId : ""), storedUsers.slice(1).map((message) => message.id));
+			const storedAssistants = record.messages.filter((message) => message.role === "assistant");
+			assert.deepEqual(
+				events.filter((event) => event.type === "assistant_entry").map((event) => event.type === "assistant_entry" ? event.entryId : ""),
+				storedAssistants.map((message) => message.id),
+			);
+			const storedTools = record.messages.filter((message) => message.role === "toolResult");
+			assert.deepEqual(
+				events.filter((event) => event.type === "tool_result_entry").map((event) => event.type === "tool_result_entry" ? event.entryId : ""),
+				storedTools.map((message) => message.id),
+			);
+			const opened = events.find((event) => event.type === "user_entry");
+			assert.equal(opened?.type === "user_entry" ? opened.entryId : "", storedUsers[0]?.id);
 
 			const stoppedEvents: LoomAgentEvent[] = [];
 			const stopped = manager.prompt(session.id, "again", { onEvent: (event) => stoppedEvents.push(event) });
