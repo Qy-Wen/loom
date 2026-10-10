@@ -8,30 +8,36 @@
 
 ---
 
-## Step 1: Observability
-
-One prompt's run, turn, step, tool, and model-request spans stay in memory. In development, a separate Traces window shows each prompt as a span waterfall. Click a tool or model span to read its arguments and result, or the messages sent and the reply. Each side is truncated. That window is not part of the packaged app. Do not add a second tracing stack. Lifetime Stats already exist.
-
----
-
-## Step 2: LangGraph
+## Step 1: LangGraph
 
 Add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.
 
 ---
 
-## Step 3: Graph retrieval
+## Step 2: Graph retrieval
 
 Retrieve by walking relations, so a search or an answer follows the graph and brings back connected files.
 
 ---
 
-## Step 4: Publishing
+## Step 3: Publishing
 
 Adapters for Xiaohongshu, Douyin, and other platforms.
 
 ---
 
-## Step 5: Packaging
+## Step 4: Packaging
 
 Consider shipping installable builds for macOS and Windows.
+
+---
+
+## Step 5: Deeper memory
+
+`MEMORY.md` is only an index. Entry bodies live elsewhere. A dreaming pass may consolidate, merge, and forget while idle.
+
+---
+
+## Step 6: Finer permissions
+
+When the user approves an operation, they can allow that command from then on, without another prompt. Choosing Full asks once more, and tells the user that this turns off the sandbox and lets the agent run every operation.

@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Observability
+
+One prompt's run, turn, step, tool, and model-request spans stay in memory, on Pi's existing telemetry. In development, a separate Traces window shows each prompt as a span waterfall. Click a tool or model span to read its arguments and result, or the messages sent and the reply. Each side is truncated. That window is not part of the packaged app. Lifetime Stats stay in Settings.
+
+---
+
 ## Process sandbox
 
 `bash`, `ffmpeg`, and `ffprobe` run in a process sandbox by default. They can write the open library and the temp directory. The user profile is not readable, then the library, the temp directory, and the directories of the shell, ffmpeg, and ffprobe are allowed again. Those processes have no network. Settings → Agent can turn it off. Full permission runs them directly, and leaving Full restores the switch. `read`, `edit`, and `write` stay in-process. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](../agent/PERMISSION.md).
