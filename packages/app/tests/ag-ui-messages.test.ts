@@ -129,6 +129,24 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 		{ id: "ck-2", role: "assistant" as const, content: "looking" },
 	];
 	assert.equal(mergeChatMessages(reloaded, streaming).at(-1)?.content, "looking");
+	const saved = [
+		{ id: "user-0", role: "user" as const, content: "你好" },
+		{ id: "asst-0", role: "assistant" as const, content: "你好" },
+		{ id: "user-1", role: "user" as const, content: "背一首宋徽宗的诗" },
+		{ id: "asst-1-thinking", role: "reasoning" as const, content: "The user asks" },
+		{ id: "asst-1", role: "assistant" as const, content: "秋劲拒霜盛" },
+	];
+	const liveFinished = [
+		{ id: "user-1", role: "user" as const, content: "背一首宋徽宗的诗" },
+		{ id: "think-1", role: "reasoning" as const, content: "The user asks" },
+		{ id: "asst-1", role: "assistant" as const, content: "秋劲拒霜盛" },
+	];
+	assert.deepEqual(mergeChatMessages(saved, liveFinished).map((message) => message.id), saved.map((message) => message.id));
+	const streamingOnly = saved.slice(0, 2);
+	assert.deepEqual(
+		mergeChatMessages(streamingOnly, liveFinished).map((message) => message.id),
+		["user-0", "asst-0", "user-1", "think-1", "asst-1"],
+	);
 });
 
 test("mergeChatMessages treats spacing around a chip as the same turn", () => {

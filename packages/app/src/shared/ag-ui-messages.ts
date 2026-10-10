@@ -188,9 +188,10 @@ function diverged(stored: Message[], live: Message[]): boolean {
 }
 
 /**
- * A later user message that disk does not have yet. Reasoning ids from the
- * previous turn often differ (`think-…` versus the saved entry), which looks
- * like a branch and would otherwise hide this turn until the run finishes.
+ * Live messages from the first user id disk does not have yet.
+ * A finished turn stays on disk. Its live copy uses another reasoning id
+ * (`think-…` versus the saved entry), so appending that copy paints the
+ * thinking again after the answer.
  */
 function continuation(stored: Message[], live: Message[]): Message[] | null {
 	const storedUsers = new Set(stored.flatMap((message) => message.role === "user" && message.id ? [message.id] : []));
@@ -254,5 +255,6 @@ export function mergeChatMessages(stored: Message[], live: Message[]): Message[]
 		const chosen = live.length >= stored.length ? live : stored;
 		return chosen === live ? overlayComposerImages(stored, live) : stored;
 	}
-	return [...stored, ...live];
+	// The agent often holds only the current turn, so it does not start like the transcript.
+	return continuation(stored, live) ?? stored;
 }
