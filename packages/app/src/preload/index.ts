@@ -90,6 +90,12 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.settingsChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.settingsChanged, handler);
 	},
+	isFullscreen: () => ipcRenderer.invoke(IPC.isFullscreen),
+	onFullscreenChanged: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, fullscreen: boolean) => listener(fullscreen);
+		ipcRenderer.on(IPC.fullscreenChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.fullscreenChanged, handler);
+	},
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
 	probeModelSlot: (draft) => ipcRenderer.invoke(IPC.probeModelSlot, draft),

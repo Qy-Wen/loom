@@ -152,6 +152,8 @@ export const IPC = {
 	saveImageGrade: "loom:saveImageGrade",
 	pickGradeOutput: "loom:pickGradeOutput",
 	pickGradeLut: "loom:pickGradeLut",
+	isFullscreen: "loom:isFullscreen",
+	fullscreenChanged: "loom:fullscreenChanged",
 } as const;
 
 export interface LoomApi {
@@ -257,6 +259,8 @@ export interface LoomApi {
 	/** Library-relative path, or null when the dialog is canceled. */
 	pickGradeOutput: (assetId: string) => Promise<string | null>;
 	pickGradeLut: () => Promise<{ path: string; name: string } | null>;
+	isFullscreen: () => Promise<boolean>;
+	onFullscreenChanged: (listener: (fullscreen: boolean) => void) => () => void;
 	openDevTrace?: () => Promise<void>;
 }
 

@@ -264,12 +264,17 @@ function registerAssetProtocol(): void {
 }
 
 function createWindow(): void {
+	const mac = process.platform === "darwin";
 	const win = new BrowserWindow({
 		width: 1200,
 		height: 800,
 		minWidth: 860,
 		minHeight: 600,
 		icon: loadAppIcon(),
+		titleBarStyle: mac ? "hiddenInset" : "hidden",
+		...(mac
+			? { trafficLightPosition: { x: 14, y: 13 } }
+			: { titleBarOverlay: { color: "#f3f3f1", symbolColor: "#202124", height: 40 } }),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
@@ -281,6 +286,12 @@ function createWindow(): void {
 	} else {
 		void win.loadFile(join(import.meta.dirname, "../renderer/index.html"));
 	}
+
+	const sendFullscreen = (fullscreen: boolean) => {
+		if (!win.isDestroyed()) win.webContents.send(IPC.fullscreenChanged, fullscreen);
+	};
+	win.on("enter-full-screen", () => sendFullscreen(true));
+	win.on("leave-full-screen", () => sendFullscreen(false));
 }
 
 async function applyProcessSandbox(): Promise<void> {
@@ -293,6 +304,10 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getAgentEndpoint, (): AgentEndpoint => {
 		if (!agentServer) throw new Error("Agent server not started");
 		return { runtimeUrl: agentServer.runtimeUrl, agentId: agentServer.agentId };
+	});
+
+	ipcMain.handle(IPC.isFullscreen, (event): boolean => {
+		return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
 	});
 
 	ipcMain.handle(IPC.getLibrarySnapshot, (): Promise<LibrarySnapshot> => {

@@ -18,8 +18,8 @@
 	transition: background 120ms ease, width 120ms ease;
 }
 
-.resize-handle:hover::after,
-body.resizing-columns .resize-handle::after {
+.resize-handle:not(.row):hover::after,
+body.resizing-columns .resize-handle:not(.row)::after {
 	width: 2px;
 	background: #7896c8;
 }
@@ -326,6 +326,8 @@ body.resizing-columns {
 	pointer-events: none;
 }
 
+.shell.has-bottom > .side-stack:not(.spread):not(.floating):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag),
+.shell.has-above > .side-stack:not(.spread):not(.floating):not(.bottom-band):not(.beside-band):not(.above-band):not(.group-drag),
 .shell.has-bottom > .side-stack.joined.dock-band {
 	display: flex;
 	flex-direction: column;
@@ -569,4 +571,23 @@ body.resizing-rows .resize-handle.row::after {
 .resize-handle.bottom-resize::after {
 	top: auto;
 	bottom: 4px;
+}
+
+/* No library column, so the center band must not reach left into it. */
+.shell.library-collapsed > .workbench,
+.shell.library-collapsed.has-bottom > .bottom-resize,
+.shell.library-collapsed.has-above > .above-resize,
+.shell.library-collapsed.has-bottom > .side-stack.bottom-band,
+.shell.library-collapsed.has-bottom > .side-stack.joined.bottom-band,
+.shell.library-collapsed.has-above > .side-stack.above-band,
+.shell.library-collapsed.has-above > .side-stack.joined.above-band,
+.shell.library-collapsed.has-bottom .bottom-cluster,
+.shell.library-collapsed.has-above .above-cluster,
+.shell.library-collapsed.has-bottom .work-panel.bottom,
+.shell.library-collapsed.has-above .work-panel.above {
+	margin-left: 0;
+}
+
+.shell.library-collapsed > .workbench {
+	padding-left: 0;
 }
