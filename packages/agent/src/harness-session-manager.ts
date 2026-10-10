@@ -156,6 +156,9 @@ export class HarnessSessionManager {
 	private recovery: { cancelled: boolean; done: Promise<void> } | undefined;
 	private deferredRecovery = false;
 	private readonly initializing = new Map<string, Promise<OpenSession & { harness: Harness; lane: AgentLane }>>();
+	/** Bumped when Chat is staged. Open harnesses rebuild on the next prompt. */
+	private chatRevision = 0;
+	private readonly builtChatRevision = new Map<string, number>();
 
 	constructor(options: LoomAgentOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) {
 		this.options = { ...options, tools: [...(options.tools ?? [])] };
@@ -630,6 +633,7 @@ export class HarnessSessionManager {
 	}
 
 	private async ensureHarness(id: string): Promise<OpenSession & { harness: Harness; lane: AgentLane }> {
+		await this.dropStaleChat(id);
 		const existing = this.initializing.get(id);
 		if (existing) return existing;
 		const initializing = (async () => {
@@ -660,6 +664,7 @@ export class HarnessSessionManager {
 			}, CONTEXT);
 			open.harness = harness;
 			open.lane = await harness.lane(MAIN, CONTEXT);
+			this.builtChatRevision.set(id, this.chatRevision);
 			harness.hooks.on("before_tool", (event, context) => this.beforeTool(event, context), { id: "loom.tool_permission" });
 			const stored = (await open.session.getValue(laneConfig(MAIN), CONTEXT))?.value;
 			if (stored?.model.provider !== model.provider || stored.model.modelId !== model.id) {
@@ -995,13 +1000,13 @@ export class HarnessSessionManager {
 		await Promise.all(preparing.map((run) => run.done));
 	}
 
-	setTools(tools: LoomTool[]): Promise<void> {
+	setTools(tools: LoomTool[], options?: { preserveRuns?: boolean }): Promise<void> {
 		return this.serializeTransition(async () => {
 			if (!this.recovery) await this.cancelPreparations();
 			this.options.tools = [...tools];
 			for (const [id, open] of this.handles) {
 				if (!open.harness || !open.lane) continue;
-				if (!open.recovering) await this.abort(id);
+				if (!options?.preserveRuns && !open.recovering) await this.abort(id);
 				const all = this.harnessTools();
 				await open.harness.setTools(all, CONTEXT);
 				await open.lane.setActiveTools(all.map((tool) => tool.name), CONTEXT);
@@ -1009,6 +1014,26 @@ export class HarnessSessionManager {
 			this.deferredRecovery = false;
 			if (this.repo && !this.recovery) this.startRecovery();
 		});
+	}
+
+	/** Remember a Chat slot for the next prompt. The running session keeps its current endpoint. */
+	stageChat(chat: LoomChatEndpoint | undefined): void {
+		this.options.chat = chat;
+		this.refreshHarness();
+	}
+
+	/** Rebuild open sessions on their next prompt. The running prompt keeps its harness. */
+	refreshHarness(): void {
+		this.chatRevision += 1;
+	}
+
+	private async dropStaleChat(id: string): Promise<void> {
+		if (this.running.has(id)) return;
+		const open = this.handles.get(id);
+		if (!open?.harness) return;
+		if ((this.builtChatRevision.get(id) ?? 0) === this.chatRevision) return;
+		this.builtChatRevision.delete(id);
+		await this.release(id);
 	}
 
 	setChat(chat: LoomChatEndpoint | undefined): Promise<void> {
