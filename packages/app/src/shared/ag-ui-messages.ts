@@ -214,6 +214,25 @@ export function freshUserTurn(messages: readonly Message[], beforeIds: ReadonlyS
 	return messages.some((message) => message.role === "user" && !!message.id && !beforeIds.has(message.id));
 }
 
+/**
+ * One shared agent holds a single thread. Its live messages belong to
+ * `agentSessionId`. Another open session must not paint them: a send would
+ * otherwise sit under the previous transcript, and opening that session
+ * would show the new turn.
+ * `hidden` is the list captured at the switch; it stays hidden until the
+ * agent replaces it.
+ */
+export function liveMessagesForSession(
+	sessionId: string,
+	agentSessionId: string,
+	live: readonly Message[],
+	hidden: readonly Message[] | null,
+): Message[] {
+	if (!sessionId || agentSessionId !== sessionId) return [];
+	if (hidden !== null && live === hidden) return [];
+	return live as Message[];
+}
+
 /** Show disk history when the live agent is empty; append new turns; avoid duplicates. */
 export function mergeChatMessages(stored: Message[], live: Message[]): Message[] {
 	if (stored.length === 0) return live;

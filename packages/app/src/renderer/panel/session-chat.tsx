@@ -19,7 +19,7 @@ import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
-import { adoptMessageId, adoptUserEntryId, freshUserTurn, mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
+import { adoptMessageId, adoptUserEntryId, freshUserTurn, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
@@ -844,7 +844,12 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			setAssets([]);
 			setImageError(null);
 			const body = contentWithPlacedAssets(text, placedChips(assetPayload));
-			if (!isRunning || !threadId) {
+			const runningHere = Boolean(isRunning) && !!threadId && agent.threadId === threadId;
+			if (!runningHere) {
+				if (threadId && agent.threadId !== threadId) {
+					agent.threadId = threadId;
+					agent.setMessages([]);
+				}
 				onSubmitMessage?.(body || "\u200b");
 				onChange?.("");
 				return;
@@ -1079,20 +1084,28 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	);
 }) as typeof CopilotChatInput;
 
+/** Point the shared agent at this session and drop the previous thread's live messages. A run stays on the session that started it. */
+function claimIdleSession(agent: { threadId: string; isRunning: boolean; setMessages: (messages: Message[]) => void }, threadId: string): void {
+	if (!threadId || agent.isRunning || agent.threadId === threadId) return;
+	agent.threadId = threadId;
+	agent.setMessages([]);
+}
+
 /** Stable slot so CopilotChat does not remount the view on every parent render. */
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	const stored = useContext(StoredMessagesContext);
 	const force = useContext(ForceContext);
 	const threadId = useContext(ThreadIdContext);
+	const { agent } = useAgent({ updates: [] });
 	const seenThread = useRef<string | null>(null);
 	const skippedLive = useRef<readonly Message[] | null>(null);
 	const rawLive = props.messages ?? [];
-	// The agent still holds the previous thread until a new run replaces it.
+	// Hide the previous thread's array until the agent replaces it.
 	if (seenThread.current !== threadId) {
 		if (seenThread.current !== null) skippedLive.current = rawLive;
 		seenThread.current = threadId;
 	}
-	const live = rawLive === skippedLive.current ? [] : rawLive;
+	const live = liveMessagesForSession(threadId, agent.threadId, rawLive, skippedLive.current);
 	const messages = useMemo(
 		() => (force ? force.display : mergeChatMessages(stored, live)),
 		[force, stored, live],
@@ -1217,11 +1230,13 @@ export function SessionChat({
 	const clearForce = useCallback(() => setForce(null), []);
 	const { agent } = useAgent({ updates: [] });
 	// CopilotChat reconnects when its thread prop changes and repaints the window.
+	// Its own effect also writes a random id onto this same agent, after the layout
+	// pass, so the passive effect claims the session again.
 	useLayoutEffect(() => {
-		agent.threadId = threadId;
+		claimIdleSession(agent, threadId);
 	}, [agent, threadId]);
 	useEffect(() => {
-		agent.threadId = threadId;
+		claimIdleSession(agent, threadId);
 	}, [agent, threadId]);
 	useEffect(() => {
 		const subscription = agent.subscribe({
