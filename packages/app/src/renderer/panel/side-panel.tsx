@@ -128,15 +128,15 @@ export function AgentPanel({
 					await window.loom.unarchiveSession(next);
 				}
 				const record = await window.loom.openSession(next);
-				setSessions(await window.loom.listSessions());
 				setSessionId(next);
 				applyRecord(record);
+				setSessions(await window.loom.listSessions());
 				return;
 			}
 			const created = await window.loom.createSession();
-			setSessions(await window.loom.listSessions());
 			setSessionId(created.id);
 			applyRecord(created);
+			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -149,9 +149,9 @@ export function AgentPanel({
 		setSessionError(null);
 		try {
 			const created = await window.loom.createSession();
-			setSessions(await window.loom.listSessions());
 			setSessionId(created.id);
 			applyRecord(created);
+			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -167,9 +167,9 @@ export function AgentPanel({
 			const selected = sessions.find((session) => session.id === id);
 			if (selected?.status === "archived") await window.loom.unarchiveSession(id);
 			const record = await window.loom.openSession(id);
-			setSessions(await window.loom.listSessions());
 			setSessionId(id);
 			applyRecord(record);
+			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
