@@ -187,6 +187,33 @@ function diverged(stored: Message[], live: Message[]): boolean {
 	return false;
 }
 
+/** Replace one on-screen message id with the entry id assigned when it was saved. */
+export function adoptMessageId(messages: readonly Message[], fromId: string, entryId: string): Message[] | null {
+	const index = messages.findIndex((message) => message.id === fromId);
+	if (index < 0 || messages[index]?.id === entryId) return null;
+	const next = messages.slice();
+	next[index] = { ...messages[index]!, id: entryId };
+	return next;
+}
+
+/** Point the latest on-screen user message at the entry id assigned when it was saved. */
+export function adoptUserEntryId(messages: readonly Message[], entryId: string): Message[] | null {
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (!message || message.role !== "user") continue;
+		if (message.id === entryId) return null;
+		const next = messages.slice();
+		next[index] = { ...message, id: entryId };
+		return next;
+	}
+	return null;
+}
+
+/** A user message whose id was not already on this list. */
+export function freshUserTurn(messages: readonly Message[], beforeIds: ReadonlySet<string>): boolean {
+	return messages.some((message) => message.role === "user" && !!message.id && !beforeIds.has(message.id));
+}
+
 /** Show disk history when the live agent is empty; append new turns; avoid duplicates. */
 export function mergeChatMessages(stored: Message[], live: Message[]): Message[] {
 	if (stored.length === 0) return live;

@@ -859,13 +859,25 @@ export class HarnessSessionManager {
 		}));
 		let userEntryId: string | undefined;
 		unsubscribers.push(open.harness.events.on("message_end", (event) => {
-			if (event.lane !== MAIN || event.message.role !== "user" || !event.entryId) return;
-			userEntryId = event.entryId;
+			if (event.lane !== MAIN || !event.entryId) return;
+			if (event.message.role === "user") {
+				userEntryId = event.entryId;
+				if (event.runId !== operationId) return;
+				const text = pendingFollowUps.get(event.entryId);
+				if (text === undefined) return;
+				pendingFollowUps.delete(event.entryId);
+				emit({ type: "follow_up_sent", text, entryId: event.entryId });
+				return;
+			}
 			if (event.runId !== operationId) return;
-			const text = pendingFollowUps.get(event.entryId);
-			if (text === undefined) return;
-			pendingFollowUps.delete(event.entryId);
-			emit({ type: "follow_up_sent", text });
+			if (event.message.role === "assistant") {
+				const hasToolCall = Array.isArray(event.message.content) && event.message.content.some((part) => part.type === "toolCall");
+				emit({ type: "assistant_entry", entryId: event.entryId, hasToolCall });
+				return;
+			}
+			if (event.message.role === "toolResult") {
+				emit({ type: "tool_result_entry", entryId: event.entryId, toolCallId: event.message.toolCallId });
+			}
 		}));
 		let resolveDone!: () => void;
 		const done = new Promise<void>((resolve) => { resolveDone = resolve; });
@@ -884,6 +896,7 @@ export class HarnessSessionManager {
 			const accepted = await lane.accept({ kind: "prompt", operationId, prompt: message }, traced);
 			if (!accepted.ok) throw accepted.error;
 			emit({ type: "agent_start" });
+			if (userEntryId) emit({ type: "user_entry", entryId: userEntryId });
 			if (run.cancelRequested) {
 				const cancelled = await lane.abort(CONTEXT);
 				if (!cancelled.ok && cancelled.error._tag !== "NoActiveOperation") throw cancelled.error;
