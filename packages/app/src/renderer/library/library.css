@@ -183,13 +183,17 @@
 	border: 0;
 	background: transparent;
 	color: #7c7f84;
-	font-size: 15px;
-	line-height: 1;
 	cursor: pointer;
+	/* Open and closed share this center, so collapsing only turns the mark. */
+	transform: translate(-1.95px, 0.69px);
+}
+
+.folder-chevron svg {
+	display: block;
 }
 
 .folder-chevron.expanded {
-	transform: rotate(90deg);
+	transform: translate(-1.95px, 0.69px) rotate(90deg);
 }
 
 .folder-symbol {
