@@ -67,6 +67,8 @@ export const messages = defineLocale(
 			agent: "Chat",
 			details: "Details",
 			dismiss: "Dismiss",
+			collapsePanels: "Collapse panels",
+			expandPanels: "Expand panels",
 		},
 		library: {
 			noFolder: "No folder open",
@@ -457,6 +459,8 @@ export const messages = defineLocale(
 			agent: "聊天",
 			details: "详情",
 			dismiss: "关闭",
+			collapsePanels: "收起面板",
+			expandPanels: "展开面板",
 		},
 		library: {
 			noFolder: "未打开文件夹",
