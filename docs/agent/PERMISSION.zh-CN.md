@@ -33,7 +33,7 @@ Pi `before_tool`（hook id `loom.tool_permission`）发出 `tool_pending`，工�
 开着时，`bash`、`ffmpeg`、`ffprobe` 跑在沙箱里：
 
 - 可写：当前库和临时目录。
-- 可读：用户目录不可读（macOS 是 `/Users`，Windows 是用户主目录的上一级），然后再放开当前库、临时目录，以及 shell、ffmpeg、ffprobe 所在目录。
+- 可读：用户目录不可读（macOS 和 Linux 是 `/Users` 或 `/home`）。Windows 上沙箱进程是另一个账户，本来就读不到用户主目录，所以不改那里的权限。然后再放开当前库、临时目录，以及 shell、ffmpeg、ffprobe 所在目录。Program Files 和 Windows 目录本来就能读，不再另授一次。
 - 网络：这些进程没有。应用自己照常请求模型。
 
 关掉就直接在这台机器上跑。
@@ -42,4 +42,4 @@ Full permission 也直接跑。开关仍保存原样。离开 Full 后按这个�
 
 `read`、`edit`、`write` 仍在 Loom 进程内。检索专职和生成专职用的是同一个 `bash`，所以同样进沙箱。生成任务是 MCP server，不套这层沙箱。
 
-没有打开的库，或者沙箱起不来，这条命令就不跑。Windows 上沙箱需要 Git Bash，并做一次管理员安装：`npx @anthropic-ai/sandbox-runtime windows-install`。
+没有打开的库，或者沙箱起不来，这条命令就不跑。Windows 上 ffmpeg 和 ffprobe 用 `cmd.exe` 在沙箱里跑。bash 工具仍然需要 Git Bash。`pnpm install` 在沙箱还没装时做一次管理员安装（一次 UAC），已经装好就跳过。

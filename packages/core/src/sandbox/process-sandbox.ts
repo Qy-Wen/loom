@@ -1,9 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { homedir, tmpdir } from "node:os";
+import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { SandboxManager, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import { SandboxManager, VENDORED_SRT_WIN_EXE, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
 import { tryResolveMediaBinaries } from "../media/binaries.ts";
 
 /**
@@ -11,7 +11,12 @@ import { tryResolveMediaBinaries } from "../media/binaries.ts";
  * The open library and the temp directory are writable. The user profile is not
  * readable. Network is off. No library, or a failed wrap, does not spawn.
  * Read, edit, and write stay in-process. MCP and generation jobs are not wrapped.
+ * Windows must name the packaged srt-win.exe; the runtime does not pick it up.
+ * On Windows the inner shell is cmd.exe. Program Files and Windows are already
+ * readable, so they are not granted another ACE. The bash tool still uses Git Bash.
  */
+
+const WINDOWS_PROXY_PORT_RANGE: [number, number] = [20080, 20089];
 
 const HELPER_SOURCE = `
 "use strict";
@@ -92,11 +97,12 @@ export async function releaseProcessSandbox(expected: string): Promise<void> {
 export async function sandboxedArgv(
 	command: string,
 	cwd?: string,
+	shell?: string,
 ): Promise<{ argv: string[]; env: NodeJS.ProcessEnv; cwd: string }> {
 	const library = await ensureSandbox();
 	const spawnCwd = cwd ?? library;
 	try {
-		const wrapped = await SandboxManager.wrapWithSandboxArgv(command, innerShell(), undefined, undefined, spawnCwd);
+		const wrapped = await SandboxManager.wrapWithSandboxArgv(command, shell ?? innerShell(), undefined, undefined, spawnCwd);
 		const commandPath = wrapped.argv[0];
 		if (!commandPath) throw new Error("Sandbox refused to start: the sandbox returned no command.");
 		return { argv: wrapped.argv, env: wrapped.env, cwd: spawnCwd };
@@ -116,7 +122,8 @@ export async function prepareSandboxedBash(execution: {
 	env: Record<string, string>;
 }): Promise<void> {
 	if (!enabled) return;
-	const wrapped = await sandboxedArgv(execution.command, execution.cwd);
+	if (root === undefined) throw new Error("Sandbox refused to start: no library is open.");
+	const wrapped = await sandboxedArgv(execution.command, execution.cwd, bashShell());
 	const helper = await spawnHelperPath();
 	const specPath = join(tmpdir(), `loom-sandbox-${randomBytes(16).toString("hex")}.json`);
 	const env = stringEnv(wrapped.env);
@@ -130,9 +137,28 @@ export async function prepareSandboxedBash(execution: {
 	};
 }
 
+/** One command for the sandbox shell. POSIX on macOS and Linux, cmd.exe on Windows. */
+export function shellCommand(args: string[]): string {
+	if (process.platform === "win32") return quoteCmd(args);
+	return posixCommand(args);
+}
+
 /** One POSIX command. Each argument is single-quoted so the host does not parse it. */
 export function posixCommand(args: string[]): string {
 	return args.map(quotePosix).join(" ");
+}
+
+/** srt-win already wraps this string for cmd /s, so it is parsed as a normal command line. */
+function quoteCmd(args: string[]): string {
+	return args.map(quoteCmdArg).join(" ");
+}
+
+function quoteCmdArg(value: string): string {
+	if (value.length === 0) return '""';
+	if (!/[\s"%&|<>^()!\r\n]/.test(value)) return value;
+	// A bare % is left alone on the command line, but %name% still expands inside quotes.
+	// Close the quote, emit a caret-escaped %, then reopen it.
+	return `"${value.replaceAll('"', '""').replaceAll("%", '"^%"')}"`;
 }
 
 function quotePosix(value: string): string {
@@ -175,25 +201,38 @@ async function apply(wanted: string): Promise<void> {
 function runtimeConfig(libraryRoot: string, shell: string): SandboxRuntimeConfig {
 	const library = canonical(libraryRoot);
 	const temp = canonical(tmpdir());
-	const readable = uniquePaths([library, temp, dirname(shell), ...binaryDirs()]);
-	return {
+	const readable = sandboxReadPaths([library, temp, ...shellReadPaths(shell), ...binaryDirs()]);
+	const config: SandboxRuntimeConfig = {
 		network: {
 			allowedDomains: [],
 			deniedDomains: [],
 		},
 		filesystem: {
-			denyRead: [profileDenyRoot()],
+			denyRead: profileDenyRoots(),
 			allowRead: readable,
 			allowWrite: uniquePaths([library, temp]),
 			denyWrite: [],
 		},
 	};
+	if (process.platform === "win32") {
+		config.windows = {
+			srtWin: { path: VENDORED_SRT_WIN_EXE },
+			// The package default 60080–60089 often sits inside a Windows excluded
+			// port range, so the proxy cannot bind. 20080–20089 stays clear of
+			// that band. Keep this in sync with scripts/ensure-windows-sandbox.mjs.
+			proxyPortRange: WINDOWS_PROXY_PORT_RANGE,
+		};
+	}
+	return config;
 }
 
-function profileDenyRoot(): string {
-	if (process.platform === "win32") return dirname(homedir());
-	if (process.platform === "linux") return "/home";
-	return "/Users";
+function profileDenyRoots(): string[] {
+	// Windows runs the child as a separate account. That account already has no
+	// access to the user profile. Stamping C:\Users fails, and stamping the
+	// profile itself walks every file under it.
+	if (process.platform === "win32") return [];
+	if (process.platform === "linux") return ["/home"];
+	return ["/Users"];
 }
 
 function binaryDirs(): string[] {
@@ -202,17 +241,68 @@ function binaryDirs(): string[] {
 	return [dirname(binaries.ffmpeg), dirname(binaries.ffprobe)];
 }
 
-function innerShell(): string {
-	if (process.platform === "win32") {
-		const found = windowsBash();
-		if (!found) {
-			throw new Error("Sandbox refused to start: Git Bash was not found. Install Git for Windows and try again.");
-		}
-		return found;
+function shellReadPaths(shell: string): string[] {
+	if (process.platform !== "win32") return [dirname(shell)];
+	const bash = windowsBash();
+	return bash ? [dirname(bash)] : [];
+}
+
+/** Paths that need a read ACE. Windows system trees are already readable by Users. */
+export function sandboxReadPaths(paths: string[]): string[] {
+	const unique = uniquePaths(paths);
+	if (process.platform !== "win32") return unique;
+	return unique.filter((path) => !windowsAlreadyReadable(path));
+}
+
+function windowsAlreadyReadable(path: string): boolean {
+	const resolved = canonical(path).replaceAll("/", "\\").toLowerCase();
+	return machineReadableRoots().some((root) => {
+		const base = canonical(root).replaceAll("/", "\\").toLowerCase();
+		return resolved === base || resolved.startsWith(`${base}\\`);
+	});
+}
+
+function machineReadableRoots(): string[] {
+	const names = [
+		"ProgramFiles",
+		"ProgramFiles(x86)",
+		"ProgramW6432",
+		"CommonProgramFiles",
+		"CommonProgramFiles(x86)",
+		"SystemRoot",
+		"windir",
+	];
+	const roots: string[] = [];
+	for (const name of names) {
+		const value = process.env[name];
+		if (value) roots.push(value);
 	}
+	return roots;
+}
+
+function innerShell(): string {
+	if (process.platform === "win32") return windowsCmd();
 	if (existsSync("/bin/bash")) return "/bin/bash";
 	if (existsSync("/bin/sh")) return "/bin/sh";
 	throw new Error("Sandbox refused to start: bash was not found.");
+}
+
+function bashShell(): string {
+	if (process.platform !== "win32") return innerShell();
+	const found = windowsBash();
+	if (!found) {
+		throw new Error(
+			"Sandbox refused to start: Git Bash was not found. The bash tool needs it. Install Git for Windows and try again.",
+		);
+	}
+	return found;
+}
+
+function windowsCmd(): string {
+	const root = process.env.SystemRoot ?? process.env.windir ?? "C:\\Windows";
+	const path = join(root, "System32", "cmd.exe");
+	if (!existsSync(path)) throw new Error("Sandbox refused to start: cmd.exe was not found.");
+	return path;
 }
 
 function windowsBash(): string | undefined {

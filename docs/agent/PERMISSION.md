@@ -33,7 +33,7 @@ Settings → Agent has a process-sandbox switch, on by default, in app user data
 On, `bash`, `ffmpeg`, and `ffprobe` run in the sandbox:
 
 - Write: the open library and the temp directory.
-- Read: the user profile is denied (`/Users` on macOS, the parent of the home directory on Windows), then the library, the temp directory, and the directories of the shell, ffmpeg, and ffprobe are allowed again.
+- Read: the user profile is denied (`/Users` on macOS and Linux). On Windows the sandboxed process is another account, which already cannot read the profile, so that directory is left unchanged. The library, the temp directory, and the directories of the shell, ffmpeg, and ffprobe are allowed. Program Files and Windows are already readable, so they are not granted again.
 - Network: off for these processes. The app still calls the model.
 
 Off, they run directly on this machine.
@@ -42,4 +42,4 @@ Full permission also runs them directly. The switch stays as saved. Leaving Full
 
 `read`, `edit`, and `write` stay in the Loom process. Retrieve and create specialists share this sandbox, because they use the same `bash`. Generation stays an MCP server and is not wrapped in this sandbox.
 
-No open library, or a sandbox that fails to start, does not run the command. On Windows the sandbox needs Git Bash, and a one-time admin install: `npx @anthropic-ai/sandbox-runtime windows-install`.
+No open library, or a sandbox that fails to start, does not run the command. On Windows, ffmpeg and ffprobe run under `cmd.exe`. The bash tool still needs Git Bash. `pnpm install` provisions the sandbox user the first time it is missing (one UAC prompt) and skips that step once it is in place.

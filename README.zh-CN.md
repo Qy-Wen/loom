@@ -39,7 +39,7 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 ## 开发
 
 ```bash
-pnpm install                          # 同时下载本机平台的 ffmpeg 和 ffprobe
+pnpm install                          # 下载本机的 ffmpeg 和 ffprobe；Windows 上缺沙箱时安装一次
 pnpm vendor:ffmpeg --all              # win32-x64、darwin-arm64、darwin-x64
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
 pnpm --filter @loom/agent try:agent   # 冒烟测试：跑通一轮 agent loop
