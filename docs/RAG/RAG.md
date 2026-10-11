@@ -22,7 +22,7 @@ That is RAG. Do not stuff the library into the prompt. Do not embed the whole li
 
 First path is chunked Markdown. Rules: [TEXT.md](./TEXT.md). Image, video, and audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md).
 
-`search_assets` is the retrieve step. It returns **passage + `asset_id`**. Property filters stay AND. FTS and vector ranks fuse with RRF; an optional Rerank slot can reorder those passages. See [TEXT.md](./TEXT.md).
+`search_assets` is the retrieve step. It returns **passage + `asset_id`**. Property filters stay AND. FTS and vector ranks fuse with RRF; one relation hop from those candidates joins the list before an optional Rerank slot reorders it. See [TEXT.md](./TEXT.md).
 
 ---
 

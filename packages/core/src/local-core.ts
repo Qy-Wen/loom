@@ -41,6 +41,7 @@ import {
 	type AssetSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
+import { expandSearchCandidates } from "./retrieval/graph.ts";
 import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
@@ -324,7 +325,14 @@ export class LocalCore {
 					: {}),
 			});
 		}
-		const ranked = await this.rerankMatches(textQuery, matches, rerank, signal);
+		const expanded = expandSearchCandidates(
+			matches,
+			await this.graphStore.listAllRelations(),
+			assetsById,
+			propertiesByAsset,
+			bestChild,
+		);
+		const ranked = await this.rerankMatches(textQuery, expanded, rerank, signal);
 		return { kind: "asset_list", assets: ranked.slice(0, limit), total: ranked.length };
 	}
 

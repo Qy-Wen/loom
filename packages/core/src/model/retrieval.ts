@@ -42,6 +42,15 @@ export interface AssetSearchItem {
 	parentPassage?: string;
 	chunkId?: string;
 	score?: number;
+	/** Set when this row was added by one relation hop. `direction` is from `assetId`. */
+	linkedFrom?: SearchLink;
+}
+
+/** The candidate a search row was expanded from. */
+export interface SearchLink {
+	assetId: string;
+	relationType: string;
+	direction: "out" | "in";
 }
 
 export interface AssetSearchResult {

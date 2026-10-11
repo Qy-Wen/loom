@@ -21,7 +21,7 @@
 
 Do not stuff the library into the prompt. Do not embed the whole library by default.
 
-`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`). If the Rerank slot is on, those fused passages go to `POST /v1/rerank` (`query` + `documents`) before the limit is applied. Empty slot, one hit, or a failed rerank keeps the RRF order. Returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only. No Embedding slot, or a failed query embed, is FTS-only.
+`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`). One relation hop from those candidates joins the list. If the Rerank slot is on, those rows go to `POST /v1/rerank` (`query` + `documents`) before the limit is applied. Empty slot, one row, or a failed rerank keeps that order. Returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only and does not walk relations. No Embedding slot, or a failed query embed, is FTS-only.
 
 ---
 
@@ -48,10 +48,10 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 - sqlite-vec (or JS cosine) over **child** chunks that already have embeddings
 - `assets_fts` ranks filename / path / properties / Level 1 / VLM text as today (`ORDER BY rank`)
 - Property filters stay hard AND on both lists before fusion
-- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. If the Rerank slot is on, send those passages as `documents`. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps RRF. TEI-native `texts` waits.
+- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. Before rerank, walk one hop from those candidates along asset relations, both directions. Each new file is its own row, at most 8 per candidate, with `linkedFrom` (candidate id, relation type, direction from the candidate). Skip ids already in the list. Type and property filters stay on the original candidates. The rerank document is still passage, parent passage, or filename. If the Rerank slot is on, send those documents. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps the expanded RRF order. Rows that rerank or the limit drop are not added back. A query with no text does not walk the graph. TEI-native `texts` waits.
 - A hit can return the child passage and optionally the parent text
 - Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
-- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../AGENT/EVALS.md).
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank) and `packages/core/tests/graph-retrieval.test.ts` (relation hop before rerank). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../AGENT/EVALS.md).
 
 ---
 

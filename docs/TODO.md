@@ -14,24 +14,18 @@ Add a controlled-flow branch beside the chat Agent, and run tasks through fixed 
 
 ---
 
-## Step 2: Graph retrieval
-
-Retrieve by walking relations, so a search or an answer follows the graph and brings back connected files.
-
----
-
-## Step 3: Publishing
+## Step 2: Publishing
 
 Adapters for Xiaohongshu, Douyin, and other platforms.
 
 ---
 
-## Step 4: Packaging
+## Step 3: Packaging
 
 Consider shipping installable builds for macOS and Windows.
 
 ---
 
-## Step 5: Deeper memory
+## Step 4: Deeper memory
 
 `MEMORY.md` is only an index. Entry bodies live elsewhere. A dreaming pass may consolidate, merge, and forget while idle.

@@ -50,7 +50,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			name: "search_assets",
 			description:
 				"Search the open local asset library by filename/path text, Level 1 extracts, VLM/audio captions, embeddings when indexed, media type, and custom properties. " +
-				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF), then an optional Rerank slot reorders those passages. Property filters are AND-combined. " +
+				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF). Before rerank, one relation hop from each fused candidate is added as its own row, at most 8 per candidate. " +
+				"linkedFrom names that candidate, the relation type, and direction from it (out: it points at this row, in: this row points at it). " +
+				"Type and property filters do not apply to those rows. Rerank and the limit decide which remain. A query with no text does not walk relations. " +
 				"Returns asset IDs plus a matching passage when one exists; use inspect_asset for one result.",
 			parameters: {
 				type: "object",
