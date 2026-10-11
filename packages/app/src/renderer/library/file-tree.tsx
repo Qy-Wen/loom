@@ -11,10 +11,21 @@ import {
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
-import { extensionOf, filenameStem, sortAssets } from "../assets/asset-utils.ts";
+import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
 import { uiPlatform } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
-import { assetKey, coversPath, folderKey, pointerMode, type PointerMode } from "./tree-nav.ts";
+import {
+	assetKey,
+	compareAssetPaths,
+	compareFolderPaths,
+	contentModifiedAt,
+	coversPath,
+	folderKey,
+	pointerMode,
+	type FileSort,
+	type FileSortDirection,
+	type PointerMode,
+} from "./tree-nav.ts";
 
 interface FolderNode {
 	name: string;
@@ -263,6 +274,7 @@ function AssetIconTile({
 }
 
 export type FileDisplay = "list" | "icons";
+export type { FileSort, FileSortDirection };
 
 interface FolderTreeRowProps {
 	folder: FolderNode;
@@ -293,6 +305,9 @@ interface FolderTreeRowProps {
 	onDropFiles: (destFolder: string, files: File[]) => void;
 	onDropFolder: (destFolder: string | null) => void;
 	fileDisplay: FileDisplay;
+	fileSort: FileSort;
+	fileSortDirection: FileSortDirection;
+	folderModifiedAt: ReadonlyMap<string, number>;
 }
 
 function FolderTreeRow({
@@ -460,6 +475,9 @@ function FolderTreeRow({
 					onDropFiles={rowProps.onDropFiles}
 					onDropFolder={rowProps.onDropFolder}
 					fileDisplay={rowProps.fileDisplay}
+					fileSort={rowProps.fileSort}
+					fileSortDirection={rowProps.fileSortDirection}
+					folderModifiedAt={rowProps.folderModifiedAt}
 				/>
 			)}
 		</div>
@@ -491,6 +509,9 @@ interface FileTreeRowsProps {
 	onDropFiles: (destFolder: string, files: File[]) => void;
 	onDropFolder: (destFolder: string | null) => void;
 	fileDisplay: FileDisplay;
+	fileSort: FileSort;
+	fileSortDirection: FileSortDirection;
+	folderModifiedAt: ReadonlyMap<string, number>;
 }
 
 function FileTreeRows({
@@ -518,9 +539,14 @@ function FileTreeRows({
 	onDropFiles,
 	onDropFolder,
 	fileDisplay,
+	fileSort,
+	fileSortDirection,
+	folderModifiedAt,
 }: FileTreeRowsProps): React.JSX.Element {
-	const folders = [...node.folders.values()].sort((a, b) => a.name.localeCompare(b.name));
-	const assets = sortAssets(node.assets);
+	const folders = [...node.folders.values()].sort((a, b) => (
+		compareFolderPaths(a.relativePath, b.relativePath, fileSort, folderModifiedAt, fileSortDirection)
+	));
+	const assets = [...node.assets].sort((a, b) => compareAssetPaths(a, b, fileSort, fileSortDirection));
 
 	return (
 		<>
@@ -544,6 +570,9 @@ function FileTreeRows({
 					selectionDrag={selectionDrag}
 					favoriteAssetIds={favoriteAssetIds}
 					fileDisplay={fileDisplay}
+					fileSort={fileSort}
+					fileSortDirection={fileSortDirection}
+					folderModifiedAt={folderModifiedAt}
 					onToggleFolder={onToggleFolder}
 					onSelectFolder={onSelectFolder}
 					onFolderContextMenu={onFolderContextMenu}
@@ -601,7 +630,7 @@ function FileTreeRows({
 	);
 }
 
-export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds"> {
+export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds" | "folderModifiedAt"> {
 	library: LibrarySnapshot;
 }
 
@@ -631,11 +660,13 @@ export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Elemen
 		() => new Set(library.favoriteAssetIds ?? []),
 		[library.favoriteAssetIds],
 	);
+	const folderModifiedAt = useMemo(() => contentModifiedAt(library.assets), [library.assets]);
 	return (
 		<FileTreeRows
 			node={buildFileTree(library)}
 			favoriteAssetIds={favoriteAssetIds}
 			{...props}
+			folderModifiedAt={folderModifiedAt}
 			dropFolder={dropFolder}
 			onDropFolder={setDropFolder}
 		/>
