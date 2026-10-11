@@ -79,6 +79,12 @@ export function joinMembers(members: readonly PanelId[], dragged: PanelId, targe
 	return base.includes(dragged) ? [...base] : [...base, dragged];
 }
 
+/** Dropping a whole tab group onto `target` keeps every member and adds that panel. */
+export function joinGroup(members: readonly PanelId[], target: PanelId): PanelId[] {
+	if (members.includes(target)) return [...members];
+	return [target, ...members];
+}
+
 /** Drop `id` where the pointer sits. Boxes line up with `order`. An unchanged list means the pointer has not crossed a new slot. */
 export function placeTab(
 	order: readonly PanelId[],
@@ -333,11 +339,11 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 		});
 	}
 
-	function panelUnder(id: PanelId, clientX: number, clientY: number): PanelId | null {
+	function panelUnder(skip: ReadonlySet<PanelId>, clientX: number, clientY: number): PanelId | null {
 		let hit: PanelId | null = null;
 		let layer = -1;
 		for (const other of PANEL_IDS) {
-			if (other === id || (other === "grade" && !gradeVisibleRef.current)) continue;
+			if (skip.has(other) || (other === "grade" && !gradeVisibleRef.current)) continue;
 			const element = document.querySelector(`.work-panel[data-panel="${other}"]`);
 			if (!(element instanceof HTMLElement)) continue;
 			const box = element.getBoundingClientRect();
@@ -492,7 +498,8 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 			}, bounds);
 			if (!joinArmed && !pointerInside(move.clientX, move.clientY, originBox)) joinArmed = true;
 			spliceHit = joinArmed ? spliceTarget(id, move.clientX, move.clientY, group, bounds) : null;
-			joinHit = spliceHit || group || !joinArmed ? null : panelUnder(id, move.clientX, move.clientY);
+			const skip = new Set(group ? membersRef.current : [id]);
+			joinHit = spliceHit || !joinArmed ? null : panelUnder(skip, move.clientX, move.clientY);
 			dockHit = !spliceHit && !joinHit && pointerDocks(move.clientX, bounds.right);
 			const metrics = readShellMetrics(shell);
 			const sideInset = group || !otherDocked(id, places, gradeVisibleRef.current) ? 0 : metrics.side;
@@ -525,11 +532,13 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 				return;
 			}
 			if (joinHit) {
-				const nextMembers = joinMembers(membersRef.current, id, joinHit);
+				const nextMembers = group
+					? joinGroup(membersRef.current, joinHit)
+					: joinMembers(membersRef.current, id, joinHit);
 				const shared = places[joinHit];
 				membersRef.current = nextMembers;
 				setMembers(nextMembers);
-				setTab(id);
+				setTab(group && nextMembers.includes(activeTab) ? activeTab : id);
 				setPlaces((current) => sharePlace(current, nextMembers, shared));
 				return;
 			}

@@ -372,6 +372,7 @@ body.resizing-columns {
 	grid-row: auto;
 }
 
+/* Merging into tabs outlines the target. Placing the whole panel fills its landing area. */
 .shell.join-target::before {
 	position: absolute;
 	z-index: 40;
@@ -380,15 +381,21 @@ body.resizing-columns {
 	top: var(--join-y);
 	width: var(--join-w);
 	height: var(--join-h);
-	border: 2px solid #7896c8;
+	border: 2px dashed #5d7eaf;
 	border-radius: 0;
-	background: rgb(120 150 200 / 12%);
+	background: transparent;
 	content: "";
 	pointer-events: none;
 }
 
 .shell.join-target.window-corner::before {
 	border-bottom-right-radius: var(--window-corner);
+}
+
+.work-panel.join-target > .work-panel-title,
+.side-stack:has(> .work-panel.join-target) > .panel-tabs {
+	background: rgb(120 150 200 / 28%);
+	box-shadow: inset 0 -2px 0 #5d7eaf;
 }
 
 .panel-tabs {
