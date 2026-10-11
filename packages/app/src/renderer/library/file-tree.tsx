@@ -399,7 +399,7 @@ function FolderTreeRow({
 					aria-label={collapsed ? t.library.expandFolder : t.library.collapseFolder}
 					onClick={chooseFolder}
 				>
-					›
+					<FolderChevronIcon />
 				</button>
 				{renaming ? (
 					<div className="rename-editor">
@@ -632,6 +632,21 @@ function FileTreeRows({
 
 export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds" | "folderModifiedAt"> {
 	library: LibrarySnapshot;
+}
+
+export function FolderChevronIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+			<path
+				d="M6.5 5.5 9.5 8 6.5 10.5"
+				fill="none"
+				stroke="currentColor"
+				strokeWidth="1.15"
+				strokeLinecap="round"
+				strokeLinejoin="round"
+			/>
+		</svg>
+	);
 }
 
 function FavoriteMark(): React.JSX.Element {

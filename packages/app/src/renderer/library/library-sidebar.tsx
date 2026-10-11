@@ -12,7 +12,7 @@ import {
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
 import { uiPlatform } from "../../shared/locale.ts";
-import { FileTree, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
+import { FileTree, FolderChevronIcon, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
 import { assetKey, pointerMode, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
@@ -490,7 +490,7 @@ export function LibrarySidebar({
 									aria-expanded={queryActive || !favoritesCollapsed}
 									onClick={() => setFavoritesCollapsed(queryActive || !favoritesCollapsed)}
 								>
-									<span className={`folder-chevron${queryActive || !favoritesCollapsed ? " expanded" : ""}`} aria-hidden="true">›</span>
+									<span className={`folder-chevron${queryActive || !favoritesCollapsed ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
 									<span className="favorites-main">
 										<span className="favorites-symbol" aria-hidden="true">
 											<svg viewBox="0 0 16 16" width="16" height="16">
@@ -530,7 +530,7 @@ export function LibrarySidebar({
 									aria-expanded={queryActive || !tagsCollapsed}
 									onClick={() => setTagsCollapsed(queryActive || !tagsCollapsed)}
 								>
-									<span className={`folder-chevron${queryActive || !tagsCollapsed ? " expanded" : ""}`} aria-hidden="true">›</span>
+									<span className={`folder-chevron${queryActive || !tagsCollapsed ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
 									<span className="tags-main">
 										<span className="tags-symbol" aria-hidden="true">
 											<svg viewBox="0 0 16 16" width="16" height="16">
@@ -552,7 +552,7 @@ export function LibrarySidebar({
 													aria-label={open ? t.library.collapseTag : t.library.expandTag}
 													onClick={() => toggleTag(tag.tagId)}
 												>
-													›
+													<FolderChevronIcon />
 												</button>
 												<button
 													className="folder-main"
