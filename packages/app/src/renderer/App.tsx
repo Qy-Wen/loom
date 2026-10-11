@@ -19,7 +19,7 @@ import type {
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
-import { isGradeableImage } from "@loom/core/grade";
+import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { sortAssets } from "./assets/asset-utils.ts";
 import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
 import { usePanelLayout, type PanelId } from "./layout/use-panel-layout.ts";
@@ -212,11 +212,18 @@ export function App(): React.JSX.Element {
 			folders: items.folders,
 		};
 	}, [picked.keys, library.assets]);
-	const gradeVisible = workbenchView === "library"
-		&& selectedAsset?.type === "image"
-		&& isGradeableImage(selectedAsset.filename);
+	const [gradingAssetId, setGradingAssetId] = useState<string | null>(null);
+	const gradeable = !!selectedAsset && (
+		(selectedAsset.type === "image" && isGradeableImage(selectedAsset.filename))
+		|| (selectedAsset.type === "video" && isGradeableVideo(selectedAsset.filename))
+	);
+	const grading = gradeable && gradingAssetId === selectedAsset.assetId;
+	const gradeVisible = workbenchView === "library" && grading;
 	const panels = usePanelLayout(shellRef, gradeVisible);
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
+	useEffect(() => {
+		setGradingAssetId((current) => current === selectedAsset?.assetId ? current : null);
+	}, [selectedAsset?.assetId]);
 
 	useEffect(() => {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
@@ -1106,11 +1113,18 @@ export function App(): React.JSX.Element {
 								assets={library.assets}
 								onGraded={selectAsset}
 								gradeHost={gradeHost}
+								grading={grading}
 								actions={(
 									<PreviewActions
-										canEdit={selectedAsset.type === "image" && isGradeableImage(selectedAsset.filename)}
+										canGrade={gradeable}
+										grading={grading}
+										leaveVideo={selectedAsset.type === "video"}
 										favorite={library.favoriteAssetIds.includes(selectedAsset.assetId)}
-										onEdit={() => panels.focus("grade")}
+										onGrade={() => {
+											setGradingAssetId(selectedAsset.assetId);
+											panels.focus("grade");
+										}}
+										onLeaveGrade={() => setGradingAssetId(null)}
 										onToggleFavorite={() => void togglePreviewFavorite(selectedAsset)}
 										onDelete={() => void trashPreviewed(selectedAsset.assetId)}
 									/>

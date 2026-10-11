@@ -7,17 +7,41 @@ export type AssetPreview = {
 	filename: string;
 	type: Asset["type"];
 	modifiedAt?: number;
+	size?: number;
 };
+
+/** Ask Chromium for a poster frame. A seek inside loadedmetadata is dropped for a file it has never decoded. */
+function videoFrameUrl(url: string): string {
+	return `${url}#t=0.1`;
+}
+
+function revealVideoFrame(video: HTMLVideoElement): void {
+	if (video.dataset.poster === "1") return;
+	video.dataset.poster = "1";
+	const seek = (nudge: boolean) => {
+		if (!video.isConnected || !(video.duration > 0)) return;
+		const base = Math.min(0.1, video.duration / 2);
+		const target = nudge ? Math.min(video.duration, base + 0.05) : base;
+		if (!nudge && video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA && Math.abs(video.currentTime - base) < 0.03) return;
+		video.currentTime = target;
+	};
+	window.setTimeout(() => seek(false), 0);
+	video.addEventListener("seeked", () => {
+		if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) return;
+		window.setTimeout(() => seek(true), 100);
+	}, { once: true });
+}
 
 /** Library-style preview: still for images, a frame for video, a type badge otherwise. */
 export function AssetThumbnail({ asset }: { asset: AssetPreview }): React.JSX.Element {
-	const [failed, setFailed] = useState(false);
+	const [failedUrl, setFailedUrl] = useState<string | null>(null);
 	const url = assetPreviewUrl(asset);
+	const failed = failedUrl === url;
 
 	if (!failed && asset.type === "image") {
 		return (
 			<span className="asset-thumbnail media-thumbnail">
-				<img src={url} alt="" loading="lazy" onError={() => setFailed(true)} />
+				<img src={url} alt="" loading="lazy" onError={() => setFailedUrl(url)} />
 			</span>
 		);
 	}
@@ -25,14 +49,13 @@ export function AssetThumbnail({ asset }: { asset: AssetPreview }): React.JSX.El
 		return (
 			<span className="asset-thumbnail media-thumbnail video-thumbnail">
 				<video
-					src={url}
+					key={url}
+					src={videoFrameUrl(url)}
 					muted
+					playsInline
 					preload="metadata"
-					onLoadedMetadata={(event) => {
-						const video = event.currentTarget;
-						if (video.duration > 0) video.currentTime = Math.min(0.1, video.duration / 2);
-					}}
-					onError={() => setFailed(true)}
+					onLoadedMetadata={(event) => revealVideoFrame(event.currentTarget)}
+					onError={() => setFailedUrl(url)}
 				/>
 			</span>
 		);
@@ -65,13 +88,12 @@ export function createAssetThumbnailElement(asset: AssetPreview): HTMLSpanElemen
 		wrap.className = "asset-thumbnail media-thumbnail video-thumbnail";
 		const video = document.createElement("video");
 		video.muted = true;
+		video.playsInline = true;
 		video.tabIndex = -1;
 		video.preload = "metadata";
-		video.src = url;
-		video.addEventListener("loadedmetadata", () => {
-			if (video.duration > 0) video.currentTime = Math.min(0.1, video.duration / 2);
-		});
+		video.addEventListener("loadedmetadata", () => revealVideoFrame(video));
 		video.addEventListener("error", () => paintBadge(wrap, asset));
+		video.src = videoFrameUrl(url);
 		wrap.append(video);
 		return wrap;
 	}

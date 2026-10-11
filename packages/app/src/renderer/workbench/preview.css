@@ -63,13 +63,34 @@
 	background: #fff;
 }
 
-.grade-stage img {
+.grade-stage img,
+.grade-stage video {
 	display: block;
 	max-width: 100%;
 	max-height: 100%;
 	border-radius: 4px;
 	box-shadow: 0 8px 28px rgb(0 0 0 / 10%);
 	object-fit: contain;
+}
+
+.grade-stage video {
+	background: #111;
+}
+
+.grade-time {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: min(640px, 100%);
+	color: #5f5e5a;
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+}
+
+.grade-time input {
+	flex: 1;
+	min-width: 0;
+	accent-color: #202124;
 }
 
 .grade-frame {
@@ -79,6 +100,10 @@
 	min-width: 0;
 	min-height: 0;
 	line-height: 0;
+}
+
+.preview-stack:has(.grade-time) .grade-frame {
+	max-height: calc(100cqh - 80px);
 }
 
 .grade-shade {

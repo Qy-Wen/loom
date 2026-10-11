@@ -1,4 +1,4 @@
-/** Still-image grade. Numbers are FFmpeg filter parameters, not a remapped scale. */
+/** Grade recipe for a still or a whole video. Numbers are FFmpeg filter parameters, not a remapped scale. */
 
 export interface CurvePoint {
 	x: number;
@@ -117,8 +117,21 @@ export function imageExtension(filename: string): string {
 	return dot <= 0 ? "" : base.slice(dot).toLowerCase();
 }
 
+export const GRADEABLE_VIDEO_EXTENSIONS: ReadonlySet<string> = new Set([
+	".avi",
+	".m4v",
+	".mkv",
+	".mov",
+	".mp4",
+	".webm",
+]);
+
 export function isGradeableImage(filename: string): boolean {
 	return GRADEABLE_IMAGE_EXTENSIONS.has(imageExtension(filename));
+}
+
+export function isGradeableVideo(filename: string): boolean {
+	return GRADEABLE_VIDEO_EXTENSIONS.has(imageExtension(filename));
 }
 
 export function isIdentityCurve(points: CurvePoint[]): boolean {

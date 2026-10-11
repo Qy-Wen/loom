@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { access, copyFile, mkdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { readStoredGrade, writeStoredGrade } from "./grade/store.ts";
-import type { ImageGradeRecord } from "./grade/types.ts";
+import { isGradeableVideo, type ImageGradeRecord } from "./grade/types.ts";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
@@ -51,6 +51,8 @@ import type {
 	ExtractFrameArgs,
 	GradeImageArgs,
 	GradeImageResult,
+	GradeVideoArgs,
+	GradeVideoResult,
 	MediaInfoResult,
 	MediaJobResult,
 	ResizeVideoArgs,
@@ -562,6 +564,52 @@ export class LocalCore {
 
 	getImageGrade(assetId: string): Promise<ImageGradeRecord | undefined> {
 		return readStoredGrade(this.library.getPaths().grades, assetId);
+	}
+
+	async gradeVideo(args: GradeVideoArgs, signal?: AbortSignal): Promise<GradeVideoResult> {
+		const job = await this.media.gradeVideo(args, signal);
+		const asset = await this.library.indexFile(job.output);
+		if (!asset) throw new Error("Could not index graded video");
+		const source = await this.metadataStore.getAssetByPath(job.input);
+		await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+			version: 1,
+			grade: job.grade,
+			sourceAssetId: source?.assetId,
+			lut: job.lut,
+		});
+		return {
+			kind: "grade_video",
+			output: job.output,
+			assetId: asset.assetId,
+			sourceAssetId: source?.assetId,
+		};
+	}
+
+	async getVideoGradeInfo(assetId: string): Promise<{ duration: number }> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) throw new Error("Asset not found");
+		if (!isGradeableVideo(asset.relativePath)) throw new TypeError("Grade supports MP4, MOV, MKV, WebM, M4V, and AVI");
+		const info = await this.media.getMediaInfo(asset.relativePath);
+		return { duration: info.duration ?? 0 };
+	}
+
+	async previewVideoGrade(
+		assetId: string,
+		timeSeconds: number,
+		grade: unknown,
+		lut?: string,
+		force = false,
+		signal?: AbortSignal,
+	): Promise<string | null> {
+		const asset = await this.metadataStore.getAsset(assetId);
+		if (!asset) throw new Error("Asset not found");
+		const bytes = await this.media.previewVideoGrade({
+			path: asset.relativePath,
+			timeSeconds,
+			grade,
+			lut,
+		}, signal, force);
+		return bytes ? bytes.toString("base64") : null;
 	}
 
 	async previewImageGrade(

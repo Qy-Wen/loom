@@ -117,6 +117,9 @@ const api: LoomApi = {
 	getImageGrade: (assetId) => ipcRenderer.invoke(IPC.getImageGrade, assetId),
 	previewImageGrade: (assetId, grade, lut, force) => ipcRenderer.invoke(IPC.previewImageGrade, assetId, grade, lut, force),
 	saveImageGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveImageGrade, assetId, grade, lut, output),
+	getVideoGradeInfo: (assetId) => ipcRenderer.invoke(IPC.getVideoGradeInfo, assetId),
+	previewVideoGrade: (assetId, timeSeconds, grade, lut, force) => ipcRenderer.invoke(IPC.previewVideoGrade, assetId, timeSeconds, grade, lut, force),
+	saveVideoGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveVideoGrade, assetId, grade, lut, output),
 	pickGradeOutput: (assetId) => ipcRenderer.invoke(IPC.pickGradeOutput, assetId),
 	pickGradeLut: () => ipcRenderer.invoke(IPC.pickGradeLut),
 	...(import.meta.env.DEV

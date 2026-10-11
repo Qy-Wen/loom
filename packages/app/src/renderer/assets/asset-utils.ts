@@ -21,9 +21,12 @@ export function filenameStem(filename: string): string {
 	return extension ? filename.slice(0, -extension.length) : filename;
 }
 
-export function assetPreviewUrl(asset: { assetId: string; modifiedAt?: number }): string {
+export function assetPreviewUrl(asset: { assetId: string; modifiedAt?: number; size?: number }): string {
 	const id = encodeURIComponent(asset.assetId);
-	return asset.modifiedAt != null ? `loom-asset://asset/${id}?v=${asset.modifiedAt}` : `loom-asset://asset/${id}`;
+	if (asset.modifiedAt == null) return `loom-asset://asset/${id}`;
+	// Size changes when a file is still being written, so a just-saved video does not keep the first empty response.
+	const version = asset.size ? `${asset.modifiedAt}-${asset.size}` : String(asset.modifiedAt);
+	return `loom-asset://asset/${id}?v=${version}`;
 }
 
 /** Same badge letters the library tree uses for audio / text / other. */

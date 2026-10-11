@@ -42,5 +42,6 @@ describe("asset display helpers", () => {
 
 	it("builds an encoded, cache-busted asset URL", () => {
 		assert.equal(assetPreviewUrl(asset("id with space", "a.jpg", 42)), "loom-asset://asset/id%20with%20space?v=42");
+		assert.equal(assetPreviewUrl({ ...asset("id", "a.jpg", 42), size: 100 }), "loom-asset://asset/id?v=42-100");
 	});
 });

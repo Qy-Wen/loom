@@ -150,6 +150,9 @@ export const IPC = {
 	getImageGrade: "loom:getImageGrade",
 	previewImageGrade: "loom:previewImageGrade",
 	saveImageGrade: "loom:saveImageGrade",
+	getVideoGradeInfo: "loom:getVideoGradeInfo",
+	previewVideoGrade: "loom:previewVideoGrade",
+	saveVideoGrade: "loom:saveVideoGrade",
 	pickGradeOutput: "loom:pickGradeOutput",
 	pickGradeLut: "loom:pickGradeLut",
 	isFullscreen: "loom:isFullscreen",
@@ -256,6 +259,10 @@ export interface LoomApi {
 	/** JPEG bytes, base64. Null when the grade leaves the image unchanged. */
 	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
 	saveImageGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;
+	getVideoGradeInfo: (assetId: string) => Promise<{ duration: number }>;
+	/** JPEG bytes of one graded frame, base64. Null when the grade leaves the frame unchanged. */
+	previewVideoGrade: (assetId: string, timeSeconds: number, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
+	saveVideoGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;
 	/** Library-relative path, or null when the dialog is canceled. */
 	pickGradeOutput: (assetId: string) => Promise<string | null>;
 	pickGradeLut: () => Promise<{ path: string; name: string } | null>;
