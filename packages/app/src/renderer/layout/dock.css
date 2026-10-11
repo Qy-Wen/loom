@@ -591,3 +591,86 @@ body.resizing-rows .resize-handle.row::after {
 .shell.library-collapsed > .workbench {
 	padding-left: 0;
 }
+
+.panel-collapse {
+	position: absolute;
+	z-index: 30;
+	top: 5px;
+	right: 6px;
+	display: grid;
+	place-items: center;
+	width: 26px;
+	height: 26px;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	color: #5f6368;
+	background: transparent;
+	cursor: pointer;
+}
+
+.panel-collapse:hover {
+	background: #e7e7e4;
+}
+
+.panel-collapse[aria-label]::after {
+	content: attr(aria-label);
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 50%;
+	z-index: 30;
+	padding: 3px 7px;
+	border-radius: 5px;
+	background: #202124;
+	color: #fff;
+	font-size: 11px;
+	font-weight: 450;
+	line-height: 1.3;
+	letter-spacing: 0;
+	text-transform: none;
+	white-space: nowrap;
+	opacity: 0;
+	pointer-events: none;
+	transform: translateX(-50%);
+	transition: opacity 80ms ease 280ms;
+}
+
+.panel-collapse[aria-label]:hover::after {
+	opacity: 1;
+}
+
+.shell.panel-collapse-bottom > .panel-collapse {
+	top: calc(100% - var(--bottom-height) + 5px);
+}
+
+.shell.panel-collapse-above > .panel-collapse {
+	top: calc(100% - var(--above-height) + 5px);
+}
+
+.shell:not(.side-hidden):not(.panels-collapsed) .work-panel.dock > .work-panel-title,
+.shell:not(.side-hidden):not(.panels-collapsed) > .side-stack:not(.spread):not(.floating):not(.bottom-band):not(.beside-band):not(.above-band) > .panel-tabs,
+.shell:not(.side-hidden):not(.panels-collapsed) > .side-stack.joined.dock-band > .panel-tabs {
+	padding-right: 40px;
+}
+
+.shell.side-hidden.has-beside:not(.panels-collapsed) .work-panel.beside > .work-panel-title,
+.shell.side-hidden.has-beside:not(.panels-collapsed) .side-stack.beside-band > .panel-tabs,
+.shell.side-hidden.has-beside:not(.panels-collapsed) .side-stack.joined.beside-band > .panel-tabs {
+	padding-right: 40px;
+}
+
+.shell.panel-collapse-bottom .work-panel.bottom > .work-panel-title,
+.shell.panel-collapse-bottom .side-stack.bottom-band > .panel-tabs,
+.shell.panel-collapse-bottom .side-stack.joined.bottom-band > .panel-tabs {
+	padding-right: 40px;
+}
+
+.shell.panel-collapse-above .work-panel.above > .work-panel-title,
+.shell.panel-collapse-above .side-stack.above-band > .panel-tabs,
+.shell.panel-collapse-above .side-stack.joined.above-band > .panel-tabs {
+	padding-right: 40px;
+}
+
+.shell.panels-collapsed > .side-stack {
+	display: none;
+}

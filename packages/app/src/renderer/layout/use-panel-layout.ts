@@ -51,6 +51,7 @@ const JOINED_KEY = "loom.layout.joined";
 const MEMBERS_KEY = "loom.layout.members";
 const TAB_KEY = "loom.layout.tab";
 const TAB_ORDER_KEY = "loom.layout.tabOrder";
+const PANELS_COLLAPSED_KEY = "loom.layout.panelsCollapsed";
 const PANEL_IDS: readonly PanelId[] = ["agent", "details", "grade"];
 
 function isPanelId(value: string): value is PanelId {
@@ -216,8 +217,11 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 	beginDockSplit: (event: ReactPointerEvent<HTMLElement>) => void;
 	beginBottomResize: (event: ReactPointerEvent<HTMLElement>) => void;
 	beginAboveResize: (event: ReactPointerEvent<HTMLElement>) => void;
+	panelsCollapsed: boolean;
+	togglePanelsCollapsed: () => void;
 } {
 	const [members, setMembers] = useState<PanelId[]>(readMembers);
+	const [panelsCollapsed, setPanelsCollapsed] = useState(() => localStorage.getItem(PANELS_COLLAPSED_KEY) === "1");
 	const membersRef = useRef(members);
 	membersRef.current = members;
 	const [places, setPlaces] = useState<Record<PanelId, PanelPlace>>(() => {
@@ -311,6 +315,14 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 		observer.observe(shell);
 		return () => observer.disconnect();
 	}, [shellRef]);
+
+	function togglePanelsCollapsed(): void {
+		setPanelsCollapsed((current) => {
+			const next = !current;
+			localStorage.setItem(PANELS_COLLAPSED_KEY, next ? "1" : "0");
+			return next;
+		});
+	}
 
 	function focus(id: PanelId): void {
 		if (membersRef.current.includes(id)) setTab(id);
@@ -817,6 +829,8 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, grade
 		beginDockSplit,
 		beginBottomResize,
 		beginAboveResize,
+		panelsCollapsed,
+		togglePanelsCollapsed,
 	};
 }
 

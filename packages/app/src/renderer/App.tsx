@@ -24,7 +24,7 @@ import { sortAssets } from "./assets/asset-utils.ts";
 import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
 import { usePanelLayout, type PanelId } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
-import { PanelTabs, WorkPanel } from "./layout/work-panel.tsx";
+import { PanelTabs, PanelsToggle, WorkPanel } from "./layout/work-panel.tsx";
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import {
 	assetKey,
@@ -990,6 +990,14 @@ export function App(): React.JSX.Element {
 		</div>
 	);
 
+	const panelsCollapsed = panels.panelsCollapsed;
+	const docked = !panelsCollapsed && panels.anyDocked;
+	const bottom = !panelsCollapsed && panels.anyBottom;
+	const beside = !panelsCollapsed && panels.anyBeside;
+	const above = !panelsCollapsed && panels.anyAbove;
+	const collapseOnBottom = !panelsCollapsed && !panels.anyDocked && !panels.anyBeside && panels.anyBottom;
+	const collapseOnAbove = !panelsCollapsed && !panels.anyDocked && !panels.anyBeside && !panels.anyBottom && panels.anyAbove;
+
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
@@ -1002,13 +1010,13 @@ export function App(): React.JSX.Element {
 				</div>
 
 				<div
-					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${panels.anyDocked ? "" : " side-hidden"}${panels.anyBottom ? " has-bottom" : ""}${panels.anyBeside ? " has-beside" : ""}${panels.anyAbove ? " has-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
+					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
 					ref={shellRef}
 					style={{
 						...shellStyle,
 						...({ "--window-corner": navigator.userAgent.includes("Windows") ? "8px" : "16px" } as CSSProperties),
-						...(panels.anyBottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
-						...(panels.anyAbove ? { "--above-height": `${panels.aboveHeight}px` } : {}),
+						...(bottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
+						...(above ? { "--above-height": `${panels.aboveHeight}px` } : {}),
 						...(panels.spliceFrame ? {
 							"--splice-x": `${panels.spliceFrame.x}px`,
 							"--splice-y": `${panels.spliceFrame.y}px`,
@@ -1130,7 +1138,9 @@ export function App(): React.JSX.Element {
 						)}
 					</main>
 
-					{panels.anyBeside && (
+					<PanelsToggle collapsed={panelsCollapsed} onToggle={panels.togglePanelsCollapsed} />
+
+					{beside && (
 						<div
 							className="resize-handle beside-resize"
 							role="separator"
@@ -1141,7 +1151,7 @@ export function App(): React.JSX.Element {
 						/>
 					)}
 
-					{panels.anyDocked && (
+					{docked && (
 						<div
 							className="resize-handle side-resize"
 							role="separator"
@@ -1152,7 +1162,7 @@ export function App(): React.JSX.Element {
 						/>
 					)}
 
-					{panels.anyAbove && (
+					{above && (
 						<div
 							className="resize-handle row above-resize"
 							role="separator"
@@ -1162,7 +1172,7 @@ export function App(): React.JSX.Element {
 						/>
 					)}
 
-					{panels.anyBottom && (
+					{bottom && (
 						<div
 							className="resize-handle row bottom-resize"
 							role="separator"
