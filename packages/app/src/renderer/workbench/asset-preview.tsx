@@ -6,6 +6,7 @@ import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { FindBar } from "./find-bar.tsx";
 import { GradeView } from "./grade-view.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
+import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
 const TEXT_EXTENSIONS = new Set([
 	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log",
@@ -75,16 +76,17 @@ function VideoPreview({ asset, url, actions = null }: { asset: Asset; url: strin
 	return (
 		<div className="media-preview video-preview">
 			<div className="preview-stack">
-			<video
-				className={status === "ready" ? undefined : "pending"}
-				controls={status === "ready"}
-				preload="metadata"
-				onLoadedMetadata={() => setStatus("ready")}
-				onError={() => setStatus("failed")}
-			>
-				<source src={url} />
-			</video>
-			{actions}
+				<MediaViewport assetId={asset.assetId} kind="video" actions={actions}>
+					<video
+						className={status === "ready" ? undefined : "pending"}
+						preload="metadata"
+						playsInline
+						onLoadedMetadata={() => setStatus("ready")}
+						onError={() => setStatus("failed")}
+					>
+						<source src={url} />
+					</video>
+				</MediaViewport>
 			</div>
 		</div>
 	);
@@ -125,8 +127,13 @@ export function AssetPreview({
 		return (
 			<div className="media-preview image-preview">
 				<div className="preview-stack">
-					<img src={url} alt={asset.filename} onError={() => setFailed(true)} />
-					{actions}
+					<MediaViewport assetId={asset.assetId} kind="image">
+						<img src={url} alt={asset.filename} draggable={false} onError={() => setFailed(true)} />
+					</MediaViewport>
+					<div className="image-toolbar">
+						{actions}
+						<MediaFullscreenButton />
+					</div>
 				</div>
 			</div>
 		);
