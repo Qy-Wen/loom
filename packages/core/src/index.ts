@@ -36,6 +36,7 @@ export * from "./rag/audio-writeup.ts";
 export * from "./rag/tokenize.ts";
 export * from "./retrieval/rrf.ts";
 export * from "./retrieval/rerank.ts";
+export * from "./retrieval/graph.ts";
 export * from "./stores/ladybug.ts";
 export * from "./stores/memory.ts";
 export * from "./stores/sqlite.ts";

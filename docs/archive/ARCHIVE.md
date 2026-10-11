@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Graph retrieval
+
+On a text query, after RRF fuses full-text and vector candidates and before rerank, walk one `RELATED` hop both ways from each candidate. A neighbor is its own row, with `linkedFrom` (candidate id, relation type, direction from that candidate). An id already in the list is not repeated. At most 8 neighbors per candidate. Type and property filters stay on the original candidates. The rerank document is still the passage, parent passage, or filename. Rows that rerank or the `limit` drop are not added back. A query with no text does not walk the graph. When the retrieve specialist names a connected file, it writes an `<asset_ref>` and the relation type. See [TEXT](../RAG/TEXT.md).
+
+---
+
 ## Finer permissions
 
 Approving a tool can remember that command for the open library, in `<library>/.loom/command-allows.json`, not in app user data. Another library does not use it. `bash` stores the command text with the ends trimmed. `run_ffmpeg` stores the program and its arguments. `write` and `edit` store the tool and the path, not the file contents. Other gated tools store the tool name. Settings → Agent can forget one. Choosing Full asks once more: the sandbox does not apply this time, and the agent can run every operation. The sandbox switch stays as saved. See [PERMISSION](../agent/PERMISSION.md).
