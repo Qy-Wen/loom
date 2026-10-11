@@ -219,10 +219,6 @@ export function App(): React.JSX.Element {
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
 
 	useEffect(() => {
-		if (gradeVisible) panels.focus("grade");
-	}, [gradeVisible, selectedAsset?.assetId]);
-
-	useEffect(() => {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		});
