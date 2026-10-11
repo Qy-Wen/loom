@@ -97,6 +97,21 @@
 	line-height: 0;
 }
 
+.grade-frame.is-loading {
+	display: grid;
+	place-items: center;
+	width: min(720px, 100%);
+	height: min(420px, calc(100cqh - 120px));
+	min-height: 160px;
+}
+
+.grade-loading {
+	margin: 0;
+	color: #8a8d92;
+	font-size: 12px;
+	line-height: 1.4;
+}
+
 .preview-stack:has(.grade-time) .grade-frame {
 	max-height: calc(100cqh - 80px);
 }
