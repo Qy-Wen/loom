@@ -20,7 +20,9 @@ Standard runs `write` and `edit` inside the open library without asking. A path 
 
 `bash` and the FFmpeg tools that write (`extract_frame`, `extract_clip`, `resize_video`, `crop_video`, `convert_format`, `grade_image`, `run_ffmpeg`) wait only on Basic. `update_settings` waits on Basic and Standard. `get_settings` only reads, so it does not wait. `get_media_info` only reads, so it does not wait. MCP and `auto_memory` are not on this list. Retrieve and create specialists use the same gate. Evals set Full so they do not hang.
 
-Stop cancels a wait. Switching to Full approves waits that are already open.
+Stop cancels a wait. Switching to Full asks once more: the process sandbox will not apply, and the agent can run every operation. The sandbox switch stays as saved. Confirming approves waits that are already open.
+
+The tool card can remember that command in the open library, `<library>/.loom/command-allows.json`. Later sessions in that library skip the prompt. Another library does not. `bash` stores the command text with the ends trimmed. `run_ffmpeg` stores the program and its arguments. `write` and `edit` store the tool and the path, not the file contents. The other gated tools store the tool name. Settings → Agent lists these and can forget one.
 
 Pi `before_tool` (hook id `loom.tool_permission`) emits `tool_pending` and pauses until the tool card continues.
 

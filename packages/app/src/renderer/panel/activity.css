@@ -75,6 +75,12 @@
 	background: #f2f2f0;
 }
 
+.tool-call-gate-error {
+	margin: 4px 0 0 13px;
+	color: #b42318;
+	font-size: 12px;
+}
+
 .tool-call-body {
 	position: relative;
 	margin: 4px 0 0 13px;

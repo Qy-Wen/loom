@@ -121,6 +121,13 @@ const api: LoomApi = {
 	getAgentPermission: () => ipcRenderer.invoke(IPC.getAgentPermission),
 	setAgentPermission: (level) => ipcRenderer.invoke(IPC.setAgentPermission, level),
 	resolveToolGate: (toolCallId, decision) => ipcRenderer.invoke(IPC.resolveToolGate, toolCallId, decision),
+	getCommandAllows: () => ipcRenderer.invoke(IPC.getCommandAllows),
+	removeCommandAllow: (allow) => ipcRenderer.invoke(IPC.removeCommandAllow, allow),
+	onCommandAllowsChanged: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, view: Parameters<typeof listener>[0]) => listener(view);
+		ipcRenderer.on(IPC.commandAllowsChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.commandAllowsChanged, handler);
+	},
 	getImageGrade: (assetId) => ipcRenderer.invoke(IPC.getImageGrade, assetId),
 	previewImageGrade: (assetId, grade, lut, force) => ipcRenderer.invoke(IPC.previewImageGrade, assetId, grade, lut, force),
 	saveImageGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveImageGrade, assetId, grade, lut, output),

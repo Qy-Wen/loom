@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Finer permissions
+
+Approving a tool can remember that command for the open library, in `<library>/.loom/command-allows.json`, not in app user data. Another library does not use it. `bash` stores the command text with the ends trimmed. `run_ffmpeg` stores the program and its arguments. `write` and `edit` store the tool and the path, not the file contents. Other gated tools store the tool name. Settings → Agent can forget one. Choosing Full asks once more: the sandbox does not apply this time, and the agent can run every operation. The sandbox switch stays as saved. See [PERMISSION](../agent/PERMISSION.md).
+
+---
+
 ## Observability
 
 One prompt's run, turn, step, tool, and model-request spans stay in memory, on Pi's existing telemetry. In development, a separate Traces window shows each prompt as a span waterfall. Click a tool or model span to read its arguments and result, or the messages sent and the reply. Each side is truncated. That window is not part of the packaged app. Lifetime Stats stay in Settings.
@@ -32,7 +38,7 @@ The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and i
 
 ## Human in the loop
 
-Chat footer: Basic, Standard (default), Full. Stored in app userData, not the library. Standard waits on `write` / `edit` outside the open library and writes inside it directly. Basic also waits on `bash` and the FFmpeg tools that write a file. `get_media_info` does not wait. Full does not wait and does not sandbox. See [PERMISSION](../agent/PERMISSION.md).
+Chat footer: Basic, Standard (default), Full. Stored in app userData, not the library. Standard waits on `write` / `edit` outside the open library and writes inside it directly. Basic also waits on `bash` and the FFmpeg tools that write a file. `get_media_info` does not wait. Full does not wait on tools and does not sandbox; choosing Full asks once more. Remembered commands are under Finer permissions above. See [PERMISSION](../agent/PERMISSION.md).
 
 ---
 
