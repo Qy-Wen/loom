@@ -9,7 +9,10 @@ import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
 	gradeSiblingRelative,
+	gradeVideoSiblingRelative,
+	isGradeableVideo,
 	isGradeExportPath,
+	isGradeVideoExportPath,
 	type EmbeddingProvider,
 	type RerankProvider,
 	type LibraryChange,
@@ -173,7 +176,7 @@ let mcpHost: McpHost | null = null;
 let mcpReady = false;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
-let imageGradePreview: AbortController | null = null;
+let gradePreview: AbortController | null = null;
 // Keep the single manager and LocalCore on the same root across overlapping open requests.
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
@@ -663,9 +666,9 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.previewImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, force: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		imageGradePreview?.abort();
+		gradePreview?.abort();
 		const controller = new AbortController();
-		imageGradePreview = controller;
+		gradePreview = controller;
 		try {
 			return await localCore.previewImageGrade(
 				assetId,
@@ -683,8 +686,49 @@ function registerIpc(): void {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
 		const source = await localCore.metadataStore.getAsset(assetId);
 		if (!source) throw new Error("Asset not found");
-		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath) : undefined;
+		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, false) : undefined;
 		const result = await localCore.gradeImage({
+			path: source.relativePath,
+			grade,
+			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
+			output: chosen,
+			beside: !chosen,
+		});
+		if (result.sourceAssetId && result.sourceAssetId !== result.assetId) {
+			await localCore.createRelation(result.assetId, result.sourceAssetId, "derived from");
+		}
+		return { assetId: result.assetId, path: result.output };
+	});
+	ipcMain.handle(IPC.getVideoGradeInfo, async (_event, assetId: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		return localCore.getVideoGradeInfo(assetId);
+	});
+	ipcMain.handle(IPC.previewVideoGrade, async (_event, assetId: unknown, timeSeconds: unknown, grade: unknown, lut: unknown, force: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		if (typeof timeSeconds !== "number" || !Number.isFinite(timeSeconds)) throw new Error("Time is missing");
+		gradePreview?.abort();
+		const controller = new AbortController();
+		gradePreview = controller;
+		try {
+			return await localCore.previewVideoGrade(
+				assetId,
+				timeSeconds,
+				grade,
+				typeof lut === "string" && lut.trim() ? lut : undefined,
+				force === true,
+				controller.signal,
+			);
+		} catch (error) {
+			if (controller.signal.aborted || (error instanceof Error && error.name === "AbortError")) return null;
+			throw error;
+		}
+	});
+	ipcMain.handle(IPC.saveVideoGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
+		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+		const source = await localCore.metadataStore.getAsset(assetId);
+		if (!source) throw new Error("Asset not found");
+		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, true) : undefined;
+		const result = await localCore.gradeVideo({
 			path: source.relativePath,
 			grade,
 			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
@@ -702,19 +746,20 @@ function registerIpc(): void {
 		if (!snapshot.rootPath) throw new Error("Open a library first.");
 		const source = await localCore.metadataStore.getAsset(assetId);
 		if (!source) throw new Error("Asset not found");
-		const suggested = freeGradeSibling(snapshot.rootPath, source.relativePath);
+		const video = isGradeableVideo(source.relativePath);
+		const suggested = freeGradeSibling(snapshot.rootPath, source.relativePath, video);
 		const owner = BrowserWindow.fromWebContents(event.sender);
 		const { t } = await uiCopy();
 		const options = {
 			title: t.grade.saveAs,
 			defaultPath: join(snapshot.rootPath, ...suggested.split("/")),
 			buttonLabel: t.common.save,
-			filters: gradeSaveFilters(extname(suggested).slice(1)),
+			filters: video ? videoGradeSaveFilters() : gradeSaveFilters(extname(suggested).slice(1)),
 			properties: ["createDirectory", "showOverwriteConfirmation"] as Array<"createDirectory" | "showOverwriteConfirmation">,
 		};
 		const result = owner ? await dialog.showSaveDialog(owner, options) : await dialog.showSaveDialog(options);
 		if (result.canceled || !result.filePath) return null;
-		return gradeOutputPath(result.filePath, source.relativePath);
+		return gradeOutputPath(result.filePath, source.relativePath, video);
 	});
 	ipcMain.handle(IPC.pickGradeLut, async (event) => {
 		const snapshot = await localCore.getLibrarySnapshot();
@@ -1105,15 +1150,19 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 	return { notes, settings: await readPublicSettings() };
 }
 
-async function gradeOutputPath(input: string, sourceRelativePath: string): Promise<string> {
+async function gradeOutputPath(input: string, sourceRelativePath: string, video: boolean): Promise<string> {
 	const snapshot = await localCore.getLibrarySnapshot();
 	if (!snapshot.rootPath) throw new Error("Open a library first.");
 	const { t } = await uiCopy();
 	let absolute = isAbsolute(input) ? input : resolve(snapshot.rootPath, ...input.replaceAll("\\", "/").split("/"));
-	if (!extname(absolute)) absolute += extname(gradeSiblingRelative(sourceRelativePath));
+	if (!extname(absolute)) {
+		absolute += extname(video ? gradeVideoSiblingRelative(sourceRelativePath) : gradeSiblingRelative(sourceRelativePath));
+	}
 	const relativePath = containedLibraryPath(snapshot.rootPath, absolute);
 	if (!relativePath) throw new Error(t.grade.saveOutside);
-	if (!isGradeExportPath(relativePath)) throw new Error(t.grade.saveType);
+	if (video ? !isGradeVideoExportPath(relativePath) : !isGradeExportPath(relativePath)) {
+		throw new Error(video ? t.grade.saveVideoType : t.grade.saveType);
+	}
 	if (relativePath === sourceRelativePath) throw new Error(t.grade.saveOriginal);
 	await assertNotSourceFile(snapshot.rootPath, relativePath, sourceRelativePath, t.grade.saveOriginal);
 	return relativePath;
@@ -1132,9 +1181,9 @@ async function assertNotSourceFile(root: string, relativePath: string, sourceRel
 	}
 }
 
-function freeGradeSibling(root: string, sourceRelativePath: string): string {
+function freeGradeSibling(root: string, sourceRelativePath: string, video = false): string {
 	for (let copy = 1; copy < 1000; copy += 1) {
-		const relativePath = gradeSiblingRelative(sourceRelativePath, copy);
+		const relativePath = video ? gradeVideoSiblingRelative(sourceRelativePath, copy) : gradeSiblingRelative(sourceRelativePath, copy);
 		if (!existsSync(join(root, ...relativePath.split("/")))) return relativePath;
 	}
 	return gradeSiblingRelative(sourceRelativePath, 999);
@@ -1148,6 +1197,14 @@ function containedLibraryPath(root: string, absolutePath: string): string | null
 		return null;
 	}
 	return posix;
+}
+
+function videoGradeSaveFilters(): Array<{ name: string; extensions: string[] }> {
+	return [
+		{ name: "MP4", extensions: ["mp4", "m4v"] },
+		{ name: "QuickTime", extensions: ["mov"] },
+		{ name: "Matroska", extensions: ["mkv"] },
+	];
 }
 
 function gradeSaveFilters(extension: string): Array<{ name: string; extensions: string[] }> {

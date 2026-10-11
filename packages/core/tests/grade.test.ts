@@ -9,10 +9,16 @@ import {
 	LocalCore,
 	adjustCrop,
 	buildGradeImageArgs,
+	buildGradeVideoArgs,
+	buildGradeVideoFrameArgs,
 	buildImageGradeFilter,
 	escapeFfmpegFilterPath,
 	flipCrop,
 	gradeSiblingRelative,
+	gradeVideoAudioArgs,
+	gradeVideoSiblingRelative,
+	isGradeableVideo,
+	isGradeVideoExportPath,
 	isNeutralImageGrade,
 	normalizeImageGrade,
 	rotateCrop,
@@ -202,6 +208,76 @@ test("gradeImage rotates before it crops", async (t) => {
 		const stored = await core.getImageGrade(graded.assetId);
 		assert.equal(stored?.grade.rotation, 1);
 		assert.deepEqual(stored?.grade.crop, { x: 0, y: 0, w: 0.5, h: 1 });
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("video preview seeks one scaled frame and export reencodes with copied audio", () => {
+	assert.equal(isGradeableVideo("clip.mp4"), true);
+	assert.equal(isGradeableVideo("still.png"), false);
+	assert.equal(gradeVideoSiblingRelative("clips/clip.mov"), "clips/clip_grade.mp4");
+	assert.equal(gradeVideoSiblingRelative("clip.webm", 2), "clip_grade 2.mp4");
+	assert.equal(isGradeVideoExportPath("out.mkv"), true);
+	assert.equal(isGradeVideoExportPath("out.webm"), false);
+	assert.deepEqual(gradeVideoAudioArgs("aac"), ["-c:a", "copy"]);
+	assert.deepEqual(gradeVideoAudioArgs(undefined), ["-c:a", "copy"]);
+	assert.deepEqual(gradeVideoAudioArgs("opus"), ["-c:a", "aac", "-b:a", "192k"]);
+
+	const frame = buildGradeVideoFrameArgs("/in.mp4", "/frame.jpg", 1.25);
+	assert.deepEqual(frame.slice(0, 6), ["-y", "-ss", "1.25", "-i", "/in.mp4", "-an"]);
+	assert.ok(frame.includes("-frames:v"));
+	assert.match(frame.join(" "), /scale='min\(1280,iw\)'/);
+
+	const copy = buildGradeVideoArgs("/in.mp4", "/out.mp4", "exposure=exposure=1", "aac");
+	assert.ok(copy.includes("exposure=exposure=1,pad=ceil(iw/2)*2:ceil(ih/2)*2"));
+	assert.ok(copy.includes("libx264"));
+	assert.deepEqual(copy.slice(copy.indexOf("-c:a"), copy.indexOf("-c:a") + 2), ["-c:a", "copy"]);
+	assert.ok(copy.includes("+faststart"));
+	const encoded = buildGradeVideoArgs("/in.webm", "/out.mkv", "exposure=exposure=1", "opus");
+	assert.equal(encoded.includes("+faststart"), false);
+	assert.deepEqual(encoded.slice(encoded.indexOf("-c:a"), encoded.indexOf("-c:a") + 4), ["-c:a", "aac", "-b:a", "192k"]);
+});
+
+test("gradeVideo writes a new movie from the current recipe", async (t) => {
+	if (!tryResolveMediaBinaries()) {
+		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
+		return;
+	}
+	const root = await mkdtemp(join(tmpdir(), "loom-grade-video-"));
+	const core = new LocalCore();
+	try {
+		const { copyFile } = await import("node:fs/promises");
+		const { dirname } = await import("node:path");
+		const { fileURLToPath } = await import("node:url");
+		const fixture = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media", "clip.mp4");
+		await copyFile(fixture, join(root, "clip.mp4"));
+		await core.openLibrary(root);
+		const source = (await core.getLibrarySnapshot()).assets.find((asset) => asset.filename === "clip.mp4");
+		assert.ok(source);
+		await assert.rejects(core.gradeVideo({ path: "clip.mp4", grade: {} }), /does not change/);
+		assert.equal(await core.previewVideoGrade(source.assetId, 0, {}), null);
+
+		const plain = await core.previewVideoGrade(source.assetId, 0, {}, undefined, true);
+		assert.ok(plain && plain.startsWith("/9j/"));
+		const gradedPreview = await core.previewVideoGrade(source.assetId, 0, { exposure: 1 });
+		assert.ok(gradedPreview && gradedPreview.startsWith("/9j/"));
+		assert.notEqual(gradedPreview, plain);
+
+		const graded = await core.gradeVideo({
+			path: "clip.mp4",
+			grade: { exposure: 0.5 },
+			beside: true,
+		});
+		assert.equal(graded.output, "clip_grade.mp4");
+		const output = await readFile(join(root, "clip_grade.mp4"));
+		assert.ok(output.byteLength > 32);
+		const stored = await core.getImageGrade(graded.assetId);
+		assert.equal(stored?.grade.exposure, 0.5);
+		assert.equal(stored?.sourceAssetId, graded.sourceAssetId);
+		const info = await core.getVideoGradeInfo(source.assetId);
+		assert.ok((info.duration ?? 0) > 0);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

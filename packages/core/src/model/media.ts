@@ -74,3 +74,26 @@ export interface GradeImageResult {
 	assetId: string;
 	sourceAssetId?: string;
 }
+
+export interface GradeVideoArgs {
+	path: string;
+	output?: string;
+	/** When `output` is omitted, write beside the source as `name_grade.mp4` instead of `outputs/`. */
+	beside?: boolean;
+	grade: unknown;
+	lut?: string;
+}
+
+export interface PreviewVideoGradeArgs {
+	path: string;
+	timeSeconds: number;
+	grade: unknown;
+	lut?: string;
+}
+
+export interface GradeVideoResult {
+	kind: "grade_video";
+	output: string;
+	assetId: string;
+	sourceAssetId?: string;
+}

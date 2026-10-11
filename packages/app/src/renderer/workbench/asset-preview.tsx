@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@loom/core";
 import { useLocale } from "../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
-import { isGradeableImage } from "@loom/core/grade";
+import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { FindBar } from "./find-bar.tsx";
 import { GradeView } from "./grade-view.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
@@ -95,12 +95,14 @@ export function AssetPreview({
 	assets,
 	onGraded,
 	gradeHost = null,
+	grading = false,
 	actions = null,
 }: {
 	asset: Asset;
 	assets: Asset[];
 	onGraded?: (assetId: string) => void;
 	gradeHost?: HTMLElement | null;
+	grading?: boolean;
 	actions?: ReactNode;
 }): React.JSX.Element {
 	const { t } = useLocale();
@@ -110,7 +112,7 @@ export function AssetPreview({
 
 	useEffect(() => setFailed(false), [asset.assetId]);
 
-	if (asset.type === "image" && isGradeableImage(asset.filename)) {
+	if (grading && ((asset.type === "image" && isGradeableImage(asset.filename)) || (asset.type === "video" && isGradeableVideo(asset.filename)))) {
 		return <GradeView asset={asset} assets={assets} onGraded={onGraded} panelHost={gradeHost} actions={actions} />;
 	}
 	if (asset.type === "video") {
@@ -149,17 +151,23 @@ export function AssetPreview({
 	return <PreviewFallback asset={asset} message={t.preview.unavailable} actions={actions} />;
 }
 
-/** Icon actions under the preview. Edit is only offered for a gradeable image. */
+/** Icon actions under the preview. Grade is a mode for stills and video, not the default view. */
 export function PreviewActions({
-	canEdit,
+	canGrade = false,
+	grading = false,
+	leaveVideo = false,
 	favorite,
-	onEdit,
+	onGrade,
+	onLeaveGrade,
 	onToggleFavorite,
 	onDelete,
 }: {
-	canEdit: boolean;
+	canGrade?: boolean;
+	grading?: boolean;
+	leaveVideo?: boolean;
 	favorite: boolean;
-	onEdit: () => void;
+	onGrade?: () => void;
+	onLeaveGrade?: () => void;
 	onToggleFavorite: () => void;
 	onDelete: () => void;
 }): React.JSX.Element {
@@ -167,9 +175,14 @@ export function PreviewActions({
 	const favoriteLabel = favorite ? t.menu.removeFromFavorites : t.menu.addToFavorites;
 	return (
 		<div className="preview-actions">
-			{canEdit && (
-				<button type="button" title={t.common.edit} aria-label={t.common.edit} onClick={onEdit}>
+			{canGrade && !grading && (
+				<button type="button" title={t.common.edit} aria-label={t.common.edit} onClick={onGrade}>
 					<PencilIcon />
+				</button>
+			)}
+			{canGrade && grading && (
+				<button type="button" title={t.grade.leave} aria-label={t.grade.leave} onClick={onLeaveGrade}>
+					{leaveVideo ? <LeaveGradeIcon /> : <LeaveStillIcon />}
 				</button>
 			)}
 			<button
@@ -193,6 +206,25 @@ function PencilIcon(): React.JSX.Element {
 		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
 			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" d="M9.6 2.2 13.8 6.4 5.4 14.8H1.2v-4.2L9.6 2.2z" />
 			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M8.2 3.6 12.4 7.8" />
+		</svg>
+	);
+}
+
+function LeaveGradeIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<rect x="2" y="2.6" width="12" height="10.8" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" d="M5 2.6v10.8M11 2.6v10.8" />
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M2 5.4h3M2 8h3M2 10.6h3M11 5.4h3M11 8h3M11 10.6h3" />
+		</svg>
+	);
+}
+
+function LeaveStillIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" d="m3.4 11 2.6-2.4 1.8 1.6 1.5-1.3L12.6 11" />
 		</svg>
 	);
 }

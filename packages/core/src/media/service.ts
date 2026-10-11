@@ -3,10 +3,14 @@ import { access, mkdir, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
 	buildGradeImageArgs,
+	buildGradeVideoArgs,
+	buildGradeVideoFrameArgs,
 	buildImageGradeFilter,
 	gradeExportExtension,
 	gradeSiblingRelative,
+	gradeVideoSiblingRelative,
 	isGradeableImage,
+	isGradeableVideo,
 	normalizeImageGrade,
 	type ImageGrade,
 } from "../grade/index.ts";
@@ -17,7 +21,9 @@ import type {
 	ExtractClipArgs,
 	ExtractFrameArgs,
 	GradeImageArgs,
+	GradeVideoArgs,
 	MediaInfoResult,
+	PreviewVideoGradeArgs,
 	MediaJobResult,
 	ResizeVideoArgs,
 	RunFfmpegArgs,
@@ -40,6 +46,8 @@ import { runMediaProcess } from "./run.ts";
 export class MediaService {
 	private readonly library: Library;
 	private readonly run: typeof runMediaProcess;
+	/** One decoded preview frame per source, so a slider move does not seek again. */
+	private readonly gradeFrames = new Map<string, { timeMs: number; file: string }>();
 
 	constructor(library: Library, run: typeof runMediaProcess = runMediaProcess) {
 		this.library = library;
@@ -122,6 +130,43 @@ export class MediaService {
 		return { input: prepared.input.path, output: destination.path, grade: prepared.grade, lut: prepared.lut };
 	}
 
+	async gradeVideo(
+		args: GradeVideoArgs,
+		signal?: AbortSignal,
+	): Promise<{ input: string; output: string; grade: ImageGrade; lut?: string }> {
+		const prepared = this.prepareVideoGrade(args);
+		if (!prepared.filter) throw new TypeError("Grade does not change the video");
+		const cwd = this.cwd();
+		const info = await this.getMediaInfo(prepared.input.path, signal);
+		const destination = args.output
+			? resolveMediaPath(args.output, cwd)
+			: args.beside
+				? await unusedSiblingOutput(prepared.input.path, cwd, true)
+				: await unusedDefaultOutput(prepared.input.path, "grade", "mp4", cwd);
+		await mkdir(dirname(destination.absolutePath), { recursive: true });
+		await this.run({
+			program: "ffmpeg",
+			args: buildGradeVideoArgs(prepared.input.absolutePath, destination.absolutePath, prepared.filter, info.audioCodec),
+			cwd,
+			signal,
+			timeoutMs: 2 * 60 * 60_000,
+		});
+		return { input: prepared.input.path, output: destination.path, grade: prepared.grade, lut: prepared.lut };
+	}
+
+	async previewVideoGrade(args: PreviewVideoGradeArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
+		const prepared = this.prepareVideoGrade(args);
+		if (!prepared.filter && !force) return null;
+		const timeSeconds = clampGradeTime(args.timeSeconds);
+		const frame = await this.gradeFrame(prepared.input.absolutePath, timeSeconds, signal);
+		if (!prepared.filter) return readFile(frame);
+		return this.previewImageGrade({
+			path: frame,
+			grade: args.grade,
+			lut: args.lut,
+		}, signal, force);
+	}
+
 	async previewImageGrade(args: GradeImageArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
 		const prepared = this.prepareGrade(args);
 		if (!prepared.filter && !force) return null;
@@ -186,6 +231,53 @@ export class MediaService {
 		return { input, grade, lut: lut?.path, filter: buildImageGradeFilter(grade, lut?.absolutePath) };
 	}
 
+	private prepareVideoGrade(args: GradeVideoArgs | PreviewVideoGradeArgs): { input: { path: string; absolutePath: string }; filter: string | null; grade: ImageGrade; lut?: string } {
+		const cwd = this.cwd();
+		const input = resolveMediaPath(args.path, cwd);
+		if (!isGradeableVideo(input.path)) {
+			throw new TypeError("Grade supports MP4, MOV, MKV, WebM, M4V, and AVI");
+		}
+		const grade = normalizeImageGrade(args.grade);
+		const lut = this.resolveLut(args.lut);
+		return { input, grade, lut: lut?.path, filter: buildImageGradeFilter(grade, lut?.absolutePath) };
+	}
+
+	private async gradeFrame(absolutePath: string, timeSeconds: number, signal?: AbortSignal): Promise<string> {
+		const timeMs = Math.round(timeSeconds * 1000);
+		const hit = this.gradeFrames.get(absolutePath);
+		if (hit?.timeMs === timeMs) return hit.file;
+		const dir = join(this.library.getPaths().cache, "grade-frames");
+		await mkdir(dir, { recursive: true });
+		const file = join(dir, `${randomUUID()}.jpg`);
+		try {
+			await this.run({
+				program: "ffmpeg",
+				args: buildGradeVideoFrameArgs(absolutePath, file, timeSeconds),
+				cwd: this.cwd(),
+				signal,
+				timeoutMs: 30_000,
+			});
+		} catch (error) {
+			await rm(file, { force: true }).catch(() => undefined);
+			throw error;
+		}
+		const previous = this.gradeFrames.get(absolutePath);
+		this.gradeFrames.set(absolutePath, { timeMs, file });
+		if (previous) await rm(previous.file, { force: true }).catch(() => undefined);
+		this.forgetOldGradeFrames(absolutePath);
+		return file;
+	}
+
+	private forgetOldGradeFrames(keep: string): void {
+		while (this.gradeFrames.size > 4) {
+			const oldest = [...this.gradeFrames.keys()].find((path) => path !== keep);
+			if (!oldest) return;
+			const frame = this.gradeFrames.get(oldest);
+			this.gradeFrames.delete(oldest);
+			if (frame) void rm(frame.file, { force: true }).catch(() => undefined);
+		}
+	}
+
 	private resolveLut(lut: string | undefined): { path: string; absolutePath: string } | undefined {
 		if (!lut?.trim()) return undefined;
 		const resolved = resolveMediaPath(lut, this.cwd());
@@ -224,9 +316,16 @@ export class MediaService {
 	}
 }
 
-async function unusedSiblingOutput(inputPath: string, cwd: string) {
+function clampGradeTime(value: number): number {
+	if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+		throw new TypeError("timeSeconds must be a non-negative finite number");
+	}
+	return value;
+}
+
+async function unusedSiblingOutput(inputPath: string, cwd: string, video = false) {
 	for (let copy = 1; copy < 1000; copy += 1) {
-		const resolved = resolveMediaPath(gradeSiblingRelative(inputPath, copy), cwd);
+		const resolved = resolveMediaPath(video ? gradeVideoSiblingRelative(inputPath, copy) : gradeSiblingRelative(inputPath, copy), cwd);
 		if (resolved.absolutePath === resolveMediaPath(inputPath, cwd).absolutePath) continue;
 		try {
 			await access(resolved.absolutePath);

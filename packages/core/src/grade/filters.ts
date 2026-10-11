@@ -53,6 +53,74 @@ export function buildGradeImageArgs(
 	return args;
 }
 
+/** One scaled frame. Later slider moves reuse this still instead of seeking again. */
+export function buildGradeVideoFrameArgs(inputPath: string, outputPath: string, timeSeconds: number): string[] {
+	return [
+		"-y",
+		"-ss",
+		formatSeconds(timeSeconds),
+		"-i",
+		inputPath,
+		"-an",
+		"-frames:v",
+		"1",
+		"-vf",
+		"scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease",
+		"-q:v",
+		"3",
+		outputPath,
+	];
+}
+
+const COPYABLE_MP4_AUDIO = new Set(["aac", "ac3", "eac3", "mp2", "mp3"]);
+
+/** Copy audio when the MP4 container can hold it. Otherwise encode AAC. */
+export function gradeVideoAudioArgs(audioCodec: string | undefined): string[] {
+	if (!audioCodec || COPYABLE_MP4_AUDIO.has(audioCodec.toLowerCase())) return ["-c:a", "copy"];
+	return ["-c:a", "aac", "-b:a", "192k"];
+}
+
+/**
+ * Full-length export. The grade filter is the still graph; a pad makes both
+ * dimensions even for H.264. Audio is copied when the container allows it.
+ */
+export function buildGradeVideoArgs(
+	inputPath: string,
+	outputPath: string,
+	filter: string,
+	audioCodec?: string,
+): string[] {
+	const args = [
+		"-y",
+		"-i",
+		inputPath,
+		"-map",
+		"0:v:0",
+		"-map",
+		"0:a:0?",
+		"-vf",
+		`${filter},pad=ceil(iw/2)*2:ceil(ih/2)*2`,
+		"-c:v",
+		"libx264",
+		"-preset",
+		"medium",
+		"-crf",
+		"18",
+		"-pix_fmt",
+		"yuv420p",
+		...gradeVideoAudioArgs(audioCodec),
+	];
+	const extension = outputPath.replaceAll("\\", "/").split("/").at(-1)?.split(".").at(-1)?.toLowerCase();
+	if (extension === "mp4" || extension === "m4v" || extension === "mov") args.push("-movflags", "+faststart");
+	args.push(outputPath);
+	return args;
+}
+
+function formatSeconds(value: number): string {
+	if (!Number.isFinite(value) || value < 0) throw new TypeError("timeSeconds must be a non-negative finite number");
+	return String(Math.round(value * 1000) / 1000);
+}
+
 function geometryFilters(grade: ImageGrade): string[] {
 	const filters: string[] = [];
 	if (grade.rotation === 1) filters.push("transpose=1");

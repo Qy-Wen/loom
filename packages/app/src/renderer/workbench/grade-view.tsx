@@ -5,6 +5,7 @@ import {
 	IDENTITY_IMAGE_GRADE,
 	adjustCrop,
 	flipCrop,
+	isGradeableVideo,
 	isNeutralImageGrade,
 	normalizeImageGrade,
 	rotateCrop,
@@ -53,6 +54,8 @@ export function GradeView({
 	const [error, setError] = useState<string | null>(null);
 	const [proxyUrl, setProxyUrl] = useState<string | null>(null);
 	const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
+	const [time, setTime] = useState(0);
+	const [duration, setDuration] = useState(0);
 	const dirtyRef = useRef(false);
 	const proxyRef = useRef<string | null>(null);
 	const fallbackRef = useRef<string | null>(null);
@@ -60,9 +63,12 @@ export function GradeView({
 	fallbackRef.current = fallbackUrl;
 
 	const source = assets.find((item) => item.assetId === sourceId) ?? asset;
+	const video = source.type === "video" && isGradeableVideo(source.filename);
 	const neutral = isNeutralImageGrade(grade) && !lut;
 	const showOriginal = comparing || neutral;
-	const shownUrl = showOriginal ? (fallbackUrl ?? assetPreviewUrl(source)) : (proxyUrl ?? fallbackUrl ?? assetPreviewUrl(source));
+	const shownUrl = video
+		? proxyUrl
+		: showOriginal ? (fallbackUrl ?? assetPreviewUrl(source)) : (proxyUrl ?? fallbackUrl ?? assetPreviewUrl(source));
 
 	useEffect(() => {
 		dirtyRef.current = false;
@@ -74,6 +80,8 @@ export function GradeView({
 		setError(null);
 		setComparing(false);
 		setCropping(false);
+		setTime(0);
+		setDuration(0);
 		triedFallback.current = false;
 		setFallbackUrl((current) => {
 			if (current) URL.revokeObjectURL(current);
@@ -81,8 +89,19 @@ export function GradeView({
 		});
 	}, [asset.assetId]);
 
-	const liveRef = useRef({ sourceId, grade, lut, showOriginal, cropping, previewFailed: t.grade.previewFailed });
-	liveRef.current = { sourceId, grade, lut, showOriginal, cropping, previewFailed: t.grade.previewFailed };
+	useEffect(() => {
+		if (!video) return;
+		let cancelled = false;
+		void window.loom.getVideoGradeInfo(asset.assetId).then((info) => {
+			if (!cancelled) setDuration(Math.max(0, info.duration));
+		}).catch(() => undefined);
+		return () => {
+			cancelled = true;
+		};
+	}, [asset.assetId, video]);
+
+	const liveRef = useRef({ sourceId, grade, lut, showOriginal, cropping, video, time, previewFailed: t.grade.previewFailed });
+	liveRef.current = { sourceId, grade, lut, showOriginal, cropping, video, time, previewFailed: t.grade.previewFailed };
 	const drainRef = useRef<() => void>(() => undefined);
 
 	useEffect(() => {
@@ -95,13 +114,22 @@ export function GradeView({
 			try {
 				while (!stopped) {
 					const shot = liveRef.current;
-					if (shot.showOriginal) return;
-					const key = previewKey(shot.sourceId, shot.grade, shot.lut, shot.cropping);
+					if (!shot.video && shot.showOriginal) return;
+					const key = previewKey(shot);
 					try {
 						const previewGrade = shot.cropping ? { ...shot.grade, crop: FULL_IMAGE_CROP } : shot.grade;
-						const bytes = await window.loom.previewImageGrade(shot.sourceId, previewGrade, shot.lut);
-						if (stopped || liveRef.current.sourceId !== shot.sourceId || liveRef.current.showOriginal) return;
-						if (previewKey(liveRef.current.sourceId, liveRef.current.grade, liveRef.current.lut, liveRef.current.cropping) !== key) continue;
+						const bytes = shot.video
+							? await window.loom.previewVideoGrade(
+								shot.sourceId,
+								shot.time,
+								shot.showOriginal ? IDENTITY_IMAGE_GRADE : previewGrade,
+								shot.showOriginal ? undefined : shot.lut,
+								shot.showOriginal,
+							)
+							: await window.loom.previewImageGrade(shot.sourceId, previewGrade, shot.lut);
+						if (stopped || liveRef.current.sourceId !== shot.sourceId) return;
+						if (!shot.video && liveRef.current.showOriginal) return;
+						if (previewKey(liveRef.current) !== key) continue;
 						setProxyUrl(replaceBlob(proxyRef, bytes));
 						if (bytes) setError(null);
 						return;
@@ -125,7 +153,7 @@ export function GradeView({
 		};
 	}, [sourceId]);
 
-	const previewSignature = previewKey(sourceId, grade, lut, cropping);
+	const previewSignature = previewKey({ sourceId, grade, lut, cropping, video, time, showOriginal });
 	useEffect(() => {
 		drainRef.current();
 	}, [previewSignature, showOriginal]);
@@ -169,7 +197,9 @@ export function GradeView({
 				if (!picked) return;
 				output = picked;
 			}
-			const result = await window.loom.saveImageGrade(sourceId, grade, lut, output);
+			const result = video
+				? await window.loom.saveVideoGrade(sourceId, grade, lut, output)
+				: await window.loom.saveImageGrade(sourceId, grade, lut, output);
 			dirtyRef.current = false;
 			setDirty(false);
 			onGraded?.(result.assetId);
@@ -193,18 +223,20 @@ export function GradeView({
 			<div className="grade-stage">
 				<div className="preview-stack">
 					<div className="grade-frame">
-						<img
-							src={shownUrl}
-							alt={asset.filename}
-							onError={() => {
-								if (triedFallback.current || !showOriginal) return;
-								triedFallback.current = true;
-								void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
-									if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
-								}).catch(() => undefined);
-							}}
-						/>
-						{cropping && !comparing && (
+						{shownUrl ? (
+							<img
+								src={shownUrl}
+								alt={asset.filename}
+								onError={() => {
+									if (video || triedFallback.current || !showOriginal) return;
+									triedFallback.current = true;
+									void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
+										if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
+									}).catch(() => undefined);
+								}}
+							/>
+						) : null}
+						{cropping && !comparing && shownUrl && (
 							<GradeCrop
 								crop={grade.crop}
 								moveLabel={t.grade.moveCrop}
@@ -213,6 +245,22 @@ export function GradeView({
 							/>
 						)}
 					</div>
+					{video && (
+						<label className="grade-time">
+							<span>{formatClock(time)}</span>
+							<input
+								type="range"
+								min={0}
+								max={duration > 0 ? duration : 0}
+								step={duration > 0 ? Math.min(0.05, duration) : 1}
+								value={Math.min(time, duration > 0 ? duration : 0)}
+								aria-label={t.grade.time}
+								disabled={duration <= 0}
+								onChange={(event) => setTime(Number(event.target.value))}
+							/>
+							<span>{formatClock(duration)}</span>
+						</label>
+					)}
 					{actions}
 				</div>
 			</div>
@@ -365,8 +413,18 @@ function GradeSlider({
 	);
 }
 
-function previewKey(sourceId: string, grade: ImageGrade, lut: string | undefined, cropping: boolean): string {
-	return JSON.stringify([sourceId, lut ?? "", cropping, { ...grade, crop: cropping ? undefined : grade.crop }]);
+function previewKey(shot: { sourceId: string; grade: ImageGrade; lut?: string; cropping: boolean; video?: boolean; time?: number; showOriginal?: boolean }): string {
+	const base = JSON.stringify([shot.sourceId, shot.lut ?? "", shot.cropping, { ...shot.grade, crop: shot.cropping ? undefined : shot.grade.crop }]);
+	if (!shot.video) return base;
+	const time = Math.round((shot.time ?? 0) * 1000) / 1000;
+	return `${base}|${time}|${shot.showOriginal ? 1 : 0}`;
+}
+
+function formatClock(seconds: number): string {
+	const total = Math.max(0, Math.floor(seconds));
+	const minutes = Math.floor(total / 60);
+	const rest = total % 60;
+	return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
 function replaceBlob(slot: React.MutableRefObject<string | null>, bytes: string | null): string | null {
