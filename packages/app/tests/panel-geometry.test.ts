@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { joinMembers, mergeTabOrder, placeTab, tabAfterDetach } from "../src/renderer/layout/use-panel-layout.ts";
+import { joinGroup, joinMembers, mergeTabOrder, placeTab, tabAfterDetach } from "../src/renderer/layout/use-panel-layout.ts";
 import { bottomBand, clampFloat, pointerDocks, pointerInside, pointerNearLowerBand, pointerOnLeftEdge, pointerOnTopEdge } from "../src/renderer/layout/panel-geometry.ts";
 
 describe("panel geometry", () => {
@@ -68,6 +68,11 @@ describe("panel geometry", () => {
 		assert.deepEqual(joinMembers(["agent", "details"], "grade", "details"), ["agent", "details", "grade"]);
 		assert.deepEqual(joinMembers(["details", "grade"], "grade", "agent"), ["agent", "grade"]);
 		assert.deepEqual(joinMembers(["details", "grade"], "agent", "grade"), ["details", "grade", "agent"]);
+	});
+
+	it("keeps every tab when a group is dropped onto another panel", () => {
+		assert.deepEqual(joinGroup(["agent", "details"], "grade"), ["grade", "agent", "details"]);
+		assert.deepEqual(joinGroup(["agent", "details"], "details"), ["agent", "details"]);
 	});
 
 	it("splices to the left of a right panel and above a lower panel", () => {
