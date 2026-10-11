@@ -43,7 +43,13 @@
 	min-width: 0;
 	flex: 1;
 	overflow-x: auto;
+	overflow-y: hidden;
 	scrollbar-width: thin;
+	/* The active underline hangs 1px over the bar border. Keep that pixel in the
+	   scrollport. overflow-x: auto would otherwise compute overflow-y to auto. */
+	height: calc(100% + 1px);
+	margin-bottom: -1px;
+	padding-bottom: 1px;
 }
 
 .session-tab {

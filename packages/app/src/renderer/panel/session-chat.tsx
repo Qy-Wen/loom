@@ -142,10 +142,16 @@ function distanceFromBottom(el: HTMLElement): number {
 	return el.scrollHeight - el.scrollTop - el.clientHeight;
 }
 
+function canScroll(el: HTMLElement): boolean {
+	return el.scrollHeight > el.clientHeight + 1;
+}
+
 /**
  * Follow new output only while the reader is already at the bottom.
- * A scroll we caused does not count as leaving. Scrolling up does, until the
- * reader returns to the bottom or sends a new message.
+ * A scroll we caused does not count as leaving. Neither does the transcript
+ * shrinking until it no longer scrolls: opening another session reuses this
+ * view, and the browser clamps scrollTop downward. Scrolling up does, until
+ * the reader returns to the bottom or opens another session.
  */
 function SessionScrollView({
 	children,
@@ -159,6 +165,7 @@ function SessionScrollView({
 	...props
 }: React.ComponentProps<typeof CopilotChat.View.ScrollView>): React.JSX.Element {
 	const { t } = useLocale();
+	const threadId = useContext(ThreadIdContext);
 	const visible = useContext(VisibleMessagesContext);
 	const scrollerRef = useRef<HTMLDivElement>(null);
 	const pinned = useRef(true);
@@ -166,15 +173,28 @@ function SessionScrollView({
 	const lastTop = useRef(0);
 	const touchStartY = useRef<number | null>(null);
 	const [away, setAway] = useState(false);
+	const [overflowing, setOverflowing] = useState(false);
 
 	const setPinned = useCallback((next: boolean) => {
 		pinned.current = next;
 		setAway((current) => current === !next ? current : !next);
 	}, []);
 
+	const noteOverflow = useCallback((el: HTMLElement) => {
+		const next = canScroll(el);
+		setOverflowing((current) => current === next ? current : next);
+		return next;
+	}, []);
+
 	const follow = useCallback(() => {
 		const el = scrollerRef.current;
-		if (!el || !pinned.current) return;
+		if (!el) return;
+		if (!noteOverflow(el)) {
+			lastTop.current = el.scrollTop;
+			setPinned(true);
+			return;
+		}
+		if (!pinned.current) return;
 		const top = el.scrollHeight;
 		if (distanceFromBottom(el) < 1) {
 			lastTop.current = el.scrollTop;
@@ -186,7 +206,7 @@ function SessionScrollView({
 		queueMicrotask(() => {
 			applying.current = false;
 		});
-	}, []);
+	}, [noteOverflow, setPinned]);
 
 	useLayoutEffect(() => {
 		const el = scrollerRef.current;
@@ -228,6 +248,11 @@ function SessionScrollView({
 		follow();
 	}, [follow, lastUserId, setPinned]);
 
+	useLayoutEffect(() => {
+		setPinned(true);
+		follow();
+	}, [follow, setPinned, threadId]);
+
 	return (
 		<div className="session-chat-scroll-host">
 			<div
@@ -237,7 +262,10 @@ function SessionScrollView({
 				onWheel={(event) => {
 					const el = scrollerRef.current;
 					if (!el || event.deltaY >= 0) return;
-					if (el.scrollHeight <= el.clientHeight + 1) return;
+					if (!canScroll(el)) {
+						setPinned(true);
+						return;
+					}
 					setPinned(false);
 				}}
 				onTouchStart={(event) => {
@@ -248,7 +276,10 @@ function SessionScrollView({
 					const start = touchStartY.current;
 					const y = event.touches[0]?.clientY;
 					if (!el || start === null || y === undefined) return;
-					if (el.scrollHeight <= el.clientHeight + 1) return;
+					if (!canScroll(el)) {
+						setPinned(true);
+						return;
+					}
 					if (y - start > 8) setPinned(false);
 				}}
 				onScroll={(event) => {
@@ -256,7 +287,10 @@ function SessionScrollView({
 					const top = el.scrollTop;
 					const delta = top - lastTop.current;
 					lastTop.current = top;
-					if (!applying.current && event.nativeEvent.isTrusted) {
+					// A shrinking transcript clamps scrollTop down. That delta is
+					// negative even though the reader is still at the bottom.
+					if (!noteOverflow(el) || distanceFromBottom(el) < 1) setPinned(true);
+					else if (!applying.current && event.nativeEvent.isTrusted) {
 						if (delta < -1) setPinned(false);
 						else if (distanceFromBottom(el) < NEAR_BOTTOM_PX) setPinned(true);
 					}
@@ -265,7 +299,7 @@ function SessionScrollView({
 			>
 				{children}
 			</div>
-			{away ? (
+			{away && overflowing ? (
 				<button
 					type="button"
 					className="session-chat-jump"
