@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
-import { toolCallNeedsApproval, toolPathArg, type ToolGateDecision } from "@loom/agent/tool-permission";
+import { commandAllowKey, toolCallNeedsApproval, toolPathArg, type CommandAllow, type ToolGateDecision } from "@loom/agent/tool-permission";
+import { useCommandAllows } from "./command-allows.ts";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
 import { useAgentPermission } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
@@ -9,9 +10,10 @@ import { useToolGatePending } from "./tool-gate-pending.ts";
 
 /** Register a chat renderer so tool results are visible in CopilotChat. */
 export function ToolCallViews({ libraryRoot }: { libraryRoot: string | null }): null {
+	const { allows } = useCommandAllows();
 	useDefaultRenderTool({
-		render: (props) => <ToolCallCard {...props} libraryRoot={libraryRoot} />,
-	}, [libraryRoot]);
+		render: (props) => <ToolCallCard {...props} libraryRoot={libraryRoot} allows={allows} />,
+	}, [libraryRoot, allows]);
 	return null;
 }
 
@@ -24,6 +26,7 @@ function ToolCallCard({
 	result,
 	toolCallId,
 	libraryRoot,
+	allows,
 }: {
 	name: string;
 	status: string;
@@ -31,6 +34,7 @@ function ToolCallCard({
 	result?: unknown;
 	toolCallId?: string;
 	libraryRoot: string | null;
+	allows: readonly CommandAllow[];
 }) {
 	const openAsset = useOpenAsset();
 	const { t } = useLocale();
@@ -38,10 +42,12 @@ function ToolCallCard({
 	const gatePending = useToolGatePending(toolCallId);
 	const [open, setOpen] = useState(false);
 	const [acted, setActed] = useState(false);
+	const [gateError, setGateError] = useState<string | null>(null);
 	const done = status === "complete";
 	const pathGated = level === "standard" && (name === "write" || name === "edit");
 	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "")
-		&& (gatePending || (toolCallNeedsApproval(level, name, libraryRoot, parameters) && (!pathGated || toolPathArg(parameters) !== undefined)));
+		&& (gatePending || (toolCallNeedsApproval(level, name, libraryRoot, parameters, allows) && (!pathGated || toolPathArg(parameters) !== undefined)));
+	const remember = waiting ? commandAllowKey(name, parameters, libraryRoot) : undefined;
 	const refs = done ? assetRefsFromTool(name, result) : null;
 	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? result : undefined);
 	const faded = !open && hasMoreThanPreview(body);
@@ -60,10 +66,14 @@ function ToolCallCard({
 			</button>
 			{waiting && toolCallId ? (
 				<div className="tool-call-gate">
-					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed); }}>{t.tool.approve}</button>
-					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed); }}>{t.tool.skip}</button>
+					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
+					{remember ? (
+						<button type="button" onClick={() => { void decide(toolCallId, "approve_always", setActed, setGateError); }}>{t.tool.always}</button>
+					) : null}
+					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed, setGateError); }}>{t.tool.skip}</button>
 				</div>
 			) : null}
+			{gateError ? <p className="tool-call-gate-error">{gateError}</p> : null}
 			{body ? (
 				<div
 					className="tool-call-body"
@@ -87,10 +97,18 @@ async function decide(
 	toolCallId: string,
 	decision: ToolGateDecision,
 	setActed: (acted: boolean) => void,
+	setGateError: (message: string | null) => void,
 ): Promise<void> {
 	decidedCalls.add(toolCallId);
 	setActed(true);
-	await window.loom.resolveToolGate(toolCallId, decision);
+	setGateError(null);
+	try {
+		await window.loom.resolveToolGate(toolCallId, decision);
+	} catch (cause) {
+		decidedCalls.delete(toolCallId);
+		setActed(false);
+		setGateError(cause instanceof Error ? cause.message : String(cause));
+	}
 }
 
 function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: string) => void }): React.JSX.Element {

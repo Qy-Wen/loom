@@ -6,6 +6,12 @@
 
 ---
 
+## 细化权限
+
+同意某个操作时可以记住这条命令，以后同一个库不再询问。记在 `<library>/.loom/command-allows.json`，不进应用用户数据。换一个库则无效。`bash` 记去掉首尾空白的命令文本。`run_ffmpeg` 记程序名和参数。`write` 和 `edit` 记工具名和路径，不看文件内容。其余要确认的工具记工具名。设置 → Agent 可以忘掉一条。切到 Full 时再确认一次：这次不进沙箱，Agent 可以执行所有操作。沙箱开关保持原样。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
+
+---
+
 ## 可观测性
 
 一次提问的 run、turn、step、tool、模型请求记在内存里，走 Pi 现有的追踪。开发时单独开一个 Traces 窗口看瀑布图。点工具或模型 span 可看参数和返回值，或发给模型的消息和回复。每一边会截断。打包后没有这个窗口。累计 Stats 仍在设置里。
@@ -32,7 +38,7 @@
 
 ## Human in the loop
 
-对话底部：Basic、Standard（默认）、Full。存在应用 userData，不进库。Standard 对库外的 `write` / `edit` 等确认，库内直接写。Basic 再对 `bash` 和会写文件的 FFmpeg 工具确认。`get_media_info` 不确认。Full 不确认，也不进沙箱。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
+对话底部：Basic、Standard（默认）、Full。存在应用 userData，不进库。Standard 对库外的 `write` / `edit` 等确认，库内直接写。Basic 再对 `bash` 和会写文件的 FFmpeg 工具确认。`get_media_info` 不确认。Full 不确认工具，也不进沙箱；切到 Full 时再确认一次。记住的命令见上面的「细化权限」。见 [PERMISSION](../agent/PERMISSION.zh-CN.md)。
 
 ---
 

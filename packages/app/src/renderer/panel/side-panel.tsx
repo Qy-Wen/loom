@@ -27,6 +27,7 @@ import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
 import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
+import { setCommandAllows } from "./command-allows.ts";
 import { ToolCallViews } from "./tool-call-views.tsx";
 
 interface AgentPanelProps {
@@ -84,6 +85,25 @@ export function AgentPanel({
 		setSessionMessages(record.messages);
 		setSessionContext(record.context ?? null);
 	}
+
+	useEffect(() => {
+		if (!libraryRoot) {
+			setCommandAllows({ allows: [], libraryOpen: false, root: null });
+			return;
+		}
+		let active = true;
+		const apply = (view: { root: string | null }) => active && view.root === libraryRoot;
+		void window.loom.getCommandAllows().then((view) => {
+			if (apply(view)) setCommandAllows(view);
+		}).catch(() => undefined);
+		const stop = window.loom.onCommandAllowsChanged((view) => {
+			if (apply(view)) setCommandAllows(view);
+		});
+		return () => {
+			active = false;
+			stop();
+		};
+	}, [libraryRoot]);
 
 	useEffect(() => {
 		if (!libraryRoot) {

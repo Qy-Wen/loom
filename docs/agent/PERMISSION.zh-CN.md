@@ -20,7 +20,9 @@ Standard 下，写在当前库里的 `write` 和 `edit` 直接执行。路径离
 
 `bash` 和会写文件的 FFmpeg 工具（`extract_frame`、`extract_clip`、`resize_video`、`crop_video`、`convert_format`、`grade_image`、`run_ffmpeg`）只在 Basic 下等待。`update_settings` 在 Basic 和 Standard 下都要确认。`get_settings` 只读，不拦截。`get_media_info` 只读，不拦截。MCP 和 `auto_memory` 不在这张名单里。检索专职和生成专职走同一道门。评测设成 Full，避免挂死。
 
-Stop 取消这次等待。切到 Full 时，已经弹出的等待也会放行。
+Stop 取消这次等待。切到 Full 时再确认一次：进程沙箱这次不再生效，Agent 可以执行所有操作。沙箱开关保持原样。确认之后，已经弹出的等待也会放行。
+
+工具卡片可以把这条命令记在当前库的 `<library>/.loom/command-allows.json`。同一个库里以后的会话不再询问。换一个库则无效。`bash` 记下去掉首尾空白的命令文本。`run_ffmpeg` 记下程序名和参数。`write` 和 `edit` 记下工具名和路径，不看文件内容。其余要确认的工具记下工具名。设置 → Agent 列出这些命令，可以忘掉一条。
 
 Pi `before_tool`（hook id `loom.tool_permission`）发出 `tool_pending`，工具卡片上继续之后才往下走。
 

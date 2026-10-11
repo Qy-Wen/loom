@@ -26,7 +26,6 @@ import {
 	contentWithPlacedAssets,
 	implicitSelectionAttachments,
 	type LoomAgentOptions,
-	type ToolGateDecision,
 } from "@loom/agent";
 import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
@@ -70,6 +69,8 @@ import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvi
 import { probeModelSlot } from "./model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
 import { AgentPermissionStore } from "./agent-permission-store.ts";
+import { CommandAllowStore } from "./command-allow-store.ts";
+import { parseCommandAllow, type CommandAllowView } from "@loom/agent/tool-permission";
 import { GeneralSettingsStore } from "./general-settings-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
 import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-settings-store.ts";
@@ -170,6 +171,7 @@ let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
 let generalSettings: GeneralSettingsStore | null = null;
 let agentPermission: AgentPermissionStore | null = null;
+let commandAllows: CommandAllowStore | null = null;
 let agentInstructions: AgentInstructionsStore | null = null;
 let agentSandbox: AgentSandboxStore | null = null;
 let agentStats: AgentStatsStore | null = null;
@@ -670,10 +672,33 @@ function registerIpc(): void {
 		await applyProcessSandbox();
 		return level;
 	});
-	ipcMain.handle(IPC.resolveToolGate, (_event, toolCallId: unknown, decision: unknown) => {
+	ipcMain.handle(IPC.getCommandAllows, () => {
+		if (!commandAllows) throw new Error("Permission store not started");
+		return commandAllows.view();
+	});
+	ipcMain.handle(IPC.removeCommandAllow, async (_event, raw: unknown) => {
+		if (!commandAllows) throw new Error("Permission store not started");
+		const allow = parseCommandAllow(raw);
+		if (!allow) throw new Error("Remembered command is invalid");
+		const view = await commandAllows.remove(allow);
+		agentManager.setCommandAllows(view.allows);
+		notifyCommandAllows(view);
+		return view;
+	});
+	ipcMain.handle(IPC.resolveToolGate, async (_event, toolCallId: unknown, decision: unknown) => {
 		if (typeof toolCallId !== "string" || !toolCallId.trim()) throw new Error("Tool call is missing");
-		if (decision !== "approve" && decision !== "reject") throw new Error("Tool decision is invalid");
-		return agentManager.resolveToolGate(toolCallId, decision as ToolGateDecision);
+		if (decision !== "approve" && decision !== "reject" && decision !== "approve_always") throw new Error("Tool decision is invalid");
+		if (decision === "approve_always") {
+			if (!commandAllows) throw new Error("Permission store not started");
+			const allow = agentManager.pendingCommandAllow(toolCallId);
+			if (!allow) throw new Error("This command cannot be remembered.");
+			const view = await commandAllows.add(allow);
+			agentManager.setCommandAllows(view.allows);
+			const resolved = agentManager.resolveToolGate(toolCallId, "approve");
+			notifyCommandAllows(view);
+			return resolved;
+		}
+		return agentManager.resolveToolGate(toolCallId, decision);
 	});
 	ipcMain.handle(IPC.getImageGrade, async (_event, assetId: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
@@ -907,6 +932,7 @@ app
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
 		generalSettings = new GeneralSettingsStore(join(app.getPath("userData"), "general.json"));
 		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
+		commandAllows = new CommandAllowStore();
 		agentManager.setPermissionLevel(await agentPermission.load());
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
 		agentManager.setInstructions(await agentInstructions.load());
@@ -1013,11 +1039,15 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 			agentManager.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
 			await agentManager.openLibrary(snapshot.rootPath, { deferRecovery: !mcpReady });
 			await lastLibrary?.remember(snapshot.rootPath);
+			await bindCommandAllows(snapshot.rootPath);
+		} else {
+			await bindCommandAllows(null);
 		}
 		setUiSelection(null);
 		return snapshot;
 	} catch (error) {
 		await agentManager.close();
+		await bindCommandAllows(null);
 		throw error;
 	} finally {
 		openingLibrary = false;
@@ -1114,6 +1144,19 @@ async function reconnectMcp(
 	if (shutdownStarted || !mcpHost) return;
 	await syncAgentTools(options);
 	if (previous) await previous.close();
+}
+
+async function bindCommandAllows(root: string | null): Promise<void> {
+	if (!commandAllows) return;
+	const view = await commandAllows.bind(root);
+	agentManager.setCommandAllows(view.allows);
+	notifyCommandAllows(view);
+}
+
+function notifyCommandAllows(view: CommandAllowView): void {
+	for (const window of BrowserWindow.getAllWindows()) {
+		if (!window.isDestroyed()) window.webContents.send(IPC.commandAllowsChanged, view);
+	}
 }
 
 function notifySettingsChanged(): void {

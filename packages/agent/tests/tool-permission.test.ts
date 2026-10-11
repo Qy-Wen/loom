@@ -4,7 +4,11 @@ import { mkdtempSync, realpathSync, rmSync, symlinkSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+	commandAllowId,
+	commandAllowKey,
+	commandAllowLabel,
 	DEFAULT_AGENT_PERMISSION,
+	parseCommandAllows,
 	ToolApprovalQueue,
 	gatedToolNames,
 	parseAgentPermissionLevel,
@@ -70,6 +74,39 @@ test("standard follows a symlink out of the library", () => {
 	}
 });
 
+test("remembered commands skip the next matching call", () => {
+	const bash = commandAllowKey("bash", { command: "  git status  " });
+	assert.deepEqual(bash, { tool: "bash", match: "git status" });
+	assert.equal(commandAllowKey("bash", { command: "   " }), undefined);
+	assert.equal(toolCallNeedsApproval("basic", "bash", "/lib", { command: "git status" }, bash ? [bash] : []), false);
+	assert.equal(toolCallNeedsApproval("basic", "bash", "/lib", { command: "git status --short" }, bash ? [bash] : []), true);
+
+	const write = commandAllowKey("write", { path: "notes/a.md" }, "/lib");
+	const writeAbsolute = commandAllowKey("write", { path: "/lib/notes/a.md" }, "/lib");
+	assert.equal(commandAllowId(write!), commandAllowId(writeAbsolute!));
+	assert.notEqual(commandAllowId(write!), commandAllowId(commandAllowKey("write", { path: "/other/a.md" }, "/lib")!));
+	assert.equal(toolCallNeedsApproval("basic", "write", "/lib", { path: "notes/a.md" }, write ? [write] : []), false);
+	assert.equal(toolCallNeedsApproval("basic", "edit", "/lib", { path: "notes/a.md" }, write ? [write] : []), true);
+
+	assert.deepEqual(commandAllowKey("extract_frame", { path: "a.mp4", time: 1 }), { tool: "extract_frame" });
+	assert.equal(toolCallNeedsApproval("basic", "extract_frame", "/lib", { path: "b.mp4" }, [{ tool: "extract_frame" }]), false);
+	assert.equal(toolCallNeedsApproval("basic", "extract_clip", "/lib", {}, [{ tool: "extract_frame" }]), true);
+
+	const ffmpeg = commandAllowKey("run_ffmpeg", { args: ["-i", "a.mp4"] });
+	assert.equal(ffmpeg?.match, JSON.stringify(["ffmpeg", "-i", "a.mp4"]));
+	assert.equal(commandAllowKey("run_ffmpeg", { program: "ffprobe", args: ["-i", "a.mp4"] })?.match, JSON.stringify(["ffprobe", "-i", "a.mp4"]));
+	assert.equal(commandAllowKey("run_ffmpeg", { args: "nope" }), undefined);
+	assert.equal(commandAllowLabel(ffmpeg!), "ffmpeg -i a.mp4");
+	assert.equal(toolCallNeedsApproval("basic", "run_ffmpeg", "/lib", { program: "ffmpeg", args: ["-i", "a.mp4"] }, ffmpeg ? [ffmpeg] : []), false);
+
+	assert.deepEqual(parseCommandAllows({
+		allows: [bash, bash, { tool: "" }, { tool: "write", match: "" }, { nope: true }],
+	}), bash ? [bash] : []);
+	if (process.platform === "win32") {
+		assert.equal(commandAllowKey("write", { path: "Notes/A.md" }, "/Lib")?.match, "notes/a.md");
+	}
+});
+
 test("ToolApprovalQueue waits until resolve or abort", async () => {
 	const queue = new ToolApprovalQueue();
 	const waiting = queue.wait("s1", "call-1");
@@ -95,4 +132,10 @@ test("ToolApprovalQueue waits until resolve or abort", async () => {
 	queue.approveAll();
 	assert.equal(await auto, "approve");
 	assert.equal(queue.size, 0);
+
+	const remembered = queue.wait("s4", "call-6", undefined, { toolName: "bash", args: { command: "ls" } });
+	assert.deepEqual(queue.call("call-6"), { toolName: "bash", args: { command: "ls" } });
+	assert.equal(queue.resolve("call-6", "approve_always"), true);
+	assert.equal(await remembered, "approve");
+	assert.equal(queue.call("call-6"), undefined);
 });

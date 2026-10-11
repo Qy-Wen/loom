@@ -1,8 +1,8 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import {
 	AGENT_PERMISSION_OPTIONS,
 	DEFAULT_AGENT_PERMISSION,
-	parseAgentPermissionLevel,
 	type AgentPermissionLevel,
 } from "@loom/agent/tool-permission";
 import { useLocale } from "../locale.tsx";
@@ -47,25 +47,108 @@ export function useAgentPermission(): {
 export function AgentPermissionSelect(): React.JSX.Element {
 	const { level, setLevel } = useAgentPermission();
 	const { t } = useLocale();
+	const rootRef = useRef<HTMLDivElement>(null);
+	const buttonRef = useRef<HTMLButtonElement>(null);
+	const menuRef = useRef<HTMLDivElement>(null);
+	const [open, setOpen] = useState(false);
+	const [menuStyle, setMenuStyle] = useState<React.CSSProperties>({});
 	const labels = { basic: t.permission.basic, standard: t.permission.standard, full: t.permission.full };
+
+	useLayoutEffect(() => {
+		if (!open) return;
+		const place = () => {
+			const rect = buttonRef.current?.getBoundingClientRect();
+			if (!rect) return;
+			setMenuStyle({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
+		};
+		place();
+		window.addEventListener("resize", place);
+		window.addEventListener("scroll", place, true);
+		return () => {
+			window.removeEventListener("resize", place);
+			window.removeEventListener("scroll", place, true);
+		};
+	}, [open]);
+
+	useEffect(() => {
+		if (!open) return;
+		const onPointer = (event: PointerEvent) => {
+			const target = event.target as Node;
+			if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+			setOpen(false);
+		};
+		const onKey = (event: KeyboardEvent) => {
+			if (event.key === "Escape") setOpen(false);
+		};
+		window.addEventListener("pointerdown", onPointer);
+		window.addEventListener("keydown", onKey);
+		return () => {
+			window.removeEventListener("pointerdown", onPointer);
+			window.removeEventListener("keydown", onKey);
+		};
+	}, [open]);
+
+	function choose(next: AgentPermissionLevel): void {
+		if (next === level) {
+			setOpen(false);
+			return;
+		}
+		if (next === "full" && !window.confirm(t.permission.fullConfirm)) return;
+		setLevel(next);
+		setOpen(false);
+	}
+
 	return (
-		<label className="session-permission">
-			<select
+		<div className="session-permission" ref={rootRef}>
+			<button
+				ref={buttonRef}
+				type="button"
 				aria-label={t.permission.label}
-				value={level}
-				onChange={(event) => {
-					setLevel(parseAgentPermissionLevel(event.target.value));
-					event.currentTarget.dataset.hold = "true";
-					event.currentTarget.blur();
-				}}
-				onPointerMove={(event) => {
-					delete event.currentTarget.dataset.hold;
+				aria-haspopup="listbox"
+				aria-expanded={open}
+				onClick={() => {
+					if (open) {
+						setOpen(false);
+						return;
+					}
+					const rect = buttonRef.current?.getBoundingClientRect();
+					if (rect) setMenuStyle({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
+					setOpen(true);
 				}}
 			>
-				{AGENT_PERMISSION_OPTIONS.map((option) => (
-					<option key={option.value} value={option.value}>{labels[option.value]}</option>
-				))}
-			</select>
-		</label>
+				<span>{labels[level]}</span>
+				<Chevron />
+			</button>
+			{open && createPortal(
+				<div
+					ref={menuRef}
+					className="session-permission-menu"
+					role="listbox"
+					aria-label={t.permission.label}
+					style={menuStyle}
+				>
+					{AGENT_PERMISSION_OPTIONS.map((option) => (
+						<button
+							key={option.value}
+							type="button"
+							role="option"
+							aria-selected={option.value === level}
+							onClick={() => choose(option.value)}
+						>
+							{labels[option.value]}
+						</button>
+					))}
+				</div>,
+				document.body,
+			)}
+		</div>
+	);
+}
+
+function Chevron(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
+			<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
+		</svg>
 	);
 }

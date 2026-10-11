@@ -1,10 +1,12 @@
 import { realpathSync } from "node:fs";
 import { basename, dirname, isAbsolute, resolve } from "node:path";
 import {
+	matchesCommandAllow,
 	pathInsideWorkspace,
 	toolNeedsApproval,
 	toolPathArg,
 	type AgentPermissionLevel,
+	type CommandAllow,
 } from "./tool-permission.ts";
 
 /** Absolute path of a write target. Follows an existing symlink; missing parents stay lexical. */
@@ -41,8 +43,10 @@ export function workspaceWriteNeedsApproval(
 	toolName: string,
 	root: string | undefined,
 	args: unknown,
+	allows?: readonly CommandAllow[],
 ): boolean {
 	if (!toolNeedsApproval(level, toolName)) return false;
+	if (matchesCommandAllow(toolName, args, root, allows)) return false;
 	if (level !== "standard" || (toolName !== "write" && toolName !== "edit")) return true;
 	if (!root) return true;
 	const raw = toolPathArg(args);

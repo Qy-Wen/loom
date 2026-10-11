@@ -64,5 +64,7 @@ export {
 	parseAgentPermissionLevel,
 	toolNeedsApproval,
 	type AgentPermissionLevel,
+	type CommandAllow,
+	type CommandAllowView,
 	type ToolGateDecision,
 } from "./tool-permission.ts";

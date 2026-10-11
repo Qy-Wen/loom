@@ -20,6 +20,8 @@ import type {
 } from "@loom/core";
 import type {
 	AgentPermissionLevel,
+	CommandAllow,
+	CommandAllowView,
 	HarnessSessionRecord as SessionRecord,
 	HarnessSessionSummary as SessionSummary,
 	ToolGateDecision,
@@ -150,6 +152,9 @@ export const IPC = {
 	getAgentPermission: "loom:getAgentPermission",
 	setAgentPermission: "loom:setAgentPermission",
 	resolveToolGate: "loom:resolveToolGate",
+	getCommandAllows: "loom:getCommandAllows",
+	removeCommandAllow: "loom:removeCommandAllow",
+	commandAllowsChanged: "loom:commandAllowsChanged",
 	getImageGrade: "loom:getImageGrade",
 	previewImageGrade: "loom:previewImageGrade",
 	saveImageGrade: "loom:saveImageGrade",
@@ -261,6 +266,9 @@ export interface LoomApi {
 	getAgentPermission: () => Promise<AgentPermissionLevel>;
 	setAgentPermission: (level: AgentPermissionLevel) => Promise<AgentPermissionLevel>;
 	resolveToolGate: (toolCallId: string, decision: ToolGateDecision) => Promise<boolean>;
+	getCommandAllows: () => Promise<CommandAllowView>;
+	removeCommandAllow: (allow: CommandAllow) => Promise<CommandAllowView>;
+	onCommandAllowsChanged: (listener: (view: CommandAllowView) => void) => () => void;
 	getImageGrade: (assetId: string) => Promise<ImageGradeRecord | null>;
 	/** JPEG bytes, base64. Null when the grade leaves the image unchanged. */
 	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;

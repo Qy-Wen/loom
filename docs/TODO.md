@@ -35,9 +35,3 @@ Consider shipping installable builds for macOS and Windows.
 ## Step 5: Deeper memory
 
 `MEMORY.md` is only an index. Entry bodies live elsewhere. A dreaming pass may consolidate, merge, and forget while idle.
-
----
-
-## Step 6: Finer permissions
-
-When the user approves an operation, they can allow that command from then on, without another prompt. Choosing Full asks once more, and tells the user that this turns off the sandbox and lets the agent run every operation.

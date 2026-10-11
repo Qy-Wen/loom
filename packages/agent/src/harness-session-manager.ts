@@ -40,10 +40,12 @@ import {
 	type SpecialistRole,
 } from "./specialist.ts";
 import {
+	commandAllowKey,
 	DEFAULT_AGENT_PERMISSION,
 	ToolApprovalQueue,
 	parseAgentPermissionLevel,
 	type AgentPermissionLevel,
+	type CommandAllow,
 	type ToolGateDecision,
 } from "./tool-permission.ts";
 import { workspaceWriteNeedsApproval } from "./workspace-path.ts";
@@ -149,6 +151,7 @@ export class HarnessSessionManager {
 	private permissionLevel: AgentPermissionLevel = DEFAULT_AGENT_PERMISSION;
 	private instructions = "";
 	private readonly toolApprovals = new ToolApprovalQueue();
+	private commandAllows: CommandAllow[] = [];
 	private closing = false;
 	private readonly listeners = new Set<(sessions: HarnessSessionSummary[]) => void>();
 	private readonly summaryCache = new Map<string, { modifiedAt: number; summary: HarnessSessionSummary }>();
@@ -174,13 +177,24 @@ export class HarnessSessionManager {
 		if (this.permissionLevel === "full") this.toolApprovals.approveAll();
 	}
 
+	setCommandAllows(allows: readonly CommandAllow[]): void {
+		this.commandAllows = allows.map((allow) => ({ ...allow }));
+	}
+
+	/** Identity to remember for a call that is still waiting. */
+	pendingCommandAllow(toolCallId: string): CommandAllow | undefined {
+		const call = this.toolApprovals.call(toolCallId);
+		if (!call) return undefined;
+		return commandAllowKey(call.toolName, call.args, this.root);
+	}
+
 	/** Approve or skip a gated tool that is waiting in `before_tool`. */
 	resolveToolGate(toolCallId: string, decision: ToolGateDecision): boolean {
 		return this.toolApprovals.resolve(toolCallId, decision);
 	}
 
 	private toolCallNeedsGate(toolName: string, args: unknown): boolean {
-		return workspaceWriteNeedsApproval(this.permissionLevel, toolName, this.root, args);
+		return workspaceWriteNeedsApproval(this.permissionLevel, toolName, this.root, args, this.commandAllows);
 	}
 
 	private sessionIdForRun(runId: string): string | undefined {
@@ -223,7 +237,10 @@ export class HarnessSessionManager {
 	): Promise<{ block?: { reason: string } } | undefined> {
 		if (!this.toolCallNeedsGate(event.toolName, event.args)) return undefined;
 		emit({ type: "tool_pending", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
-		const decision = await this.toolApprovals.wait(sessionId, event.toolCallId, context.abortSignal);
+		const decision = await this.toolApprovals.wait(sessionId, event.toolCallId, context.abortSignal, {
+			toolName: event.toolName,
+			args: event.args,
+		});
 		if (decision === "approve") return undefined;
 		if (decision === "reject") return { block: { reason: "The user skipped this tool." } };
 		return { block: { reason: "The user pressed Stop. This turn was cancelled on purpose, not because of an error." } };
@@ -1074,6 +1091,7 @@ export class HarnessSessionManager {
 			await this.repo?.close(CONTEXT);
 			this.repo = undefined;
 			this.root = undefined;
+			this.commandAllows = [];
 			this.workspace = undefined;
 			this.skills = [];
 		} finally {

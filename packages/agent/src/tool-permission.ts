@@ -11,7 +11,20 @@ export const AGENT_PERMISSION_OPTIONS = [
 	{ value: "full", label: "Full permission" },
 ] as const satisfies ReadonlyArray<{ value: AgentPermissionLevel; label: string }>;
 
-export type ToolGateDecision = "approve" | "reject";
+export type ToolGateDecision = "approve" | "reject" | "approve_always";
+
+/** One remembered command. No `match` means every call of that tool. */
+export type CommandAllow = {
+	tool: string;
+	match?: string;
+};
+
+export type CommandAllowView = {
+	allows: CommandAllow[];
+	libraryOpen: boolean;
+	/** Open library this list belongs to. The renderer ignores a list for another library. */
+	root: string | null;
+};
 
 /** App settings. Basic and Standard both wait. `get_settings` is not here. */
 const SETTINGS_TOOLS = ["update_settings"] as const;
@@ -55,8 +68,10 @@ export function toolCallNeedsApproval(
 	toolName: string,
 	root: string | null | undefined,
 	args: unknown,
+	allows?: readonly CommandAllow[],
 ): boolean {
 	if (!toolNeedsApproval(level, toolName)) return false;
+	if (matchesCommandAllow(toolName, args, root, allows)) return false;
 	if (level !== "standard" || (toolName !== "write" && toolName !== "edit")) return true;
 	if (!root) return true;
 	const target = toolPathArg(args);
@@ -127,30 +142,156 @@ function foldPath(path: string): string {
 	return windows ? path.toLowerCase() : path;
 }
 
+export function commandAllowId(allow: CommandAllow): string {
+	return allow.match === undefined ? allow.tool : `${allow.tool}\0${allow.match}`;
+}
+
+export function commandAllowLabel(allow: CommandAllow): string {
+	if (allow.tool === "run_ffmpeg" && allow.match) {
+		try {
+			const parsed: unknown = JSON.parse(allow.match);
+			if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) return parsed.join(" ");
+		} catch {
+			return allow.match;
+		}
+	}
+	if (allow.match) return allow.tool === "bash" ? allow.match : `${allow.tool} ${allow.match}`;
+	return allow.tool;
+}
+
+/** Stable identity for "always allow". Undefined when the call has no specific command to remember. */
+export function commandAllowKey(toolName: string, args: unknown, root?: string | null): CommandAllow | undefined {
+	if (toolName === "bash") {
+		const command = stringField(args, "command")?.trim();
+		return command ? { tool: "bash", match: command } : undefined;
+	}
+	if (toolName === "run_ffmpeg") {
+		const match = ffmpegAllowMatch(args);
+		return match ? { tool: "run_ffmpeg", match } : undefined;
+	}
+	if (toolName === "write" || toolName === "edit") {
+		const path = toolPathArg(args);
+		if (!path) return undefined;
+		return { tool: toolName, match: commandAllowPath(root, path) };
+	}
+	if (!toolName.trim()) return undefined;
+	return { tool: toolName };
+}
+
+export function matchesCommandAllow(
+	toolName: string,
+	args: unknown,
+	root: string | null | undefined,
+	allows: readonly CommandAllow[] | undefined,
+): boolean {
+	if (!allows || allows.length === 0) return false;
+	const key = commandAllowKey(toolName, args, root);
+	if (!key) return false;
+	const id = commandAllowId(key);
+	return allows.some((allow) => commandAllowId(allow) === id);
+}
+
+export function parseCommandAllow(value: unknown): CommandAllow | undefined {
+	if (!value || typeof value !== "object") return undefined;
+	const tool = (value as { tool?: unknown }).tool;
+	const match = (value as { match?: unknown }).match;
+	if (typeof tool !== "string" || tool.trim().length === 0) return undefined;
+	if (match === undefined) return { tool: tool.trim() };
+	if (typeof match !== "string" || match.length === 0) return undefined;
+	return { tool: tool.trim(), match };
+}
+
+export function parseCommandAllows(value: unknown): CommandAllow[] {
+	const raw = value && typeof value === "object" && Array.isArray((value as { allows?: unknown }).allows)
+		? (value as { allows: unknown[] }).allows
+		: [];
+	const allows: CommandAllow[] = [];
+	const seen = new Set<string>();
+	for (const row of raw) {
+		const allow = parseCommandAllow(row);
+		if (!allow) continue;
+		const id = commandAllowId(allow);
+		if (seen.has(id)) continue;
+		seen.add(id);
+		allows.push(allow);
+	}
+	return allows;
+}
+
+function commandAllowPath(root: string | null | undefined, target: string): string {
+	if (!root) return foldPath(normalizeSlashes(target));
+	const base = lexicalPath(root, root);
+	const resolved = lexicalPath(root, target);
+	if (!base || !resolved) return foldPath(normalizeSlashes(target));
+	const left = foldPath(base);
+	const right = foldPath(resolved);
+	if (right === left) return ".";
+	if (right.startsWith(`${left}/`)) return right.slice(left.length + 1);
+	return right;
+}
+
+function ffmpegAllowMatch(args: unknown): string | undefined {
+	const record = recordOf(args);
+	if (!record || !Array.isArray(record.args) || record.args.some((arg) => typeof arg !== "string")) return undefined;
+	const program = record.program === "ffprobe" ? "ffprobe" : "ffmpeg";
+	return JSON.stringify([program, ...(record.args as string[])]);
+}
+
+function stringField(args: unknown, key: string): string | undefined {
+	const value = recordOf(args)?.[key];
+	return typeof value === "string" ? value : undefined;
+}
+
+function recordOf(args: unknown): Record<string, unknown> | undefined {
+	if (typeof args === "string") {
+		try {
+			return recordOf(JSON.parse(args));
+		} catch {
+			return undefined;
+		}
+	}
+	if (!args || typeof args !== "object" || Array.isArray(args)) return undefined;
+	return args as Record<string, unknown>;
+}
+
 export class ToolApprovalQueue {
 	private readonly pending = new Map<string, {
 		sessionId: string;
-		resolve: (decision: ToolGateDecision | "abort") => void;
+		toolName?: string;
+		args?: unknown;
+		resolve: (decision: "approve" | "reject" | "abort") => void;
 	}>();
 
-	wait(sessionId: string, toolCallId: string, signal?: AbortSignal): Promise<ToolGateDecision | "abort"> {
+	wait(
+		sessionId: string,
+		toolCallId: string,
+		signal?: AbortSignal,
+		call?: { toolName: string; args: unknown },
+	): Promise<"approve" | "reject" | "abort"> {
 		if (signal?.aborted) return Promise.resolve("abort");
 		return new Promise((resolve) => {
-			const finish = (decision: ToolGateDecision | "abort") => {
+			const finish = (decision: "approve" | "reject" | "abort") => {
 				if (!this.pending.delete(toolCallId)) return;
 				signal?.removeEventListener("abort", onAbort);
 				resolve(decision);
 			};
 			const onAbort = () => finish("abort");
-			this.pending.set(toolCallId, { sessionId, resolve: finish });
+			this.pending.set(toolCallId, { sessionId, toolName: call?.toolName, args: call?.args, resolve: finish });
 			signal?.addEventListener("abort", onAbort, { once: true });
 		});
+	}
+
+	/** The call waiting on this id, before it is approved or skipped. */
+	call(toolCallId: string): { toolName: string; args: unknown } | undefined {
+		const row = this.pending.get(toolCallId);
+		if (!row?.toolName) return undefined;
+		return { toolName: row.toolName, args: row.args };
 	}
 
 	resolve(toolCallId: string, decision: ToolGateDecision): boolean {
 		const row = this.pending.get(toolCallId);
 		if (!row) return false;
-		row.resolve(decision);
+		row.resolve(decision === "reject" ? "reject" : "approve");
 		return true;
 	}
 
