@@ -33,6 +33,7 @@ import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-libr
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { applyAppIcon, loadAppIcon } from "./app-icon.ts";
+import { clipboardHasFiles, readFileClipboard } from "./file-clipboard.ts";
 import { type AgentServer, startAgentServer } from "./agent-server.ts";
 import { systemPromptForLibrary } from "./agent-prompt.ts";
 import { createAssetTools } from "./asset-tools.ts";
@@ -357,7 +358,7 @@ function registerIpc(): void {
 				{ label: t.menu.duplicate, click: () => "duplicate" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
-				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 				{ type: "separator" },
 				{ label: t.menu.copyPath, click: () => "copy_path" },
 				{ label: t.menu.reveal(platform), click: () => "reveal" },
@@ -378,7 +379,7 @@ function registerIpc(): void {
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
-				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 				{ type: "separator" },
 				{ label: t.menu.copyPath, click: () => "copy_path" },
 				{ label: t.menu.reveal(platform), click: () => "reveal" },
@@ -395,7 +396,7 @@ function registerIpc(): void {
 			return popupContextMenu<LibraryContextAction>(event, [
 				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ label: t.menu.newMdFile, click: () => "new_md_file" },
-				{ label: t.menu.paste, enabled: canPaste, click: () => "paste" },
+				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 			]);
 		},
 	);
@@ -434,6 +435,20 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.moveFolderInto, (_event, sourceFolder: string, destFolder: string) => {
 		return localCore.moveFolderInto(sourceFolder, destFolder);
+	});
+
+	ipcMain.handle(IPC.readFileClipboard, () => readFileClipboard());
+
+	ipcMain.handle(IPC.placePathsInto, async (_event, absolutePaths: string[], destFolder: string, move: boolean) => {
+		const placed = await localCore.placePathsInto(absolutePaths, destFolder, move);
+		if (move) {
+			try {
+				clipboard.clear();
+			} catch {
+				// The files are already in the library. A second paste skips paths that are gone.
+			}
+		}
+		return placed;
 	});
 
 	ipcMain.handle(IPC.copyLibraryPaths, async (_event, assetIds: string[], folders: string[]): Promise<void> => {
@@ -802,6 +817,7 @@ function registerIpc(): void {
 			? await dialog.showMessageBox(owner, options)
 			: await dialog.showMessageBox(options);
 		if (result.response !== 1) return false;
+		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 
 		await shell.trashItem(filePath);
 		await localCore.forgetAsset(assetId);
@@ -826,6 +842,7 @@ function registerIpc(): void {
 			? await dialog.showMessageBox(owner, options)
 			: await dialog.showMessageBox(options);
 		if (result.response !== 1) return false;
+		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 
 		await shell.trashItem(folderPath);
 		await localCore.forgetFolder(relativePath);
@@ -849,6 +866,7 @@ function registerIpc(): void {
 			? await dialog.showMessageBox(owner, options)
 			: await dialog.showMessageBox(options);
 		if (result.response !== 1) return false;
+		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 		for (const relativePath of folders) {
 			await shell.trashItem(localCore.getFolderFilePath(relativePath));
 			await localCore.forgetFolder(relativePath);

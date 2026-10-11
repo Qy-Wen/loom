@@ -35,6 +35,8 @@ const api: LoomApi = {
 	trashFolder: (relativePath) => ipcRenderer.invoke(IPC.trashFolder, relativePath),
 	trashLibraryItems: (assetIds, folders) => ipcRenderer.invoke(IPC.trashLibraryItems, assetIds, folders),
 	copyLibraryPaths: (assetIds, folders) => ipcRenderer.invoke(IPC.copyLibraryPaths, assetIds, folders),
+	readFileClipboard: () => ipcRenderer.invoke(IPC.readFileClipboard),
+	placePathsInto: (absolutePaths, destFolder, move) => ipcRenderer.invoke(IPC.placePathsInto, absolutePaths, destFolder, move),
 	getPropertySnapshot: () => ipcRenderer.invoke(IPC.getPropertySnapshot),
 	createProperty: (name, type) => ipcRenderer.invoke(IPC.createProperty, name, type),
 	updateProperty: (propertyId, name, type) =>
@@ -79,6 +81,11 @@ const api: LoomApi = {
 		const handler = (_event: Electron.IpcRendererEvent, change: LibraryChange) => listener(change);
 		ipcRenderer.on(IPC.libraryChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.libraryChanged, handler);
+	},
+	onTrashStarted: (listener) => {
+		const handler = () => listener();
+		ipcRenderer.on(IPC.trashStarted, handler);
+		return () => ipcRenderer.removeListener(IPC.trashStarted, handler);
 	},
 	onSessionsChanged: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, sessions: SessionSummary[]) => listener(sessions);

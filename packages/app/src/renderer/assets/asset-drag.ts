@@ -74,6 +74,11 @@ export function hasLibraryDrag(transfer: DataTransfer): boolean {
 	return types.includes(LOOM_LIBRARY_DRAG) || types.includes(LOOM_ASSET_DRAG);
 }
 
+/** A file drag from Explorer or Finder. Internal library drags win when both are present. */
+export function hasOsFileDrag(transfer: DataTransfer): boolean {
+	return [...transfer.types].includes("Files") && !hasLibraryDrag(transfer);
+}
+
 /** True when dropping this item onto destFolder would actually move it. */
 export function canDropLibraryItem(destFolder: string, item: LibraryDrag | null): boolean {
 	if (!item) return false;

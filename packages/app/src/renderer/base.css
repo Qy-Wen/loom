@@ -83,6 +83,53 @@ body {
 	cursor: default;
 }
 
+.status-toast {
+	position: fixed;
+	z-index: 50;
+	top: 14px;
+	left: 50%;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: max-content;
+	max-width: min(460px, calc(100% - 32px));
+	padding: 8px 12px;
+	border: 1px solid #e3e3e0;
+	border-radius: 8px;
+	color: #3c3c3c;
+	background: #fff;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
+	font-size: 12px;
+	line-height: 1.4;
+	transform: translateX(-50%);
+}
+
+.status-toast-spin {
+	width: 12px;
+	height: 12px;
+	flex: none;
+	border: 1.5px solid #d5d5d2;
+	border-top-color: #3c3c3c;
+	border-radius: 50%;
+	animation: status-toast-spin 0.7s linear infinite;
+}
+
+@keyframes status-toast-spin {
+	to { transform: rotate(360deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.status-toast-spin {
+		animation: none;
+		border-color: #3c3c3c;
+		border-right-color: transparent;
+	}
+}
+
+.status-toast.below {
+	top: 58px;
+}
+
 .error-toast {
 	position: fixed;
 	z-index: 50;

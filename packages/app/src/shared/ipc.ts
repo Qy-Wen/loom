@@ -72,6 +72,7 @@ export const IPC = {
 	addAssetTag: "loom:addAssetTag",
 	removeAssetTag: "loom:removeAssetTag",
 	libraryChanged: "loom:libraryChanged",
+	trashStarted: "loom:trashStarted",
 	showAssetContextMenu: "loom:showAssetContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
 	showLibraryContextMenu: "loom:showLibraryContextMenu",
@@ -92,6 +93,8 @@ export const IPC = {
 	trashFolder: "loom:trashFolder",
 	trashLibraryItems: "loom:trashLibraryItems",
 	copyLibraryPaths: "loom:copyLibraryPaths",
+	readFileClipboard: "loom:readFileClipboard",
+	placePathsInto: "loom:placePathsInto",
 	getPropertySnapshot: "loom:getPropertySnapshot",
 	createProperty: "loom:createProperty",
 	updateProperty: "loom:updateProperty",
@@ -167,6 +170,7 @@ export interface LoomApi {
 	addAssetTag: (assetId: string, name: string) => Promise<void>;
 	removeAssetTag: (assetId: string, tagId: string) => Promise<void>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
+	onTrashStarted: (listener: () => void) => () => void;
 	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
@@ -187,6 +191,8 @@ export interface LoomApi {
 	trashFolder: (relativePath: string) => Promise<boolean>;
 	trashLibraryItems: (assetIds: string[], folders: string[]) => Promise<boolean>;
 	copyLibraryPaths: (assetIds: string[], folders: string[]) => Promise<void>;
+	readFileClipboard: () => Promise<{ paths: string[]; move: boolean } | null>;
+	placePathsInto: (absolutePaths: string[], destFolder: string, move: boolean) => Promise<{ assets: Asset[]; folders: string[] }>;
 	getPropertySnapshot: () => Promise<PropertySnapshot>;
 	createProperty: (name: string, type: PropertyType) => Promise<PropertyDefinition>;
 	updateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<PropertyDefinition>;
