@@ -6,7 +6,7 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, test } from "node:test";
 import { runMediaProcess } from "../src/media/run.ts";
-import { prepareSandboxedBash, releaseProcessSandbox, setProcessSandboxEnabled, setProcessSandboxRoot } from "../src/sandbox/process-sandbox.ts";
+import { prepareSandboxedBash, releaseProcessSandbox, sandboxReadPaths, sandboxedArgv, setProcessSandboxEnabled, setProcessSandboxRoot, shellCommand } from "../src/sandbox/process-sandbox.ts";
 
 describe("process sandbox", { concurrency: false }, () => {
 	test("does not spawn when no library is open", async () => {
@@ -62,6 +62,39 @@ describe("process sandbox", { concurrency: false }, () => {
 		}
 	});
 
+	test("windows read grants skip system trees", () => {
+		const programFiles = process.env.ProgramFiles ?? "C:\\Program Files";
+		const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+		const library = join(tmpdir(), "loom-sandbox-library");
+		const kept = sandboxReadPaths([
+			library,
+			join(programFiles, "Git", "bin"),
+			join(systemRoot, "System32"),
+		]);
+		if (process.platform === "win32") {
+			assert.deepEqual(kept, [library]);
+		} else {
+			assert.equal(kept.length, 3);
+		}
+	});
+
+	test("windows sandbox runs ffmpeg-shaped arguments through cmd.exe", { skip: process.platform !== "win32" }, async () => {
+		const dir = await mkdtemp(join(tmpdir(), "loom-sandbox-cmd-"));
+		const filter = "scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease";
+		const samples = ["hello world", "100%", "a&b", filter];
+		const script = "process.stdout.write(JSON.stringify(process.argv.slice(1)))";
+		setProcessSandboxRoot(dir);
+		try {
+			const wrapped = await sandboxedArgv(shellCommand([process.execPath, "-e", script, ...samples]));
+			assert.equal(wrapped.argv.some((arg) => /cmd\.exe/i.test(arg)), true);
+			const output = await runArgv(wrapped.argv, wrapped.cwd, wrapped.env);
+			assert.deepEqual(JSON.parse(output), samples);
+		} finally {
+			await releaseProcessSandbox(dir);
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
 	test("a turned-off sandbox runs the command directly", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "loom-sandbox-off-"));
 		const binary = join(dir, "ffmpeg");
@@ -83,6 +116,33 @@ describe("process sandbox", { concurrency: false }, () => {
 		}
 	});
 });
+
+function runArgv(argv: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
+	const [command, ...args] = argv;
+	if (!command) return Promise.reject(new Error("missing command"));
+	return new Promise((resolve, reject) => {
+		const child = spawn(command, args, {
+			cwd,
+			env,
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		});
+		let output = "";
+		child.stdout?.setEncoding("utf8");
+		child.stderr?.setEncoding("utf8");
+		child.stdout?.on("data", (chunk: string) => {
+			output += chunk;
+		});
+		child.stderr?.on("data", (chunk: string) => {
+			output += chunk;
+		});
+		child.on("error", reject);
+		child.on("close", (code) => {
+			if (code === 0) resolve(output);
+			else reject(new Error(`command exited ${code ?? "unknown"}: ${output}`));
+		});
+	});
+}
 
 function quote(value: string): string {
 	return `'${value.replaceAll("'", `'\\''`)}'`;

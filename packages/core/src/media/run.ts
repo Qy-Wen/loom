@@ -1,5 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
-import { posixCommand, processSandboxEnabled, sandboxedArgv } from "../sandbox/process-sandbox.ts";
+import { processSandboxEnabled, sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
 import type { MediaProgram } from "./binaries.ts";
 import { resolveMediaBinary } from "./binaries.ts";
 
@@ -44,7 +44,7 @@ async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaPr
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
 	let wrapped: Awaited<ReturnType<typeof sandboxedArgv>>;
 	try {
-		wrapped = await sandboxedArgv(posixCommand([binary, ...options.args]), options.cwd);
+		wrapped = await sandboxedArgv(shellCommand([binary, ...options.args]), options.cwd);
 	} catch (error) {
 		if (signal?.aborted) throw abortError(options.program);
 		throw error;
