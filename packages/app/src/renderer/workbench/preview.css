@@ -72,6 +72,96 @@
 	object-fit: contain;
 }
 
+.grade-frame {
+	position: relative;
+	max-width: 100%;
+	max-height: calc(100cqh - 46px);
+	min-width: 0;
+	min-height: 0;
+	line-height: 0;
+}
+
+.grade-shade {
+	position: absolute;
+	background: rgb(0 0 0 / 45%);
+	pointer-events: none;
+}
+
+.grade-crop {
+	position: absolute;
+	border: 1px solid #fff;
+	box-shadow: 0 0 0 1px rgb(0 0 0 / 40%);
+	cursor: move;
+	touch-action: none;
+}
+
+.grade-crop-handle {
+	position: absolute;
+	width: 10px;
+	height: 10px;
+	padding: 0;
+	border: 1px solid #fff;
+	border-radius: 2px;
+	background: #202124;
+	touch-action: none;
+}
+
+.grade-crop-handle.n,
+.grade-crop-handle.s { cursor: ns-resize; }
+.grade-crop-handle.e,
+.grade-crop-handle.w { cursor: ew-resize; }
+.grade-crop-handle.ne,
+.grade-crop-handle.sw { cursor: nesw-resize; }
+.grade-crop-handle.nw,
+.grade-crop-handle.se { cursor: nwse-resize; }
+
+.grade-crop-handle.n { top: 0; left: 50%; transform: translate(-50%, -50%); }
+.grade-crop-handle.s { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
+.grade-crop-handle.e { top: 50%; right: 0; transform: translate(50%, -50%); }
+.grade-crop-handle.w { top: 50%; left: 0; transform: translate(-50%, -50%); }
+.grade-crop-handle.nw { top: 0; left: 0; transform: translate(-50%, -50%); }
+.grade-crop-handle.ne { top: 0; right: 0; transform: translate(50%, -50%); }
+.grade-crop-handle.sw { bottom: 0; left: 0; transform: translate(-50%, 50%); }
+.grade-crop-handle.se { bottom: 0; right: 0; transform: translate(50%, 50%); }
+
+.grade-geometry {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 4px;
+}
+
+.grade-geometry button {
+	display: grid;
+	place-items: center;
+	width: 28px;
+	height: 28px;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: #5c5f66;
+	cursor: pointer;
+}
+
+.grade-geometry button:hover:not(:disabled) {
+	background: #ececea;
+	color: #202124;
+}
+
+.grade-geometry button[aria-pressed="true"] {
+	background: #ececea;
+	color: #202124;
+}
+
+.grade-geometry button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.grade-geometry .grade-crop-toggle {
+	margin-left: auto;
+}
+
 .grade-panel-host {
 	display: flex;
 	flex: 1;
@@ -231,7 +321,7 @@
 	min-height: 0;
 }
 
-.grade-stage .preview-stack > img,
+.grade-stage .grade-frame > img,
 .media-preview .preview-stack > img,
 .media-preview .preview-stack > video {
 	max-width: 100%;

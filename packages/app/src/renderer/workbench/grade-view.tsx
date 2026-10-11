@@ -1,11 +1,18 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
+	FULL_IMAGE_CROP,
 	IDENTITY_IMAGE_GRADE,
+	adjustCrop,
+	flipCrop,
 	isNeutralImageGrade,
 	normalizeImageGrade,
+	rotateCrop,
+	type CropHandle,
 	type CurvePoint,
+	type ImageCrop,
 	type ImageGrade,
+	type ImageRotation,
 } from "@loom/core/grade";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../assets/asset-utils.ts";
@@ -41,6 +48,7 @@ export function GradeView({
 	const [channel, setChannel] = useState<CurveChannel>("rgb");
 	const [dirty, setDirty] = useState(false);
 	const [comparing, setComparing] = useState(false);
+	const [cropping, setCropping] = useState(false);
 	const [saving, setSaving] = useState<"save" | "saveAs" | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [proxyUrl, setProxyUrl] = useState<string | null>(null);
@@ -48,9 +56,7 @@ export function GradeView({
 	const dirtyRef = useRef(false);
 	const proxyRef = useRef<string | null>(null);
 	const fallbackRef = useRef<string | null>(null);
-	const assetsRef = useRef(assets);
 	const triedFallback = useRef(false);
-	assetsRef.current = assets;
 	fallbackRef.current = fallbackUrl;
 
 	const source = assets.find((item) => item.assetId === sourceId) ?? asset;
@@ -59,7 +65,6 @@ export function GradeView({
 	const shownUrl = showOriginal ? (fallbackUrl ?? assetPreviewUrl(source)) : (proxyUrl ?? fallbackUrl ?? assetPreviewUrl(source));
 
 	useEffect(() => {
-		let cancelled = false;
 		dirtyRef.current = false;
 		setDirty(false);
 		setGrade(IDENTITY_IMAGE_GRADE);
@@ -68,26 +73,16 @@ export function GradeView({
 		setChannel("rgb");
 		setError(null);
 		setComparing(false);
+		setCropping(false);
 		triedFallback.current = false;
 		setFallbackUrl((current) => {
 			if (current) URL.revokeObjectURL(current);
 			return null;
 		});
-		void window.loom.getImageGrade(asset.assetId).then((record) => {
-			if (cancelled || dirtyRef.current || !record?.sourceAssetId) return;
-			const linked = assetsRef.current.find((item) => item.assetId === record.sourceAssetId);
-			if (!linked) return;
-			setSourceId(linked.assetId);
-			setGrade(normalizeImageGrade(record.grade));
-			setLut(record.lut);
-		}).catch(() => undefined);
-		return () => {
-			cancelled = true;
-		};
 	}, [asset.assetId]);
 
-	const liveRef = useRef({ sourceId, grade, lut, showOriginal, previewFailed: t.grade.previewFailed });
-	liveRef.current = { sourceId, grade, lut, showOriginal, previewFailed: t.grade.previewFailed };
+	const liveRef = useRef({ sourceId, grade, lut, showOriginal, cropping, previewFailed: t.grade.previewFailed });
+	liveRef.current = { sourceId, grade, lut, showOriginal, cropping, previewFailed: t.grade.previewFailed };
 	const drainRef = useRef<() => void>(() => undefined);
 
 	useEffect(() => {
@@ -101,20 +96,19 @@ export function GradeView({
 				while (!stopped) {
 					const shot = liveRef.current;
 					if (shot.showOriginal) return;
-					const key = previewKey(shot.sourceId, shot.grade, shot.lut);
+					const key = previewKey(shot.sourceId, shot.grade, shot.lut, shot.cropping);
 					try {
-						const bytes = await window.loom.previewImageGrade(shot.sourceId, shot.grade, shot.lut);
-						if (stopped || liveRef.current.sourceId !== shot.sourceId) return;
-						if (bytes) {
-							setProxyUrl(replaceBlob(proxyRef, bytes));
-							setError(null);
-						}
+						const previewGrade = shot.cropping ? { ...shot.grade, crop: FULL_IMAGE_CROP } : shot.grade;
+						const bytes = await window.loom.previewImageGrade(shot.sourceId, previewGrade, shot.lut);
+						if (stopped || liveRef.current.sourceId !== shot.sourceId || liveRef.current.showOriginal) return;
+						if (previewKey(liveRef.current.sourceId, liveRef.current.grade, liveRef.current.lut, liveRef.current.cropping) !== key) continue;
+						setProxyUrl(replaceBlob(proxyRef, bytes));
+						if (bytes) setError(null);
+						return;
 					} catch (cause) {
 						if (!stopped) setError(cause instanceof Error ? cause.message : shot.previewFailed);
 						return;
 					}
-					if (stopped || liveRef.current.showOriginal) return;
-					if (previewKey(liveRef.current.sourceId, liveRef.current.grade, liveRef.current.lut) === key) return;
 				}
 			} finally {
 				busy = false;
@@ -131,9 +125,10 @@ export function GradeView({
 		};
 	}, [sourceId]);
 
+	const previewSignature = previewKey(sourceId, grade, lut, cropping);
 	useEffect(() => {
 		drainRef.current();
-	}, [grade, lut, showOriginal]);
+	}, [previewSignature, showOriginal]);
 
 	useEffect(() => () => {
 		if (proxyRef.current) URL.revokeObjectURL(proxyRef.current);
@@ -148,6 +143,20 @@ export function GradeView({
 
 	function editCurve(points: CurvePoint[]): void {
 		edit({ ...grade, curves: { ...grade.curves, [channel]: points } });
+	}
+
+	function turn(direction: 1 | -1): void {
+		const rotation = ((grade.rotation + direction + 4) % 4) as ImageRotation;
+		edit({ ...grade, rotation, crop: rotateCrop(grade.crop, direction) });
+	}
+
+	function mirror(axis: "h" | "v"): void {
+		edit({
+			...grade,
+			flipH: axis === "h" ? !grade.flipH : grade.flipH,
+			flipV: axis === "v" ? !grade.flipV : grade.flipV,
+			crop: flipCrop(grade.crop, axis),
+		});
 	}
 
 	async function save(mode: "save" | "saveAs"): Promise<void> {
@@ -183,21 +192,48 @@ export function GradeView({
 		<div className="grade-workbench">
 			<div className="grade-stage">
 				<div className="preview-stack">
-					<img
-						src={shownUrl}
-						alt={asset.filename}
-						onError={() => {
-							if (triedFallback.current || !showOriginal) return;
-							triedFallback.current = true;
-							void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
-								if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
-							}).catch(() => undefined);
-						}}
-					/>
+					<div className="grade-frame">
+						<img
+							src={shownUrl}
+							alt={asset.filename}
+							onError={() => {
+								if (triedFallback.current || !showOriginal) return;
+								triedFallback.current = true;
+								void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
+									if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
+								}).catch(() => undefined);
+							}}
+						/>
+						{cropping && !comparing && (
+							<GradeCrop
+								crop={grade.crop}
+								moveLabel={t.grade.moveCrop}
+								resizeLabel={t.grade.resizeCrop}
+								onChange={(crop) => edit({ ...grade, crop })}
+							/>
+						)}
+					</div>
 					{actions}
 				</div>
 			</div>
 			{panelHost && createPortal(<div className="grade-panel thin-scroll">
+				<div className="grade-geometry">
+					<button type="button" title={t.grade.rotateLeft} aria-label={t.grade.rotateLeft} disabled={saving !== null} onClick={() => turn(-1)}>
+						<RotateLeftIcon />
+					</button>
+					<button type="button" title={t.grade.rotateRight} aria-label={t.grade.rotateRight} disabled={saving !== null} onClick={() => turn(1)}>
+						<RotateRightIcon />
+					</button>
+					<button type="button" title={t.grade.flipHorizontal} aria-label={t.grade.flipHorizontal} aria-pressed={grade.flipH} disabled={saving !== null} onClick={() => mirror("h")}>
+						<FlipHorizontalIcon />
+					</button>
+					<button type="button" title={t.grade.flipVertical} aria-label={t.grade.flipVertical} aria-pressed={grade.flipV} disabled={saving !== null} onClick={() => mirror("v")}>
+						<FlipVerticalIcon />
+					</button>
+					<button type="button" className="grade-crop-toggle" title={t.grade.crop} aria-label={t.grade.crop} aria-pressed={cropping} disabled={saving !== null} onClick={() => setCropping((on) => !on)}>
+						<CropIcon />
+					</button>
+				</div>
 				<GradeSlider label={t.grade.exposure} min={-3} max={3} step={0.01} value={grade.exposure} onChange={(exposure) => edit({ ...grade, exposure })} />
 				<GradeSlider label={t.grade.brightness} min={-1} max={1} step={0.01} value={grade.brightness} onChange={(brightness) => edit({ ...grade, brightness })} />
 				<GradeSlider label={t.grade.lightness} min={-1} max={1} step={0.01} value={grade.lightness} onChange={(lightness) => edit({ ...grade, lightness })} />
@@ -329,14 +365,131 @@ function GradeSlider({
 	);
 }
 
-function previewKey(sourceId: string, grade: ImageGrade, lut?: string): string {
-	return JSON.stringify([sourceId, lut ?? "", grade]);
+function previewKey(sourceId: string, grade: ImageGrade, lut: string | undefined, cropping: boolean): string {
+	return JSON.stringify([sourceId, lut ?? "", cropping, { ...grade, crop: cropping ? undefined : grade.crop }]);
 }
 
 function replaceBlob(slot: React.MutableRefObject<string | null>, bytes: string | null): string | null {
 	if (slot.current) URL.revokeObjectURL(slot.current);
 	slot.current = bytes ? base64ToObjectUrl(bytes) : null;
 	return slot.current;
+}
+
+const CROP_HANDLES: Array<Exclude<CropHandle, "move">> = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+
+function GradeCrop({
+	crop,
+	moveLabel,
+	resizeLabel,
+	onChange,
+}: {
+	crop: ImageCrop;
+	moveLabel: string;
+	resizeLabel: string;
+	onChange: (crop: ImageCrop) => void;
+}): React.JSX.Element {
+	const right = 1 - crop.x - crop.w;
+	const bottom = 1 - crop.y - crop.h;
+	const dragRef = useRef<(() => void) | null>(null);
+	useEffect(() => () => dragRef.current?.(), []);
+	function start(event: React.PointerEvent, handle: CropHandle): void {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const frame = event.currentTarget.closest(".grade-frame")?.getBoundingClientRect();
+		if (!frame || frame.width < 1 || frame.height < 1) return;
+		const bounds = frame;
+		dragRef.current?.();
+		const origin = crop;
+		const startX = event.clientX;
+		const startY = event.clientY;
+		function move(ev: PointerEvent): void {
+			const dx = (ev.clientX - startX) / bounds.width;
+			const dy = (ev.clientY - startY) / bounds.height;
+			if (dx === 0 && dy === 0) return;
+			onChange(adjustCrop(origin, handle, dx, dy));
+		}
+		function end(): void {
+			window.removeEventListener("pointermove", move);
+			window.removeEventListener("pointerup", end);
+			if (dragRef.current === end) dragRef.current = null;
+		}
+		dragRef.current = end;
+		window.addEventListener("pointermove", move);
+		window.addEventListener("pointerup", end);
+	}
+
+	return (
+		<>
+			{crop.y > 0 && <div className="grade-shade" style={{ top: 0, left: 0, right: 0, height: pct(crop.y) }} />}
+			{bottom > 0 && <div className="grade-shade" style={{ bottom: 0, left: 0, right: 0, height: pct(bottom) }} />}
+			{crop.x > 0 && <div className="grade-shade" style={{ top: pct(crop.y), left: 0, width: pct(crop.x), height: pct(crop.h) }} />}
+			{right > 0 && <div className="grade-shade" style={{ top: pct(crop.y), right: 0, width: pct(right), height: pct(crop.h) }} />}
+			<div
+				className="grade-crop"
+				role="group"
+				aria-label={moveLabel}
+				style={{ left: pct(crop.x), top: pct(crop.y), width: pct(crop.w), height: pct(crop.h) }}
+				onPointerDown={(event) => start(event, "move")}
+			>
+				{CROP_HANDLES.map((handle) => (
+					<button
+						key={handle}
+						type="button"
+						className={`grade-crop-handle ${handle}`}
+						aria-label={resizeLabel}
+						onPointerDown={(event) => start(event, handle)}
+					/>
+				))}
+			</div>
+		</>
+	);
+}
+
+function pct(value: number): string {
+	return `${value * 100}%`;
+}
+
+function RotateLeftIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" d="M3.2 7.2A4.8 4.8 0 1 1 4.6 11" />
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" d="M3 3.8v3.6h3.6" />
+		</svg>
+	);
+}
+
+function RotateRightIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" d="M12.8 7.2A4.8 4.8 0 1 0 11.4 11" />
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" d="M13 3.8v3.6H9.4" />
+		</svg>
+	);
+}
+
+function FlipHorizontalIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" d="M2.2 12.6 7.2 3.4v9.2H2.2zM13.8 12.6 8.8 3.4v9.2h5z" />
+		</svg>
+	);
+}
+
+function CropIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" d="M5.2 2.2v8.6h8.6M10.8 13.8V5.2H2.2" />
+		</svg>
+	);
+}
+
+function FlipVerticalIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" d="M3.4 2.2 12.6 7.2H3.4V2.2zM3.4 13.8 12.6 8.8H3.4v5z" />
+		</svg>
+	);
 }
 
 function base64ToObjectUrl(bytes: string): string {

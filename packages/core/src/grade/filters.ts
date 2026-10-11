@@ -1,12 +1,14 @@
-import { isIdentityCurve, type ImageGrade } from "./types.ts";
+import { isFullImageCrop, isIdentityCurve, type ImageGrade } from "./types.ts";
 
 /**
  * One filtergraph for preview and export.
  * Omitted filters are at the FFmpeg default, so an unchanged grade produces no graph.
- * Order: exposure, eq, vibrance, huesaturation, colortemperature, colorlevels, curves, lut3d.
+ * Order: rotation, mirror, crop, then exposure, eq, vibrance, huesaturation,
+ * colortemperature, colorlevels, curves, lut3d.
+ * Crop is measured on the frame after rotation and mirroring.
  */
 export function buildImageGradeFilter(grade: ImageGrade, lutAbsolutePath?: string): string | null {
-	const filters: string[] = [];
+	const filters: string[] = [...geometryFilters(grade)];
 	if (grade.exposure !== 0) filters.push(`exposure=exposure=${formatNumber(grade.exposure)}`);
 	const eq = eqOptions(grade);
 	if (eq) filters.push(eq);
@@ -49,6 +51,22 @@ export function buildGradeImageArgs(
 	if (!proxy && /\.webp$/i.test(outputPath)) args.push("-c:v", "libwebp", "-quality", "85");
 	args.push("-update", "1", outputPath);
 	return args;
+}
+
+function geometryFilters(grade: ImageGrade): string[] {
+	const filters: string[] = [];
+	if (grade.rotation === 1) filters.push("transpose=1");
+	else if (grade.rotation === 2) filters.push("hflip", "vflip");
+	else if (grade.rotation === 3) filters.push("transpose=2");
+	if (grade.flipH) filters.push("hflip");
+	if (grade.flipV) filters.push("vflip");
+	if (!isFullImageCrop(grade.crop)) {
+		const { x, y, w, h } = grade.crop;
+		filters.push(
+			`crop=trunc(iw*${formatUnit(w)}):trunc(ih*${formatUnit(h)}):trunc(iw*${formatUnit(x)}):trunc(ih*${formatUnit(y)})`,
+		);
+	}
+	return filters;
 }
 
 function eqOptions(grade: ImageGrade): string | null {

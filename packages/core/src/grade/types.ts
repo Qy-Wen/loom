@@ -12,7 +12,32 @@ export interface ImageGradeCurves {
 	b: CurvePoint[];
 }
 
+/** Axis-aligned crop of the frame after rotation and mirroring. Edges are 0..1. */
+export interface ImageCrop {
+	x: number;
+	y: number;
+	w: number;
+	h: number;
+}
+
+export type ImageRotation = 0 | 1 | 2 | 3;
+
+export type CropHandle = "move" | "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw";
+
+export const FULL_IMAGE_CROP: ImageCrop = { x: 0, y: 0, w: 1, h: 1 };
+
+/** Smallest crop the on-image handles can drag to. Stored crops may be tighter. */
+const MIN_CROP_DRAG = 0.05;
+const MIN_STORED_CROP = 0.001;
+
 export interface ImageGrade {
+	/** Quarter turns clockwise. 0 leaves the image unchanged. */
+	rotation: ImageRotation;
+	/** Mirror left to right after rotation. */
+	flipH: boolean;
+	/** Mirror top to bottom after rotation. */
+	flipV: boolean;
+	crop: ImageCrop;
 	/** `exposure` filter, EV. −3..3, 0 leaves the image unchanged. */
 	exposure: number;
 	/** `eq` brightness. −1..1, 0 leaves the image unchanged. */
@@ -61,6 +86,10 @@ const IDENTITY_CURVE: CurvePoint[] = [
 ];
 
 export const IDENTITY_IMAGE_GRADE: ImageGrade = {
+	rotation: 0,
+	flipH: false,
+	flipV: false,
+	crop: { ...FULL_IMAGE_CROP },
 	exposure: 0,
 	brightness: 0,
 	lightness: 0,
@@ -100,8 +129,83 @@ export function isIdentityCurve(points: CurvePoint[]): boolean {
 		&& points[1].y === 1;
 }
 
+export function isFullImageCrop(crop: ImageCrop): boolean {
+	return crop.x === 0 && crop.y === 0 && crop.w === 1 && crop.h === 1;
+}
+
+/** Keep the same pixels selected when the frame turns clockwise by `quarterTurns`. */
+export function rotateCrop(crop: ImageCrop, quarterTurns: number): ImageCrop {
+	const turns = ((Math.trunc(quarterTurns) % 4) + 4) % 4;
+	let next = crop;
+	for (let step = 0; step < turns; step += 1) {
+		next = { x: round4(1 - (next.y + next.h)), y: next.x, w: next.h, h: next.w };
+	}
+	return next;
+}
+
+/** Keep the same pixels selected when the oriented frame is mirrored. */
+export function flipCrop(crop: ImageCrop, axis: "h" | "v"): ImageCrop {
+	if (axis === "h") return { x: round4(1 - (crop.x + crop.w)), y: crop.y, w: crop.w, h: crop.h };
+	return { x: crop.x, y: round4(1 - (crop.y + crop.h)), w: crop.w, h: crop.h };
+}
+
+/** Move or resize a normalized crop. `dx` and `dy` are fractions of the frame. */
+export function adjustCrop(crop: ImageCrop, handle: CropHandle, dx: number, dy: number): ImageCrop {
+	let x = crop.x;
+	let y = crop.y;
+	let w = crop.w;
+	let h = crop.h;
+	const west = handle === "w" || handle === "nw" || handle === "sw";
+	const east = handle === "e" || handle === "ne" || handle === "se";
+	const north = handle === "n" || handle === "ne" || handle === "nw";
+	const south = handle === "s" || handle === "se" || handle === "sw";
+	if (handle === "move") {
+		x += dx;
+		y += dy;
+	}
+	if (west) {
+		x += dx;
+		w -= dx;
+	}
+	if (east) w += dx;
+	if (north) {
+		y += dy;
+		h -= dy;
+	}
+	if (south) h += dy;
+	if (w < MIN_CROP_DRAG) {
+		if (west) x -= MIN_CROP_DRAG - w;
+		w = MIN_CROP_DRAG;
+	}
+	if (h < MIN_CROP_DRAG) {
+		if (north) y -= MIN_CROP_DRAG - h;
+		h = MIN_CROP_DRAG;
+	}
+	if (x < 0) {
+		if (handle !== "move") w += x;
+		x = 0;
+	}
+	if (y < 0) {
+		if (handle !== "move") h += y;
+		y = 0;
+	}
+	if (x + w > 1) {
+		if (handle === "move" || west) x = 1 - w;
+		else w = 1 - x;
+	}
+	if (y + h > 1) {
+		if (handle === "move" || north) y = 1 - h;
+		else h = 1 - y;
+	}
+	return normalizeCrop({ x, y, w, h });
+}
+
 export function isNeutralImageGrade(grade: ImageGrade): boolean {
-	return grade.exposure === 0
+	return grade.rotation === 0
+		&& !grade.flipH
+		&& !grade.flipV
+		&& isFullImageCrop(grade.crop)
+		&& grade.exposure === 0
 		&& grade.brightness === 0
 		&& grade.lightness === 0
 		&& grade.contrast === 1
@@ -153,6 +257,10 @@ export function normalizeImageGrade(value: unknown): ImageGrade {
 		else white = black + 0.001;
 	}
 	return {
+		rotation: normalizeRotation(record.rotation),
+		flipH: record.flipH === true,
+		flipV: record.flipV === true,
+		crop: normalizeCrop(record.crop),
 		exposure: round3(clampNum(record.exposure, -3, 3, 0)),
 		brightness: round3(clampNum(record.brightness, -1, 1, 0)),
 		lightness: round3(clampNum(record.lightness, -1, 1, 0)),
@@ -172,6 +280,34 @@ export function normalizeImageGrade(value: unknown): ImageGrade {
 	};
 }
 
+export function normalizeCrop(value: unknown): ImageCrop {
+	if (!isRecord(value)) return { ...FULL_IMAGE_CROP };
+	let x = clampNum(value.x, 0, 1, 0);
+	let y = clampNum(value.y, 0, 1, 0);
+	let w = clampNum(value.w, MIN_STORED_CROP, 1, 1);
+	let h = clampNum(value.h, MIN_STORED_CROP, 1, 1);
+	if (x + w > 1) w = 1 - x;
+	if (y + h > 1) h = 1 - y;
+	if (w < MIN_STORED_CROP) {
+		x = Math.max(0, x - (MIN_STORED_CROP - w));
+		w = MIN_STORED_CROP;
+	}
+	if (h < MIN_STORED_CROP) {
+		y = Math.max(0, y - (MIN_STORED_CROP - h));
+		h = MIN_STORED_CROP;
+	}
+	const cropped = { x: round4(x), y: round4(y), w: round4(w), h: round4(h) };
+	if (cropped.x + cropped.w > 1) cropped.w = round4(1 - cropped.x);
+	if (cropped.y + cropped.h > 1) cropped.h = round4(1 - cropped.y);
+	return cropped;
+}
+
+function normalizeRotation(value: unknown): ImageRotation {
+	const turns = typeof value === "number" && Number.isFinite(value) ? Math.round(value) : 0;
+	if (turns === 1 || turns === 2 || turns === 3) return turns;
+	return 0;
+}
+
 function clampNum(value: unknown, min: number, max: number, fallback: number): number {
 	if (typeof value !== "number" || !Number.isFinite(value)) return fallback;
 	return clamp(value, min, max);
@@ -183,6 +319,10 @@ function clamp(value: number, min: number, max: number): number {
 
 function round3(value: number): number {
 	return Math.round(value * 1000) / 1000;
+}
+
+function round4(value: number): number {
+	return Math.round(value * 10000) / 10000;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

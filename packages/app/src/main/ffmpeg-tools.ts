@@ -136,6 +136,8 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "grade_image",
 			description:
 				"Grade one still image with the preview panel's controls and write a new file. " +
+				"rotation is quarter-turns clockwise from 0 to 3. flipH and flipV mirror after that rotation. " +
+				"crop is {x, y, w, h} from 0 to 1 of the oriented frame; omit it to keep the whole frame. " +
 				"exposure is EV from -3 to 3 (0 unchanged). brightness and lightness are -1 to 1 (0 unchanged). " +
 				"hue is degrees from -180 to 180 (0 unchanged). contrast is 0 to 2 and saturation is 0 to 3 (1 unchanged). " +
 				"vibrance is -2 to 2 (0 unchanged). temperature is Kelvin from 1000 to 40000 (6500 unchanged). " +
@@ -150,6 +152,19 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 				properties: {
 					path: { type: "string" },
 					output: { type: "string" },
+					rotation: { type: "integer", enum: [0, 1, 2, 3] },
+					flipH: { type: "boolean" },
+					flipV: { type: "boolean" },
+					crop: {
+						type: "object",
+						properties: {
+							x: { type: "number" },
+							y: { type: "number" },
+							w: { type: "number" },
+							h: { type: "number" },
+						},
+						additionalProperties: false,
+					},
 					exposure: { type: "number" },
 					brightness: { type: "number" },
 					lightness: { type: "number" },
@@ -178,6 +193,10 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			execute: async (rawArgs, signal) => {
 				const record = asRecord(rawArgs);
 				const grade = normalizeImageGrade({
+					rotation: record.rotation,
+					flipH: record.flipH,
+					flipV: record.flipV,
+					crop: record.crop,
 					exposure: record.exposure,
 					brightness: record.brightness,
 					lightness: record.lightness,
