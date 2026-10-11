@@ -4,14 +4,18 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import {
+	FULL_IMAGE_CROP,
 	IDENTITY_IMAGE_GRADE,
 	LocalCore,
+	adjustCrop,
 	buildGradeImageArgs,
 	buildImageGradeFilter,
 	escapeFfmpegFilterPath,
+	flipCrop,
 	gradeSiblingRelative,
 	isNeutralImageGrade,
 	normalizeImageGrade,
+	rotateCrop,
 	tryResolveMediaBinaries,
 } from "../src/index.ts";
 
@@ -41,6 +45,39 @@ test("grade filters use FFmpeg parameters in a fixed order", () => {
 		"curves=master='0/0 0.5/0.6 1/1'",
 		"lut3d=file='C\\:/Looks/my lut.cube'",
 	].join(","));
+});
+
+test("rotation, mirror, and crop run before color", () => {
+	const filter = buildImageGradeFilter(normalizeImageGrade({
+		rotation: 1,
+		flipH: true,
+		flipV: true,
+		crop: { x: 0.1, y: 0.2, w: 0.5, h: 0.4 },
+		exposure: 1,
+	}));
+	assert.equal(filter, [
+		"transpose=1",
+		"hflip",
+		"vflip",
+		"crop=trunc(iw*0.5):trunc(ih*0.4):trunc(iw*0.1):trunc(ih*0.2)",
+		"exposure=exposure=1",
+	].join(","));
+	assert.equal(buildImageGradeFilter(normalizeImageGrade({ rotation: 2 })), "hflip,vflip");
+	assert.equal(buildImageGradeFilter(normalizeImageGrade({ rotation: 3, flipH: true })), "transpose=2,hflip");
+	assert.equal(isNeutralImageGrade(normalizeImageGrade({ crop: FULL_IMAGE_CROP })), true);
+	assert.equal(isNeutralImageGrade(normalizeImageGrade({ rotation: 1 })), false);
+});
+
+test("crop stays on the same pixels when the frame turns or mirrors", () => {
+	const crop = { x: 0.1, y: 0.2, w: 0.3, h: 0.4 };
+	assert.deepEqual(rotateCrop(crop, 1), { x: 0.4, y: 0.1, w: 0.4, h: 0.3 });
+	assert.deepEqual(rotateCrop(crop, -1), rotateCrop(crop, 3));
+	assert.deepEqual(rotateCrop(FULL_IMAGE_CROP, 1), FULL_IMAGE_CROP);
+	assert.deepEqual(flipCrop(crop, "h"), { x: 0.6, y: 0.2, w: 0.3, h: 0.4 });
+	assert.deepEqual(flipCrop(crop, "v"), { x: 0.1, y: 0.4, w: 0.3, h: 0.4 });
+	assert.deepEqual(adjustCrop(FULL_IMAGE_CROP, "w", 0.2, 0), { x: 0.2, y: 0, w: 0.8, h: 1 });
+	assert.deepEqual(adjustCrop({ x: 0.2, y: 0.2, w: 0.4, h: 0.4 }, "move", 0.1, -0.1), { x: 0.3, y: 0.1, w: 0.4, h: 0.4 });
+	assert.deepEqual(adjustCrop({ x: 0.1, y: 0.1, w: 0.4, h: 0.4 }, "move", -1, 0), { x: 0, y: 0.1, w: 0.4, h: 0.4 });
 });
 
 test("hue, lightness, and brightness map onto huesaturation and eq", () => {
@@ -86,6 +123,13 @@ test("normalizeImageGrade clamps to filter ranges and keeps curve endpoints", ()
 	assert.equal(grade.curves.r[0].x, 0);
 	assert.equal(grade.curves.r.at(-1)?.x, 1);
 	assert.equal(grade.curves.r.filter((point) => point.x === 0.4).length, 1);
+	assert.equal(grade.rotation, 0);
+	assert.equal(grade.flipH, false);
+	assert.deepEqual(grade.crop, { x: 0, y: 0, w: 1, h: 1 });
+	const tight = normalizeImageGrade({ rotation: 9, flipH: "yes", crop: { x: 0.2, y: -1, w: 2, h: 0.3 } });
+	assert.equal(tight.rotation, 0);
+	assert.equal(tight.flipH, false);
+	assert.deepEqual(tight.crop, { x: 0.2, y: 0, w: 0.8, h: 0.3 });
 });
 
 test("gradeImage writes a new still, indexes it, and stores the recipe", async (t) => {
@@ -132,3 +176,39 @@ test("gradeImage writes a new still, indexes it, and stores the recipe", async (
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("gradeImage rotates before it crops", async (t) => {
+	if (!tryResolveMediaBinaries()) {
+		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
+		return;
+	}
+	const root = await mkdtemp(join(tmpdir(), "loom-grade-geometry-"));
+	const core = new LocalCore();
+	try {
+		const { copyFile } = await import("node:fs/promises");
+		const { dirname } = await import("node:path");
+		const { fileURLToPath } = await import("node:url");
+		const fixture = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media", "still.png");
+		await copyFile(fixture, join(root, "still.png"));
+		await core.openLibrary(root);
+		const source = pngSize(await readFile(fixture));
+		const graded = await core.gradeImage({
+			path: "still.png",
+			grade: { rotation: 1, crop: { x: 0, y: 0, w: 0.5, h: 1 } },
+		});
+		const output = pngSize(await readFile(join(root, graded.output)));
+		assert.equal(output.w, Math.trunc(source.h * 0.5));
+		assert.equal(output.h, source.w);
+		const stored = await core.getImageGrade(graded.assetId);
+		assert.equal(stored?.grade.rotation, 1);
+		assert.deepEqual(stored?.grade.crop, { x: 0, y: 0, w: 0.5, h: 1 });
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+function pngSize(bytes: Buffer): { w: number; h: number } {
+	assert.equal(bytes.toString("ascii", 1, 4), "PNG");
+	return { w: bytes.readUInt32BE(16), h: bytes.readUInt32BE(20) };
+}
