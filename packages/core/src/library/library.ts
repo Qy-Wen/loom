@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, cp, mkdir, readdir, rename, stat, writeFile } from "node:fs/promises";
-import { basename, extname, join, resolve } from "node:path";
+import { copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
 	assetTypeFromPath,
 	type Asset,
@@ -25,6 +25,15 @@ import { releaseProcessSandbox, setProcessSandboxRoot } from "../sandbox/process
 import { LibraryWatcher, type LibraryFileEvent } from "./watcher.ts";
 
 type LibraryListener = (change: LibraryChange) => void;
+
+export interface PlacedLibraryItems {
+	assets: Asset[];
+	folders: string[];
+}
+
+type PlacedEntry =
+	| { kind: "asset"; asset: Asset }
+	| { kind: "folder"; relativePath: string };
 
 const REMOVE_GRACE_MS = 500;
 
@@ -296,6 +305,32 @@ export class Library {
 			imported.push(asset);
 		}
 		return imported;
+	}
+
+	/**
+	 * Copy or move absolute paths into a library folder.
+	 * Paths already in the library keep their asset ids when moved.
+	 * A move deletes an outside source only after that source is in the library.
+	 */
+	async placePathsInto(absolutePaths: string[], destFolder: string, move: boolean): Promise<PlacedLibraryItems> {
+		await this.requireDirectory(destFolder);
+		const selected = rootAbsolutePaths(absolutePaths);
+		if (selected.length === 0) return { assets: [], folders: [] };
+
+		const watching = await this.pauseWatcher();
+		try {
+			const assets: Asset[] = [];
+			const folders: string[] = [];
+			for (const absolutePath of selected) {
+				const placed = await this.placeOnePath(absolutePath, destFolder, move);
+				if (!placed) continue;
+				if (placed.kind === "asset") assets.push(placed.asset);
+				else folders.push(placed.relativePath);
+			}
+			return { assets, folders };
+		} finally {
+			if (watching) await this.resumeWatcher();
+		}
 	}
 
 	async copyFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
@@ -587,6 +622,87 @@ export class Library {
 		}
 	}
 
+	private async placeOnePath(absolutePath: string, destFolder: string, move: boolean): Promise<PlacedEntry | null> {
+		const paths = this.requirePaths();
+		const name = basename(absolutePath);
+		if (name === ".loom" || name === ".agents" || name === ".DS_Store") {
+			throw new Error(`${name} cannot be imported.`);
+		}
+
+		let info: Awaited<ReturnType<typeof stat>>;
+		try {
+			info = await stat(absolutePath);
+		} catch (error) {
+			if (move && (error as NodeJS.ErrnoException).code === "ENOENT") return null;
+			throw new Error(`${name} could not be read.`);
+		}
+		if (!info.isFile() && !info.isDirectory()) throw new Error(`${name} cannot be imported.`);
+		if (paths.isIgnoredPath(absolutePath)) throw new Error(`${name} cannot be imported.`);
+		if (info.isDirectory() && containsPath(absolutePath, this.folderAbsolute(destFolder))) {
+			throw new Error("Cannot paste a folder into itself");
+		}
+
+		let relativePath: string | undefined;
+		try {
+			relativePath = paths.toRelativePath(absolutePath);
+		} catch {
+			relativePath = undefined;
+		}
+
+		if (relativePath !== undefined) {
+			if (info.isDirectory()) {
+				const next = move
+					? await this.moveFolderInto(relativePath, destFolder)
+					: await this.copyFolderInto(relativePath, destFolder);
+				return { kind: "folder", relativePath: next };
+			}
+			let asset = await this.metadata.getAssetByPath(relativePath);
+			if (!asset) {
+				asset = await this.indexFile(relativePath);
+				if (!asset) throw new Error(`${name} cannot be imported.`);
+			}
+			const next = move
+				? await this.moveAssetInto(asset.assetId, destFolder)
+				: await this.copyAssetInto(asset.assetId, destFolder);
+			return { kind: "asset", asset: next };
+		}
+
+		if (info.isDirectory()) {
+			const desired = assertEntryName(name);
+			const folderName = await this.pathExists(joinRelative(destFolder, desired))
+				? await this.uniqueName(destFolder, `${desired} copy`)
+				: desired;
+			const destRelative = joinRelative(destFolder, folderName);
+			await this.transferExternal(absolutePath, this.folderAbsolute(destRelative), true, move);
+			await this.indexTree(destRelative);
+			return { kind: "folder", relativePath: destRelative };
+		}
+
+		const extension = extname(name);
+		const stem = basename(name, extension);
+		assertEntryName(stem || name);
+		const filename = await this.uniqueCopyName(destFolder, name);
+		const destRelative = joinRelative(destFolder, filename);
+		await this.transferExternal(absolutePath, this.folderAbsolute(destRelative), false, move);
+		const asset = await this.indexFile(destRelative);
+		if (!asset) throw new Error(`Failed to import ${name}`);
+		return { kind: "asset", asset };
+	}
+
+	private async transferExternal(source: string, dest: string, directory: boolean, move: boolean): Promise<void> {
+		if (move) {
+			try {
+				await rename(source, dest);
+				return;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "EXDEV") throw error;
+			}
+		}
+		if (directory) await cp(source, dest, { recursive: true });
+		else await copyFile(source, dest);
+		if (move) await rm(source, { recursive: directory });
+	}
+
 	private async uniqueCopyName(parentRelativePath: string, desired: string): Promise<string> {
 		if (!(await this.pathExists(joinRelative(parentRelativePath, desired)))) return desired;
 		const extension = extname(desired);
@@ -712,6 +828,29 @@ export class Library {
 	private emit(change: LibraryChange): void {
 		for (const listener of this.listeners) listener(change);
 	}
+}
+
+/** Drop paths nested inside another selected path so a folder and its children are one item. */
+function rootAbsolutePaths(absolutePaths: string[]): string[] {
+	const unique: string[] = [];
+	const seen = new Set<string>();
+	for (const raw of absolutePaths) {
+		if (!raw.trim()) continue;
+		const absolutePath = resolve(raw);
+		const key = process.platform === "win32" ? absolutePath.toLowerCase() : absolutePath;
+		if (seen.has(key)) continue;
+		seen.add(key);
+		unique.push(absolutePath);
+	}
+	return unique.filter((absolutePath) => !unique.some((other) => {
+		if (other === absolutePath) return false;
+		return containsPath(other, absolutePath);
+	}));
+}
+
+function containsPath(parent: string, child: string): boolean {
+	const value = relative(parent, child);
+	return value === "" || (value !== ".." && !value.startsWith(`..${sep}`) && !isAbsolute(value));
 }
 
 function ancestorFolders(relativePath: string): string[] {

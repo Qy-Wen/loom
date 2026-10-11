@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -294,6 +294,56 @@ test("Library copies an outside file into Inbox and reuses a file already in the
 		const again = await core.importExternalFiles([join(outside, "shot.png")]);
 		assert.equal(again[0].relativePath, "Inbox/shot 2.png");
 		assert.notEqual(again[0].assetId, imported.assetId);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+		await rm(outside, { recursive: true, force: true });
+	}
+});
+
+test("Library places outside files and folders into a chosen folder", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-place-"));
+	const outside = await mkdtemp(join(tmpdir(), "loom-place-src-"));
+	const core = new LocalCore();
+	try {
+		await mkdir(join(root, "briefs"));
+		await writeFile(join(root, "cover.jpg"), "cover");
+		await mkdir(join(outside, "album"));
+		await writeFile(join(outside, "album", "shot.png"), "shot");
+		await writeFile(join(outside, "loose.txt"), "loose");
+		const opened = await core.openLibrary(root);
+		const cover = opened.assets.find((asset) => asset.relativePath === "cover.jpg");
+		assert.ok(cover);
+
+		const copied = await core.placePathsInto([
+			join(outside, "album"),
+			join(outside, "album", "shot.png"),
+			join(outside, "loose.txt"),
+		], "briefs", false);
+		assert.deepEqual(copied.folders, ["briefs/album"]);
+		assert.equal(copied.assets.length, 1);
+		assert.equal(copied.assets[0].relativePath, "briefs/loose.txt");
+		const afterCopy = await core.getLibrarySnapshot();
+		assert.ok(afterCopy.assets.some((asset) => asset.relativePath === "briefs/album/shot.png"));
+		assert.equal(afterCopy.assets.some((asset) => asset.relativePath === "briefs/shot.png"), false);
+		assert.equal(await readFile(join(outside, "loose.txt"), "utf8"), "loose");
+
+		const again = await core.placePathsInto([join(outside, "loose.txt")], "briefs", false);
+		assert.equal(again.assets[0].relativePath, "briefs/loose copy.txt");
+
+		await writeFile(join(outside, ".DS_Store"), "meta");
+		await assert.rejects(() => core.placePathsInto([join(outside, ".DS_Store")], "briefs", false), /cannot be imported/);
+		await assert.rejects(() => core.placePathsInto([join(root, "briefs")], "briefs", false), /into itself/);
+
+		const moved = await core.placePathsInto([join(outside, "album")], "", true);
+		assert.deepEqual(moved.folders, ["album"]);
+		await assert.rejects(() => access(join(outside, "album")));
+		assert.ok((await core.getLibrarySnapshot()).assets.some((asset) => asset.relativePath === "album/shot.png"));
+
+		const movedCover = await core.placePathsInto([join(root, "cover.jpg")], "briefs", true);
+		assert.equal(movedCover.assets[0].assetId, cover.assetId);
+		assert.equal(movedCover.assets[0].relativePath, "briefs/cover.jpg");
+		await assert.rejects(() => access(join(root, "cover.jpg")));
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

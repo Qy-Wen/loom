@@ -188,6 +188,10 @@ export class LocalCore {
 		return this.library.importExternalFiles(absolutePaths);
 	}
 
+	placePathsInto(absolutePaths: string[], destFolder: string, move: boolean) {
+		return this.library.placePathsInto(absolutePaths, destFolder, move);
+	}
+
 	getFolderFilePath(relativePath: string): string {
 		return this.library.getFolderFilePath(relativePath);
 	}

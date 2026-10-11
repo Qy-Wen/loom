@@ -162,6 +162,8 @@ export function App(): React.JSX.Element {
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [status, setStatus] = useState<string | null>(null);
+	const statusCount = useRef(0);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
 	const [textEmbed, setTextEmbed] = useState<TextEmbedStatus | undefined>();
 	const [imageVlm, setImageVlm] = useState<ImageVlmStatus | undefined>();
@@ -394,8 +396,11 @@ export function App(): React.JSX.Element {
 			const next = new Set(current);
 			for (const relativePath of relativePaths) {
 				next.delete(relativePath);
-				const parent = parentFolder(relativePath);
-				if (parent) next.delete(parent);
+				let parent = parentFolder(relativePath);
+				while (parent) {
+					next.delete(parent);
+					parent = parentFolder(parent);
+				}
 			}
 			return next;
 		});
@@ -477,24 +482,101 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function pasteInto(destFolder: string): Promise<void> {
-		if (!libraryClipboard) return;
+	function beginStatus(label: string): () => void {
+		statusCount.current += 1;
+		const show = window.setTimeout(() => {
+			if (statusCount.current > 0) setStatus(label);
+		}, 400);
+		return () => {
+			window.clearTimeout(show);
+			statusCount.current -= 1;
+			if (statusCount.current === 0) setStatus(null);
+		};
+	}
+
+	async function whileBusy<T>(label: string, work: () => Promise<T>): Promise<T> {
+		const end = beginStatus(label);
+		try {
+			return await work();
+		} finally {
+			end();
+		}
+	}
+
+	async function withTrashNotice<T>(work: () => Promise<T>): Promise<T> {
+		const end: { current: (() => void) | null } = { current: null };
+		const unsubscribe = window.loom.onTrashStarted(() => {
+			if (!end.current) end.current = beginStatus(t.library.deleting);
+		});
+		try {
+			return await work();
+		} finally {
+			unsubscribe();
+			end.current?.();
+		}
+	}
+
+	function showPlaced(destFolder: string, placed: { assets: { assetId: string }[]; folders: string[] }): void {
+		const keys = [...placed.folders.map(folderKey), ...placed.assets.map((asset) => assetKey(asset.assetId))];
+		const focus = placed.assets[0] ? assetKey(placed.assets[0].assetId) : keys[0];
+		if (focus) setPicked({ keys, anchor: focus, focus });
+		revealFolders(destFolder ? [destFolder, ...placed.folders] : placed.folders);
+	}
+
+	async function placeExternalPaths(absolutePaths: string[], destFolder: string, move: boolean): Promise<void> {
+		if (absolutePaths.length === 0) return;
 		setError(null);
 		try {
-			const move = libraryClipboard.mode === "cut";
-			const next = libraryClipboard.assetIds.length > 0
-				? await (move ? window.loom.moveAssetsInto : window.loom.copyAssetsInto)(libraryClipboard.assetIds, destFolder)
-				: [];
-			const folders: string[] = [];
-			const placeFolder = move ? window.loom.moveFolderInto : window.loom.copyFolderInto;
-			for (const folder of libraryClipboard.folders) folders.push(await placeFolder(folder, destFolder));
-			const keys = [...folders.map(folderKey), ...next.map((asset) => assetKey(asset.assetId))];
-			const focus = next[0] ? assetKey(next[0].assetId) : keys[0];
-			if (focus) setPicked({ keys, anchor: focus, focus });
-			if (move) setLibraryClipboard(null);
+			showPlaced(destFolder, await window.loom.placePathsInto(absolutePaths, destFolder, move));
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
+	}
+
+	async function pasteInto(destFolder: string): Promise<void> {
+		await whileBusy(t.library.pasting, async () => {
+			if (libraryClipboard) {
+				setError(null);
+				try {
+					const move = libraryClipboard.mode === "cut";
+					const next = libraryClipboard.assetIds.length > 0
+						? await (move ? window.loom.moveAssetsInto : window.loom.copyAssetsInto)(libraryClipboard.assetIds, destFolder)
+						: [];
+					const folders: string[] = [];
+					const placeFolder = move ? window.loom.moveFolderInto : window.loom.copyFolderInto;
+					for (const folder of libraryClipboard.folders) folders.push(await placeFolder(folder, destFolder));
+					showPlaced(destFolder, { assets: next, folders });
+					if (move) setLibraryClipboard(null);
+				} catch (cause) {
+					setError(cause instanceof Error ? cause.message : String(cause));
+				}
+				return;
+			}
+			try {
+				const clip = await window.loom.readFileClipboard();
+				if (!clip) return;
+				await placeExternalPaths(clip.paths, destFolder, clip.move);
+			} catch (cause) {
+				setError(cause instanceof Error ? cause.message : String(cause));
+			}
+		});
+	}
+
+	async function dropExternalFiles(destFolder: string, files: File[]): Promise<void> {
+		const paths: string[] = [];
+		for (const file of files) {
+			try {
+				const path = window.loom.pathForFile(file);
+				if (path) paths.push(path);
+			} catch {
+				// Skip entries without a local path.
+			}
+		}
+		if (paths.length === 0) {
+			setError(t.library.importFailed);
+			return;
+		}
+		await whileBusy(t.library.pasting, () => placeExternalPaths(paths, destFolder, false));
 	}
 
 	async function dropLibraryItem(destFolder: string, item: LibraryDrag): Promise<void> {
@@ -661,7 +743,7 @@ export function App(): React.JSX.Element {
 	async function trashPreviewed(assetId: string): Promise<void> {
 		setError(null);
 		try {
-			await window.loom.trashAsset(assetId);
+			await withTrashNotice(() => window.loom.trashAsset(assetId));
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -679,10 +761,12 @@ export function App(): React.JSX.Element {
 
 	async function trashSelection(selection: TreeSelection = picked): Promise<boolean> {
 		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
-		if (items.assetIds.length === 1 && items.folders.length === 0) return window.loom.trashAsset(items.assetIds[0]);
-		if (items.folders.length === 1 && items.assetIds.length === 0) return window.loom.trashFolder(items.folders[0]);
 		if (items.assetIds.length === 0 && items.folders.length === 0) return false;
-		return window.loom.trashLibraryItems(items.assetIds, items.folders);
+		return withTrashNotice(() => {
+			if (items.assetIds.length === 1 && items.folders.length === 0) return window.loom.trashAsset(items.assetIds[0]);
+			if (items.folders.length === 1 && items.assetIds.length === 0) return window.loom.trashFolder(items.folders[0]);
+			return window.loom.trashLibraryItems(items.assetIds, items.folders);
+		});
 	}
 
 	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean): void {
@@ -1004,6 +1088,12 @@ export function App(): React.JSX.Element {
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
+				{status && (
+					<div className={`status-toast${error ? " below" : ""}`} role="status">
+						<span className="status-toast-spin" aria-hidden="true" />
+						{status}
+					</div>
+				)}
 				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
 					{import.meta.env.DEV ? <TracesButton onOpen={() => void window.loom.openDevTrace?.()} /> : null}
@@ -1062,6 +1152,7 @@ export function App(): React.JSX.Element {
 						onRenameFolder={renameFolder}
 						onCancelRename={cancelRename}
 						onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
+						onDropFiles={(dest, files) => void dropExternalFiles(dest, files)}
 						onKeyDown={onLibraryKeyDown}
 						collapsed={libraryCollapsed}
 					/>

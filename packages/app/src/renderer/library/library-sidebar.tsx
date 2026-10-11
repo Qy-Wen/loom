@@ -5,6 +5,7 @@ import {
 	canDropLibraryItem,
 	endLibraryDrag,
 	hasLibraryDrag,
+	hasOsFileDrag,
 	readLibraryDrag,
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
@@ -81,6 +82,7 @@ interface LibrarySidebarProps {
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
+	onDropFiles: (destFolder: string, files: File[]) => void;
 	onKeyDown: (event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean) => void;
 	collapsed: boolean;
 }
@@ -107,6 +109,7 @@ export function LibrarySidebar({
 	onRenameFolder,
 	onCancelRename,
 	onDropIntoFolder,
+	onDropFiles,
 	onKeyDown,
 	collapsed,
 }: LibrarySidebarProps): React.JSX.Element {
@@ -168,6 +171,12 @@ export function LibrarySidebar({
 			else next.add(tagId);
 			return next;
 		});
+	}
+
+	function overFavoritesOrTags(event: React.DragEvent): boolean {
+		const target = event.target;
+		const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
+		return element?.closest(".favorites, .library-tags") != null;
 	}
 
 	function acceptRootDrop(event: React.DragEvent): boolean {
@@ -289,9 +298,22 @@ export function LibrarySidebar({
 				<div
 					className="asset-list thin-scroll"
 					onDragOver={(event) => {
+						if (overFavoritesOrTags(event)) return;
+						if (hasOsFileDrag(event.dataTransfer)) {
+							event.preventDefault();
+							event.dataTransfer.dropEffect = "copy";
+							return;
+						}
 						acceptRootDrop(event);
 					}}
 					onDrop={(event) => {
+						if (overFavoritesOrTags(event)) return;
+						if (hasOsFileDrag(event.dataTransfer)) {
+							event.preventDefault();
+							const files = [...event.dataTransfer.files];
+							if (files.length > 0) onDropFiles("", files);
+							return;
+						}
 						if (!acceptRootDrop(event)) return;
 						const item = readLibraryDrag(event.dataTransfer);
 						endLibraryDrag();
@@ -446,6 +468,7 @@ export function LibrarySidebar({
 							onRenameAsset={onRenameAsset}
 							onCancelRename={onCancelRename}
 							onDropIntoFolder={onDropIntoFolder}
+							onDropFiles={onDropFiles}
 						/>
 						)}
 						</>

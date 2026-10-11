@@ -5,6 +5,7 @@ import {
 	canDropLibraryItem,
 	endLibraryDrag,
 	hasLibraryDrag,
+	hasOsFileDrag,
 	readLibraryDrag,
 	writeLibraryDrag,
 	type LibraryDrag,
@@ -289,6 +290,7 @@ interface FolderTreeRowProps {
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
+	onDropFiles: (destFolder: string, files: File[]) => void;
 	onDropFolder: (destFolder: string | null) => void;
 	fileDisplay: FileDisplay;
 }
@@ -329,6 +331,13 @@ function FolderTreeRow({
 	return (
 		<div
 			onDragOver={(event) => {
+				if (hasOsFileDrag(event.dataTransfer)) {
+					event.preventDefault();
+					event.stopPropagation();
+					event.dataTransfer.dropEffect = "copy";
+					rowProps.onDropFolder(folder.relativePath);
+					return;
+				}
 				if (!hasLibraryDrag(event.dataTransfer)) return;
 				event.preventDefault();
 				event.stopPropagation();
@@ -339,7 +348,20 @@ function FolderTreeRow({
 				event.dataTransfer.dropEffect = "move";
 				rowProps.onDropFolder(folder.relativePath);
 			}}
+			onDragLeave={(event) => {
+				const next = event.relatedTarget;
+				if (next instanceof Node && event.currentTarget.contains(next)) return;
+				rowProps.onDropFolder(null);
+			}}
 			onDrop={(event) => {
+				if (hasOsFileDrag(event.dataTransfer)) {
+					event.preventDefault();
+					event.stopPropagation();
+					rowProps.onDropFolder(null);
+					const files = [...event.dataTransfer.files];
+					if (files.length > 0) rowProps.onDropFiles(folder.relativePath, files);
+					return;
+				}
 				if (!hasLibraryDrag(event.dataTransfer)) return;
 				event.preventDefault();
 				event.stopPropagation();
@@ -435,6 +457,7 @@ function FolderTreeRow({
 					onRenameAsset={rowProps.onRenameAsset}
 					onCancelRename={rowProps.onCancelRename}
 					onDropIntoFolder={rowProps.onDropIntoFolder}
+					onDropFiles={rowProps.onDropFiles}
 					onDropFolder={rowProps.onDropFolder}
 					fileDisplay={rowProps.fileDisplay}
 				/>
@@ -465,6 +488,7 @@ interface FileTreeRowsProps {
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
+	onDropFiles: (destFolder: string, files: File[]) => void;
 	onDropFolder: (destFolder: string | null) => void;
 	fileDisplay: FileDisplay;
 }
@@ -491,6 +515,7 @@ function FileTreeRows({
 	onRenameAsset,
 	onCancelRename,
 	onDropIntoFolder,
+	onDropFiles,
 	onDropFolder,
 	fileDisplay,
 }: FileTreeRowsProps): React.JSX.Element {
@@ -528,6 +553,7 @@ function FileTreeRows({
 					onRenameAsset={onRenameAsset}
 					onCancelRename={onCancelRename}
 					onDropIntoFolder={onDropIntoFolder}
+					onDropFiles={onDropFiles}
 					onDropFolder={onDropFolder}
 				/>
 			))}
@@ -592,6 +618,15 @@ function FavoriteMark(): React.JSX.Element {
 
 export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Element {
 	const [dropFolder, setDropFolder] = useState<string | null>(null);
+	useEffect(() => {
+		const clear = () => setDropFolder(null);
+		window.addEventListener("dragend", clear);
+		window.addEventListener("drop", clear);
+		return () => {
+			window.removeEventListener("dragend", clear);
+			window.removeEventListener("drop", clear);
+		};
+	}, []);
 	const favoriteAssetIds = useMemo(
 		() => new Set(library.favoriteAssetIds ?? []),
 		[library.favoriteAssetIds],
