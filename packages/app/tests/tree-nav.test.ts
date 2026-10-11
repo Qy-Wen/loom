@@ -45,6 +45,50 @@ describe("visibleTreeRows", () => {
 			"m.txt",
 		]);
 	});
+
+	it("sorts folders by their newest file and files newest first", () => {
+		const dated: TreeAssetRef[] = [
+			{ assetId: "old", relativePath: "a/old.txt", modifiedAt: 10 },
+			{ assetId: "new", relativePath: "b/new.txt", modifiedAt: 50 },
+			{ assetId: "nested", relativePath: "a/c/nested.txt", modifiedAt: 40 },
+			{ assetId: "mid", relativePath: "mid.txt", modifiedAt: 30 },
+			{ assetId: "fresh", relativePath: "fresh.txt", modifiedAt: 60 },
+		];
+		assert.deepEqual(paths(visibleTreeRows(["b", "a", "a/c", "empty"], dated, new Set(), "modified", "desc")), [
+			"b",
+			"b/new.txt",
+			"a",
+			"a/c",
+			"a/c/nested.txt",
+			"a/old.txt",
+			"empty",
+			"fresh.txt",
+			"mid.txt",
+		]);
+		assert.deepEqual(paths(visibleTreeRows(["b", "a", "a/c", "empty"], dated, new Set(), "modified", "asc")), [
+			"empty",
+			"a",
+			"a/c",
+			"a/c/nested.txt",
+			"a/old.txt",
+			"b",
+			"b/new.txt",
+			"mid.txt",
+			"fresh.txt",
+		]);
+	});
+
+	it("reverses each group when name order is descending", () => {
+		assert.deepEqual(paths(visibleTreeRows(["b", "a"], [
+			{ assetId: "m", relativePath: "m.txt" },
+			{ assetId: "z", relativePath: "z.txt" },
+		], new Set(), "name", "desc")), [
+			"b",
+			"a",
+			"z.txt",
+			"m.txt",
+		]);
+	});
 });
 
 describe("treeMotion", () => {

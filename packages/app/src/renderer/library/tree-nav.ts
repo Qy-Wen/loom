@@ -3,7 +3,14 @@
 export interface TreeAssetRef {
 	assetId: string;
 	relativePath: string;
+	modifiedAt?: number;
 }
+
+/** `name` compares labels. `modified` uses each file's time, and a folder's newest file. */
+export type FileSort = "name" | "modified";
+
+/** `asc` is A→Z and oldest first. `desc` reverses that key. */
+export type FileSortDirection = "asc" | "desc";
 
 export interface TreeRow {
 	kind: "folder" | "asset";
@@ -40,12 +47,64 @@ function folderName(relativePath: string): string {
 	return index === -1 ? relativePath : relativePath.slice(index + 1);
 }
 
+/** Newest file inside each folder. Directory mtimes are not in the library snapshot. */
+export function contentModifiedAt(
+	assets: readonly { relativePath: string; modifiedAt?: number }[],
+): Map<string, number> {
+	const times = new Map<string, number>();
+	for (const asset of assets) {
+		const time = asset.modifiedAt ?? 0;
+		let parent = parentPath(asset.relativePath);
+		while (parent) {
+			if (time > (times.get(parent) ?? 0)) times.set(parent, time);
+			parent = parentPath(parent);
+		}
+	}
+	return times;
+}
+
+function applyDirection(order: number, direction: FileSortDirection): number {
+	return direction === "desc" ? -order : order;
+}
+
+export function compareFolderPaths(
+	a: string,
+	b: string,
+	sort: FileSort,
+	times: ReadonlyMap<string, number>,
+	direction: FileSortDirection = "asc",
+): number {
+	if (sort === "modified") {
+		const delta = (times.get(a) ?? 0) - (times.get(b) ?? 0);
+		if (delta !== 0) return applyDirection(delta, direction);
+	}
+	const byName = folderName(a).localeCompare(folderName(b));
+	return sort === "name" ? applyDirection(byName, direction) : byName;
+}
+
+export function compareAssetPaths(
+	a: { relativePath: string; modifiedAt?: number },
+	b: { relativePath: string; modifiedAt?: number },
+	sort: FileSort,
+	direction: FileSortDirection = "asc",
+): number {
+	if (sort === "modified") {
+		const delta = (a.modifiedAt ?? 0) - (b.modifiedAt ?? 0);
+		if (delta !== 0) return applyDirection(delta, direction);
+	}
+	const byName = a.relativePath.localeCompare(b.relativePath);
+	return sort === "name" ? applyDirection(byName, direction) : byName;
+}
+
 /** Rows in the same order the file tree paints them, skipping children of collapsed folders. */
 export function visibleTreeRows(
 	folders: readonly string[],
 	assets: readonly TreeAssetRef[],
 	collapsed: ReadonlySet<string>,
+	sort: FileSort = "name",
+	direction: FileSortDirection = "asc",
 ): TreeRow[] {
+	const times = sort === "modified" ? contentModifiedAt(assets) : new Map<string, number>();
 	const foldersByParent = new Map<string, string[]>();
 	for (const folder of folders) {
 		const parent = parentPath(folder);
@@ -54,7 +113,7 @@ export function visibleTreeRows(
 		else foldersByParent.set(parent, [folder]);
 	}
 	for (const list of foldersByParent.values()) {
-		list.sort((a, b) => folderName(a).localeCompare(folderName(b)));
+		list.sort((a, b) => compareFolderPaths(a, b, sort, times, direction));
 	}
 
 	const assetsByParent = new Map<string, TreeAssetRef[]>();
@@ -65,7 +124,7 @@ export function visibleTreeRows(
 		else assetsByParent.set(parent, [asset]);
 	}
 	for (const list of assetsByParent.values()) {
-		list.sort((a, b) => a.relativePath.localeCompare(b.relativePath));
+		list.sort((a, b) => compareAssetPaths(a, b, sort, direction));
 	}
 
 	const rows: TreeRow[] = [];
