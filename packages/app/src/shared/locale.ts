@@ -233,6 +233,7 @@ export const messages = defineLocale(
 			saveType: "Save as JPEG, PNG, WebP, TIFF, or BMP.",
 			saveVideoType: "Save as MP4, MOV, or MKV.",
 			time: "Time",
+			loading: "Loading video…",
 			leave: "Exit edit",
 		},
 		chat: {
@@ -639,6 +640,7 @@ export const messages = defineLocale(
 			saveType: "请保存为 JPEG、PNG、WebP、TIFF 或 BMP。",
 			saveVideoType: "请保存为 MP4、MOV 或 MKV。",
 			time: "时间",
+			loading: "正在加载视频…",
 			leave: "退出编辑",
 		},
 		chat: {

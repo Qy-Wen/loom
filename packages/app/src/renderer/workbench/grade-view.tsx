@@ -56,6 +56,7 @@ export function GradeView({
 	const [fallbackUrl, setFallbackUrl] = useState<string | null>(null);
 	const [time, setTime] = useState(0);
 	const [duration, setDuration] = useState(0);
+	const [loadingFrame, setLoadingFrame] = useState(() => asset.type === "video" && isGradeableVideo(asset.filename));
 	const dirtyRef = useRef(false);
 	const proxyRef = useRef<string | null>(null);
 	const fallbackRef = useRef<string | null>(null);
@@ -82,6 +83,7 @@ export function GradeView({
 		setCropping(false);
 		setTime(0);
 		setDuration(0);
+		setLoadingFrame(asset.type === "video" && isGradeableVideo(asset.filename));
 		triedFallback.current = false;
 		setFallbackUrl((current) => {
 			if (current) URL.revokeObjectURL(current);
@@ -115,6 +117,7 @@ export function GradeView({
 				while (!stopped) {
 					const shot = liveRef.current;
 					if (!shot.video && shot.showOriginal) return;
+					if (shot.video && !proxyRef.current) setLoadingFrame(true);
 					const key = previewKey(shot);
 					try {
 						const previewGrade = shot.cropping ? { ...shot.grade, crop: FULL_IMAGE_CROP } : shot.grade;
@@ -131,10 +134,14 @@ export function GradeView({
 						if (!shot.video && liveRef.current.showOriginal) return;
 						if (previewKey(liveRef.current) !== key) continue;
 						setProxyUrl(replaceBlob(proxyRef, bytes));
+						if (shot.video) setLoadingFrame(false);
 						if (bytes) setError(null);
 						return;
 					} catch (cause) {
-						if (!stopped) setError(cause instanceof Error ? cause.message : shot.previewFailed);
+						if (!stopped) {
+							if (shot.video) setLoadingFrame(false);
+							setError(cause instanceof Error ? cause.message : shot.previewFailed);
+						}
 						return;
 					}
 				}
@@ -217,12 +224,14 @@ export function GradeView({
 		b: t.grade.curveB,
 	};
 	const lutName = lut ? lut.split("/").at(-1) ?? lut : t.grade.none;
+	const showFrameLoading = video && loadingFrame && !shownUrl;
 
 	return (
 		<div className="grade-workbench">
 			<div className="grade-stage">
 				<div className="preview-stack">
-					<div className="grade-frame">
+					<div className={`grade-frame${showFrameLoading ? " is-loading" : ""}`}>
+						{showFrameLoading && <p className="grade-loading">{t.grade.loading}</p>}
 						{shownUrl ? (
 							<img
 								src={shownUrl}
