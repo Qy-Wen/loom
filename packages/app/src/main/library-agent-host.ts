@@ -1,0 +1,176 @@
+import {
+	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
+	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
+	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate,
+	type Conversation, type ConversationId, type EntryId, type LoomSessionRecord, type LoomSessionSummary,
+} from "@loom/agent/durable";
+import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
+import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
+
+const idOf = (id: string): ConversationId => {
+	const parsed = Number(id);
+	if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(parsed)) throw new Error("Invalid conversation ID");
+	return parsed as ConversationId;
+};
+
+/** App-only lifecycle/DTO boundary. It owns a LibraryAgent, never reimplements lanes or generation. */
+export class LibraryAgentHost {
+	owner: LibraryAgent | undefined;
+	readonly gate = new ToolGate();
+	readonly #options: LoomAgentOptions;
+	#instructions = "";
+	#unsubscribe: (() => void) | undefined;
+	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
+	#revision = 0;
+	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
+	#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+
+	constructor(options: LoomAgentOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
+	getPermissionLevel() { return this.gate.level; }
+	setPermissionLevel(level: AgentPermissionLevel) { this.gate.setLevel(level); }
+	setCommandAllows(allows: readonly CommandAllow[]) { this.gate.allows = allows; }
+	pendingCommandAllow(id: string) { return this.owner ? this.gate.pendingCommandAllow(id, this.owner.libraryPath) : undefined; }
+	resolveToolGate(id: string, decision: ToolGateDecision) { return this.gate.resolve(id, decision); }
+	setSystemPrompt(prompt: string) { this.#options.systemPrompt = prompt; }
+
+	async openLibrary(root: string): Promise<void> {
+		await this.close();
+		const ready = chatEndpointReady(this.#options.chat);
+		const chat = ready ? buildChatModels(this.#options.chat!) : undefined;
+		const permission = this.gate.extension(root, () => this.requireOwner().harness);
+		const { assembly, specialists } = await this.assemble(root, permission);
+		this.#models = chat?.models ?? createModels();
+		this.owner = await LibraryAgent.open(root, {
+			models: this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists],
+			settings: { extensions: [assembly.extension, permission] },
+			agent: { ...(chat ? { model: { provider: chat.model.provider, modelId: chat.model.id } } : {}), instructions: this.#instructions },
+			conversationCreated: async (tx, record) => {
+				await assembly.conversationCreated(tx, record);
+				await tx.doc(LoomApprovalsDoc, record.id);
+				if (!record.parent) await tx.appendEntry(record.id, { kind: "loom.start", head: "self" });
+			},
+		}, context);
+		await clearPendingApprovals(this.owner.harness);
+		this.#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+		const baseline = await this.owner.harness.usage(context);
+		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];
+		this.#unsubscribe = this.owner.harness.subscribeCommits((publication) => {
+			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
+			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && change.record.kind === LoomConversationDoc.definition.kind))) void this.publish();
+		});
+		this.owner.harness.resume();
+		await this.publish();
+	}
+	async close(): Promise<void> {
+		const owner = this.owner;
+		this.#unsubscribe?.(); this.#unsubscribe = undefined;
+		if (owner) await owner.close(context);
+		if (this.owner === owner) this.owner = undefined;
+		await this.publish();
+	}
+	requireOwner(): LibraryAgent { if (!this.owner) throw new Error("Open a library first."); return this.owner; }
+	async conversation(id: string): Promise<Conversation> {
+		const handle = await this.requireOwner().harness.conversation(idOf(id), context);
+		if (!handle) throw new Error(`Conversation not found: ${id}`);
+		return handle;
+	}
+	async listSessions(): Promise<LoomSessionSummary[]> {
+		const owner = this.owner;
+		if (!owner) return [];
+		return (await listLoomConversations(owner.harness, {}, context)).map((row) => ({
+			id: String(row.id), title: row.title, status: row.archived ? "archived" : "open", createdAt: row.createdAt, updatedAt: row.createdAt,
+		}));
+	}
+	async createSession() { const conversation = await this.requireOwner().createConversation({}, context); return this.getSession(String(conversation.id)); }
+	async openSession(id: string) { return this.getSession(id); }
+	async getSession(id: string): Promise<LoomSessionRecord> {
+		const owner = this.requireOwner();
+		const conversation = await this.conversation(id);
+		const metadata = await owner.harness.snapshot(LoomConversationDoc, conversation.id, context);
+		const entries = (await conversation.context(context)).entries;
+		const messages = entries.flatMap((entry) => (entry.model ?? []).filter((message) => message.role !== "system").map((message) => ({
+			...message, id: String(entry.id), ...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text } : {}),
+		})));
+		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: undefined };
+	}
+	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireOwner().harness, idOf(id), title, context); }
+	async archiveSession(id: string) { await setConversationArchived(this.requireOwner().harness, idOf(id), true, context); }
+	async unarchiveSession(id: string) { await setConversationArchived(this.requireOwner().harness, idOf(id), false, context); }
+	async deleteSession(id: string) {
+		const conversation = await this.conversation(id);
+		await conversation.abort(context);
+		await conversation.commit(async (tx) => { (await tx.doc(LoomConversationDoc, conversation.id)).hidden = true; }, context);
+	}
+	async forkBefore(id: string, entryId: string) {
+		const conversation = await this.conversation(id);
+		await conversation.abort(context);
+		const history = (await conversation.context(context)).entries;
+		const index = history.findIndex((entry) => String(entry.id) === entryId);
+		if (index < 0) throw new Error("Entry not found");
+		// Fork before the user entry, not at it; a reset provides an empty-context anchor for first-entry forks.
+		const at = history[index - 1]?.id;
+		if (!at) throw new Error("Cannot fork before the conversation's start anchor");
+		const fork = await conversation.fork(at as EntryId, { ownership: { kind: "ownerless" } }, context);
+		return this.getSession(String(fork.id));
+	}
+	async branchBefore(id: string, entryId: string) {
+		const fork = await this.forkBefore(id, entryId);
+		await this.archiveSession(id);
+		return fork;
+	}
+	async setChat(chat: LoomChatEndpoint | undefined) {
+		this.#options.chat = chat;
+		const owner = this.owner;
+		if (!owner) return;
+		const built = chatEndpointReady(chat) ? buildChatModels(chat) : undefined;
+		// Provider object replacement is supported without replacing the Harness's Models collection.
+		if (built) {
+			this.#models?.setProvider(built.models.getProvider(built.model.provider)!);
+			for (const row of await listLoomConversations(owner.harness, { includeOwned: true }, context)) {
+				await (await owner.harness.conversation(row.id, context))!.configure({ model: { provider: built.model.provider, modelId: built.model.id } }, context);
+			}
+		} else this.#models?.deleteProvider("loom-chat");
+	}
+	#models: ReturnType<typeof createModels> | undefined;
+	async setInstructions(text: string) {
+		this.#instructions = text;
+		if (!this.owner) return;
+		for (const row of await listLoomConversations(this.owner.harness, {}, context)) {
+			await (await this.owner.harness.conversation(row.id, context))!.configure({ instructions: text }, context);
+		}
+	}
+	async setTools(tools: LoomTool[]) {
+		this.#options.tools = tools;
+		if (!this.owner) return;
+		const permission = this.gate.extension(this.owner.libraryPath, () => this.requireOwner().harness);
+		const { assembly, specialists } = await this.assemble(this.owner.libraryPath, permission);
+		this.owner.registry.install(assembly.extension);
+		for (const child of specialists) this.owner.registry.install(child);
+	}
+	private async recordUsage() {
+		const owner = this.owner; if (!owner) return;
+		try {
+			const usage = await owner.harness.usage(context);
+			if (this.owner !== owner) return;
+			const next = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+			for (const row of Object.values(usage.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) next[key] += row[key];
+			const delta = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+			for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) delta[key] = Math.max(0, next[key] - this.#usage[key]);
+			this.#usage = next; if (Object.values(delta).some((value) => value > 0)) this.#onUsage?.(delta);
+		} catch { /* A closing owner cannot publish usage. */ }
+	}
+	private async assemble(root: string, permission: ReturnType<ToolGate["extension"]>) {
+		const grouped = partitionLibraryTools(this.#options.tools ?? []);
+		const workspace = await createWorkspaceTools();
+		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission);
+		const create = createSpecialistExtension("create", [...workspace.filter((tool) => tool.name === "write" || tool.name === "bash"), ...grouped.create.map(toDurableTool)], permission);
+		const assembly = await createLibraryExtension(root, { systemPrompt: this.#options.systemPrompt, tools: grouped.parent });
+		return { assembly: { ...assembly, extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] } }, specialists: [retrieve.child, create.child] };
+	}
+	subscribeSessions(listener: (rows: LoomSessionSummary[]) => void) { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
+	async publish() {
+		const revision = ++this.#revision;
+		try { const rows = await this.listSessions(); if (revision === this.#revision) for (const listener of this.#listeners) listener(rows); }
+		catch { /* A closing library will publish its empty list after close. */ }
+	}
+}

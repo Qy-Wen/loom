@@ -1,60 +1,56 @@
-/** Native Pi harness tools. cwd is the open library. bash is sandboxed; read, edit, and write stay in-process. */
+/** Durable coding tools. Each call gets its cwd/environment from HarnessOptions.env. */
+import { prepareSandboxedBash } from "@loom/core/sandbox";
+import { Type, type TSchema } from "@earendil-works/pi-ai";
+import { copyJson, type JsonValue } from "@earendil-works/chord";
 import {
 	createBashTool,
 	createEditTool,
+	createNodePhotonImages,
 	createReadTool,
 	createWriteTool,
-	type AgentHarnessTool,
-	type ExecutionToolContext,
-} from "#vendor/pi-agent";
-import { NodeExecutionEnv } from "#vendor/pi-agent/node";
-import { prepareSandboxedBash } from "@loom/core/sandbox";
-import { Type } from "@earendil-works/pi-ai";
-import { processReadImage } from "./read-image.ts";
-import type { LoomTool, LoomToolContentPart, LoomToolResult } from "./types.ts";
+	defineTool,
+	type BashPrepare,
+	type ImageProcessor,
+	type ToolRegistration,
+} from "./durable-adapter.ts";
+import type { LoomTool, LoomToolContentPart } from "./types.ts";
 
-export interface WorkspaceTools {
-	tools: AgentHarnessTool<ExecutionToolContext>[];
-	toolContext: ExecutionToolContext;
-	setCwd: (cwd: string) => void;
+export type WorkspaceToolOptions = {
+	/** Omitted: upstream Photon worker; false: only pass through supported, bounded images. */
+	images?: ImageProcessor | false;
+	/** Defaults to Loom's process sandbox. Used by hosts with their own sandbox implementation. */
+	prepareBash?: BashPrepare;
+};
+
+export async function createWorkspaceTools(options: WorkspaceToolOptions = {}): Promise<ToolRegistration[]> {
+	const images = options.images === false ? undefined : options.images ?? await createNodePhotonImages();
+	return [
+		createReadTool({ images }),
+		createBashTool({ prepare: options.prepareBash ?? ((execution) => prepareSandboxedBash(execution)) }),
+		createEditTool(),
+		createWriteTool(),
+	];
 }
 
-export function createWorkspaceTools(cwd = process.cwd()): WorkspaceTools {
-	const toolContext = { env: new NodeExecutionEnv({ cwd }) };
-	return {
-		tools: [
-			createReadTool({ imageProcessor: processReadImage }),
-			createBashTool({ prepare: (execution) => prepareSandboxedBash(execution) }),
-			createEditTool(),
-			createWriteTool(),
-		],
-		toolContext,
-		setCwd(next) {
-			toolContext.env.cwd = next;
-		},
-	};
-}
-
-/** Adapt an application tool without allowing unknown side effects to replay after recovery. */
-export function toHarnessTool(tool: LoomTool): AgentHarnessTool<ExecutionToolContext> {
-	return {
+/** Adapt Loom results to durable's model output and committed UI details; external effects are not replay-safe. */
+export function toDurableTool(tool: LoomTool): ToolRegistration {
+	return defineTool({
 		name: tool.name,
-		label: tool.name,
 		description: tool.description,
-		parameters: (tool.parameters ?? Type.Object({})) as AgentHarnessTool<ExecutionToolContext>["parameters"],
-		replay: "never",
-		async execute(_toolCallId, args, _onUpdate, _toolContext, _invocation, context) {
+		parameters: (tool.parameters ?? Type.Object({})) as TSchema,
+		replay: "unsafe",
+		async execute(args, _api, context) {
 			context.abortSignal?.throwIfAborted();
 			const output = await tool.execute(args, context.abortSignal);
-			const result: LoomToolResult = typeof output === "string" ? { content: output } : output;
+			const result = typeof output === "string" ? { content: output } : output;
+			const content: LoomToolContentPart[] = typeof result.content === "string"
+				? [{ type: "text", text: result.content }]
+				: result.content;
+			// Durable documents only accept strict JSON; reject unsupported details rather than silently losing them.
 			return {
-				content: toPiContent(result.content),
-				details: result.details,
+				output: content,
+				...(result.details === undefined ? {} : { details: copyJson(result.details as JsonValue) }),
 			};
 		},
-	};
-}
-
-function toPiContent(content: string | LoomToolContentPart[]): LoomToolContentPart[] {
-	return typeof content === "string" ? [{ type: "text", text: content }] : content;
+	});
 }

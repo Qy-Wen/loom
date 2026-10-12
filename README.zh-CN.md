@@ -52,7 +52,7 @@ pnpm -r typecheck
 
 ## Vendor：pi durable 引擎
 
-Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 import 边界，迁移期间通过 `@loom/agent/durable` 暴露。Loom Chat 模型配置已适配，SQLite 冒烟链路已跑通；旧 harness 与 app 接入尚未迁移，见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 vendor import 边界，`src/durable.ts` 暴露 `@loom/agent/durable`，包含每库一个 Harness/Registry 的 `LibraryAgent` 与已提交的 title/archive 元数据。fork 标题追加 `（分支）`，默认未归档。Loom Chat 与 SQLite 冒烟链路已跑通；`createLibraryExtension` 已装配 durable 编码/Loom/auto-memory 工具与 prompt sections，memory 按会话冻结。root facade 与 app 已接入 durable 句柄/事件与 document 审批，specialist 改为归属前台 conversation。UI 端到端验收、specialist 专项验证、skills 和旧测试/eval 尚待完成，见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 

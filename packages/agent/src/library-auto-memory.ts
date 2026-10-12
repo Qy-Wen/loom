@@ -1,7 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { Type } from "@earendil-works/pi-ai";
-import type { AgentHarnessTool, ExecutionToolContext } from "#vendor/pi-agent";
+import { defineTool } from "./durable-adapter.ts";
 
 export const AUTO_MEMORY_CHAR_LIMIT = 2000;
 const ENTRY_SEPARATOR = "\n§\n";
@@ -55,10 +55,9 @@ export async function ensureLibraryAutoMemoryDir(root: string): Promise<void> {
 	await mkdir(join(root, ".agents", "memory"), { recursive: true });
 }
 
-export function createAutoMemoryTool(root: string): AgentHarnessTool<ExecutionToolContext> {
-	return {
+export function createAutoMemoryTool(root: string) {
+	return defineTool({
 		name: "auto_memory",
-		label: "auto memory",
 		description:
 			"Save a durable fact about the user or this library, such as a preference or a convention. " +
 			"Write facts, not procedures. Procedures belong in skills. " +
@@ -69,21 +68,24 @@ export function createAutoMemoryTool(root: string): AgentHarnessTool<ExecutionTo
 			content: Type.Optional(Type.String({ description: "The fact to save. Required for add and replace." })),
 			old_text: Type.Optional(Type.String({ description: "A unique substring of the existing entry. Required for replace and remove." })),
 		}),
-		replay: "never",
-		async execute(_toolCallId, args, _onUpdate, _toolContext, _invocation, context) {
+		replay: "unsafe",
+		async execute(args, _api, context) {
 			context.abortSignal?.throwIfAborted();
-			return { content: [{ type: "text", text: await updateLibraryAutoMemory(root, args) }], details: undefined };
+			return { output: [{ type: "text", text: await updateLibraryAutoMemory(root, args, context.abortSignal) }] };
 		},
-	};
+	});
 }
 
-export async function updateLibraryAutoMemory(root: string, args: unknown): Promise<string> {
+export async function updateLibraryAutoMemory(root: string, args: unknown, signal?: AbortSignal): Promise<string> {
+	signal?.throwIfAborted();
 	const action = parseAutoMemoryArgs(args);
 	return exclusive(libraryAutoMemoryFile(root), async () => {
+		signal?.throwIfAborted();
 		await ensureLibraryAutoMemoryDir(root);
 		const current = parseAutoMemoryEntries(await readLibraryAutoMemory(root));
 		const next = applyAutoMemoryAction(current, action);
-		await writeFile(libraryAutoMemoryFile(root), serializeAutoMemory(next.entries), "utf8");
+		signal?.throwIfAborted();
+		await writeFile(libraryAutoMemoryFile(root), serializeAutoMemory(next.entries), { encoding: "utf8", signal });
 		return next.message;
 	});
 }
@@ -161,6 +163,8 @@ function exclusive<T>(key: string, operation: () => Promise<T>): Promise<T> {
 	const previous = writes.get(key) ?? Promise.resolve();
 	const run = previous.then(operation, operation);
 	writes.set(key, run);
+	const cleanup = () => { if (writes.get(key) === run) writes.delete(key); };
+	void run.then(cleanup, cleanup);
 	return run;
 }
 

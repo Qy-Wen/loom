@@ -138,7 +138,7 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 }
 
 function userBubbleContent(message: LoomTranscriptMessage): string {
-	return transcriptText(message.content).replaceAll("\u200b", "");
+	return transcriptText(message.displayContent ?? message.content).replaceAll("\u200b", "");
 }
 
 function textOf(message: Message): string {

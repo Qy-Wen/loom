@@ -52,7 +52,7 @@ pnpm -r typecheck
 
 ## Vendored pi durable engine
 
-Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from upstream `main` into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Both are synced from the same commit. `src/durable-adapter.ts` is the import boundary, exposed as `@loom/agent/durable` during the migration. Loom Chat model configuration is adapted and the SQLite smoke chain works; the existing Loom harness and app integration are not migrated yet. See [MIGRATION](./docs/agent/MIGRATION.md).
+Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from upstream `main` into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Both are synced from the same commit. `src/durable-adapter.ts` is the vendor import boundary; `src/durable.ts` exposes `@loom/agent/durable`. It includes `LibraryAgent` (one Harness/Registry per library) and committed title/archive metadata; forks append `（分支）` and start unarchived. Loom Chat and the SQLite smoke chain work; `createLibraryExtension` now assembles durable coding/Loom/auto-memory tools and prompt sections, with frozen per-conversation memory. The root facade and app now use durable handles/events with document-based permission waits. Specialists use owned foreground conversations. UI end-to-end acceptance, focused specialist validation, skills, and old tests/evals remain pending. See [MIGRATION](./docs/agent/MIGRATION.md).
 
 ### Syncing upstream
 
