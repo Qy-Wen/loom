@@ -78,6 +78,34 @@ test("compaction and reopen preserve paginated chat history and forks before com
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 
+test("closing empty conversations hides them, while sent or inherited history remains archived", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-empty-close-"));
+	const host = new LibraryAgentHost({});
+	try {
+		await host.openLibrary(path);
+		const empty = await host.createSession();
+		await host.setSessionName(empty.id, "Named but unused");
+		const blank = await host.conversation(empty.id);
+		await blank.commit((tx) => tx.appendEntry(blank.id, { kind: "test.system", model: [{ role: "system", content: "internal prompt", timestamp: 1 }] }), context);
+		await host.archiveSession(empty.id);
+		assert.equal((await host.listSessions()).some((row) => row.id === empty.id), false);
+
+		const used = await host.createSession();
+		const conversation = await host.conversation(used.id);
+		const first = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "loom.user", data: { text: "sent" }, model: [{ role: "user", content: "sent", timestamp: 2 }] }), context);
+		const second = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "loom.user", data: { text: "next" }, model: [{ role: "user", content: "next", timestamp: 3 }] }), context);
+		const fork = await host.forkBefore(used.id, String(second.id));
+		const emptyFork = await host.forkBefore(used.id, String(first.id));
+		await host.archiveSession(used.id); await host.archiveSession(fork.id); await host.archiveSession(emptyFork.id);
+		assert.deepEqual((await host.listSessions()).map((row) => ({ id: row.id, status: row.status })), [{ id: fork.id, status: "archived" }, { id: used.id, status: "archived" }]);
+		await host.close(); await host.openLibrary(path);
+		assert.equal((await host.listSessions()).some((row) => row.id === empty.id || row.id === emptyFork.id), false);
+		assert.equal((await host.getSession(fork.id)).messages[0]?.displayContent, "sent");
+		await host.unarchiveSession(used.id);
+		assert.equal((await host.getSession(used.id)).status, "open");
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
 test("model and instruction edits apply to both existing and subsequently created conversations", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-defaults-"));
 	const host = new LibraryAgentHost({});

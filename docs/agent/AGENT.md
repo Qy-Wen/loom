@@ -45,7 +45,7 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 - New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Model/instruction edits configure existing conversations and update defaults for subsequent chats; tools replace registry extensions in place.
 - `LoomConversationDoc` stores latest title/archive/hidden/creation metadata outside model context. Forks append `（分支）`, clear archive/hidden, and leave the source unchanged.
 - Chat DTOs paginate native fork-aware `conversation.entries()` history, not compacted `context().entries`. Compaction summaries are not user messages. List/record timestamps use the last non-system, non-compaction message.
-- Fork-before finds the preceding entry in full history, including a start anchor for the first question and messages removed from model context by compaction. Branch-before creates the fork and archives the source. Delete hides the conversation, preserving ancestry and files already written.
+- Fork-before finds the preceding entry in full history, including a start anchor for the first question and messages removed from model context by compaction. Branch-before creates the fork and archives the source. Closing an empty conversation (no chat messages or pending input) hides it without adding History; conversations with messages are archived. Internal start/system entries do not count as chat; inherited fork messages do. Delete hides the conversation, preserving ancestry and files already written.
 - Old `.loom/harness-sessions/` JSONL is ignored, not migrated.
 
 ## 4. Tools, specialists, prompt

@@ -8,7 +8,7 @@ test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByRole("button", { name: "Agent permission", exact: true })).toBeVisible();
 });
 
-test("creates a persisted durable conversation without Chat", async ({ loomPage }) => {
+test("creates a durable conversation and discards the unused tab on close",  async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
 	const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	expect(root).toBeTruthy();
@@ -27,6 +27,16 @@ test("creates a persisted durable conversation without Chat", async ({ loomPage 
 	const database = await readFile(join(root!, ".loom", "loom.sqlite"));
 	expect(database.subarray(0, 16).toString()).toBe("SQLite format 3\u0000");
 	expect(created!.id).toMatch(/^[1-9]\d*$/);
+
+	await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
+	const archivedIds = sessions.filter((row) => row.status === "archived").map((row) => row.id);
+	await loomPage.locator(".session-tab.active").getByRole("button", { name: "Close New session", exact: true }).click();
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).some((row) => row.id === created!.id)).toBe(false);
+	await expect(loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab", { selected: true })).toHaveCount(1);
+	await loomPage.reload();
+	await expect(loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab", { selected: true })).toHaveCount(1);
+	expect((await loomPage.evaluate(() => window.loom.listSessions())).some((row) => row.id === created!.id)).toBe(false);
+	expect((await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.status === "archived").map((row) => row.id)).toEqual(archivedIds);
 });
 
 test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
