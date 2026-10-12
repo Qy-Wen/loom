@@ -72,7 +72,7 @@ test("formatSkillsForSystemPrompt lists the catalog without skill bodies", async
 		assert.match(prompt, /^The following skills provide specialized instructions/);
 		assert.match(prompt, /<name>brand-voice<\/name>/);
 		assert.match(prompt, /<description>Apply the house brand voice when writing titles or copy.<\/description>/);
-		assert.match(prompt, /\.agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
+		assert.match(prompt.replaceAll("\\", "/"), /\.agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
 		assert.doesNotMatch(prompt, new RegExp(BODY));
 		assert.equal(formatSkillsForSystemPrompt([]), "");
 		assert.equal(formatSkillsForSystemPrompt(skills.map((skill) => ({ ...skill, disableModelInvocation: true }))), "");

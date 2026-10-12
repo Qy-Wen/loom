@@ -185,10 +185,18 @@ async function apply(wanted: string): Promise<void> {
 		applied = undefined;
 	}
 	if (root !== wanted) return;
-	try {
-		await SandboxManager.initialize(runtimeConfig(wanted, shell));
-	} catch (error) {
-		throw refused(error);
+	const started = Date.now();
+	for (;;) {
+		try {
+			await SandboxManager.initialize(runtimeConfig(wanted, shell));
+			break;
+		} catch (error) {
+			// Parallel tests each bind two ports in the 10-port Windows range.
+			if (!isPortBusy(error) || Date.now() - started > 45_000) throw refused(error);
+			await SandboxManager.reset().catch(() => undefined);
+			await new Promise((resolve) => setTimeout(resolve, 400));
+			if (!enabled || root !== wanted) return;
+		}
 	}
 	if (root !== wanted) {
 		await SandboxManager.reset();
@@ -350,6 +358,12 @@ function canonical(path: string): string {
 	} catch {
 		return resolve(path);
 	}
+}
+
+function isPortBusy(error: unknown): boolean {
+	if (typeof error === "object" && error !== null && "code" in error && error.code === "EADDRINUSE") return true;
+	const message = error instanceof Error ? error.message : String(error);
+	return message.includes("EADDRINUSE") || message.includes("No free port in range");
 }
 
 function refused(error: unknown): Error {

@@ -29,7 +29,7 @@ describe("process sandbox", { concurrency: false }, () => {
 		}
 	});
 
-	test("bash stays inside the library and off the network", async () => {
+	test("bash stays inside the library and off the network", { skip: process.platform === "win32" }, async () => {
 		const dir = await mkdtemp(join(tmpdir(), "loom-sandbox-live-"));
 		const outside = join(homedir(), ".loom-sandbox-outside-probe");
 		const sentinel = "loom-sandbox-sentinel";
@@ -51,6 +51,33 @@ describe("process sandbox", { concurrency: false }, () => {
 
 			const output = await runHostShell(execution.command, dir, execution.env);
 			assert.match(output, new RegExp(sentinel));
+			assert.match(output, /OUTSIDE_BLOCKED/);
+			assert.match(output, /NET_BLOCKED/);
+			assert.equal(existsSync(outside), false);
+			assert.equal(await readFile(join(dir, "inside.txt"), "utf8"), "ok");
+		} finally {
+			await releaseProcessSandbox(dir);
+			await rm(outside, { force: true });
+			await rm(dir, { recursive: true, force: true });
+		}
+	});
+
+	test("windows sandbox stays inside the library and off the network", { skip: process.platform !== "win32" }, async () => {
+		const dir = await mkdtemp(join(tmpdir(), "loom-sandbox-win-"));
+		const outside = join(homedir(), ".loom-sandbox-outside-probe");
+		const systemRoot = process.env.SystemRoot ?? "C:\\Windows";
+		const curl = join(systemRoot, "System32", "curl.exe");
+		setProcessSandboxRoot(dir);
+		const command = [
+			"(echo loom-sandbox-sentinel)",
+			"(<nul set /p=ok> inside.txt)",
+			`((>"${outside.replaceAll('"', '""')}" echo no) && echo OUTSIDE_OK || echo OUTSIDE_BLOCKED)`,
+			`(("${curl}" -sS --max-time 8 -o NUL https://example.com) && echo NET_OK || echo NET_BLOCKED)`,
+		].join("&");
+		try {
+			const wrapped = await sandboxedArgv(command, dir);
+			const output = await runArgv(wrapped.argv, wrapped.cwd, wrapped.env);
+			assert.match(output, /loom-sandbox-sentinel/);
 			assert.match(output, /OUTSIDE_BLOCKED/);
 			assert.match(output, /NET_BLOCKED/);
 			assert.equal(existsSync(outside), false);
@@ -97,8 +124,7 @@ describe("process sandbox", { concurrency: false }, () => {
 
 	test("a turned-off sandbox runs the command directly", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "loom-sandbox-off-"));
-		const binary = join(dir, "ffmpeg");
-		await writeFile(binary, "#!/bin/sh\necho plain\n", { mode: 0o755 });
+		const binary = await writeEchoFfmpeg(dir);
 		const previous = process.env.LOOM_FFMPEG_PATH;
 		process.env.LOOM_FFMPEG_PATH = binary;
 		const execution = { command: "echo hi", cwd: dir, env: {} as Record<string, string> };
@@ -142,6 +168,17 @@ function runArgv(argv: string[], cwd: string, env: NodeJS.ProcessEnv): Promise<s
 			else reject(new Error(`command exited ${code ?? "unknown"}: ${output}`));
 		});
 	});
+}
+
+async function writeEchoFfmpeg(dir: string): Promise<string> {
+	if (process.platform === "win32") {
+		const binary = join(dir, "ffmpeg.cmd");
+		await writeFile(binary, "@echo off\r\necho plain\r\n");
+		return binary;
+	}
+	const binary = join(dir, "ffmpeg");
+	await writeFile(binary, "#!/bin/sh\necho plain\n", { mode: 0o755 });
+	return binary;
 }
 
 function quote(value: string): string {
