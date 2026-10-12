@@ -164,6 +164,8 @@ test("transport detach preserves work; durable reconnect and exact-run Stop need
 		const subscription = stream.subscribe((event) => { if (event.type === EventType.TEXT_MESSAGE_CONTENT) first.resolve(); });
 		await first.promise; subscription.unsubscribe();
 		assert.equal(await runner.isRunning({ threadId: session.id }), true);
+		await host.archiveSession(session.id);
+		assert.equal((await host.listSessions()).find((row) => row.id === session.id)?.status, "archived", "closing a busy sent conversation must keep its history");
 		const fresh = new DurableAgentRunner(host, new LoomAgUiAgent(host));
 		const connected = lastValueFrom(fresh.connect({ threadId: session.id }).pipe(toArray()));
 		assert.equal(await fresh.stop({ threadId: session.id, runId: "another-run" }), false);

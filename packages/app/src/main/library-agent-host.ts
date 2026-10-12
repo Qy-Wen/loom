@@ -1,7 +1,7 @@
 import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
 	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
-	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc,
+	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
@@ -105,7 +105,24 @@ export class LibraryAgentHost {
 		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireOwner().harness, idOf(id), title, context); }
-	async archiveSession(id: string) { await setConversationArchived(this.requireOwner().harness, idOf(id), true, context); }
+	async archiveSession(id: string) {
+		const conversation = await this.conversation(id);
+		await conversation.commit(async (tx) => {
+			let hasMessages = false;
+			let cursor: Cursor | undefined;
+			do {
+				const page = await tx.scanEntries({ conversationId: conversation.id }, 256, cursor);
+				hasMessages = page.items.some((entry) => !CompactionEntry.is(entry) && entry.model?.some((message) => message.role !== "system"));
+				cursor = page.next;
+			} while (!hasMessages && cursor !== undefined);
+			const live = await tx.doc(LiveDoc, conversation.id);
+			const inbox = await tx.doc(InboxDoc, conversation.id);
+			const metadata = await tx.doc(LoomConversationDoc, conversation.id);
+			// Closing an unused tab is not history. Keep durable ancestry, but hide it from both lists.
+			if (!hasMessages && !live.run && !inbox.items.some((item) => item.mode !== "write")) metadata.hidden = true;
+			else metadata.archived = true;
+		}, context);
+	}
 	async unarchiveSession(id: string) { await setConversationArchived(this.requireOwner().harness, idOf(id), false, context); }
 	async deleteSession(id: string) {
 		const conversation = await this.conversation(id);
