@@ -2,6 +2,7 @@ import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
 	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
+	DurableTrace, TraceStore, type LoomTraceRecord,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
@@ -25,6 +26,11 @@ export class LibraryAgentHost {
 	#revision = 0;
 	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
 	#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
+	#trace?: DurableTrace;
+	#tracePublisher?: (record: LoomTraceRecord | null) => void;
+	/** Enable local tracing before opening a library. Diagnostics never cross the Chat transport. */
+	setTracePublisher(publish: (record: LoomTraceRecord | null) => void) { this.#tracePublisher = publish; }
+	listTraces(limit = 40, before?: { at: number; id: string }): LoomTraceRecord[] { return this.#trace?.store.list(limit, before) ?? []; }
 
 	constructor(options: LoomAgentOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
 	getPermissionLevel() { return this.gate.level; }
@@ -38,21 +44,36 @@ export class LibraryAgentHost {
 		await this.close();
 		const ready = chatEndpointReady(this.#options.chat);
 		const chat = ready ? buildChatModels(this.#options.chat!) : undefined;
+		if (this.#tracePublisher) {
+			try {
+				this.#trace = new DurableTrace(await TraceStore.open(root), (record) => this.#tracePublisher?.(record), () => { /* Diagnostics must not fail a run. */ });
+				this.#trace.setSecrets(this.#options.chat?.apiKey ? [this.#options.chat.apiKey] : []);
+			} catch { /* A read-only/unavailable diagnostic store does not prevent opening Chat. */ }
+		}
 		const permission = this.gate.extension(root, () => this.requireOwner().harness);
 		const { assembly, specialists } = await this.assemble(root, permission);
 		this.#models = chat?.models ?? createModels();
 		this.#agentDefaults.model = chat ? { provider: chat.model.provider, modelId: chat.model.id } : undefined;
 		this.#agentDefaults.instructions = this.#instructions;
-		this.owner = await LibraryAgent.open(root, {
-			models: this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists],
-			settings: { extensions: [assembly.extension, permission] },
+		const traceExtensions = this.#trace ? [this.#trace.extension] : [];
+		try { this.owner = await LibraryAgent.open(root, {
+			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists, ...traceExtensions],
+			settings: { extensions: [assembly.extension, permission, ...traceExtensions] },
 			agent: this.#agentDefaults,
 			conversationCreated: async (tx, record) => {
 				await assembly.conversationCreated(tx, record);
 				await tx.doc(LoomApprovalsDoc, record.id);
 				if (!record.parent) await tx.appendEntry(record.id, { kind: "loom.start", head: "self" });
 			},
-		}, context);
+		}, context); }
+		catch (error) { this.#trace?.stop(); this.#trace = undefined; throw error; }
+		if (this.#trace) {
+			try {
+				await this.#trace.start(this.owner.harness);
+				for (const record of this.#trace.store.list().reverse()) this.#tracePublisher?.(record);
+			}
+			catch { this.#trace.stop(); this.#trace = undefined; }
+		}
 		await clearPendingApprovals(this.owner.harness);
 		this.#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 		const baseline = await this.owner.harness.usage(context);
@@ -67,7 +88,8 @@ export class LibraryAgentHost {
 	async close(): Promise<void> {
 		const owner = this.owner;
 		this.#unsubscribe?.(); this.#unsubscribe = undefined;
-		if (owner) await owner.close(context);
+		try { if (owner) await owner.close(context); }
+		finally { this.#trace?.stop(); this.#trace = undefined; this.#tracePublisher?.(null); }
 		if (this.owner === owner) this.owner = undefined;
 		await this.publish();
 	}
@@ -147,6 +169,7 @@ export class LibraryAgentHost {
 	}
 	async setChat(chat: LoomChatEndpoint | undefined) {
 		this.#options.chat = chat;
+		this.#trace?.setSecrets(chat?.apiKey ? [chat.apiKey] : []);
 		const owner = this.owner;
 		if (!owner) return;
 		const built = chatEndpointReady(chat) ? buildChatModels(chat) : undefined;
@@ -219,8 +242,9 @@ export class LibraryAgentHost {
 	private async assemble(root: string, permission: ReturnType<ToolGate["extension"]>) {
 		const grouped = partitionLibraryTools(this.#options.tools ?? []);
 		const workspace = await createWorkspaceTools();
-		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission);
-		const create = createSpecialistExtension("create", [...workspace.filter((tool) => tool.name === "write" || tool.name === "bash"), ...grouped.create.map(toDurableTool)], permission);
+		const traceExtensions = this.#trace ? [this.#trace.extension] : [];
+		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission, traceExtensions);
+		const create = createSpecialistExtension("create", [...workspace.filter((tool) => tool.name === "write" || tool.name === "bash"), ...grouped.create.map(toDurableTool)], permission, traceExtensions);
 		const assembly = await createLibraryExtension(root, { systemPrompt: this.#options.systemPrompt, tools: grouped.parent });
 		return { assembly: { ...assembly, extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] } }, specialists: [retrieve.child, create.child] };
 	}

@@ -136,7 +136,7 @@ const api: LoomApi = {
 	saveVideoGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveVideoGrade, assetId, grade, lut, output),
 	pickGradeOutput: (assetId) => ipcRenderer.invoke(IPC.pickGradeOutput, assetId),
 	pickGradeLut: () => ipcRenderer.invoke(IPC.pickGradeLut),
-	...(import.meta.env.DEV
+	...(import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")
 		? { openDevTrace: (): Promise<void> => ipcRenderer.invoke(DEV_TRACE_IPC.open) }
 		: {}),
 };

@@ -54,7 +54,7 @@ pnpm -r typecheck
 
 Loom 从上游 `main` 同一 commit 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。Loom 自有代码放在 vendor `src/` 之外，`src/durable-adapter.ts` 是 import 边界。`@loom/agent` 装配每库一个 SQLite Harness/Registry、document 元数据/审批/memory、skills section 和前台归属 specialist。App 使用原生 durable 事件与 fork-aware 完整聊天历史，独立于模型压缩；fork 标题追加 `（分支）`，默认未归档。
 
-全仓库类型检查/测试通过。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。Windows 实机和受控新旧评测对比待完成，telemetry 延后。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+全仓库类型检查/测试通过。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.agents/traces/traces.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 

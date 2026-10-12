@@ -11,20 +11,30 @@ export function DevTraceApp(): React.JSX.Element {
 	const [records, setRecords] = useState<DevTraceRecord[]>([]);
 	const [selected, setSelected] = useState<string | null>(null);
 	const followLatest = useRef(true);
+	const sourceRevision = useRef(0);
+	const [hasMore, setHasMore] = useState(false);
+	const merge = (record: DevTraceRecord) => setRecords((prev) => {
+		const existing = prev.find((row) => row.id === record.id);
+		if (existing && existing.revision >= record.revision) return prev;
+		return [...prev.filter((row) => row.id !== record.id), record].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id));
+	});
 
 	useEffect(() => {
 		let alive = true;
-		const seen = new Set<string>();
-		const add = (record: DevTraceRecord) => {
-			if (!alive || seen.has(record.id)) return;
-			seen.add(record.id);
-			setRecords((prev) => [...prev, record].slice(-40));
+		let received = 0;
+		const add = (record: DevTraceRecord | null) => {
+			if (!alive) return;
+			if (!record) { sourceRevision.current++; received = 0; setRecords([]); setSelected(null); setHasMore(false); followLatest.current = true; return; }
+			if (++received === 40) setHasMore(true);
+			merge(record);
 			setSelected((current) => (followLatest.current || current === null ? record.id : current));
 		};
 		const stop = window.loomDev.onTrace(add);
+		const revision = sourceRevision.current;
 		void window.loomDev.getTraces().then((list) => {
-			if (!alive) return;
-			for (const record of list) add(record);
+			if (!alive || sourceRevision.current !== revision) return;
+			setHasMore(list.length === 40);
+			for (const record of list.reverse()) add(record);
 		});
 		return () => {
 			alive = false;
@@ -50,9 +60,17 @@ export function DevTraceApp(): React.JSX.Element {
 						}}
 					>
 						<span className="trace-item-time">{formatTime(record.at)}</span>
-						<span className="trace-item-summary">{traceSummary(record.spans) || "empty"}</span>
+						<span className="trace-item-summary">{record.status} · {traceSummary(record.spans) || "empty"}</span>
 					</button>
 				))}
+				{hasMore ? <button type="button" onClick={() => {
+					const oldest = records[0]; if (!oldest) return;
+					const revision = sourceRevision.current;
+					void window.loomDev.getTraces({ at: oldest.at, id: oldest.id }).then((list) => {
+						if (sourceRevision.current !== revision) return;
+						setHasMore(list.length === 40); for (const record of list) merge(record);
+					});
+				}}>Load older traces</button> : null}
 			</aside>
 			<main className="trace-detail">
 				{current && traceSummary(current.spans) ? <TraceTree key={current.id} spans={current.spans} /> : null}

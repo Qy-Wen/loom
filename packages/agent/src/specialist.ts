@@ -70,7 +70,7 @@ export function specialistDescription(role: SpecialistRole): string {
 }
 
 /** Foreground owned conversations: durable controls Stop, busy state, and restart ownership. */
-export function createSpecialistExtension(role: SpecialistRole, tools: readonly ToolRegistration[], permission: Extension) {
+export function createSpecialistExtension(role: SpecialistRole, tools: readonly ToolRegistration[], permission: Extension, extensions: readonly Extension[] = []) {
 	const child = defineExtension({ name: `loom.${role}`, tools });
 	const tool = defineTool({
 		name: role === "retrieve" ? RETRIEVE_AGENT_TOOL : CREATE_AGENT_TOOL,
@@ -82,7 +82,7 @@ export function createSpecialistExtension(role: SpecialistRole, tools: readonly 
 				if (existing) return existing.id;
 				const record = await tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } });
 				await configure(tx, record.id, {
-					extensions: [child, permission],
+					extensions: [child, permission, ...extensions],
 					instructions: role === "retrieve" ? RETRIEVE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT,
 				});
 				return record.id;

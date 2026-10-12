@@ -6,8 +6,9 @@ export default defineConfig(({ command }) => {
 	const preloadInput: Record<string, string> = {
 		index: resolve(__dirname, "src/preload/index.ts"),
 	};
-	// The traces window is served in dev and omitted from the production bundle.
-	if (command === "serve") {
+	// Isolated Electron trace acceptance may include the dev window; production still omits it.
+	const trace = command === "serve" || process.env.LOOM_E2E_TRACE === "1";
+	if (trace) {
 		preloadInput["dev-trace"] = resolve(__dirname, "src/preload/dev-trace.ts");
 	}
 	return {
@@ -41,7 +42,7 @@ export default defineConfig(({ command }) => {
 			},
 			build: {
 				rollupOptions: {
-					input: { index: resolve(__dirname, "src/renderer/index.html") },
+					input: { index: resolve(__dirname, "src/renderer/index.html"), ...(trace ? { "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html") } : {}) },
 				},
 			},
 			plugins: [react()],
