@@ -1,6 +1,6 @@
 /* Region placement and registered slot presentation. */
 .resize-handle { position: relative; z-index: 2; background: transparent; cursor: col-resize; touch-action: none; }
-.resize-handle::after { position: absolute; top: 0; bottom: 0; left: 4px; width: 1px; background: #dededb; content: ""; transition: background 120ms ease, width 120ms ease; }
+.resize-handle::after { position: absolute; top: 0; bottom: 0; left: 4px; width: 2px; background: #dededb; content: ""; transition: background 120ms ease, width 120ms ease; }
 .resize-handle:not(.row):hover::after,
 body.resizing-columns .resize-handle:not(.row)::after { width: 2px; background: #7896c8; }
 .resize-handle.side-resize::after { left: auto; right: 4px; }
@@ -65,7 +65,7 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .work-panel-edge.bottom { right: 12px; bottom: 0; left: 0; height: 6px; cursor: ns-resize; }
 .work-panel-edge.corner { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 .resize-handle.row { flex: 0 0 10px; cursor: row-resize; }
-.resize-handle.row::after { top: 4px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
+.resize-handle.row::after { top: 4px; right: 0; bottom: auto; left: 0; width: auto; height: 2px; }
 .resize-handle.row:hover::after, body.resizing-rows .resize-handle.row::after { width: auto; height: 2px; }
 .resize-handle.bottom-resize::after, .resize-handle.above-resize::after { top: calc(100% - var(--join-border-width)); bottom: auto; }
 .shell.library-collapsed > .workbench,

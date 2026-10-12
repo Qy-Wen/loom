@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import {
 	FULL_IMAGE_CROP,
@@ -265,6 +265,7 @@ export function GradeView({
 								value={Math.min(time, duration > 0 ? duration : 0)}
 								aria-label={t.grade.time}
 								disabled={duration <= 0}
+								style={{ "--grade-fill": `${duration > 0 ? (Math.min(time, duration) / duration) * 100 : 0}%` } as CSSProperties}
 								onChange={(event) => setTime(Number(event.target.value))}
 							/>
 							<span>{formatClock(duration)}</span>
@@ -406,6 +407,7 @@ function GradeSlider({
 	onChange: (value: number) => void;
 }): React.JSX.Element {
 	const digits = step >= 1 ? 0 : 2;
+	const fill = max === min ? 0 : ((value - min) / (max - min)) * 100;
 	return (
 		<label className="grade-field">
 			<span>{label}</span>
@@ -416,6 +418,7 @@ function GradeSlider({
 				max={max}
 				step={step}
 				value={value}
+				style={{ "--grade-fill": `${fill}%` } as CSSProperties}
 				onChange={(event) => onChange(Number(event.target.value))}
 			/>
 		</label>
