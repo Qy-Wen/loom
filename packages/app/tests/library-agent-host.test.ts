@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BACKGROUND_CONTEXT as context } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
 
 test("app fork-before switches context, archives source, and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
@@ -28,6 +28,47 @@ test("app fork-before switches context, archives source, and hides deletion with
 		assert.equal((await host.getSession(fork.id)).messages[0]?.content, "first");
 		await host.close(); await host.openLibrary(path);
 		assert.equal((await host.getSession(fork.id)).messages[0]?.content, "first");
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
+test("compaction and reopen preserve paginated chat history and forks before compacted messages", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-history-"));
+	const host = new LibraryAgentHost({ chat: { baseUrl: "http://localhost/v1", model: "demo" } });
+	try {
+		await host.openLibrary(path);
+		const session = await host.createSession();
+		const conversation = await host.conversation(session.id);
+		const entries = await conversation.commit(async (tx) => {
+			const rows = [];
+			for (let i = 0; i < 270; i++) rows.push(await tx.appendEntry(conversation.id, {
+				kind: "loom.user", data: { text: `question ${i}` },
+				model: [{ role: "user", content: `question ${i}: ${"history ".repeat(200)}`, timestamp: Date.now() + i }],
+			}));
+			return rows;
+		}, context);
+		host.requireOwner().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, {
+			beforeCompact: async () => ({ summary: "Earlier questions summarized." }),
+		})] }));
+		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
+		const task = await conversation.compact(undefined, context);
+		assert.equal((await host.requireOwner().harness.waitForTask(task, context)).state.outcome.status, "completed");
+		await conversation.waitForIdle(context);
+		const active = await conversation.context(context);
+		assert.ok(active.head, "a real compaction head must be placed");
+		assert.ok(!active.entries.some((entry) => entry.id === entries[1]!.id), "old question must leave model context");
+		const expectedIds = entries.map((entry) => String(entry.id));
+		assert.deepEqual((await host.getSession(session.id)).messages.map((message) => message.id), expectedIds);
+		assert.equal((await host.listSessions())[0]?.updatedAt, (await host.getSession(session.id)).updatedAt);
+		await host.close(); await host.openLibrary(path);
+		assert.deepEqual((await host.getSession(session.id)).messages.map((message) => message.id), expectedIds);
+		const fork = await host.forkBefore(session.id, String(entries[1]!.id));
+		assert.deepEqual(fork.messages.map((message) => message.id), expectedIds.slice(0, 1));
+		assert.equal(fork.messages[0]?.displayContent, "question 0");
+		const empty = await host.forkBefore(session.id, String(entries[0]!.id));
+		assert.deepEqual(empty.messages, []);
+		await host.deleteSession(session.id);
+		await host.close(); await host.openLibrary(path);
+		assert.deepEqual((await host.getSession(fork.id)).messages.map((message) => message.id), expectedIds.slice(0, 1));
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 

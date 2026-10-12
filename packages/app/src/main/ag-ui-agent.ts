@@ -263,7 +263,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 					if (submit) {
 						const submission = await conversation.submit({ type: "input", content, whenBusy: "reject", requestId: input.runId, entry: { kind: "loom.user", data: { text: body } } }, context);
 						const settled = await submission.wait(context);
-						if (settled.status === "done" && settled.type === "input" && !stream.snapshot.entries.some((entry) => entry.id === settled.answer)) await Promise.race([done.promise, stream.closed]);
+						if (settled.status === "done" && settled.type === "input" && existingRequest?.status !== "done" && !stream.snapshot.entries.some((entry) => entry.id === settled.answer)) await Promise.race([done.promise, stream.closed]);
 						if (settled.status === "unanswered" && settled.reason !== "aborted") throw new Error(typeof settled.detail === "string" ? settled.detail : settled.reason);
 					} else if (stream.snapshot.run) await Promise.race([done.promise, stream.closed, detached.promise]);
 					close();

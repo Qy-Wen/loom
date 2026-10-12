@@ -44,14 +44,15 @@ git merge vendor-clean
 - `LibraryAgentHost` 先安装资源、清理过期审批、记录 usage 基线，再调用原生 `resume()`。
 - 新独立会话使用库 cwd 和当前 Chat/instructions 默认值。fork 保留 as-of agent 配置。修改模型/指令时 configure 现有会话并更新后续默认值；工具通过 registry extension 原地替换。
 - `LoomConversationDoc` 保存最新 title/archive/hidden/创建时间，不进入模型上下文。fork 标题追加 `（分支）`，清除 archive/hidden，不改变来源。
-- fork-before 取目标之前的 entry，首个问题使用初始 anchor。branch-before 创建 fork 并归档来源。删除只隐藏，保留祖先历史和已写入的文件。
+- 聊天 DTO 使用原生 `conversation.entries()` 分页读取 fork-aware 完整历史，不使用压缩后的 `context().entries`；压缩摘要不充当用户消息。列表和记录的更新时间取最后一条非 system/compaction 消息。
+- fork-before 从完整历史取目标之前的 entry，首个问题使用初始 anchor，被压缩的旧消息也可分叉。branch-before 创建 fork 并归档来源。删除只隐藏，保留祖先历史和已写入的文件。
 - 旧 `.loom/harness-sessions/` JSONL 直接忽略，不迁移。
 
 ## 4. 工具、specialist 与 prompt
 
 - `createWorkspaceTools()` 返回 durable `read`、`bash`、`edit`、`write`。env/cwd 按会话构建，bash preparation 接 core 进程沙箱；图像使用上游 Photon worker。
 - `toDurableTool()` 把 Loom `content` 转成 durable `output`，传递取消信号、验证 JSON `details`，外部副作用采用 `replay: "unsafe"`。
-- 主对话保留工作区、FFmpeg、describe/embed 等应用工具。检索专职使用 `search_assets`、`inspect_asset`、`read`；创作专职使用 MCP `server__tool`、`write`、`bash`。
+- 主对话保留工作区、FFmpeg、describe/embed 等应用工具。检索专职使用 `search_assets`、`inspect_asset`、`read`；任务给出 ID 时先 inspect，不再 search 同一素材；需要源文本时 read 返回的 `relativePath`。父代理需传递素材 ID。创作专职使用 MCP `server__tool`、`write`、`bash`。
 - 每次 specialist 调用创建一个归属工具任务的前台 conversation。独立调用并行；子代理只见任务和专职 prompt，不能再派生 specialist。父代理只收到摘要，不收到子 transcript。Stop 沿 ownership 取消；request ID 让安全重放复用子会话和 submission。
 - `createLibraryExtension()` 装配工具及 preamble/skills/memory sections。用户指令使用原生 `agent.instructions`。
 - Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。
@@ -83,17 +84,19 @@ Partial 不只有字符串 delta，还有完整消息和完整内容块。按 bl
 
 CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随机 agent thread。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
 
-`DurableAgentRunner` 把 run/connect/stop 路由到 adapter 与原生 submission，不使用 CopilotKit 内存历史。传输断开只停止 connect watcher，不取消 durable 工作；显式 Stop 取消匹配的运行。Connect 从 durable snapshot 恢复历史、partial、工具和子审批，包含主进程崩溃后重开。
+`DurableAgentRunner` 把 run/connect/stop 路由到 adapter 与原生 submission，不使用 CopilotKit 内存历史。传输断开只停止 connect watcher，不取消 durable 工作；显式 Stop 取消匹配的运行。Connect 从 durable snapshot 恢复 partial、工具和子审批，聊天历史由完整 entries 提供，包含主进程崩溃后重开。已完成 submission 重连不等待新的 run-end，即使 answer 已被压缩。
+
+SIGKILL 后流式请求按已提交 checkpoint 重发；中断 partial 保留为 `aborted` 历史，不进入重发的模型上下文。执行中的 unsafe 工具不重放，返回“可能已部分执行”；操作系统子进程可能独立存活，不承诺外部副作用 exactly-once。
 
 Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。context 百分比暂不显示；telemetry producer 留待后续，dev-trace 保留类型和界面但无 span。
 
 ## 7. 验证
 
-Agent/app 类型检查和单元测试通过；vendor 源码与编译后 worker 检查通过。Electron 验收覆盖持久化、子代理审批、reload/fork、等待审批时 SIGKILL/重开且不重复请求模型，以及模型结束**之前**已显示文字。可选真实模型验收：
+Agent/app 类型检查和单元测试通过；vendor 源码与编译后 worker 检查通过。Electron 验收覆盖持久化、子代理审批、压缩后 reload/旧消息 fork，以及审批、流式生成和外部 bash 执行中 SIGKILL/重开；验证用户输入不重复、unsafe 工具不重放，以及模型结束**之前**已显示文字。可选真实模型验收：
 
 ```bash
 cd packages/app
 LOOM_E2E_LIVE_CHAT=1 node --env-file=../../.env node_modules/@playwright/test/cli.js test live-chat.spec.ts
 ```
 
-DeepSeek 的真实流式显示、压缩后锚点回忆及 prompt-cache 评测通过。严格 live 工具金标目前 3/4：chip 任务有时直接 `read` 而不执行要求的 `inspect_asset`。因此尚不宣称完整能力等价。结果和限制见 [EVALS](./EVALS.zh-CN.md)。
+DeepSeek 的真实流式显示、压缩后锚点回忆及 prompt-cache 评测通过。对齐 retrieve 提示和 inspect mock 的产品字段后，严格 live 工具金标连续两次 4/4，未放宽金标。Windows 实机和受控新旧评测对比仍未完成，不宣称完整能力等价。结果和限制见 [EVALS](./EVALS.zh-CN.md)。

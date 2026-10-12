@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
-import { lastValueFrom, toArray } from "rxjs";
+import { lastValueFrom, timeout, toArray } from "rxjs";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
 import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 import { DurableAgentRunner } from "../src/main/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { BACKGROUND_CONTEXT as context } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
 import type { AddressInfo } from "node:net";
 
 async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => Promise<void>, respond?: (request: IncomingMessage, response: ServerResponse) => void) {
@@ -64,6 +64,26 @@ test("resubmitting a completed durable request does not hang the AG-UI stream or
 		const second = await lastValueFrom(adapter.clone().run(input(session.id)).pipe(toArray()));
 		assert.equal(second.at(-1)?.type, EventType.RUN_FINISHED);
 		assert.equal((await host.getSession(session.id)).messages.length, 2);
+	});
+});
+
+test("completed request reconnect after compaction returns full history without waiting for a new run", { timeout: 10_000 }, async () => {
+	await fixture(async (host, adapter) => {
+		const session = await host.createSession();
+		await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+		const conversation = await host.conversation(session.id);
+		const originalIds = (await host.getSession(session.id)).messages.map((message) => message.id);
+		await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "loom.user", model: [{ role: "user", content: "tail ".repeat(30_000), timestamp: Date.now() }] }), context);
+		host.requireOwner().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, { beforeCompact: async () => ({ summary: "First exchange summarized." }) })] }));
+		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
+		const task = await conversation.compact(undefined, context);
+		assert.equal((await host.requireOwner().harness.waitForTask(task, context)).state.outcome.status, "completed");
+		await conversation.waitForIdle(context);
+		assert.ok(!(await conversation.context(context)).entries.some((entry) => String(entry.id) === originalIds[1]));
+		const replay = await lastValueFrom(adapter.clone().run(input(session.id)).pipe(timeout(1500), toArray()));
+		assert.equal(replay.at(-1)?.type, EventType.RUN_FINISHED);
+		assert.deepEqual((await host.getSession(session.id)).messages.slice(0, 2).map((message) => message.id), originalIds);
+		assert.equal((await host.getSession(session.id)).messages.length, 3);
 	});
 });
 

@@ -52,7 +52,9 @@ pnpm -r typecheck
 
 ## Vendor：pi durable 引擎
 
-Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 vendor import 边界，`src/durable.ts` 暴露 `@loom/agent/durable`，包含每库一个 Harness/Registry 的 `LibraryAgent` 与已提交的 title/archive 元数据。fork 标题追加 `（分支）`，默认未归档。Loom Chat 与 SQLite 冒烟链路已跑通；`createLibraryExtension` 已装配 durable 编码/Loom/auto-memory 工具与 prompt sections，memory 按会话冻结。root facade 与 app 已接入 durable 句柄/事件与 document 审批，specialist 改为归属前台 conversation。skills 与 tests/evals 已改为 durable，覆盖 specialist approve/reject/Stop/reopen 和并行执行。Electron 验证了子审批、reload/fork 与结束前显示文字，包含真实 DeepSeek。全仓库类型检查/测试通过；严格 live 工具金标为 3/4，等待审批时 SIGKILL/重开恢复通过，Windows 运行时和其他崩溃点覆盖仍待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+Loom 从上游 `main` 同一 commit 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。Loom 自有代码放在 vendor `src/` 之外，`src/durable-adapter.ts` 是 import 边界。`@loom/agent` 装配每库一个 SQLite Harness/Registry、document 元数据/审批/memory、skills section 和前台归属 specialist。App 使用原生 durable 事件与 fork-aware 完整聊天历史，独立于模型压缩；fork 标题追加 `（分支）`，默认未归档。
+
+全仓库类型检查/测试通过。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。Windows 实机和受控新旧评测对比待完成，telemetry 延后。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 

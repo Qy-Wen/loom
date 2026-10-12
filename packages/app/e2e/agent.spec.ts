@@ -60,6 +60,52 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
+test("Electron retains pre-compaction chat after reload and can fork before an old question", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+	test.setTimeout(60_000);
+	const answers = ["OLD_HISTORY_REPLY", "RECENT_HISTORY_REPLY", "AFTER_COMPACTION_REPLY"];
+	let summaries = 0; let turns = 0; let lastAnswerContext = "";
+	const server = createServer((request, response) => {
+		let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const parsed = JSON.parse(body) as { messages: Array<{ role: string; content: unknown }> };
+			const summary = JSON.stringify(parsed.messages[0]?.content).includes("context summarization assistant");
+			let text: string;
+			if (summary) { summaries++; text = "Earlier history summarized."; }
+			else { lastAnswerContext = JSON.stringify(parsed.messages); const index = turns++; text = `${answers[index] ?? "Unexpected extra request"}${index < 2 ? `\n${"padding ".repeat(16_000)}` : ""}`; }
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.end(`data: ${JSON.stringify({ id: "history", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content: text }, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: "history", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: {}, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await loomPage.evaluate(async (baseUrl) => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", contextWindow: 50_000, apiKey: "test", enabled: true } });
+		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		const before = await loomPage.evaluate(() => window.loom.listSessions());
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(before.length + 1);
+		const session = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!;
+		for (let i = 0; i < 3; i++) {
+			await loomPage.getByRole("textbox").fill(`HISTORY_QUESTION_${i}`); await loomPage.getByRole("textbox").press("Enter");
+			await expect.poll(async () => (await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).messages.filter((message) => message.role === "assistant").length).toBe(i + 1);
+		}
+		expect(summaries).toBeGreaterThan(0); expect(turns).toBe(3);
+		expect(lastAnswerContext).not.toContain("HISTORY_QUESTION_1");
+		await loomPage.reload();
+		await expect(loomPage.getByTestId("copilot-message-list").getByText("HISTORY_QUESTION_0", { exact: true })).toBeVisible();
+		await expect(loomPage.getByText(/OLD_HISTORY_REPLY/)).toBeVisible();
+		const record = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
+		expect(record.messages).toHaveLength(6);
+		const oldQuestion = record.messages.filter((message) => message.role === "user")[1]!;
+		const fork = await loomPage.evaluate(({ id, entry }) => window.loom.branchBefore(id, entry), { id: session.id, entry: String(oldQuestion.id) });
+		expect(fork.messages.map((message) => message.id)).toEqual(record.messages.slice(0, 2).map((message) => message.id));
+		expect(JSON.stringify(fork.messages)).toContain("OLD_HISTORY_REPLY");
+		expect((await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).status).toBe("archived");
+	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+});
+
 test("Electron shows partial text before the model finishes streaming", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
 	const finish = Promise.withResolvers<void>();

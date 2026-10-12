@@ -2,8 +2,8 @@
 
 # Agent Core 迁移 — pi `packages/agent` harness → `pi-durable`
 
-> 评估把当前 vendor 的 Pi harness 换成 `@earendil-works/pi-durable`。当前架构见 [AGENT](./AGENT.zh-CN.md)。
-> 本文记录范围、逐文件映射、能力对照、telemetry，以及待定决策。本文假设完全向后不兼容：旧会话文件直接丢弃。迁移落地后同步更新 [AGENT](./AGENT.zh-CN.md)。
+> Pi harness → `@earendil-works/pi-durable` 的迁移设计与验收记录。当前架构见 [AGENT](./AGENT.zh-CN.md)。
+> 主体迁移已完成，最终状态与剩余验收见 §10。以下旧 API 表格是迁移对照，不代表当前实现。旧会话不兼容，不迁移。
 >
 > **源码基线：** 跟随上游 `main`，不是 `v1.1.0` tag。下文的图像处理、嵌套工具、结构化输出与 code mode 均在该 tag 之后加入；`UPSTREAM` 记录实际同步的 commit，npm 依赖需要据此核对。
 
@@ -41,7 +41,7 @@ durable 缺：telemetry 生产者、Agent Skills 加载器、prompt templates。
 
 因此迁移的动机是**长期可维护性**（不再 fork `harness/**`，跟住上游），而不是新能力。若这不是重点，留在 v0.85.1 完全可行。
 
-注：上面的"能力大体相同"是读 1.1.0 源码得出的，尚未实测。durable 的压缩策略（`DEFAULT_COMPACTION_POLICY`）与旧 harness 不同，这份等价性应由现有 eval 验证，见 §10 第 7 步。
+durable 的压缩策略（`DEFAULT_COMPACTION_POLICY`）与旧 harness 不同。现有运行时、工具和 Electron 验收已执行；完整新旧能力等价仍需受控对比，见 §10 和 [EVALS](./EVALS.zh-CN.md)。
 
 ---
 
@@ -277,29 +277,19 @@ durable 接入点：
 
 ## 10. 迁移顺序
 
-**第 1 步已完成：** durable 与 codemode 均从上游 `main` commit `4270522473e677ddba7b093caa0064a3df51d459` vendor，来源一致，已更新 imports/export 边界、依赖与独立检查。重复同步内容一致。完整 vendor 类型检查/构建、10 项源码测试与编译后 JS/worker 冒烟测试通过；覆盖 memory/JSONL/SQLite、工具/事件、嵌套结构化输出、Photon、沙箱隔离、确定性运行与 durable code mode。Loom 旧测试/eval 与 app 仍引用已移除的 harness，尚不能运行。
+**第 1–8 步已实现：**
 
-**第 2 步已完成：** macOS 上 Electron SQLite 前置条件通过；`buildChatModels` 已改用 `/models`，不再 import 旧 harness。新增两项独立测试，验证 endpoint/auth/model 配置与 SQLite 上的 OpenAI SSE 请求，包括重开的模型上下文、provider identity 与 request 去重。`pnpm --filter @loom/agent try:durable` 也已对真实 DeepSeek endpoint 跑通 echo 工具与 SQLite 重开。可通过 `LOOM_CHAT_BASE_URL` / `LOOM_CHAT_MODEL` / `LOOM_CHAT_API_KEY` 覆盖冒烟 endpoint（默认 DeepSeek，使用 `DEEPSEEK_API_KEY`）。app owner 与 UI 仍未动，旧 `toProviderMessages` 调用点留待迁移。
+- durable/codemode 从上游 `main` 同一 commit `4270522473e677ddba7b093caa0064a3df51d459` vendor；Loom 不改 vendor `src/`。独立类型检查、34 项源码测试和 1 项编译 worker 测试通过。
+- macOS Electron `node:sqlite`、模型 endpoint/provider identity、SQLite 重开和 request 去重通过；真实 DeepSeek 工具冒烟通过。
+- `LibraryAgent` 每库一个 Harness/Registry；metadata、权限、memory 使用 document，skills 使用 `ExecutionEnv`/section，specialist 使用前台归属 conversation。App/root facade、tests/evals 均已迁移，无旧 manager 兼容层。
+- AG-UI 使用 partial 增量、显式 threadId、durable connect/stop，断开传输不取消工作。聊天历史按原生 fork-aware entries 分页，与压缩后的模型上下文分离；压缩后刷新、旧消息 fork 和已完成 request 重连有回归覆盖。
+- Electron SIGKILL 验收覆盖审批、流式生成和 unsafe bash 执行。审批复用原子代理；流式重发原请求、不重复用户输入，保留 aborted partial；unsafe 工具不重放并报告可能已部分执行，不承诺外部副作用 exactly-once。
+- 全仓库类型检查通过；单元测试 core 133 + 1 跳过、agent 59、app 191。Electron 标准 10 项通过，可选真实模型流式 1 项通过。Core 文件夹重命名 watcher 曾超时，单独复跑及全仓库复跑通过，未修改该测试。
+- 严格 live 工具金标连续两次 4/4，金标不变；retrieve 已知 ID 先 inspect，inspect mock 对齐产品 metadata。压缩/cache 数值见 [EVALS](./EVALS.zh-CN.md)。
 
-**第 3 步已完成：** 新增 `LibraryAgent`（每库一个 SQLite Harness + Registry，委派 durable 恢复/关闭）、`LoomConversationDoc` 与列表/改名/归档操作。`@loom/agent/durable` 通过 `src/durable.ts` 转发通用 API 与 Loom owner，vendor import 仍只在 `durable-adapter.ts`。原生与 raw fork 都追加 `（分支）`、重置归档，默认列表排除 owned conversation。同进程通过 canonical path 防止重复打开；跨进程唯一 owner 仍由 app 生命周期保证，未新增跨进程锁。新增 10 项 owner 测试，总计 22 项独立源码测试与编译后 worker 检查通过。app、旧 root facade 与业务工具尚未接入，fork-and-switch 的来源归档留给 app 操作。
+**剩余验收：** Windows 实机运行时，以及受控新旧压缩/cache/工具行为对比。现有三个崩溃点不覆盖所有时序和外部工具。跨进程 owner 仍依赖 Electron 单实例约束，不新增通用锁。
 
-**第 4 步已完成：** `pi-tools` 改为 durable tools，无 toolContext/setCwd；bash 通过 durable `prepare(execution, api, context)` 调用现有进程沙箱。`toDurableTool` 用 `defineTool`，转发输出/取消并校验 JSON details，外部副作用 `replay: "unsafe"`。删除 `read-image.ts`，read 使用上游 Photon worker。`createLibraryExtension` 装配 workspace/Loom/auto-memory 工具与 preamble/memory sections；`LoomMemoryDoc` 保存创建时快照，fork/重开保留，更新文件只影响新会话。调用方需将装配的 `conversationCreated` 传给 `LibraryAgent.open`；用户 instructions 用原生 `agent.instructions`。新增 9 项工具层测试，总计 31 项独立源码测试通过，包含真实沙箱写入/网络限制。权限门禁、specialist、skills 与 app 仍留待后续，不用此扩展替代尚未迁移的 permission hook。
-
-**第 5–8 步已实现，能力验收仍有未闭环项：** app 使用 `LibraryAgentHost`、原生 submission/inbox、metadata document 和 AG-UI `watchEvents`。测试覆盖 specialist ownership、隔离、并行、approve/reject/Stop 和 SQLite 重开。Skills 使用 durable `ExecutionEnv` 与目录 section。旧 tests/evals 改为原生 durable API，删除的 workspace/image/branch/gate 旧测试由新 vendor/app 测试覆盖。Root facade 暴露原生句柄和 Loom DTO，不提供旧 manager 兼容 API。
-
-流式修复：处理 `message_start` 及所有 partial change（完整消息/内容块和 delta）；admission 前快照保留 optimistic user，避免 history/live 合并隐藏增量。Electron 验证了子审批（包含等待时刷新恢复）和结束前显示文字，真实 DeepSeek 也通过。CopilotChat 显式传入 `threadId` 后使用原生重连，取代手动抢占线程。`DurableAgentRunner` 用原生 durable connect/stop 路由取代 CopilotKit 内存运行历史，断开传输不取消工作。SIGKILL/重开验收恢复同一个等待审批的子代理，不重复请求模型。临时调试代码已移除。
-
-验证：全仓库类型检查通过；单元测试通过（core 133 + 1 跳过、agent 60、app 189），另外 34 项 vendor 独立测试和 1 项编译 worker 测试通过。Electron 标准 7 项通过，可选 live 1 项通过。Live 流式断言只统计 `/run`，排除空闲 connect 的结束事件。Core 旧测试对齐显式关系 links 和沙箱 fail-closed 初始化，Markdown 预期补上缓存 size 后缀。Live 压缩保留锚点回忆，cache 评测可运行；严格 live 工具金标为 3/4，数值见 [EVALS](./EVALS.zh-CN.md)。Windows 运行时、其他崩溃点（流式生成/正在执行外部工具）的覆盖以及工具金标差距待完成；telemetry 延后，context 百分比暂不显示。
-
-1. **先改 vendor 源码与脚本。** 用 pi-durable 替换 `vendor-pi-agent/`，更新 vendor 来源/同步脚本（`vendor:sync`）及 `packages/agent` 的依赖、导出和构建/测试脚本；先确保 vendor 可重复同步、编译和独立测试，不接 app。
-2. 升 pi-ai / chord 到 1.1.0 并引入 pi-durable；**先验证 Electron 主进程的 `node:sqlite`（§9 决策 4 前置条件）**，再跑通最小链路：`buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`。
-3. 定 facade 与 UI 输入（§9 决策 1–2），实现 durable 形态的 owner（`Harness` + `Registry` + Loom `defineDoc`）和 `@loom/agent` facade。
-4. 移植工具层：`pi-tools`、`read-image`（→ `createNodePhotonImages`，删旧代码）、`library-auto-memory`；把工具和提示做成 extension。
-5. 用 durable 形态的 owner 取代 session manager；把 app 接到 view/event（最大一块）。
-6. Specialist 迁到归属子代理（§9 决策 6）。
-7. 补 skills + prompt section + 会话元数据文档。
-8. 重建 tests / evals；不写存储迁移，旧会话直接丢弃。重建后先跑 `compaction-rate` / `prompt-cache-hit` / `agent-tools` / `compaction-e2e` 拿到与旧版可比的数值基线，用它们判定 §2 的"能力等价"是否成立，而不是只看 API 齐不齐。
-9. （后续，不在本次范围）按 §8 用 extension 重建 telemetry。
+**第 9 步延后：** telemetry 按 §8 以 extension 重建；context 百分比暂不显示。
 
 ---
 
@@ -319,8 +309,8 @@ durable 接入点：
 - 上游把 harness 从 `packages/agent` 移到了 `pi-durable`；vendor 的 harness 冻结在 v0.85.1。
 - durable 是重构，核心能力相同，不是功能升级。
 - durable 与 codemode 从上游 `main` 同一 commit 源码级 vendor，取代 `vendor-pi-agent/`；npm 依赖为 pi-ai、chord、photon、typebox、diff、quickjs-wasi。
-- "durable 与旧 harness 能力相当"目前是读源码的判断，需由现有 eval 在重建后验证（§10 第 8 步）。
+- 迁移主体和有限运行时/工具/Electron 验收已完成；Windows 和受控新旧对比未完成，不宣称完整能力等价（§10）。
 - 放弃向后兼容：旧会话存储、transcript 形状、附件旁路字段、projector 都不沿用。
 - 范围以 durable 的特点为准；`packages/app` 也在范围内，不只是 `packages/agent`。
-- 最大工作量是用 durable 形态的 owner 取代 session manager（旧实现 1105 行、14 处引用）并把 app 接到 durable 的 view/event——`packages/app` 主进程三个文件都在内，其次是 `specialist.ts`。telemetry 不在本次范围。
+- 旧 session manager 已删除，app 使用 durable owner/view/event，specialist 已迁移。telemetry 不在本次范围。
 - 已定：薄的 `@loom/agent` 边界、`watchEvents` 驱动的 UI、SQLite 存储、durable 用内置 `node:sqlite`、telemetry 本次不做且以后走 extension（§9）。会话元数据用单独的 `defineDoc`（§9 决策 5）；specialist 都走归属 conversation 且不做后台任务（§9 决策 6）；branch-before 用 fork-and-switch，并归档隐藏旧会话（§9 决策 8）。
