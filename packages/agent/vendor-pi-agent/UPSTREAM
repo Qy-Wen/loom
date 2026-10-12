@@ -1,4 +1,0 @@
-repo: https://github.com/earendil-works/pi.git
-directory: packages/agent
-ref: v0.85.1
-commit: d981de1229ef899957bbe968bc8dcda02a21f477

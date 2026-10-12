@@ -1,0 +1,4 @@
+repo: https://github.com/earendil-works/pi.git
+directory: packages/codemode
+ref: main
+commit: 4270522473e677ddba7b093caa0064a3df51d459

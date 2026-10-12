@@ -4,6 +4,8 @@
 
 > 评估把当前 vendor 的 Pi harness 换成 `@earendil-works/pi-durable`。当前架构见 [AGENT](./AGENT.zh-CN.md)。
 > 本文记录范围、逐文件映射、能力对照、telemetry，以及待定决策。本文假设完全向后不兼容：旧会话文件直接丢弃。迁移落地后同步更新 [AGENT](./AGENT.zh-CN.md)。
+>
+> **源码基线：** 跟随上游 `main`，不是 `v1.1.0` tag。下文的图像处理、嵌套工具、结构化输出与 code mode 均在该 tag 之后加入；`UPSTREAM` 记录实际同步的 commit，npm 依赖需要据此核对。
 
 ---
 
@@ -39,6 +41,8 @@ durable 缺：telemetry 生产者、Agent Skills 加载器、prompt templates。
 
 因此迁移的动机是**长期可维护性**（不再 fork `harness/**`，跟住上游），而不是新能力。若这不是重点，留在 v0.85.1 完全可行。
 
+注：上面的"能力大体相同"是读 1.1.0 源码得出的，尚未实测。durable 的压缩策略（`DEFAULT_COMPACTION_POLICY`）与旧 harness 不同，这份等价性应由现有 eval 验证，见 §10 第 7 步。
+
 ---
 
 ## 3. 范围：以 durable 的特点为准，不局限在 `@loom/agent`
@@ -50,14 +54,14 @@ durable 缺：telemetry 生产者、Agent Skills 加载器、prompt templates。
 - **用 owner，不用 lane。** 用 durable 形态的 owner 取代 `HarnessSessionManager`：每个打开的库一个 `Harness` 加一个 `Registry`，对外暴露 `Conversation` 句柄。不再有 `lane`、`accept`、`drive`，也不手写 recovery。
 - **App 状态用 document。** 会话 title、archive 标记以及其他 Loom per-conversation 状态改成 `defineDoc`，在 commit 中读写，而不是 session 旁路值。
 - **Busy 用 inbox。** steer / follow-up / reject 用 `submit(..., { whenBusy })` 和 `pi.inbox`，不再手写 follow-up map。
-- **Specialist 用归属子代理。** `run_retrieve_agent` / `run_create_agent` 改成归属 conversation（`ownership: { kind: "task", taskId }`），不再是每次调用一个内存 harness。
+- **Specialist 用归属子代理。** `run_retrieve_agent` / `run_create_agent` 改成归属 conversation（`ownership: { kind: "task", taskId }`），不再是每次调用一个内存 harness。retrieve 与 create 都不标 `background`（§9 决策 6），所以 Stop 能中断它们、生成期间会话算 busy。
 - **工具与提示用 registry。** Loom 工具、系统提示、skills/memory 注入、权限门禁都做成一个 extension（tools、sections、hooks、wraps），装进 registry。
 - **UI 消费已提交状态。** App 读 `conversation.viewState()` / `watch()` 和/或 `watchEvents()`。`LoomAgUiAgent` 仍是 AG-UI 协议边界，但输入从 `LoomAgentEvent` + manager 方法变成 durable 的 view/event。
 - **每库一个 SQLite 存储**（例如 `<library>/.loom/loom.sqlite`），取代 `harness-sessions/` JSONL 目录。
 
-值得保留（作为待确认的偏好，而非硬规则）的边界：AG-UI 仍是前端协议，`packages/app` 优先使用薄的 `@loom/agent` facade，而不是直接 import `pi-durable` 类型。是否保留 facade、还是让 app 直接用 durable 句柄，是 §9 的决策 1。
+边界偏好：AG-UI 仍是前端协议，`packages/app` 优先使用薄的 `@loom/agent` facade，而不是直接 import `pi-durable` 类型。结论见 §9 决策 1（已定：保留薄 facade）。
 
-`packages/agent` 之外会牵动的文件：会话列表（→ `scanConversations` + Loom document）、renderer 的会话/上下文面板、dev-trace（§8），以及所有依赖旧 session manager 行为的 `packages/app` 调用点。
+`packages/agent` 之外会牵动的文件：会话列表（→ `scanConversations` + Loom document）、renderer 的会话/上下文面板、dev-trace（§8），以及所有依赖旧 session manager 行为的 `packages/app` 调用点。规模不小：`harness-session-manager.ts` 有 1105 行，被 14 个文件引用，其中 app 侧主进程的 `ag-ui-agent.ts`（512 行）、`agent-server.ts`、`index.ts` 都要跟着重写——§5 单列了一张 app 侧映射表。
 
 **完全不兼容。** 旧的 `<library>/.loom/harness-sessions/` JSONL、存储的 transcript 形状、`attachments` 旁路字段、`loom_user_stop` entry projector 全部丢弃。一个库只保留一个 durable 存储；旧会话文件直接忽略，不做迁移。按最干净的设计做，不为存量写读取器。
 
@@ -70,6 +74,7 @@ durable 缺：telemetry 生产者、Agent Skills 加载器、prompt templates。
 | `@earendil-works/pi-ai` | 0.85.1 | 1.1.0 | `createModels` / `createProvider` 移到 `/models`；核对 API factory 路径 |
 | `@earendil-works/chord` | 0.85.1 | 1.1.0 | `BACKGROUND_CONTEXT`、`Context` 从 `@earendil-works/chord/context` 取 |
 | `@earendil-works/pi-durable` | — | vendor 源码 | 新 harness，vendor 到 `vendor-pi-durable/src`；子路径用 `#vendor/pi-durable/*` 映射；见下方 Vendoring |
+| `@earendil-works/pi-codemode` | — | vendor 源码（`workspace:*`） | `vendor-pi-codemode/src`，与 durable 从上游 `main` 同一 commit 同步；只有它的 `quickjs-wasi` 依赖仍走 npm |
 | SQLite 驱动 | `better-sqlite3`（检索库） | durable 用 `node:sqlite`；core 的 `better-sqlite3` 不变 | durable 的 `/storage/sqlite/node` 用 Node 内置 `node:sqlite`（`DatabaseSync`）。两个驱动并存，对应不同文件（durable 的 `.loom/loom.sqlite` 与 core 的检索库）；统一驱动不在本次范围。见 §9 |
 | `@earendil-works/pi-telemetry` | 0.85.1 | 1.1.0 | 只剩契约；pi 1.1.0 内没有任何运行时生产者 |
 | `@silvia-odwyer/photon-node` | 0.3.4 | 删除 | durable 的图像处理改用 `@silvia-odwyer/photon` |
@@ -86,18 +91,23 @@ packages/agent/
 ├── package.json        # imports: "#vendor/pi-durable", "#vendor/pi-durable/tools", ...
 ├── tsconfig.json       # 对应的 paths
 ├── src/                # Loom 代码；唯一 import #vendor/pi-durable 的地方
-└── vendor-pi-durable/
-    ├── UPSTREAM        # repo: .../pi.git, directory: packages/durable, ref, commit
-    ├── sync.sh         # 镜像 pi 的 packages/durable/src
-    └── src/            # 拷贝进来的 pi 源码，可改
+├── vendor-pi-durable/
+│   ├── UPSTREAM        # repo: .../pi.git, directory: packages/durable, ref, commit
+│   ├── sync.sh         # 转发 sync.mjs；一次同步两份 vendor
+│   └── src/            # 纯净上游源码
+└── vendor-pi-codemode/
+    ├── package.json    # 私有 workspace；保留上游包名/exports
+    ├── UPSTREAM        # directory: packages/codemode；相同 ref 与 commit
+    └── src/            # 纯净上游源码
 ```
 
-`sync.sh` 用 `rsync --delete` 镜像 `packages/durable/src/`（排除 `**/*.test.ts`、`**/testing/**`、`benchmark/**`），把 ref + commit 写进 `UPSTREAM`，默认 ref 用 `v1.1.0`。`UPSTREAM.directory` 改为 `packages/durable`。
+`sync.sh` 用 `rsync --delete` 镜像 `packages/durable/src/`（排除 `**/*.test.ts`、`**/testing/**`、`benchmark/**`），把 ref + commit 写进 `UPSTREAM`，默认 ref 用 `main`。`sync.sh` 转发到 `sync.mjs`，后者从同一次 clone 镜像 `packages/durable/src` 与 `packages/codemode/src`，分别记录来源目录与相同 commit，并在原生 Windows 上提供等价的文件系统镜像。Loom 自有的 codemode 包/构建配置留在 `src/` 外，不受同步影响；durable 的 `@earendil-works/pi-codemode` import 直接解析到私有 workspace，无需改写 vendor 源码。注意 `**/testing/**` 被排除，所以 durable 的 `./testing` 导出（storage 一致性测试套件）在 vendor 里不可用；若 Loom 想复用那套 conformance 用例，要么单独拷贝，要么直接依赖 npm 上的 `@earendil-works/pi-durable`。
 
 入口：把 Loom 用到的 durable 子路径通过 `imports` / tsconfig 映射：
 
 - `#vendor/pi-durable` → `vendor-pi-durable/src/index.ts`
 - `#vendor/pi-durable/tools` → `vendor-pi-durable/src/tools/index.ts`
+- `#vendor/pi-durable/codemode` → `vendor-pi-durable/src/codemode/index.ts`
 - `#vendor/pi-durable/env/node` → `vendor-pi-durable/src/env/node.ts`
 - `#vendor/pi-durable/images/node` → `vendor-pi-durable/src/images/node.ts`
 - `#vendor/pi-durable/storage/sqlite/node` → `vendor-pi-durable/src/storage/sqlite/node.ts`
@@ -109,7 +119,7 @@ packages/agent/
 
 vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改动，只在 `vendor-clean` 上 sync，Loom 自己的新增放到 `src/`，不要放进 `vendor-pi-durable/src/`（下次 sync 会被删）。
 
-因为 durable 是 Experimental 且改动频繁，预期合并会比旧 harness 更折腾。vendor 也顺带让 §8 的 telemetry 方案 B 变得可行：可以直接给 vendor 里的 generation / tool task 打点。
+因为 durable 是 Experimental 且改动频繁，预期合并会比旧 harness 更折腾。telemetry 不靠改 vendor：以后走 extension 外挂（§8），vendor 保持纯净上游。
 
 ---
 
@@ -123,10 +133,25 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | `library-skills.ts` | `loadSkills`、`formatSkillsForSystemPrompt` | 无等价导出；在 durable `ExecutionEnv` 上自研，或移植 coding-agent 的 `core/skills.ts`。目录注入改成 prompt `section` |
 | `library-auto-memory.ts` | `AgentHarnessTool`、`ExecutionToolContext` | 仅类型替换为 `defineTool` + `ToolExecutionApi`。注入改成 `section` / `instructions` |
 | `agent-instructions.ts` | — | 映射到 per-conversation `instructions`（渲染为 `instructions` section） |
-| `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | 去掉"每个 specialist 一个内存 harness"；改用 durable 归属子代理：`api.commit(tx => tx.createConversation({ownership:{kind:"task",taskId:api.taskId}}))` + `api.conversation(child).submit().wait()` |
+| `session-title.ts` | — | 纯文本工具（`titleFromUserText`），无 harness 依赖；title 的**存储**改由 Loom `defineDoc` 承担，见 §9 决策 5 |
+| `attachments.ts` / `composer-asset.ts` | 经 `convertToLlm` 折入 | 旁路字段本身不再需要；折进 `content` 的时机从 `convertToLlm` 挪到 `submit` 之前 |
+| `tool-permission.ts` | `hooks.on("before_tool")` | `AGENT_PERMISSION_LEVELS` / `ToolGateDecision` 业务逻辑原样保留，挂载点改成 `hook(ToolTask, { beforeTool })`；等待态发布见 §6 |
+| `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | 去掉"每个 specialist 一个内存 harness"；改用 durable 归属子代理（§9 决策 6：retrieve 与 create 都归属，都不标 `background`）。**注意 Tx 与 Conversation 是两级 API，别混用**：工具内部走 `Tx`——`api.commit(tx => tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }))`，随后 `api.conversation(childId)` 拿句柄；Harness 层才有 `harness.createConversation({ ownership }, context)` 和 `Conversation.fork(at, { ownership }, context)` |
 | `harness-session-manager.ts` | `JsonlSessionRepo`、`AgentHarness.create`、`lane.accept/drive/followUp/abort/resume`、`hooks.on`、`events.on`、`estimateContextTokens`、`laneConfig/laneState/value` | 整体重写——见 §6 |
-| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`、pi-telemetry span | 基于 `watchEvents` + generation/tool hook 重建，或砍掉——见 §8 |
+| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`、pi-telemetry span | 本次迁移不做：先摘除对 `withTelemetryContext` / pi-telemetry 的依赖，保留 `LoomTraceSpan` 类型与 dev-trace UI 不动；以后基于 durable extension 重建——见 §8 |
 | tests / evals | `AgentHarness`、`JsonlSessionRepo`、`NodeExecutionEnv`、`estimateTokens`、`findCutPoint`、`span-io` | 逐个重写；`BACKGROUND_CONTEXT` 改从 `@earendil-works/chord/context` 取 |
+
+### App 侧（`packages/app`）映射
+
+会话 manager 的替换不会止步于 `packages/agent`。当前引用 `HarnessSessionManager` 的 app 侧文件：
+
+| 文件 | 旧依赖 | 新做法 |
+|---|---|---|
+| `src/main/ag-ui-agent.ts` | `HarnessSessionManager` 方法 + `LoomAgentEvent` | 改为消费 `watchEvents(harness, conversationId)` 的 `AgentEvent` 流加 Loom 通道（§9 决策 2）；AG-UI 映射重写；持有 durable `Conversation` 句柄 |
+| `src/main/agent-server.ts` | manager 路由 | 同上；对外 RPC 形状不变，内部换成 durable 句柄 |
+| `src/main/index.ts` | manager 生命周期 | 改成 per-library `Harness` + `Registry` 的持有与关闭 |
+| `tests/ag-ui-agent.test.ts` | manager 桩 | 用 memory storage + `createRegistry()` 重建桩 |
+| `evals/*`、`scripts/try-agent.ts`、`tests/*` | `AgentHarness`、`JsonlSessionRepo` | 见上表最后一行 |
 
 ---
 
@@ -137,12 +162,12 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | 现在 | durable |
 |---|---|
 | `JsonlSessionRepo({ fileSystem, sessionsRoot })` | `openNodeSqliteStorage(file)`（推荐；JSONL 全量驻内存）或 `openNodeJsonlStorage(dir)`——Node SQLite 适配器用 `node:sqlite`，见 §9 |
-| `AgentHarness.create({ session, models, model, tools, toolContext, systemPrompt, toProviderMessages, compaction, ... })` | `Harness.open(storage, { models, registry, settings, env })` |
+| `AgentHarness.create({ session, models, model, tools, toolContext, systemPrompt, toProviderMessages, compaction, ... })` | `Harness.open(storage, { models, registry, settings, env }, context)`——`context` 是必填第三参，容易漏 |
 | `harness.lane("main")` + `lane.accept({kind:"prompt"})` + `lane.drive()` | `harness.root()` / `harness.conversation(id)` → `conversation.submit({type:"input", content, requestId})` → `submission.wait()` |
 | `lane.abort`、`lane.resume`、手写 recovery | `conversation.abort()`、`harness.resume()`、带 `requestId` 的幂等 `submit` |
 | `lane.followUp` / steering | `submit(..., { whenBusy: "steer" \| "followUp" \| "reject" })` |
-| `lane.navigateTree` / `repo.fork({ scope:"branch", position:"before" })` | 有 `conversation.fork(at, ...)`；**"回到某条 user 消息之前"没有直接对应**——fork 后切换，或 reset |
-| `session.setName` / `setValue(ARCHIVED)` | 无 title/archive 概念；用 per-conversation `defineDoc` 或 entry 自存 |
+| `lane.navigateTree` / `repo.fork({ scope:"branch", position:"before" })` | `Conversation.fork(at: EntryId, options: ConversationCreateOptions, context)`（`options = { ownership, agent?, init? }`）；采用 fork-and-switch：从目标 user 消息之前的上下文 fork，切换到新会话，并归档/隐藏旧会话。旧会话记录必须保留，因为 fork 通过 parent 关系继承历史。`conversation.context(ctx, { at })` 可先预览 fork 点的上下文而不建分支 |
+| `session.setName` / `setValue(ARCHIVED)` | 无 title/archive 概念；用 per-conversation `defineDoc` 单独存储，不进 entry（§9 决策 5） |
 | `session.getValue(laneConfig/laneState)` | `conversation.configure()` / `conversation.agent()` / `harness.inspect()` |
 | session 列表 | `Storage.scanConversations({ ownerConversationId?, order? })`；无 `cwd` 过滤，"一库一组"需自建归属映射 |
 | `hooks.on("before_tool", …)` | `defineExtension({ hooks: [hook(ToolTask, { beforeTool: call => … })] })`；`call.id/name/arguments` 可用；异步等用户审批仍可行 |
@@ -151,6 +176,12 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | `entryProjectors: { loom_user_stop }` | 自定义 entry kind + `entry.model`，或 generation hook |
 
 **等待审批**在 durable 里没有事件。`beforeTool` 可以 await，所以门禁机制成立；等待状态由 Loom 发布——一个 Loom `defineDoc`（等待中的审批）用 `watchDoc` 观察，加一个 Loom 自有事件——因为 durable 的 `watchEvents` 流不能注入。
+
+三个 `HarnessOptions` 细节值得单独记住：
+
+- **`env` 是工厂，不是实例。** 签名是 `(target: EnvTarget, context: Context) => ExecutionEnv | undefined | Promise<...>`，其中 `EnvTarget = { conversationId, cwd?, read }`。用 `new NodeExecutionEnv({ cwd: target.cwd })` 按需构造即可，正好替掉旧的 `setCwd` 模式。
+- **`conversationCreated` 是归属映射的落点。** `HarnessOptions.conversationCreated?: (tx, conversation) => void | Promise<void>` 在每个创建/分叉 conversation 的 commit 里跑（早于 `init`），是初始化 per-conversation Loom `defineDoc`、以及建立上面"Session 列表"一行所缺的"一库一组"归属映射的地方。
+- **`registry` 是必填项且与 Harness 实例绑定。** `createRegistry()` 产出的 registry 必须包含内置任务（否则 `Harness.open` 直接抛错），且一个 `Harness` 打开时就固定了它的 registry 实例；热替换的粒度是 registry 内部的 `install()` / `uninstall()`，换 registry 需重开 Harness。
 
 ---
 
@@ -167,7 +198,7 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | 图像处理 | 有（`tools/image.ts`） | 有（`createNodePhotonImages`） |
 | 子任务 / 归属子代理 | **无** | 有 |
 | 存储后端 | JSONL + memory | SQLite / JSONL / memory / Durable Object |
-| 可热替换注册表 | 无 | 有（extension/section/hook/wrap） |
+| 可热替换注册表 | 无 | 有（extension/section/hook/wrap），但粒度限于 registry 内部：`Registry.install()` / `uninstall()` 可热装热卸扩展，`Harness` 打开时即绑定传入的 registry，换 registry 需重开 Harness |
 | 结构化输出 / 嵌套工具 / code mode | 无 | 有 |
 | telemetry span | 有 | **无生产者** |
 | Agent Skills 加载器 | 有 | **无** |
@@ -215,12 +246,11 @@ durable 接入点：
 3. `loom.io.input` 里的 system prompt 文本需从 durable 的结构化 `sections` 渲染。
 4. HTTP status / chunk count / TTFT 两版 pi-ai 都不产出。
 
-两种接法：
+**范围：本次迁移不做 telemetry，以后做；做法定为基于 durable 扩展机制的外挂，不 fork durable。** 迁移期间 dev-trace 不产出 span（UI 和 `LoomTraceSpan` 类型保留）。
 
-- **A. 外挂（推荐）**：一个 telemetry extension（`hook(GenerationTask, …)` + `hook(ToolTask, …)`），每个 conversation 一个 `watchEvents` 观察器，加一个 Loom 自有的可手动 start/end 的 `TelemetryContext`，用 `conversationId` / `taskId` / `callId` 维护 span 树。只要 span 名/属性对齐，`LoomTraceSpan` 和 dev-trace UI 无需改动。
-- **B. Fork durable**：把 `harness/telemetry.ts`（schema + `startAiSpan` / `startHarnessSpan` / `recordAiResult`）移植进 durable 的 generation / tool / compaction task。更接近旧结构，但给一个 Experimental 包加 fork。
+以后的做法：一个 telemetry extension（`hook(GenerationTask, …)` + `hook(ToolTask, …)`），每个 conversation 一个 `watchEvents` 观察器，加一个 Loom 自有的可手动 start/end 的 `TelemetryContext`，用 `conversationId` / `taskId` / `callId` 维护 span 树。只要 span 名/属性对齐，`LoomTraceSpan` 和 dev-trace UI 无需改动。
 
-两者都需要重新拥有 `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA`（在旧 vendor 里，会随 vendor 消失；`pi-telemetry` 仍提供 `defineTelemetrySchema` / `createTypedSpanStarter`），并放弃 `withTelemetryContext`——durable 不从 chord `Context` 读 telemetry。
+需要重新拥有 `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA`（在旧 vendor 里，会随 vendor 消失；`pi-telemetry` 仍提供 `defineTelemetrySchema` / `createTypedSpanStarter`），并放弃 `withTelemetryContext`——durable 不从 chord `Context` 读 telemetry。
 
 ---
 
@@ -229,40 +259,46 @@ durable 接入点：
 已定：
 
 1. **Facade 还是直接用 durable 类型 → 薄的 `@loom/agent`。** 转发 durable 的通用类型与句柄（`Harness`、`Conversation`、`EntryRecord`、`ConversationView`、`watchEvents`、`defineTool` / `defineExtension` / `section` / `hook` / `defineDoc`）；只包装 Loom 特有的装配与策略——工具集、提示 section、skills/memory、权限门禁、Loom 文档、每库一个 `Harness` 的生命周期。`packages/app` 的 main 持 durable 句柄；IPC 与 renderer 仍走 Loom DTO，让上游 churn 不穿过进程边界。判定：通用运行时与活句柄转发，Loom 特有与跨进程包装。
-2. **UI 输入 → durable `watchEvents`。** AG-UI 由 durable 的 `AgentEvent` 驱动（每次 commit 一批，挂载时先给 `snapshot`），不用 `viewState()` / `watch()`。durable 不发而属于 Loom 的状态——等待审批、dev-trace、follow-up 展示——走 Loom 通道：Loom `defineDoc` 配 `watchDoc`，加上 Loom 自有事件。`LoomAgentEvent` 不再作为传输层；它的 AG-UI 映射改到 durable 流 + Loom 通道上。
+2. **UI 输入 → durable `watchEvents`。** AG-UI 由 durable 的 `AgentEvent` 驱动（每次 commit 一批，挂载时先给 `snapshot`），不用 `viewState()` / `watch()` 作为主通道。理由：事件流是增量，跨进程只传增量可以省掉全量快照的序列化，而 `LoomAgentEvent` 的翻译逻辑本来就在事件粒度上。代价是挂载/重连时要自行重建完整视图。若这条路径变得太绕，退路是用 `viewState()`（返回 `AttachedReplicatedState<ConversationView>` 快照）兜住挂载态、`watchEvents` 拿增量——两者不冲突，可随时切换。durable 不发而属于 Loom 的状态——等待审批、dev-trace、follow-up 展示——走 Loom 通道：Loom `defineDoc` 配 `watchDoc`，加上 Loom 自有事件。`LoomAgentEvent` 不再作为传输层；它的 AG-UI 映射改到 durable 流 + Loom 通道上。
 3. **存储后端 → SQLite。** 每库一个存储（例如 `<library>/.loom/loom.sqlite`），取代 `harness-sessions/` JSONL 目录；无需兼容旧格式。
-4. **SQLite 驱动 → durable 用内置 `node:sqlite`**（`openNodeSqliteStorage`、`DatabaseSync`）。不做 facade，durable 也不用 `better-sqlite3`。`packages/core` 的检索库继续用 `better-sqlite3`，统一驱动不在本次范围。Electron 38.2.2 主进程是否暴露 `node:sqlite` 需验证一次。
+4. **SQLite 驱动 → durable 用内置 `node:sqlite`**（`openNodeSqliteStorage`、`DatabaseSync`）。不做 facade，durable 也不用 `better-sqlite3`。`packages/core` 的检索库继续用 `better-sqlite3`，统一驱动不在本次范围。
 
-待定：
+   **前置条件（动工前必须验证，不是收尾检查）：** 决策 3 选了 SQLite，即每个库的会话都落在一个文件里，而这个文件必须能被 Electron 38.2.2 主进程打开。所以"主进程是否暴露 `node:sqlite`"是决策 3 能否成立的前提。验证方式：在 Electron 主进程 `require("node:sqlite")` 并开一个临时库读写一次。若不支持，退路是给 durable 提供 `better-sqlite3` 的 `SqliteDatabase` 实现——durable 的 `storage/sqlite/storage.ts` 只依赖 `SqliteDatabase` 接口，替换面很小。另需确认 WAL 模式下同一库多窗口/多进程并发打开的行为。
 
-5. **会话元数据**：title / archive 用 per-conversation `defineDoc`（可 watch）还是普通 entry？
-6. **Specialist**：retrieve 和 create 都用归属 conversation，create agent 是否做成后台任务？
-7. **Retarget / branch-before**：放弃，还是用 `fork(at)` 模拟？
-8. **Telemetry**：基于事件 + hook 重建一个更粗的 trace（A），还是 fork durable（B），还是砍掉 dev-trace？
+5. **会话元数据 → per-conversation `defineDoc`，单独存储，不进 entry。** title / archive 等 Loom per-conversation 状态是元数据，不属于 transcript：不写 entry，不参与模型上下文与 compaction，也不随历史回放。读写在 commit 里进行，可用 `watchDoc` 观察；在 `HarnessOptions.conversationCreated` 里初始化。fork 行为（`fork: "current"` / `"initial"`）在定义 doc 时再定——archive 标记通常不应带到分支上，title 视产品需要。会话列表用 `scanConversations` 拿 conversation，再按 id 读 doc 拼出 title / archive。
+6. **Specialist → 归属 conversation，且不做后台任务。** retrieve 和 create 都用归属子代理（`ownership: { kind: "task", taskId }`），取代每次调用一个内存 harness；两者都不标 `background`，以保持现状：Stop 会中断正在跑的 specialist，生成期间会话也算 busy。
+7. **Telemetry → 本次不做，以后基于 durable extension 外挂（§8）。** 不 fork durable、不改 vendor。迁移期间 dev-trace 无 span 输出。
+
+已定：
+
+8. **Retarget / branch-before → fork-and-switch，旧会话归档隐藏。** 从目标 user 消息之前的上下文 fork，切换到新会话，并归档/隐藏原会话；不物理删除原会话记录，因为 fork 通过 parent 关系继承历史。
 
 ---
 
 ## 10. 迁移顺序
 
-1. 先定 facade 与 UI 输入（§9 决策 1–2），再定义 durable 形态的 owner（`Harness` + `Registry` + Loom `defineDoc`）和 `@loom/agent` facade。
-2. 升 pi-ai / chord 到 1.1.0，引入 pi-durable；先确认 SQLite 驱动（§9 决策 4），再跑通 `buildChatModels` + `Harness.open` + `submit` / `wait`。
-3. 移植工具层：`pi-tools`、`read-image`（→ `createNodePhotonImages`，删旧代码）、`library-auto-memory`；把工具和提示做成 extension。
-4. 用 durable 形态的 owner 取代 session manager；把 app 接到 view/event（最大一块）。
-5. Specialist 迁到归属子代理。
-6. 补 skills + prompt section + 会话元数据文档。
-7. 重建 tests / evals；不写存储迁移，旧会话直接丢弃。
-8. 决定 telemetry。
+**第 1 步已完成：** durable 与 codemode 均从上游 `main` commit `4270522473e677ddba7b093caa0064a3df51d459` vendor，来源一致，已更新 imports/export 边界、依赖与独立检查。重复同步内容一致。完整 vendor 类型检查/构建、10 项源码测试与编译后 JS/worker 冒烟测试通过；覆盖 memory/JSONL/SQLite、工具/事件、嵌套结构化输出、Photon、沙箱隔离、确定性运行与 durable code mode。Loom 旧测试/eval 与 app 仍引用已移除的 harness，尚不能运行。
+
+1. **先改 vendor 源码与脚本。** 用 pi-durable 替换 `vendor-pi-agent/`，更新 vendor 来源/同步脚本（`vendor:sync`）及 `packages/agent` 的依赖、导出和构建/测试脚本；先确保 vendor 可重复同步、编译和独立测试，不接 app。
+2. 升 pi-ai / chord 到 1.1.0 并引入 pi-durable；**先验证 Electron 主进程的 `node:sqlite`（§9 决策 4 前置条件）**，再跑通最小链路：`buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`。
+3. 定 facade 与 UI 输入（§9 决策 1–2），实现 durable 形态的 owner（`Harness` + `Registry` + Loom `defineDoc`）和 `@loom/agent` facade。
+4. 移植工具层：`pi-tools`、`read-image`（→ `createNodePhotonImages`，删旧代码）、`library-auto-memory`；把工具和提示做成 extension。
+5. 用 durable 形态的 owner 取代 session manager；把 app 接到 view/event（最大一块）。
+6. Specialist 迁到归属子代理（§9 决策 6）。
+7. 补 skills + prompt section + 会话元数据文档。
+8. 重建 tests / evals；不写存储迁移，旧会话直接丢弃。重建后先跑 `compaction-rate` / `prompt-cache-hit` / `agent-tools` / `compaction-e2e` 拿到与旧版可比的数值基线，用它们判定 §2 的"能力等价"是否成立，而不是只看 API 齐不齐。
+9. （后续，不在本次范围）按 §8 用 extension 重建 telemetry。
 
 ---
 
 ## 11. 风险
 
-- **durable 是 Experimental**，API 随时变。锁版本，预期有反复。
+- **durable 是 Experimental**，API 随时变。跟随上游 `main`，记录每次同步的 commit，预期有反复。
 - **Vendor 维护成本**：vendor 源码意味着 Loom 要合上游频繁改动，并自己维护这份 fork。
-- **SQLite 驱动**：durable 的 Node 适配器依赖 `node:sqlite`，其在 Electron 38.2.2 中是否可用尚未验证；见 §9 决策 4。
+- **SQLite 驱动**：durable 的 Node 适配器依赖 `node:sqlite`。已提升为 §9 决策 4 的前置条件，动工前必须验证；若不可用，需为 durable 提供 `SqliteDatabase` 的 `better-sqlite3` 实现。
 - **不兼容（有意为之）**：旧的 `.loom/harness-sessions/` 会话直接忽略，不迁移。
-- **行为漂移**：branch-before / retarget、会话 title / archive、上下文百分比显示在 durable 没有 1:1 原语。
-- **telemetry 归属**：原先上游提供的生产者，迁移后要 Loom 自己承担。
+- **行为漂移**：branch-before / retarget 改为 fork-and-switch（创建新会话而非原地切换；旧会话归档隐藏但保留为历史来源）；会话 title / archive、上下文百分比显示在 durable 没有 1:1 原语。
+- **telemetry 归属 / 空窗**：原先上游提供的生产者，迁移后要 Loom 自己承担；本次不做，期间 dev-trace 没有数据，排查问题少一个手段。
 
 ---
 
@@ -270,8 +306,9 @@ durable 接入点：
 
 - 上游把 harness 从 `packages/agent` 移到了 `pi-durable`；vendor 的 harness 冻结在 v0.85.1。
 - durable 是重构，核心能力相同，不是功能升级。
-- durable 以源码 vendor 进来，取代 `vendor-pi-agent/`；npm 依赖为 pi-ai、chord、photon、typebox、diff。
+- durable 与 codemode 从上游 `main` 同一 commit 源码级 vendor，取代 `vendor-pi-agent/`；npm 依赖为 pi-ai、chord、photon、typebox、diff、quickjs-wasi。
+- "durable 与旧 harness 能力相当"目前是读源码的判断，需由现有 eval 在重建后验证（§10 第 8 步）。
 - 放弃向后兼容：旧会话存储、transcript 形状、附件旁路字段、projector 都不沿用。
 - 范围以 durable 的特点为准；`packages/app` 也在范围内，不只是 `packages/agent`。
-- 最大工作量是用 durable 形态的 owner 取代 session manager 并把 app 接到 durable 的 view/event，其次是 `specialist.ts` 与 telemetry 重建。
-- 已定：薄的 `@loom/agent` 边界、`watchEvents` 驱动的 UI、SQLite 存储、durable 用内置 `node:sqlite`（§9）。其余 §9 项在动工前敲定。
+- 最大工作量是用 durable 形态的 owner 取代 session manager（旧实现 1105 行、14 处引用）并把 app 接到 durable 的 view/event——`packages/app` 主进程三个文件都在内，其次是 `specialist.ts`。telemetry 不在本次范围。
+- 已定：薄的 `@loom/agent` 边界、`watchEvents` 驱动的 UI、SQLite 存储、durable 用内置 `node:sqlite`、telemetry 本次不做且以后走 extension（§9）。会话元数据用单独的 `defineDoc`（§9 决策 5）；specialist 都走归属 conversation 且不做后台任务（§9 决策 6）；branch-before 用 fork-and-switch，并归档隐藏旧会话（§9 决策 8）。

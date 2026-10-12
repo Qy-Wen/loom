@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.vendor.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "customConditions": ["loom-vendor-build"],
+    "noEmitOnError": true,
+    "rootDir": "./vendor-pi-durable/src",
+    "outDir": "./dist/vendor-pi-durable",
+    "declaration": true,
+    "declarationMap": true
+  },
+  "include": ["vendor-pi-durable/src/**/*.ts"]
+}

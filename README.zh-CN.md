@@ -49,31 +49,34 @@ pnpm test:e2e:attach                 # Playwright 连上正在跑的 pnpm dev（
 pnpm -r typecheck
 ```
 
-## Vendor：pi agent 引擎
+## Vendor：pi durable 引擎
 
-Loom 的 agent 内核**源码级 vendor** 自 [pi](https://github.com/earendil-works/pi) 的 `packages/agent`，放在 `packages/agent/vendor-pi-agent/`。业务代码只通过 `packages/agent/src/pi-adapter.ts`（唯一 `#vendor/pi-agent` 入口）使用它。
+Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 import 边界，迁移期间通过 `@loom/agent/durable` 暴露。Loom 的旧 harness 与 app 接入尚未迁移，见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
-### 同步 / 升级上游
+### 同步上游
 
-**心智模型**：`vendor-clean` 分支始终是上游唯一真相（只放未魔改的 pi 源码），`main` 通过 `git merge` 从它获得 vendor；所有魔改只在 `main` 上做。
-
-**同步脚本**（`packages/agent/vendor-pi-agent/sync.sh`）：按 ref 从 GitHub 浅克隆到临时目录，`rsync --delete` 镜像覆盖 `vendor-pi-agent/src/`，把上游 `repo/directory/ref/commit` 记进 `UPSTREAM`。无需本地 pi 仓库；对同版本幂等（不写时间戳）。
+`vendor-clean` 保持纯净上游；在该分支同步、提交，再合并到 Loom 的 `main`：
 
 ```bash
-# 首次：从已含 vendor 的提交分出普通分支（与 main 有共同祖先）
-git branch vendor-clean
-
-# 升级上游（固定四步）：
-git checkout vendor-clean                             # 1. 回纯净分支
-pnpm --filter @loom/agent vendor:sync v0.86.0         # 2. 拉新版镜像覆盖
-git commit -am "vendor: pi-agent v0.86.0 (pristine)"  #    （同版本无改动时跳过）
-git checkout main                                     # 3. 回主线
-git merge vendor-clean                                # 4. 三方合并：上游改动 vs 魔改，只在真冲突处停下
+git checkout vendor-clean
+pnpm vendor:sync                       # 上游最新 main；可传 ref 参数
+git add packages/agent/vendor-pi-durable packages/agent/vendor-pi-codemode
+git commit -m "vendor: sync pi-durable main"
+git checkout main
+git merge vendor-clean
 ```
 
-**两条约束**（否则会丢魔改）：
+`vendor-pi-durable/sync.mjs` 浅克隆上游，将 `repo/directory/ref/commit` 写入 `UPSTREAM`，不写时间戳。macOS 用 `rsync --delete --delete-excluded` 镜像，原生 Windows 用等价的 Node 文件系统镜像；排除测试、`testing/` 与 benchmark。`sync.sh` 转发同一脚本。脚本拒绝在 `vendor-clean` 之外运行。
 
-1. `sync` 是 `rsync --delete` 镜像覆盖、不做合并——**只在 `vendor-clean` 上跑**（该分支本就只有纯上游，覆盖不丢东西）。
-2. 魔改只在 `main` 做；自己新增的代码放业务层 `packages/agent/src/`，别塞进 `vendor-pi-agent/src/`（下次 sync 会被 `--delete` 删掉）。
+Loom 自有代码不要放进两份 vendor 的 `src/`，同步会删除其中的本地新增。codemode 目录是私有 workspace 包，保留上游包名与 exports，让 durable 源码无需修改；它只有 `quickjs-wasi` 仍从 npm 获取。同一 commit 重复同步不改变文件内容。外部依赖仍走 npm，每次同步 `main` 时需要核对上游依赖 API。
 
-**外部依赖**：vendor 的 agent 需要 `@earendil-works/{pi-ai,chord,pi-telemetry}`（及 `diff`/`ignore`/`typebox`/`yaml`），作为 `@loom/agent` 的 npm 依赖，版本对齐 `UPSTREAM` 记录的 pi 版本。
+### Vendor 独立检查
+
+```bash
+pnpm --filter @loom/agent typecheck:vendor
+pnpm --filter @loom/agent test:vendor
+pnpm --filter @loom/agent build:vendor       # 先构建 codemode，再构建 durable
+pnpm --filter @loom/agent test:vendor:build  # 验证编译后 JS 与 worker
+```
+
+源码测试无需预先构建。编译产物检查通过 `--conditions=loom-vendor-build` 选择 codemode 的 JS exports；开发默认使用源码 exports。旧 Loom 测试、eval 与 app 要等 harness import 迁移后才能运行。

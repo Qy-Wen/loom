@@ -8,11 +8,17 @@
     "./composer-image": "./src/composer-image.ts",
     "./attachments": "./src/attachments.ts",
     "./composer-asset": "./src/composer-asset.ts",
-    "./tool-permission": "./src/tool-permission.ts"
+    "./tool-permission": "./src/tool-permission.ts",
+    "./durable": "./src/durable-adapter.ts"
   },
   "imports": {
-    "#vendor/pi-agent": "./vendor-pi-agent/src/index.ts",
-    "#vendor/pi-agent/node": "./vendor-pi-agent/src/node.ts"
+    "#vendor/pi-durable": "./vendor-pi-durable/src/index.ts",
+    "#vendor/pi-durable/tools": "./vendor-pi-durable/src/tools/index.ts",
+    "#vendor/pi-durable/codemode": "./vendor-pi-durable/src/codemode/index.ts",
+    "#vendor/pi-durable/env/node": "./vendor-pi-durable/src/env/node.ts",
+    "#vendor/pi-durable/images/node": "./vendor-pi-durable/src/images/node.ts",
+    "#vendor/pi-durable/storage/sqlite/node": "./vendor-pi-durable/src/storage/sqlite/node.ts",
+    "#vendor/pi-durable/storage/jsonl/node": "./vendor-pi-durable/src/storage/jsonl/node.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -23,18 +29,21 @@
     "eval:prompt-cache-hit": "node --experimental-strip-types --env-file=../../.env evals/prompt-cache-hit.ts",
     "eval:agent-tools": "node --experimental-strip-types evals/agent-tools.ts",
     "eval:agent-tools:live": "node --experimental-strip-types --env-file=../../.env evals/agent-tools.ts --live",
-    "vendor:sync": "./vendor-pi-agent/sync.sh"
+    "vendor:sync": "node vendor-pi-durable/sync.mjs",
+    "typecheck:vendor": "tsc --noEmit -p tsconfig.vendor.json",
+    "build:vendor": "pnpm --filter @earendil-works/pi-codemode build && tsc -p tsconfig.vendor-build.json",
+    "test:vendor": "node --experimental-strip-types --test vendor-tests/*.test.ts",
+    "test:vendor:build": "pnpm build:vendor && node --conditions=loom-vendor-build --test vendor-tests/build.test.mjs"
   },
   "dependencies": {
-    "@earendil-works/chord": "0.85.1",
+    "@earendil-works/chord": "1.1.0",
     "@loom/core": "workspace:*",
-    "@earendil-works/pi-ai": "0.85.1",
-    "@earendil-works/pi-telemetry": "0.85.1",
-    "@silvia-odwyer/photon-node": "0.3.4",
+    "@earendil-works/pi-ai": "1.1.0",
+    "@earendil-works/pi-codemode": "workspace:*",
+    "@earendil-works/pi-telemetry": "1.1.0",
+    "@silvia-odwyer/photon": "0.3.3",
     "diff": "8.0.4",
-    "ignore": "7.0.8",
-    "typebox": "1.3.27",
-    "yaml": "2.9.0"
+    "typebox": "1.3.27"
   },
   "devDependencies": {
     "@types/node": "22.19.19",

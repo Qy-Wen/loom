@@ -1,0 +1,27 @@
+{
+  "name": "@earendil-works/pi-codemode",
+  "version": "1.1.0",
+  "private": true,
+  "license": "MIT",
+  "type": "module",
+  "engines": { "node": ">=22.19.0" },
+  "exports": {
+    ".": { "loom-vendor-build": "./dist/index.js", "default": "./src/index.ts" },
+    "./portable": { "loom-vendor-build": "./dist/portable.js", "default": "./src/portable.ts" },
+    "./declarations": { "loom-vendor-build": "./dist/declarations.js", "default": "./src/declarations.ts" },
+    "./source": { "loom-vendor-build": "./dist/source.js", "default": "./src/source.ts" },
+    "./cloudflare": { "loom-vendor-build": "./dist/cloudflare.js", "default": "./src/cloudflare.ts" },
+    "./worker": { "loom-vendor-build": "./dist/runtime/worker.js", "default": "./src/runtime/worker.ts" }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json"
+  },
+  "dependencies": {
+    "quickjs-wasi": "3.6.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.19.19",
+    "typescript": "5.9.3"
+  }
+}

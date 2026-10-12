@@ -1,10 +1,17 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
+    "target": "ES2024",
+    "lib": ["ES2024"],
     "paths": {
-      "#vendor/pi-agent": ["./vendor-pi-agent/src/index.ts"],
-      "#vendor/pi-agent/node": ["./vendor-pi-agent/src/node.ts"]
+      "#vendor/pi-durable": ["./vendor-pi-durable/src/index.ts"],
+      "#vendor/pi-durable/tools": ["./vendor-pi-durable/src/tools/index.ts"],
+      "#vendor/pi-durable/codemode": ["./vendor-pi-durable/src/codemode/index.ts"],
+      "#vendor/pi-durable/env/node": ["./vendor-pi-durable/src/env/node.ts"],
+      "#vendor/pi-durable/images/node": ["./vendor-pi-durable/src/images/node.ts"],
+      "#vendor/pi-durable/storage/sqlite/node": ["./vendor-pi-durable/src/storage/sqlite/node.ts"],
+      "#vendor/pi-durable/storage/jsonl/node": ["./vendor-pi-durable/src/storage/jsonl/node.ts"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "evals/**/*.ts", "vendor-pi-agent/src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "evals/**/*.ts", "vendor-tests/**/*.ts", "vendor-pi-durable/src/**/*.ts"]
 }
