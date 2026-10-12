@@ -1,121 +1,46 @@
-/* Shell grid. Band placement for beside, above, and joined stacks is in dock.css. */
+/* Grid belongs to regions, never to individual registered panels. */
 .shell {
 	position: relative;
-	/* macOS Tahoe titled window. Windows 11 overrides this from the shell style. */
 	--window-corner: 16px;
+	--join-border-width: 2px;
 	display: grid;
-	grid-template-columns:
-		var(--library-width) var(--library-gap, 10px)
-		minmax(240px, 1fr) 10px
-		var(--side-width);
+	grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--side-width);
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
 }
+.shell.side-hidden { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr); }
+.shell.has-beside { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--beside-width) 10px var(--side-width); }
+.shell.has-beside.side-hidden { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--beside-width); }
+.shell.has-bottom { grid-template-rows: minmax(0, 1fr) 10px var(--bottom-height); }
+.shell.has-above { grid-template-rows: minmax(0, 1fr) 10px var(--above-height); }
+.shell.has-above.has-bottom { grid-template-rows: minmax(0, 1fr) 10px var(--above-height) 10px var(--bottom-height); }
 
-.shell.side-hidden {
-	grid-template-columns:
-		var(--library-width) var(--library-gap, 10px)
-		minmax(240px, 1fr);
-}
+.shell > .library-sidebar { grid-column: 1; grid-row: 1 / -1; }
+.shell > .library-resize { grid-column: 2; grid-row: 1 / -1; }
+.shell > .workbench { grid-column: 3; grid-row: 1; }
+.shell > .side-resize { grid-column: 4; grid-row: 1 / -1; }
+.shell.has-beside > .side-resize { grid-column: 6; }
+.shell > .beside-resize { grid-column: 4; grid-row: 1 / -1; }
+.shell.has-bottom > .workbench,
+.shell.has-above > .workbench { margin-bottom: -5px; padding-bottom: 5px; }
+.shell > .bottom-resize,
+.shell > .above-resize { grid-column: 3; grid-row: 2; margin-left: -5px; margin-right: -5px; }
+.shell.has-above.has-bottom > .bottom-resize { grid-row: 4; }
+.shell.has-beside > .bottom-resize { grid-column: 3 / 6; }
+.shell.side-hidden:not(.has-beside) > .bottom-resize,
+.shell.side-hidden:not(.has-beside) > .above-resize { margin-right: 0; }
 
-.shell.has-bottom {
-	grid-template-rows: minmax(0, 1fr) 10px var(--bottom-height);
-}
-
-.shell.has-bottom > .library-sidebar,
-.shell.has-bottom > .library-resize,
-.shell.has-bottom > .side-resize {
-	grid-row: 1 / -1;
-}
-
-.shell.has-bottom > .library-sidebar { grid-column: 1; }
-.shell.has-bottom > .library-resize { grid-column: 2; }
-.shell.has-bottom > .workbench { grid-column: 3; grid-row: 1; margin-bottom: -5px; padding-bottom: 5px; }
-.shell.has-bottom > .side-resize { grid-column: 4; }
-.shell.has-bottom > .bottom-resize { grid-column: 3; grid-row: 2; margin-left: -5px; margin-right: -5px; }
-.shell.side-hidden.has-bottom > .bottom-resize,
-.shell.side-hidden.has-bottom .work-panel.bottom { margin-right: 0; }
-.shell.has-bottom > .side-stack.bottom-band { grid-column: 3; grid-row: 3; margin-top: -5px; margin-left: -5px; padding-top: 5px; }
-.side-stack.bottom-band > .work-panel.bottom { margin: 0; padding-top: 0; }
-.shell.has-bottom .work-panel.bottom {
-	grid-column: 3;
-	grid-row: 3;
-	margin-top: -5px;
-	margin-left: -5px;
-	margin-right: -5px;
-	padding-top: 5px;
-}
-.shell.has-bottom .work-panel.dock { grid-column: 5; grid-row: 1 / -1; margin-left: -5px; padding-left: 5px; }
-
-.shell.has-bottom .bottom-cluster {
-	display: flex;
-	grid-column: 3;
-	grid-row: 3;
-	min-width: 0;
-	min-height: 0;
-	margin-top: -5px;
-	margin-left: -5px;
-	margin-right: -5px;
-	padding-top: 5px;
-}
-
-.shell.side-hidden.has-bottom .bottom-cluster { margin-right: 0; }
-
-.shell.has-bottom .bottom-cluster > .work-panel.bottom {
-	flex: 1 1 0;
-	grid-column: auto;
-	grid-row: auto;
-	min-width: 0;
-	min-height: 0;
-	margin: 0;
-	padding-top: 0;
-}
-
-.shell.has-bottom .bottom-cluster > .work-panel.bottom + .work-panel.bottom {
-	border-left: 1px solid #e4e4e0;
-}
-
-.shell > .work-panel[data-panel="grade"].dock {
-	grid-column: 5;
-	grid-row: 1;
-	min-height: 0;
-}
-
-.shell.has-bottom > .work-panel[data-panel="grade"].dock {
-	grid-row: 1 / -1;
-}
-
-.shell.lower-target::before {
-	position: absolute;
-	z-index: 40;
-	box-sizing: border-box;
-	left: var(--lower-x);
-	top: calc(var(--lower-y) - 1px);
-	width: var(--lower-w);
-	height: calc(var(--lower-h) + 1px);
-	border: 2px solid #7896c8;
-	border-radius: 0;
-	background: rgb(120 150 200 / 12%);
-	content: "";
-	pointer-events: none;
-}
-
+.shell.lower-target::before,
 .shell.dock-target::before {
 	position: absolute;
 	z-index: 40;
 	box-sizing: border-box;
-	top: -1px;
-	right: 0;
-	bottom: 0;
-	width: calc(var(--side-width) + 5px);
 	border: 2px solid #7896c8;
-	border-bottom-right-radius: var(--window-corner);
 	background: rgb(120 150 200 / 12%);
 	content: "";
 	pointer-events: none;
 }
-
-.shell.side-hidden.lower-target::before {
-	border-bottom-right-radius: var(--window-corner);
-}
+.shell.lower-target::before { left: var(--lower-x); top: calc(var(--lower-y) - 1px); width: var(--lower-w); height: calc(var(--lower-h) + 1px); }
+.shell.dock-target::before { top: -1px; right: 0; bottom: 0; width: calc(var(--side-width) + 5px); border-bottom-right-radius: var(--window-corner); }
+.shell.side-hidden.lower-target::before { border-bottom-right-radius: var(--window-corner); }

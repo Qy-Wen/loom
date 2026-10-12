@@ -71,6 +71,15 @@ export function pointerOnLeftEdge(clientX: number, clientY: number, box: Box): b
 	return clientX >= box.left - 28 && clientX <= box.left + edge;
 }
 
+/** Vertical docking wins at a right panel's top/bottom; the middle remains a tab target. */
+export function dockSplitEdge(clientX: number, clientY: number, box: Box): "top" | "bottom" | null {
+	if (!pointerInside(clientX, clientY, box)) return null;
+	const edge = Math.min(64, Math.max(24, (box.bottom - box.top) * 0.2));
+	if (clientY <= box.top + edge) return "top";
+	if (clientY >= box.bottom - edge) return "bottom";
+	return null;
+}
+
 /** Top strip of a lower panel, plus the gap just above it. */
 export function pointerOnTopEdge(clientX: number, clientY: number, box: Box): boolean {
 	if (clientX < box.left || clientX > box.right) return false;
