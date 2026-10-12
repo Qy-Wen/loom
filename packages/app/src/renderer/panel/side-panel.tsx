@@ -82,8 +82,15 @@ export function AgentPanel({
 	const [sessionError, setSessionError] = useState<string | null>(null);
 
 	function applyRecord(record: LoomSessionRecord): void {
+		if (sessionIdRef.current !== record.id) return;
 		setSessionMessages(record.messages);
 		setSessionContext(record.context ?? null);
+	}
+	function activateRecord(record: LoomSessionRecord): void {
+		// Switch the async-response guard immediately, before React commits the new session.
+		sessionIdRef.current = record.id;
+		setSessionId(record.id);
+		applyRecord(record);
 	}
 
 	useEffect(() => {
@@ -151,14 +158,12 @@ export function AgentPanel({
 					await window.loom.unarchiveSession(next);
 				}
 				const record = await window.loom.openSession(next);
-				setSessionId(next);
-				applyRecord(record);
+				activateRecord(record);
 				setSessions(await window.loom.listSessions());
 				return;
 			}
 			const created = await window.loom.createSession();
-			setSessionId(created.id);
-			applyRecord(created);
+			activateRecord(created);
 			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
@@ -172,8 +177,7 @@ export function AgentPanel({
 		setSessionError(null);
 		try {
 			const created = await window.loom.createSession();
-			setSessionId(created.id);
-			applyRecord(created);
+			activateRecord(created);
 			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
@@ -190,8 +194,7 @@ export function AgentPanel({
 			const selected = sessions.find((session) => session.id === id);
 			if (selected?.status === "archived") await window.loom.unarchiveSession(id);
 			const record = await window.loom.openSession(id);
-			setSessionId(id);
-			applyRecord(record);
+			activateRecord(record);
 			setSessions(await window.loom.listSessions());
 		} catch (cause) {
 			setSessionError(cause instanceof Error ? cause.message : String(cause));
@@ -221,12 +224,10 @@ export function AgentPanel({
 				const fallback = sessions.find((session) => session.id !== id && session.status === "open");
 				if (fallback) {
 					const record = await window.loom.openSession(fallback.id);
-					setSessionId(fallback.id);
-					applyRecord(record);
+					activateRecord(record);
 				} else {
 					const created = await window.loom.createSession();
-					setSessionId(created.id);
-					applyRecord(created);
+					activateRecord(created);
 				}
 			}
 			await window.loom.deleteSession(id);
@@ -269,10 +270,9 @@ export function AgentPanel({
 									onComposerDraftApplied={() => setComposerDraft(null)}
 									composerAttach={composerAttach}
 									onComposerAttachApplied={onComposerAttachApplied}
-									onSessionRecord={applyRecord}
+									onSessionRecord={activateRecord}
 									onForked={(record, text) => {
-										setSessionId(record.id);
-										applyRecord(record);
+										activateRecord(record);
 										setComposerDraft({ sessionId: record.id, text });
 										void window.loom.listSessions().then(setSessions).catch(() => undefined);
 									}}

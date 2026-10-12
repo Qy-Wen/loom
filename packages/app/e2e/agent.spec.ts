@@ -87,17 +87,22 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(before.length + 1);
 		const session = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!;
+		const contextSizes: number[] = [];
 		for (let i = 0; i < 3; i++) {
 			await loomPage.getByRole("textbox").fill(`HISTORY_QUESTION_${i}`); await loomPage.getByRole("textbox").press("Enter");
 			await expect.poll(async () => (await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).messages.filter((message) => message.role === "assistant").length).toBe(i + 1);
+			contextSizes.push((await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).context!.tokens!);
 		}
 		expect(summaries).toBeGreaterThan(0); expect(turns).toBe(3);
 		expect(lastAnswerContext).not.toContain("HISTORY_QUESTION_1");
+		expect(contextSizes[2]!).toBeLessThan(contextSizes[1]!);
 		await loomPage.reload();
 		await expect(loomPage.getByTestId("copilot-message-list").getByText("HISTORY_QUESTION_0", { exact: true })).toBeVisible();
 		await expect(loomPage.getByText(/OLD_HISTORY_REPLY/)).toBeVisible();
 		const record = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
 		expect(record.messages).toHaveLength(6);
+		await loomPage.getByRole("button", { name: "Context usage", exact: true }).click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText(`~${record.context!.percent!.toFixed(1)}% / 50k`);
 		const oldQuestion = record.messages.filter((message) => message.role === "user")[1]!;
 		const fork = await loomPage.evaluate(({ id, entry }) => window.loom.branchBefore(id, entry), { id: session.id, entry: String(oldQuestion.id) });
 		expect(fork.messages.map((message) => message.id)).toEqual(record.messages.slice(0, 2).map((message) => message.id));
@@ -112,7 +117,7 @@ test("Electron shows partial text before the model finishes streaming", async ({
 	let providerFinished = false;
 	const server = createServer((_request, response) => {
 		response.writeHead(200, { "content-type": "text/event-stream" });
-		const chunk = (content: string, finishReason: string | null = null) => `data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content }, finish_reason: finishReason }] })}\n\n`;
+		const chunk = (content: string, finishReason: string | null = null) => `data: ${JSON.stringify({ id: "stream", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content }, finish_reason: finishReason }], ...(finishReason ? { usage: { prompt_tokens: 1000, completion_tokens: 20, total_tokens: 1020 } } : {}) })}\n\n`;
 		response.write(chunk("First words before completion"));
 		void finish.promise.then(() => { providerFinished = true; response.end(chunk(" and final words", "stop") + "data: [DONE]\n\n"); });
 	});
@@ -127,11 +132,29 @@ test("Electron shows partial text before the model finishes streaming", async ({
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(count + 1);
 		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
+		const indicator = loomPage.getByRole("button", { name: "Context usage", exact: true });
+		await expect(indicator).toBeVisible(); await indicator.click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.0% / 128k");
+		await indicator.click();
 		const composer = loomPage.getByRole("textbox");
 		await composer.fill("Test streaming"); await composer.press("Enter");
 		await expect(loomPage.getByText("First words before completion", { exact: true })).toBeVisible({ timeout: 5000 });
 		expect(providerFinished).toBe(false);
 		finish.resolve();
 		await expect(loomPage.getByText("First words before completion and final words", { exact: true })).toBeVisible();
+		await indicator.click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.8% / 128k");
+		await loomPage.reload(); await indicator.click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.8% / 128k");
+		await loomPage.evaluate(async () => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { ...current.chat, contextWindow: 64_000 } });
+		});
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~1.6% / 64k");
+		await loomPage.evaluate(async () => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { ...current.chat, enabled: false } });
+		});
+		await expect(indicator).toHaveCount(0);
 	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });

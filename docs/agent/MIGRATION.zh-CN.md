@@ -172,7 +172,7 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | session 列表 | `Storage.scanConversations({ ownerConversationId?, order? })`；无 `cwd` 过滤，"一库一组"需自建归属映射 |
 | `hooks.on("before_tool", …)` | `defineExtension({ hooks: [hook(ToolTask, { beforeTool: call => … })] })`；`call.id/name/arguments` 可用；异步等用户审批仍可行 |
 | `events.on("message_update" / "thinking_*" / "tool_*" / "usage" / "compaction_*" / "retry_*")` | `watchEvents(harness, conversationId)` 的 `AgentEvent`（`message_update` delta、`tool_execution_*`、`auto_retry_*`、`compaction_*`、`usage_changed`），或 `conversation.watch()` / `viewState()`；重写 `LoomAgentEvent` 翻译 |
-| `estimateContextTokens` / `calculateContextTokens` | 不导出；用 `harness.usage()` / `pi.usage`，或砍掉上下文百分比显示 |
+| `estimateContextTokens` / `calculateContextTokens` | Loom `contextUsage()` 基于活动 `ContextView` 与 pi-ai 估算工具，最近有效 usage + 后续消息估算；`harness.usage()` 是累计消耗，不能作当前占用 |
 | `entryProjectors: { loom_user_stop }` | 自定义 entry kind + `entry.model`，或 generation hook |
 
 **等待审批**在 durable 里没有事件。`beforeTool` 可以 await，所以门禁机制成立；等待状态由 Loom 发布——一个 Loom `defineDoc`（等待中的审批）用 `watchDoc` 观察，加一个 Loom 自有事件——因为 durable 的 `watchEvents` 流不能注入。
@@ -284,12 +284,14 @@ durable 接入点：
 - `LibraryAgent` 每库一个 Harness/Registry；metadata、权限、memory 使用 document，skills 使用 `ExecutionEnv`/section，specialist 使用前台归属 conversation。App/root facade、tests/evals 均已迁移，无旧 manager 兼容层。
 - AG-UI 使用 partial 增量、显式 threadId、durable connect/stop，断开传输不取消工作。聊天历史按原生 fork-aware entries 分页，与压缩后的模型上下文分离；压缩后刷新、旧消息 fork 和已完成 request 重连有回归覆盖。
 - Electron SIGKILL 验收覆盖审批、流式生成和 unsafe bash 执行。审批复用原子代理；流式重发原请求、不重复用户输入，保留 aborted partial；unsafe 工具不重放并报告可能已部分执行，不承诺外部副作用 exactly-once。
-- 全仓库类型检查通过；单元测试 core 133 + 1 跳过、agent 59、app 191。Electron 标准 10 项通过，可选真实模型流式 1 项通过。Core 文件夹重命名 watcher 曾超时，单独复跑及全仓库复跑通过，未修改该测试。
+- 全仓库类型检查通过；单元测试 core 133 + 1 跳过、agent 65、app 192。Electron 标准 10 项通过，可选真实模型流式 1 项通过。Core 文件夹重命名 watcher 曾超时，单独复跑及全仓库复跑通过，未修改该测试。
 - 严格 live 工具金标连续两次 4/4，金标不变；retrieve 已知 ID 先 inspect，inspect mock 对齐产品 metadata。压缩/cache 数值见 [EVALS](./EVALS.zh-CN.md)。
 
 **剩余验收：** Windows 实机运行时，以及受控新旧压缩/cache/工具行为对比。现有三个崩溃点不覆盖所有时序和外部工具。跨进程 owner 仍依赖 Electron 单实例约束，不新增通用锁。
 
-**第 9 步延后：** telemetry 按 §8 以 extension 重建；context 百分比暂不显示。
+**上下文百分比已恢复：** 当前模型窗口与活动上下文估算，压缩后不沿用旧 usage；提交/模型变化刷新，使用 `~` 标记近似值。测试覆盖 cache/工具/图像、模型变化、压缩/fork/重开和 Electron 圆环。
+
+**第 9 步延后：** telemetry 按 §8 以 extension 重建。
 
 ---
 

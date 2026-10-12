@@ -172,7 +172,7 @@ The old `HarnessSessionManager` owned lanes, sessions, recovery, and event trans
 | Session list | `Storage.scanConversations({ ownerConversationId?, order? })`; no `cwd` filter, so "one group per library" needs its own ownership mapping |
 | `hooks.on("before_tool", …)` | `defineExtension({ hooks: [hook(ToolTask, { beforeTool: call => … })] })`; `call.id/name/arguments` available; async user approval still works |
 | `events.on("message_update" / "thinking_*" / "tool_*" / "usage" / "compaction_*" / "retry_*")` | `watchEvents(harness, conversationId)` `AgentEvent` (`message_update` deltas, `tool_execution_*`, `auto_retry_*`, `compaction_*`, `usage_changed`), or `conversation.watch()` / `viewState()`; rewrite the `LoomAgentEvent` translation |
-| `estimateContextTokens` / `calculateContextTokens` | Not exported; use `harness.usage()` / `pi.usage`, or drop the context-percent indicator |
+| `estimateContextTokens` / `calculateContextTokens` | Loom `contextUsage()` uses active `ContextView` and pi-ai estimates: latest applicable usage + trailing messages. `harness.usage()` is cumulative spend, not current occupancy |
 | `entryProjectors: { loom_user_stop }` | A custom entry kind + `entry.model`, or a generation hook |
 
 **Permission waiting** has no durable event. The `beforeTool` hook may await, so the gate works; the waiting state is published by Loom — a Loom `defineDoc` (pending approvals) observed with `watchDoc`, plus a Loom-owned event — because durable's `watchEvents` stream cannot be injected into.
@@ -284,12 +284,14 @@ Resolved:
 - `LibraryAgent` owns one Harness/Registry per library; metadata, permission, and memory use documents; skills use `ExecutionEnv`/sections; specialists use foreground owned conversations. App/root facade and tests/evals use durable, with no old-manager compatibility layer.
 - AG-UI uses partial increments, explicit threadId, and durable connect/stop; detach does not cancel work. Chat paginates fork-aware entries separately from compacted model context. Regressions cover post-compaction reload, old-message forks, and completed-request reconnect.
 - Electron SIGKILL acceptance covers approval, streaming, and executing unsafe bash. Approval reuses its child; streaming resends without duplicate user input and retains aborted partials; unsafe tools do not replay and report possible partial execution. External effects are not guaranteed exactly-once.
-- Workspace typechecks pass; unit suites: core 133 + 1 skipped, agent 59, app 191. Electron: 10 standard tests and one opt-in live streaming test pass. A core folder-rename watcher timed out once; isolated and workspace retries passed without modifying that test.
+- Workspace typechecks pass; unit suites: core 133 + 1 skipped, agent 65, app 192. Electron: 10 standard tests and one opt-in live streaming test pass. A core folder-rename watcher timed out once; isolated and workspace retries passed without modifying that test.
 - Strict live tool gold passed 4/4 twice, unchanged. Retrieve inspects supplied IDs first; the inspect mock matches product metadata. Compaction/cache measurements: [EVALS](./EVALS.md).
 
 **Remaining acceptance:** Windows on-device runtime and controlled old/new compaction/cache/tool comparisons. The three accepted crash points do not cover every timing or external tool. Cross-process owner exclusivity still relies on Electron's single-instance constraint, not a new general lock.
 
-**Step 9 deferred:** rebuild telemetry as an extension per §8; context percentage stays absent.
+**Context percentage restored:** current-model window and active-context estimate, without reusing pre-compaction usage; commits/model changes refresh it and `~` marks approximation. Tests cover cache/tools/images, model changes, compaction/fork/reopen, and the Electron ring.
+
+**Step 9 deferred:** rebuild telemetry as an extension per §8.
 
 ---
 

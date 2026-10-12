@@ -6,6 +6,7 @@ export interface LoomSessionSummary {
 	createdAt: number;
 	updatedAt: number;
 }
+/** Approximate active context size: provider usage when applicable, plus estimates of trailing messages. */
 export interface LoomContextUsage { tokens: number | null; window: number; percent: number | null }
 export interface LoomSessionRecord extends LoomSessionSummary {
 	messages: Array<Record<string, unknown> & { role: string }>;

@@ -1183,7 +1183,7 @@ function ContextIndicator({ context }: { context: LoomContextUsage | null }): Re
 	const radius = 6;
 	const circumference = 2 * Math.PI * radius;
 	const label = context.percent !== null
-		? `${context.percent.toFixed(1)}% / ${formatTokens(context.window)}`
+		? `~${context.percent.toFixed(1)}% / ${formatTokens(context.window)}`
 		: `? / ${formatTokens(context.window)}`;
 	return (
 		<div className="session-context-usage" ref={rootRef}>
