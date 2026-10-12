@@ -19,7 +19,7 @@ import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
-import { adoptMessageId, adoptUserEntryId, freshUserTurn, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
+import { adoptMessageId, adoptUserEntryId, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useOpenAsset } from "./asset-open.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
@@ -34,11 +34,7 @@ const TranscriptContext = createContext<readonly LoomTranscriptMessage[]>([]);
 const ComposerAttachContext = createContext<AssetRefAttachment | null>(null);
 const ComposerAttachAppliedContext = createContext<() => void>(() => {});
 
-type ForceView = {
-	installedIds: string[];
-	display: Message[];
-	priorStoredIds: string[];
-};
+type PendingEdit = { threadId: string; text: string };
 
 type BranchActions = {
 	busy: boolean;
@@ -47,16 +43,14 @@ type BranchActions = {
 	edit: (entryId: string) => void;
 	cancelEdit: () => void;
 	fork: (entryId: string, text: string) => void;
-	commitEdit: (text: string) => Promise<Message[] | null>;
-	deliver: (installed: Message[], text: string) => void;
-	bindDeliver: (deliver: (installed: Message[], text: string) => void) => void;
+	commitEdit: (text: string) => Promise<void>;
 };
 
 const BranchContext = createContext<BranchActions | null>(null);
-const ForceContext = createContext<ForceView | null>(null);
-const LiveMessagesContext = createContext<readonly Message[]>([]);
+const PendingEditContext = createContext<PendingEdit | null>(null);
+const EditSubmittedContext = createContext<(edit: PendingEdit) => void>(() => {});
+const ConnectingContext = createContext(true);
 const DraftContext = createContext<string | null>(null);
-const ClearForceContext = createContext<() => void>(() => {});
 const DraftAppliedContext = createContext<() => void>(() => {});
 const ContextUsageContext = createContext<LoomContextUsage | null>(null);
 
@@ -126,14 +120,6 @@ function userEntryIds(visible: readonly Message[], stored: readonly Message[]): 
 		index += 1;
 	}
 	return map;
-}
-
-function hasPrefixIds(live: readonly Message[], ids: readonly string[]): boolean {
-	if (live.length < ids.length) return false;
-	for (let index = 0; index < ids.length; index++) {
-		if (live[index]?.id !== ids[index]) return false;
-	}
-	return true;
 }
 
 const NEAR_BOTTOM_PX = 48;
@@ -478,10 +464,7 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 				onCancel={() => branch.cancelEdit()}
 				onSend={(next) => {
 					const body = contentWithPlacedAssets(next, placedChips(assets));
-					void branch.commitEdit(body).then((installed) => {
-						if (!installed) return;
-						branch.deliver(installed, body);
-					});
+					void branch.commitEdit(body);
 				}}
 			/>
 		);
@@ -713,10 +696,10 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	const threadId = useContext(ThreadIdContext);
 	const visible = useContext(VisibleMessagesContext);
 	const branch = useContext(BranchContext);
-	const force = useContext(ForceContext);
-	const live = useContext(LiveMessagesContext);
+	const pendingEdit = useContext(PendingEditContext);
+	const editSubmitted = useContext(EditSubmittedContext);
+	const connecting = useContext(ConnectingContext);
 	const draft = useContext(DraftContext);
-	const clearForce = useContext(ClearForceContext);
 	const onDraftApplied = useContext(DraftAppliedContext);
 	const composerAttach = useContext(ComposerAttachContext);
 	const onComposerAttachApplied = useContext(ComposerAttachAppliedContext);
@@ -749,29 +732,30 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 		if (!draftRef.current) onChangeRef.current?.("");
 	}, [threadId]);
 	const appliedDraft = useRef<string | null>(null);
-	const stored = useContext(StoredMessagesContext);
-	const handoff = useRef<ReadonlySet<string> | null>(null);
-	branch?.bindDeliver((installed, text) => {
-		handoff.current = new Set(live.flatMap((message) => message.id ? [message.id] : []));
-		agent.setMessages(installed);
+	const submittedEdit = useRef<PendingEdit | null>(null);
+	useEffect(() => {
+		// A controlled thread switch connects asynchronously. Never send through the old thread's callback.
+		if (!pendingEdit || pendingEdit.threadId !== threadId || agent.threadId !== threadId || connecting || isRunning || !onSubmitMessage || submittedEdit.current === pendingEdit) return;
+		submittedEdit.current = pendingEdit;
+		editSubmitted(pendingEdit);
 		void (async () => {
+			const text = pendingEdit.text;
 			const chips = placedChips([
 				...assetRefBlocks(text),
 				...inlineAssetIds(text).flatMap((id) => {
-					const known = assetsRef.current.find((asset) => asset.assetId === id) ?? lookupComposerAsset(id);
+					const known = lookupComposerAsset(id);
 					return known && known.type === "asset_ref" ? [known] : [];
 				}),
 			]);
-			if (chips.length > 0 && threadId && typeof window.loom.stageComposerAssets === "function") {
-				try {
-					await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
-				} catch (cause) {
-					setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
-				}
+			try {
+				if (chips.length > 0) await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				await onSubmitMessage(contentWithPlacedAssets(text, chips));
+			} catch (cause) {
+				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+				onChange?.(text);
 			}
-			onSubmitMessage?.(contentWithPlacedAssets(text, chips));
 		})();
-	});
+	}, [pendingEdit, editSubmitted, threadId, agent, connecting, isRunning, onSubmitMessage, onChange, t.chat.attachFailed]);
 
 	useEffect(() => {
 		if (!draft) {
@@ -824,17 +808,6 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 			cancelled = true;
 		};
 	}, [composerAttach]);
-
-	useEffect(() => {
-		if (!force) {
-			handoff.current = null;
-			return;
-		}
-		const beforeIds = handoff.current;
-		const prefixReady = force.installedIds.length === 0 || hasPrefixIds(live, force.installedIds);
-		const liveSent = !!beforeIds && prefixReady && freshUserTurn(live.slice(force.installedIds.length), beforeIds);
-		if (liveSent || freshUserTurn(stored, new Set(force.priorStoredIds))) clearForce();
-	}, [clearForce, force, live, stored]);
 
 	useEffect(() => {
 		if (!isRunning) {
@@ -1121,7 +1094,6 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 /** Stable slot so CopilotChat does not remount the view on every parent render. */
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	const stored = useContext(StoredMessagesContext);
-	const force = useContext(ForceContext);
 	const threadId = useContext(ThreadIdContext);
 	const { agent } = useAgent({ updates: [] });
 	const seenThread = useRef<string | null>(null);
@@ -1134,12 +1106,12 @@ function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	}
 	const live = liveMessagesForSession(threadId, agent.threadId, rawLive, skippedLive.current);
 	const messages = useMemo(
-		() => (force ? force.display : mergeChatMessages(stored, live)),
-		[force, stored, live],
+		() => mergeChatMessages(stored, live),
+		[stored, live],
 	);
 	return (
 		<VisibleMessagesContext.Provider value={messages}>
-			<LiveMessagesContext.Provider value={live}>
+			<ConnectingContext.Provider value={Boolean(props.isConnecting)}>
 			<CopilotChat.View
 				{...props}
 				messages={messages}
@@ -1147,7 +1119,7 @@ function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 				messageView={SessionMessageView}
 				input={FollowUpInput}
 			/>
-			</LiveMessagesContext.Provider>
+			</ConnectingContext.Provider>
 		</VisibleMessagesContext.Provider>
 	);
 }
@@ -1245,16 +1217,13 @@ export function SessionChat({
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
-	const [force, setForce] = useState<ForceView | null>(null);
+	const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
 	const editingRef = useRef<string | null>(null);
-	const storedIds = useRef<string[]>([]);
-	storedIds.current = stored.flatMap((message) => message.id ? [message.id] : []);
-	const deliverRef = useRef<(installed: Message[], text: string) => void>(() => {});
+	const editSubmitted = useCallback((edit: PendingEdit) => setPendingEdit((current) => current === edit ? null : current), []);
 	const onRecord = useRef(onSessionRecord);
 	const onFork = useRef(onForked);
 	onRecord.current = onSessionRecord;
 	onFork.current = onForked;
-	const clearForce = useCallback(() => setForce(null), []);
 	const { agent } = useAgent({ updates: [] });
 	useEffect(() => {
 		const subscription = agent.subscribe({
@@ -1282,7 +1251,6 @@ export function SessionChat({
 		editingRef.current = null;
 		setEditingId(null);
 		setError(null);
-		setForce(null);
 		setBusy(false);
 	}, [threadId]);
 
@@ -1290,12 +1258,6 @@ export function SessionChat({
 		busy,
 		editingId,
 		error,
-		bindDeliver(next) {
-			deliverRef.current = next;
-		},
-		deliver(installed, text) {
-			deliverRef.current(installed, text);
-		},
 		edit(entryId) {
 			editingRef.current = entryId;
 			setEditingId(entryId);
@@ -1320,22 +1282,17 @@ export function SessionChat({
 		},
 		async commitEdit(text) {
 			const entryId = editingRef.current;
-			if (!entryId) return null;
-			const priorStoredIds = storedIds.current;
+			if (!entryId) return;
 			setBusy(true);
 			setError(null);
 			try {
 				const record = await window.loom.branchBefore(threadId, entryId);
-				const installed = toAgUiMessages(record.messages);
-				const display: Message[] = [...installed, { id: "loom-branch-pending", role: "user", content: text }];
 				editingRef.current = null;
 				setEditingId(null);
-				setForce({ installedIds: installed.map((message) => message.id), display, priorStoredIds });
+				setPendingEdit({ threadId: record.id, text });
 				onRecord.current(record);
-				return installed;
 			} catch (cause) {
 				setError(errorText(cause));
-				return null;
 			} finally {
 				setBusy(false);
 			}
@@ -1347,8 +1304,8 @@ export function SessionChat({
 		<StoredMessagesContext.Provider value={stored}>
 			<ThreadIdContext.Provider value={threadId}>
 			<BranchContext.Provider value={actions}>
-			<ForceContext.Provider value={force}>
-			<ClearForceContext.Provider value={clearForce}>
+			<PendingEditContext.Provider value={pendingEdit}>
+			<EditSubmittedContext.Provider value={editSubmitted}>
 			<DraftContext.Provider value={composerDraft}>
 			<DraftAppliedContext.Provider value={onComposerDraftApplied}>
 			<ComposerAttachContext.Provider value={composerAttach}>
@@ -1362,8 +1319,8 @@ export function SessionChat({
 			</ComposerAttachContext.Provider>
 			</DraftAppliedContext.Provider>
 			</DraftContext.Provider>
-			</ClearForceContext.Provider>
-			</ForceContext.Provider>
+			</EditSubmittedContext.Provider>
+			</PendingEditContext.Provider>
 			</BranchContext.Provider>
 			</ThreadIdContext.Provider>
 		</StoredMessagesContext.Provider>

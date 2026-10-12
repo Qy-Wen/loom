@@ -149,6 +149,26 @@ test("mergeChatMessages keeps stored history when live is empty and appends new 
 	);
 });
 
+test("later streamed turns remain visible after user admission despite historical reasoning ID differences", () => {
+	const saved = [
+		{ id: "u0", role: "user" as const, content: "first" },
+		{ id: "a0-thinking", role: "reasoning" as const, content: "reasoning" },
+		{ id: "a0", role: "assistant" as const, content: "first answer" },
+		{ id: "u1", role: "user" as const, content: "second" },
+	];
+	const live = [
+		saved[0]!, { ...saved[1]!, id: "live0-thinking" }, saved[2]!, saved[3]!,
+		{ id: "live1-thinking", role: "reasoning" as const, content: "next reasoning" },
+		{ id: "live1", role: "assistant" as const, content: "partial" },
+	];
+	assert.deepEqual(mergeChatMessages(saved, live), [...saved, ...live.slice(4)]);
+	assert.deepEqual(mergeChatMessages(saved, live.slice(3)), [...saved, ...live.slice(4)]);
+	assert.equal(mergeChatMessages(saved, [...live.slice(0, -1), { ...live.at(-1)!, content: "partial plus more" }]).at(-1)?.content, "partial plus more");
+	const completed = [...saved, { id: "a1-thinking", role: "reasoning" as const, content: "next reasoning" }, { id: "a1", role: "assistant" as const, content: "complete" }];
+	const ended = [...live.slice(0, -1), completed.at(-1)!];
+	assert.deepEqual(mergeChatMessages(completed, ended), completed, "saved completion must not duplicate historical reasoning");
+});
+
 test("mergeChatMessages treats spacing around a chip as the same turn", () => {
 	const block = "<asset_ref>\npath: clips/hero.png\nasset_id: asset-1\ntype: image\n</asset_ref>";
 	const stored = toAgUiMessages([

@@ -80,9 +80,9 @@ git merge vendor-clean
 | 重试 / 压缩 | retry activity / compaction custom event |
 | 挂载 / 完成 | messages snapshot |
 
-Partial 不只有字符串 delta，还有完整消息和完整内容块。按 block 维护 partial state，只发送尚未显示的 text/thinking 后缀。初始快照在 admission 前保留 optimistic user row，否则前端 history/live 合并会隐藏实时 continuation。工具 call ID 在实时事件和已保存 DTO 中都加 conversation 命名空间。
+Partial 不只有字符串 delta，还有完整消息和完整内容块。按 block 维护 partial state，只发送尚未显示的 text/thinking 后缀。初始快照在 admission 前保留 optimistic user row，否则前端 history/live 合并会隐藏实时 continuation。工具 call ID 在实时事件和已保存 DTO 中都加 conversation 命名空间。历史 reasoning ID 与实时 ID 不同时，合并以共享的已保存尾消息锚定后续增量；当前 user admission 后仍保留回复流，避免第二轮起只显示等待点。验收覆盖同一会话连续三轮首块/后续块和真实模型连续两轮。
 
-CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随机 agent thread。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
+CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随机 agent thread。编辑旧问题先 fork-and-switch，等待新线程连接完成后，通过当前 CopilotChat 发送入口提交一次；不复用旧线程发送回调或强制覆盖实时消息。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
 
 `DurableAgentRunner` 把 run/connect/stop 路由到 adapter 与原生 submission，不使用 CopilotKit 内存历史。传输断开只停止 connect watcher，不取消 durable 工作；显式 Stop 取消匹配的运行。Connect 从 durable snapshot 恢复 partial、工具和子审批，聊天历史由完整 entries 提供，包含主进程崩溃后重开。已完成 submission 重连不等待新的 run-end，即使 answer 已被压缩。
 

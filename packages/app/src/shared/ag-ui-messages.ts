@@ -188,16 +188,19 @@ function diverged(stored: Message[], live: Message[]): boolean {
 }
 
 /**
- * Live messages from the first user id disk does not have yet.
- * A finished turn stays on disk. Its live copy uses another reasoning id
- * (`think-…` versus the saved entry), so appending that copy paints the
- * thinking again after the answer.
+ * Append new user turns or increments after the shared saved tail. Historical reasoning
+ * IDs may differ; do not append completed live turns and duplicate their thinking.
  */
 function continuation(stored: Message[], live: Message[]): Message[] | null {
 	const storedUsers = new Set(stored.flatMap((message) => message.role === "user" && message.id ? [message.id] : []));
 	const start = live.findIndex((message) => message.role === "user" && !!message.id && !storedUsers.has(message.id));
-	if (start < 0) return null;
-	return [...stored, ...live.slice(start)];
+	if (start >= 0) return [...stored, ...live.slice(start)];
+	// Admission gives the current user its durable ID before its answer commits.
+	// Historical reasoning IDs may differ, but a shared transcript tail still anchors live increments.
+	const tail = stored.at(-1);
+	if (!tail?.id) return null;
+	const anchor = live.findLastIndex((message) => message.id === tail.id && fingerprint(message) === fingerprint(tail));
+	return anchor < 0 ? null : [...stored, ...live.slice(anchor + 1)];
 }
 
 /** Replace one on-screen message id with the entry id assigned when it was saved. */
