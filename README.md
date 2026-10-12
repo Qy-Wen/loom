@@ -49,31 +49,34 @@ pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9344)
 pnpm -r typecheck
 ```
 
-## Vendored pi agent engine
+## Vendored pi durable engine
 
-Loom vendors the source of pi's [`packages/agent`](https://github.com/earendil-works/pi) into `packages/agent/vendor-pi-agent/`. Application code accesses it only through `packages/agent/src/pi-adapter.ts`, the sole `#vendor/pi-agent` import boundary.
+Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from upstream `main` into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Both are synced from the same commit. `src/durable-adapter.ts` is the import boundary, exposed as `@loom/agent/durable` during the migration. The existing Loom harness and app integration are not migrated yet; see [MIGRATION](./docs/agent/MIGRATION.md).
 
-### Syncing and upgrading upstream
+### Syncing upstream
 
-**Mental model:** the `vendor-clean` branch always represents pristine upstream source. `main` obtains vendor updates by merging that branch, and all local modifications live only on `main`.
-
-The sync script at `packages/agent/vendor-pi-agent/sync.sh` shallow-clones a ref from GitHub, mirrors `packages/agent/src/` with `rsync --delete`, and records the repository, directory, ref, and commit in `UPSTREAM`. It does not require a local pi checkout and is idempotent for the same version.
+`vendor-clean` holds pristine upstream source. Sync there, commit, then merge into Loom's `main`:
 
 ```bash
-# Initially create a normal branch from a commit containing the pristine vendor source.
-git branch vendor-clean
-
-# Fixed four-step upgrade flow:
 git checkout vendor-clean
-pnpm --filter @loom/agent vendor:sync v0.86.0
-git commit -am "vendor: update pi-agent to v0.86.0 (pristine)"
+pnpm vendor:sync                       # latest upstream main; optional ref argument
+git add packages/agent/vendor-pi-durable packages/agent/vendor-pi-codemode
+git commit -m "vendor: sync pi-durable main"
 git checkout main
 git merge vendor-clean
 ```
 
-**Two constraints:**
+`vendor-pi-durable/sync.mjs` shallow-clones upstream and records `repo/directory/ref/commit` in `UPSTREAM`, without timestamps. On macOS it mirrors with `rsync --delete --delete-excluded`; native Windows uses an equivalent Node filesystem mirror. Tests, `testing/`, and benchmarks are excluded. `sync.sh` delegates to the same script. The script refuses to run outside `vendor-clean`.
 
-1. Syncing mirrors with `rsync --delete`; it does not merge. Run it **only on `vendor-clean`**.
-2. Modify vendor source only on `main`. Put Loom-owned additions in `packages/agent/src/`, not inside `vendor-pi-agent/src/`, where the next sync would delete them.
+Keep Loom-owned code outside both vendor `src/` directories: syncing deletes local additions there. The codemode directory is a private workspace package preserving upstream's package name and exports, so durable source stays unmodified; only `quickjs-wasi` is fetched from npm for it. A second sync of the same commit is a content no-op. npm dependencies remain separate and must be checked against upstream whenever syncing `main`.
 
-**External dependencies:** the vendored agent requires `@earendil-works/{pi-ai,chord,pi-telemetry}` plus `diff`, `ignore`, `typebox`, and `yaml`. They remain npm dependencies of `@loom/agent` and must match the pi version recorded in `UPSTREAM`.
+### Isolated vendor checks
+
+```bash
+pnpm --filter @loom/agent typecheck:vendor
+pnpm --filter @loom/agent test:vendor
+pnpm --filter @loom/agent build:vendor       # builds codemode, then durable
+pnpm --filter @loom/agent test:vendor:build  # checks compiled JS and worker
+```
+
+Source tests run without a build. Compiled checks select codemode's JS exports with `--conditions=loom-vendor-build`; the source exports remain the default for development. The old Loom tests, evals, and app cannot run until their harness imports are migrated.

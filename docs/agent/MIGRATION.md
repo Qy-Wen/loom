@@ -4,6 +4,8 @@
 
 > Evaluates replacing the vendored Pi harness with `@earendil-works/pi-durable`. See [AGENT](./AGENT.md) for the current architecture.
 > This document records the scope, the file-by-file mapping, capability parity, telemetry, and the open decisions. It assumes a fully backward-incompatible migration: existing session files are discarded. Update [AGENT](./AGENT.md) once the migration lands.
+>
+> **Source baseline:** follow upstream `main`, not the `v1.1.0` tag. The image processor, nested tools, structured output, and code mode described below were added after that tag. `UPSTREAM` records the actual synced commit; npm dependencies must be checked against it.
 
 ---
 
@@ -39,6 +41,8 @@ Durable lacks a telemetry producer, the Agent Skills loader, and prompt template
 
 The driver is therefore **long-term maintainability** — stop forking `harness/**`, stay on upstream — not new capability. If that is not a priority, staying on v0.85.1 is viable.
 
+Note: "roughly the same feature set" above is a reading of the 1.1.0 source, not yet measured. Durable's compaction policy (`DEFAULT_COMPACTION_POLICY`) differs from the old harness's, so this equivalence should be verified by the existing evals — see §10 step 7.
+
 ---
 
 ## 3. Scope: shaped by durable, not confined to `@loom/agent`
@@ -50,14 +54,14 @@ What that means concretely:
 - **Owner, not lanes.** Replace `HarnessSessionManager` with a durable-shaped owner: one `Harness` per open library plus a `Registry`, exposing `Conversation` handles. There is no `lane`, `accept`, `drive`, or hand-written recovery.
 - **Documents for app state.** Session title, archive flag, and other Loom per-conversation state become `defineDoc`s read and written in commits, not sidecar session values.
 - **Inbox for busy handling.** Steer / follow-up / reject use `submit(..., { whenBusy })` and `pi.inbox`, not a hand-rolled follow-up map.
-- **Owned subagents for specialists.** `run_retrieve_agent` / `run_create_agent` become owned conversations (`ownership: { kind: "task", taskId }`), not a per-call in-memory harness.
+- **Owned subagents for specialists.** `run_retrieve_agent` / `run_create_agent` become owned conversations (`ownership: { kind: "task", taskId }`), not a per-call in-memory harness. Neither is `background` (§9 decision 6), so Stop interrupts them and the conversation is busy while they run.
 - **Registry for tools and prompt.** Loom tools, the system prompt, skills/memory injection, and the permission gate become an extension (tools, sections, hooks, wraps) installed in the registry.
 - **Committed state for the UI.** The app reads `conversation.viewState()` / `watch()` and/or `watchEvents()`. `LoomAgUiAgent` stays as the AG-UI protocol boundary, but its input changes from `LoomAgentEvent` + manager methods to durable views/events.
 - **One SQLite store per library** (e.g. `<library>/.loom/loom.sqlite`), replacing the `harness-sessions/` JSONL directory.
 
-A boundary worth keeping (as a preference to confirm, not a hard rule): AG-UI remains the frontend protocol, and `packages/app` should prefer a thin `@loom/agent` facade over importing `pi-durable` types directly. Whether to keep that facade or let the app consume durable handles directly is decision 1 in §9.
+Boundary preference: AG-UI remains the frontend protocol, and `packages/app` should prefer a thin `@loom/agent` facade over importing `pi-durable` types directly. Resolved in §9 decision 1 (keep the thin facade).
 
-Files outside `packages/agent` this touches: session listing (→ `scanConversations` + Loom documents), the renderer session/context panel, dev-trace (§8), and every `packages/app` caller that relied on old session-manager behavior.
+Files outside `packages/agent` this touches: session listing (→ `scanConversations` + Loom documents), the renderer session/context panel, dev-trace (§8), and every `packages/app` caller that relied on old session-manager behavior. The size is not small: `harness-session-manager.ts` is 1105 lines referenced from 14 files, and three of them are app main-process files — `ag-ui-agent.ts` (512 lines), `agent-server.ts`, `index.ts` — all of which get rewritten. §5 has a dedicated app-side mapping table.
 
 **No backward compatibility.** The old `<library>/.loom/harness-sessions/` JSONL, the stored transcript shape, the `attachments` sidecar, and the `loom_user_stop` entry projector are all dropped. A library keeps one durable store; old session files are ignored, not migrated. Design the clean path, not a reader for what exists.
 
@@ -70,6 +74,7 @@ Files outside `packages/agent` this touches: session listing (→ `scanConversat
 | `@earendil-works/pi-ai` | 0.85.1 | 1.1.0 | `createModels` / `createProvider` move under `/models`; verify API-factory paths |
 | `@earendil-works/chord` | 0.85.1 | 1.1.0 | `BACKGROUND_CONTEXT`, `Context` from `@earendil-works/chord/context` |
 | `@earendil-works/pi-durable` | — | vendored source | The new harness, vendored as `vendor-pi-durable/src`; subpaths mapped via `#vendor/pi-durable/*`; see Vendoring below |
+| `@earendil-works/pi-codemode` | — | vendored source (`workspace:*`) | `vendor-pi-codemode/src`, synced with durable from the same upstream `main` commit; only its `quickjs-wasi` dependency stays npm |
 | SQLite driver | `better-sqlite3` (core store) | Durable: `node:sqlite`; core: `better-sqlite3` unchanged | Durable's `/storage/sqlite/node` uses Node's built-in `node:sqlite` (`DatabaseSync`). Two drivers coexist over separate files (`.loom/loom.sqlite` for durable, the retrieval store for core); unifying them is out of scope. See §9 |
 | `@earendil-works/pi-telemetry` | 0.85.1 | 1.1.0 | Contracts only; no runtime producer anywhere in pi 1.1.0 |
 | `@silvia-odwyer/photon-node` | 0.3.4 | remove | Durable's image processor uses `@silvia-odwyer/photon` instead |
@@ -86,18 +91,23 @@ packages/agent/
 ├── package.json        # imports: "#vendor/pi-durable", "#vendor/pi-durable/tools", ...
 ├── tsconfig.json       # matching paths
 ├── src/                # Loom code; the only place that imports #vendor/pi-durable
-└── vendor-pi-durable/
-    ├── UPSTREAM        # repo: .../pi.git, directory: packages/durable, ref, commit
-    ├── sync.sh         # mirrors pi packages/durable/src
-    └── src/            # copied pi source, available for modification
+├── vendor-pi-durable/
+│   ├── UPSTREAM        # repo: .../pi.git, directory: packages/durable, ref, commit
+│   ├── sync.sh         # delegates to sync.mjs; syncs both vendors
+│   └── src/            # pristine upstream source
+└── vendor-pi-codemode/
+    ├── package.json    # private workspace; preserves upstream package name/exports
+    ├── UPSTREAM        # directory: packages/codemode; same ref and commit
+    └── src/            # pristine upstream source
 ```
 
-`sync.sh` mirrors `packages/durable/src/` (`rsync --delete`, excluding `**/*.test.ts`, `**/testing/**`, `benchmark/**`), records the ref and commit in `UPSTREAM`, and defaults to `v1.1.0`. `UPSTREAM.directory` becomes `packages/durable`.
+`sync.sh` mirrors `packages/durable/src/` (`rsync --delete`, excluding `**/*.test.ts`, `**/testing/**`, `benchmark/**`), records the ref and commit in `UPSTREAM`, and defaults to `main`. `sync.sh` delegates to `sync.mjs`, which mirrors both `packages/durable/src` and `packages/codemode/src` from one clone, records their directories and identical commits, and provides an equivalent filesystem mirror on native Windows. Loom-owned codemode package/build configuration stays outside `src/` and survives sync; durable's imports of `@earendil-works/pi-codemode` resolve to this private workspace without rewriting vendor source. Note that excluding `**/testing/**` makes durable's `./testing` export (the storage conformance suite) unavailable from the vendored copy; to reuse that suite, either copy it separately or depend on the npm `@earendil-works/pi-durable`.
 
 Entry points: map the durable subpaths Loom uses through `imports` / tsconfig:
 
 - `#vendor/pi-durable` → `vendor-pi-durable/src/index.ts`
 - `#vendor/pi-durable/tools` → `vendor-pi-durable/src/tools/index.ts`
+- `#vendor/pi-durable/codemode` → `vendor-pi-durable/src/codemode/index.ts`
 - `#vendor/pi-durable/env/node` → `vendor-pi-durable/src/env/node.ts`
 - `#vendor/pi-durable/images/node` → `vendor-pi-durable/src/images/node.ts`
 - `#vendor/pi-durable/storage/sqlite/node` → `vendor-pi-durable/src/storage/sqlite/node.ts`
@@ -109,7 +119,7 @@ External deps stay npm and align with durable's version: `@earendil-works/chord`
 
 The vendor-branch rules are unchanged: `vendor-clean` holds pristine source, `main` carries local changes, sync only on `vendor-clean`, and Loom-owned additions go in `src/`, not `vendor-pi-durable/src/` (where the next sync deletes them).
 
-Because durable is Experimental and changes quickly, expect more merge churn than the old harness. Vendoring also makes telemetry approach B (§8) available: instrument the vendored generation/tool tasks directly.
+Because durable is Experimental and changes quickly, expect more merge churn than the old harness. Telemetry does not touch the vendor: later it goes in as an extension (§8), keeping the vendored copy pristine upstream.
 
 ---
 
@@ -123,10 +133,25 @@ Because durable is Experimental and changes quickly, expect more merge churn tha
 | `library-skills.ts` | `loadSkills`, `formatSkillsForSystemPrompt` | No equivalent export; self-host over the durable `ExecutionEnv`, or port coding-agent `core/skills.ts`. Inject the catalog as a prompt `section` |
 | `library-auto-memory.ts` | `AgentHarnessTool`, `ExecutionToolContext` | Type-only swap to `defineTool` + `ToolExecutionApi`. Inject the note as a `section` / `instructions` |
 | `agent-instructions.ts` | — | Map to per-conversation `instructions` (rendered as the `instructions` section) |
-| `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | Drop the per-specialist in-memory harness; use durable owned subagents: `api.commit(tx => tx.createConversation({ownership:{kind:"task",taskId:api.taskId}}))` + `api.conversation(child).submit().wait()` |
+| `session-title.ts` | — | Pure text helper (`titleFromUserText`), no harness dependency; only the title *storage* moves to a Loom `defineDoc` — see §9 decision 5 |
+| `attachments.ts` / `composer-asset.ts` | folded in via `convertToLlm` | The sidecar field itself is no longer needed; the fold into `content` moves from `convertToLlm` to just before `submit` |
+| `tool-permission.ts` | `hooks.on("before_tool")` | The `AGENT_PERMISSION_LEVELS` / `ToolGateDecision` logic carries over unchanged; the attachment point becomes `hook(ToolTask, { beforeTool })`. Publishing the waiting state is in §6 |
+| `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | Drop the per-specialist in-memory harness; use durable owned subagents (§9 decision 6: both retrieve and create are owned, neither `background`). **`Tx` and `Conversation` are two API levels — do not mix them:** inside a tool, go through `Tx` — `api.commit(tx => tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }))`, then take a handle with `api.conversation(childId)`. Only the Harness level has `harness.createConversation({ ownership }, context)` and `Conversation.fork(at, { ownership }, context)` |
 | `harness-session-manager.ts` | `JsonlSessionRepo`, `AgentHarness.create`, `lane.accept/drive/followUp/abort/resume`, `hooks.on`, `events.on`, `estimateContextTokens`, `laneConfig/laneState/value` | Full rewrite — see §6 |
-| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`, pi-telemetry spans | Rebuild from `watchEvents` + generation/tool hooks, or drop — see §8 |
+| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`, pi-telemetry spans | Not in this migration: remove the dependency on `withTelemetryContext` / pi-telemetry, leave the `LoomTraceSpan` type and dev-trace UI untouched; rebuild later on a durable extension — see §8 |
 | tests / evals | `AgentHarness`, `JsonlSessionRepo`, `NodeExecutionEnv`, `estimateTokens`, `findCutPoint`, `span-io` | Rewrite; `BACKGROUND_CONTEXT` moves to `@earendil-works/chord/context` |
+
+### App side (`packages/app`)
+
+Replacing the session manager does not stop at `packages/agent`. App-side files referencing `HarnessSessionManager` today:
+
+| File | Old dependency | New approach |
+|---|---|---|
+| `src/main/ag-ui-agent.ts` | `HarnessSessionManager` methods + `LoomAgentEvent` | Consume the `watchEvents(harness, conversationId)` `AgentEvent` stream plus the Loom channel (§9 decision 2); rewrite the AG-UI mapping; hold durable `Conversation` handles |
+| `src/main/agent-server.ts` | manager routing | Same; the outward RPC shape is unchanged, the internals become durable handles |
+| `src/main/index.ts` | manager lifecycle | Hold and close a per-library `Harness` + `Registry` |
+| `tests/ag-ui-agent.test.ts` | manager stub | Rebuild the stub over memory storage + `createRegistry()` |
+| `evals/*`, `scripts/try-agent.ts`, `tests/*` | `AgentHarness`, `JsonlSessionRepo` | See the last row above |
 
 ---
 
@@ -137,12 +162,12 @@ The old `HarnessSessionManager` owned lanes, sessions, recovery, and event trans
 | Now | Durable |
 |---|---|
 | `JsonlSessionRepo({ fileSystem, sessionsRoot })` | `openNodeSqliteStorage(file)` (recommended; JSONL keeps the full history in memory) or `openNodeJsonlStorage(dir)` — the Node SQLite adapter uses `node:sqlite`, see §9 |
-| `AgentHarness.create({ session, models, model, tools, toolContext, systemPrompt, toProviderMessages, compaction, ... })` | `Harness.open(storage, { models, registry, settings, env })` |
+| `AgentHarness.create({ session, models, model, tools, toolContext, systemPrompt, toProviderMessages, compaction, ... })` | `Harness.open(storage, { models, registry, settings, env }, context)` — `context` is a required third argument and is easy to miss |
 | `harness.lane("main")` + `lane.accept({kind:"prompt"})` + `lane.drive()` | `harness.root()` / `harness.conversation(id)` → `conversation.submit({type:"input", content, requestId})` → `submission.wait()` |
 | `lane.abort`, `lane.resume`, hand-written recovery | `conversation.abort()`, `harness.resume()`, idempotent `submit` with `requestId` |
 | `lane.followUp` / steering | `submit(..., { whenBusy: "steer" \| "followUp" \| "reject" })` |
-| `lane.navigateTree` / `repo.fork({ scope:"branch", position:"before" })` | `conversation.fork(at, ...)` exists; **"retarget before a user message" has no direct equivalent** — fork-and-switch or reset |
-| `session.setName` / `setValue(ARCHIVED)` | No title/archive concept; self-host in a per-conversation `defineDoc` or entry |
+| `lane.navigateTree` / `repo.fork({ scope:"branch", position:"before" })` | `Conversation.fork(at: EntryId, options: ConversationCreateOptions, context)` where `options = { ownership, agent?, init? }`; use fork-and-switch: fork from the context before the target user message, switch to the new conversation, and archive/hide the old one. Keep the old conversation records because the fork inherits history through its parent relationship. `conversation.context(ctx, { at })` previews the fork-point context without creating a branch |
+| `session.setName` / `setValue(ARCHIVED)` | No title/archive concept; store separately in a per-conversation `defineDoc`, not as entries (§9 decision 5) |
 | `session.getValue(laneConfig/laneState)` | `conversation.configure()` / `conversation.agent()` / `harness.inspect()` |
 | Session list | `Storage.scanConversations({ ownerConversationId?, order? })`; no `cwd` filter, so "one group per library" needs its own ownership mapping |
 | `hooks.on("before_tool", …)` | `defineExtension({ hooks: [hook(ToolTask, { beforeTool: call => … })] })`; `call.id/name/arguments` available; async user approval still works |
@@ -151,6 +176,12 @@ The old `HarnessSessionManager` owned lanes, sessions, recovery, and event trans
 | `entryProjectors: { loom_user_stop }` | A custom entry kind + `entry.model`, or a generation hook |
 
 **Permission waiting** has no durable event. The `beforeTool` hook may await, so the gate works; the waiting state is published by Loom — a Loom `defineDoc` (pending approvals) observed with `watchDoc`, plus a Loom-owned event — because durable's `watchEvents` stream cannot be injected into.
+
+Three `HarnessOptions` details worth remembering on their own:
+
+- **`env` is a factory, not an instance.** Its signature is `(target: EnvTarget, context: Context) => ExecutionEnv | undefined | Promise<...>` with `EnvTarget = { conversationId, cwd?, read }`. Construct `new NodeExecutionEnv({ cwd: target.cwd })` on demand; this is what replaces the old `setCwd` pattern.
+- **`conversationCreated` is where the ownership mapping goes.** `HarnessOptions.conversationCreated?: (tx, conversation) => void | Promise<void>` runs inside every commit that creates or forks a conversation (before `init`). That is the place to initialize per-conversation Loom `defineDoc`s and to build the "one group per library" ownership mapping that the Session-list row below lacks.
+- **`registry` is required and bound to the Harness instance.** The registry from `createRegistry()` must contain the built-in tasks (`Harness.open` throws otherwise), and a `Harness` fixes its registry instance when opened; hot-swap granularity is `Registry.install()` / `uninstall()` inside that registry — swapping registries means reopening the Harness.
 
 ---
 
@@ -167,7 +198,7 @@ The old `HarnessSessionManager` owned lanes, sessions, recovery, and event trans
 | Image processing | yes (`tools/image.ts`) | yes (`createNodePhotonImages`) |
 | Child tasks / owned subagents | **no** | yes |
 | Storage backends | JSONL + memory | SQLite / JSONL / memory / Durable Object |
-| Hot-swappable registry | no | yes (extensions/sections/hooks/wraps) |
+| Hot-swappable registry | no | yes (extensions/sections/hooks/wraps), but only within a registry: `Registry.install()` / `uninstall()` hot-add and hot-remove extensions; a `Harness` binds the registry passed at open, so swapping registries means reopening the Harness |
 | Structured output / nested tools / code mode | no | yes |
 | Telemetry spans | yes | **no producer** |
 | Agent Skills loader | yes | **no** |
@@ -215,12 +246,11 @@ Irreducible gaps:
 3. **System prompt text** in `loom.io.input` must be rendered from durable's structured `sections`.
 4. HTTP status / chunk count / TTFT are not produced by either pi-ai version.
 
-Two approaches:
+**Scope: telemetry is not part of this migration; it comes later, built on durable's extension mechanism rather than a fork of durable.** Until then dev-trace emits no spans (the UI and the `LoomTraceSpan` type stay).
 
-- **A. External (recommended).** A telemetry extension (`hook(GenerationTask, …)` + `hook(ToolTask, …)`) plus one `watchEvents` observer per conversation, and a Loom-owned manual-start/end `TelemetryContext` maintaining a span tree keyed by `conversationId` / `taskId` / `callId`. `LoomTraceSpan` and the dev-trace UI stay unchanged if span names/attributes match.
-- **B. Fork durable.** Port `harness/telemetry.ts` (schema + `startAiSpan` / `startHarnessSpan` / `recordAiResult`) into durable's generation / tool / compaction tasks. Closer to the old structure, but adds a fork to an experimental package.
+The later approach: a telemetry extension (`hook(GenerationTask, …)` + `hook(ToolTask, …)`) plus one `watchEvents` observer per conversation, and a Loom-owned manual-start/end `TelemetryContext` maintaining a span tree keyed by `conversationId` / `taskId` / `callId`. `LoomTraceSpan` and the dev-trace UI stay unchanged if span names/attributes match.
 
-Both require re-owning `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA` (they live in the old vendor and disappear with it; `pi-telemetry` still provides `defineTelemetrySchema` / `createTypedSpanStarter`), and dropping `withTelemetryContext` — durable does not read telemetry off the chord `Context`.
+This requires re-owning `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA` (they live in the old vendor and disappear with it; `pi-telemetry` still provides `defineTelemetrySchema` / `createTypedSpanStarter`), and dropping `withTelemetryContext` — durable does not read telemetry off the chord `Context`.
 
 ---
 
@@ -229,40 +259,46 @@ Both require re-owning `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA` (they 
 Resolved:
 
 1. **Facade or direct durable types → thin `@loom/agent`.** Forward durable's generic types and handles (`Harness`, `Conversation`, `EntryRecord`, `ConversationView`, `watchEvents`, `defineTool` / `defineExtension` / `section` / `hook` / `defineDoc`); wrap only Loom-specific assembly and policy — tools, prompt sections, skills/memory, the permission gate, Loom documents, and the per-library `Harness` lifecycle. `packages/app` main holds durable handles; IPC and renderer stay on Loom DTOs, so upstream churn does not cross the process boundary. Rule of thumb: forward generic runtime and live handles, wrap Loom-specific and cross-process.
-2. **UI input → durable `watchEvents`.** AG-UI is driven by durable `AgentEvent` (one batch per commit, preceded by a `snapshot` on attach), not by `viewState()` / `watch()`. Loom-owned state durable does not emit — pending approvals, dev-trace, follow-up display — rides a Loom channel: a Loom `defineDoc` observed with `watchDoc`, plus Loom-owned events. `LoomAgentEvent` is retired as the transport; its AG-UI mapping moves to the durable stream plus the Loom channel.
+2. **UI input → durable `watchEvents`.** AG-UI is driven by durable `AgentEvent` (one batch per commit, preceded by a `snapshot` on attach), not by `viewState()` / `watch()` as the primary channel. Rationale: the stream is incremental, so crossing the process boundary with deltas avoids serializing full snapshots, and the `LoomAgentEvent` translation already operates at event granularity. The cost is rebuilding the full view on attach/reconnect. If that gets convoluted, the fallback is `viewState()` (an `AttachedReplicatedState<ConversationView>` snapshot) for the attach state with `watchEvents` for deltas — the two do not conflict and can be switched at any time. Loom-owned state durable does not emit — pending approvals, dev-trace, follow-up display — rides a Loom channel: a Loom `defineDoc` observed with `watchDoc`, plus Loom-owned events. `LoomAgentEvent` is retired as the transport; its AG-UI mapping moves to the durable stream plus the Loom channel.
 3. **Storage backend → SQLite.** One store per library (e.g. `<library>/.loom/loom.sqlite`), replacing the `harness-sessions/` JSONL directory; no old format to honor.
-4. **SQLite driver → durable's built-in `node:sqlite`** (`openNodeSqliteStorage`, `DatabaseSync`). No facade, no `better-sqlite3` for durable. `packages/core` keeps `better-sqlite3` for the retrieval store; unifying the two drivers is out of scope. Verify once that Electron 38.2.2's main process exposes `node:sqlite`.
+4. **SQLite driver → durable's built-in `node:sqlite`** (`openNodeSqliteStorage`, `DatabaseSync`). No facade, no `better-sqlite3` for durable. `packages/core` keeps `better-sqlite3` for the retrieval store; unifying the two drivers is out of scope.
 
-Open:
+   **Prerequisite (verify before starting, not as a finishing check):** decision 3 chose SQLite, so every library's sessions land in one file that must be openable from the Electron 38.2.2 main process. Whether that process exposes `node:sqlite` is therefore what decision 3 rests on. Verify by `require("node:sqlite")` in the Electron main process and writing/reading a throwaway database once. If unsupported, the fallback is a `better-sqlite3` implementation of durable's `SqliteDatabase` — `storage/sqlite/storage.ts` depends only on that interface, so the surface to replace is small. Also confirm what concurrent multi-window / multi-process opens of the same database do under WAL.
 
-5. **Session metadata:** per-conversation `defineDoc` (watchable) or plain entries for title / archive?
-6. **Specialists:** owned conversations for both retrieve and create, and do create agents become background tasks?
-7. **Retarget / branch-before:** drop, or emulate with `fork(at)`?
-8. **Telemetry:** rebuild a coarser trace from events + hooks (approach A), fork durable (approach B), or drop dev-trace?
+5. **Session metadata → per-conversation `defineDoc`, stored separately, not as entries.** Title, archive, and other Loom per-conversation state are metadata, not transcript: no entry is written, they take no part in model context or compaction, and they are not replayed with history. Read and write inside commits, observe with `watchDoc`, and initialize in `HarnessOptions.conversationCreated`. Fork behavior (`fork: "current"` / `"initial"`) is chosen when the doc is defined — an archive flag usually should not carry onto a branch; title depends on the product. The session list uses `scanConversations` for the conversations, then reads each doc by id to assemble title / archive.
+6. **Specialists → owned conversations, not background tasks.** Both retrieve and create use owned subagents (`ownership: { kind: "task", taskId }`), replacing a per-call in-memory harness; neither is marked `background`, preserving today's behavior: Stop interrupts a running specialist, and the conversation counts as busy while it runs.
+7. **Telemetry → not in this migration; later, as a durable extension (§8).** No durable fork, no vendor changes. Dev-trace has no span output in the meantime.
+
+Resolved:
+
+8. **Retarget / branch-before → fork-and-switch; archive/hide the old conversation.** Fork from the context before the target user message, switch to the new conversation, and archive/hide the source; do not physically delete its records because the fork inherits history through its parent relationship.
 
 ---
 
 ## 10. Migration order
 
-1. Decide the facade and UI-input questions (§9 decisions 1–2), then define the durable-shaped owner (`Harness` + `Registry` + Loom `defineDoc`s) and the `@loom/agent` facade.
-2. Bump pi-ai / chord to 1.1.0, add pi-durable; confirm the SQLite driver (§9 decision 4), then get `buildChatModels` + `Harness.open` + `submit` / `wait` running.
-3. Port the tool layer: `pi-tools`, `read-image` (→ `createNodePhotonImages`, delete old code), `library-auto-memory`; move tools and the prompt into an extension.
-4. Replace the session manager with the durable-shaped owner; wire the app to views/events (largest piece).
-5. Move specialists to owned subagents.
-6. Add skills + prompt sections + session metadata documents.
-7. Rebuild tests / evals. No storage migration; old sessions are dropped.
-8. Decide telemetry.
+**Step 1 complete:** durable and codemode are vendored from upstream `main` commit `4270522473e677ddba7b093caa0064a3df51d459`, with matching provenance, imports/export boundary, dependencies, and isolated checks. Repeated sync is content-identical. Full vendor typecheck/build, 10 source tests, and a compiled JS/worker smoke test pass. Tests cover memory/JSONL/SQLite, tools/events, nested structured output, Photon, sandbox isolation, deterministic runs, and durable code mode. The existing Loom tests/evals and app still target the removed harness and are not runnable yet.
+
+1. **Start with the vendored source and scripts.** Replace `vendor-pi-agent/` with pi-durable; update vendor source/version metadata and sync scripts (`vendor:sync`), plus `packages/agent` dependencies, exports, and build/test scripts. First make the vendor reproducibly sync, compile, and test in isolation; do not wire the app yet.
+2. Bump pi-ai / chord to 1.1.0 and add pi-durable; **first verify `node:sqlite` in the Electron main process (§9 decision 4 prerequisite)**, then get the minimal path running: `buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`.
+3. Settle the facade and UI-input questions (§9 decisions 1–2), then implement the durable-shaped owner (`Harness` + `Registry` + Loom `defineDoc`s) and the `@loom/agent` facade.
+4. Port the tool layer: `pi-tools`, `read-image` (→ `createNodePhotonImages`, delete old code), `library-auto-memory`; move tools and the prompt into an extension.
+5. Replace the session manager with the durable-shaped owner; wire the app to views/events (largest piece).
+6. Move specialists to owned subagents (§9 decision 6).
+7. Add skills + prompt sections + session metadata documents.
+8. Rebuild tests / evals. No storage migration; old sessions are dropped. Then run `compaction-rate` / `prompt-cache-hit` / `agent-tools` / `compaction-e2e` to get baselines comparable to the old version, and let those decide whether §2's "capability parity" holds — not whether the API surface lines up.
+9. (Later, out of scope here) Rebuild telemetry as an extension per §8.
 
 ---
 
 ## 11. Risks
 
-- **Durable is Experimental;** API changes without notice. Pin the version and expect churn.
+- **Durable is Experimental;** API changes without notice. Track upstream `main`, record each synced commit, and expect churn.
 - **Vendor churn:** vendoring the source means Loom merges frequent upstream changes and owns the fork.
-- **SQLite driver:** durable's Node adapter depends on `node:sqlite`, whose availability in Electron 38.2.2 is unverified; see §9 decision 4.
+- **SQLite driver:** durable's Node adapter depends on `node:sqlite`. Promoted to a prerequisite of §9 decision 4 and must be verified before starting; if unavailable, durable needs a `SqliteDatabase` implementation over `better-sqlite3`.
 - **No compatibility (by design):** existing `.loom/harness-sessions/` sessions are ignored, not migrated.
-- **Behavioral drift:** branch-before / retarget, session title / archive, and context-percent display have no 1:1 durable primitive.
-- **Telemetry ownership:** Loom ends up owning the producer that upstream used to ship.
+- **Behavioral drift:** branch-before / retarget becomes fork-and-switch (creates a new conversation rather than switching in place; the old conversation is archived/hidden but retained as a history source); session title / archive and context-percent display have no 1:1 durable primitive.
+- **Telemetry ownership / gap:** Loom ends up owning the producer that upstream used to ship; deferred, so dev-trace has no data in the meantime and one debugging aid is missing.
 
 ---
 
@@ -270,8 +306,9 @@ Open:
 
 - Upstream moved the harness out of `packages/agent` into `pi-durable`; the vendored harness is frozen at v0.85.1.
 - Durable is a re-architecture with the same core capabilities, not a feature upgrade.
-- Durable is vendored as source, replacing `vendor-pi-agent/`; npm deps are pi-ai, chord, photon, typebox, and diff.
+- Durable and codemode are vendored from the same upstream `main` commit, replacing `vendor-pi-agent/`; npm deps are pi-ai, chord, photon, typebox, diff, and quickjs-wasi.
+- "Durable matches the old harness capability-wise" is a source reading so far; the existing evals must verify it after the rebuild (§10 step 8).
 - Backward compatibility is dropped: old session storage, transcript shape, attachment sidecar, and projector are not carried over.
 - Scope follows durable's model; `packages/app` is in scope, not just `packages/agent`.
-- The largest work is replacing the session manager with a durable-shaped owner and wiring the app to durable views/events, then `specialist.ts` and the telemetry rebuild.
-- Decided: a thin `@loom/agent` boundary, a `watchEvents`-driven UI, SQLite storage, and durable on the built-in `node:sqlite` (§9). Decide the remaining §9 items before starting.
+- The largest work is replacing the session manager (1105 lines, 14 referencing files) with a durable-shaped owner and wiring the app to durable views/events — three app main-process files included — then `specialist.ts`. Telemetry is out of scope.
+- Decided: a thin `@loom/agent` boundary, a `watchEvents`-driven UI, SQLite storage, durable on the built-in `node:sqlite`, and telemetry deferred and later built as an extension (§9). Session metadata uses a separate `defineDoc` (§9 decision 5); specialists use owned conversations without `background` (§9 decision 6); branch-before uses fork-and-switch and archives/hides the old conversation (§9 decision 8).
