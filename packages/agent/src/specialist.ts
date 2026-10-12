@@ -1,20 +1,7 @@
-import { randomUUID } from "node:crypto";
-import {
-	AgentHarness,
-	BACKGROUND_CONTEXT,
-	DEFAULT_COMPACTION_SETTINGS,
-	type Context,
-	MemorySessionRepo,
-	type AgentHarnessTool,
-	type ExecutionToolContext,
-} from "#vendor/pi-agent";
-import { NodeExecutionEnv } from "#vendor/pi-agent/node";
 import { Type } from "@earendil-works/pi-ai";
+import { AssistantEntry, configure, defineExtension, defineTool, type Extension, type ToolRegistration } from "./durable-adapter.ts";
 import { userTextFromContent } from "./attachments.ts";
-import { buildChatModels, toProviderMessages } from "./pi-adapter.ts";
-import type { LoomAgentEvent, LoomChatEndpoint, LoomTool } from "./types.ts";
-
-const CONTEXT = BACKGROUND_CONTEXT;
+import type { LoomTool } from "./types.ts";
 
 export const RETRIEVE_AGENT_TOOL = "run_retrieve_agent";
 export const CREATE_AGENT_TOOL = "run_create_agent";
@@ -79,107 +66,32 @@ export function specialistDescription(role: SpecialistRole): string {
 	return "Generate assets with MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Does not search the library. Returns library paths written. Independent calls in the same turn run together.";
 }
 
-type Usage = { input: number; output: number; cacheRead: number; cacheWrite: number };
-
-type BeforeTool = (
-	event: { toolCallId: string; toolName: string; args: Record<string, unknown> },
-	context: { abortSignal?: AbortSignal },
-) => Promise<{ block?: { reason: string } } | undefined>;
-
-/** One short-lived specialist. Its transcript stays in memory and is not a chat session. */
-export async function runSpecialistAgent(options: {
-	role: SpecialistRole;
-	goal: string;
-	cwd: string;
-	chat: LoomChatEndpoint;
-	tools: AgentHarnessTool<ExecutionToolContext>[];
-	abortSignal?: AbortSignal;
-	/** Parent run context, so this specialist's spans nest in the same trace. */
-	context?: Context;
-	onTool: (event: LoomAgentEvent) => void;
-	onUsage?: (usage: Usage) => void;
-	beforeTool: BeforeTool;
-	registerAbort?: (abort: () => Promise<void>) => void;
-}): Promise<string> {
-	if (options.abortSignal?.aborted) throw new Error("The user pressed Stop. This turn was cancelled on purpose, not because of an error.");
-	const traced = options.context ?? CONTEXT;
-	const { models, model } = buildChatModels(options.chat);
-	const repo = new MemorySessionRepo();
-	const session = await repo.create({}, CONTEXT);
-	let harness: AgentHarness<ExecutionToolContext> | undefined;
-	const unsubscribers: Array<() => void> = [];
-	try {
-		const created = await AgentHarness.create({
-			session,
-			models,
-			model,
-			tools: options.tools,
-			toolContext: { env: new NodeExecutionEnv({ cwd: options.cwd }) },
-			systemPrompt: options.role === "retrieve" ? RETRIEVE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT,
-			toProviderMessages,
-			compaction: DEFAULT_COMPACTION_SETTINGS,
-			followUpMode: "one-at-a-time",
-		}, traced);
-		harness = created.harness;
-		const lane = await harness.lane("main", traced);
-		options.registerAbort?.(async () => {
-			const stopped = await lane.abort(CONTEXT);
-			if (!stopped.ok && stopped.error._tag !== "NoActiveOperation") throw stopped.error;
-		});
-		harness.hooks.on("before_tool", (event, hookContext) => options.beforeTool(event, hookContext), { id: "loom.specialist_permission" });
-		unsubscribers.push(harness.events.on("tool_start", (event) => {
-			options.onTool({ type: "tool_start", toolCallId: event.toolCallId, name: event.toolName, args: event.args });
-		}));
-		unsubscribers.push(harness.events.on("tool_end", (event) => {
-			const content = event.result.content;
-			const text = Array.isArray(content)
-				? content.filter((part) => part.type === "text").map((part) => part.text).join("\n")
-				: String(content ?? "");
-			options.onTool({
-				type: "tool_end",
-				toolCallId: event.toolCallId,
-				name: event.toolName,
-				result: { content: text, details: event.result.details },
-				isError: event.isError,
-			});
-		}));
-		unsubscribers.push(harness.events.on("usage", (event) => {
-			if (event.row.adjustment) return;
-			const usage = event.row.usage;
-			options.onUsage?.({ input: usage.input, output: usage.output, cacheRead: usage.cacheRead, cacheWrite: usage.cacheWrite });
-		}));
-		const onAbort = () => {
-			void lane.abort(CONTEXT);
-		};
-		options.abortSignal?.addEventListener("abort", onAbort);
-		let summary = "";
-		unsubscribers.push(harness.events.on("message_end", (event) => {
-			if (event.message.role !== "assistant") return;
-			const text = userTextFromContent(event.message.content).trim();
-			if (text) summary = text;
-		}));
-		try {
-			const operationId = randomUUID();
-			const accepted = await lane.accept({
-				kind: "prompt",
-				operationId,
-				prompt: { role: "user", content: specialistUserMessage(options.goal), timestamp: Date.now() },
-			}, traced);
-			if (!accepted.ok) throw accepted.error;
-			const outcome = await lane.drive({ operationId, waitForRetry: true }, traced);
-			if (!outcome.ok) throw outcome.error;
-			if (outcome.value.kind === "waiting") throw new Error(`Specialist is waiting for unsupported ${outcome.value.reason}`);
-			if (outcome.value.outcome.status === "failed") {
-				throw new Error(outcome.value.outcome.error?.message ?? "Specialist request failed");
-			}
-			if (options.abortSignal?.aborted) throw new Error("The user pressed Stop. This turn was cancelled on purpose, not because of an error.");
-			return summary || "The specialist finished without a summary.";
-		} finally {
-			options.abortSignal?.removeEventListener("abort", onAbort);
-		}
-	} finally {
-		for (const unsubscribe of unsubscribers) unsubscribe();
-		await harness?.close(CONTEXT);
-		await repo.close(CONTEXT);
-	}
+/** Foreground owned conversations: durable controls Stop, busy state, and restart ownership. */
+export function createSpecialistExtension(role: SpecialistRole, tools: readonly ToolRegistration[], permission: Extension) {
+	const child = defineExtension({ name: `loom.${role}`, tools });
+	const tool = defineTool({
+		name: role === "retrieve" ? RETRIEVE_AGENT_TOOL : CREATE_AGENT_TOOL,
+		description: specialistDescription(role), parameters: specialistParameters(), replay: "safe",
+		async execute({ goal }, api, context) {
+			const childId = await api.commit(async (tx) => {
+				const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
+				if (existing) return existing.id;
+				const record = await tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } });
+				await configure(tx, record.id, {
+					extensions: [child, permission], tools, modelTools: tools,
+					instructions: role === "retrieve" ? RETRIEVE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT,
+				});
+				return record.id;
+			}, context);
+			await api.details({ conversationId: childId }, context);
+			const conversation = await api.conversation(childId, context);
+			if (!conversation) throw new Error("Specialist conversation is missing");
+			const submission = await conversation.submit({ type: "input", content: specialistUserMessage(goal), requestId: `specialist:${api.taskId}` }, context);
+			const result = await submission.wait(context);
+			if (result.status !== "done" || result.type !== "input") throw new Error(`Specialist failed: ${result.status}`);
+			const answer = await api.commit((tx) => tx.entry(AssistantEntry, result.answer), context);
+			return { output: [{ type: "text", text: userTextFromContent(answer?.model?.[0]?.content) || "The specialist finished without a summary." }] };
+		},
+	});
+	return { child, tool };
 }

@@ -1,6 +1,6 @@
 import { stripInlineAssetRefs } from "./composer-asset.ts";
 
-/** Product-level session title helpers; storage itself lives in the Harness session repo. */
+/** Product-level title helpers; durable metadata stores titles outside the transcript. */
 export const DEFAULT_SESSION_TITLE = "New session";
 
 export function titleFromUserText(text: string): string {

@@ -21,12 +21,13 @@ import {
 	type PropertyValue,
 } from "@loom/core";
 import {
-	HarnessSessionManager,
 	parseAgentPermissionLevel,
 	contentWithPlacedAssets,
 	implicitSelectionAttachments,
 	type LoomAgentOptions,
 } from "@loom/agent";
+import { LibraryAgentHost } from "./library-agent-host.ts";
+import { BACKGROUND_CONTEXT as agentContext, foldUserText } from "@loom/agent";
 import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
 import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
@@ -92,6 +93,10 @@ function configureAutomation(): void {
 }
 
 configureAutomation();
+// Multiple windows share one main-process owner; another app process must not open the same durable store.
+const ownsAppInstance = app.requestSingleInstanceLock();
+if (!ownsAppInstance) app.exit(0);
+app.on("second-instance", () => { BrowserWindow.getAllWindows()[0]?.focus(); });
 
 type ContextMenuItem<T extends string> =
 	| { type: "separator" }
@@ -184,9 +189,7 @@ let gradePreview: AbortController | null = null;
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
 let pendingLibraryChanges: LibraryChange[] = [];
-const agentManager = new HarnessSessionManager(AGENT_OPTIONS, (usage) => {
-	void agentStats?.record(usage);
-});
+const agentManager = new LibraryAgentHost(AGENT_OPTIONS, (usage) => { void agentStats?.record(usage); });
 
 function sendLibraryChange(change: LibraryChange): void {
 	for (const window of BrowserWindow.getAllWindows()) {
@@ -597,10 +600,12 @@ function registerIpc(): void {
 		const attachments = implicitSelectionAttachments(chips, getUiSelection(), session.messages);
 		const raw = text.replaceAll("\u200b", "");
 		const body = contentWithPlacedAssets(raw.trim() ? raw : "", chips);
-		await agentManager.followUp(id, body, {
-			...(attachments.length > 0 ? { attachments } : {}),
-			...(images.length > 0 ? { images } : {}),
-		});
+		const content = foldUserText(body, attachments);
+		await (await agentManager.conversation(id)).submit({
+			type: "input", whenBusy: "followUp",
+			content: images.length ? [{ type: "text", text: content }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : content,
+			entry: { kind: "loom.user", data: { text: body } },
+		}, agentContext);
 	});
 	ipcMain.handle(IPC.branchBefore, (_event, id: string, entryId: string) => agentManager.branchBefore(id, entryId));
 	ipcMain.handle(IPC.forkBefore, (_event, id: string, entryId: string) => agentManager.forkBefore(id, entryId));
@@ -630,7 +635,7 @@ function registerIpc(): void {
 		if (!agentInstructions) throw new Error("Settings store not started");
 		if (typeof text !== "string") throw new Error("Instructions must be text.");
 		const saved = await agentInstructions.save(text);
-		agentManager.setInstructions(saved);
+		await agentManager.setInstructions(saved);
 		return saved;
 	});
 	ipcMain.handle(IPC.getGeneralSettings, async () => {
@@ -935,7 +940,7 @@ app
 		commandAllows = new CommandAllowStore();
 		agentManager.setPermissionLevel(await agentPermission.load());
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
-		agentManager.setInstructions(await agentInstructions.load());
+		await agentManager.setInstructions(await agentInstructions.load());
 		agentSandbox = new AgentSandboxStore(join(app.getPath("userData"), "agent-sandbox.json"));
 		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
@@ -1037,7 +1042,7 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 		const snapshot = await localCore.openLibrary(rootPath);
 		if (snapshot.rootPath) {
 			agentManager.setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
-			await agentManager.openLibrary(snapshot.rootPath, { deferRecovery: !mcpReady });
+			await agentManager.openLibrary(snapshot.rootPath);
 			await lastLibrary?.remember(snapshot.rootPath);
 			await bindCommandAllows(snapshot.rootPath);
 		} else {
@@ -1117,7 +1122,7 @@ async function setMcpServerLive(draft: McpServerDraft) {
 
 /** Push the full tool list (built-in library/FFmpeg plus live MCP tools) to the agent manager. */
 async function syncAgentTools(options?: { preserveRuns?: boolean }): Promise<void> {
-	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])], options);
+	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
 	mcpReady = true;
 }
 
@@ -1186,7 +1191,7 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 		const file = await modelSettings.update(modelDraftForPatch(before, patch.models));
 		notes.push(...modelChangeNotes(before, file));
 		if (chatSlotChanged(before, file)) {
-			agentManager.stageChat(resolveChatEndpoint(file, process.env, false));
+			await agentManager.setChat(resolveChatEndpoint(file, process.env, false));
 			notes.push("Chat slot saved. This reply keeps the endpoint it started with. The next message uses the new slot.");
 		}
 	}
@@ -1197,8 +1202,7 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 	}
 	if (patch.instructions !== undefined) {
 		const saved = await agentInstructions.save(patch.instructions);
-		agentManager.setInstructions(saved);
-		agentManager.refreshHarness();
+		await agentManager.setInstructions(saved);
 		notes.push("Instructions saved. This reply keeps the text it started with. The next message appends the new text.");
 	}
 	if (patch.mcp) {

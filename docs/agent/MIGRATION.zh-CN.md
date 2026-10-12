@@ -265,7 +265,7 @@ durable 接入点：
 
    **前置条件已在 macOS 验证：** `pnpm --filter @loom/app check:node-sqlite` 启动真实 Electron 38.2.2 主进程（Node 22.19.0），`node:sqlite` 读写/重开通过。WAL 下第一进程持有读快照时，第二个 Electron 进程可提交写入；同时写事务由 SQLite 锁互斥。这**不代表**多个 durable owner 可安全共享存储：durable 没有跨进程 session 锁，每库存储只能有一个活跃 Harness owner。Windows 仍需在实机运行同一检查。
 
-5. **会话元数据 → per-conversation `defineDoc`，单独存储，不进 entry。** title / archive 等 Loom per-conversation 状态是元数据，不属于 transcript：不写 entry，不参与模型上下文与 compaction，也不随历史回放。读写在 commit 里进行，可用 `watchDoc` 观察；在 `HarnessOptions.conversationCreated` 里初始化。fork 行为（`fork: "current"` / `"initial"`）在定义 doc 时再定——archive 标记通常不应带到分支上，title 视产品需要。会话列表用 `scanConversations` 拿 conversation，再按 id 读 doc 拼出 title / archive。
+5. **会话元数据 → per-conversation `defineDoc`，单独存储，不进 entry。** title / archive 等 Loom per-conversation 状态是元数据，不属于 transcript：不写 entry，不参与模型上下文与 compaction，也不随历史回放。读写在 commit 里进行，可用 `watchDoc` 观察；在 `HarnessOptions.conversationCreated` 里初始化。使用 `fork: "current"` 拷贝当前标题，创建 hook 再追加 `（分支）` 后缀并重置 `archived: false`；不改变来源会话。嵌套 fork 每次追加一次后缀。会话列表用 `scanConversations` 拿 conversation，再按 id 读 doc 拼出 title / archive。
 6. **Specialist → 归属 conversation，且不做后台任务。** retrieve 和 create 都用归属子代理（`ownership: { kind: "task", taskId }`），取代每次调用一个内存 harness；两者都不标 `background`，以保持现状：Stop 会中断正在跑的 specialist，生成期间会话也算 busy。
 7. **Telemetry → 本次不做，以后基于 durable extension 外挂（§8）。** 不 fork durable、不改 vendor。迁移期间 dev-trace 无 span 输出。
 
@@ -280,6 +280,12 @@ durable 接入点：
 **第 1 步已完成：** durable 与 codemode 均从上游 `main` commit `4270522473e677ddba7b093caa0064a3df51d459` vendor，来源一致，已更新 imports/export 边界、依赖与独立检查。重复同步内容一致。完整 vendor 类型检查/构建、10 项源码测试与编译后 JS/worker 冒烟测试通过；覆盖 memory/JSONL/SQLite、工具/事件、嵌套结构化输出、Photon、沙箱隔离、确定性运行与 durable code mode。Loom 旧测试/eval 与 app 仍引用已移除的 harness，尚不能运行。
 
 **第 2 步已完成：** macOS 上 Electron SQLite 前置条件通过；`buildChatModels` 已改用 `/models`，不再 import 旧 harness。新增两项独立测试，验证 endpoint/auth/model 配置与 SQLite 上的 OpenAI SSE 请求，包括重开的模型上下文、provider identity 与 request 去重。`pnpm --filter @loom/agent try:durable` 也已对真实 DeepSeek endpoint 跑通 echo 工具与 SQLite 重开。可通过 `LOOM_CHAT_BASE_URL` / `LOOM_CHAT_MODEL` / `LOOM_CHAT_API_KEY` 覆盖冒烟 endpoint（默认 DeepSeek，使用 `DEEPSEEK_API_KEY`）。app owner 与 UI 仍未动，旧 `toProviderMessages` 调用点留待迁移。
+
+**第 3 步已完成：** 新增 `LibraryAgent`（每库一个 SQLite Harness + Registry，委派 durable 恢复/关闭）、`LoomConversationDoc` 与列表/改名/归档操作。`@loom/agent/durable` 通过 `src/durable.ts` 转发通用 API 与 Loom owner，vendor import 仍只在 `durable-adapter.ts`。原生与 raw fork 都追加 `（分支）`、重置归档，默认列表排除 owned conversation。同进程通过 canonical path 防止重复打开；跨进程唯一 owner 仍由 app 生命周期保证，未新增跨进程锁。新增 10 项 owner 测试，总计 22 项独立源码测试与编译后 worker 检查通过。app、旧 root facade 与业务工具尚未接入，fork-and-switch 的来源归档留给 app 操作。
+
+**第 4 步已完成：** `pi-tools` 改为 durable tools，无 toolContext/setCwd；bash 通过 durable `prepare(execution, api, context)` 调用现有进程沙箱。`toDurableTool` 用 `defineTool`，转发输出/取消并校验 JSON details，外部副作用 `replay: "unsafe"`。删除 `read-image.ts`，read 使用上游 Photon worker。`createLibraryExtension` 装配 workspace/Loom/auto-memory 工具与 preamble/memory sections；`LoomMemoryDoc` 保存创建时快照，fork/重开保留，更新文件只影响新会话。调用方需将装配的 `conversationCreated` 传给 `LibraryAgent.open`；用户 instructions 用原生 `agent.instructions`。新增 9 项工具层测试，总计 31 项独立源码测试通过，包含真实沙箱写入/网络限制。权限门禁、specialist、skills 与 app 仍留待后续，不用此扩展替代尚未迁移的 permission hook。
+
+**第 5 步主体已落地，待 UI 端到端验收：** 删除旧 `harness-session-manager.ts`；app 的 `LibraryAgentHost` 持有库级 owner，IPC 返回纯 DTO，AG-UI 直接消费 durable `watchEvents` 与审批 document。权限 hook 支持 approve/reject/Stop，重开清理旧等待态；follow-up 用 inbox，附件在 submit 前折入 model content，显示文本用自定义 entry data。fork-before 用初始 anchor 实现，branch-before 归档来源；删除会话仅隐藏，保留 fork 历史。主进程使用单实例锁，settings/工具通过原生 configure/registry 更新；dev-trace 无 span，context 百分比暂不显示。Specialist 已改为 task-owned foreground conversation 并接入工具分组，但子会话重连/审批显示与 Stop 仍需专项验收（第 6 步）。app 类型检查/构建、34 项 agent 独立测试、3 项 app 新测试通过；app 全量测试有 2 项 Markdown 图像失败，旧 agent tests/evals 仍未重建。skills 尚未迁移。
 
 1. **先改 vendor 源码与脚本。** 用 pi-durable 替换 `vendor-pi-agent/`，更新 vendor 来源/同步脚本（`vendor:sync`）及 `packages/agent` 的依赖、导出和构建/测试脚本；先确保 vendor 可重复同步、编译和独立测试，不接 app。
 2. 升 pi-ai / chord 到 1.1.0 并引入 pi-durable；**先验证 Electron 主进程的 `node:sqlite`（§9 决策 4 前置条件）**，再跑通最小链路：`buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`。

@@ -6,10 +6,11 @@
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { AssetRefAttachment, ComposerImageInput, HarnessSessionManager, UiSelectionFields } from "@loom/agent";
+import type { AssetRefAttachment, ComposerImageInput, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
 import type { DevTraceRecord } from "../shared/dev-trace.ts";
+import type { LibraryAgentHost } from "./library-agent-host.ts";
 import { LoomAgUiAgent } from "./ag-ui-agent.ts";
 
 export interface AgentServer {
@@ -24,7 +25,7 @@ const ENDPOINT = "/api/copilotkit";
 const AGENT_ID = "loom";
 
 export async function startAgentServer(
-	manager: HarnessSessionManager,
+	manager: LibraryAgentHost,
 	getUiSelection?: () => UiSelectionFields | null,
 	takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
 	takeComposerAssets?: (sessionId: string) => Promise<AssetRefAttachment[]>,

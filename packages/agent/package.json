@@ -9,12 +9,13 @@
     "./attachments": "./src/attachments.ts",
     "./composer-asset": "./src/composer-asset.ts",
     "./tool-permission": "./src/tool-permission.ts",
-    "./durable": "./src/durable-adapter.ts"
+    "./durable": "./src/durable.ts"
   },
   "imports": {
     "#vendor/pi-durable": "./vendor-pi-durable/src/index.ts",
     "#vendor/pi-durable/tools": "./vendor-pi-durable/src/tools/index.ts",
     "#vendor/pi-durable/codemode": "./vendor-pi-durable/src/codemode/index.ts",
+    "#vendor/pi-durable/env": "./vendor-pi-durable/src/env/index.ts",
     "#vendor/pi-durable/env/node": "./vendor-pi-durable/src/env/node.ts",
     "#vendor/pi-durable/images/node": "./vendor-pi-durable/src/images/node.ts",
     "#vendor/pi-durable/storage/sqlite/node": "./vendor-pi-durable/src/storage/sqlite/node.ts",
