@@ -1,8 +1,8 @@
 import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
 	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
-	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate,
-	type Conversation, type ConversationId, type EntryId, type LoomSessionRecord, type LoomSessionSummary,
+	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId,
+	type AgentChange, type Conversation, type ConversationId, type EntryId, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
@@ -19,6 +19,7 @@ export class LibraryAgentHost {
 	readonly gate = new ToolGate();
 	readonly #options: LoomAgentOptions;
 	#instructions = "";
+	readonly #agentDefaults: { -readonly [Key in keyof AgentChange]: AgentChange[Key] } = {};
 	#unsubscribe: (() => void) | undefined;
 	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
 	#revision = 0;
@@ -40,10 +41,12 @@ export class LibraryAgentHost {
 		const permission = this.gate.extension(root, () => this.requireOwner().harness);
 		const { assembly, specialists } = await this.assemble(root, permission);
 		this.#models = chat?.models ?? createModels();
+		this.#agentDefaults.model = chat ? { provider: chat.model.provider, modelId: chat.model.id } : undefined;
+		this.#agentDefaults.instructions = this.#instructions;
 		this.owner = await LibraryAgent.open(root, {
 			models: this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists],
 			settings: { extensions: [assembly.extension, permission] },
-			agent: { ...(chat ? { model: { provider: chat.model.provider, modelId: chat.model.id } } : {}), instructions: this.#instructions },
+			agent: this.#agentDefaults,
 			conversationCreated: async (tx, record) => {
 				await assembly.conversationCreated(tx, record);
 				await tx.doc(LoomApprovalsDoc, record.id);
@@ -89,7 +92,10 @@ export class LibraryAgentHost {
 		const metadata = await owner.harness.snapshot(LoomConversationDoc, conversation.id, context);
 		const entries = (await conversation.context(context)).entries;
 		const messages = entries.flatMap((entry) => (entry.model ?? []).filter((message) => message.role !== "system").map((message) => ({
-			...message, id: String(entry.id), ...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text } : {}),
+			...message, id: String(entry.id),
+			...(message.role === "assistant" ? { content: message.content.map((part) => part.type === "toolCall" ? { ...part, id: toolEventId(entry.conversationId, part.id) } : part) } : {}),
+			...(message.role === "toolResult" ? { toolCallId: toolEventId(entry.conversationId, message.toolCallId) } : {}),
+			...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text } : {}),
 		})));
 		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: undefined };
 	}
@@ -123,6 +129,7 @@ export class LibraryAgentHost {
 		const owner = this.owner;
 		if (!owner) return;
 		const built = chatEndpointReady(chat) ? buildChatModels(chat) : undefined;
+		this.#agentDefaults.model = built ? { provider: built.model.provider, modelId: built.model.id } : undefined;
 		// Provider object replacement is supported without replacing the Harness's Models collection.
 		if (built) {
 			this.#models?.setProvider(built.models.getProvider(built.model.provider)!);
@@ -134,6 +141,7 @@ export class LibraryAgentHost {
 	#models: ReturnType<typeof createModels> | undefined;
 	async setInstructions(text: string) {
 		this.#instructions = text;
+		this.#agentDefaults.instructions = text;
 		if (!this.owner) return;
 		for (const row of await listLoomConversations(this.owner.harness, {}, context)) {
 			await (await this.owner.harness.conversation(row.id, context))!.configure({ instructions: text }, context);

@@ -1,4 +1,4 @@
-// Thin durable facade; application integration migrates separately from the legacy root export.
+// Thin facade: forward native durable primitives and add Loom library assembly/policy.
 export * from "./durable-adapter.ts";
 export { createModels } from "@earendil-works/pi-ai/models";
 export type { Context } from "@earendil-works/chord";
@@ -7,6 +7,8 @@ export { LibraryAgent, type LibraryAgentOptions } from "./library-agent.ts";
 export { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "./pi-tools.ts";
 export { createLibraryExtension, LoomMemoryDoc, type LibraryExtensionOptions } from "./library-extension.ts";
 export { createSpecialistExtension, partitionLibraryTools } from "./specialist.ts";
+export { loadLibrarySkills, formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR } from "./library-skills.ts";
+export type { Skill, SkillDiagnostic } from "./library-skills.ts";
 export { createAutoMemoryTool } from "./library-auto-memory.ts";
 export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tool-gate.ts";
 export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage } from "./session-dto.ts";

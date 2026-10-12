@@ -13,6 +13,7 @@ import { LibraryPaths } from "../src/library/paths.ts";
 import { InMemoryMetadataStore } from "../src/stores/memory.ts";
 import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 import { tryResolveMediaBinaries } from "../src/media/binaries.ts";
+import { releaseProcessSandbox, setProcessSandboxRoot } from "../src/sandbox/process-sandbox.ts";
 
 function videoAsset(assetId = "clip", modifiedAt = 10, size = 24): Asset {
 	return {
@@ -190,6 +191,7 @@ describe("extractVideoFramesForVlm", () => {
 		}
 		const fixtures = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media");
 		const root = await mkdtemp(join(tmpdir(), "loom-vlm-frames-"));
+		setProcessSandboxRoot(root);
 		try {
 			const path = join(root, "clip.mp4");
 			await copyFile(join(fixtures, "clip.mp4"), path);
@@ -198,6 +200,7 @@ describe("extractVideoFramesForVlm", () => {
 			assert.equal(frames[0]?.bytes[0], 0xff);
 			assert.equal(frames[0]?.bytes[1], 0xd8);
 		} finally {
+			await releaseProcessSandbox(root);
 			await rm(root, { recursive: true, force: true });
 		}
 	});

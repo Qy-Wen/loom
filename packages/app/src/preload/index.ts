@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { LibraryChange } from "@loom/core";
-import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
+import type { LoomSessionSummary as SessionSummary } from "@loom/agent";
 import { DEV_TRACE_IPC } from "../shared/dev-trace.ts";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
 

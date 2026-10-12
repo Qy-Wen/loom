@@ -22,8 +22,8 @@ import type {
 	AgentPermissionLevel,
 	CommandAllow,
 	CommandAllowView,
-	HarnessSessionRecord as SessionRecord,
-	HarnessSessionSummary as SessionSummary,
+	LoomSessionRecord as SessionRecord,
+	LoomSessionSummary as SessionSummary,
 	ToolGateDecision,
 } from "@loom/agent";
 import type { AgentStatsView } from "./agent-stats.ts";

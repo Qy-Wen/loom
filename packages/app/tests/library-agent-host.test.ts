@@ -30,3 +30,20 @@ test("app fork-before switches context, archives source, and hides deletion with
 		assert.equal((await host.getSession(fork.id)).messages[0]?.content, "first");
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
+
+test("model and instruction edits apply to both existing and subsequently created conversations", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-defaults-"));
+	const host = new LibraryAgentHost({});
+	try {
+		await host.openLibrary(path);
+		const first = await host.createSession();
+		await host.setInstructions("Updated instructions");
+		await host.setChat({ baseUrl: "http://localhost/v1", model: "next-model" });
+		const next = await host.createSession();
+		for (const id of [first.id, next.id]) {
+			const agent = await (await host.conversation(id)).agent(context);
+			assert.equal(agent.instructions, "Updated instructions");
+			assert.equal(agent.model?.modelId, "next-model");
+		}
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});

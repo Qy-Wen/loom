@@ -1,6 +1,3 @@
-import type { LoomUserAttachment } from "./attachments.ts";
-import type { LoomTraceSpan } from "./run-trace.ts";
-
 /**
  * Loom's own Agent interface.
  *
@@ -39,30 +36,6 @@ export interface LoomTool<TArgs = unknown, TDetails = unknown> {
 	) => Promise<string | LoomToolResult<TDetails>> | string | LoomToolResult<TDetails>;
 }
 
-/** Events Loom surfaces to callers. A deliberately small, engine-agnostic subset. */
-export type LoomAgentEvent =
-	| { type: "agent_start" }
-	| { type: "user_entry"; entryId: string }
-	| { type: "assistant_entry"; entryId: string; hasToolCall: boolean }
-	| { type: "tool_result_entry"; entryId: string; toolCallId: string }
-	| { type: "text"; delta: string }
-	| { type: "thinking_start" }
-	| { type: "thinking_delta"; delta: string }
-	| { type: "thinking_end" }
-	| { type: "compaction_start"; reason: "manual" | "threshold" | "overflow" }
-	| { type: "compaction_end"; reason: "manual" | "threshold" | "overflow"; status: "completed" | "declined" | "aborted" | "failed" }
-	| { type: "tool_start"; toolCallId: string; name: string; args: unknown }
-	| { type: "tool_pending"; toolCallId: string; name: string; args: unknown }
-	| { type: "tool_progress"; toolCallId: string; name: string; text: string }
-	| { type: "tool_end"; toolCallId: string; name: string; result: LoomToolResult; isError: boolean }
-	| { type: "retry_scheduled"; attempt: number; maxAttempts: number; delayMs: number; errorMessage: string }
-	| { type: "retry_start"; attempt: number }
-	| { type: "retry_end"; success: boolean; errorMessage?: string }
-	| { type: "error"; message: string }
-	| { type: "follow_up_sent"; text: string; entryId: string }
-	| { type: "trace"; spans: LoomTraceSpan[] }
-	| { type: "agent_end" };
-
 export type LoomTranscriptMessage = Record<string, unknown> & { role: string };
 
 export interface LoomChatEndpoint {
@@ -77,13 +50,6 @@ export interface LoomAgentOptions {
 	systemPrompt?: string;
 	/** OpenAI-compatible Chat slot. Missing or incomplete until the user configures Settings. */
 	chat?: LoomChatEndpoint;
-	/** Loom-owned tools; native workspace tools are installed by the Harness manager. */
+	/** Loom-owned tools; native workspace tools are installed by the library extension. */
 	tools?: LoomTool[];
-}
-
-export interface LoomPromptOptions {
-	attachments?: LoomUserAttachment[];
-	/** Composer pictures stored on the user message `content`. */
-	images?: Array<{ data: string; mimeType: string }>;
-	onEvent?: (event: LoomAgentEvent) => void;
 }

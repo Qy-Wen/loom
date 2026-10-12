@@ -75,7 +75,7 @@ test("renderMarkdown rewrites library images onto loom-asset URLs", () => {
 		fromRelativePath: "notes/a.md",
 		assets: [shot],
 	});
-	assert.match(html, /src="loom-asset:\/\/asset\/shot-id\?v=9"/);
+	assert.match(html, /src="loom-asset:\/\/asset\/shot-id\?v=9-12"/);
 });
 
 test("renderMarkdown turns wiki image embeds into library images", () => {
@@ -92,7 +92,7 @@ test("renderMarkdown turns wiki image embeds into library images", () => {
 		fromRelativePath: "notes/a.md",
 		assets: [cover],
 	});
-	assert.match(html, /src="loom-asset:\/\/asset\/cover-id\?v=4"/);
+	assert.match(html, /src="loom-asset:\/\/asset\/cover-id\?v=4-12"/);
 });
 
 test("renderMarkdown typesets TeX with KaTeX", () => {

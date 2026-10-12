@@ -6,15 +6,15 @@
  */
 import { createServer, type Server } from "node:http";
 import type { AddressInfo } from "node:net";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import { EVAL_FILES } from "../../core/evals/library.ts";
-import { contentWithPlacedAssets, implicitSelectionAttachments, type AssetRefAttachment } from "../src/attachments.ts";
-import { HarnessSessionManager } from "../src/harness-session-manager.ts";
-import type { LoomAgentEvent, LoomTool } from "../src/types.ts";
+import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, type AssetRefAttachment } from "../src/attachments.ts";
+import { watchEvents, type AgentEvent, type LibraryAgent } from "../src/durable.ts";
+import { openEvalAgent, context } from "./runtime.ts";
+import type { LoomTool } from "../src/types.ts";
 import { answerFromEvents, callsFromEvents, scoreAgentTask, type AgentScore } from "./agent-score.ts";
 import { chatFromEnv } from "./compaction-e2e.ts";
 import { AGENT_EVAL_TASKS, type AgentEvalTask } from "./tasks.ts";
@@ -46,7 +46,12 @@ const MOCK_TOOLS: LoomTool[] = [
 		name: "inspect_asset",
 		description: "Inspect one asset by stable assetId.",
 		parameters: Type.Object({ assetId: Type.String({ minLength: 1 }) }),
-		execute: (args) => JSON.stringify({ assetId: (args as { assetId: string }).assetId, path: "notes/river.md" }),
+		execute: (args) => {
+			const assetId = (args as { assetId: string }).assetId;
+			const path = assetId === "eval-soup" ? "recipes/soup.md" : assetId === "eval-river" ? "notes/river.md" : undefined;
+			if (!path) throw new Error(`Unknown eval asset: ${assetId}`);
+			return JSON.stringify({ assetId, path, content: EVAL_FILES.find((file) => file.relativePath === path)!.text });
+		},
 	},
 ];
 
@@ -212,18 +217,31 @@ export function startStubChat(): Promise<{ baseUrl: string; close: () => Promise
 }
 
 async function runTask(
-	manager: HarnessSessionManager,
+	owner: LibraryAgent,
 	task: AgentEvalTask,
 ): Promise<AgentScore> {
-	const session = await manager.createSession();
-	const events: LoomAgentEvent[] = [];
-	const before = await manager.getSession(session.id);
+	const conversation = await owner.createConversation({}, context);
+	const events: AgentEvent[] = [];
 	const chips: AssetRefAttachment[] = (task.chips ?? []).map((chip) => ({ type: "asset_ref", ...chip }));
-	const attachments = implicitSelectionAttachments(chips, task.selection ?? null, before.messages);
-	await manager.prompt(session.id, contentWithPlacedAssets(task.user, chips), {
-		attachments: attachments.length > 0 ? attachments : undefined,
-		onEvent: (event) => events.push(event),
+	const attachments = implicitSelectionAttachments(chips, task.selection ?? null, []);
+	const stream = await watchEvents(owner.harness, conversation.id, context);
+	const children = new Map<number, Awaited<ReturnType<typeof watchEvents>>>();
+	stream.start(async (batch) => {
+		events.push(...batch);
+		for (const event of batch) if (event.type === "tool_execution_update") {
+			const childId = (event.details as { conversationId?: number } | undefined)?.conversationId;
+			if (childId && !children.has(childId)) {
+				const child = await watchEvents(owner.harness, childId as typeof conversation.id, context);
+				children.set(childId, child);
+				child.start(async (batch) => { events.push(...batch); });
+			}
+		}
 	});
+	try {
+		const submission = await conversation.submit({ type: "input", content: foldUserText(contentWithPlacedAssets(task.user, chips), attachments) }, context);
+		const result = await submission.wait(context);
+		if (result.status !== "done") throw new Error(`Eval input ${result.status}`);
+	} finally { await stream.stop(); for (const child of children.values()) await child.stop(); }
 	return scoreAgentTask(task, callsFromEvents(events), answerFromEvents(events));
 }
 
@@ -236,26 +254,18 @@ async function writeEvalLibrary(root: string): Promise<void> {
 }
 
 export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string; model: string }): Promise<AgentEvalResult> {
-	const library = await mkdtemp(join(tmpdir(), "loom-agent-eval-"));
-	await writeEvalLibrary(library);
-	const manager = new HarnessSessionManager({
-		systemPrompt: AGENT_EVAL_SYSTEM_PROMPT,
-		chat: { ...chat, model: chat.model || "eval" },
-		tools: MOCK_TOOLS,
-	});
-	manager.setPermissionLevel("full");
+	const runtime = await openEvalAgent({ ...chat, model: chat.model || "eval" }, { systemPrompt: AGENT_EVAL_SYSTEM_PROMPT, tools: MOCK_TOOLS });
 	try {
-		await manager.openLibrary(library);
+		await writeEvalLibrary(runtime.library);
 		const scores: AgentScore[] = [];
-		for (const task of AGENT_EVAL_TASKS) scores.push(await runTask(manager, task));
+		for (const task of AGENT_EVAL_TASKS) scores.push(await runTask(runtime.owner, task));
 		return {
 			scores,
 			passed: scores.filter((score) => score.ok).length,
 			failed: scores.filter((score) => !score.ok).length,
 		};
 	} finally {
-		await manager.close();
-		await rm(library, { recursive: true, force: true });
+		await runtime.close();
 	}
 }
 

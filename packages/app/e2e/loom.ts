@@ -12,16 +12,21 @@ const appRoot = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9344";
 const attach = Boolean(process.env.LOOM_CDP_URL?.trim());
 
+export function launchTestElectron(userData: string): Promise<ElectronApplication> {
+	if (!existsSync(join(appRoot, "out/main/index.js"))) throw new Error("Build the app first: pnpm --filter @loom/app build");
+	return electron.launch({
+		executablePath: require("electron") as string,
+		args: [appRoot],
+		env: { ...process.env, LOOM_E2E: "1", LOOM_E2E_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
+	});
+}
+
 export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronApplication | null }>({
 	electronApp: [
 		async ({}, use) => {
 			if (attach) {
 				await use(null);
 				return;
-			}
-			const main = join(appRoot, "out/main/index.js");
-			if (!existsSync(main)) {
-				throw new Error("Build the app first: pnpm --filter @loom/app build");
 			}
 			const e2eRoot = await mkdtemp(join(tmpdir(), "loom-e2e-"));
 			try {
@@ -30,16 +35,8 @@ export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronAppli
 				await mkdir(libraryRoot);
 				await mkdir(userData);
 				await writeFile(join(userData, "last-library.json"), JSON.stringify({ rootPath: libraryRoot }));
-				const app = await electron.launch({
-					executablePath: require("electron") as string,
-					args: [appRoot],
-					env: {
-						...process.env,
-						LOOM_E2E: "1",
-						LOOM_E2E_USER_DATA: userData,
-						ELECTRON_DISABLE_SECURITY_WARNINGS: "1",
-					},
-				});
+				await writeFile(join(userData, "general.json"), JSON.stringify({ language: "en", reopenLastLibrary: true }));
+				const app = await launchTestElectron(userData);
 				try {
 					await use(app);
 				} finally {

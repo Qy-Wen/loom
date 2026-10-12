@@ -1,6 +1,6 @@
 import { assetRefBlocks, replaceAssetRefBlocks } from "./composer-asset.ts";
 
-/** Sidecar context on a stored user message. Folded into Chat `content` in convertToLlm. */
+/** Send-time context folded into durable model content before submit. */
 
 export type LoomAssetType = "image" | "video" | "audio" | "text" | "other";
 
@@ -71,6 +71,12 @@ export function latestUiSelectionAssetId(messages: readonly unknown[]): string |
 			const row = attachments[j];
 			if (row?.type === "ui_selection") return row.assetId;
 		}
+		const message = messages[i] as { role?: string; content?: unknown } | undefined;
+		if (message?.role !== "user") continue;
+		const text = userTextFromContent(message.content);
+		const blocks = [...text.matchAll(/<system-reminder>\s*The user had this file selected in the library\.[\s\S]*?<ui_selection>\s*path: [^\n]*\nasset_id: ([^\n]+)\ntype: [^\n]*\n<\/ui_selection>\s*<\/system-reminder>/g)];
+		const id = blocks.at(-1)?.[1]?.trim();
+		if (id) return id;
 	}
 	return undefined;
 }
@@ -92,7 +98,7 @@ export function uiSelectionToAttach(
 
 /**
  * Placed chips are stored already expanded inside the user text.
- * The library highlight stays on `attachments`.
+ * The library highlight is folded after the text before submit.
  */
 export function contentWithPlacedAssets(text: string, chips: readonly AssetRefAttachment[]): string {
 	const byId = new Map(chips.map((chip) => [chip.assetId, chip]));

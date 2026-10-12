@@ -14,7 +14,7 @@ import {
 } from "@copilotkit/react-core/v2";
 import { createContext, forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
+import type { AssetRefAttachment, LoomContextUsage, LoomSessionRecord, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
@@ -58,7 +58,7 @@ const LiveMessagesContext = createContext<readonly Message[]>([]);
 const DraftContext = createContext<string | null>(null);
 const ClearForceContext = createContext<() => void>(() => {});
 const DraftAppliedContext = createContext<() => void>(() => {});
-const ContextUsageContext = createContext<HarnessContextUsage | null>(null);
+const ContextUsageContext = createContext<LoomContextUsage | null>(null);
 
 type QueuedFollowUp = { text: string; label?: string; seen: number };
 
@@ -1118,13 +1118,6 @@ const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props 
 	);
 }) as typeof CopilotChatInput;
 
-/** Point the shared agent at this session and drop the previous thread's live messages. A run stays on the session that started it. */
-function claimIdleSession(agent: { threadId: string; isRunning: boolean; setMessages: (messages: Message[]) => void }, threadId: string): void {
-	if (!threadId || agent.isRunning || agent.threadId === threadId) return;
-	agent.threadId = threadId;
-	agent.setMessages([]);
-}
-
 /** Stable slot so CopilotChat does not remount the view on every parent render. */
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
 	const stored = useContext(StoredMessagesContext);
@@ -1166,7 +1159,7 @@ function formatTokens(tokens: number): string {
 }
 
 /** Context usage as a ring. The percent and window appear only after a click. */
-function ContextIndicator({ context }: { context: HarnessContextUsage | null }): React.JSX.Element | null {
+function ContextIndicator({ context }: { context: LoomContextUsage | null }): React.JSX.Element | null {
 	const { t } = useLocale();
 	const [open, setOpen] = useState(false);
 	const rootRef = useRef<HTMLDivElement>(null);
@@ -1225,7 +1218,7 @@ function errorText(cause: unknown): string {
 	return cause instanceof Error ? cause.message : String(cause);
 }
 
-/** Draw JSONL history through CopilotChat.View without writing into its agent. */
+/** Draw committed durable history through CopilotChat.View without writing into its agent. */
 export function SessionChat({
 	threadId,
 	messages,
@@ -1239,13 +1232,13 @@ export function SessionChat({
 }: {
 	threadId: string;
 	messages: LoomTranscriptMessage[];
-	context: HarnessContextUsage | null;
+	context: LoomContextUsage | null;
 	composerDraft: string | null;
 	onComposerDraftApplied: () => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
-	onSessionRecord: (record: HarnessSessionRecord) => void;
-	onForked: (record: HarnessSessionRecord, draft: string) => void;
+	onSessionRecord: (record: LoomSessionRecord) => void;
+	onForked: (record: LoomSessionRecord, draft: string) => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
@@ -1263,15 +1256,6 @@ export function SessionChat({
 	onFork.current = onForked;
 	const clearForce = useCallback(() => setForce(null), []);
 	const { agent } = useAgent({ updates: [] });
-	// CopilotChat reconnects when its thread prop changes and repaints the window.
-	// Its own effect also writes a random id onto this same agent, after the layout
-	// pass, so the passive effect claims the session again.
-	useLayoutEffect(() => {
-		claimIdleSession(agent, threadId);
-	}, [agent, threadId]);
-	useEffect(() => {
-		claimIdleSession(agent, threadId);
-	}, [agent, threadId]);
 	useEffect(() => {
 		const subscription = agent.subscribe({
 			onCustomEvent({ event, messages }) {
@@ -1371,7 +1355,7 @@ export function SessionChat({
 			<ComposerAttachAppliedContext.Provider value={onComposerAttachApplied}>
 			<ContextUsageContext.Provider value={context}>
 			<div className="session-chat-shell">
-				<CopilotChat welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
+				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>
 			</ContextUsageContext.Provider>
 			</ComposerAttachAppliedContext.Provider>

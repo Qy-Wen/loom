@@ -57,7 +57,6 @@ import { AgentInstructionsStore } from "./agent-instructions-store.ts";
 import { AgentSandboxStore } from "./agent-sandbox-store.ts";
 import { AgentStatsStore } from "./agent-stats-store.ts";
 import { parseByteRange } from "./byte-range.ts";
-import type { DevTraceRecord } from "../shared/dev-trace.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
 import { parseGeneralSettings, resolveAppLanguage } from "../shared/general-settings.ts";
@@ -181,11 +180,10 @@ let agentInstructions: AgentInstructionsStore | null = null;
 let agentSandbox: AgentSandboxStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
-let mcpReady = false;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
 let gradePreview: AbortController | null = null;
-// Keep the single manager and LocalCore on the same root across overlapping open requests.
+// Keep the library agent owner and LocalCore on the same root across overlapping open requests.
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
 let pendingLibraryChanges: LibraryChange[] = [];
@@ -948,18 +946,15 @@ app
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		await agentManager.setChat(await modelSettings.chat());
-		let publishDevTrace: ((record: DevTraceRecord) => void) | undefined;
 		if (import.meta.env.DEV) {
 			const devTrace = await import("./dev-trace-window.ts");
 			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"));
-			publishDevTrace = devTrace.publishDevTrace;
 		}
 		agentServer = await startAgentServer(
 			agentManager,
 			getUiSelection,
 			(id) => takeComposerImages(id),
 			(id) => takeLiveComposerAssets(id),
-			publishDevTrace,
 		);
 		registerAssetProtocol();
 		registerIpc();
@@ -1120,10 +1115,9 @@ async function setMcpServerLive(draft: McpServerDraft) {
 	}
 }
 
-/** Push the full tool list (built-in library/FFmpeg plus live MCP tools) to the agent manager. */
-async function syncAgentTools(options?: { preserveRuns?: boolean }): Promise<void> {
+/** Replace registry tools without reopening the library or interrupting durable work. */
+async function syncAgentTools(): Promise<void> {
 	await agentManager.setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
-	mcpReady = true;
 }
 
 function mcpConfigPath(): string {
@@ -1141,13 +1135,12 @@ async function mcpSettingsView() {
 
 async function reconnectMcp(
 	configs: Awaited<ReturnType<McpSettingsStore["load"]>>,
-	options?: { preserveRuns?: boolean },
 ): Promise<void> {
 	const previous = mcpHost;
 	mcpHost = new McpHost();
 	await mcpHost.connect(configs);
 	if (shutdownStarted || !mcpHost) return;
-	await syncAgentTools(options);
+	await syncAgentTools();
 	if (previous) await previous.close();
 }
 
@@ -1208,7 +1201,7 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 	if (patch.mcp) {
 		const next = mergeMcpServers(await mcpSettings.drafts(), patch.mcp);
 		await mcpSettings.save(next);
-		await reconnectMcp(await mcpSettings.load(), { preserveRuns: true });
+		await reconnectMcp(await mcpSettings.load());
 		notes.push("MCP servers saved and reconnected.");
 	}
 	notifySettingsChanged();

@@ -1,20 +1,18 @@
-import { readFile, readdir } from "node:fs/promises";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
 test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
-	await expect(loomPage.getByRole("button", { name: "Agent" })).toBeVisible();
-	await expect(loomPage.getByRole("button", { name: "Settings" })).toBeVisible();
-	await loomPage.getByRole("button", { name: "Agent" }).click();
-	await expect(loomPage.getByRole("combobox", { name: "Agent permission" })).toBeVisible();
+	await expect(loomPage.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+	await expect(loomPage.getByRole("button", { name: "Agent permission", exact: true })).toBeVisible();
 });
 
-test("creates a persisted Harness session without Chat", async ({ loomPage }) => {
+test("creates a persisted durable conversation without Chat", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
 	const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	expect(root).toBeTruthy();
-	await expect(loomPage.getByRole("tab", { name: "New session" })).toHaveCount(1);
+	await expect(loomPage.getByRole("tab", { name: "New session", exact: true }).first()).toBeVisible();
 	const initial = await loomPage.evaluate(() => window.loom.listSessions());
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(initial.length + 1);
@@ -24,15 +22,11 @@ test("creates a persisted Harness session without Chat", async ({ loomPage }) =>
 	const record = await loomPage.evaluate((id) => window.loom.openSession(id), created!.id);
 	expect(record.title).toBe("New session");
 	expect(record.messages).toEqual([]);
-	await expect(loomPage.getByRole("tab", { name: "New session" })).toHaveCount(sessions.filter(({ status }) => status === "open").length);
+	await expect(loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab")).toHaveCount(sessions.filter(({ status }) => status === "open").length);
 
-	const sessionsRoot = join(root!, ".loom", "harness-sessions");
-	const directories = await readdir(sessionsRoot);
-	const files = (await Promise.all(directories.map(async (directory) =>
-		(await readdir(join(sessionsRoot, directory))).map((file) => join(sessionsRoot, directory, file)),
-	))).flat();
-	const headers = await Promise.all(files.map(async (file) => JSON.parse((await readFile(file, "utf8")).split("\n")[0]!)));
-	expect(headers).toContainEqual(expect.objectContaining({ kind: "header", v: 4, id: created!.id }));
+	const database = await readFile(join(root!, ".loom", "loom.sqlite"));
+	expect(database.subarray(0, 16).toString()).toBe("SQLite format 3\u0000");
+	expect(created!.id).toMatch(/^[1-9]\d*$/);
 });
 
 test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {

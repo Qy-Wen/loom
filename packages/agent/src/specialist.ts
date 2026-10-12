@@ -72,13 +72,14 @@ export function createSpecialistExtension(role: SpecialistRole, tools: readonly 
 	const tool = defineTool({
 		name: role === "retrieve" ? RETRIEVE_AGENT_TOOL : CREATE_AGENT_TOOL,
 		description: specialistDescription(role), parameters: specialistParameters(), replay: "safe",
-		async execute({ goal }, api, context) {
+		async execute(args, api, context) {
+			const { goal } = parseSpecialistArgs(args);
 			const childId = await api.commit(async (tx) => {
 				const existing = (await tx.scanConversations({ ownerTaskId: api.taskId }, 1)).items[0];
 				if (existing) return existing.id;
 				const record = await tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } });
 				await configure(tx, record.id, {
-					extensions: [child, permission], tools, modelTools: tools,
+					extensions: [child, permission],
 					instructions: role === "retrieve" ? RETRIEVE_SYSTEM_PROMPT : CREATE_SYSTEM_PROMPT,
 				});
 				return record.id;
@@ -88,7 +89,7 @@ export function createSpecialistExtension(role: SpecialistRole, tools: readonly 
 			if (!conversation) throw new Error("Specialist conversation is missing");
 			const submission = await conversation.submit({ type: "input", content: specialistUserMessage(goal), requestId: `specialist:${api.taskId}` }, context);
 			const result = await submission.wait(context);
-			if (result.status !== "done" || result.type !== "input") throw new Error(`Specialist failed: ${result.status}`);
+			if (result.status !== "done" || result.type !== "input") throw new Error(`Specialist failed: ${result.status}${result.status === "unanswered" ? ` (${result.reason})` : ""}`);
 			const answer = await api.commit((tx) => tx.entry(AssistantEntry, result.answer), context);
 			return { output: [{ type: "text", text: userTextFromContent(answer?.model?.[0]?.content) || "The specialist finished without a summary." }] };
 		},

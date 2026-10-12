@@ -11,8 +11,8 @@ describe("compactionRate", () => {
 });
 
 describe("compactTranscript", () => {
-	it("shrinks a long session below the original context length", () => {
-		const result = compactTranscript(longTranscript(), 400);
+	it("shrinks a long session using durable's actual compaction task", async () => {
+		const result = await compactTranscript(longTranscript(), 400);
 		assert.ok(result.tokensBefore > result.tokensAfter);
 		assert.ok(result.rate > 0 && result.rate < 1);
 		assert.ok(result.dropped > 0);

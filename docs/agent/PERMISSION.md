@@ -24,7 +24,7 @@ Stop cancels a wait. Switching to Full asks once more: the process sandbox will 
 
 The tool card can remember that command in the open library, `<library>/.loom/command-allows.json`. Later sessions in that library skip the prompt. Another library does not. `bash` stores the command text with the ends trimmed. `run_ffmpeg` stores the program and its arguments. `write` and `edit` store the tool and the path, not the file contents. The other gated tools store the tool name. Settings → Agent lists these and can forget one.
 
-Pi `before_tool` (hook id `loom.tool_permission`) emits `tool_pending` and pauses until the tool card continues.
+The `loom.permission` extension installs a cancellable `ToolTask.beforeTool` hook. Pending calls persist in `LoomApprovalsDoc`; AG-UI watches it and publishes `loom.tool_gate`. IDs are namespaced by conversation, including specialist calls. Stop clears waits; reopen clears stale document rows before durable recovery asks again.
 
 ---
 

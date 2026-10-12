@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { HarnessSessionSummary as SessionSummary } from "@loom/agent";
+import type { LoomSessionSummary as SessionSummary } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
 
 interface SessionBarProps {

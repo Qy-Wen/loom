@@ -26,7 +26,7 @@ Hybrid Search unit tests (`packages/core/tests/hybrid-search.test.ts`) stay. The
 
 ## 2. Runtime
 
-- **Compaction rate:** context tokens after compact / tokens before. Smaller means more was dropped. Offline formula in `compaction-rate.ts`. Live threshold compaction is `eval:compaction-e2e`.
+- **Compaction rate:** context tokens after compact / tokens before. Smaller means more was dropped. `compaction-rate.ts` executes the native durable compaction task with a deterministic faux summarizer and pi-ai message-token estimates. Live threshold compaction is `eval:compaction-e2e`; its before/after numbers are estimates, not provider usage.
 - **Prompt-cache hit rate:** `cacheRead / (input + cacheRead + cacheWrite)` from Chat usage (the API `prompt_tokens` split). `eval:prompt-cache-hit`.
 
 Live Chat reads `.env`: `DEEPSEEK_API_KEY`, optional `LOOM_CHAT_BASE_URL` and `LOOM_CHAT_MODEL` (defaults: DeepSeek URL and `deepseek-v4-flash`). Not the Settings file.
@@ -45,7 +45,7 @@ Gold tasks in `tasks.ts`. Each row is one user turn:
 
 Current tasks: `search-river` (must `search_assets`, no bash/write/edit), `inspect-selection` (must `inspect_asset` on the library highlight, no extra search/bash/write/edit), `inspect-chip` (same for a composer `asset_ref` chip), `chitchat` (answer includes `4`, no library or workspace tools).
 
-Scoring is in `agent-score.ts` over `tool_start` events plus concatenated `text` deltas. Fail on any missing expected tool, forbidden hit, arg miss, or answer miss.
+Scoring is in `agent-score.ts` over durable `tool_execution_start` events from parent and owned child conversations, plus committed assistant text. Fail on any missing expected tool, forbidden hit, arg miss, or answer miss.
 
 | Runner | Command | Chat |
 |---|---|---|
@@ -88,3 +88,13 @@ pnpm --filter @loom/core eval:retrieval:live
 ```
 
 CI: stub Agent tasks, fake-embed retrieval, Hybrid Search unit tests, metric unit tests. Live scripts are optional and need `.env`.
+
+## 6. Durable migration baseline
+
+- Offline native compaction: 4,246 → 460 estimated tokens (10.8%); 29 messages replaced, 3 retained.
+- DeepSeek `deepseek-v4-flash` threshold compaction: one summary; 39,499 → 14,388 estimated tokens. Summary retained code/path; recall returned `LOOM-7F3K`, `projects/aurora/main.mp4`, and `teal`.
+- Prompt-cache: same-selection mean 60.0% (0.0%, 80.2%, 99.7%); changed-selection mean 99.8%. The second scenario reuses a warmed prefix, so the means are not a controlled comparison of selection changes.
+- Stub tool gold: 4/4. Latest live tool gold: 3/4; `inspect-chip` used `read` without required `inspect_asset`. An inconsistent eval mock was corrected to return the right asset path; the strict gold was not relaxed. This remains a behavior/parity gap, not a passing migration score.
+- Electron tests open a temporary library and exercise child approvals, reload/fork, SIGKILL/restart recovery, and text visible while the model stream is still open. Live timing measures `/run`, not idle connect completion. Optional `e2e/live-chat.spec.ts` also passed with real DeepSeek: visible text before `RUN_FINISHED`.
+
+No claim of complete old/new parity yet: Windows runtime and more crash-point coverage (streaming/externally executing tools) remain outstanding. Telemetry is outside this migration.

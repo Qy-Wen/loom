@@ -13,7 +13,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { AssetRefAttachment, HarnessContextUsage, HarnessSessionRecord, HarnessSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
+import type { AssetRefAttachment, LoomContextUsage, LoomSessionRecord, LoomSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
@@ -76,12 +76,12 @@ export function AgentPanel({
 	const sessionIdRef = useRef<string | null>(null);
 	sessionIdRef.current = sessionId;
 	const [sessionMessages, setSessionMessages] = useState<LoomTranscriptMessage[]>([]);
-	const [sessionContext, setSessionContext] = useState<HarnessContextUsage | null>(null);
+	const [sessionContext, setSessionContext] = useState<LoomContextUsage | null>(null);
 	const [composerDraft, setComposerDraft] = useState<{ sessionId: string; text: string } | null>(null);
 	const [sessionBusy, setSessionBusy] = useState(false);
 	const [sessionError, setSessionError] = useState<string | null>(null);
 
-	function applyRecord(record: HarnessSessionRecord): void {
+	function applyRecord(record: LoomSessionRecord): void {
 		setSessionMessages(record.messages);
 		setSessionContext(record.context ?? null);
 	}
