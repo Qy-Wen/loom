@@ -8,7 +8,7 @@
 
 ## 1. Where it lives
 
-Notes for the open library live in `<library>/.agents/memory/MEMORY.md`. One file. About 2,000 characters. When the library opens, create `.agents/memory/` if it is missing. `.agents` is not indexed as assets. Skills in `.agents/skills/` are loaded from disk when the library opens.
+Notes for the open library live in `<library>/.agents/memory/MEMORY.md`. One file. About 2,000 characters. The memory directory is created on the first write. `.agents` is not indexed as assets. The skill catalog in `.agents/skills/` is read during request preparation.
 
 Facts only: preferences and conventions for this library. A different library has a different file. Procedures stay in `.agents/skills/`.
 
@@ -18,7 +18,7 @@ Facts only: preferences and conventions for this library. A different library ha
 
 Read the file when a session starts and append that snapshot after the existing system prompt and the skills catalog. The snapshot stays byte-stable for the rest of the session.
 
-`systemPrompt()` runs on every generation. Hold the snapshot on the session. Do not re-read the file each turn. A write during the session updates the file immediately. The next session reads it. The current session's system prompt does not change.
+`LoomMemoryDoc` stores the creation-time snapshot in the library's durable SQLite store. The prompt section reads that document, not the file. Forks and reopens retain it. A write updates the file immediately; new conversations read it, existing conversations do not.
 
 ---
 

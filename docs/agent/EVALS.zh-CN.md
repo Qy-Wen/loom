@@ -26,7 +26,7 @@ Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。�
 
 ## 2. 运行时
 
-- **压缩率：** 压缩后 / 压缩前的上下文 token。越小说明丢掉越多。离线公式在 `compaction-rate.ts`。真实阈值压缩是 `eval:compaction-e2e`。
+- **压缩率：** 压缩后 / 压缩前的上下文 token。越小说明丢掉越多。`compaction-rate.ts` 用确定性 faux 摘要器执行原生 durable compaction task，使用 pi-ai 消息 token 估算。真实阈值压缩是 `eval:compaction-e2e`，前后数值也是估算，并非 provider usage。
 - **Prompt-cache 命中率：** Chat usage 的 `cacheRead / (input + cacheRead + cacheWrite)`（接口 `prompt_tokens` 拆开后）。命令是 `eval:prompt-cache-hit`。
 
 现场 Chat 读 `.env`：`DEEPSEEK_API_KEY`，可选 `LOOM_CHAT_BASE_URL` 和 `LOOM_CHAT_MODEL`（默认 DeepSeek 地址和 `deepseek-v4-flash`）。不读设置页文件。
@@ -45,7 +45,7 @@ Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。�
 
 当前任务：`search-river`（必须 `search_assets`，不要 bash/write/edit）、`inspect-selection`（必须对库高亮 `inspect_asset`，不要再 search/bash/write/edit）、`inspect-chip`（输入框 `asset_ref` 芯片同样规则）、`chitchat`（回答里有 `4`，不要库工具或工作区工具）。
 
-打分在 `agent-score.ts`：看 `tool_start` 事件和拼起来的 `text`。缺了该调的、调了禁止的、参数没对上、回答缺关键字，都算失败。
+打分在 `agent-score.ts`：看父/归属子会话的 durable `tool_execution_start` 事件和已提交 assistant 正文。缺了该调的、调了禁止的、参数没对上、回答缺关键字，都算失败。
 
 | Runner | 命令 | Chat |
 |---|---|---|
@@ -88,3 +88,13 @@ pnpm --filter @loom/core eval:retrieval:live
 ```
 
 CI：假 Chat 的 Agent 任务、假向量检索、Hybrid Search 单测、指标单测。现场脚本可选，需要 `.env`。
+
+## 6. Durable 迁移基线
+
+- 离线原生压缩：估算 4246 → 460 token（10.8%），替换 29 条消息，保留 3 条。
+- DeepSeek `deepseek-v4-flash` 阈值压缩：产生一份摘要，估算 39499 → 14388 token。摘要保留 code/path，回忆返回 `LOOM-7F3K`、`projects/aurora/main.mp4`、`teal`。
+- Prompt-cache：同选区平均 60.0%（0.0%、80.2%、99.7%），换选区平均 99.8%。第二组复用了已热的前缀，不能把均值作为选区变化的受控对比。
+- 假 Chat 工具金标 4/4；最近一次 live 为 3/4，`inspect-chip` 直接 `read` 而未执行要求的 `inspect_asset`。修正了 mock 返回错误素材路径的问题，没有放宽金标；该行为/能力差距仍未关闭。
+- Electron 测试实际打开临时库，覆盖子审批、reload/fork、SIGKILL/重开恢复，以及模型流仍未结束时文字已显示。Live 计时只统计 `/run`，不计空闲 connect 的结束事件。可选 `e2e/live-chat.spec.ts` 也用真实 DeepSeek 验证了 `RUN_FINISHED` 前正文可见。
+
+尚不宣称完整新旧能力等价：Windows 运行时、更多崩溃点（流式生成/正在执行外部工具）的覆盖待完成。Telemetry 不在本次迁移范围。

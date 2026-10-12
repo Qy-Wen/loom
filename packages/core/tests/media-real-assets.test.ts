@@ -123,18 +123,27 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		await assertOutputFile(root, "outputs/clip.wav");
 		assertNoAbsoluteLeak(raw, root, FIXTURES);
 
-		const clipView = (await core.inspectAsset(video.assetId)).generated.find(
-			(item) => item.relativePath === "outputs/clip.mp4",
-		);
+		// Media output is indexed; provenance edges are explicit, not inferred by these operations.
+		const clipView = await waitForIndexedAsset(core, "outputs/clip.mp4");
 		assert.ok(clipView);
 		const clipDetail = await core.inspectAsset(clipView.assetId);
-		assert.ok(clipDetail.generated.some((item) => item.relativePath === "outputs/clip.mp3"));
-		assert.equal(clipDetail.generated.some((item) => item.relativePath === "outputs/clip.wav"), false);
+		assert.deepEqual(clipDetail.links, []);
+		assert.deepEqual((await core.inspectAsset(video.assetId)).links, []);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+async function waitForIndexedAsset(core: LocalCore, relativePath: string) {
+	const deadline = Date.now() + 5000;
+	for (;;) {
+		const asset = (await core.getLibrarySnapshot()).assets.find((item) => item.relativePath === relativePath);
+		if (asset) return asset;
+		if (Date.now() >= deadline) throw new Error(`Watcher did not index ${relativePath}`);
+		await new Promise((resolve) => setTimeout(resolve, 25));
+	}
+}
 
 function assertNoAbsoluteLeak(value: unknown, ...roots: string[]): void {
 	const text = JSON.stringify(value);

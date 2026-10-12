@@ -2,352 +2,98 @@
 
 # Agent Architecture
 
-> This document records how Loom's Agent layer is implemented: source boundaries, decoupling, upstream merges, user-message attachments, and the frontend interaction protocol (AG-UI).
-> See [PRODUCT.md](./PRODUCT.md) Sections 6–7 for product positioning, [EVALS.md](./EVALS.md) for how Agent and retrieval are scored, and [TODO.md](./TODO.md) for the roadmap.
+Loom's creative-asset agent runs on vendored `pi-durable`. Model/provider integration uses npm `pi-ai`; AG-UI is the frontend protocol. See [MIGRATION](./MIGRATION.md), [EVALS](./EVALS.md), [MEMORY](./MEMORY.md), and [PERMISSION](./PERMISSION.md).
 
----
-
-## 1. Goal and positioning
-
-- Loom's Agent is a **creative-asset Agent**. The chat Agent talks, plans, and transforms (`read` / `edit` / `write` / `bash`, FFmpeg, describe, embed). `run_retrieve_agent` and `run_create_agent` start short-lived specialists. Skills load from the open library's `.agents/skills/`. Permission and the process sandbox: [PERMISSION](./PERMISSION.md).
-- Library retrieval is RAG: Hybrid Search returns text passages (images and video are written up first, then chunked) and the Agent answers or acts from those chunks, not from stuffing the whole library into the prompt. See [RAG](./RAG/RAG.md).
-- One goal is to develop hands-on Agent engineering expertise, so Loom vendors and selectively modifies the agent loop source instead of treating it as a black-box SDK.
-- Only the true core is vendored. Infrastructure such as model and provider integrations remains in published npm packages to avoid burying the project in unrelated code.
-
----
-
-## 2. Source boundary: vendor only `packages/agent`, use npm for the rest
-
-> **The vendored source is pi's `packages/agent` package (published as `@earendil-works/pi-agent-core`), the agent-loop kernel.**
-> It is **not `packages/coding-agent`**, which is an application shell for terminal coding workflows (SessionManager, ResourceLoader, InteractiveMode, CLI, skill loading, and more) and is tightly coupled to TUI/CLI concerns Loom does not need.
-
-Pi's Agent-related code has three layers, handled differently by Loom:
-
-| Layer | pi package | Size | Loom approach | Reason |
-|---|---|---:|---|---|
-| Agent-loop kernel | `packages/agent` (`pi-agent-core`): `agent.ts`, `agent-loop.ts`, execution, compaction | A few thousand core lines | **Vendor source** | This is the primary area to study and modify |
-| Model/provider integration | `pi-ai` (`packages/ai`) | ~24k lines; 73% provider adapters | **npm dependency** for now | Integrating 40+ vendors is infrastructure, not Loom's Agent capability |
-| Event flow/telemetry | `chord`, `pi-telemetry` | — | **npm dependencies** | Runtime foundations; telemetry can receive a NOOP implementation |
-
-`pi-ai` is not vendored because it is large, mostly provider glue, and brings heavyweight SDKs such as `@anthropic-ai/sdk`, `openai`, `@google/genai`, and `@aws-sdk/*`.
-
-**Model seam:** `HarnessSessionManager` builds the selected Chat model with `pi-ai` and passes it to `AgentHarness` lanes. Loom configures OpenAI-compatible Chat requests without vendoring `pi-ai`.
-
----
-
-## 3. Vendor strategy: sync script and pristine branch
-
-> A sync script copies upstream source into `vendor-pi-agent/`. A pristine branch isolates upstream, and normal three-way Git merges carry updates into Loom.
-> Submodule and subtree are avoided because both are awkward for selecting one subdirectory and then modifying it freely.
-
-### 3.1 Layout
-
-The vendor directory lives directly inside `@loom/agent`, allowing it to resolve pi's external dependencies from the same package:
+## 1. Boundaries
 
 ```
-packages/agent/                 # @loom/agent
-├── package.json                # imports: "#vendor/pi-agent" → ./vendor-pi-agent/src/index.ts
-├── tsconfig.json
-├── src/
-│   ├── index.ts
-│   ├── types.ts                # Loom-owned tools, events, and settings
-│   ├── harness-session-manager.ts # Harness session/runtime owner
-│   ├── pi-adapter.ts           # pi-ai Chat model and attachment conversion
-│   └── pi-tools.ts             # native workspace tools and Loom tool bridge
-├── scripts/try-agent.ts        # smoke test
-└── vendor-pi-agent/
-    ├── UPSTREAM                # source repository, commit, and tag
-    ├── src/                    # copied pi source, available for modification
-    └── sync.sh                 # sync script
+Renderer: CopilotChat + Loom session/tool views
+    │ IPC (plain DTOs) / localhost HTTP SSE (AG-UI)
+Main: LibraryAgentHost + DurableAgentRunner + LoomAgUiAgent
+    │ @loom/agent
+Loom: LibraryAgent + extensions/documents/tool adapters
+    │ durable-adapter.ts
+Vendor: pi-durable + pi-codemode
+    │ pi-ai models / chord / node:sqlite
 ```
 
-### 3.2 `vendor-pi-agent/sync.sh`
+- `packages/agent/src/durable-adapter.ts` is the only vendor import boundary. `@loom/agent` and `@loom/agent/durable` forward native handles and add Loom assembly/policy.
+- Main holds `Harness`, `Registry`, and `Conversation` handles. IPC exposes `LoomSessionRecord` / `LoomSessionSummary`; IDs are decimal strings. Renderer never holds durable handles.
+- Durable owns scheduling, inboxes, retry, compaction, task cancellation, and recovery. Loom does not recreate lanes or a session manager.
+- Retrieval/index storage remains separate in `packages/core`.
 
-The script shallow-clones a requested GitHub ref into a temporary directory, copies `packages/agent/src/` while excluding tests, testing helpers, and benchmarks, records the upstream commit in `UPSTREAM`, and removes the temporary directory. The default ref is `v0.85.1`.
+## 2. Vendor workflow
 
-**Why fetch remotely instead of reading a local pi checkout:** the workflow is self-contained. Anyone can clone Loom and sync without already having pi on disk, and the script never changes a developer's local pi branch state.
+`vendor-pi-durable/src` and `vendor-pi-codemode/src` mirror upstream `main` from the same commit. Each `UPSTREAM` records provenance. External model/runtime dependencies remain npm; codemode is a private workspace retaining upstream imports.
 
 ```bash
-set -euo pipefail
-REF="${1:-v0.85.1}"
-REPO="https://github.com/earendil-works/pi.git"
-HERE="$(cd "$(dirname "$0")" && pwd)"
-TMP="$(mktemp -d)"
-trap 'rm -rf "$TMP"' EXIT
-
-git clone --depth 1 --branch "$REF" --quiet "$REPO" "$TMP"
-UPSTREAM_SHA="$(git -C "$TMP" rev-parse HEAD)"
-
-rsync -a --delete \
-  --exclude='**/*.test.ts' \
-  --exclude='**/testing/**' \
-  --exclude='benchmark/**' \
-  "$TMP/packages/agent/src/" "$HERE/src/"
-
-# UPSTREAM records repo / directory / ref / commit
-```
-
-Run `pnpm --filter @loom/agent vendor:sync [ref]`, or use `pnpm vendor:sync` from the repository root. No local pi path is required.
-
-### 3.3 One workflow for initial import and upgrades
-
-**Single mental model: `vendor-clean` always contains pristine upstream source, and `main` always receives vendor changes through `git merge`.** The same path applies to the initial import and every upgrade, regardless of whether the vendor source has been modified locally.
-
-```bash
-VENDOR=packages/agent/vendor-pi-agent
-
-# Initially branch from a normal commit that already contains pristine source.
-git branch vendor-clean
-
-# Every future upgrade follows these four steps:
 git checkout vendor-clean
-$VENDOR/sync.sh v0.86.0
-git commit -am "vendor: update pi-agent to v0.86.0 (pristine)"
+pnpm vendor:sync                 # optionally specify a ref
+git add packages/agent/vendor-pi-durable packages/agent/vendor-pi-codemode
+git commit -m "vendor: sync pi durable main"
 git checkout main
 git merge vendor-clean
 ```
 
-This works because `vendor-clean` remains pure upstream while `main` carries local changes. Git automatically merges non-conflicting upstream updates and stops only where Loom genuinely modified the same code. A normal branch is preferred to an orphan branch because it retains a shared ancestor and a natural history.
+Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/benchmarks, and supports macOS and native Windows. Keep Loom-owned code outside both vendor `src/` trees; no upstream-source edits are needed for integration.
 
-**Two critical constraints:**
+## 3. Library ownership and persistence
 
-1. **Sync means an `rsync --delete` mirror, not a merge.** It adds and overwrites upstream files and removes files deleted upstream. It knows nothing about Loom's modifications; Git performs the real three-way merge. Run sync **only on `vendor-clean`**.
-2. **Modify vendor code only on `main`; keep `vendor-clean` pristine.** Put Loom-owned additions in `packages/agent/src/`, not `vendor-pi-agent/src/`, where a future sync would remove them.
+- `LibraryAgent.open(root, options, context)` opens `<library>/.loom/loom.sqlite` with `node:sqlite`, creating one Harness and Registry. Close delegates to durable and leaves unfinished tasks recoverable.
+- Canonical-path reservation prevents duplicate owners within a process. Electron uses an app single-instance lock; other programs must not open the same store as a second active owner. WAL is not owner coordination. Windows runtime validation remains pending.
+- `LibraryAgentHost` installs resources before `resume()`, clears stale approval documents, records the usage baseline, then resumes native recovery.
+- New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Model/instruction edits configure existing conversations and update defaults for subsequent chats; tools replace registry extensions in place.
+- `LoomConversationDoc` stores latest title/archive/hidden/creation metadata outside model context. Forks append `（分支）`, clear archive/hidden, and leave the source unchanged.
+- Fork-before uses the preceding entry, including a start anchor for the first question. Branch-before creates the fork and archives the source. Delete hides the conversation, preserving ancestry and files already written.
+- Old `.loom/harness-sessions/` JSONL is ignored, not migrated.
 
-### 3.4 External dependency alignment
+## 4. Tools, specialists, prompt
 
-The vendored Agent still requires chord, pi-ai, pi-telemetry, diff, ignore, typebox, and yaml. They are npm dependencies of `@loom/agent` and must match the pi version recorded in `UPSTREAM` (pi packages share a release version such as 0.85.1). Upgrade them together with the vendor source.
+- `createWorkspaceTools()` returns durable `read`, `bash`, `edit`, and `write`. Environment/cwd is per conversation; bash preparation delegates to the core process sandbox. Images use upstream Photon workers.
+- `toDurableTool()` adapts Loom `content` to durable `output`, forwards cancellation, validates JSON `details`, and uses `replay: "unsafe"` for external effects.
+- Parent chat keeps workspace, FFmpeg, describe/embed, and other application tools. Retrieve owns `search_assets`, `inspect_asset`, and `read`. Create owns MCP `server__tool`, `write`, and `bash`.
+- Each specialist tool creates a foreground task-owned conversation. Independent calls can run together. The child sees only its goal and specialist prompt; it cannot spawn another specialist. Parent receives the summary, not the child transcript. Stop cascades through ownership. Request IDs make safe specialist replay reuse its child/submission.
+- `createLibraryExtension()` assembles tools and preamble/skills/memory sections. User instructions use native `agent.instructions`.
+- Skills scan only `.agents/skills/`, via durable `ExecutionEnv`, on request preparation. Discovery honors scoped ignore files, diagnoses invalid/duplicate metadata, and skips symlinks. The catalog contains name/description/location, never bodies; the model uses `read` on demand. `disable-model-invocation` removes a skill from the catalog.
+- Memory is a creation-time `LoomMemoryDoc` snapshot, retained on forks/reopen. `auto_memory` writes `.agents/memory/MEMORY.md` immediately but affects only later conversations' prompts. Specialists do not select this extension. See [MEMORY](./MEMORY.md).
+- Permission uses a cancellable `ToolTask.beforeTool` hook and `LoomApprovalsDoc`; the app watches pending rows. Remembered command rules and sandbox policy are in [PERMISSION](./PERMISSION.md).
 
----
+## 5. Send-time context
 
-## 4. Decoupling through the Loom Agent boundary
+Placed files become `<asset_ref>` blocks in user text. Implicit selection becomes `<ui_selection>` inside a `<system-reminder>` after the words. Fold once **before submit**, then persist the resulting model content unchanged; no attachment sidecar or provider-time conversion is required.
 
-> Core rule: **the rest of Loom never imports `#vendor/pi-agent`; it uses the Loom-owned `HarnessSessionManager` and tool/event types from `@loom/agent`.**
+`loom.user` entry data keeps display text, so bubbles omit the implicit reminder. Pictures are model image content. Repeated selection is detected in persisted folded content; existing messages are never rewritten. Asset refs copy stable IDs and library-relative paths; clicking resolves the current asset by ID, falling back to path.
 
-```
-Loom application code → @loom/agent
-                       ├── types.ts                 # Loom tools, events, settings
-                       ├── harness-session-manager.ts # session and AgentHarness owner
-                       ├── specialist.ts            # retrieve and create child agents
-                       ├── library-skills.ts        # Agent Skills from the open library
-                       ├── pi-adapter.ts            # pi-ai Chat model and message folding
-                       └── pi-tools.ts              # native tools and Loom tool bridge
-                                        ↓
-                                 vendor-pi-agent/
-```
+## 6. AG-UI and live rendering
 
-Only `harness-session-manager.ts`, `specialist.ts`, `library-skills.ts`, `pi-adapter.ts`, and `pi-tools.ts` import `#vendor/pi-agent`; the application uses their exported Loom surface. Node's native `imports` field maps `#vendor/pi-agent` and `#vendor/pi-agent/node` into `vendor-pi-agent/`, with matching tsconfig paths.
+`LoomAgUiAgent` extends `AbstractAgent`; clones retain the host and shared run lifecycle. `watchEvents` provides an atomic `stream.snapshot` separately from later commit batches; consume both.
 
-### Registering tools without changing upstream
-
-- **Workspace tools:** use Pi Harness's native `createReadTool` / `createEditTool` / `createWriteTool` / `createBashTool` with `NodeExecutionEnv`. `cwd` is the open library; relative and absolute paths both work. `read` attaches JPEG, PNG, GIF, and WebP for the model, scaling anything over 2000px or about 4.5MB of base64. BMP and other decodable images are converted to PNG first.
-- **Library tools:** the chat Agent keeps FFmpeg, `describe_*`, and `embed_asset`. `search_assets` and `inspect_asset` belong to the retrieve specialist. `search_assets` is the retrieve step of RAG: RRF over FTS and child-chunk vectors, returning passage + `asset_id`.
-- **Specialists:** `run_retrieve_agent` (search, inspect, `read`) and `run_create_agent` (MCP tools named `server__tool`, plus `write` / `bash`). Each call gets a fresh in-memory transcript and one goal string. Include asset ids in that string when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. Child tool cards appear in the same turn; the parent receives only the summary. The retrieve summary names a file with an `<asset_ref>` block copied from the tool result. Stop and the permission gate apply to the child.
-- **MCP client:** Main loads app user-data `mcp.json` (or `LOOM_MCP_CONFIG`) and registers those tools as `server__tool` on the create specialist. Settings → MCP edits that list. Any MCP server can attach; ComfyUI is one example.
-- **System prompt:** the open library root is the working directory. It stays stable across turns. Live UI selection is not written here. Settings → Agent instructions (`AGENTS.md` in app user data) are appended at the end when a session starts, and stay frozen for that session. Empty instructions add nothing. Specialists do not receive them.
-- **Skills:** on library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and any relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`.
-- **Auto memory:** `<library>/.agents/memory/MEMORY.md` holds facts for this library. The folder is created on open. `.agents` is not indexed. The session reads the note once into the system prompt, after the skills catalog. `auto_memory` (`add` / `replace` / `remove`) writes the file immediately; that session's prompt stays frozen. Retrieve and create specialists do not get the tool. See [MEMORY](./MEMORY.md).
-
----
-
-## 5. User message attachments
-
-> Transcript contract for system-injected context (UI selection first). Chat bubbles show `content` only. Prefix cache requires the folded Chat `content` for a stored user message to be identical on every later request.
-
-Do not put changing UI state in the system prompt (that busts the entire prefix). Do not add a `get_selection` tool. A file the user placed in the composer is stored already expanded in `content`. The library highlight stays on `attachments` and is folded only when building the Chat request.
-
-### 5.1 Stored user message
-
-Harness's persisted user message keeps a sidecar field. After send, that user row is frozen.
-
-```json
-{
-  "role": "user",
-  "timestamp": 1727000000000,
-  "content": [{ "type": "text", "text": "把这个处理一下" }],
-  "attachments": [
-    {
-      "type": "ui_selection",
-      "assetId": "a1b2c3d4-…",
-      "path": "clips/hero.mp4",
-      "assetType": "video"
-    }
-  ]
-}
-```
-
-When nothing is selected and the composer has no chips, omit `attachments`. Do not store a `none` placeholder.
-
-Snapshot at send time from the current library highlight (`assetId`, workspace-relative `path`, `assetType`) as one `ui_selection` row. Graph edges are not a selection. The composer can also place library files explicitly: drag one from the library onto the input, right-click a file and choose Add to chat, or use the + menu (Library file). External file and Finder drops copy into `Inbox/` first (or reuse the asset if the file is already in the library), then place the same chip. At send, look up the live library row by `assetId` and write the current `path` / `assetType` into the block. Older rows stay frozen. Do not put timestamps or other per-request noise in the payload.
-
-A chip sits in the text, including between words. The composer writes the `<asset_ref>` block at that position, and that string is what gets stored and sent. The chip is not also an `attachments` row. The bubble parses the block back into a chip. An implicit library highlight that was not already in the chips is appended after the text, inside a `<system-reminder>`. Titles read the words and skip the chip. A click on a chip selects that asset in the library.
-
-An assistant reply names a library file with the same `<asset_ref>` block. The bubble looks up `asset_id` in the open library and draws that file's current path in blue. If the id is missing or not in the library, it tries `path`. If that misses too, the written path is red and does not select anything. An unfinished block stays text while it streams.
-
-```
-看一下
-<asset_ref>
-path: clips/hero.mp4
-asset_id: a1b2c3d4-…
-type: video
-</asset_ref>
-这段
-```
-
-### 5.2 Fold for the Chat API
-
-Chat uses OpenAI-compatible `POST /v1/chat/completions`. Many servers accept only a single string `content`, not multiple text parts. `toProviderMessages` in `pi-adapter` folds each stored user message's text and attachments into **one string** before `convertToLlm`. A placed chip is already that block inside `content`, so the fold leaves it where it sits and only appends a leftover library highlight. Injections never become a second text part.
-
-Composer attaches are library chips, not image parts. The agent reads pixels only if it calls `describe_image` / `describe_video` / `describe_audio` or `read`.
-
-The fold is deterministic. The HTTP body never includes `attachments`.
-
-```
-把这个处理一下<asset_ref>
-path: clips/hero.mp4
-asset_id: a1b2c3d4-…
-type: video
-</asset_ref>
-```
-
-A leftover library highlight uses the same three fields inside `<ui_selection>`, wrapped in one `<system-reminder>` after the user's words. The reminder says the file was selected in the library and may or may not be related to the task. Empty: fold is the user text only. Do not append `<ui_selection>none</ui_selection>`.
-
-```
-看一下
-
-<system-reminder>
-The user had this file selected in the library. This may or may not be related to the current task.
-
-<ui_selection>
-path: notes/brief.md
-asset_id: …
-type: text
-</ui_selection>
-</system-reminder>
-```
-
-System prompt states that `<asset_ref>` blocks are files the user placed, and a `<system-reminder>` after those words is context the app attached. Use `<asset_ref>` and `<ui_selection>` for “this” / “the file” when they do not name a path; if they name a different path, prefer that. When the reply names a library file, write the same `<asset_ref>` block. Copy `path` and `asset_id`. Omit `asset_id` when it is unknown. Do not invent paths or ids.
-
-The next user turn snapshots the library highlight again. If it matches the most recent `ui_selection` already in the transcript (`assetId`), omit that attachment and the fold — history still has that block. A prior `asset_ref` of the same file does not suppress the next implicit `ui_selection`. If there is no prior `ui_selection`, or the file changed, attach and fold as usual. Older rows are not rewritten. Within one turn (tool loop), reuse the send-time snapshot. On the same send, skip the implicit `ui_selection` when that `assetId` is already among the chips.
-
----
-
-## 6. Frontend protocol: CopilotKit and AG-UI, without exposing Pi runtime events
-
-Pi Harness emits in-process runtime events; `HarnessSessionManager` exposes Loom's smaller `LoomAgentEvent` stream. Neither defines the frontend transport: `LoomAgUiAgent` translates Loom events into AG-UI over SSE.
-
-### 6.1 Seam location
-
-The frontend **temporarily uses CopilotKit** for a ready-made chat UI over AG-UI. CopilotKit requires an HTTP runtime endpoint, so Electron Main hosts it in a localhost HTTP server. This directly realizes PRODUCT.md Section 9, where Local Core may become a local service.
-
-**CopilotKit is safe as a temporary choice because its three layers can evolve independently:**
-
-| Layer | Content | When Loom becomes a deeper workbench |
-|---|---|---|
-| 1. Protocol/runtime | AG-UI transport and runtime endpoint | **Keep long term**; independent of UI |
-| 2. React hooks | `useCopilotAction` for generative UI, `useCoAgent` for shared state, `useCopilotReadable` for exposing UI state | **Become more useful** in a workbench |
-| 3. Ready-made UI | `CopilotChat` from `@copilotkit/react-core/v2` | Replace with Loom's own workbench UI while retaining layers 1 and 2 |
-
-A richer workbench replaces only the chat component. The runtime and `LoomAgUiAgent` remain unchanged, while generative UI and shared state continue to use the hooks. Even abandoning CopilotKit entirely does not damage the backend because AG-UI remains the protocol boundary.
-
-```
-Renderer process
-  @copilotkit/react-core/v2: CopilotKitProvider + CopilotChat
-   │ HTTP / SSE, runtimeUrl = http://127.0.0.1:<port>/api/copilotkit
-   ↓
-Main process (Local Core)
-┌────────────────────────────────────────────┐
-│ localhost HTTP server                      │
-│   └ CopilotKit runtime endpoint            │
-│        └ LoomAgUiAgent (AG-UI seam)         │  LoomAgentEvent → AG-UI
-│             └ HarnessSessionManager        │  @loom/agent
-└────────────────────────────────────────────┘
-   │ pi-ai
-   ↓
-Model (DeepSeek, ...)
-```
-
-Pi Harness events and `LoomAgentEvent` **never leave the Main process**. Only AG-UI is exposed externally. Extracting Local Core into a standalone localhost service or replacing pi with a custom Agent requires no frontend changes as long as AG-UI remains the output.
-
-**Verified implementation details:**
-
-- The seam extends `AbstractAgent` from `@ag-ui/client` and implements `run(input): Observable<BaseEvent>` with RxJS.
-- `@ag-ui/{client,core}` is pinned to **1.0.1**, matching `@copilotkit/runtime` 1.77.0.
-- The Node endpoint uses v2 `createCopilotNodeListener`, not the deprecated v1 endpoint.
-- The frontend uses `CopilotKitProvider` and `CopilotChat` directly from `@copilotkit/react-core/v2`; `@copilotkit/react-ui` is unnecessary.
-- Runtime clones the registered AG-UI agent for each run. `LoomAgUiAgent.clone()` keeps the shared `HarnessSessionManager` and in-flight run map.
-- `HarnessSessionManager` owns session handles and persists new conversations in `<library>/.loom/harness-sessions/` via Pi `JsonlSessionRepo`; history reads the active path. Old v1 files in `<library>/.loom/sessions/` remain untouched. Branching from an earlier question is in §6.3d.
-
-**Server rules:**
-
-- `server.listen(0, "127.0.0.1")` chooses a free random port and binds only to localhost, avoiding port conflicts and external reachability.
-- Preload/IPC injects the actual port into Renderer for `<CopilotKitProvider runtimeUrl>`.
-- Main awaits the listener before creating the window and closes the server during `app.on("will-quit")`.
-
-### 6.2 Event mapping
-
-`LoomAgUiAgent` consumes Loom's reduced `LoomAgentEvent` set and translates it into AG-UI:
-
-| `LoomAgentEvent` | AG-UI event |
+| Durable / Loom state | AG-UI |
 |---|---|
-| `agent_start` | `RUN_STARTED` |
-| `text` delta | `TEXT_MESSAGE_START`, `TEXT_MESSAGE_CONTENT`, `TEXT_MESSAGE_END` |
-| `thinking_start` / `thinking_delta` / `thinking_end` | `REASONING_START`, `REASONING_MESSAGE_*`, `REASONING_END` |
-| `tool_pending` | `TOOL_CALL_START` and `TOOL_CALL_ARGS` while the call waits for approval |
-| `tool_start` | Same pair; skipped if `tool_pending` already started that `toolCallId` |
-| `tool_progress` | `ACTIVITY_SNAPSHOT` `loom.tool_progress`, replaced in place; hidden when the call ends |
-| `tool_end` | `TOOL_CALL_END` and `TOOL_CALL_RESULT`; structured `details` also emits `CUSTOM loom.tool_result` |
-| `retry_scheduled` / `retry_start` / `retry_end` | `ACTIVITY_SNAPSHOT` `loom.retry`. The row shows the wait, then clears |
-| `error` | A `loom-error-*` notice plus `RUN_ERROR` (bad key, unreachable Chat, missing Settings). Styled as a system alert, not a model reply. |
-| `agent_end` | `RUN_FINISHED` |
+| Input submission / settlement | `RUN_STARTED`, `RUN_FINISHED` / `RUN_ERROR` |
+| `message_start`, `message_update` | text/reasoning increments |
+| Committed entry | `loom.user_entry`, `loom.adopt_entry` |
+| `tool_execution_*` | tool start/args/end/result, progress activity |
+| Approval document | `loom.tool_gate` activity |
+| Tool result details | `loom.tool_result` custom event |
+| Retry / compaction | retry activity / compaction custom event |
+| Attach / completion | messages snapshot |
 
-### 6.3 Preserved behavior and deferred product capabilities
+Partial updates are not only string deltas: durable also publishes whole messages and whole content blocks. Keep a per-block partial state and emit only the unseen text/thinking suffix. Initial snapshots preserve the optimistic user row until admission; otherwise the renderer's history/live merge hides the streaming continuation. Tool call IDs are namespaced by conversation in both live events and saved DTOs.
 
-Harness provides the runtime; Loom maps existing behavior and defers only the listed product interactions.
+CopilotChat receives an explicit `threadId`, enabling native reconnect rather than manually claiming a random agent thread. Reload while a child waits for approval replays its card and pending state. Child tool/approval watchers attach through persisted specialist details and restore from their snapshots. Child text stays out of parent model history. Follow-ups use native `whenBusy: "followUp"`; Stop drops unadmitted inputs and aborts foreground owned work.
 
-**a. Thinking/reasoning**
+`DurableAgentRunner` routes run/connect/stop to the adapter and native submissions; it does not use CopilotKit's in-memory history. Transport detach stops a connect watcher, not durable work; explicit Stop aborts the matching run. Connect restores history, partials, tools, and child approvals from durable snapshots, including after a main-process crash.
 
-- Pi `thinking_start` / `thinking_delta` / `thinking_end` become `LoomAgentEvent` of the same names, then AG-UI `REASONING_*`. Deprecated `THINKING_*` events do not create a chat message.
-- Redacted thinking is dropped. `thinkingSignature` / `thoughtSignature` stay on the transcript and are not sent to the frontend.
+Main binds HTTP to `127.0.0.1` on a random port, permits Electron/local renderer origins, and closes on quit. Only AG-UI crosses this boundary. Context percentage is temporarily absent. Telemetry production is deferred; dev-trace types/UI remain but emit no spans.
 
-**b. Rich tool output**
+## 7. Validation
 
-- Pi's `AgentToolResult` naturally has two channels: `content` (text for the model) and `details` (structured data for UI rendering).
-- Loom now preserves both channels: text maps to `TOOL_CALL_RESULT`, while structured details emit `CUSTOM loom.tool_result`.
-- `search_assets` and `inspect_asset` use `asset_list` and `asset_detail` detail payloads. The chat draws those files as links keyed by `asset_id`. A click selects the asset in the library and does not switch away from the Agent tab.
+Agent/app typechecks and unit suites pass; vendor source/compiled-worker checks pass. Electron acceptance covers persistence, specialist approval, reload/fork, SIGKILL/restart of an approval-blocked child without duplicate model calls, and text visible **before** model completion. Optional live acceptance:
 
-**c. Stop conversation**
+```bash
+cd packages/app
+LOOM_E2E_LIVE_CHAT=1 node --env-file=../../.env node_modules/@playwright/test/cli.js test live-chat.spec.ts
+```
 
-- CopilotChat Stop detaches the AG-UI run and requests cancellation through `HarnessSessionManager.abort()`.
-- Harness cancels the active operation and any specialist it started; signals propagate to in-flight workspace/library/MCP tools, FFmpeg child processes, and model requests.
-- Stop is recorded durably in the Harness session as a user cancellation, distinct from an error; it is not mapped as a Chat `RUN_ERROR`.
-- Enter while a run is active queues the text as `followUp`. The same run continues when it would otherwise finish, one queued follow-up at a time. Queued text sits above the composer until it is inserted, then it leaves the queue and appears as a user message. Stop drops follow-ups that have not been inserted. `steer` and `nextRun` are unused.
-
-**d. Branch from a previous question**
-
-- Selecting an earlier user question edits that message in place. Sending switches the active path to just before that question. The old path stays in the tree.
-- Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files already written are not reverted.
-
-**e. Tool permission**
-
-See [PERMISSION](./PERMISSION.md).
-
----
-
-## 7. Evals
-
-In-repo gold sets, stub Chat / fake embed for CI, `--live` against `.env` Chat and Embedding slots. Commands, metrics, and out-of-scope items: [EVALS.md](./EVALS.md).
-
----
-
-## 8. Summary
-
-- **One vendored package:** pi-agent, available for source-level study and modification.
-- **Three npm packages:** pi-ai, chord, and pi-telemetry, aligned with `UPSTREAM`.
-- **Upstream merges:** pristine `vendor-clean` branch plus normal three-way merges.
-- **Decoupling:** application code uses `HarnessSessionManager` and Loom-owned event/tool types; only `@loom/agent` imports the vendored Pi Harness.
-- **User attachments:** A placed chip is an `<asset_ref>` block in the user message `content`. The library highlight (`ui_selection`) stays on `attachments` and is folded into that string at request time, inside a `<system-reminder>`. External files are copied into `Inbox/` first. A chip and a tool-result file name select that asset by id. An `<asset_ref>` block in an assistant reply selects that file by `asset_id` when the id is in the open library, otherwise by `path`.
-- **Frontend protocol:** CopilotKit/AG-UI over a localhost server in Main; `LoomAgUiAgent` translates `LoomAgentEvent` without leaking Pi runtime events.
-- **Tool permission and sandbox:** [PERMISSION](./PERMISSION.md).
-- **Evals:** compaction rate, prompt-cache hit rate, in-repo Agent/tool gold tasks, and retrieval Recall@k / nDCG. See [EVALS.md](./EVALS.md).
-- **Current scope:** production chat and new-session persistence run through Harness; asset tools preserve stable call IDs and structured result payloads. Stop cancels the active operation; model thinking is shown in chat. Enter during a run queues a follow-up and continues that run when it would otherwise finish. Automatic threshold compaction is on. Branching from an earlier question is available. Composer library chips and clickable asset refs are on. Skills are the catalog in the system prompt; the model reads `SKILL.md` on demand. Standard asks before `write` / `edit` outside the open library. Basic also asks before `bash` and the FFmpeg tools that write a file. `get_media_info` does not ask. Full does not ask.
+DeepSeek live streaming, compaction anchor recall, and prompt-cache evals pass. The strict live tool gold set is currently 3/4: the chip task sometimes uses `read` without required `inspect_asset`. This is not a passing parity claim. See [EVALS](./EVALS.md) for results and limitations.

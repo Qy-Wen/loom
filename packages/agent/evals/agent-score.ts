@@ -1,4 +1,4 @@
-import type { LoomAgentEvent } from "../src/types.ts";
+import type { AgentEvent } from "../src/durable.ts";
 import type { AgentEvalTask } from "./tasks.ts";
 
 export type AgentCall = { name: string; args: unknown };
@@ -13,17 +13,14 @@ export type AgentScore = {
 	calls: AgentCall[];
 };
 
-export function callsFromEvents(events: LoomAgentEvent[]): AgentCall[] {
-	return events
-		.filter((event): event is Extract<LoomAgentEvent, { type: "tool_start" }> => event.type === "tool_start")
-		.map((event) => ({ name: event.name, args: event.args }));
+export function callsFromEvents(events: AgentEvent[]): AgentCall[] {
+	return events.flatMap((event) => event.type === "tool_execution_start" ? [{ name: event.toolName, args: event.args }] : []);
 }
 
-export function answerFromEvents(events: LoomAgentEvent[]): string {
-	return events
-		.filter((event): event is Extract<LoomAgentEvent, { type: "text" }> => event.type === "text")
-		.map((event) => event.delta)
-		.join("");
+export function answerFromEvents(events: AgentEvent[]): string {
+	return events.flatMap((event) => event.type === "message_end" ? event.entry.model ?? [] : [])
+		.filter((message) => message.role === "assistant")
+		.flatMap((message) => message.content.filter((part) => part.type === "text").map((part) => part.text)).join("");
 }
 
 export function scoreAgentTask(task: AgentEvalTask, calls: AgentCall[], answer: string): AgentScore {

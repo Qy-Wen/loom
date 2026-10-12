@@ -6,14 +6,14 @@
  * Drives a real model with a deliberately small contextWindow so threshold
  * compaction fires mid-conversation, then checks:
  *   1. a compaction entry lands in the session
- *   2. the recorded context usage drops after compaction
+ *   2. the estimated active context drops after compaction
  *   3. the summary keeps anchor facts the later turns can still recall
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { HarnessSessionManager, type LoomAgentEvent } from "../src/index.ts";
+import { CompactionEntry, watchEvents, type AgentEvent } from "../src/durable.ts";
+import { estimateMessageTokens } from "@earendil-works/pi-ai/utils/estimate";
+import { userTextFromContent } from "../src/attachments.ts";
+import { openEvalAgent, context } from "./runtime.ts";
 
 /** Deliberately small so a few fat turns cross window - reserve. */
 const CONTEXT_WINDOW = 100_000;
@@ -42,64 +42,55 @@ export type CompactionE2EResult = {
 	turns: number;
 };
 
-function summaryText(messages: { role: string; summary?: unknown }[]): string {
-	return messages
-		.filter((message) => message.role === "compactionSummary")
-		.map((message) => (typeof message.summary === "string" ? message.summary : ""))
-		.join("\n");
-}
-
 export async function runCompactionE2E(
 	chat: { baseUrl: string; apiKey?: string; model: string },
 	options: { window?: number; turns?: number } = {},
 ): Promise<CompactionE2EResult> {
 	const window = options.window ?? CONTEXT_WINDOW;
 	const turns = options.turns ?? 4;
-	const library = await mkdtemp(join(tmpdir(), "loom-compaction-e2e-"));
-	const manager = new HarnessSessionManager({
+	const runtime = await openEvalAgent({ ...chat, contextWindow: window }, {
 		systemPrompt: "You are Loom. Answer briefly in one sentence. Do not call tools.",
-		chat: { ...chat, contextWindow: window },
+		settings: { compaction: { reserveTokens: Math.min(16_384, Math.floor(window / 4)), keepRecentTokens: Math.min(4000, Math.floor(window / 8)), backgroundTokens: 0 } },
 	});
-	manager.setPermissionLevel("full");
-	const events: LoomAgentEvent[] = [];
+	const events: AgentEvent[] = [];
+	let stream: Awaited<ReturnType<typeof watchEvents>> | undefined;
 	try {
-		await manager.openLibrary(library);
-		const session = await manager.createSession();
+		const conversation = await runtime.owner.createConversation({}, context);
+		stream = await watchEvents(runtime.owner.harness, conversation.id, context);
+		stream.start(async (batch) => { events.push(...batch); });
+		const prompt = async (content: string) => {
+			if ((await (await conversation.submit({ type: "input", content }, context)).wait(context)).status !== "done") throw new Error("Compaction eval request failed");
+		};
 		let lastContext: number | null = null;
+		let contextBefore: number | null = null;
 		let contextAfterCompaction: number | null = null;
 
 		for (let turn = 0; turn < turns; turn++) {
 			const anchor = turn === 0
 				? ` Remember for the whole session: the project code is ${ANCHOR.code}, the main file is ${ANCHOR.path}, and the theme color is ${ANCHOR.color}.`
 				: "";
-			await manager.prompt(session.id, `${filler(turn)}${anchor}`, {
-				onEvent: (event) => events.push(event),
-			});
-			const record = await manager.getSession(session.id);
-			const usage = record.context?.tokens ?? null;
-			const compacted = events.some((event) => event.type === "compaction_end" && event.status === "completed");
+			await prompt(`${filler(turn)}${anchor}`);
+			const active = await conversation.context(context);
+			const usage = active.messages.reduce((sum, message) => sum + estimateMessageTokens(message), 0);
+			const compacted = active.entries.some((entry) => CompactionEntry.is(entry));
 			// First concrete reading after a compaction reflects the compacted context.
 			if (compacted && contextAfterCompaction === null && usage !== null && usage < (lastContext ?? Infinity)) {
 				contextAfterCompaction = usage;
+				contextBefore = lastContext;
 			}
 			if (usage !== null) lastContext = usage;
 		}
 
 		// Recall probe: can the model still name the anchors after compaction?
-		await manager.prompt(session.id, `One line: what is the project code, main file, and theme color?`);
-		const final = await manager.getSession(session.id);
-		const recallAnswer = final.messages
-			.filter((message) => message.role === "assistant")
-			.map((message) => String(Array.isArray(message.content)
-				? message.content.filter((part): part is { type: string; text: string } => typeof part === "object" && part.type === "text").map((part) => part.text).join(" ")
-				: message.content ?? ""))
-			.at(-1) ?? "";
-
-		const summary = summaryText(final.messages);
+		await prompt("One line: what is the project code, main file, and theme color?");
+		const final = await conversation.context(context);
+		const recallAnswer = userTextFromContent(final.messages.findLast((message) => message.role === "assistant")?.content);
+		const summaries = final.entries.filter((entry) => CompactionEntry.is(entry));
+		const summary = summaries.map((entry) => userTextFromContent(entry.model?.[0]?.content)).join("\n");
 		return {
 			window,
-			compactionEvents: events.filter((event) => event.type === "compaction_end" && event.status === "completed").length,
-			contextBefore: contextAfterCompaction === null ? lastContext : (lastContext ?? null),
+			compactionEvents: events.filter((event) => event.type === "compaction_end" && !event.error).length,
+			contextBefore: contextBefore ?? lastContext,
 			contextAfterCompaction,
 			summary,
 			summaryMentionsCode: summary.includes(ANCHOR.code),
@@ -108,8 +99,7 @@ export async function runCompactionE2E(
 			turns,
 		};
 	} finally {
-		await manager.close();
-		await rm(library, { recursive: true, force: true });
+		await stream?.stop(); await runtime.close();
 	}
 }
 
@@ -130,7 +120,7 @@ async function main(): Promise<void> {
 	console.log(`  ${chat.baseUrl}  ${chat.model}  window=${CONTEXT_WINDOW}\n`);
 	const result = await runCompactionE2E(chat);
 	console.log(`  compaction events      ${result.compactionEvents}`);
-	console.log(`  context after compact  ${result.contextAfterCompaction ?? "n/a"} tokens (window ${result.window}, final ${result.contextBefore ?? "n/a"})`);
+	console.log(`  context after compact  ${result.contextAfterCompaction ?? "n/a"} estimated tokens (window ${result.window}, before ${result.contextBefore ?? "n/a"})`);
 	console.log(`  summary has code/path  ${result.summaryMentionsCode} / ${result.summaryMentionsPath}`);
 	console.log(`  summary excerpt        ${result.summary.replace(/\s+/g, " ").slice(0, 220)}`);
 	console.log(`  recall answer          ${result.recallAnswer.slice(0, 160)}`);

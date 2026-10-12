@@ -24,7 +24,7 @@ Stop 取消这次等待。切到 Full 时再确认一次：进程沙箱这次不
 
 工具卡片可以把这条命令记在当前库的 `<library>/.loom/command-allows.json`。同一个库里以后的会话不再询问。换一个库则无效。`bash` 记下去掉首尾空白的命令文本。`run_ffmpeg` 记下程序名和参数。`write` 和 `edit` 记下工具名和路径，不看文件内容。其余要确认的工具记下工具名。设置 → Agent 列出这些命令，可以忘掉一条。
 
-Pi `before_tool`（hook id `loom.tool_permission`）发出 `tool_pending`，工具卡片上继续之后才往下走。
+`loom.permission` extension 安装可取消的 `ToolTask.beforeTool` hook。待审批调用存入 `LoomApprovalsDoc`，AG-UI 观察后发布 `loom.tool_gate`。ID 带 conversation 命名空间，包含 specialist。Stop 清除等待；重开时先清理过期 document rows，durable 恢复后重新询问。
 
 ---
 

@@ -71,6 +71,14 @@ describe("latestUiSelectionAssetId", () => {
 	it("ignores composer chips", () => {
 		assert.equal(latestUiSelectionAssetId([{ attachments: [chip] }]), undefined);
 	});
+
+	it("reads the persisted durable content block without an attachments sidecar", () => {
+		const messages = [{ role: "user", content: foldUserText("look", [selection]) }, { role: "assistant", content: "done" }];
+		assert.equal(latestUiSelectionAssetId(messages), fields.assetId);
+		assert.equal(uiSelectionToAttach(fields, messages), undefined);
+		assert.equal(latestUiSelectionAssetId([{ role: "assistant", content: messages[0]!.content }]), undefined);
+		assert.equal(latestUiSelectionAssetId([{ role: "user", content: contentWithPlacedAssets("look", [chip]) }]), undefined);
+	});
 });
 
 describe("promptAttachments", () => {

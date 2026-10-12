@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BACKGROUND_CONTEXT } from "#vendor/pi-agent";
+import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryAgent, createModels } from "../src/durable.ts";
+import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { LIBRARY_SKILLS_DIR, loadLibrarySkills, systemPromptWithSkills } from "../src/library-skills.ts";
-import { createWorkspaceTools } from "../src/pi-tools.ts";
+
 
 const BODY = "SECRET_BODY_MUST_STAY_OUT_OF_THE_CATALOG";
 
@@ -18,11 +19,7 @@ async function writeSkill(libraryRoot: string, name: string, description: string
 test("loadLibrarySkills skips a missing .agents/skills directory", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-missing-"));
 	try {
-		const { skills, diagnostics } = await loadLibrarySkills(
-			createWorkspaceTools(root).toolContext.env,
-			root,
-			BACKGROUND_CONTEXT,
-		);
+		const { skills, diagnostics } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
 		assert.deepEqual(skills, []);
 		assert.deepEqual(diagnostics, []);
 	} finally {
@@ -50,11 +47,7 @@ test("loadLibrarySkills reads SKILL.md under .agents/skills and leaves other tre
 			"---\nname: other\ndescription: Must not load from library skills/.\n---\n\nignored\n",
 		);
 
-		const { skills, diagnostics } = await loadLibrarySkills(
-			createWorkspaceTools(root).toolContext.env,
-			root,
-			BACKGROUND_CONTEXT,
-		);
+		const { skills, diagnostics } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
 		assert.equal(diagnostics.length, 0);
 		assert.equal(skills.length, 1);
 		assert.equal(skills[0]?.name, "brand-voice");
@@ -75,11 +68,7 @@ test("systemPromptWithSkills lists the catalog without skill bodies", async () =
 			"Apply the house brand voice when writing titles or copy.",
 			BODY,
 		);
-		const { skills } = await loadLibrarySkills(
-			createWorkspaceTools(root).toolContext.env,
-			root,
-			BACKGROUND_CONTEXT,
-		);
+		const { skills } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
 		const prompt = systemPromptWithSkills("You are Loom.", skills);
 		assert.match(prompt, /^You are Loom.\n\nThe following skills provide specialized instructions/);
 		assert.match(prompt, /<name>brand-voice<\/name>/);
@@ -87,7 +76,51 @@ test("systemPromptWithSkills lists the catalog without skill bodies", async () =
 		assert.match(prompt, /\.agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
 		assert.doesNotMatch(prompt, new RegExp(BODY));
 		assert.equal(systemPromptWithSkills("You are Loom.", []), "You are Loom.");
+		assert.equal(systemPromptWithSkills("You are Loom.", skills.map((skill) => ({ ...skill, disableModelInvocation: true }))), "You are Loom.");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
+});
+
+test("skills honor scoped ignores, stop at a skill root, diagnose malformed/duplicate metadata and skip symlinks", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-skills-rules-"));
+	try {
+		await writeSkill(root, "valid", "A & B < C", BODY);
+		await writeSkill(root, "ignored", "ignored", BODY);
+		await writeSkill(root, "valid/nested", "nested", BODY);
+		await writeSkill(root, "duplicate", "duplicate", BODY);
+		await writeFile(join(root, LIBRARY_SKILLS_DIR, "duplicate", "SKILL.md"), "---\nname: valid\ndescription: duplicate\n---\nbody");
+		await writeSkill(root, "bad", "bad", BODY);
+		await writeFile(join(root, LIBRARY_SKILLS_DIR, "bad", "SKILL.md"), "---\nname: [broken\n---\nbody");
+		await writeFile(join(root, LIBRARY_SKILLS_DIR, ".ignore"), "ignored/\n");
+		await symlink(root, join(root, LIBRARY_SKILLS_DIR, "cycle"), process.platform === "win32" ? "junction" : "dir");
+		const result = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
+		assert.equal(result.skills.length, 1);
+		assert.ok(result.diagnostics.some((row) => /Duplicate skill/.test(row.message)));
+		assert.ok(result.diagnostics.some((row) => row.path.endsWith("bad/SKILL.md") || row.path.endsWith("bad\\SKILL.md")));
+		assert.ok(!result.skills.some((row) => row.name === "nested" || row.name === "ignored"));
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("library skills section reloads the catalog on a later request without injecting bodies", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-skills-section-"));
+	let owner: LibraryAgent | undefined;
+	try {
+		await writeSkill(root, "brand-voice", "A & B < C", BODY);
+		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
+		const assembly = await createLibraryExtension(root, { autoMemory: false, workspace: { images: false } });
+		owner = await LibraryAgent.open(root, { models, extensions: [assembly.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, BACKGROUND_CONTEXT);
+		const conversation = await owner.createConversation({}, BACKGROUND_CONTEXT);
+		for (const description of ["A &amp; B &lt; C", "New description"]) {
+			faux.setResponses([(request) => {
+				const system = request.messages.findLast((message) => message.role === "system");
+				assert.ok(JSON.stringify(system).includes(description), JSON.stringify(request));
+				assert.doesNotMatch(JSON.stringify(request), new RegExp(BODY));
+				return fauxAssistantMessage("done");
+			}]);
+			const result = await (await conversation.submit({ type: "input", content: "hello" }, BACKGROUND_CONTEXT)).wait(BACKGROUND_CONTEXT);
+			assert.equal(result.status, "done", JSON.stringify(result));
+			await writeSkill(root, "brand-voice", "New description", BODY);
+		}
+	} finally { await owner?.close(BACKGROUND_CONTEXT); await rm(root, { recursive: true, force: true }); }
 });

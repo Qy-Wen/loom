@@ -3,11 +3,10 @@
  *
  *   pnpm --filter @loom/agent eval:prompt-cache-hit
  */
-import { mkdtemp, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { HarnessSessionManager, uiSelectionToAttach, type LoomTranscriptMessage, type UiSelectionFields } from "../src/index.ts";
+import { foldUserText, uiSelectionToAttach, type UiSelectionFields } from "../src/index.ts";
+
+import { openEvalAgent, context } from "./runtime.ts";
 
 export type UsageSnapshot = {
 	/** Uncached prompt tokens (`prompt_tokens - cacheRead - cacheWrite` in pi-ai). */
@@ -104,9 +103,9 @@ export type PromptCacheHitResult = {
 	meanHit: number;
 };
 
-function lastAssistantUsage(messages: LoomTranscriptMessage[]): UsageSnapshot | undefined {
+function lastAssistantUsage(messages: readonly import("@earendil-works/pi-ai").Message[]): UsageSnapshot | undefined {
 	for (let i = messages.length - 1; i >= 0; i--) {
-		const usage = usageFromMessage(messages[i]);
+		const usage = usageFromMessage(messages[i] as unknown as Record<string, unknown>);
 		if (usage) return usage;
 	}
 	return undefined;
@@ -117,21 +116,18 @@ export async function runPromptCacheHit(
 	turns: PromptCacheTurn[],
 	chat: { baseUrl: string; apiKey?: string; model: string },
 ): Promise<PromptCacheHitResult> {
-	const library = await mkdtemp(join(tmpdir(), "loom-prompt-cache-"));
-	const manager = new HarnessSessionManager({ systemPrompt: paddedSystemPrompt(), chat });
-	manager.setPermissionLevel("full");
+	const runtime = await openEvalAgent(chat, { systemPrompt: paddedSystemPrompt() });
 	try {
-		await manager.openLibrary(library);
-		const session = await manager.createSession();
+		const conversation = await runtime.owner.createConversation({}, context);
 		const usages: UsageSnapshot[] = [];
 		const hits: CacheHit[] = [];
 
 		for (const turn of turns) {
-			const before = await manager.getSession(session.id);
+			const before = await conversation.context(context);
 			const attachment = uiSelectionToAttach(turn.selection ?? null, before.messages);
-			await manager.prompt(session.id, turn.user, attachment ? { attachments: [attachment] } : undefined);
-			const after = await manager.getSession(session.id);
-			const usage = lastAssistantUsage(after.messages);
+			const submission = await conversation.submit({ type: "input", content: foldUserText(turn.user, attachment ? [attachment] : []) }, context);
+			if ((await submission.wait(context)).status !== "done") throw new Error("Cache eval request failed");
+			const usage = lastAssistantUsage([...(await conversation.context(context)).messages]);
 			if (!usage) throw new Error(`No usage on assistant message after: ${turn.user}`);
 			hits.push(cacheHitFromUsage(usage));
 			usages.push(usage);
@@ -144,8 +140,7 @@ export async function runPromptCacheHit(
 			meanHit: mean(hits.map((row) => row.hit)),
 		};
 	} finally {
-		await manager.close();
-		await rm(library, { recursive: true, force: true });
+		await runtime.close();
 	}
 }
 

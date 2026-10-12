@@ -11,6 +11,7 @@ import {
 	readLibraryAutoMemory,
 } from "./library-auto-memory.ts";
 import { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "./pi-tools.ts";
+import { formatSkillsForSystemPrompt, loadLibrarySkills } from "./library-skills.ts";
 import type { LoomTool } from "./types.ts";
 
 /** Memory stays frozen per conversation. Forks retain the source snapshot, not the current file. */
@@ -30,6 +31,8 @@ export type LibraryExtensionOptions = {
 	workspace?: WorkspaceToolOptions;
 	/** Default true; specialists should disable memory or not select this extension. */
 	autoMemory?: boolean;
+	/** Discover the library catalog on each request; bodies are loaded only through read. */
+	skills?: boolean;
 };
 
 /** Assemble tools and stable prompt sections; pass conversationCreated to LibraryAgent.open(). */
@@ -53,6 +56,11 @@ export async function createLibraryExtension(root: string, options: LibraryExten
 		tools,
 		sections: [
 			section("preamble", () => systemPrompt || undefined, { tag: false }),
+			...(options.skills !== false ? [section("skills", async (input, context) => {
+				if (!input.env) return undefined;
+				const { skills } = await loadLibrarySkills(input.env, root, context);
+				return formatSkillsForSystemPrompt(skills) || undefined;
+			}, { tag: false })] : []),
 			...(memory ? [section("auto_memory", async (input, context) => {
 				const saved = await input.read.snapshot(LoomMemoryDoc, input.conversationId, context);
 				return formatAutoMemoryForSystemPrompt(saved?.snapshot ?? "") || undefined;
