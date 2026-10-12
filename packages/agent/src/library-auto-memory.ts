@@ -25,12 +25,6 @@ export function serializeAutoMemory(entries: readonly string[]): string {
 	return entries.join(ENTRY_SEPARATOR);
 }
 
-/** Append the frozen note. An empty file adds nothing. */
-export function systemPromptWithAutoMemory(base: string, memory: string): string {
-	const block = formatAutoMemoryForSystemPrompt(memory);
-	return block ? `${base}\n\n${block}` : base;
-}
-
 export function formatAutoMemoryForSystemPrompt(memory: string): string {
 	const entries = parseAutoMemoryEntries(memory);
 	if (entries.length === 0) return "";

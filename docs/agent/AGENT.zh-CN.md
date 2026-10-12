@@ -22,6 +22,20 @@ Vendor：pi-durable + pi-codemode
 - 调度、inbox、重试、压缩、任务取消和恢复属于 durable。Loom 不重建 lane 或旧 session manager。
 - 检索与索引仍使用 `packages/core` 的独立存储。
 
+`packages/agent/src` 按职责组织：
+
+| 职责 | 模块 |
+|---|---|
+| 原生边界与模型配置 | `index`、`durable`、`durable-adapter`、`pi-adapter` |
+| 库级 owner 与会话元数据 | `library-agent`、`conversation-metadata`、`session-title` |
+| 工具、specialist、权限 | `pi-tools`、`specialist`、`tool-gate`、`tool-permission`、`workspace-path` |
+| Prompt sections | `library-extension`、`library-auto-memory`、`library-skills` |
+| 输入框与发送时上下文 | `attachments`、`composer-asset`、`composer-image` |
+| 契约与上下文占用 | `types`、`session-dto`、`context-usage` |
+| 诊断 | `durable-trace`、`trace-models`、`trace-privacy`、`trace-store`、`trace-types` |
+
+运行时调度留在 durable。指令使用原生配置，附件在 submit 前折叠，memory/skills 使用 section；不保留重复的请求时转换、prompt 拼接包装或旧 telemetry recorder。
+
 ## 2. Vendor 工作流
 
 `vendor-pi-durable/src` 与 `vendor-pi-codemode/src` 从上游 `main` 的同一 commit 镜像，各自 `UPSTREAM` 记录来源。模型/运行时依赖仍走 npm；codemode 是保留上游 imports 的私有 workspace。

@@ -9,14 +9,15 @@ import {
 	libraryAutoMemoryFile,
 	parseAutoMemoryEntries,
 	readLibraryAutoMemory,
-	systemPromptWithAutoMemory,
+	formatAutoMemoryForSystemPrompt,
 	updateLibraryAutoMemory,
 } from "../src/library-auto-memory.ts";
 
-test("systemPromptWithAutoMemory appends saved facts and skips an empty note", () => {
-	assert.equal(systemPromptWithAutoMemory("Base.", ""), "Base.");
-	const prompt = systemPromptWithAutoMemory("Base.", "user prefers concise titles");
-	assert.match(prompt, /^Base\.\n\nAuto memory for this library/);
+test("formatAutoMemoryForSystemPrompt formats saved facts and skips an empty note", () => {
+	assert.equal(formatAutoMemoryForSystemPrompt(""), "");
+	assert.equal(formatAutoMemoryForSystemPrompt("  \r\n"), "");
+	const prompt = formatAutoMemoryForSystemPrompt("user prefers concise titles");
+	assert.match(prompt, /^Auto memory for this library/);
 	assert.match(prompt, /user prefers concise titles$/);
 	assert.deepEqual(parseAutoMemoryEntries("one\r\n§\r\ntwo\r\n"), ["one", "two"]);
 });

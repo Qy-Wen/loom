@@ -2,15 +2,14 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	contentWithPlacedAssets,
-	foldUserMessageForLlm,
 	foldUserText,
 	implicitSelectionAttachments,
 	latestUiSelectionAssetId,
 	promptAttachments,
 	uiSelectionToAttach,
+	userTextFromContent,
 } from "../src/attachments.ts";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/composer-asset.ts";
-import { bytesToBase64, parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
 
 const fields = {
 	assetId: "asset-1",
@@ -126,24 +125,14 @@ describe("composer asset chips", () => {
 	});
 });
 
-describe("foldUserMessageForLlm", () => {
-	it("leaves content alone when there are no attachments", () => {
-		const message = { role: "user", content: [{ type: "text", text: "hello" }] };
-		assert.equal(foldUserMessageForLlm(message), message);
+describe("send-time attachment folding", () => {
+	it("leaves text alone when there are no attachments", () => {
+		assert.equal(foldUserText("hello", []), "hello");
 	});
 
-	it("folds an implicit selection into one string and keeps the stored row's attachments", () => {
-		const message = {
-			role: "user",
-			content: [{ type: "text", text: "把这个处理一下" }],
-			attachments: [selection],
-		};
-		assert.deepEqual(foldUserMessageForLlm(message), {
-			...message,
-			content: foldUserText("把这个处理一下", [selection]),
-		});
+	it("folds an implicit selection after the user's text", () => {
 		assert.match(
-			String(foldUserMessageForLlm(message).content),
+			foldUserText("把这个处理一下", [selection]),
 			/^把这个处理一下\n\n<system-reminder>\nThe user had this file selected in the library\. This may or may not be related to the current task\.\n\n<ui_selection>\npath: clips\/hero\.mp4\nasset_id: asset-1\ntype: video\n<\/ui_selection>\n<\/system-reminder>$/,
 		);
 	});
@@ -157,7 +146,7 @@ describe("foldUserMessageForLlm", () => {
 		);
 	});
 
-	it("stores a placed chip in the text and keeps a different selection on attachments", () => {
+	it("stores a placed chip in the text and folds a different implicit selection", () => {
 		const other = { type: "ui_selection" as const, assetId: "asset-2", path: "notes/brief.md", assetType: "text" as const };
 		const stored = "看一下\n\n<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>\n\n这段";
 		assert.equal(contentWithPlacedAssets(stored, [chip]), stored);
@@ -172,10 +161,10 @@ describe("foldUserMessageForLlm", () => {
 			contentWithPlacedAssets(inline, [moved]),
 			`看一下<asset_ref>\npath: clips/moved.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>这段`,
 		);
-		const sent = foldUserMessageForLlm({ role: "user", content: stored, attachments: [other] });
-		assert.equal(String(sent.content).match(/<asset_ref>/g)?.length, 1);
+		const sent = foldUserText(contentWithPlacedAssets(stored, [chip]), implicitSelectionAttachments([chip], other, []));
+		assert.equal(sent.match(/<asset_ref>/g)?.length, 1);
 		assert.match(
-			String(sent.content),
+			sent,
 			/这段\n\n<system-reminder>\nThe user had this file selected in the library\. This may or may not be related to the current task\.\n\n<ui_selection>\npath: notes\/brief\.md\nasset_id: asset-2\ntype: text\n<\/ui_selection>\n<\/system-reminder>$/,
 		);
 		assert.deepEqual(splitStoredAssetText(stored), [
@@ -202,25 +191,10 @@ describe("foldUserMessageForLlm", () => {
 		);
 	});
 
-	it("drops an image part and keeps the text", () => {
-		const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
-		const image = { type: "image" as const, data: bytesToBase64(png), mimeType: "image/png" };
-		const message = { role: "user", content: [{ type: "text", text: "look" }, image] };
-		assert.deepEqual(foldUserMessageForLlm(message), { ...message, content: "look" });
-	});
-
-	it("rejects a file that is not a JPEG, PNG, GIF, or WebP", () => {
-		assert.equal(sniffComposerImage(new Uint8Array([0, 1, 2, 3])), undefined);
-		assert.throws(() => parseComposerImageInputs([{ filename: "x.txt", mimeType: "image/png", data: bytesToBase64(new Uint8Array([1, 2, 3, 4])) }]));
-	});
-
-	it("folds attachments into one string and drops image parts", () => {
-		const image = { type: "image" as const, data: "abc", mimeType: "image/png" };
-		const folded = foldUserMessageForLlm({
-			role: "user",
-			content: [{ type: "text", text: "look" }, image],
-			attachments: [chip],
-		});
-		assert.equal(folded.content, foldUserText("look", [chip]));
+	it("extracts display text without rewriting the model's image content", () => {
+		const content = [{ type: "text", text: "look" }, { type: "image", data: "abc", mimeType: "image/png" }];
+		const original = structuredClone(content);
+		assert.equal(userTextFromContent(content), "look");
+		assert.deepEqual(content, original);
 	});
 });

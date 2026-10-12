@@ -9,7 +9,7 @@ import {
 	type CommitPublication, type ConversationRecord, type Harness, type HookApi,
 	type TaskRecord, type LiveState, type ToolTaskInput,
 } from "./durable-adapter.ts";
-import type { LoomTraceSpan } from "./run-trace.ts";
+import type { LoomTraceSpan } from "./trace-types.ts";
 import { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";
 import { TracePrivacy } from "./trace-privacy.ts";
 import { traceModels } from "./trace-models.ts";

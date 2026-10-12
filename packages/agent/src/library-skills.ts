@@ -102,7 +102,3 @@ export function formatSkillsForSystemPrompt(skills: readonly Skill[]): string {
 	if (!offered.length) return "";
 	return "The following skills provide specialized instructions for specific tasks. Read the SKILL.md with read when its description matches the task. Resolve references relative to that skill's directory.\n\n<available_skills>\n" + offered.map((skill) => `  <skill>\n    <name>${escapeXml(skill.name)}</name>\n    <description>${escapeXml(skill.description)}</description>\n    <location>${escapeXml(skill.filePath)}</location>\n  </skill>`).join("\n") + "\n</available_skills>";
 }
-export function systemPromptWithSkills(base: string, skills: readonly Skill[]): string {
-	const catalog = formatSkillsForSystemPrompt(skills);
-	return catalog ? `${base}\n\n${catalog}` : base;
-}
