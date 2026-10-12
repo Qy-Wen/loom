@@ -1,7 +1,7 @@
 import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
 	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
-	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry,
+	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
@@ -59,7 +59,7 @@ export class LibraryAgentHost {
 		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];
 		this.#unsubscribe = this.owner.harness.subscribeCommits((publication) => {
 			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
-			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && change.record.kind === LoomConversationDoc.definition.kind))) void this.publish();
+			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
 		});
 		this.owner.harness.resume();
 		await this.publish();
@@ -98,7 +98,11 @@ export class LibraryAgentHost {
 			...(message.role === "toolResult" ? { toolCallId: toolEventId(entry.conversationId, message.toolCallId) } : {}),
 			...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text } : {}),
 		})));
-		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: undefined };
+		const agent = await conversation.agent(context);
+		const ref = agent.model;
+		const model = ref && this.#models?.getModel(ref.provider, ref.modelId);
+		const usage = ref && model && model.contextWindow > 0 ? contextUsage(await conversation.context(context), ref, model.contextWindow) : undefined;
+		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireOwner().harness, idOf(id), title, context); }
 	async archiveSession(id: string) { await setConversationArchived(this.requireOwner().harness, idOf(id), true, context); }
@@ -137,6 +141,8 @@ export class LibraryAgentHost {
 				await (await owner.harness.conversation(row.id, context))!.configure({ model: { provider: built.model.provider, modelId: built.model.id } }, context);
 			}
 		} else this.#models?.deleteProvider("loom-chat");
+		// Context-window-only edits and disabling Chat may not change pi.agent.
+		await this.publish();
 	}
 	#models: ReturnType<typeof createModels> | undefined;
 	async setInstructions(text: string) {

@@ -13,6 +13,7 @@ test("app fork-before switches context, archives source, and hides deletion with
 		await host.openLibrary(path);
 		const record = await host.createSession();
 		await host.setSessionName(record.id, "Project");
+		assert.equal(record.context, undefined, "no Chat model means no context indicator");
 		const conversation = await host.conversation(record.id);
 		const first = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "first", timestamp: 1 }] }), context);
 		const second = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "second", timestamp: 2 }] }), context);
@@ -50,17 +51,22 @@ test("compaction and reopen preserve paginated chat history and forks before com
 			beforeCompact: async () => ({ summary: "Earlier questions summarized." }),
 		})] }));
 		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
+		const beforeUsage = (await host.getSession(session.id)).context!;
 		const task = await conversation.compact(undefined, context);
 		assert.equal((await host.requireOwner().harness.waitForTask(task, context)).state.outcome.status, "completed");
 		await conversation.waitForIdle(context);
 		const active = await conversation.context(context);
 		assert.ok(active.head, "a real compaction head must be placed");
 		assert.ok(!active.entries.some((entry) => entry.id === entries[1]!.id), "old question must leave model context");
+		const afterUsage = (await host.getSession(session.id)).context!;
+		assert.ok(afterUsage.tokens! < beforeUsage.tokens!, "UI context must shrink even though history is retained");
+		assert.equal(afterUsage.percent, afterUsage.tokens! / afterUsage.window * 100);
 		const expectedIds = entries.map((entry) => String(entry.id));
 		assert.deepEqual((await host.getSession(session.id)).messages.map((message) => message.id), expectedIds);
 		assert.equal((await host.listSessions())[0]?.updatedAt, (await host.getSession(session.id)).updatedAt);
 		await host.close(); await host.openLibrary(path);
 		assert.deepEqual((await host.getSession(session.id)).messages.map((message) => message.id), expectedIds);
+		assert.deepEqual((await host.getSession(session.id)).context, afterUsage);
 		const fork = await host.forkBefore(session.id, String(entries[1]!.id));
 		assert.deepEqual(fork.messages.map((message) => message.id), expectedIds.slice(0, 1));
 		assert.equal(fork.messages[0]?.displayContent, "question 0");
@@ -79,12 +85,15 @@ test("model and instruction edits apply to both existing and subsequently create
 		await host.openLibrary(path);
 		const first = await host.createSession();
 		await host.setInstructions("Updated instructions");
-		await host.setChat({ baseUrl: "http://localhost/v1", model: "next-model" });
+		await host.setChat({ baseUrl: "http://localhost/v1", model: "next-model", contextWindow: 64_000 });
 		const next = await host.createSession();
 		for (const id of [first.id, next.id]) {
 			const agent = await (await host.conversation(id)).agent(context);
 			assert.equal(agent.instructions, "Updated instructions");
 			assert.equal(agent.model?.modelId, "next-model");
+			assert.deepEqual((await host.getSession(id)).context, { tokens: 0, window: 64_000, percent: 0 });
 		}
+		await host.setChat(undefined);
+		assert.equal((await host.getSession(first.id)).context, undefined);
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });

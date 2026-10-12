@@ -88,7 +88,9 @@ CopilotChat receives an explicit `threadId`, enabling native reconnect rather th
 
 After SIGKILL, a streaming request is resent from its committed checkpoint. Interrupted partial text remains as `aborted` history but is excluded from the resent model context. An executing unsafe tool is not replayed and reports that it may have partially run. OS children may survive independently; external effects are not guaranteed exactly-once.
 
-Main binds HTTP to `127.0.0.1` on a random port, permits Electron/local renderer origins, and closes on quit. Only AG-UI crosses this boundary. Context percentage is temporarily absent. Telemetry production is deferred; dev-trace types/UI remain but emit no spans.
+Main binds HTTP to `127.0.0.1` on a random port, permits Electron/local renderer origins, and closes on quit. Only AG-UI crosses this boundary. Telemetry production is deferred; dev-trace types/UI remain but emit no spans.
+
+The context ring estimates current-model window occupancy; click for `~percent / window`. `contextUsage()` reads native active `ContextView`, uses applicable current-provider/model assistant usage after the latest head (including cache and output), then estimates trailing messages. Without applicable usage after creation, compaction, or model changes, it estimates active messages, including system/tool schemas/images, not full chat history or cumulative spend. Committed messages, compaction, and model settings changes refresh it; unconfigured Chat hides it. The model window comes from settings, defaulting to 128k; this is not an exact tokenizer measurement.
 
 ## 7. Validation
 

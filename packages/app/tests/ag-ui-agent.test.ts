@@ -10,7 +10,7 @@ import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
 import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 import { DurableAgentRunner } from "../src/main/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, contextUsage } from "@loom/agent";
 import type { AddressInfo } from "node:net";
 
 async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => Promise<void>, respond?: (request: IncomingMessage, response: ServerResponse) => void) {
@@ -38,6 +38,34 @@ test("durable AG-UI adapter produces text, committed IDs, snapshots, and a finis
 		assert.ok(events.some((event) => event.type === EventType.MESSAGES_SNAPSHOT));
 		assert.equal((await host.getSession(session.id)).messages.length, 2);
 		assert.equal((await host.getSession(session.id)).title, "question");
+	});
+});
+
+test("context reports provider usage, survives reopen, and publishes window-only or disabled-model updates", { timeout: 10_000 }, async () => {
+	await fixture(async (host, adapter) => {
+		const session = await host.createSession();
+		assert.deepEqual(session.context, { tokens: 0, window: 128_000, percent: 0 });
+		await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+		const usage = (await host.getSession(session.id)).context!;
+		assert.deepEqual(usage, { tokens: 1020, window: 128_000, percent: 1020 / 128_000 * 100 });
+		const root = host.requireOwner().libraryPath;
+		await host.close(); await host.openLibrary(root);
+		assert.deepEqual((await host.getSession(session.id)).context, usage);
+		const updated = Promise.withResolvers<void>();
+		const unsubscribe = host.subscribeSessions(() => updated.resolve());
+		try {
+			await host.setChat({ baseUrl: "http://localhost/v1", model: "demo", contextWindow: 64_000 });
+			await updated.promise;
+			assert.deepEqual((await host.getSession(session.id)).context, { ...usage, window: 64_000, percent: 1020 / 64_000 * 100 });
+			await host.setChat({ baseUrl: "http://localhost/v1", model: "other", contextWindow: 32_000 });
+			const conversation = await host.conversation(session.id);
+			assert.deepEqual((await host.getSession(session.id)).context, contextUsage(await conversation.context(context), { provider: "loom-chat", modelId: "other" }, 32_000));
+			await host.setChat(undefined);
+			assert.equal((await host.getSession(session.id)).context, undefined);
+		} finally { unsubscribe(); }
+	}, (_request, response) => {
+		response.writeHead(200, { "content-type": "text/event-stream" });
+		response.end('data: {"id":"reply","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1000,"completion_tokens":20,"total_tokens":1020}}\n\ndata: [DONE]\n\n');
 	});
 });
 
