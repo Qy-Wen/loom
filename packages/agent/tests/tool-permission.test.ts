@@ -9,7 +9,6 @@ import {
 	commandAllowLabel,
 	DEFAULT_AGENT_PERMISSION,
 	parseCommandAllows,
-	ToolApprovalQueue,
 	gatedToolNames,
 	parseAgentPermissionLevel,
 	pathInsideWorkspace,
@@ -105,37 +104,4 @@ test("remembered commands skip the next matching call", () => {
 	if (process.platform === "win32") {
 		assert.equal(commandAllowKey("write", { path: "Notes/A.md" }, "/Lib")?.match, "notes/a.md");
 	}
-});
-
-test("ToolApprovalQueue waits until resolve or abort", async () => {
-	const queue = new ToolApprovalQueue();
-	const waiting = queue.wait("s1", "call-1");
-	assert.equal(queue.size, 1);
-	assert.equal(queue.resolve("missing", "approve"), false);
-	assert.equal(queue.resolve("call-1", "reject"), true);
-	assert.equal(await waiting, "reject");
-	assert.equal(queue.size, 0);
-	assert.equal(queue.resolve("call-1", "approve"), false);
-
-	const controller = new AbortController();
-	const aborted = queue.wait("s1", "call-2", controller.signal);
-	controller.abort();
-	assert.equal(await aborted, "abort");
-
-	const sessionWait = queue.wait("s1", "call-3");
-	queue.wait("s2", "call-4");
-	queue.abortSession("s1");
-	assert.equal(await sessionWait, "abort");
-	assert.equal(queue.resolve("call-4", "approve"), true);
-
-	const auto = queue.wait("s3", "call-5");
-	queue.approveAll();
-	assert.equal(await auto, "approve");
-	assert.equal(queue.size, 0);
-
-	const remembered = queue.wait("s4", "call-6", undefined, { toolName: "bash", args: { command: "ls" } });
-	assert.deepEqual(queue.call("call-6"), { toolName: "bash", args: { command: "ls" } });
-	assert.equal(queue.resolve("call-6", "approve_always"), true);
-	assert.equal(await remembered, "approve");
-	assert.equal(queue.call("call-6"), undefined);
 });

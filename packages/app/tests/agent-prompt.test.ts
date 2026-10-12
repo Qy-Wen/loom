@@ -11,6 +11,7 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /Omit asset_id when you do not have one/);
 		assert.match(prompt, /<system-reminder>/);
 		assert.match(prompt, /<ui_selection>/);
+		assert.match(prompt, /Pass the full question in goal, including asset ids from <asset_ref> or <ui_selection>/);
 		assert.match(prompt, /Do not invent paths or ids/);
 		assert.match(prompt, /create_relation/);
 		assert.match(prompt, /list_properties/);

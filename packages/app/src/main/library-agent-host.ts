@@ -1,16 +1,16 @@
 import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
 	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
-	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId,
-	type AgentChange, type Conversation, type ConversationId, type EntryId, type LoomSessionRecord, type LoomSessionSummary,
+	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry,
+	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
 
-const idOf = (id: string): ConversationId => {
+const idOf = <T extends ConversationId | EntryId>(id: string): T => {
 	const parsed = Number(id);
 	if (!/^[1-9]\d*$/.test(id) || !Number.isSafeInteger(parsed)) throw new Error("Invalid conversation ID");
-	return parsed as ConversationId;
+	return parsed as T;
 };
 
 /** App-only lifecycle/DTO boundary. It owns a LibraryAgent, never reimplements lanes or generation. */
@@ -80,9 +80,10 @@ export class LibraryAgentHost {
 	async listSessions(): Promise<LoomSessionSummary[]> {
 		const owner = this.owner;
 		if (!owner) return [];
-		return (await listLoomConversations(owner.harness, {}, context)).map((row) => ({
-			id: String(row.id), title: row.title, status: row.archived ? "archived" : "open", createdAt: row.createdAt, updatedAt: row.createdAt,
-		}));
+		return Promise.all((await listLoomConversations(owner.harness, {}, context)).map(async (row) => ({
+			id: String(row.id), title: row.title, status: row.archived ? "archived" as const : "open" as const, createdAt: row.createdAt,
+			updatedAt: await this.lastMessageTimestamp((await owner.harness.conversation(row.id, context))!) ?? row.createdAt,
+		})));
 	}
 	async createSession() { const conversation = await this.requireOwner().createConversation({}, context); return this.getSession(String(conversation.id)); }
 	async openSession(id: string) { return this.getSession(id); }
@@ -90,7 +91,7 @@ export class LibraryAgentHost {
 		const owner = this.requireOwner();
 		const conversation = await this.conversation(id);
 		const metadata = await owner.harness.snapshot(LoomConversationDoc, conversation.id, context);
-		const entries = (await conversation.context(context)).entries;
+		const entries = await this.history(conversation);
 		const messages = entries.flatMap((entry) => (entry.model ?? []).filter((message) => message.role !== "system").map((message) => ({
 			...message, id: String(entry.id),
 			...(message.role === "assistant" ? { content: message.content.map((part) => part.type === "toolCall" ? { ...part, id: toolEventId(entry.conversationId, part.id) } : part) } : {}),
@@ -110,13 +111,12 @@ export class LibraryAgentHost {
 	async forkBefore(id: string, entryId: string) {
 		const conversation = await this.conversation(id);
 		await conversation.abort(context);
-		const history = (await conversation.context(context)).entries;
-		const index = history.findIndex((entry) => String(entry.id) === entryId);
-		if (index < 0) throw new Error("Entry not found");
+		const history = (await conversation.entries({ maxEntryId: idOf<EntryId>(entryId) }, 2, undefined, context)).items;
+		if (String(history[0]?.id) !== entryId) throw new Error("Entry not found");
 		// Fork before the user entry, not at it; a reset provides an empty-context anchor for first-entry forks.
-		const at = history[index - 1]?.id;
+		const at = history[1]?.id;
 		if (!at) throw new Error("Cannot fork before the conversation's start anchor");
-		const fork = await conversation.fork(at as EntryId, { ownership: { kind: "ownerless" } }, context);
+		const fork = await conversation.fork(at, { ownership: { kind: "ownerless" } }, context);
 		return this.getSession(String(fork.id));
 	}
 	async branchBefore(id: string, entryId: string) {
@@ -154,6 +154,32 @@ export class LibraryAgentHost {
 		const { assembly, specialists } = await this.assemble(this.owner.libraryPath, permission);
 		this.owner.registry.install(assembly.extension);
 		for (const child of specialists) this.owner.registry.install(child);
+	}
+	/** UI transcript is fork-aware history, not the model's compacted active context. */
+	private async history(conversation: Conversation): Promise<EntryRecord[]> {
+		const tail = (await conversation.entries({}, 1, undefined, context)).items[0]?.id;
+		if (tail === undefined) return [];
+		const entries: EntryRecord[] = [];
+		let cursor: Cursor | undefined;
+		do {
+			const page = await conversation.entries({ order: "ascending", maxEntryId: tail }, 256, cursor, context);
+			entries.push(...page.items.filter((entry) => !CompactionEntry.is(entry)));
+			cursor = page.next;
+		} while (cursor !== undefined);
+		return entries;
+	}
+	private async lastMessageTimestamp(conversation: Conversation): Promise<number | undefined> {
+		let cursor: Cursor | undefined;
+		do {
+			const page = await conversation.entries({}, 32, cursor, context);
+			for (const entry of page.items) {
+				if (CompactionEntry.is(entry)) continue;
+				const message = entry.model?.findLast((message) => message.role !== "system");
+				if (message) return message.timestamp;
+			}
+			cursor = page.next;
+		} while (cursor !== undefined);
+		return undefined;
 	}
 	private async recordUsage() {
 		const owner = this.owner; if (!owner) return;

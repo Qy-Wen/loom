@@ -28,7 +28,7 @@ export type AgentEvalResult = {
 const AGENT_EVAL_SYSTEM_PROMPT =
 	"You are Loom, an assistant for a local creative asset workspace. " +
 	"The working directory is the asset library the user has open. " +
-	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids when the task needs them. It returns <asset_ref> blocks and passages. You do not have search_assets or inspect_asset. " +
+	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids from <asset_ref> or <ui_selection> when the task needs them. It returns <asset_ref> blocks and passages. You do not have search_assets or inspect_asset. " +
 	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
 	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
@@ -40,17 +40,21 @@ const MOCK_TOOLS: LoomTool[] = [
 		name: "search_assets",
 		description: "Search the open local asset library.",
 		parameters: Type.Object({ query: Type.Optional(Type.String()) }),
-		execute: (args) => JSON.stringify({ total: 1, query: (args as { query?: string }).query, assets: [{ path: "notes/river.md" }] }),
+		execute: () => JSON.stringify({ kind: "asset_list", total: 1, assets: [{ assetId: "eval-river", relativePath: "notes/river.md", filename: "river.md", type: "text", properties: [], passage: EVAL_FILES.find((file) => file.relativePath === "notes/river.md")!.text }] }),
 	},
 	{
 		name: "inspect_asset",
-		description: "Inspect one asset by stable assetId.",
+		description: "Inspect one asset by stable assetId. Returns file metadata, custom properties, relations, available write-ups, text-index status, and a safe preview reference. Does not return the full source text.",
 		parameters: Type.Object({ assetId: Type.String({ minLength: 1 }) }),
 		execute: (args) => {
 			const assetId = (args as { assetId: string }).assetId;
 			const path = assetId === "eval-soup" ? "recipes/soup.md" : assetId === "eval-river" ? "notes/river.md" : undefined;
 			if (!path) throw new Error(`Unknown eval asset: ${assetId}`);
-			return JSON.stringify({ assetId, path, content: EVAL_FILES.find((file) => file.relativePath === path)!.text });
+			return JSON.stringify({
+				kind: "asset_detail", assetId, relativePath: path, filename: path.split("/").at(-1), type: "text", properties: [], links: [],
+				textEmbed: { status: "idle" }, imageVlm: { status: "idle" }, videoVlm: { status: "idle" }, audioWriteup: { status: "idle" },
+				previewRef: `loom-asset://asset/${assetId}`,
+			});
 		},
 	},
 ];

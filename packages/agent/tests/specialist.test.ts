@@ -9,7 +9,7 @@ import {
 	BACKGROUND_CONTEXT as context, createModels, createSpecialistExtension, defineExtension, defineTool,
 	LibraryAgent, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry,
 } from "../src/durable.ts";
-import { partitionLibraryTools, specialistUserMessage } from "../src/specialist.ts";
+import { partitionLibraryTools, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/specialist.ts";
 
 const call = (name: string, args = {}) => answer(fauxToolCall(name, args), { stopReason: "toolUse" });
 
@@ -19,6 +19,8 @@ test("specialists partition search and MCP off the parent and accept only a self
 	assert.deepEqual(split.retrieve.map((tool) => tool.name), ["search_assets", "inspect_asset"]);
 	assert.deepEqual(split.create.map((tool) => tool.name), ["comfy__generate"]);
 	assert.equal(specialistUserMessage(" find the dock "), "Task:\nfind the dock");
+	assert.match(RETRIEVE_SYSTEM_PROMPT, /asset_id.*inspect_asset.*exact id first; do not call search_assets/);
+	assert.match(RETRIEVE_SYSTEM_PROMPT, /read on the relativePath returned by inspect_asset/);
 });
 
 for (const action of ["approve", "reject", "stop", "reopen"] as const) {

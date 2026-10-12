@@ -44,14 +44,15 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 - `LibraryAgentHost` installs resources before `resume()`, clears stale approval documents, records the usage baseline, then resumes native recovery.
 - New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Model/instruction edits configure existing conversations and update defaults for subsequent chats; tools replace registry extensions in place.
 - `LoomConversationDoc` stores latest title/archive/hidden/creation metadata outside model context. Forks append `（分支）`, clear archive/hidden, and leave the source unchanged.
-- Fork-before uses the preceding entry, including a start anchor for the first question. Branch-before creates the fork and archives the source. Delete hides the conversation, preserving ancestry and files already written.
+- Chat DTOs paginate native fork-aware `conversation.entries()` history, not compacted `context().entries`. Compaction summaries are not user messages. List/record timestamps use the last non-system, non-compaction message.
+- Fork-before finds the preceding entry in full history, including a start anchor for the first question and messages removed from model context by compaction. Branch-before creates the fork and archives the source. Delete hides the conversation, preserving ancestry and files already written.
 - Old `.loom/harness-sessions/` JSONL is ignored, not migrated.
 
 ## 4. Tools, specialists, prompt
 
 - `createWorkspaceTools()` returns durable `read`, `bash`, `edit`, and `write`. Environment/cwd is per conversation; bash preparation delegates to the core process sandbox. Images use upstream Photon workers.
 - `toDurableTool()` adapts Loom `content` to durable `output`, forwards cancellation, validates JSON `details`, and uses `replay: "unsafe"` for external effects.
-- Parent chat keeps workspace, FFmpeg, describe/embed, and other application tools. Retrieve owns `search_assets`, `inspect_asset`, and `read`. Create owns MCP `server__tool`, `write`, and `bash`.
+- Parent chat keeps workspace, FFmpeg, describe/embed, and other application tools. Retrieve owns `search_assets`, `inspect_asset`, and `read`: supplied IDs require inspect first, without searching for the same asset; source text is read from the returned `relativePath`. The parent passes asset IDs in the goal. Create owns MCP `server__tool`, `write`, and `bash`.
 - Each specialist tool creates a foreground task-owned conversation. Independent calls can run together. The child sees only its goal and specialist prompt; it cannot spawn another specialist. Parent receives the summary, not the child transcript. Stop cascades through ownership. Request IDs make safe specialist replay reuse its child/submission.
 - `createLibraryExtension()` assembles tools and preamble/skills/memory sections. User instructions use native `agent.instructions`.
 - Skills scan only `.agents/skills/`, via durable `ExecutionEnv`, on request preparation. Discovery honors scoped ignore files, diagnoses invalid/duplicate metadata, and skips symlinks. The catalog contains name/description/location, never bodies; the model uses `read` on demand. `disable-model-invocation` removes a skill from the catalog.
@@ -83,17 +84,19 @@ Partial updates are not only string deltas: durable also publishes whole message
 
 CopilotChat receives an explicit `threadId`, enabling native reconnect rather than manually claiming a random agent thread. Reload while a child waits for approval replays its card and pending state. Child tool/approval watchers attach through persisted specialist details and restore from their snapshots. Child text stays out of parent model history. Follow-ups use native `whenBusy: "followUp"`; Stop drops unadmitted inputs and aborts foreground owned work.
 
-`DurableAgentRunner` routes run/connect/stop to the adapter and native submissions; it does not use CopilotKit's in-memory history. Transport detach stops a connect watcher, not durable work; explicit Stop aborts the matching run. Connect restores history, partials, tools, and child approvals from durable snapshots, including after a main-process crash.
+`DurableAgentRunner` routes run/connect/stop to the adapter and native submissions; it does not use CopilotKit's in-memory history. Transport detach stops a connect watcher, not durable work; explicit Stop aborts the matching run. Connect restores partials, tools, and child approvals from durable snapshots and chat history from full entries, including after a main-process crash. Reconnecting a completed submission does not wait for a new run-end, even if its answer was compacted.
+
+After SIGKILL, a streaming request is resent from its committed checkpoint. Interrupted partial text remains as `aborted` history but is excluded from the resent model context. An executing unsafe tool is not replayed and reports that it may have partially run. OS children may survive independently; external effects are not guaranteed exactly-once.
 
 Main binds HTTP to `127.0.0.1` on a random port, permits Electron/local renderer origins, and closes on quit. Only AG-UI crosses this boundary. Context percentage is temporarily absent. Telemetry production is deferred; dev-trace types/UI remain but emit no spans.
 
 ## 7. Validation
 
-Agent/app typechecks and unit suites pass; vendor source/compiled-worker checks pass. Electron acceptance covers persistence, specialist approval, reload/fork, SIGKILL/restart of an approval-blocked child without duplicate model calls, and text visible **before** model completion. Optional live acceptance:
+Agent/app typechecks and unit suites pass; vendor source/compiled-worker checks pass. Electron acceptance covers persistence, specialist approvals, post-compaction reload/old-message forks, and SIGKILL/restart during approval, streaming, and external bash execution. It checks unduplicated user inputs, no unsafe tool replay, and text visible **before** model completion. Optional live acceptance:
 
 ```bash
 cd packages/app
 LOOM_E2E_LIVE_CHAT=1 node --env-file=../../.env node_modules/@playwright/test/cli.js test live-chat.spec.ts
 ```
 
-DeepSeek live streaming, compaction anchor recall, and prompt-cache evals pass. The strict live tool gold set is currently 3/4: the chip task sometimes uses `read` without required `inspect_asset`. This is not a passing parity claim. See [EVALS](./EVALS.md) for results and limitations.
+DeepSeek live streaming, compaction anchor recall, and prompt-cache evals pass. After aligning retrieve instructions and inspect mock fields with the product, strict live tool gold passed 4/4 twice without relaxing gold. Windows on-device validation and controlled old/new eval comparisons remain; no claim of complete parity. See [EVALS](./EVALS.md) for results and limitations.

@@ -2,8 +2,8 @@
 
 # Agent Core Migration — pi `packages/agent` harness → `pi-durable`
 
-> Evaluates replacing the vendored Pi harness with `@earendil-works/pi-durable`. See [AGENT](./AGENT.md) for the current architecture.
-> This document records the scope, the file-by-file mapping, capability parity, telemetry, and the open decisions. It assumes a fully backward-incompatible migration: existing session files are discarded. Update [AGENT](./AGENT.md) once the migration lands.
+> Migration design and acceptance record for Pi harness → `@earendil-works/pi-durable`. Current architecture: [AGENT](./AGENT.md).
+> Core implementation is complete; final status and remaining acceptance are in §10. Old-API tables below are migration mappings, not the current implementation. Existing sessions are incompatible and are not migrated.
 >
 > **Source baseline:** follow upstream `main`, not the `v1.1.0` tag. The image processor, nested tools, structured output, and code mode described below were added after that tag. `UPSTREAM` records the actual synced commit; npm dependencies must be checked against it.
 
@@ -41,7 +41,7 @@ Durable lacks a telemetry producer, the Agent Skills loader, and prompt template
 
 The driver is therefore **long-term maintainability** — stop forking `harness/**`, stay on upstream — not new capability. If that is not a priority, staying on v0.85.1 is viable.
 
-Note: "roughly the same feature set" above is a reading of the 1.1.0 source, not yet measured. Durable's compaction policy (`DEFAULT_COMPACTION_POLICY`) differs from the old harness's, so this equivalence should be verified by the existing evals — see §10 step 7.
+Durable's compaction policy (`DEFAULT_COMPACTION_POLICY`) differs from the old harness's. Runtime, tool, and Electron acceptance have been exercised; complete old/new equivalence still requires controlled comparisons. See §10 and [EVALS](./EVALS.md).
 
 ---
 
@@ -277,29 +277,19 @@ Resolved:
 
 ## 10. Migration order
 
-**Step 1 complete:** durable and codemode are vendored from upstream `main` commit `4270522473e677ddba7b093caa0064a3df51d459`, with matching provenance, imports/export boundary, dependencies, and isolated checks. Repeated sync is content-identical. Full vendor typecheck/build, 10 source tests, and a compiled JS/worker smoke test pass. Tests cover memory/JSONL/SQLite, tools/events, nested structured output, Photon, sandbox isolation, deterministic runs, and durable code mode. The existing Loom tests/evals and app still target the removed harness and are not runnable yet.
+**Steps 1–8 implemented:**
 
-**Step 2 complete:** Electron SQLite prerequisite verified on macOS; `buildChatModels` uses `/models` and no longer imports the old harness. Two new independent tests verify endpoint/auth/model configuration and OpenAI SSE over SQLite, including restored model context, provider identity, and request deduplication. `pnpm --filter @loom/agent try:durable` also passes against the real DeepSeek endpoint with an echo tool and SQLite reopen. Use `LOOM_CHAT_BASE_URL` / `LOOM_CHAT_MODEL` / `LOOM_CHAT_API_KEY` to override the smoke endpoint (default: DeepSeek with `DEEPSEEK_API_KEY`). The app owner and UI are still untouched; old consumers of `toProviderMessages` remain to migrate.
+- Durable/codemode are vendored from the same upstream `main` commit `4270522473e677ddba7b093caa0064a3df51d459`; Loom does not modify vendor `src/`. Isolated typechecks, 34 source tests, and one compiled worker test pass.
+- macOS Electron `node:sqlite`, model endpoint/provider identity, SQLite reopen, request deduplication, and a real DeepSeek tool smoke path pass.
+- `LibraryAgent` owns one Harness/Registry per library; metadata, permission, and memory use documents; skills use `ExecutionEnv`/sections; specialists use foreground owned conversations. App/root facade and tests/evals use durable, with no old-manager compatibility layer.
+- AG-UI uses partial increments, explicit threadId, and durable connect/stop; detach does not cancel work. Chat paginates fork-aware entries separately from compacted model context. Regressions cover post-compaction reload, old-message forks, and completed-request reconnect.
+- Electron SIGKILL acceptance covers approval, streaming, and executing unsafe bash. Approval reuses its child; streaming resends without duplicate user input and retains aborted partials; unsafe tools do not replay and report possible partial execution. External effects are not guaranteed exactly-once.
+- Workspace typechecks pass; unit suites: core 133 + 1 skipped, agent 59, app 191. Electron: 10 standard tests and one opt-in live streaming test pass. A core folder-rename watcher timed out once; isolated and workspace retries passed without modifying that test.
+- Strict live tool gold passed 4/4 twice, unchanged. Retrieve inspects supplied IDs first; the inspect mock matches product metadata. Compaction/cache measurements: [EVALS](./EVALS.md).
 
-**Step 3 complete:** added `LibraryAgent` (one SQLite Harness + Registry per library, delegating recovery/close), `LoomConversationDoc`, and list/rename/archive operations. `@loom/agent/durable` forwards generic APIs and the Loom owner through `src/durable.ts`; only `durable-adapter.ts` imports vendor paths. Native and raw forks append `（分支）` and reset archive; the default list excludes owned conversations. Canonical paths prevent duplicate owners within one process; the app lifecycle must still ensure cross-process exclusivity, with no new cross-process lock. Ten owner tests were added; all 22 isolated source tests and the compiled worker check pass. The app, old root facade, and business tools remain unmigrated; archiving the source in fork-and-switch is an app operation.
+**Remaining acceptance:** Windows on-device runtime and controlled old/new compaction/cache/tool comparisons. The three accepted crash points do not cover every timing or external tool. Cross-process owner exclusivity still relies on Electron's single-instance constraint, not a new general lock.
 
-**Step 4 complete:** `pi-tools` uses durable tools without toolContext/setCwd; bash's `prepare(execution, api, context)` delegates to the existing process sandbox. `toDurableTool` uses `defineTool`, forwards output/cancellation, validates JSON details, and marks external effects `replay: "unsafe"`. Removed `read-image.ts`; read uses upstream's Photon worker. `createLibraryExtension` assembles workspace/Loom/auto-memory tools and preamble/memory sections; `LoomMemoryDoc` freezes memory at conversation creation and preserves it on fork/reopen, while file updates affect new conversations only. Pass the assembly's `conversationCreated` into `LibraryAgent.open`; user instructions use native `agent.instructions`. Nine tool-layer tests were added; all 31 isolated source tests pass, including real sandbox write/network restrictions. Permission hooks, specialists, skills, and the app remain separate later steps; this extension does not replace the unmigrated permission gate.
-
-**Steps 5–8 implemented; parity acceptance remains open:** app uses `LibraryAgentHost`, native submissions/inbox, metadata documents, and AG-UI `watchEvents`. Specialist ownership, isolation, concurrent execution, approve/reject/Stop and SQLite reopen are tested. Skills use durable `ExecutionEnv` and a catalog section. Old tests/evals now use native durable APIs; retired workspace/image/branch/gate tests are covered by the new vendor/app suites. Root facade exports native handles and Loom DTOs, not manager compatibility APIs.
-
-Streaming fixes: process `message_start` and all partial changes (whole message/block as well as deltas); retain the optimistic user in the pre-admission snapshot so history/live merging does not hide increments. Electron acceptance proves child approvals (including reload while waiting) and text visible before completion; a real DeepSeek run also passed. Passing explicit `threadId` to CopilotChat restores native reconnect and replaces manual thread claiming. `DurableAgentRunner` replaces CopilotKit's in-memory run history with native durable connect/stop routing; disconnect does not abort work. SIGKILL/restart acceptance restores the same approval-blocked child without duplicate model requests. Temporary debug instrumentation is removed.
-
-Validation: workspace typechecks pass; unit suites pass (core 133 + 1 skipped, agent 60, app 189), plus 34 isolated vendor tests and one compiled worker test. Electron has 7 passing standard tests and one opt-in live test. The live streaming assertion measures only `/run`, excluding idle connect completion events. Existing core tests were aligned with explicit relation links and fail-closed sandbox setup; Markdown expectations now include the cache size suffix. Live compaction preserves anchor recall and cache eval works; strict live tool gold is 3/4. See [EVALS](./EVALS.md) for measurements. Windows runtime, further crash-point coverage (streaming/externally executing tools), and the tool gold gap remain; telemetry is deferred and context percentage stays absent.
-
-1. **Start with the vendored source and scripts.** Replace `vendor-pi-agent/` with pi-durable; update vendor source/version metadata and sync scripts (`vendor:sync`), plus `packages/agent` dependencies, exports, and build/test scripts. First make the vendor reproducibly sync, compile, and test in isolation; do not wire the app yet.
-2. Bump pi-ai / chord to 1.1.0 and add pi-durable; **first verify `node:sqlite` in the Electron main process (§9 decision 4 prerequisite)**, then get the minimal path running: `buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`.
-3. Settle the facade and UI-input questions (§9 decisions 1–2), then implement the durable-shaped owner (`Harness` + `Registry` + Loom `defineDoc`s) and the `@loom/agent` facade.
-4. Port the tool layer: `pi-tools`, `read-image` (→ `createNodePhotonImages`, delete old code), `library-auto-memory`; move tools and the prompt into an extension.
-5. Replace the session manager with the durable-shaped owner; wire the app to views/events (largest piece).
-6. Move specialists to owned subagents (§9 decision 6).
-7. Add skills + prompt sections + session metadata documents.
-8. Rebuild tests / evals. No storage migration; old sessions are dropped. Then run `compaction-rate` / `prompt-cache-hit` / `agent-tools` / `compaction-e2e` to get baselines comparable to the old version, and let those decide whether §2's "capability parity" holds — not whether the API surface lines up.
-9. (Later, out of scope here) Rebuild telemetry as an extension per §8.
+**Step 9 deferred:** rebuild telemetry as an extension per §8; context percentage stays absent.
 
 ---
 
@@ -319,8 +309,8 @@ Validation: workspace typechecks pass; unit suites pass (core 133 + 1 skipped, a
 - Upstream moved the harness out of `packages/agent` into `pi-durable`; the vendored harness is frozen at v0.85.1.
 - Durable is a re-architecture with the same core capabilities, not a feature upgrade.
 - Durable and codemode are vendored from the same upstream `main` commit, replacing `vendor-pi-agent/`; npm deps are pi-ai, chord, photon, typebox, diff, and quickjs-wasi.
-- "Durable matches the old harness capability-wise" is a source reading so far; the existing evals must verify it after the rebuild (§10 step 8).
+- Core implementation and limited runtime/tool/Electron acceptance are complete; Windows and controlled old/new comparisons remain, so complete parity is not claimed (§10).
 - Backward compatibility is dropped: old session storage, transcript shape, attachment sidecar, and projector are not carried over.
 - Scope follows durable's model; `packages/app` is in scope, not just `packages/agent`.
-- The largest work is replacing the session manager (1105 lines, 14 referencing files) with a durable-shaped owner and wiring the app to durable views/events — three app main-process files included — then `specialist.ts`. Telemetry is out of scope.
+- The old session manager is deleted; the app uses durable owner/views/events and specialists are migrated. Telemetry is out of scope.
 - Decided: a thin `@loom/agent` boundary, a `watchEvents`-driven UI, SQLite storage, durable on the built-in `node:sqlite`, and telemetry deferred and later built as an extension (§9). Session metadata uses a separate `defineDoc` (§9 decision 5); specialists use owned conversations without `background` (§9 decision 6); branch-before uses fork-and-switch and archives/hides the old conversation (§9 decision 8).

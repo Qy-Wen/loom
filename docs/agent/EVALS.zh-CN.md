@@ -94,7 +94,7 @@ CI：假 Chat 的 Agent 任务、假向量检索、Hybrid Search 单测、指标
 - 离线原生压缩：估算 4246 → 460 token（10.8%），替换 29 条消息，保留 3 条。
 - DeepSeek `deepseek-v4-flash` 阈值压缩：产生一份摘要，估算 39499 → 14388 token。摘要保留 code/path，回忆返回 `LOOM-7F3K`、`projects/aurora/main.mp4`、`teal`。
 - Prompt-cache：同选区平均 60.0%（0.0%、80.2%、99.7%），换选区平均 99.8%。第二组复用了已热的前缀，不能把均值作为选区变化的受控对比。
-- 假 Chat 工具金标 4/4；最近一次 live 为 3/4，`inspect-chip` 直接 `read` 而未执行要求的 `inspect_asset`。修正了 mock 返回错误素材路径的问题，没有放宽金标；该行为/能力差距仍未关闭。
-- Electron 测试实际打开临时库，覆盖子审批、reload/fork、SIGKILL/重开恢复，以及模型流仍未结束时文字已显示。Live 计时只统计 `/run`，不计空闲 connect 的结束事件。可选 `e2e/live-chat.spec.ts` 也用真实 DeepSeek 验证了 `RUN_FINISHED` 前正文可见。
+- 假 Chat 工具金标 4/4；严格 live 连续两次 4/4。Retrieve 提示明确已知 ID 先 inspect、不 search 同一素材；父代理传递 ID。Inspect mock 对齐产品的 `relativePath`/metadata，不再虚构源文本 `content`。金标不变；这是有限任务集的通过，不证明行为永远稳定。
+- Electron 测试实际打开临时库，覆盖子审批、压缩后 reload/旧消息 fork、审批/流式/unsafe bash 执行中 SIGKILL 和重开恢复，以及模型流仍未结束时文字已显示。流式请求重发但用户输入不重复，partial 保存为 `aborted`；unsafe bash 不重放，副作用一次，明确报告可能已部分执行。Live 计时只统计 `/run`，不计空闲 connect 的结束事件。可选 `e2e/live-chat.spec.ts` 也用真实 DeepSeek 验证了 `RUN_FINISHED` 前正文可见。
 
-尚不宣称完整新旧能力等价：Windows 运行时、更多崩溃点（流式生成/正在执行外部工具）的覆盖待完成。Telemetry 不在本次迁移范围。
+尚不宣称完整新旧能力等价：Windows 实机和受控新旧评测对比待完成。已覆盖的三个崩溃点不等于全部时序/工具验收；OS 子进程可能在主进程退出后继续执行，不能承诺外部副作用 exactly-once。Telemetry 不在本次迁移范围。
