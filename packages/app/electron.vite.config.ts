@@ -42,7 +42,7 @@ export default defineConfig(({ command }) => {
 			},
 			build: {
 				rollupOptions: {
-					input: { index: resolve(__dirname, "src/renderer/index.html"), ...(trace ? { "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html") } : {}) },
+					input: { index: resolve(__dirname, "src/renderer/index.html"), ...(trace ? { "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html") } : {}), ...(process.env.LOOM_E2E_PANELS === "1" ? { "panels-fixture": resolve(__dirname, "src/renderer/panels-fixture.html") } : {}) },
 				},
 			},
 			plugins: [react()],

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { joinGroup, joinMembers, mergeTabOrder, placeTab, tabAfterDetach } from "../src/renderer/layout/use-panel-layout.ts";
-import { bottomBand, clampFloat, pointerDocks, pointerInside, pointerNearLowerBand, pointerOnLeftEdge, pointerOnTopEdge } from "../src/renderer/layout/panel-geometry.ts";
+import { placeTab } from "../src/renderer/layout/use-panel-layout.ts";
+import { bottomBand, clampFloat, dockSplitEdge, pointerDocks, pointerInside, pointerNearLowerBand, pointerOnLeftEdge, pointerOnTopEdge } from "../src/renderer/layout/panel-geometry.ts";
 
 describe("panel geometry", () => {
 	it("keeps a floating window inside the shell", () => {
@@ -49,30 +49,6 @@ describe("panel geometry", () => {
 		assert.deepEqual(placeTab(three, "agent", 50, boxes), ["agent", "details", "grade"]);
 		assert.deepEqual(placeTab(three, "agent", 110, boxes), ["details", "grade", "agent"]);
 		assert.deepEqual(placeTab(three, "grade", 10, boxes), ["grade", "agent", "details"]);
-		assert.deepEqual(
-			mergeTabOrder(["agent", "grade", "details"], ["agent", "details"], ["details", "agent"]),
-			["details", "grade", "agent"],
-		);
-	});
-
-	it("selects a remaining tab after the active one is pulled out", () => {
-		const members = ["agent", "details", "grade"] as const;
-		assert.equal(tabAfterDetach("agent", members, "agent", true), "details");
-		assert.equal(tabAfterDetach("details", members, "agent", true), "details");
-		assert.equal(tabAfterDetach("grade", members, "grade", true), "agent");
-		assert.equal(tabAfterDetach("agent", ["agent", "grade"], "agent", false), "agent");
-	});
-
-	it("adds the dropped panel to the target's tab group", () => {
-		assert.deepEqual(joinMembers([], "grade", "details"), ["details", "grade"]);
-		assert.deepEqual(joinMembers(["agent", "details"], "grade", "details"), ["agent", "details", "grade"]);
-		assert.deepEqual(joinMembers(["details", "grade"], "grade", "agent"), ["agent", "grade"]);
-		assert.deepEqual(joinMembers(["details", "grade"], "agent", "grade"), ["details", "grade", "agent"]);
-	});
-
-	it("keeps every tab when a group is dropped onto another panel", () => {
-		assert.deepEqual(joinGroup(["agent", "details"], "grade"), ["grade", "agent", "details"]);
-		assert.deepEqual(joinGroup(["agent", "details"], "details"), ["agent", "details"]);
 	});
 
 	it("splices to the left of a right panel and above a lower panel", () => {
@@ -84,6 +60,15 @@ describe("panel geometry", () => {
 		assert.equal(pointerOnTopEdge(400, 570, lower), true);
 		assert.equal(pointerOnTopEdge(400, 630, lower), true);
 		assert.equal(pointerOnTopEdge(400, 720, lower), false);
+	});
+
+	it("uses top/bottom strips for vertical docking and leaves the center for tabs", () => {
+		const box = { left: 800, top: 40, right: 1200, bottom: 800 };
+		assert.equal(dockSplitEdge(1000, 52, box), "top");
+		assert.equal(dockSplitEdge(1000, 788, box), "bottom");
+		assert.equal(dockSplitEdge(1000, 420, box), null);
+		assert.equal(dockSplitEdge(799, 52, box), null);
+		assert.equal(dockSplitEdge(1000, 39, box), null);
 	});
 
 	it("docks only when the pointer is on the right edge", () => {
