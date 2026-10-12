@@ -1,12 +1,7 @@
-import type { LoomTraceSpan } from "@loom/agent";
+import type { LoomTraceRecord } from "@loom/agent";
 
-/** One prompt's spans, kept in the dev window for this process only. */
-export interface DevTraceRecord {
-	id: string;
-	threadId: string;
-	at: number;
-	spans: LoomTraceSpan[];
-}
+/** One persisted run, including task-owned specialist spans. */
+export type DevTraceRecord = LoomTraceRecord;
 
 export const DEV_TRACE_IPC = {
 	open: "loom:openDevTrace",

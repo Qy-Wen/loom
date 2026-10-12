@@ -46,6 +46,10 @@ function SpanPayload({ span }: { span: LoomTraceSpan }): React.JSX.Element {
 	const labels = payloadLabels(span.name);
 	return (
 		<div>
+			{span.name === "pi.ai.request" ? <p className="trace-empty">
+				Cache read: {String(span.attributes["pi.ai.usage.cache_read_tokens"] ?? 0)} · Cache write: {String(span.attributes["pi.ai.usage.cache_write_tokens"] ?? 0)}
+			</p> : null}
+			{typeof span.attributes["pi.tool.duration_ms"] === "number" ? <p className="trace-empty">Execution: {formatTraceDuration(span.attributes["pi.tool.duration_ms"])} (task time includes approval/waits)</p> : null}
 			{payload.input ? (
 				<section>
 					<h3>{labels.input}</h3>

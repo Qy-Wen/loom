@@ -41,6 +41,41 @@ test("durable AG-UI adapter produces text, committed IDs, snapshots, and a finis
 	});
 });
 
+test("trace persists streaming increments before completion and reloads from the library", { timeout: 10_000 }, async () => {
+	const finish = Promise.withResolvers<void>();
+	const published = Promise.withResolvers<void>();
+	await fixture(async (host) => {
+		await host.close();
+		const updates: import("@loom/agent").LoomTraceRecord[] = [];
+		let resets = 0;
+		host.setTracePublisher((record) => { if (!record) { resets++; return; } updates.push(record); if (record.status === "running" && record.spans.some((span) => String(span.attributes["loom.io.output"]).includes("trace partial"))) published.resolve(); });
+		const root = await mkdtemp(join(tmpdir(), "loom-app-trace-"));
+		try {
+			await host.openLibrary(root);
+			const session = await host.createSession();
+			const adapter = new LoomAgUiAgent(host);
+			const run = lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+			try {
+				await Promise.race([published.promise, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("No live trace before completion")), 2000); timer.unref(); })]);
+				assert.equal(host.listTraces()[0]!.status, "running");
+			} finally { finish.resolve(); await run; }
+			const records = host.listTraces(); assert.equal(records.length, 1); assert.equal(records[0]!.status, "completed");
+			assert.ok(updates.length > 1);
+			await host.close(); await host.openLibrary(root);
+			assert.deepEqual(host.listTraces(), records);
+			assert.ok(resets >= 2);
+			const secondLibrary = await mkdtemp(join(tmpdir(), "loom-app-trace-switch-"));
+			try { await host.openLibrary(secondLibrary); assert.deepEqual(host.listTraces(), []); }
+			finally { await host.close(); await rm(secondLibrary, { recursive: true, force: true }); }
+			await host.openLibrary(root); assert.deepEqual(host.listTraces(), records);
+		} finally { finish.resolve(); await host.close(); await rm(root, { recursive: true, force: true }); }
+	}, (_request, response) => {
+		response.writeHead(200, { "content-type": "text/event-stream" });
+		response.write('data: {"id":"trace","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"trace partial"},"finish_reason":null}]}\n\n');
+		void finish.promise.then(() => response.end('data: {"id":"trace","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
+	});
+});
+
 test("context reports provider usage, survives reopen, and publishes window-only or disabled-model updates", { timeout: 10_000 }, async () => {
 	await fixture(async (host, adapter) => {
 		const session = await host.createSession();

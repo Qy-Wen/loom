@@ -54,7 +54,7 @@ pnpm -r typecheck
 
 Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from the same upstream `main` commit into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Loom-owned code stays outside vendor `src/`; `src/durable-adapter.ts` is the import boundary. `@loom/agent` assembles one SQLite Harness/Registry per library, document-based metadata/approval/memory, skills sections, and foreground owned specialists. App chat uses native durable events and fork-aware full history, independently of model compaction; forks append `（分支）` and start unarchived.
 
-Workspace typechecks/tests pass. Electron accepts post-compaction reload/fork, pre-completion streaming (including real DeepSeek), and SIGKILL recovery during approval, streaming, and unsafe bash execution. Strict live tool gold passed 4/4 twice without relaxing expectations. Windows on-device validation and controlled old/new eval comparisons remain; telemetry is deferred. See [MIGRATION](./docs/agent/MIGRATION.md).
+Workspace typechecks/tests pass. Electron accepts post-compaction reload/fork, pre-completion streaming (including real DeepSeek), and SIGKILL recovery during approval, streaming, and unsafe bash execution. Strict live tool gold passed 4/4 twice without relaxing expectations. Development traces persist locally in `.agents/traces/traces.sqlite` ([TRACE](./docs/agent/TRACE.md)). Windows on-device validation and controlled old/new eval comparisons remain. See [MIGRATION](./docs/agent/MIGRATION.md).
 
 ### Syncing upstream
 

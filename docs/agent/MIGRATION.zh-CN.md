@@ -208,6 +208,8 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 
 ## 8. Telemetry
 
+**后续已实现：** 本地 durable trace 保存到 `.agents/traces/traces.sqlite`，见 [TRACE](./TRACE.zh-CN.md)。下方对比描述迁移基线，不代表当前 trace 实现；无需修改 vendor 源码。
+
 `pi-telemetry` 1.1.0 作为契约仍然完整，但 **pi 1.1.0 内没有任何运行时产出 span**：只有 `pi-ai` 引用它（仅透传 `ProviderRequestOptions.telemetryContext` 类型），没有任何地方调用 `startSpan`。旧 harness 是唯一生产者，durable 没有。
 
 旧 harness **实际**产出的（不是 schema 声明的）：
@@ -246,11 +248,9 @@ durable 接入点：
 3. `loom.io.input` 里的 system prompt 文本需从 durable 的结构化 `sections` 渲染。
 4. HTTP status / chunk count / TTFT 两版 pi-ai 都不产出。
 
-**范围：本次迁移不做 telemetry，以后做；做法定为基于 durable 扩展机制的外挂，不 fork durable。** 迁移期间 dev-trace 不产出 span（UI 和 `LoomTraceSpan` 类型保留）。
+**当前实现：** trace 是迁移后的 Loom 自有模块，使用 durable hooks/commit publication 与公开模型调用观察；现有 dev-trace UI 读取持久化 revision，不 fork durable。见 [TRACE](./TRACE.zh-CN.md)。
 
-以后的做法：一个 telemetry extension（`hook(GenerationTask, …)` + `hook(ToolTask, …)`），每个 conversation 一个 `watchEvents` 观察器，加一个 Loom 自有的可手动 start/end 的 `TelemetryContext`，用 `conversationId` / `taskId` / `callId` 维护 span 树。只要 span 名/属性对齐，`LoomTraceSpan` 和 dev-trace UI 无需改动。
-
-需要重新拥有 `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA`（在旧 vendor 里，会随 vendor 消失；`pi-telemetry` 仍提供 `defineTelemetrySchema` / `createTypedSpanStarter`），并放弃 `withTelemetryContext`——durable 不从 chord `Context` 读 telemetry。
+`DurableTrace` 使用任务 hooks 与一个 owner 级 `subscribeCommits` 观察器。publication 提供任务身份、ownership、时间戳和终态；`traceModels()` 不抢先消费流，观察公开请求。覆盖 deferred poll、压缩请求和工具恢复，不使用 `withTelemetryContext`、不改 vendor、不另建事件/恢复循环。`LoomTraceSpan` 保持 UI 契约。
 
 ---
 
@@ -267,7 +267,7 @@ durable 接入点：
 
 5. **会话元数据 → per-conversation `defineDoc`，单独存储，不进 entry。** title / archive 等 Loom per-conversation 状态是元数据，不属于 transcript：不写 entry，不参与模型上下文与 compaction，也不随历史回放。读写在 commit 里进行，可用 `watchDoc` 观察；在 `HarnessOptions.conversationCreated` 里初始化。使用 `fork: "current"` 拷贝当前标题，创建 hook 再追加 `（分支）` 后缀并重置 `archived: false`；不改变来源会话。嵌套 fork 每次追加一次后缀。会话列表用 `scanConversations` 拿 conversation，再按 id 读 doc 拼出 title / archive。
 6. **Specialist → 归属 conversation，且不做后台任务。** retrieve 和 create 都用归属子代理（`ownership: { kind: "task", taskId }`），取代每次调用一个内存 harness；两者都不标 `background`，以保持现状：Stop 会中断正在跑的 specialist，生成期间会话也算 busy。
-7. **Telemetry → 本次不做，以后基于 durable extension 外挂（§8）。** 不 fork durable、不改 vendor。迁移期间 dev-trace 无 span 输出。
+7. **Telemetry → Loom 自有 durable extension/commit 观察器（§8）。** 后续已实现本地持久化 trace，不 fork durable、不改 vendor。
 
 已定：
 
@@ -291,7 +291,7 @@ durable 接入点：
 
 **上下文百分比已恢复：** 当前模型窗口与活动上下文估算，压缩后不沿用旧 usage；提交/模型变化刷新，使用 `~` 标记近似值。测试覆盖 cache/工具/图像、模型变化、压缩/fork/重开和 Electron 圆环。
 
-**第 9 步延后：** telemetry 按 §8 以 extension 重建。
+**第 9 步后续已完成：** 本地 trace 使用 Loom 自有 hooks/commit 观察与独立存储，见 §8 和 [TRACE](./TRACE.zh-CN.md)。
 
 ---
 
@@ -302,7 +302,7 @@ durable 接入点：
 - **SQLite 驱动**：已在 macOS Electron 38.2.2 验证（§9 决策 4），Windows 待实机验证。SQLite WAL 并发不等于跨进程 durable 协调；每库存储保持单一活跃 Harness owner。
 - **不兼容（有意为之）**：旧的 `.loom/harness-sessions/` 会话直接忽略，不迁移。
 - **行为漂移**：branch-before / retarget 改为 fork-and-switch（创建新会话而非原地切换；旧会话归档隐藏但保留为历史来源）；会话 title / archive、上下文百分比显示在 durable 没有 1:1 原语。
-- **telemetry 归属 / 空窗**：原先上游提供的生产者，迁移后要 Loom 自己承担；本次不做，期间 dev-trace 没有数据，排查问题少一个手段。
+- **telemetry 归属**：Loom 自有本地 producer 与 trace 存储已实现；输入输出脱敏为尽力处理。见 [TRACE](./TRACE.zh-CN.md)。
 
 ---
 
@@ -315,4 +315,4 @@ durable 接入点：
 - 放弃向后兼容：旧会话存储、transcript 形状、附件旁路字段、projector 都不沿用。
 - 范围以 durable 的特点为准；`packages/app` 也在范围内，不只是 `packages/agent`。
 - 旧 session manager 已删除，app 使用 durable owner/view/event，specialist 已迁移。telemetry 不在本次范围。
-- 已定：薄的 `@loom/agent` 边界、`watchEvents` 驱动的 UI、SQLite 存储、durable 用内置 `node:sqlite`、telemetry 本次不做且以后走 extension（§9）。会话元数据用单独的 `defineDoc`（§9 决策 5）；specialist 都走归属 conversation 且不做后台任务（§9 决策 6）；branch-before 用 fork-and-switch，并归档隐藏旧会话（§9 决策 8）。
+- 已定：薄的 `@loom/agent` 边界、`watchEvents` 驱动的 UI、SQLite 存储、durable 用内置 `node:sqlite`、本地 telemetry 后续由 Loom 自有模块实现（§8）。会话元数据用单独的 `defineDoc`（§9 决策 5）；specialist 都走归属 conversation 且不做后台任务（§9 决策 6）；branch-before 用 fork-and-switch，并归档隐藏旧会话（§9 决策 8）。

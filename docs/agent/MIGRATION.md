@@ -208,6 +208,8 @@ Three `HarnessOptions` details worth remembering on their own:
 
 ## 8. Telemetry
 
+**Implemented follow-up:** local durable traces now persist at `.agents/traces/traces.sqlite`; see [TRACE](./TRACE.md). The comparison below describes the migration baseline, not the current trace implementation. No vendor source changes were needed.
+
 `pi-telemetry` 1.1.0 is intact as contracts, but **no runtime in pi 1.1.0 emits spans**: only `pi-ai` imports it (for the pass-through `ProviderRequestOptions.telemetryContext` type), and nothing calls `startSpan`. The old harness was the only producer, and durable has none.
 
 What the old harness actually emitted (not what the schema declared):
@@ -246,11 +248,9 @@ Irreducible gaps:
 3. **System prompt text** in `loom.io.input` must be rendered from durable's structured `sections`.
 4. HTTP status / chunk count / TTFT are not produced by either pi-ai version.
 
-**Scope: telemetry is not part of this migration; it comes later, built on durable's extension mechanism rather than a fork of durable.** Until then dev-trace emits no spans (the UI and the `LoomTraceSpan` type stay).
+**Current implementation:** tracing is a Loom-owned follow-up using durable hooks/commit publications and public model-call instrumentation. The existing dev-trace UI reads persisted revisions; no durable fork is needed. See [TRACE](./TRACE.md).
 
-The later approach: a telemetry extension (`hook(GenerationTask, …)` + `hook(ToolTask, …)`) plus one `watchEvents` observer per conversation, and a Loom-owned manual-start/end `TelemetryContext` maintaining a span tree keyed by `conversationId` / `taskId` / `callId`. `LoomTraceSpan` and the dev-trace UI stay unchanged if span names/attributes match.
-
-This requires re-owning `AI_TELEMETRY_SCHEMA` / `HARNESS_TELEMETRY_SCHEMA` (they live in the old vendor and disappear with it; `pi-telemetry` still provides `defineTelemetrySchema` / `createTypedSpanStarter`), and dropping `withTelemetryContext` — durable does not read telemetry off the chord `Context`.
+`DurableTrace` uses task-owned hooks plus one owner-level `subscribeCommits` observer. Publications supply task identity, ownership, timestamps, and terminal outcomes; `traceModels()` observes requests without consuming ahead of durable. This covers deferred polling, compaction requests, and tool recovery without `withTelemetryContext`, vendor edits, or a second event/recovery loop. `LoomTraceSpan` remains the UI contract.
 
 ---
 
@@ -267,7 +267,7 @@ Resolved:
 
 5. **Session metadata → per-conversation `defineDoc`, stored separately, not as entries.** Title, archive, and other Loom per-conversation state are metadata, not transcript: no entry is written, they take no part in model context or compaction, and they are not replayed with history. Read and write inside commits, observe with `watchDoc`, and initialize in `HarnessOptions.conversationCreated`. Use `fork: "current"` to copy the current title, then the creation hook appends `（分支）` and resets `archived: false`, leaving the source unchanged. Each nested fork adds another suffix. The session list uses `scanConversations` for the conversations, then reads each doc by id to assemble title / archive.
 6. **Specialists → owned conversations, not background tasks.** Both retrieve and create use owned subagents (`ownership: { kind: "task", taskId }`), replacing a per-call in-memory harness; neither is marked `background`, preserving today's behavior: Stop interrupts a running specialist, and the conversation counts as busy while it runs.
-7. **Telemetry → not in this migration; later, as a durable extension (§8).** No durable fork, no vendor changes. Dev-trace has no span output in the meantime.
+7. **Telemetry → Loom-owned durable extension/commit observer (§8).** Local persistent traces are implemented as a follow-up; no durable fork or vendor changes.
 
 Resolved:
 
@@ -291,7 +291,7 @@ Resolved:
 
 **Context percentage restored:** current-model window and active-context estimate, without reusing pre-compaction usage; commits/model changes refresh it and `~` marks approximation. Tests cover cache/tools/images, model changes, compaction/fork/reopen, and the Electron ring.
 
-**Step 9 deferred:** rebuild telemetry as an extension per §8.
+**Step 9 completed as a follow-up:** local traces use Loom-owned hooks/commit observation and an independent store; see §8 and [TRACE](./TRACE.md).
 
 ---
 
@@ -302,7 +302,7 @@ Resolved:
 - **SQLite driver:** verified in Electron 38.2.2 on macOS (§9 decision 4); Windows validation remains. SQLite WAL concurrency is not cross-process durable coordination: keep one active Harness owner per library store.
 - **No compatibility (by design):** existing `.loom/harness-sessions/` sessions are ignored, not migrated.
 - **Behavioral drift:** branch-before / retarget becomes fork-and-switch (creates a new conversation rather than switching in place; the old conversation is archived/hidden but retained as a history source); session title / archive and context-percent display have no 1:1 durable primitive.
-- **Telemetry ownership / gap:** Loom ends up owning the producer that upstream used to ship; deferred, so dev-trace has no data in the meantime and one debugging aid is missing.
+- **Telemetry ownership:** Loom now owns the local producer and trace store; input/output redaction is best-effort. See [TRACE](./TRACE.md).
 
 ---
 
@@ -315,4 +315,4 @@ Resolved:
 - Backward compatibility is dropped: old session storage, transcript shape, attachment sidecar, and projector are not carried over.
 - Scope follows durable's model; `packages/app` is in scope, not just `packages/agent`.
 - The old session manager is deleted; the app uses durable owner/views/events and specialists are migrated. Telemetry is out of scope.
-- Decided: a thin `@loom/agent` boundary, a `watchEvents`-driven UI, SQLite storage, durable on the built-in `node:sqlite`, and telemetry deferred and later built as an extension (§9). Session metadata uses a separate `defineDoc` (§9 decision 5); specialists use owned conversations without `background` (§9 decision 6); branch-before uses fork-and-switch and archives/hides the old conversation (§9 decision 8).
+- Decided: a thin `@loom/agent` boundary, a `watchEvents`-driven UI, SQLite storage, durable on the built-in `node:sqlite`, and local telemetry implemented as a Loom-owned follow-up (§8). Session metadata uses a separate `defineDoc` (§9 decision 5); specialists use owned conversations without `background` (§9 decision 6); branch-before uses fork-and-switch and archives/hides the old conversation (§9 decision 8).

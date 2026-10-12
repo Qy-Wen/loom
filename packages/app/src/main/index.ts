@@ -946,9 +946,10 @@ app
 		// Start the localhost agent server before the window loads, so the
 		// renderer always finds a ready endpoint. MCP attaches in the background.
 		await agentManager.setChat(await modelSettings.chat());
-		if (import.meta.env.DEV) {
+		if (import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) {
 			const devTrace = await import("./dev-trace-window.ts");
-			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"));
+			agentManager.setTracePublisher(devTrace.publishDevTrace);
+			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), (limit, before) => agentManager.listTraces(limit, before));
 		}
 		agentServer = await startAgentServer(
 			agentManager,

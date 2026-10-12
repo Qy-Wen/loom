@@ -88,7 +88,7 @@ CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随
 
 SIGKILL 后流式请求按已提交 checkpoint 重发；中断 partial 保留为 `aborted` 历史，不进入重发的模型上下文。执行中的 unsafe 工具不重放，返回“可能已部分执行”；操作系统子进程可能独立存活，不承诺外部副作用 exactly-once。
 
-Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。telemetry producer 留待后续，dev-trace 保留类型和界面但无 span。
+Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。开发 trace 使用 Loom extension/commit 观察器和公开模型调用观察，保存到 `.agents/traces/traces.sqlite`；Traces 窗口读取历史和实时 revision。时间、隐私、恢复与验收边界见 [TRACE](./TRACE.zh-CN.md)。
 
 上下文圆环显示当前模型窗口的估算占用，点击查看 `~百分比 / 窗口`。`contextUsage()` 使用原生活动 `ContextView`，取当前 provider/model、最新 head 之后的有效 assistant usage（含 cache 与输出），再加后续消息估算。新会话、压缩或模型变化后没有适用 usage 时估算活动消息，含 system/tool schema/图像；不使用完整聊天历史或累计消耗。消息提交、压缩和模型设置变化触发刷新；未配置 Chat 时隐藏。模型窗口取设置值，未填默认 128k，数值并非 tokenizer 精确测量。
 

@@ -9,6 +9,7 @@ const SHOWN = new Set([
 	"pi.harness.compaction",
 	"pi.harness.navigation",
 	"pi.ai.request",
+	"loom.approval",
 ]);
 
 /** Drop hook and session spans, and hang the rest on the nearest kept ancestor. */
@@ -35,6 +36,7 @@ function textAttr(span: LoomTraceSpan, name: string): string | undefined {
 }
 
 export function spanLabel(span: LoomTraceSpan): string {
+	if (span.name === "loom.approval") return `Approval · ${textAttr(span, "pi.tool.name") ?? "tool"}`;
 	if (span.name === "pi.harness.tool") return textAttr(span, "pi.tool.name") ?? "tool";
 	if (span.name === "pi.ai.request") {
 		const model = textAttr(span, "pi.ai.model") ?? "model";
@@ -65,7 +67,7 @@ export function toSpanData(spans: readonly LoomTraceSpan[]): SpanData[] {
 		parentSpanId: span.parentId === null ? null : String(span.parentId),
 		name: spanLabel(span),
 		type: spanKind(span),
-		status: span.status.status === "error" ? "failed" : "completed",
+		status: span.status.status === "error" ? "failed" : span.endedAt === undefined ? "running" : "completed",
 		startedAt: span.startedAt,
 		endedAt: span.endedAt ?? null,
 		latencyMs: span.endedAt === undefined ? null : span.endedAt - span.startedAt,
