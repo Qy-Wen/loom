@@ -46,10 +46,10 @@ export function toDurableTool(tool: LoomTool): ToolRegistration {
 			const content: LoomToolContentPart[] = typeof result.content === "string"
 				? [{ type: "text", text: result.content }]
 				: result.content;
-			// Durable documents only accept strict JSON; reject unsupported details rather than silently losing them.
+			// Match JSON object semantics for optional fields; still reject non-JSON values (Date, etc.).
 			return {
 				output: content,
-				...(result.details === undefined ? {} : { details: copyJson(result.details as JsonValue) }),
+				...(result.details === undefined ? {} : { details: copyJson(result.details as JsonValue, { omitUndefinedProperties: true }) }),
 			};
 		},
 	});

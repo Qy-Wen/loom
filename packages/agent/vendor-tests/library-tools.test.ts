@@ -117,6 +117,10 @@ test("adapted Loom tools forward args and cancellation, preserve mixed output an
 	assert.equal(result.output?.[1]?.type, "image");
 	controller.abort();
 	await assert.rejects(tool.execute({ id: "asset" }, {} as ToolExecutionApi, withAbortSignal(controller.signal, context)));
+	const optional = toDurableTool({ name: "optional", description: "Optional fields", parameters: Type.Object({}), execute: () => ({ content: "text", details: { width: 64, audioCodec: undefined, nested: { absent: undefined, present: null } } }) });
+	assert.deepEqual((await optional.execute({}, {} as ToolExecutionApi, context)).details, { width: 64, nested: { present: null } });
+	const invalidArray = toDurableTool({ name: "array", description: "Invalid array", parameters: Type.Object({}), execute: () => ({ content: "text", details: [undefined] }) });
+	await assert.rejects(invalidArray.execute({}, {} as ToolExecutionApi, context), /strict JSON/);
 	const invalid = toDurableTool({ name: "invalid", description: "Invalid", parameters: Type.Object({}), execute: () => ({ content: "text", details: new Date() }) });
 	await assert.rejects(invalid.execute({}, {} as ToolExecutionApi, context), /strict JSON/);
 });
@@ -160,14 +164,14 @@ test("library extension includes Loom tools with durable output/details and reje
 	await temporary(async (path) => {
 		const { owner, faux } = await setup(path, { autoMemory: false, tools: [{
 			name: "library_note", description: "Get a note", parameters: Type.Object({}),
-			execute: () => ({ content: "a note", details: { assetId: "asset" } }),
+			execute: () => ({ content: "a note", details: { assetId: "asset", optional: undefined, nested: { present: null, absent: undefined } } }),
 		}] });
 		try {
 			const conversation = await owner.createConversation({}, context);
 			const results = await run(conversation, faux, [call("library_note", {})]);
 			assert.equal(results[0]?.isError, false);
 			assert.match(text(results[0]!.content), /a note/);
-			assert.deepEqual(results[0]?.details, { assetId: "asset" });
+			assert.deepEqual(results[0]?.details, { assetId: "asset", nested: { present: null } });
 		} finally { await owner.close(context); }
 		await assert.rejects(createLibraryExtension(path, { tools: [{ name: "read", description: "duplicate", parameters: Type.Object({}), execute: () => "" }] }), /Duplicate library tool/);
 	});
