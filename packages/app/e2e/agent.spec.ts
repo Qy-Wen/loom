@@ -35,6 +35,8 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(before.length + 1);
 		const session = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!;
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 		const composer = loomPage.getByRole("textbox");
 		await composer.fill("Generate a file");
 		await composer.press("Enter");
@@ -83,10 +85,14 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 			const current = await window.loom.getModelSettings();
 			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", contextWindow: 50_000, apiKey: "test", enabled: true } });
 		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(before.length + 1);
 		const session = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!;
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 		const contextSizes: number[] = [];
 		for (let i = 0; i < 3; i++) {
 			await loomPage.getByRole("textbox").fill(`HISTORY_QUESTION_${i}`); await loomPage.getByRole("textbox").press("Enter");
@@ -109,6 +115,106 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 		expect(JSON.stringify(fork.messages)).toContain("OLD_HISTORY_REPLY");
 		expect((await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).status).toBe("archived");
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+});
+
+for (const editedQuestion of ["OLD_QUESTION", "KEEP_QUESTION"] as const) {
+test(`editing ${editedQuestion} sends once on the new branch and streams before completion`, async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated library required");
+	const finish = Promise.withResolvers<void>();
+	const requests: string[][] = [];
+	const server = createServer((request, response) => {
+		let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const messages = (JSON.parse(body) as { messages: Array<{ role: string; content: string }> }).messages;
+			requests.push(messages.filter((message) => message.role === "user").map((message) => message.content));
+			const edited = JSON.stringify(messages).includes("EDITED_QUESTION");
+			const text = edited ? "EDITED_REPLY_PARTIAL" : `ANSWER_${requests.length}`;
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			const chunk = (content: string, finish_reason: string | null = null) => `data: ${JSON.stringify({ id: "edit", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content }, finish_reason }] })}\n\n`;
+			response.write(chunk(text));
+			if (edited) void finish.promise.then(() => response.end(chunk(" finished", "stop") + "data: [DONE]\n\n"));
+			else response.end(chunk("", "stop") + "data: [DONE]\n\n");
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await loomPage.evaluate(async (baseUrl) => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
+		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		for (const [index, question] of ["KEEP_QUESTION", "OLD_QUESTION", "LATER_QUESTION"].entries()) {
+			await loomPage.getByRole("textbox").fill(question); await loomPage.getByRole("textbox").press("Enter");
+			await expect(loomPage.getByText(`ANSWER_${index + 1}`, { exact: true })).toBeVisible();
+		}
+		const source = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => row.title === "KEEP_QUESTION")!;
+		const original = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
+		const bubble = loomPage.getByTestId("copilot-user-message").filter({ hasText: editedQuestion });
+		await bubble.getByText(editedQuestion, { exact: true }).hover(); await bubble.getByRole("button", { name: "Edit", exact: true }).click();
+		await loomPage.getByRole("textbox", { name: "Edit question", exact: true }).fill("EDITED_QUESTION");
+		await loomPage.locator(".session-inline-edit-send").click();
+		await expect.poll(() => requests.length).toBe(4);
+		expect(JSON.stringify(requests[3])).not.toMatch(/OLD_QUESTION|LATER_QUESTION/);
+		await expect(loomPage.getByText("EDITED_REPLY_PARTIAL", { exact: true })).toBeVisible();
+		const branch = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => row.title === "KEEP_QUESTION（分支）")!;
+		expect(branch.id).not.toBe(source.id);
+		const expectedUsers = editedQuestion === "OLD_QUESTION" ? ["KEEP_QUESTION", "EDITED_QUESTION"] : ["EDITED_QUESTION"];
+		expect(requests[3]).toEqual(expectedUsers);
+		finish.resolve(); await expect(loomPage.getByText("EDITED_REPLY_PARTIAL finished", { exact: true })).toBeVisible();
+		const record = await loomPage.evaluate((id) => window.loom.getSession(id), branch.id);
+		expect(record.messages.filter((message) => message.role === "user").map((message) => message.displayContent)).toEqual(expectedUsers);
+		expect((await loomPage.evaluate((id) => window.loom.getSession(id), source.id)).messages).toEqual(original.messages);
+		expect((await loomPage.evaluate((id) => window.loom.getSession(id), source.id)).status).toBe("archived");
+		await loomPage.reload(); await expect(loomPage.getByText("EDITED_REPLY_PARTIAL finished", { exact: true })).toBeVisible();
+		expect(requests).toHaveLength(4);
+	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+});
+}
+
+test("Electron streams successive turns after reasoning and durable user admission", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+	const releases = Array.from({ length: 3 }, () => Promise.withResolvers<void>());
+	const nextChunks = Array.from({ length: 3 }, () => Promise.withResolvers<void>());
+	let requests = 0;
+	const server = createServer((_request, response) => {
+		const turn = requests++;
+		response.writeHead(200, { "content-type": "text/event-stream" });
+		const chunk = (delta: object, finish_reason: string | null = null) => `data: ${JSON.stringify({ id: `turn-${turn}`, object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+		response.write(chunk({ reasoning_content: `Reasoning for turn ${turn}` }));
+		response.write(chunk({ content: `STREAM_TURN_${turn}_PARTIAL` }));
+		void nextChunks[turn]!.promise.then(() => response.write(chunk({ content: " plus another chunk" })));
+		void releases[turn]!.promise.then(() => response.end(chunk({ content: " and finished" }, "stop") + "data: [DONE]\n\n"));
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await loomPage.evaluate(async (baseUrl) => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
+		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		const before = await loomPage.evaluate(() => window.loom.listSessions());
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(before.length + 1);
+		const session = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!;
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		for (let turn = 0; turn < 3; turn++) {
+			await loomPage.getByRole("textbox").fill(`Stream question ${turn}`); await loomPage.getByRole("textbox").press("Enter");
+			await expect.poll(() => requests).toBe(turn + 1);
+			// The provider cannot finish until visible partial text passes this assertion.
+			await expect(loomPage.getByTestId("copilot-message-list").getByText(`STREAM_TURN_${turn}_PARTIAL`, { exact: true })).toBeVisible();
+			const pending = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
+			expect(pending.messages.filter((message) => message.role === "user")).toHaveLength(turn + 1);
+			expect(pending.messages.filter((message) => message.role === "assistant")).toHaveLength(turn);
+			nextChunks[turn]!.resolve();
+			await expect(loomPage.getByText(`STREAM_TURN_${turn}_PARTIAL plus another chunk`, { exact: true })).toBeVisible();
+			releases[turn]!.resolve();
+			await expect(loomPage.getByText(`STREAM_TURN_${turn}_PARTIAL plus another chunk and finished`, { exact: true })).toBeVisible();
+			await expect.poll(async () => (await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).messages.filter((message) => message.role === "assistant").length).toBe(turn + 1);
+		}
+	} finally { for (const next of nextChunks) next.resolve(); for (const release of releases) release.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
 test("Electron shows partial text before the model finishes streaming", async ({ loomPage }) => {

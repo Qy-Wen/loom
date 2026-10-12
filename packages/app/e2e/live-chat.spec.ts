@@ -1,9 +1,9 @@
 import { expect, test } from "./loom.ts";
 
 /** Optional live acceptance; never log the key or request payload. */
-test("real Chat model renders text before RUN_FINISHED", async ({ loomPage }) => {
+test("real Chat model streams both first and subsequent turns before RUN_FINISHED", async ({ loomPage }) => {
 	test.skip(process.env.LOOM_E2E_LIVE_CHAT !== "1", "set LOOM_E2E_LIVE_CHAT=1 and load Chat credentials");
-	test.setTimeout(90_000);
+	test.setTimeout(150_000);
 	const chat = {
 		baseUrl: process.env.LOOM_CHAT_BASE_URL?.trim() || "https://api.deepseek.com",
 		model: process.env.LOOM_CHAT_MODEL?.trim() || "deepseek-v4-flash",
@@ -50,12 +50,19 @@ test("real Chat model renders text before RUN_FINISHED", async ({ loomPage }) =>
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(count + 1);
 	await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 	const composer = loomPage.getByRole("textbox");
-	await composer.fill("Do not use any tools. Start your answer with LOOM_STREAM_CHECK. Then write 40 numbered sentences explaining how to organize creative assets. Write the answer directly, not into a file.");
-	await composer.press("Enter");
-	await expect(loomPage.getByText(/^LOOM_STREAM_CHECK/).last()).toBeVisible({ timeout: 60_000 });
-	await expect.poll(() => loomPage.evaluate(() => (window as unknown as { liveProgress: { partialBeforeFinish: boolean } }).liveProgress.partialBeforeFinish)).toBe(true);
-	const progress = await loomPage.evaluate(() => (window as unknown as { liveProgress: { finished: boolean; partialBeforeFinish: boolean } }).liveProgress);
-	expect(progress.partialBeforeFinish).toBe(true);
-	expect(progress.finished).toBe(false);
-	await expect.poll(async () => loomPage.evaluate(() => (window as unknown as { liveProgress: { finished: boolean } }).liveProgress.finished), { timeout: 60_000 }).toBe(true);
+	for (let turn = 0; turn < 2; turn++) {
+		await loomPage.evaluate(() => {
+			const progress = (window as unknown as { liveProgress: { finished: boolean; partialBeforeFinish: boolean } }).liveProgress;
+			progress.finished = false; progress.partialBeforeFinish = false;
+		});
+		const marker = `LOOM_STREAM_CHECK_${turn}`;
+		await composer.fill(`Do not use any tools. Start your answer with ${marker}. Then write 40 numbered sentences explaining how to organize creative assets. Write the answer directly, not into a file.`);
+		await composer.press("Enter");
+		await expect(loomPage.getByTestId("copilot-message-list").getByText(new RegExp(`^${marker}`)).last()).toBeVisible({ timeout: 60_000 });
+		await expect.poll(() => loomPage.evaluate(() => (window as unknown as { liveProgress: { partialBeforeFinish: boolean } }).liveProgress.partialBeforeFinish)).toBe(true);
+		const progress = await loomPage.evaluate(() => (window as unknown as { liveProgress: { finished: boolean; partialBeforeFinish: boolean } }).liveProgress);
+		expect(progress.partialBeforeFinish).toBe(true);
+		expect(progress.finished).toBe(false);
+		await expect.poll(async () => loomPage.evaluate(() => (window as unknown as { liveProgress: { finished: boolean } }).liveProgress.finished), { timeout: 60_000 }).toBe(true);
+	}
 });
