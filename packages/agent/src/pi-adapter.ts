@@ -1,7 +1,5 @@
-import { convertToLlm, type AgentMessage } from "#vendor/pi-agent";
-import { createModels, createProvider } from "@earendil-works/pi-ai";
+import { createModels, createProvider } from "@earendil-works/pi-ai/models";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
-import { foldUserMessageForLlm } from "./attachments.ts";
 import type { LoomChatEndpoint } from "./types.ts";
 
 const CHAT_PROVIDER = "loom-chat";
@@ -13,6 +11,7 @@ export function chatEndpointReady(chat: LoomChatEndpoint | undefined): chat is L
 
 /** Build the current Chat model for the durable Harness runtime. */
 export function buildChatModels(chat: LoomChatEndpoint) {
+	if (!chatEndpointReady(chat)) throw new Error("Chat is not configured. Set base URL and model in Settings.");
 	const baseUrl = chat.baseUrl.trim().replace(/\/+$/, "");
 	const modelId = chat.model.trim();
 	const apiKey = chat.apiKey?.trim();
@@ -51,9 +50,4 @@ export function buildChatModels(chat: LoomChatEndpoint) {
 	const model = models.getModel(CHAT_PROVIDER, modelId);
 	if (!model) throw new Error(`Unknown model: ${modelId}`);
 	return { models, model };
-}
-
-/** Keep Loom attachment sidecars on disk; fold them only for Chat requests. The second argument is the harness context and is unused. */
-export function toProviderMessages(messages: AgentMessage[], _context?: unknown) {
-	return convertToLlm(messages.map((message) => foldUserMessageForLlm(message)));
 }

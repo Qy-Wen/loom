@@ -127,7 +127,7 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 
 | 文件 | 旧依赖 | 新做法 |
 |---|---|---|
-| `pi-adapter.ts` | `convertToLlm`、`AgentMessage` | `buildChatModels` 保留（pi-ai 1.1.0）。`convertToLlm` / `toProviderMessages` 不再需要：durable 的 entry 直接带 `model: Message[]`，附件折叠改到 submit 时做 |
+| `pi-adapter.ts` | `convertToLlm`、`AgentMessage` | `buildChatModels` 已改用 pi-ai 1.1.0 `/models`；lazy OpenAI-completions API 路径不变。已移除 `convertToLlm` / `toProviderMessages`：durable 的 entry 直接带 `model: Message[]`，附件折叠改到 submit 时做 |
 | `pi-tools.ts` | `AgentHarnessTool`、`createReadTool({imageProcessor})`、`createBashTool({prepare})`、`ExecutionToolContext` | 改用 durable `createCodingTools()` / `createReadTool` / `createWriteTool` / `createEditTool` / `createBashTool`；`toHarnessTool` 重写为 `defineTool`（`execute(args, api, context)` → `{ output, details }`）。bash `prepare` 变为 `BashExecution {command, cwd, env, inheritEnv}` + `api` + `context`，适配 `prepareSandboxedBash`。`ExecutionToolContext` / `setCwd` 消失：env 由 `HarnessOptions.env` 按 conversation `cwd` 每次构建 |
 | `read-image.ts` | `ReadImageProcessor` / `ReadImageProcessorResult` | 换成 durable `ImageProcessor.prepare(bytes, mimeType, limits) → PreparedImage`；直接用 `createNodePhotonImages()` 并删掉本文件 |
 | `library-skills.ts` | `loadSkills`、`formatSkillsForSystemPrompt` | 无等价导出；在 durable `ExecutionEnv` 上自研，或移植 coding-agent 的 `core/skills.ts`。目录注入改成 prompt `section` |
@@ -263,7 +263,7 @@ durable 接入点：
 3. **存储后端 → SQLite。** 每库一个存储（例如 `<library>/.loom/loom.sqlite`），取代 `harness-sessions/` JSONL 目录；无需兼容旧格式。
 4. **SQLite 驱动 → durable 用内置 `node:sqlite`**（`openNodeSqliteStorage`、`DatabaseSync`）。不做 facade，durable 也不用 `better-sqlite3`。`packages/core` 的检索库继续用 `better-sqlite3`，统一驱动不在本次范围。
 
-   **前置条件（动工前必须验证，不是收尾检查）：** 决策 3 选了 SQLite，即每个库的会话都落在一个文件里，而这个文件必须能被 Electron 38.2.2 主进程打开。所以"主进程是否暴露 `node:sqlite`"是决策 3 能否成立的前提。验证方式：在 Electron 主进程 `require("node:sqlite")` 并开一个临时库读写一次。若不支持，退路是给 durable 提供 `better-sqlite3` 的 `SqliteDatabase` 实现——durable 的 `storage/sqlite/storage.ts` 只依赖 `SqliteDatabase` 接口，替换面很小。另需确认 WAL 模式下同一库多窗口/多进程并发打开的行为。
+   **前置条件已在 macOS 验证：** `pnpm --filter @loom/app check:node-sqlite` 启动真实 Electron 38.2.2 主进程（Node 22.19.0），`node:sqlite` 读写/重开通过。WAL 下第一进程持有读快照时，第二个 Electron 进程可提交写入；同时写事务由 SQLite 锁互斥。这**不代表**多个 durable owner 可安全共享存储：durable 没有跨进程 session 锁，每库存储只能有一个活跃 Harness owner。Windows 仍需在实机运行同一检查。
 
 5. **会话元数据 → per-conversation `defineDoc`，单独存储，不进 entry。** title / archive 等 Loom per-conversation 状态是元数据，不属于 transcript：不写 entry，不参与模型上下文与 compaction，也不随历史回放。读写在 commit 里进行，可用 `watchDoc` 观察；在 `HarnessOptions.conversationCreated` 里初始化。fork 行为（`fork: "current"` / `"initial"`）在定义 doc 时再定——archive 标记通常不应带到分支上，title 视产品需要。会话列表用 `scanConversations` 拿 conversation，再按 id 读 doc 拼出 title / archive。
 6. **Specialist → 归属 conversation，且不做后台任务。** retrieve 和 create 都用归属子代理（`ownership: { kind: "task", taskId }`），取代每次调用一个内存 harness；两者都不标 `background`，以保持现状：Stop 会中断正在跑的 specialist，生成期间会话也算 busy。
@@ -278,6 +278,8 @@ durable 接入点：
 ## 10. 迁移顺序
 
 **第 1 步已完成：** durable 与 codemode 均从上游 `main` commit `4270522473e677ddba7b093caa0064a3df51d459` vendor，来源一致，已更新 imports/export 边界、依赖与独立检查。重复同步内容一致。完整 vendor 类型检查/构建、10 项源码测试与编译后 JS/worker 冒烟测试通过；覆盖 memory/JSONL/SQLite、工具/事件、嵌套结构化输出、Photon、沙箱隔离、确定性运行与 durable code mode。Loom 旧测试/eval 与 app 仍引用已移除的 harness，尚不能运行。
+
+**第 2 步已完成：** macOS 上 Electron SQLite 前置条件通过；`buildChatModels` 已改用 `/models`，不再 import 旧 harness。新增两项独立测试，验证 endpoint/auth/model 配置与 SQLite 上的 OpenAI SSE 请求，包括重开的模型上下文、provider identity 与 request 去重。`pnpm --filter @loom/agent try:durable` 也已对真实 DeepSeek endpoint 跑通 echo 工具与 SQLite 重开。可通过 `LOOM_CHAT_BASE_URL` / `LOOM_CHAT_MODEL` / `LOOM_CHAT_API_KEY` 覆盖冒烟 endpoint（默认 DeepSeek，使用 `DEEPSEEK_API_KEY`）。app owner 与 UI 仍未动，旧 `toProviderMessages` 调用点留待迁移。
 
 1. **先改 vendor 源码与脚本。** 用 pi-durable 替换 `vendor-pi-agent/`，更新 vendor 来源/同步脚本（`vendor:sync`）及 `packages/agent` 的依赖、导出和构建/测试脚本；先确保 vendor 可重复同步、编译和独立测试，不接 app。
 2. 升 pi-ai / chord 到 1.1.0 并引入 pi-durable；**先验证 Electron 主进程的 `node:sqlite`（§9 决策 4 前置条件）**，再跑通最小链路：`buildChatModels` + `createRegistry()` + `Harness.open(storage, options, context)` + `submit` / `wait`。
@@ -295,7 +297,7 @@ durable 接入点：
 
 - **durable 是 Experimental**，API 随时变。跟随上游 `main`，记录每次同步的 commit，预期有反复。
 - **Vendor 维护成本**：vendor 源码意味着 Loom 要合上游频繁改动，并自己维护这份 fork。
-- **SQLite 驱动**：durable 的 Node 适配器依赖 `node:sqlite`。已提升为 §9 决策 4 的前置条件，动工前必须验证；若不可用，需为 durable 提供 `SqliteDatabase` 的 `better-sqlite3` 实现。
+- **SQLite 驱动**：已在 macOS Electron 38.2.2 验证（§9 决策 4），Windows 待实机验证。SQLite WAL 并发不等于跨进程 durable 协调；每库存储保持单一活跃 Harness owner。
 - **不兼容（有意为之）**：旧的 `.loom/harness-sessions/` 会话直接忽略，不迁移。
 - **行为漂移**：branch-before / retarget 改为 fork-and-switch（创建新会话而非原地切换；旧会话归档隐藏但保留为历史来源）；会话 title / archive、上下文百分比显示在 durable 没有 1:1 原语。
 - **telemetry 归属 / 空窗**：原先上游提供的生产者，迁移后要 Loom 自己承担；本次不做，期间 dev-trace 没有数据，排查问题少一个手段。

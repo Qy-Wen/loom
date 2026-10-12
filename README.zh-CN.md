@@ -42,7 +42,8 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 pnpm install                          # 下载本机的 ffmpeg 和 ffprobe；Windows 上缺沙箱时安装一次
 pnpm vendor:ffmpeg --all              # win32-x64、darwin-arm64、darwin-x64
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
-pnpm --filter @loom/agent try:agent   # 冒烟测试：跑通一轮 agent loop
+pnpm --filter @loom/app check:node-sqlite  # 验证真实 Electron 主进程的 SQLite
+pnpm --filter @loom/agent try:durable  # 真实模型/工具 + 临时 SQLite/重开冒烟测试
 pnpm test                            # 全部单元 / 集成测试
 pnpm test:e2e                        # Playwright 冷启动（需先 build）
 pnpm test:e2e:attach                 # Playwright 连上正在跑的 pnpm dev（:9344）
@@ -51,7 +52,7 @@ pnpm -r typecheck
 
 ## Vendor：pi durable 引擎
 
-Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 import 边界，迁移期间通过 `@loom/agent/durable` 暴露。Loom 的旧 harness 与 app 接入尚未迁移，见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+Loom 从上游 `main` 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。两份源码始终从同一 commit 同步。`src/durable-adapter.ts` 是 import 边界，迁移期间通过 `@loom/agent/durable` 暴露。Loom Chat 模型配置已适配，SQLite 冒烟链路已跑通；旧 harness 与 app 接入尚未迁移，见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 
