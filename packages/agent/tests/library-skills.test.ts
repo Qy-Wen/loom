@@ -5,8 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryAgent, createModels } from "../src/durable.ts";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { LIBRARY_SKILLS_DIR, loadLibrarySkills, systemPromptWithSkills } from "../src/library-skills.ts";
-
+import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/library-skills.ts";
 
 const BODY = "SECRET_BODY_MUST_STAY_OUT_OF_THE_CATALOG";
 
@@ -59,7 +58,7 @@ test("loadLibrarySkills reads SKILL.md under .agents/skills and leaves other tre
 	}
 });
 
-test("systemPromptWithSkills lists the catalog without skill bodies", async () => {
+test("formatSkillsForSystemPrompt lists the catalog without skill bodies", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-prompt-"));
 	try {
 		await writeSkill(
@@ -69,14 +68,14 @@ test("systemPromptWithSkills lists the catalog without skill bodies", async () =
 			BODY,
 		);
 		const { skills } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
-		const prompt = systemPromptWithSkills("You are Loom.", skills);
-		assert.match(prompt, /^You are Loom.\n\nThe following skills provide specialized instructions/);
+		const prompt = formatSkillsForSystemPrompt(skills);
+		assert.match(prompt, /^The following skills provide specialized instructions/);
 		assert.match(prompt, /<name>brand-voice<\/name>/);
 		assert.match(prompt, /<description>Apply the house brand voice when writing titles or copy.<\/description>/);
 		assert.match(prompt, /\.agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
 		assert.doesNotMatch(prompt, new RegExp(BODY));
-		assert.equal(systemPromptWithSkills("You are Loom.", []), "You are Loom.");
-		assert.equal(systemPromptWithSkills("You are Loom.", skills.map((skill) => ({ ...skill, disableModelInvocation: true }))), "You are Loom.");
+		assert.equal(formatSkillsForSystemPrompt([]), "");
+		assert.equal(formatSkillsForSystemPrompt(skills.map((skill) => ({ ...skill, disableModelInvocation: true }))), "");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

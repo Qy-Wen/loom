@@ -49,11 +49,6 @@ export function isLoomUserAttachment(value: unknown): value is LoomUserAttachmen
 	return isUiSelectionAttachment(value) || isAssetRefAttachment(value);
 }
 
-/** The Chat endpoint refused a picture. The turn should be reported and left off the active path. */
-export function chatRejectedImages(message: string): boolean {
-	return /image_url|input_image|image input|do(?:es)? not support images?|multimodal|invalid content type|unknown content type|content must be (?:a )?string/i.test(message);
-}
-
 export function parseUserAttachments(value: unknown): LoomUserAttachment[] {
 	if (!Array.isArray(value)) return [];
 	return value.filter(isLoomUserAttachment);
@@ -208,28 +203,4 @@ export function foldUserText(text: string, attachments: readonly LoomUserAttachm
 	}
 	if (implicit.length > 0) out = appendSelectionBlock(out, formatImplicitContext(implicit));
 	return out.replace(/\n+$/, "");
-}
-
-type ImagePart = { type: "image"; data: string; mimeType: string };
-
-function imagePartsFromContent(content: unknown): ImagePart[] {
-	if (!Array.isArray(content)) return [];
-	const images: ImagePart[] = [];
-	for (const part of content) {
-		if (typeof part !== "object" || part === null) continue;
-		const row = part as { type?: unknown; data?: unknown; mimeType?: unknown };
-		if (row.type === "image" && typeof row.data === "string" && typeof row.mimeType === "string") {
-			images.push({ type: "image", data: row.data, mimeType: row.mimeType });
-		}
-	}
-	return images;
-}
-
-/** Clone a user row for the provider as one text string. Image parts on `content` are dropped. */
-export function foldUserMessageForLlm<T extends { role: string; content?: unknown; attachments?: unknown }>(message: T): T {
-	if (message.role !== "user") return message;
-	const attachments = parseUserAttachments(message.attachments);
-	if (attachments.length === 0 && imagePartsFromContent(message.content).length === 0) return message;
-	const folded = foldUserText(userTextFromContent(message.content), attachments);
-	return { ...message, content: folded };
 }

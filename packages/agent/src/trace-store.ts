@@ -1,7 +1,7 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { DatabaseSync } from "node:sqlite";
-import type { LoomTraceSpan } from "./run-trace.ts";
+import type { LoomTraceSpan } from "./trace-types.ts";
 
 export type LoomTraceStatus = "running" | "completed" | "error" | "aborted" | "interrupted";
 export interface LoomTraceRecord {

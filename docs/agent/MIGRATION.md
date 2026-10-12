@@ -132,13 +132,13 @@ Because durable is Experimental and changes quickly, expect more merge churn tha
 | `read-image.ts` | `ReadImageProcessor` / `ReadImageProcessorResult` | Replace with durable `ImageProcessor.prepare(bytes, mimeType, limits) → PreparedImage`; use `createNodePhotonImages()` and delete the file |
 | `library-skills.ts` | `loadSkills`, `formatSkillsForSystemPrompt` | No equivalent export; self-host over the durable `ExecutionEnv`, or port coding-agent `core/skills.ts`. Inject the catalog as a prompt `section` |
 | `library-auto-memory.ts` | `AgentHarnessTool`, `ExecutionToolContext` | Type-only swap to `defineTool` + `ToolExecutionApi`. Inject the note as a `section` / `instructions` |
-| `agent-instructions.ts` | — | Map to per-conversation `instructions` (rendered as the `instructions` section) |
+| `agent-instructions.ts` | — | Removed; per-conversation `instructions` renders the native `instructions` section |
 | `session-title.ts` | — | Pure text helper (`titleFromUserText`), no harness dependency; only the title *storage* moves to a Loom `defineDoc` — see §9 decision 5 |
 | `attachments.ts` / `composer-asset.ts` | folded in via `convertToLlm` | The sidecar field itself is no longer needed; the fold into `content` moves from `convertToLlm` to just before `submit` |
 | `tool-permission.ts` | `hooks.on("before_tool")` | The `AGENT_PERMISSION_LEVELS` / `ToolGateDecision` logic carries over unchanged; the attachment point becomes `hook(ToolTask, { beforeTool })`. Publishing the waiting state is in §6 |
 | `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | Drop the per-specialist in-memory harness; use durable owned subagents (§9 decision 6: both retrieve and create are owned, neither `background`). **`Tx` and `Conversation` are two API levels — do not mix them:** inside a tool, go through `Tx` — `api.commit(tx => tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }))`, then take a handle with `api.conversation(childId)`. Only the Harness level has `harness.createConversation({ ownership }, context)` and `Conversation.fork(at, { ownership }, context)` |
 | `harness-session-manager.ts` | `JsonlSessionRepo`, `AgentHarness.create`, `lane.accept/drive/followUp/abort/resume`, `hooks.on`, `events.on`, `estimateContextTokens`, `laneConfig/laneState/value` | Full rewrite — see §6 |
-| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`, pi-telemetry spans | Not in this migration: remove the dependency on `withTelemetryContext` / pi-telemetry, leave the `LoomTraceSpan` type and dev-trace UI untouched; rebuild later on a durable extension — see §8 |
+| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`, pi-telemetry spans | Removed; `trace-types.ts` retains the `LoomTraceSpan` contract. Diagnostics now use `durable-trace`, public model-call observation, and a separate trace store — see §8 |
 | tests / evals | `AgentHarness`, `JsonlSessionRepo`, `NodeExecutionEnv`, `estimateTokens`, `findCutPoint`, `span-io` | Rewrite; `BACKGROUND_CONTEXT` moves to `@earendil-works/chord/context` |
 
 ### App side (`packages/app`)

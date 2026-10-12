@@ -22,6 +22,20 @@ Vendor: pi-durable + pi-codemode
 - Durable owns scheduling, inboxes, retry, compaction, task cancellation, and recovery. Loom does not recreate lanes or a session manager.
 - Retrieval/index storage remains separate in `packages/core`.
 
+`packages/agent/src` groups by responsibility:
+
+| Responsibility | Modules |
+|---|---|
+| Native boundary and model configuration | `index`, `durable`, `durable-adapter`, `pi-adapter` |
+| Library owner and conversation metadata | `library-agent`, `conversation-metadata`, `session-title` |
+| Tools, specialists, permissions | `pi-tools`, `specialist`, `tool-gate`, `tool-permission`, `workspace-path` |
+| Prompt sections | `library-extension`, `library-auto-memory`, `library-skills` |
+| Composer and send-time context | `attachments`, `composer-asset`, `composer-image` |
+| Contracts and context occupancy | `types`, `session-dto`, `context-usage` |
+| Diagnostics | `durable-trace`, `trace-models`, `trace-privacy`, `trace-store`, `trace-types` |
+
+Keep runtime scheduling in durable. Instructions use native configuration, attachments fold before submit, and memory/skills use sections; do not retain duplicate provider-time transforms, prompt concatenators, or the old telemetry recorder.
+
 ## 2. Vendor workflow
 
 `vendor-pi-durable/src` and `vendor-pi-codemode/src` mirror upstream `main` from the same commit. Each `UPSTREAM` records provenance. External model/runtime dependencies remain npm; codemode is a private workspace retaining upstream imports.

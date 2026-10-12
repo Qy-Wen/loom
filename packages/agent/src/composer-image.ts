@@ -55,15 +55,6 @@ export function sniffComposerImage(bytes: Uint8Array): ComposerImageMime | undef
 	return undefined;
 }
 
-export function bytesToBase64(bytes: Uint8Array): string {
-	let binary = "";
-	const step = 0x8000;
-	for (let index = 0; index < bytes.length; index += step) {
-		binary += String.fromCharCode(...bytes.subarray(index, index + step));
-	}
-	return btoa(binary);
-}
-
 function decodedLength(data: string): number {
 	const padding = data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0;
 	return Math.floor((data.length * 3) / 4) - padding;

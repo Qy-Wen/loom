@@ -1,9 +1,4 @@
-/**
- * Loom's own Agent interface.
- *
- * Application code depends on this small boundary, never on the vendored
- * harness session or tool types directly.
- */
+/** Loom-owned tool and Chat configuration contracts; native runtime handles live in durable.ts. */
 
 export type LoomToolContentPart =
 	| { type: "text"; text: string }
@@ -14,14 +9,6 @@ export interface LoomToolResult<TDetails = unknown> {
 	content: string | LoomToolContentPart[];
 	/** Structured UI payload; never injected into the model context. */
 	details?: TDetails;
-}
-
-export function toolResultText(content: string | LoomToolContentPart[]): string {
-	if (typeof content === "string") return content;
-	return content
-		.filter((part): part is { type: "text"; text: string } => part.type === "text")
-		.map((part) => part.text)
-		.join("\n");
 }
 
 /** A tool the agent can call. Loom's own shape, kept minimal. */

@@ -132,13 +132,13 @@ vendor 分支规则不变：`vendor-clean` 存纯净上游，`main` 放本地改
 | `read-image.ts` | `ReadImageProcessor` / `ReadImageProcessorResult` | 换成 durable `ImageProcessor.prepare(bytes, mimeType, limits) → PreparedImage`；直接用 `createNodePhotonImages()` 并删掉本文件 |
 | `library-skills.ts` | `loadSkills`、`formatSkillsForSystemPrompt` | 无等价导出；在 durable `ExecutionEnv` 上自研，或移植 coding-agent 的 `core/skills.ts`。目录注入改成 prompt `section` |
 | `library-auto-memory.ts` | `AgentHarnessTool`、`ExecutionToolContext` | 仅类型替换为 `defineTool` + `ToolExecutionApi`。注入改成 `section` / `instructions` |
-| `agent-instructions.ts` | — | 映射到 per-conversation `instructions`（渲染为 `instructions` section） |
+| `agent-instructions.ts` | — | 已删除；per-conversation `instructions` 渲染原生 `instructions` section |
 | `session-title.ts` | — | 纯文本工具（`titleFromUserText`），无 harness 依赖；title 的**存储**改由 Loom `defineDoc` 承担，见 §9 决策 5 |
 | `attachments.ts` / `composer-asset.ts` | 经 `convertToLlm` 折入 | 旁路字段本身不再需要；折进 `content` 的时机从 `convertToLlm` 挪到 `submit` 之前 |
 | `tool-permission.ts` | `hooks.on("before_tool")` | `AGENT_PERMISSION_LEVELS` / `ToolGateDecision` 业务逻辑原样保留，挂载点改成 `hook(ToolTask, { beforeTool })`；等待态发布见 §6 |
 | `specialist.ts` | `AgentHarness` + `MemorySessionRepo` | 去掉"每个 specialist 一个内存 harness"；改用 durable 归属子代理（§9 决策 6：retrieve 与 create 都归属，都不标 `background`）。**注意 Tx 与 Conversation 是两级 API，别混用**：工具内部走 `Tx`——`api.commit(tx => tx.createConversation({ ownership: { kind: "task", taskId: api.taskId } }))`，随后 `api.conversation(childId)` 拿句柄；Harness 层才有 `harness.createConversation({ ownership }, context)` 和 `Conversation.fork(at, { ownership }, context)` |
 | `harness-session-manager.ts` | `JsonlSessionRepo`、`AgentHarness.create`、`lane.accept/drive/followUp/abort/resume`、`hooks.on`、`events.on`、`estimateContextTokens`、`laneConfig/laneState/value` | 整体重写——见 §6 |
-| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`、pi-telemetry span | 本次迁移不做：先摘除对 `withTelemetryContext` / pi-telemetry 的依赖，保留 `LoomTraceSpan` 类型与 dev-trace UI 不动；以后基于 durable extension 重建——见 §8 |
+| `run-trace.ts` / `trace-io.ts` | `withTelemetryContext`、pi-telemetry span | 已删除；`trace-types.ts` 保留 `LoomTraceSpan` 契约。诊断使用 `durable-trace`、公开模型调用观察与独立 trace store，见 §8 |
 | tests / evals | `AgentHarness`、`JsonlSessionRepo`、`NodeExecutionEnv`、`estimateTokens`、`findCutPoint`、`span-io` | 逐个重写；`BACKGROUND_CONTEXT` 改从 `@earendil-works/chord/context` 取 |
 
 ### App 侧（`packages/app`）映射
