@@ -42,7 +42,8 @@ Extended from [pi agent core](https://github.com/earendil-works/pi) (`@earendil-
 pnpm install                          # downloads ffmpeg and ffprobe; on Windows, installs the sandbox once
 pnpm vendor:ffmpeg --all              # win32-x64, darwin-arm64, and darwin-x64
 pnpm dev                              # Electron app (requires DEEPSEEK_API_KEY in .env)
-pnpm --filter @loom/agent try:agent   # Smoke test: run one agent loop
+pnpm --filter @loom/app check:node-sqlite  # Verify SQLite in the real Electron main process
+pnpm --filter @loom/agent try:durable  # Live model/tool + temporary SQLite/reopen smoke test
 pnpm test                             # All unit and integration tests
 pnpm test:e2e                         # Playwright launch (needs app build)
 pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9344)
@@ -51,7 +52,7 @@ pnpm -r typecheck
 
 ## Vendored pi durable engine
 
-Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from upstream `main` into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Both are synced from the same commit. `src/durable-adapter.ts` is the import boundary, exposed as `@loom/agent/durable` during the migration. The existing Loom harness and app integration are not migrated yet; see [MIGRATION](./docs/agent/MIGRATION.md).
+Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) and `packages/codemode` from upstream `main` into `packages/agent/vendor-pi-durable/` and `vendor-pi-codemode/`. Both are synced from the same commit. `src/durable-adapter.ts` is the import boundary, exposed as `@loom/agent/durable` during the migration. Loom Chat model configuration is adapted and the SQLite smoke chain works; the existing Loom harness and app integration are not migrated yet. See [MIGRATION](./docs/agent/MIGRATION.md).
 
 ### Syncing upstream
 

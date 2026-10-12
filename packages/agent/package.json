@@ -24,6 +24,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "test": "node --experimental-strip-types --test tests/*.test.ts",
     "try:agent": "node --experimental-strip-types --env-file=../../.env scripts/try-agent.ts",
+    "try:durable": "node --experimental-strip-types --env-file=../../.env scripts/try-durable.ts",
     "eval:compaction-rate": "node --experimental-strip-types --env-file=../../.env evals/compaction-rate.ts",
     "eval:compaction-e2e": "node --experimental-strip-types --env-file=../../.env evals/compaction-e2e.ts",
     "eval:prompt-cache-hit": "node --experimental-strip-types --env-file=../../.env evals/prompt-cache-hit.ts",

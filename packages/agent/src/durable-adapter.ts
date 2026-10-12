@@ -1,4 +1,6 @@
 // The durable import boundary. Loom assembly and the main facade migrate separately.
+export { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW } from "./pi-adapter.ts";
+export type { LoomChatEndpoint } from "./types.ts";
 export * from "#vendor/pi-durable";
 export {
 	CodingTools,
