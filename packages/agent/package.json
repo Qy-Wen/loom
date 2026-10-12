@@ -23,7 +23,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --experimental-strip-types --test tests/*.test.ts",
+    "test": "node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test tests/*.test.ts",
     "try:agent": "node --experimental-strip-types --env-file=../../.env scripts/try-agent.ts",
     "try:durable": "node --experimental-strip-types --env-file=../../.env scripts/try-durable.ts",
     "eval:compaction-rate": "node --experimental-strip-types --env-file=../../.env evals/compaction-rate.ts",

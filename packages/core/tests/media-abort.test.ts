@@ -22,16 +22,15 @@ test("runMediaProcess rejects immediately when the signal is already aborted", a
 describe("sandboxed ffmpeg abort", { concurrency: false }, () => {
 	test("runMediaProcess kills the child when aborted", async () => {
 		const dir = await mkdtemp(join(tmpdir(), "loom-ffmpeg-abort-"));
-		const binary = join(dir, "ffmpeg");
-		await writeFile(binary, "#!/bin/sh\necho $$ > started.pid\nsleep 30\necho done > finished\n", { mode: 0o755 });
+		const sleeper = await sleepingFfmpeg(dir);
 		const previous = process.env.LOOM_FFMPEG_PATH;
-		process.env.LOOM_FFMPEG_PATH = binary;
+		process.env.LOOM_FFMPEG_PATH = sleeper.path;
 		setProcessSandboxRoot(dir);
 		const controller = new AbortController();
 		try {
 			const pending = runMediaProcess({
 				program: "ffmpeg",
-				args: ["-version"],
+				args: sleeper.args,
 				cwd: dir,
 				signal: controller.signal,
 			});
@@ -54,6 +53,25 @@ describe("sandboxed ffmpeg abort", { concurrency: false }, () => {
 	});
 });
 
+async function sleepingFfmpeg(dir: string): Promise<{ path: string; args: string[] }> {
+	if (process.platform !== "win32") {
+		const path = join(dir, "ffmpeg");
+		await writeFile(path, "#!/bin/sh\necho $$ > started.pid\nsleep 30\necho done > finished\n", { mode: 0o755 });
+		return { path, args: ["-version"] };
+	}
+	// A script under the user profile cannot be loaded: the sandbox user may not
+	// walk C:\Users. System PowerShell takes the sleep inline.
+	const root = process.env.SystemRoot ?? "C:\\Windows";
+	return {
+		path: join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe"),
+		args: [
+			"-NoProfile",
+			"-Command",
+			"[IO.File]::WriteAllText('started.pid', [string]$PID); Start-Sleep -Seconds 30; [IO.File]::WriteAllText('finished', 'done')",
+		],
+	};
+}
+
 async function waitForFile(path: string): Promise<void> {
 	const started = Date.now();
 	for (;;) {
@@ -61,7 +79,7 @@ async function waitForFile(path: string): Promise<void> {
 			await stat(path);
 			return;
 		} catch {
-			if (Date.now() - started > 20_000) throw new Error(`timed out waiting for ${path}`);
+			if (Date.now() - started > 50_000) throw new Error(`timed out waiting for ${path}`);
 			await new Promise((resolve) => setTimeout(resolve, 50));
 		}
 	}

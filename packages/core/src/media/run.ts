@@ -1,4 +1,5 @@
 import { spawn, type ChildProcess } from "node:child_process";
+import { join } from "node:path";
 import { processSandboxEnabled, sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
 import type { MediaProgram } from "./binaries.ts";
 import { resolveMediaBinary } from "./binaries.ts";
@@ -30,11 +31,7 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 function runDirect(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
 	const binary = resolveMediaBinary(options.program);
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
-	const child = spawn(binary, options.args, {
-		cwd: options.cwd,
-		stdio: ["ignore", "pipe", "pipe"],
-		windowsHide: true,
-	});
+	const child = spawnProgram(binary, options.args, { cwd: options.cwd });
 	return watchChild(child, options, timeoutMs);
 }
 
@@ -121,9 +118,50 @@ function watchChild(
 	});
 }
 
+function spawnProgram(
+	binary: string,
+	args: string[],
+	options: { cwd?: string; env?: NodeJS.ProcessEnv; detached?: boolean },
+): ChildProcess {
+	// Node refuses to CreateProcess a .cmd/.bat (EINVAL). cmd.exe can run them.
+	if (process.platform === "win32" && /\.(?:cmd|bat)$/i.test(binary)) {
+		const root = process.env.SystemRoot ?? "C:\\Windows";
+		const comspec = process.env.ComSpec ?? join(root, "System32", "cmd.exe");
+		return spawn(comspec, ["/d", "/s", "/c", cmdLine([binary, ...args])], {
+			cwd: options.cwd,
+			env: options.env,
+			detached: options.detached,
+			stdio: ["ignore", "pipe", "pipe"],
+			windowsHide: true,
+		});
+	}
+	return spawn(binary, args, {
+		cwd: options.cwd,
+		env: options.env,
+		detached: options.detached,
+		stdio: ["ignore", "pipe", "pipe"],
+		windowsHide: true,
+	});
+}
+
+function cmdLine(args: string[]): string {
+	return args.map(quoteCmdArg).join(" ");
+}
+
+function quoteCmdArg(value: string): string {
+	if (value.length === 0) return '""';
+	if (!/[\s"%&|<>^()!]/.test(value)) return value;
+	return `"${value.replaceAll('"', '""')}"`;
+}
+
 function stopChild(child: ChildProcess): void {
 	const pid = child.pid;
-	if (pid && process.platform !== "win32") {
+	if (process.platform === "win32") {
+		if (pid) killWindowsTree(pid);
+		else child.kill();
+		return;
+	}
+	if (pid) {
 		try {
 			process.kill(-pid, "SIGTERM");
 			return;
@@ -132,6 +170,15 @@ function stopChild(child: ChildProcess): void {
 		}
 	}
 	child.kill();
+}
+
+function killWindowsTree(pid: number): void {
+	const root = process.env.SystemRoot ?? "C:\\Windows";
+	const killer = spawn(join(root, "System32", "taskkill.exe"), ["/F", "/T", "/PID", String(pid)], {
+		stdio: "ignore",
+		windowsHide: true,
+	});
+	killer.once("error", () => {});
 }
 
 function abortError(program: MediaProgram): Error {
