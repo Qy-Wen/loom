@@ -15,17 +15,19 @@ export function toastMessage(text: string): string {
 interface ErrorToastProps {
 	text: string;
 	onDismiss: () => void;
+	autoDismiss?: boolean;
 }
 
-export function ErrorToast({ text, onDismiss }: ErrorToastProps): React.JSX.Element {
+export function ErrorToast({ text, onDismiss, autoDismiss = true }: ErrorToastProps): React.JSX.Element {
 	const { t } = useLocale();
 	const onDismissRef = useRef(onDismiss);
 	onDismissRef.current = onDismiss;
 
 	useEffect(() => {
+		if (!autoDismiss) return;
 		const timer = window.setTimeout(() => onDismissRef.current(), TOAST_MS);
 		return () => window.clearTimeout(timer);
-	}, [text]);
+	}, [text, autoDismiss]);
 
 	return (
 		<div className="error-toast" role="status">

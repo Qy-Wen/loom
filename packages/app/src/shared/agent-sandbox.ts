@@ -1,5 +1,10 @@
 export const DEFAULT_PROCESS_SANDBOX = true;
 
+export interface ProcessSandboxNotice {
+	id: string;
+	reason: string;
+}
+
 export function parseProcessSandboxEnabled(value: unknown): boolean {
 	return typeof value === "boolean" ? value : DEFAULT_PROCESS_SANDBOX;
 }

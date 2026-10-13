@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
-import { processSandboxEnabled, sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
+import { sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
 import type { MediaProgram } from "./binaries.ts";
 import { resolveMediaBinary } from "./binaries.ts";
 
@@ -24,7 +24,7 @@ export interface RunMediaProcessResult {
 export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
 	const signal = options.signal;
 	if (signal?.aborted) return Promise.reject(abortError(options.program));
-	if (!processSandboxEnabled()) return runDirect(options);
+	// sandboxedArgv also gates direct execution while fallback is settling.
 	return runSandboxed(options);
 }
 
@@ -47,6 +47,7 @@ async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaPr
 		throw error;
 	}
 	if (signal?.aborted) throw abortError(options.program);
+	if (wrapped === undefined) return runDirect(options);
 	const [command, ...args] = wrapped.argv;
 	if (!command) throw new Error("Sandbox refused to start: the sandbox returned no command.");
 
