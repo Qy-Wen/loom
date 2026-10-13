@@ -146,7 +146,16 @@ export class LoomAgUiAgent extends AbstractAgent {
 					const snapshottedTools = new Set<string>();
 					const progress = new Map<string, string>();
 					let submittedEntry: string | undefined;
-					const done = Promise.withResolvers<void>();
+					// A follow-up run starts in the same commit that ends the previous one.
+					// Signal only after that whole batch is applied, so the stream is not torn down between them.
+					const boundaries: Array<{ started: boolean }> = [];
+					let boundaryWait = Promise.withResolvers<void>();
+					const pushBoundary = (started: boolean) => {
+						boundaries.push({ started });
+						const current = boundaryWait;
+						boundaryWait = Promise.withResolvers<void>();
+						current.resolve();
+					};
 					const startTool = (id: string, name: string, args: unknown) => {
 						if (knownTools.has(id)) return;
 						close(); knownTools.add(id);
@@ -243,7 +252,6 @@ export class LoomAgUiAgent extends AbstractAgent {
 							case "auto_retry_start": emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: "loom-retry", activityType: "loom.retry", content: { phase: "wait", attempt: event.attempt, delayMs: Math.max(0, event.at - Date.now()), errorMessage: event.errorMessage } }); break;
 							case "auto_retry_end": emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: "loom-retry", activityType: "loom.retry", content: { phase: "done", attempt: event.attempt } }); break;
 							case "compaction_start": case "compaction_end": emit({ type: EventType.CUSTOM, name: "loom.compaction", value: { phase: event.type === "compaction_start" ? "start" : "end", reason: event.reason, ...(event.type === "compaction_end" ? { status: event.error ? "failed" : "completed" } : {}) } }); break;
-							case "run_end": done.resolve(); break;
 						}
 					};
 					const approvalPresenter = () => {
@@ -256,16 +264,62 @@ export class LoomAgUiAgent extends AbstractAgent {
 						};
 					};
 					await onEvent(stream.snapshot);
-					stream.start(async (events) => { for (const event of events) await onEvent(event); });
+					stream.start(async (events) => {
+						let ended = false;
+						let started = false;
+						for (const event of events) {
+							if (event.type === "run_end") ended = true;
+							if (event.type === "run_start") started = true;
+							await onEvent(event);
+						}
+						if (ended) pushBoundary(started);
+					});
 					approvals = await owner.harness.watchDoc(LoomApprovalsDoc, conversation.id, context);
 					if (approvals) { const show = approvalPresenter(); show(approvals.value); approvals.start(async (value) => { show(value); }); }
 					const content = images.length ? [{ type: "text" as const, text: folded }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : folded;
+					const watched = stream;
+					const placedInput = async () => {
+						const inspection = await owner.harness.inspect(context);
+						return inspection.submissions.some((row) => row.conversationId === conversation.id && row.type === "input" && row.status === "placed");
+					};
+					// Stay attached across queued follow-ups. The first answer's run_end is not the end of the
+					// turn the user is watching when the inbox still has work, and later replies must keep streaming.
+					const drainFollowUps = async (detach: boolean) => {
+						while (!cancelled && await placedInput()) {
+							const woke = boundaries.length > 0 ? "boundary" as const : await Promise.race([
+								boundaryWait.promise.then(() => "boundary" as const),
+								conversation.waitForIdle(context).then(() => "idle" as const),
+								watched.closed.then(() => "closed" as const),
+								...(detach ? [detached.promise.then(() => "detach" as const)] : []),
+							]);
+							if (cancelled || woke === "closed" || woke === "detach") return;
+							if (woke === "idle" && boundaries.length === 0) {
+								if (!await placedInput()) return;
+								const again = await Promise.race([
+									boundaryWait.promise.then(() => "boundary" as const),
+									watched.closed.then(() => "closed" as const),
+									...(detach ? [detached.promise.then(() => "detach" as const)] : []),
+								]);
+								if (again !== "boundary") return;
+							}
+							const step = boundaries.shift();
+							if (step && !step.started && !await placedInput()) return;
+						}
+					};
 					if (submit) {
 						const submission = await conversation.submit({ type: "input", content, whenBusy: "reject", requestId: input.runId, entry: { kind: "loom.user", data: { text: body } } }, context);
 						const settled = await submission.wait(context);
-						if (settled.status === "done" && settled.type === "input" && existingRequest?.status !== "done" && !stream.snapshot.entries.some((entry) => entry.id === settled.answer)) await Promise.race([done.promise, stream.closed]);
 						if (settled.status === "unanswered" && settled.reason !== "aborted") throw new Error(typeof settled.detail === "string" ? settled.detail : settled.reason);
-					} else if (stream.snapshot.run) await Promise.race([done.promise, stream.closed, detached.promise]);
+						const answerSeen = settled.status === "done" && settled.type === "input" && stream.snapshot.entries.some((entry) => entry.id === settled.answer);
+						if (settled.status === "done" && settled.type === "input" && existingRequest?.status !== "done" && !answerSeen) {
+							while (boundaries.length === 0 && !cancelled) {
+								const woke = await Promise.race([boundaryWait.promise.then(() => "boundary" as const), stream.closed.then(() => "closed" as const)]);
+								if (woke !== "boundary") break;
+							}
+							const step = boundaries.shift();
+							if (step?.started && !cancelled) await drainFollowUps(false);
+						} else if (!cancelled) await drainFollowUps(false);
+					} else if (stream.snapshot.run || await placedInput()) await drainFollowUps(true);
 					close();
 					if (!cancelled) { emit({ type: EventType.MESSAGES_SNAPSHOT, messages: toAgUiMessages((await this.host.getSession(input.threadId)).messages) }); emit({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId }); }
 				} catch (error) {
