@@ -150,6 +150,76 @@ test("completed request reconnect after compaction returns full history without 
 	});
 });
 
+test("queued follow-ups stay one at a time and keep streaming after the first answer", { timeout: 15_000 }, async () => {
+	const release = [Promise.withResolvers<void>(), Promise.withResolvers<void>(), Promise.withResolvers<void>()];
+	let requests = 0;
+	try {
+		await fixture(async (host, adapter) => {
+			const session = await host.createSession();
+			const events: import("@ag-ui/core").BaseEvent[] = [];
+			let finished = false;
+			const completed = Promise.withResolvers<void>();
+			const subscription = adapter.run(input(session.id)).subscribe({
+				next: (event) => { events.push(event); },
+				error: (error) => completed.reject(error instanceof Error ? error : new Error(String(error))),
+				complete: () => { finished = true; completed.resolve(); },
+			});
+			const text = () => events.filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT).map((event) => (event as { delta?: string }).delta ?? "").join("");
+			const waitFor = async (snippet: string) => {
+				const start = Date.now();
+				while (!text().includes(snippet)) {
+					if (finished) throw new Error(`Run finished before ${snippet}: ${text()}`);
+					if (Date.now() - start > 4_000) throw new Error(`Missing ${snippet} in ${text()}`);
+					await new Promise((resolve) => setTimeout(resolve, 20));
+				}
+			};
+			try {
+				await waitFor("A-partial");
+				const conversation = await host.conversation(session.id);
+				await conversation.submit({ type: "input", content: "second", whenBusy: "followUp" }, context);
+				await conversation.submit({ type: "input", content: "third", whenBusy: "followUp" }, context);
+				release[0]!.resolve();
+				await waitFor("B-partial");
+				assert.equal(finished, false);
+				assert.equal(requests, 2);
+				const inspection = await host.requireOwner().harness.inspect(context);
+				const queued = inspection.submissions.filter((row) => row.conversationId === conversation.id && row.type === "input" && row.status === "queued");
+				assert.equal(queued.length, 1);
+				release[1]!.resolve();
+				await waitFor("C-partial");
+				assert.equal(finished, false);
+				assert.equal(requests, 3);
+				release[2]!.resolve();
+				await completed.promise;
+				assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
+				assert.match(text(), /A-partial/);
+				assert.match(text(), /B-partial/);
+				assert.match(text(), /C-partial/);
+				const messages = (await host.getSession(session.id)).messages;
+				assert.equal(messages.filter((message) => message.role === "user").length, 3);
+				assert.equal(messages.filter((message) => message.role === "assistant").length, 3);
+			} finally {
+				for (const gate of release) gate.resolve();
+				subscription.unsubscribe();
+			}
+		}, (request, response) => {
+			request.resume();
+			request.on("end", () => {
+				const turn = requests++;
+				const label = ["A", "B", "C"][turn] ?? "Z";
+				response.writeHead(200, { "content-type": "text/event-stream" });
+				response.write(`data: ${JSON.stringify({ id: label, object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content: `${label}-partial` }, finish_reason: null }] })}\n\n`);
+				void (release[turn] ?? release[2]!).promise.then(() => {
+					if (response.writableEnded || response.destroyed) return;
+					response.end(`data: ${JSON.stringify({ id: label, object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content: `${label}-done` }, finish_reason: "stop" }] })}\n\ndata: [DONE]\n\n`);
+				});
+			});
+		});
+	} finally {
+		for (const gate of release) gate.resolve();
+	}
+});
+
 test("text is delivered while the provider is still streaming, not only at message_end", { timeout: 10_000 }, async () => {
 	const nextChunk = Promise.withResolvers<void>();
 	const finish = Promise.withResolvers<void>();
