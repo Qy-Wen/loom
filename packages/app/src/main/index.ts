@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
-import { setProcessSandboxEnabled } from "@loom/core/sandbox";
+import { setProcessSandboxEnabled, setProcessSandboxFailureHandler } from "@loom/core/sandbox";
 import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
@@ -644,6 +644,15 @@ function registerIpc(): void {
 		if (!generalSettings) throw new Error("Settings store not started");
 		return generalSettings.save(parseGeneralSettings(raw));
 	});
+	ipcMain.handle(IPC.getProcessSandboxNotice, async () => {
+		if (!agentSandbox) throw new Error("Settings store not started");
+		return agentSandbox.pendingNotice();
+	});
+	ipcMain.handle(IPC.acknowledgeProcessSandboxNotice, async (_event, id: unknown) => {
+		if (!agentSandbox) throw new Error("Settings store not started");
+		if (typeof id !== "string") throw new Error("Sandbox notice ID must be text.");
+		await agentSandbox.acknowledgeNotice(id);
+	});
 	ipcMain.handle(IPC.getAgentSandbox, async () => {
 		if (!agentSandbox) throw new Error("Settings store not started");
 		return agentSandbox.load();
@@ -940,6 +949,22 @@ app
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
 		await agentManager.setInstructions(await agentInstructions.load());
 		agentSandbox = new AgentSandboxStore(join(app.getPath("userData"), "agent-sandbox.json"));
+		setProcessSandboxFailureHandler(async (reason) => {
+			const store = agentSandbox!;
+			let message = reason.message;
+			try {
+				// Retain the notice before broadcasting: restore/recovery may run
+				// before any window exists or its renderer has subscribed.
+				await store.recordFailure(message);
+			} catch (error) {
+				message += ` Settings could not be saved: ${error instanceof Error ? error.message : String(error)}`;
+			}
+			const notice = await store.pendingNotice();
+			notifySettingsChanged();
+			if (notice) for (const window of BrowserWindow.getAllWindows()) {
+				if (!window.isDestroyed()) window.webContents.send(IPC.processSandboxDisabled, { ...notice, reason: message });
+			}
+		});
 		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();

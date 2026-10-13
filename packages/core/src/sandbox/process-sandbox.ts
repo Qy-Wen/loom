@@ -9,7 +9,8 @@ import { tryResolveMediaBinaries } from "../media/binaries.ts";
 /**
  * Process sandbox for bash and bundled ffmpeg/ffprobe.
  * The open library and the temp directory are writable. The user profile is not
- * readable. Network is off. No library, or a failed wrap, does not spawn.
+ * readable. Network is off. No library prevents spawning. On Windows, failed
+ * sandbox initialization disables the setting and lets the command run directly.
  * Read, edit, and write stay in-process. MCP and generation jobs are not wrapped.
  * Windows must name the packaged srt-win.exe; the runtime does not pick it up.
  * On Windows the inner shell is cmd.exe. Program Files and Windows are already
@@ -62,6 +63,12 @@ let applied: string | undefined;
 let enabled = true;
 let chain: Promise<void> = Promise.resolve();
 let helperReady: Promise<string> | undefined;
+let fallbackPending: Promise<void> | undefined;
+let sandboxFailureHandler: ((error: Error) => void | Promise<void>) | undefined;
+
+export function setProcessSandboxFailureHandler(handler: ((error: Error) => void | Promise<void>) | undefined): void {
+	sandboxFailureHandler = handler;
+}
 
 export function setProcessSandboxRoot(next: string): void {
 	root = resolve(next);
@@ -94,12 +101,14 @@ export async function releaseProcessSandbox(expected: string): Promise<void> {
 	});
 }
 
+/** Returns undefined if Windows sandbox initialization failed and was disabled. */
 export async function sandboxedArgv(
 	command: string,
 	cwd?: string,
 	shell?: string,
-): Promise<{ argv: string[]; env: NodeJS.ProcessEnv; cwd: string }> {
+): Promise<{ argv: string[]; env: NodeJS.ProcessEnv; cwd: string } | undefined> {
 	const library = await ensureSandbox();
+	if (library === undefined) return undefined;
 	const spawnCwd = cwd ?? library;
 	try {
 		const wrapped = await SandboxManager.wrapWithSandboxArgv(command, shell ?? innerShell(), undefined, undefined, spawnCwd);
@@ -121,9 +130,11 @@ export async function prepareSandboxedBash(execution: {
 	cwd: string;
 	env: Record<string, string>;
 }): Promise<void> {
+	while (fallbackPending) await fallbackPending;
 	if (!enabled) return;
 	if (root === undefined) throw new Error("Sandbox refused to start: no library is open.");
 	const wrapped = await sandboxedArgv(execution.command, execution.cwd, bashShell());
+	if (wrapped === undefined) return;
 	const helper = await spawnHelperPath();
 	const specPath = join(tmpdir(), `loom-sandbox-${randomBytes(16).toString("hex")}.json`);
 	const env = stringEnv(wrapped.env);
@@ -165,45 +176,81 @@ function quotePosix(value: string): string {
 	return `'${value.replaceAll("'", `'\\''`)}'`;
 }
 
-async function ensureSandbox(): Promise<string> {
+async function ensureSandbox(): Promise<string | undefined> {
 	for (;;) {
+		if (fallbackPending) { await fallbackPending; continue; }
+		if (!enabled) return undefined;
 		const wanted = root;
 		if (!wanted) throw new Error("Sandbox refused to start: no library is open.");
 		await enqueue(() => apply(wanted));
+		if (fallbackPending) continue;
+		if (!enabled) return undefined;
 		if (root === wanted && applied === wanted) return wanted;
 	}
 }
 
 async function apply(wanted: string): Promise<void> {
 	if (!enabled || root !== wanted || applied === wanted) return;
-	const shell = innerShell();
-	if (!SandboxManager.isSupportedPlatform()) {
-		throw new Error("Sandbox refused to start: this operating system is not supported.");
-	}
-	if (applied !== undefined) {
-		await SandboxManager.reset();
-		applied = undefined;
-	}
-	if (root !== wanted) return;
-	const started = Date.now();
-	for (;;) {
+	try {
+		const shell = innerShell();
+		if (!SandboxManager.isSupportedPlatform()) {
+			throw new Error("Sandbox refused to start: this operating system is not supported.");
+		}
+		if (applied !== undefined) {
+			await SandboxManager.reset();
+			applied = undefined;
+		}
+		if (root !== wanted) return;
+		const started = Date.now();
+		for (;;) {
+			try {
+				await SandboxManager.initialize(runtimeConfig(wanted, shell));
+				break;
+			} catch (error) {
+				// Parallel tests each bind two ports in the 10-port Windows range.
+				if (!isPortBusy(error) || Date.now() - started > 45_000) throw error;
+				await SandboxManager.reset().catch(() => undefined);
+				await new Promise((resolve) => setTimeout(resolve, 400));
+				if (!enabled || root !== wanted) return;
+			}
+		}
+		if (root !== wanted) {
+			await SandboxManager.reset();
+			applied = undefined;
+			return;
+		}
+		applied = wanted;
+	} catch (cause) {
+		const error = refused(cause);
+		if (process.platform !== "win32") throw error;
+		// Keep the fallback policy, but hold every direct-execution entry until
+		// cleanup and failure reporting settle, including callers arriving now.
+		let finishFallback!: () => void;
+		fallbackPending = new Promise<void>((resolve) => { finishFallback = resolve; });
+		enabled = false;
 		try {
-			await SandboxManager.initialize(runtimeConfig(wanted, shell));
-			break;
-		} catch (error) {
-			// Parallel tests each bind two ports in the 10-port Windows range.
-			if (!isPortBusy(error) || Date.now() - started > 45_000) throw refused(error);
-			await SandboxManager.reset().catch(() => undefined);
-			await new Promise((resolve) => setTimeout(resolve, 400));
-			if (!enabled || root !== wanted) return;
+			let resetError: unknown;
+			try {
+				await SandboxManager.reset();
+			} catch (resetCause) {
+				resetError = resetCause;
+			} finally {
+				applied = undefined;
+			}
+			const reason = resetError === undefined
+				? error
+				: new Error(`${error.message} Cleanup also failed: ${resetError instanceof Error ? resetError.message : String(resetError)}`);
+			try {
+				await sandboxFailureHandler?.(reason);
+			} catch (handlerError) {
+				console.error("Could not persist Windows sandbox fallback:", handlerError);
+			}
+			if (!sandboxFailureHandler) console.warn("Windows sandbox disabled after initialization failure:", reason);
+		} finally {
+			fallbackPending = undefined;
+			finishFallback();
 		}
 	}
-	if (root !== wanted) {
-		await SandboxManager.reset();
-		applied = undefined;
-		return;
-	}
-	applied = wanted;
 }
 
 function runtimeConfig(libraryRoot: string, shell: string): SandboxRuntimeConfig {

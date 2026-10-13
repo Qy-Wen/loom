@@ -16,6 +16,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
+import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
@@ -137,6 +138,7 @@ export function App(): React.JSX.Element {
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [sandboxNotice, setSandboxNotice] = useState<ProcessSandboxNotice | null>(null);
 	const [status, setStatus] = useState<string | null>(null);
 	const statusCount = useRef(0);
 	const [enrichment, setEnrichment] = useState<AssetEnrichment | undefined>();
@@ -172,6 +174,30 @@ export function App(): React.JSX.Element {
 			stop();
 		};
 	}, []);
+	useEffect(() => {
+		let alive = true;
+		let receivedLive = false;
+		// Subscribe before reading the retained notice to close the startup gap.
+		const stop = window.loom.onProcessSandboxDisabled((notice) => {
+			receivedLive = true;
+			if (alive) setSandboxNotice(notice);
+		});
+		void window.loom.getProcessSandboxNotice().then((notice) => {
+			if (alive && !receivedLive) setSandboxNotice(notice);
+		}).catch((cause) => {
+			if (alive) setError(cause instanceof Error ? cause.message : String(cause));
+		});
+		return () => { alive = false; stop(); };
+	}, []);
+
+	function dismissSandboxNotice(): void {
+		if (!sandboxNotice) return;
+		const id = sandboxNotice.id;
+		setSandboxNotice(null);
+		void window.loom.acknowledgeProcessSandboxNotice(id).catch((cause) => {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		});
+	}
 	const selectedAsset = useMemo(
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
 		[library.assets, selectedAssetId],
@@ -1011,7 +1037,9 @@ export function App(): React.JSX.Element {
 						{status}
 					</div>
 				)}
-				{error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
+				{sandboxNotice
+					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
+					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
 					{import.meta.env.DEV ? <TracesButton onOpen={() => void window.loom.openDevTrace?.()} /> : null}
 					<SettingsButton onOpen={() => setSettingsOpen(true)} />

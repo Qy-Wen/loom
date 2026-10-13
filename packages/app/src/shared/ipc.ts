@@ -1,4 +1,5 @@
 /** Typed contract shared by Electron main, preload, and renderer. */
+import type { ProcessSandboxNotice } from "./agent-sandbox.ts";
 import type { ImageGrade, ImageGradeRecord } from "@loom/core/grade";
 import type {
 	Asset,
@@ -134,6 +135,9 @@ export const IPC = {
 	deleteSession: "loom:deleteSession",
 	sessionsChanged: "loom:sessionsChanged",
 	settingsChanged: "loom:settingsChanged",
+	processSandboxDisabled: "loom:processSandboxDisabled",
+	getProcessSandboxNotice: "loom:getProcessSandboxNotice",
+	acknowledgeProcessSandboxNotice: "loom:acknowledgeProcessSandboxNotice",
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
 	probeModelSlot: "loom:probeModelSlot",
@@ -248,6 +252,9 @@ export interface LoomApi {
 	deleteSession: (id: string) => Promise<void>;
 	onSessionsChanged: (listener: (sessions: SessionSummary[]) => void) => () => void;
 	onSettingsChanged: (listener: () => void) => () => void;
+	onProcessSandboxDisabled: (listener: (notice: ProcessSandboxNotice) => void) => () => void;
+	getProcessSandboxNotice: () => Promise<ProcessSandboxNotice | null>;
+	acknowledgeProcessSandboxNotice: (id: string) => Promise<void>;
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
 	probeModelSlot: (draft: ModelProbeDraft) => Promise<ProbeResult>;

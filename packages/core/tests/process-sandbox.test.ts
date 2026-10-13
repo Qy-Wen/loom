@@ -76,6 +76,7 @@ describe("process sandbox", { concurrency: false }, () => {
 		].join("&");
 		try {
 			const wrapped = await sandboxedArgv(command, dir);
+			assert.ok(wrapped);
 			const output = await runArgv(wrapped.argv, wrapped.cwd, wrapped.env);
 			assert.match(output, /loom-sandbox-sentinel/);
 			assert.match(output, /OUTSIDE_BLOCKED/);
@@ -113,6 +114,7 @@ describe("process sandbox", { concurrency: false }, () => {
 		setProcessSandboxRoot(dir);
 		try {
 			const wrapped = await sandboxedArgv(shellCommand([process.execPath, "-e", script, ...samples]));
+			assert.ok(wrapped);
 			assert.equal(wrapped.argv.some((arg) => /cmd\.exe/i.test(arg)), true);
 			const output = await runArgv(wrapped.argv, wrapped.cwd, wrapped.env);
 			assert.deepEqual(JSON.parse(output), samples);

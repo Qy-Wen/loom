@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, webUtils } from "electron";
 import type { LibraryChange } from "@loom/core";
 import type { LoomSessionSummary as SessionSummary } from "@loom/agent";
 import { DEV_TRACE_IPC } from "../shared/dev-trace.ts";
+import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
 
 const api: LoomApi = {
@@ -97,6 +98,13 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.settingsChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.settingsChanged, handler);
 	},
+	onProcessSandboxDisabled: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, notice: ProcessSandboxNotice) => listener(notice);
+		ipcRenderer.on(IPC.processSandboxDisabled, handler);
+		return () => ipcRenderer.removeListener(IPC.processSandboxDisabled, handler);
+	},
+	getProcessSandboxNotice: () => ipcRenderer.invoke(IPC.getProcessSandboxNotice),
+	acknowledgeProcessSandboxNotice: (id) => ipcRenderer.invoke(IPC.acknowledgeProcessSandboxNotice, id),
 	isFullscreen: () => ipcRenderer.invoke(IPC.isFullscreen),
 	onFullscreenChanged: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, fullscreen: boolean) => listener(fullscreen);

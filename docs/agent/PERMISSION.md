@@ -44,4 +44,6 @@ Full permission also runs them directly. The switch stays as saved. Leaving Full
 
 `read`, `edit`, and `write` stay in the Loom process. Retrieve and create specialists share this sandbox, because they use the same `bash`. Generation stays an MCP server and is not wrapped in this sandbox.
 
-No open library, or a sandbox that fails to start, does not run the command. On Windows, ffmpeg and ffprobe run under `cmd.exe`. The bash tool still needs Git Bash. `pnpm install` provisions the sandbox user the first time it is missing (one UAC prompt) and skips that step once it is in place.
+With the sandbox on, no open library prevents execution. On macOS/Linux, sandbox startup failure also prevents execution. On Windows, initialization failure turns the saved switch off and runs commands directly after cleanup and failure reporting finish; concurrent commands wait for that transition. The failure notice is retained in `agent-sandbox.json` and displayed after startup, reload or restart until dismissed. Dismissal does not re-enable the sandbox.
+
+On Windows, ffmpeg and ffprobe run under `cmd.exe`. The bash tool still needs Git Bash. `pnpm install` provisions the sandbox user the first time it is missing (one UAC prompt) and skips that step once it is in place.
