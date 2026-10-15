@@ -23,3 +23,9 @@ Adapters for Xiaohongshu, Douyin, and other platforms.
 ## Step 3: Deeper memory
 
 `MEMORY.md` is only an index. Entry bodies live elsewhere. A dreaming pass may consolidate, merge, and forget while idle.
+
+---
+
+## Step 4: Easier model setup
+
+Lower the barrier to model configuration, making it easier to choose and set up a provider, model, and connection details.
