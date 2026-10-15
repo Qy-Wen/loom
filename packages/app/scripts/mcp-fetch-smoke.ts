@@ -2,7 +2,9 @@ import { resolve } from "node:path";
 import { loadMcpConfigFile } from "../src/main/mcp/config.ts";
 import { McpHost } from "../src/main/mcp/host.ts";
 
-const configs = await loadMcpConfigFile(resolve(import.meta.dirname, "../../../mcp.json"));
+const configPath = process.env.LOOM_MCP_CONFIG?.trim();
+if (!configPath) throw new Error("LOOM_MCP_CONFIG is empty");
+const configs = await loadMcpConfigFile(resolve(configPath));
 const host = new McpHost();
 const tools = await host.connect(configs);
 const names = tools.map((tool) => tool.name);

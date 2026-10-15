@@ -4,8 +4,10 @@ import { McpHost } from "../src/main/mcp/host.ts";
 
 const root = resolve(import.meta.dirname, "../../..");
 process.loadEnvFile(resolve(root, ".env"));
-const configs = (await loadMcpConfigFile(resolve(root, "mcp.json"))).filter((config) => config.id === "comfy");
-if (!configs[0]) throw new Error("mcp.json has no comfy server");
+const configPath = process.env.LOOM_MCP_CONFIG?.trim();
+if (!configPath) throw new Error("LOOM_MCP_CONFIG is empty");
+const configs = (await loadMcpConfigFile(resolve(configPath))).filter((config) => config.id === "comfy");
+if (!configs[0]) throw new Error("MCP config has no comfy server");
 if (!process.env.COMFY_API_KEY?.trim()) throw new Error("COMFY_API_KEY is empty");
 
 const host = new McpHost();
