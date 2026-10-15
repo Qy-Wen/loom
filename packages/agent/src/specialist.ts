@@ -8,6 +8,10 @@ export const RETRIEVE_AGENT_TOOL = "run_retrieve_agent";
 export const CREATE_AGENT_TOOL = "run_create_agent";
 
 const RETRIEVE_LIBRARY_TOOLS = new Set(["search_assets", "inspect_asset"]);
+/** Resolve source asset ids and transform media. The create specialist does not search the library. */
+const CREATE_LIBRARY_TOOLS = new Set([
+	"inspect_asset", "get_media_info", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg",
+]);
 
 export type SpecialistRole = "retrieve" | "create";
 
@@ -23,7 +27,8 @@ export const RETRIEVE_SYSTEM_PROMPT =
 
 export const CREATE_SYSTEM_PROMPT =
 	"You handle the delegated creative task, primarily generating assets. You share the connected MCP tools with the main agent. Use the tools needed to complete only this task. " +
-	"Use write or bash only to place results inside the library. Do not search the library. " +
+	"When the task supplies an asset_id, call inspect_asset to get its relativePath, then use read or the media tools on that path. Use read and edit for files, and the FFmpeg media tools to convert, trim, resize, or grade generated media. " +
+	"Use write, edit, or bash only to place results inside the library. Do not call search_assets; the task supplies the assets it needs. " +
 	"If an external action times out, disconnects, or is interrupted, report that its outcome is unknown and check its status before retrying. " +
 	"Reply with a summary of the outcome and the workspace-relative paths you wrote, if any.";
 
@@ -41,6 +46,11 @@ export function partitionLibraryTools(tools: readonly LoomTool[]): {
 		if (RETRIEVE_LIBRARY_TOOLS.has(tool.name)) {
 			parent.push(tool);
 			retrieve.push(tool);
+			if (CREATE_LIBRARY_TOOLS.has(tool.name)) create.push(tool);
+		}
+		else if (CREATE_LIBRARY_TOOLS.has(tool.name)) {
+			parent.push(tool);
+			create.push(tool);
 		}
 		else if (isMcpToolName(tool.name)) {
 			parent.push(tool);
@@ -71,7 +81,7 @@ export function specialistDescription(role: SpecialistRole): string {
 	if (role === "retrieve") {
 		return "Consider delegation only when there are multiple independent retrieval tasks that can run in parallel. Handle a single retrieval task, including a multi-step one, directly with search_assets and inspect_asset. Pass each task's full question in goal, including asset ids when needed. Returns asset ids and passages. Independent calls in the same turn run together.";
 	}
-	return "Run a creative task with the shared MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Does not search the library. Returns an outcome summary and any library paths written. Independent calls in the same turn run together.";
+	return "Run a creative task with the shared MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Can inspect supplied asset ids, read and edit files, and run FFmpeg media tools, but does not search the library. Returns an outcome summary and any library paths written. Independent calls in the same turn run together.";
 }
 
 /** Foreground owned conversations: durable controls Stop, busy state, and restart ownership. */

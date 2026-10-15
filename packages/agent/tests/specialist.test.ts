@@ -17,12 +17,20 @@ test("parent shares retrieval and MCP tools with the corresponding specialists",
 	const split = partitionLibraryTools(["search_assets", "inspect_asset", "describe_image", "comfy__generate", "run_retrieve_agent"].map((name) => ({ name, description: name, parameters: Type.Object({}), execute: () => name })));
 	assert.deepEqual(split.parent.map((tool) => tool.name), ["search_assets", "inspect_asset", "describe_image", "comfy__generate"]);
 	assert.deepEqual(split.retrieve.map((tool) => tool.name), ["search_assets", "inspect_asset"]);
-	assert.deepEqual(split.create.map((tool) => tool.name), ["comfy__generate"]);
+	assert.deepEqual(split.create.map((tool) => tool.name), ["inspect_asset", "comfy__generate"]);
 	assert.equal(specialistUserMessage(" find the dock "), "Task:\nfind the dock");
 	assert.match(RETRIEVE_SYSTEM_PROMPT, /asset_id.*inspect_asset.*exact id first; do not call search_assets/);
 	assert.match(RETRIEVE_SYSTEM_PROMPT, /read on the relativePath returned by inspect_asset/);
 	assert.match(specialistDescription("retrieve"), /only when there are multiple independent retrieval tasks that can run in parallel/);
 	assert.match(specialistDescription("retrieve"), /Handle a single retrieval task, including a multi-step one, directly/);
+});
+
+test("create receives inspect and FFmpeg tools without search or settings", () => {
+	const names = ["search_assets", "inspect_asset", "get_media_info", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "describe_image", "update_settings", "comfy__generate"];
+	const split = partitionLibraryTools(names.map((name) => ({ name, description: name, parameters: Type.Object({}), execute: () => name })));
+	assert.deepEqual(split.create.map((tool) => tool.name), ["inspect_asset", "get_media_info", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "comfy__generate"]);
+	assert.deepEqual(split.retrieve.map((tool) => tool.name), ["search_assets", "inspect_asset"]);
+	assert.deepEqual(split.parent.map((tool) => tool.name), names);
 });
 
 test("parent and create share the same MCP tools while retrieve stays isolated", () => {

@@ -50,13 +50,16 @@ test("retrieval tools are available to the parent and retrieve specialist across
 			assert.ok(names(extension).includes("search_assets"));
 			assert.ok(names(extension).includes("inspect_asset"));
 		}
-		assert.ok(!names("loom.create").some((name) => tools.some((tool) => tool.name === name)));
+		assert.ok(!names("loom.create").includes("search_assets"));
+		assert.ok(names("loom.create").includes("inspect_asset"));
+		for (const name of ["read", "edit", "write", "bash"]) assert.ok(names("loom.create").includes(name));
 		await host.setTools([tools[1]!]);
 		assert.equal(host.requireOwner(), owner);
 		for (const extension of ["loom.library", "loom.retrieve"]) {
 			assert.ok(!names(extension).includes("search_assets"));
 			assert.ok(names(extension).includes("inspect_asset"));
 		}
+		assert.ok(names("loom.create").includes("inspect_asset"));
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 

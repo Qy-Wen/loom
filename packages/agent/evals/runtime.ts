@@ -17,7 +17,7 @@ export async function openEvalAgent(chat: LoomChatEndpoint, options: { systemPro
 		const workspace = await createWorkspaceTools({ images: false });
 		const permission = { name: "eval.permission" };
 		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission);
-		const create = createSpecialistExtension("create", grouped.create.map(toDurableTool), permission);
+		const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], permission);
 		const assembly = await createLibraryExtension(library, { systemPrompt: options.systemPrompt, tools: grouped.parent, autoMemory: false, skills: false, workspace: { images: false } });
 		const extension = { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] };
 		const owner = await LibraryAgent.open(library, {

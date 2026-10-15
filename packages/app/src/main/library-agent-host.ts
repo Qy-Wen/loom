@@ -244,7 +244,7 @@ export class LibraryAgentHost {
 		const workspace = await createWorkspaceTools();
 		const traceExtensions = this.#trace ? [this.#trace.extension] : [];
 		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission, traceExtensions);
-		const create = createSpecialistExtension("create", [...workspace.filter((tool) => tool.name === "write" || tool.name === "bash"), ...grouped.create.map(toDurableTool)], permission, traceExtensions);
+		const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], permission, traceExtensions);
 		const assembly = await createLibraryExtension(root, { systemPrompt: this.#options.systemPrompt, tools: grouped.parent });
 		return { assembly: { ...assembly, extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] } }, specialists: [retrieve.child, create.child] };
 	}
