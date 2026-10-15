@@ -20,14 +20,14 @@
 `out/` 放进 asar。下面这些要留成真实文件，因为会按路径加载：
 
 - `better-sqlite3` 和 sqlite-vec 的可加载扩展
-- `@silvia-odwyer/photon-node` 和 `@ladybugdb/wasm-core`，以及它们在拆包后还要 `require` 的包（`threads`、`uuid` 和这条链上的其余包）
+- `@ladybugdb/wasm-core`，以及它在拆包后还要 `require` 的包（`threads`、`uuid` 和这条链上的其余包）
 - `@anthropic-ai/sandbox-runtime`，包括 `vendor/srt-win`，以及它在拆包后要 `require` 的包
 
 `srt-win.exe` 和 sqlite-vec 扩展的路径从包内算出来。路径落在 `app.asar` 里时，改写成 `app.asar.unpacked` 下的同一相对路径。
 
 该平台的 FFmpeg 从 `packages/core/vendor/ffmpeg/<platform>-<arch>/` 复制到 `resources/ffmpeg/`。[binaries.ts](../packages/core/src/media/binaries.ts) 已经在那里找 `ffmpeg` 和 `ffprobe`。
 
-`@loom/core` 和 `@loom/agent` 打进主进程。只有 `@loom/app` 的依赖会留在包外。构建之后，`out/main` 里每个运行时 `require` 都是 app 依赖。生产依赖在仓库里装好再交给 electron-builder。
+`@loom/core` 和 `@loom/agent` 打进主进程。界面用的包打进 `out/renderer`，在 `@loom/app` 里列为开发依赖，不进安装包。主进程运行时要加载的依赖留在包里。source map 不进安装包。Ladybug 只留 `nodejs` 这一份。`esbuild` 和已经打进主进程的 `js-tiktoken` 不进安装包。`better-sqlite3` 只留当前平台的预编译文件，不带 C 源码。生产依赖在仓库里装好再交给 electron-builder。
 
 `better-sqlite3` 已经带了 `darwin-arm64`、`darwin-x64` 和 `win32-x64` 的预编译文件。Photon 和 Ladybug 是 wasm。`srt-win.exe` 已经在 `sandbox-runtime` 里。sqlite-vec 每个平台一个可选包。pnpm 的 `supportedArchitectures` 包含 darwin、win32、arm64 和 x64，`@loom/app` 直接依赖 `sqlite-vec-darwin-x64` 和 `sqlite-vec-windows-x64`，这样在 arm64 Mac 上也会装上这两份。三个平台的 FFmpeg 用 `pnpm vendor:ffmpeg --all` 一次下齐。
 

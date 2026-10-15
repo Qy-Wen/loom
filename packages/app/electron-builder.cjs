@@ -1,4 +1,4 @@
-const { cpSync, existsSync } = require("node:fs");
+const { cpSync, existsSync, readdirSync, rmSync } = require("node:fs");
 const { join } = require("node:path");
 
 const repoRoot = join(__dirname, "../..");
@@ -19,12 +19,26 @@ const config = {
 		// @loom/core and @loom/agent are bundled into out/main. Leave them out so the
 		// package does not also carry their source and the vendored FFmpeg tree.
 		"!node_modules/@loom/**",
+		"!**/*.map",
+		// Ladybug publishes browser, sync, and multithreaded builds. The app loads nodejs only.
+		"!**/node_modules/@ladybugdb/wasm-core/lbug_wasm_worker.js",
+		"!**/node_modules/@ladybugdb/wasm-core/sync/**",
+		"!**/node_modules/@ladybugdb/wasm-core/multithreaded/**",
+		// chord's bundler depends on esbuild. Loom does not call it.
+		"!**/node_modules/esbuild/**",
+		"!**/node_modules/@esbuild/**",
+		// The tokenizer is bundled into out/main.
+		"!**/node_modules/js-tiktoken/**",
+		// Prebuilds are loaded; the SQLite C sources and non-target binaries are not.
+		"!**/node_modules/better-sqlite3/deps/**",
+		"!**/node_modules/better-sqlite3/prebuilds/linux-*",
+		"!**/node_modules/better-sqlite3/prebuilds/linuxmusl-*",
+		"!**/node_modules/better-sqlite3/prebuilds/win32-arm64*",
 	],
 	asarUnpack: [
 		"**/node_modules/better-sqlite3/**",
 		"**/node_modules/sqlite-vec/**",
 		"**/node_modules/sqlite-vec-*/**",
-		"**/node_modules/@silvia-odwyer/photon-node/**",
 		"**/node_modules/@ladybugdb/wasm-core/**",
 		// The Ladybug worker runs from the unpacked tree, so its requires must be unpacked too.
 		"**/node_modules/threads/**",
@@ -75,12 +89,25 @@ const config = {
 		if (!existsSync(join(source, binary))) {
 			throw new Error(`FFmpeg for ${id} is missing. Run pnpm vendor:ffmpeg --all.`);
 		}
-		const resources =
+		const resourcesRoot =
 			platform === "darwin"
-				? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources", "ffmpeg")
-				: join(context.appOutDir, "resources", "ffmpeg");
-		cpSync(source, resources, { recursive: true });
+				? join(context.appOutDir, `${context.packager.appInfo.productFilename}.app`, "Contents", "Resources")
+				: join(context.appOutDir, "resources");
+		cpSync(source, join(resourcesRoot, "ffmpeg"), { recursive: true });
+		keepSqlitePrebuild(resourcesRoot, id);
 	},
 };
+
+function keepSqlitePrebuild(resourcesRoot, id) {
+	const prebuilds = join(resourcesRoot, "app.asar.unpacked/node_modules/better-sqlite3/prebuilds");
+	if (!existsSync(prebuilds)) throw new Error(`better-sqlite3 prebuilds are missing under ${prebuilds}`);
+	const keep = `${id}.node`;
+	for (const name of readdirSync(prebuilds)) {
+		if (name !== keep) rmSync(join(prebuilds, name), { recursive: true, force: true });
+	}
+	if (!existsSync(join(prebuilds, keep))) {
+		throw new Error(`better-sqlite3 prebuild ${keep} is missing.`);
+	}
+}
 
 module.exports = config;
