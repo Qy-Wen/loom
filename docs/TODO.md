@@ -29,3 +29,15 @@ Adapters for Xiaohongshu, Douyin, and other platforms.
 ## Step 4: Easier model setup
 
 Lower the barrier to model configuration, making it easier to choose and set up a provider, model, and connection details.
+
+---
+
+## Step 5: Multi-tab material viewing
+
+Consider supporting multiple tabs for viewing library items.
+
+---
+
+## Step 6: Better image and video zoom controls
+
+Polish the zoom buttons shown on images and videos.
