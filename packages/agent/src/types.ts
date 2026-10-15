@@ -5,8 +5,8 @@ export type LoomToolContentPart =
 	| { type: "image"; data: string; mimeType: string };
 
 export interface LoomToolResult<TDetails = unknown> {
-	/** Text or mixed content returned to the model. Images stay as attachments. */
-	content: string | LoomToolContentPart[];
+	/** Shared adapter preserves text/images and serializes other content blocks as text. */
+	content: string | (LoomToolContentPart | Record<string, unknown>)[];
 	/** Structured UI payload; never injected into the model context. */
 	details?: TDetails;
 }

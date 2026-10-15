@@ -79,6 +79,10 @@ git merge vendor-clean
 
 `loom.user` entry data 保存展示文字，气泡不显示隐式提醒；图片是 model image content。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
 
+MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。AG-UI 在实时事件和历史快照中用序列化内容块传递图片结果；工具卡片分别展示文字和图片，不打印 base64 数据。纯文字工具结果沿用原有表示。
+
+主 Agent 和专职 Agent 共用 `createToolResultStorage()`，在 durable 最终截断前通过 `afterTool` 保存超过 50 KiB 或 2,000 行的完整文字，路径为 `.agents/tool-results/<conversationId>/<taskId>.txt`。模型收到最多 2 KiB、UTF-8 安全的预览、完整路径和分段读取提示；图片、错误状态、UI details 和结构化结果不变。`read` 和已有 `full_output` 提示的结果不重复落盘。写入失败会警告并沿用 durable 截断。文件在重开和分支后仍保留，不自动过期；`.agents` 不作为素材索引。进入钩子前已被流式缓冲丢弃的文字无法恢复；shell 工具沿用现有落盘机制。
+
 ## 6. AG-UI 与实时显示
 
 `LoomAgUiAgent` 继承 `AbstractAgent`；clone 保留 host 和共享运行生命周期。`watchEvents` 的原子 `stream.snapshot` 与后续 commit batch 分开提供，两者都需消费。

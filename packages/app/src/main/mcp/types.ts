@@ -1,3 +1,5 @@
+import type { LoomToolResult } from "@loom/agent";
+
 export interface McpStdioServerConfig {
 	id: string;
 	command: string;
@@ -32,6 +34,6 @@ export interface McpSession {
 		name: string,
 		args: Record<string, unknown>,
 		signal?: AbortSignal,
-	): Promise<{ content: string; isError?: boolean }>;
+	): Promise<{ content: LoomToolResult["content"]; isError?: boolean }>;
 	close(): Promise<void>;
 }

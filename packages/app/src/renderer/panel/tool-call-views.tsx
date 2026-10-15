@@ -3,6 +3,7 @@ import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
 import { commandAllowKey, toolCallNeedsApproval, toolPathArg, type CommandAllow, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { useCommandAllows } from "./command-allows.ts";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
+import { toolResultParts } from "../../shared/tool-result-content.ts";
 import { useAgentPermission } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
 import { useLocale } from "../locale.tsx";
@@ -49,7 +50,10 @@ function ToolCallCard({
 		&& (gatePending || (toolCallNeedsApproval(level, name, libraryRoot, parameters, allows) && (!pathGated || toolPathArg(parameters) !== undefined)));
 	const remember = waiting ? commandAllowKey(name, parameters, libraryRoot) : undefined;
 	const refs = done ? assetRefsFromTool(name, result) : null;
-	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? result : undefined);
+	const resultParts = done ? toolResultParts(result) : null;
+	const images = resultParts?.filter((part) => part.type === "image") ?? [];
+	const displayResult = resultParts ? resultParts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n") : result;
+	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? displayResult : undefined);
 	const faded = !open && hasMoreThanPreview(body);
 
 	return (
@@ -80,6 +84,11 @@ function ToolCallCard({
 					onClick={open ? undefined : () => setOpen(true)}
 				>
 					<pre className="tool-call-result">{body}</pre>
+				</div>
+			) : null}
+			{images.length > 0 ? (
+				<div className="tool-call-images">
+					{images.map((part, index) => <img key={index} src={`data:${part.mimeType};base64,${part.data}`} alt={`${t.tool.image} ${index + 1}`} />)}
 				</div>
 			) : null}
 			{refs ? (

@@ -15,8 +15,11 @@ export function toolsFromMcpSession(serverId: string, session: McpSession, specs
 		execute: async (rawArgs, signal) => {
 			const args = asObject(rawArgs);
 			const result = await session.callTool(spec.name, args, signal);
-			if (result.isError) throw new Error(result.content || `MCP tool ${spec.name} failed`);
-			return result.content;
+			if (result.isError) {
+				const message = typeof result.content === "string" ? result.content : result.content.flatMap((part) => part.type === "text" && typeof part.text === "string" ? [part.text] : []).join("\n");
+				throw new Error(message || `MCP tool ${spec.name} failed`);
+			}
+			return typeof result.content === "string" ? result.content : { content: result.content };
 		},
 	}));
 }

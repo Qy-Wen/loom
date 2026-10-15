@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, it } from "node:test";
+import { BACKGROUND_CONTEXT, toDurableTool, type ToolExecutionApi } from "@loom/agent/durable";
 import { expandEnv, parseMcpConfig } from "../src/main/mcp/config.ts";
 import { McpHost, resolveStdioCommand, stdioLaunch } from "../src/main/mcp/host.ts";
 import { mcpToolName, toolsFromMcpSession } from "../src/main/mcp/tools.ts";
@@ -42,6 +44,57 @@ describe("MCP config", () => {
 });
 
 describe("MCP tools", () => {
+	it("passes content unchanged to the same result adapter as application tools", async () => {
+		const content = [
+			{ type: "text", text: "Scan", annotations: { audience: ["assistant"] } },
+			{ type: "image", data: "YWJj", mimeType: "image/png" },
+			{ type: "audio", data: "YWJj", mimeType: "audio/wav" },
+			{ type: "resource_link", uri: "file:///test" },
+		];
+		const session: McpSession = {
+			listTools: async () => [],
+			callTool: async () => ({ content }),
+			close: async () => undefined,
+		};
+		const [mcp] = toolsFromMcpSession("demo", session, [{ name: "result" }]);
+		assert.ok(mcp);
+		const raw = await mcp.execute({});
+		assert.ok(typeof raw !== "string");
+		assert.equal(raw.content, content);
+		const direct = { name: "result", description: "Result", parameters: { type: "object" }, execute: () => ({ content }) };
+		const api = {} as ToolExecutionApi;
+		assert.deepEqual(
+			await toDurableTool(mcp).execute({}, api, BACKGROUND_CONTEXT),
+			await toDurableTool(direct).execute({}, api, BACKGROUND_CONTEXT),
+		);
+	});
+
+	it("returns images from a real SDK stdio session", { timeout: 10_000 }, async () => {
+		const host = new McpHost();
+		try {
+			const tools = await host.connect([{ id: "fixture", command: process.execPath, args: ["--experimental-strip-types", fileURLToPath(new URL("./fixtures/mcp-image-server.ts", import.meta.url))], enabled: true }]);
+			const tool = tools.find((candidate) => candidate.name === "fixture__image");
+			assert.ok(tool, JSON.stringify(host.lastStatus()));
+			const result = await tool.execute({});
+			assert.ok(typeof result !== "string" && Array.isArray(result.content));
+			assert.deepEqual(result.content[0], { type: "text", text: "Image from MCP" });
+			const image = result.content[1];
+			assert.ok(image?.type === "image");
+			assert.equal(image.mimeType, "image/png");
+			assert.ok(image.data === (await readFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url))).toString("base64"));
+		} finally { await host.close(); }
+	});
+
+	it("reports mixed-content errors as text without leaking image bytes", async () => {
+		const session: McpSession = {
+			listTools: async () => [],
+			callTool: async () => ({ content: [{ type: "text", text: "Login expired" }, { type: "image", data: "secret-image-bytes", mimeType: "image/png" }], isError: true }),
+			close: async () => undefined,
+		};
+		const [tool] = toolsFromMcpSession("demo", session, [{ name: "fail" }]);
+		await assert.rejects(async () => tool!.execute({}), { message: "Login expired" });
+	});
+
 	it("prefixes names and calls the original MCP tool", async () => {
 		const calls: { name: string; args: Record<string, unknown> }[] = [];
 		const session: McpSession = {

@@ -1,6 +1,6 @@
 import {
 	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
-	createLibraryExtension, createModels, createSpecialistExtension, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
+	createLibraryExtension, createModels, createSpecialistExtension, createToolResultStorage, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	DurableTrace, TraceStore, type LoomTraceRecord,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
@@ -51,14 +51,13 @@ export class LibraryAgentHost {
 			} catch { /* A read-only/unavailable diagnostic store does not prevent opening Chat. */ }
 		}
 		const permission = this.gate.extension(root, () => this.requireOwner().harness);
-		const { assembly, specialists } = await this.assemble(root, permission);
+		const { assembly, specialists, sharedExtensions } = await this.assemble(root, permission);
 		this.#models = chat?.models ?? createModels();
 		this.#agentDefaults.model = chat ? { provider: chat.model.provider, modelId: chat.model.id } : undefined;
 		this.#agentDefaults.instructions = this.#instructions;
-		const traceExtensions = this.#trace ? [this.#trace.extension] : [];
 		try { this.owner = await LibraryAgent.open(root, {
-			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists, ...traceExtensions],
-			settings: { extensions: [assembly.extension, permission, ...traceExtensions] },
+			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists, ...sharedExtensions],
+			settings: { extensions: [assembly.extension, permission, ...sharedExtensions] },
 			agent: this.#agentDefaults,
 			conversationCreated: async (tx, record) => {
 				await assembly.conversationCreated(tx, record);
@@ -242,11 +241,11 @@ export class LibraryAgentHost {
 	private async assemble(root: string, permission: ReturnType<ToolGate["extension"]>) {
 		const grouped = partitionLibraryTools(this.#options.tools ?? []);
 		const workspace = await createWorkspaceTools();
-		const traceExtensions = this.#trace ? [this.#trace.extension] : [];
-		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission, traceExtensions);
-		const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], permission, traceExtensions);
+		const sharedExtensions = [createToolResultStorage(root), ...(this.#trace ? [this.#trace.extension] : [])];
+		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission, sharedExtensions);
+		const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], permission, sharedExtensions);
 		const assembly = await createLibraryExtension(root, { systemPrompt: this.#options.systemPrompt, tools: grouped.parent });
-		return { assembly: { ...assembly, extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] } }, specialists: [retrieve.child, create.child] };
+		return { assembly: { ...assembly, extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] } }, specialists: [retrieve.child, create.child], sharedExtensions };
 	}
 	subscribeSessions(listener: (rows: LoomSessionSummary[]) => void) { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 	async publish() {

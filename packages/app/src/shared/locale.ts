@@ -287,6 +287,7 @@ export const messages = defineLocale(
 			always: "Always allow",
 			skip: "Skip",
 			noAssets: "No assets",
+			image: "Tool image",
 		},
 		activity: {
 			retryingIn: (delay: string) => `Retrying in ${delay}`,
@@ -706,6 +707,7 @@ export const messages = defineLocale(
 			always: "以后都允许",
 			skip: "跳过",
 			noAssets: "没有素材",
+			image: "工具返回图片",
 		},
 		activity: {
 			retryingIn: (delay) => `${delay}后重试`,

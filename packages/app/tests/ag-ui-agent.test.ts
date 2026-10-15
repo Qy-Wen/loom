@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdtemp, rm, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
@@ -11,7 +12,11 @@ import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 import { DurableAgentRunner } from "../src/main/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, contextUsage } from "@loom/agent";
+import type { ConversationId } from "@loom/agent";
 import type { AddressInfo } from "node:net";
+import { McpHost } from "../src/main/mcp/host.ts";
+import { toAgUiMessages } from "../src/shared/ag-ui-messages.ts";
+import { toolResultParts } from "../src/shared/tool-result-content.ts";
 
 async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => Promise<void>, respond?: (request: IncomingMessage, response: ServerResponse) => void) {
 	const directory = await mkdtemp(join(tmpdir(), "loom-ag-ui-"));
@@ -26,6 +31,98 @@ async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => 
 	finally { await host.close(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
 }
 const input = (threadId: string): RunAgentInput => ({ threadId, runId: `run-${threadId}`, messages: [{ id: "user", role: "user", content: "question" }], state: {}, tools: [], context: [], forwardedProps: {} });
+
+for (const caller of ["main", "retrieve", "create"] as const) {
+	test(`large ${caller} results use shared storage and survive fork/reopen`, { timeout: 10_000 }, async () => {
+		const full = "result line\n".repeat(6_000) + "END_FULL_OUTPUT";
+		const toolName = caller === "retrieve" ? "search_assets" : "fixture__large";
+		let receivedPreview = false;
+		await fixture(async (host, adapter) => {
+			await host.setTools([{ name: toolName, description: "Large result", parameters: { type: "object", properties: {} }, execute: () => full }]);
+			host.setPermissionLevel("full");
+			const session = await host.createSession();
+			const events = await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+			assert.ok(receivedPreview, "provider must receive a bounded preview and the full-output path");
+			const result = events.find((event) => event.type === EventType.TOOL_CALL_RESULT && "content" in event && String(event.content).includes("Full output:"));
+			assert.ok(result && "content" in result && "toolCallId" in result);
+			const path = /Full output: ([^\n]+)/.exec(String(result.content))?.[1];
+			assert.ok(path);
+			assert.equal(await readFile(path, "utf8"), full);
+			const owner = host.requireOwner();
+			const conversationId = Number(String(result.toolCallId).split("/")[0]) as ConversationId;
+			assert.equal(path.startsWith(join(owner.libraryPath, ".agents", "tool-results", String(conversationId))), true);
+			const conversation = await owner.harness.conversation(conversationId, context);
+			assert.ok(conversation);
+			const at = (await conversation.entries({}, 1, undefined, context)).items[0]!.id;
+			const fork = await conversation.fork(at, { ownership: { kind: "ownerless" } }, context);
+			assert.ok(JSON.stringify((await fork.context(context)).messages).includes(path.replaceAll("\\", "\\\\")));
+			const root = owner.libraryPath;
+			await host.close();
+			await host.openLibrary(root);
+			assert.equal(await readFile(path, "utf8"), full);
+			assert.ok(JSON.stringify((await host.getSession(String(fork.id))).messages).includes(path.replaceAll("\\", "\\\\")));
+		}, (request, response) => {
+			let body = "";
+			request.setEncoding("utf8");
+			request.on("data", (chunk: string) => { body += chunk; });
+			request.on("end", () => {
+				const parsed = JSON.parse(body) as { tools?: Array<{ function: { name: string } }>; messages: Array<{ role: string; content?: unknown }> };
+				const results = parsed.messages.filter((message) => message.role === "tool");
+				if (results.length > 0) {
+					const content = JSON.stringify(results);
+					assert.ok(!content.includes("END_FULL_OUTPUT"));
+					if (content.includes("Full output:")) {
+						receivedPreview = true;
+						assert.ok(content.length < 8 * 1024);
+					}
+					reply(response);
+				} else if (caller !== "main" && parsed.tools?.some((tool) => tool.function.name === `run_${caller}_agent`)) {
+					reply(response, `run_${caller}_agent`, { goal: `Call ${toolName} for this task` });
+				} else reply(response, toolName);
+			});
+		});
+	});
+}
+
+for (const caller of ["main", "create"] as const) {
+	test(`MCP images reach the ${caller} model, live tool results, and persisted history`, { timeout: 10_000 }, async () => {
+		const data = (await readFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url))).toString("base64");
+		let receivedImage = false;
+		await fixture(async (host, adapter) => {
+			const mcp = new McpHost();
+			try {
+				const tools = await mcp.connect([{ id: "fixture", command: process.execPath, args: ["--experimental-strip-types", fileURLToPath(new URL("./fixtures/mcp-image-server.ts", import.meta.url))], enabled: true }]);
+				assert.equal(tools.length, 1);
+				await host.setTools(tools);
+				host.setPermissionLevel("full");
+				const session = await host.createSession();
+				const events = await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+				assert.ok(receivedImage, "the provider request must contain an image_url content part");
+				const imageResult = events.find((event) => event.type === EventType.TOOL_CALL_RESULT && "content" in event && toolResultParts(event.content));
+				assert.ok(imageResult && "content" in imageResult && "toolCallId" in imageResult);
+				const parts = toolResultParts(imageResult.content)!;
+				assert.ok(parts.some((part) => part.type === "image" && part.data === data));
+				const resultConversation = String(imageResult.toolCallId).split("/")[0]!;
+				const root = host.requireOwner().libraryPath;
+				await host.close(); await host.openLibrary(root);
+				const messages = toAgUiMessages((await host.getSession(resultConversation)).messages);
+				const restored = messages.find((message) => message.role === "tool" && toolResultParts(message.content));
+				assert.ok(restored && "content" in restored);
+				assert.ok(toolResultParts(restored.content)?.some((part) => part.type === "image" && part.data === data));
+			} finally { await mcp.close(); }
+		}, (request, response) => {
+			let body = "";
+			request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+			request.on("end", () => {
+				const parsed = JSON.parse(body) as { tools?: Array<{ function: { name: string } }>; messages: Array<{ role: string; content?: unknown }> };
+				if (parsed.messages.some((message) => Array.isArray(message.content) && message.content.some((part) => part?.type === "image_url" && part.image_url?.url === `data:image/png;base64,${data}`))) receivedImage = true;
+				if (parsed.messages.some((message) => message.role === "tool")) reply(response);
+				else if (caller === "create" && parsed.tools?.some((tool) => tool.function.name === "run_create_agent")) reply(response, "run_create_agent", { goal: "Get an image from fixture__image" });
+				else reply(response, "fixture__image");
+			});
+		});
+	});
+}
 
 test("durable AG-UI adapter produces text, committed IDs, snapshots, and a finished run", { timeout: 10_000 }, async () => {
 	await fixture(async (host, adapter) => {

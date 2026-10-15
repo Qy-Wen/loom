@@ -45,7 +45,13 @@ export function toDurableTool(tool: LoomTool): ToolRegistration {
 			const result = typeof output === "string" ? { content: output } : output;
 			const content: LoomToolContentPart[] = typeof result.content === "string"
 				? [{ type: "text", text: result.content }]
-				: result.content;
+				: result.content.map((part): LoomToolContentPart => {
+					if (part.type === "text" && typeof part.text === "string") return { type: "text", text: part.text };
+					if (part.type === "image" && typeof part.data === "string" && typeof part.mimeType === "string") {
+						return { type: "image", data: part.data, mimeType: part.mimeType };
+					}
+					return { type: "text", text: JSON.stringify(part) };
+				});
 			// Match JSON object semantics for optional fields; still reject non-JSON values (Date, etc.).
 			return {
 				output: content,

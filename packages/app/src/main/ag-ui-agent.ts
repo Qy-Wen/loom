@@ -6,7 +6,7 @@ import {
 	DEFAULT_SESSION_TITLE, type AgentEvent, type ComposerImageInput, type AssetRefAttachment, type UiSelectionFields, type DocumentWatch, type PendingToolApproval, type ConversationId,
 } from "@loom/agent";
 import type { LibraryAgentHost } from "./library-agent-host.ts";
-import { toAgUiMessages, transcriptText } from "../shared/ag-ui-messages.ts";
+import { toAgUiMessages, toolResultContent, transcriptText } from "../shared/ag-ui-messages.ts";
 import { formatChatError } from "../shared/chat-error.ts";
 import { Observable } from "rxjs";
 
@@ -129,7 +129,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								if (event.type === "tool_execution_end") {
 									const toolId = toolEventId(id as ConversationId, event.toolCallId); const result = event.entry?.model?.[0];
 									emit({ type: EventType.TOOL_CALL_END, toolCallId: toolId });
-									emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? toolId), toolCallId: toolId, role: "tool", content: result && "content" in result ? transcriptText(result.content) : "" });
+									emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? toolId), toolCallId: toolId, role: "tool", content: result && "content" in result ? toolResultContent(result.content) : "" });
 									if (result?.role === "toolResult" && result.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: toolId, toolName: event.toolName, isError: result.isError, details: result.details } });
 								}
 							}
@@ -245,7 +245,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								const id = toolEventId(conversation.id, event.toolCallId); const result = event.entry?.model?.[0];
 								emit({ type: EventType.TOOL_CALL_END, toolCallId: id });
 								emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: `loom-tool-${id}`, activityType: "loom.tool_progress", content: { name: event.toolName, text: "", hidden: true } });
-								emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? id), toolCallId: id, role: "tool", content: result && "content" in result ? transcriptText(result.content) : JSON.stringify(event.result?.structuredOutput ?? "") });
+								emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? id), toolCallId: id, role: "tool", content: result && "content" in result ? toolResultContent(result.content) : JSON.stringify(event.result?.structuredOutput ?? "") });
 								if (result?.role === "toolResult" && result.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: id, toolName: event.toolName, isError: result.isError, details: result.details } });
 								break;
 							}

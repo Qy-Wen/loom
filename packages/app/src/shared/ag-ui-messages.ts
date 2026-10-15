@@ -2,6 +2,11 @@ import type { Message, ToolCall } from "@ag-ui/core";
 import type { LoomTranscriptMessage } from "@loom/agent";
 import { splitStoredAssetText } from "@loom/agent/composer-asset";
 import { CHAT_ERROR_ID_PREFIX, formatChatError } from "./chat-error.ts";
+import { toolResultParts } from "./tool-result-content.ts";
+
+export function toolResultContent(content: unknown): string {
+	return Array.isArray(content) && toolResultParts(content) ? JSON.stringify({ content }) : transcriptText(content);
+}
 
 export function transcriptText(content: unknown): string {
 	if (typeof content === "string") return content;
@@ -130,7 +135,7 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 				id,
 				role: "tool",
 				toolCallId: String(message.toolCallId ?? id),
-				content: transcriptText(message.content),
+				content: toolResultContent(message.content),
 			});
 		}
 	}

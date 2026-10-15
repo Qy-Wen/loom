@@ -3,6 +3,7 @@ import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
+import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
 import type { LoomTool } from "@loom/agent";
 import type { McpServerStatus } from "../../shared/mcp-settings.ts";
 import { isHttpServer, type McpServerConfig, type McpSession } from "./types.ts";
@@ -133,9 +134,9 @@ export async function openSdkSession(config: McpServerConfig): Promise<McpSessio
 			}));
 		},
 		async callTool(name, args, signal) {
-			const result = await client.callTool({ name, arguments: args }, undefined, signal ? { signal } : undefined);
+			const result = await client.callTool({ name, arguments: args }, undefined, signal ? { signal } : undefined) as CallToolResult;
 			return {
-				content: flattenMcpContent(result.content),
+				content: result.content,
 				isError: result.isError === true,
 			};
 		},
@@ -192,18 +193,4 @@ export function resolveStdioCommand(
 		}
 	}
 	return command;
-}
-
-function flattenMcpContent(content: unknown): string {
-	if (!Array.isArray(content)) return content == null ? "" : String(content);
-	return content
-		.map((part) => {
-			if (typeof part !== "object" || part === null) return String(part);
-			const record = part as { type?: string; text?: string; mimeType?: string };
-			if (record.type === "text") return record.text ?? "";
-			if (record.type === "image") return `[image ${record.mimeType ?? "unknown"}]`;
-			return JSON.stringify(part);
-		})
-		.filter(Boolean)
-		.join("\n");
 }
