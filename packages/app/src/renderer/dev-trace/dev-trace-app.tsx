@@ -73,7 +73,7 @@ export function DevTraceApp(): React.JSX.Element {
 				}}>Load older traces</button> : null}
 			</aside>
 			<main className="trace-detail">
-				{current && traceSummary(current.spans) ? <TraceTree key={current.id} spans={current.spans} /> : null}
+				{current && traceSummary(current.spans) ? <TraceTree key={current.id} spans={current.spans} blobs={current.blobs} /> : null}
 				{current && !traceSummary(current.spans) ? <p className="trace-empty">No spans.</p> : null}
 			</main>
 		</div>

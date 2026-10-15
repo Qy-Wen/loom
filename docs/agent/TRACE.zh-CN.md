@@ -13,9 +13,9 @@
 
 ## 内容与隐私
 
-根运行包含 generation、模型请求、工具、审批等待、重试、压缩 span。后台/手动压缩单独记录。模型 span 包含 model/provider/API、stop reason、可用的响应 ID、token/cache usage，以及限长输入输出；工具结果包含已提交 diagnostics。窗口按 revision 更新同一记录。
+根运行包含 generation、模型请求、工具、审批等待、重试、压缩 span。后台/手动压缩单独记录。模型 span 包含 model/provider/API、stop reason、可用的响应 ID、token/cache usage，以及限长输入输出。一次请求保留最近 200 条消息，每条单独限长，所以用户消息始终可见。system section 和工具定义里的长文本只显示 600 字符预览，旁边有 **Expand** 按钮；全文存在记录的 `blobs` 里，相同文本只存一份，同样经过脱敏。工具结果包含已提交 diagnostics。窗口按 revision 更新同一记录。
 
-落盘前移除已知 Chat key 和常见凭据字段/模式；省略图像、签名与 headers。每个输入/输出字段约限 8KiB UTF-8 文本。**这是尽力脱敏，不是匿名化：** prompt、memory、源文本、文件路径和工具输出仍可能含隐私。数据库未加密，请保护素材库，不要随意分享 trace。
+落盘前移除已知 Chat key 和常见凭据字段/模式；省略图像、签名与 headers。其余输入/输出字段约限 8KiB UTF-8 文本，被截断时会写明丢弃的字节数；可展开的文本上限为 4 MiB。**这是尽力脱敏，不是匿名化：** prompt、memory、源文本、文件路径和工具输出仍可能含隐私。数据库未加密，请保护素材库，不要随意分享 trace。
 
 崩溃后未结束 span 标为 `interrupted`。原生恢复接回同一条持久化 trace，增加新的模型 attempt，保留中断 attempt。unsafe 工具保留不确定结果，trace 不会重放工具。
 

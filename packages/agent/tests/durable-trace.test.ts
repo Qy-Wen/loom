@@ -13,6 +13,7 @@ import {
 	defineExtension, defineTool, createSpecialistExtension, ToolGate, LoomApprovalsDoc, clearPendingApprovals,
 } from "../src/durable.ts";
 import { TracePrivacy } from "../src/trace-privacy.ts";
+import { splitTraceBlobs } from "../src/trace-blob.ts";
 
 async function temporary(run: (root: string) => Promise<void>) {
 	const root = await mkdtemp(join(tmpdir(), "loom-trace-"));
@@ -35,8 +36,36 @@ test("trace privacy redacts credentials, omits images/signatures, and bounds UTF
 	const privacy = new TracePrivacy(); privacy.setSecrets(["test-private-key"]);
 	const payload = privacy.value({ api_key: "secret", authorization: "Bearer abc", note: "test-private-key sk-abcdefghijk", image: { type: "image", data: "BASE64", mimeType: "image/png" }, thoughtSignature: "SIGNATURE", body: "汉".repeat(10_000) });
 	for (const secret of ["test-private-key", "sk-abcdefghijk", "BASE64", "SIGNATURE", "Bearer abc"]) assert.ok(!payload.includes(secret));
-	assert.ok(Buffer.byteLength(payload) <= 8200);
+	assert.ok(Buffer.byteLength(payload) <= 8300);
+	assert.match(payload, /bytes cut\)/);
 	assert.doesNotMatch(payload, /\uFFFD/);
+});
+
+test("a request keeps the latest messages and previews long system text behind an expandable reference", () => {
+	const privacy = new TracePrivacy(); privacy.setSecrets(["test-private-key"]);
+	const preamble = "preamble ".repeat(5_000) + " test-private-key";
+	const blobs: Record<string, string> = {};
+	const text = privacy.request([
+		{ role: "system", content: "", sections: { preamble, skills: "short" } },
+		{ role: "user", content: "what is the weather" },
+	], (hash, full) => { blobs[hash] = full; });
+	assert.ok(text.includes("what is the weather"), "the user message survives long system text");
+	assert.ok(Buffer.byteLength(text) < 4_000);
+	const refs = splitTraceBlobs(text).filter((part) => "hash" in part);
+	assert.equal(refs.length, 1);
+	const ref = refs[0] as { hash: string; length: number };
+	assert.equal(blobs[ref.hash]!.length, ref.length);
+	assert.ok(blobs[ref.hash]!.startsWith("preamble preamble"));
+	assert.ok(!blobs[ref.hash]!.includes("test-private-key"), "full text is still redacted");
+	assert.ok(text.includes('"skills": "short"'));
+	// The same text gives the same reference, so a record stores it once.
+	const again = privacy.request([{ role: "system", content: "", sections: { preamble } }], () => {});
+	assert.ok(again.includes(ref.hash));
+	// Many messages: the latest are kept and the omission is stated.
+	const many = privacy.request(Array.from({ length: 250 }, (_, i) => ({ role: "user", content: `m${i}` })), () => {});
+	assert.ok(many.includes("50 earlier messages omitted") && many.includes('"m249"') && !many.includes('"m49"'));
+	// A cut payload says how much was cut.
+	assert.match(privacy.value({ body: "x".repeat(10_000) }), /bytes cut\)/);
 });
 
 test("model observation failures cannot change streaming or completion", async () => {
@@ -112,6 +141,27 @@ test("two native runs persist model/tool spans with bounded payloads and reopen 
 		} finally { await close(); }
 		const store = await TraceStore.open(root); assert.equal(store.list().length, 2); store.close();
 		assert.ok(!(await readFile(join(root, ".agents", "traces", "traces.sqlite"))).includes(Buffer.from("test-private-key")));
+	});
+});
+
+test("requests in one run show the user message and store each long system text once", { timeout: 10_000 }, async () => {
+	await temporary(async (root) => {
+		const tool = defineTool({ name: "note", description: "note", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: "done" }] }) });
+		const { owner, trace, faux, close } = await fixture(root, { models: createModels(), extensions: [defineExtension({ name: "test", tools: [tool] })], agent: { instructions: "Always answer politely. ".repeat(500) } });
+		try {
+			const conversation = await owner.createConversation({}, context);
+			faux.setResponses([answer(fauxToolCall("note", {}), { stopReason: "toolUse" }), answer("final")]);
+			assert.equal((await (await conversation.submit({ type: "input", content: "WHERE_IS_MY_QUESTION" }, context)).wait(context)).status, "done");
+			trace.flush();
+			const record = trace.store.list()[0]!;
+			const requests = record.spans.filter((span) => span.name === "pi.ai.request");
+			assert.equal(requests.length, 2);
+			for (const request of requests) assert.ok(String(request.attributes["loom.io.input"]).includes("WHERE_IS_MY_QUESTION"));
+			const hashes = requests.flatMap((request) => splitTraceBlobs(String(request.attributes["loom.io.input"])).filter((part) => "hash" in part).map((part) => (part as { hash: string }).hash));
+			assert.ok(hashes.length >= 2, "both requests reference the long system text");
+			for (const hash of hashes) assert.ok(record.blobs?.[hash]);
+			assert.equal(Object.keys(record.blobs ?? {}).length, new Set(hashes).size, "each distinct text is stored once");
+		} finally { await close(); }
 	});
 });
 

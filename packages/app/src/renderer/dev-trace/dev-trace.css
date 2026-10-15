@@ -102,6 +102,34 @@ body {
 	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+.trace-blob-toggle {
+	margin: 0 4px;
+	padding: 0 6px;
+	border: 1px solid #c9ccd0;
+	border-radius: 4px;
+	background: #f6f7f8;
+	color: #4a4f55;
+	font: inherit;
+	font-size: 11px;
+	cursor: pointer;
+}
+
+.trace-blob-toggle:hover {
+	background: #eceef0;
+}
+
+.trace-blob-full {
+	display: block;
+	margin: 4px 0;
+	padding: 6px 8px;
+	border-left: 2px solid #c9ccd0;
+	background: #f6f7f8;
+}
+
+.trace-blob-missing {
+	color: #8a8d91;
+}
+
 .trace-row.is-selected .trace-span {
 	background: #eef1f4;
 }

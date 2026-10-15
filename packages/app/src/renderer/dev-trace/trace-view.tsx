@@ -2,6 +2,7 @@ import { createContext, useContext, useMemo, useState } from "react";
 import { SpanPrimitive, SpanResource } from "@assistant-ui/react-o11y";
 import { AuiConfig, AuiProvider, useAuiState } from "@assistant-ui/store";
 import type { LoomTraceSpan } from "@loom/agent";
+import { splitTraceBlobs } from "@loom/agent/trace-blob";
 import { formatTraceDuration, spanPayload, toSpanData } from "./trace-spans.ts";
 
 const TraceSelection = createContext<{ selected: string | null; select: (id: string) => void }>({
@@ -40,7 +41,36 @@ function payloadLabels(name: string): { input: string; output: string } {
 	return { input: "Arguments", output: "Result" };
 }
 
-function SpanPayload({ span }: { span: LoomTraceSpan }): React.JSX.Element {
+/** Text that may contain previews of long texts; each preview expands to its full text from the record's blobs. */
+function PayloadText({ text, blobs }: { text: string; blobs: Readonly<Record<string, string>> | undefined }): React.JSX.Element {
+	const [open, setOpen] = useState<ReadonlySet<string>>(new Set());
+	const parts = splitTraceBlobs(text);
+	return (
+		<pre>
+			{parts.map((part, index) => {
+				if ("text" in part) return part.text;
+				const full = blobs?.[part.hash];
+				if (full === undefined) return <span key={index} className="trace-blob-missing">[full text unavailable]</span>;
+				const key = `${index}:${part.hash}`;
+				const expanded = open.has(key);
+				return (
+					<span key={index}>
+						{expanded ? <span className="trace-blob-full">{"\n"}{full}{"\n"}</span> : null}
+						<button
+							type="button"
+							className="trace-blob-toggle"
+							onClick={() => setOpen((prev) => { const next = new Set(prev); if (!next.delete(key)) next.add(key); return next; })}
+						>
+							{expanded ? "Collapse" : `Expand (${part.length.toLocaleString()} chars)`}
+						</button>
+					</span>
+				);
+			})}
+		</pre>
+	);
+}
+
+function SpanPayload({ span, blobs }: { span: LoomTraceSpan; blobs: Readonly<Record<string, string>> | undefined }): React.JSX.Element {
 	const payload = spanPayload(span);
 	if (!payload) return <p className="trace-empty">No payload.</p>;
 	const labels = payloadLabels(span.name);
@@ -53,7 +83,7 @@ function SpanPayload({ span }: { span: LoomTraceSpan }): React.JSX.Element {
 			{payload.input ? (
 				<section>
 					<h3>{labels.input}</h3>
-					<pre>{payload.input}</pre>
+					<PayloadText text={payload.input} blobs={blobs} />
 				</section>
 			) : null}
 			{payload.output ? (
@@ -66,7 +96,7 @@ function SpanPayload({ span }: { span: LoomTraceSpan }): React.JSX.Element {
 	);
 }
 
-export function TraceTree({ spans }: { spans: readonly LoomTraceSpan[] }): React.JSX.Element | null {
+export function TraceTree({ spans, blobs }: { spans: readonly LoomTraceSpan[]; blobs?: Readonly<Record<string, string>> }): React.JSX.Element | null {
 	const [selected, setSelected] = useState<string | null>(null);
 	const data = useMemo(() => toSpanData(spans), [spans]);
 	const config = useMemo(
@@ -88,7 +118,7 @@ export function TraceTree({ spans }: { spans: readonly LoomTraceSpan[] }): React
 				</AuiProvider>
 			</div>
 			<div className="trace-io">
-				{chosen ? <SpanPayload span={chosen} /> : <p className="trace-empty">Select a span.</p>}
+				{chosen ? <SpanPayload span={chosen} blobs={blobs} /> : <p className="trace-empty">Select a span.</p>}
 			</div>
 		</TraceSelection.Provider>
 	);

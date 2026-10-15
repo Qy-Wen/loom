@@ -179,7 +179,7 @@ export class DurableTrace {
 	private request(taskId: number, messages: readonly Message[]): Span | undefined {
 		const trace = this.taskTrace.get(taskId); const parent = trace?.spans.get(`task:${taskId}`);
 		if (!trace || !parent || this.stopped) return undefined;
-		const span = this.span(trace, `request:${taskId}:${Date.now()}:${++this.requestSequence}`, "pi.ai.request", parent.id, { "loom.io.input": this.privacy.value(messages), "loom.task_id": taskId });
+		const span = this.span(trace, `request:${taskId}:${Date.now()}:${++this.requestSequence}`, "pi.ai.request", parent.id, { "loom.io.input": this.privacy.request(messages, (hash, text) => { trace.record.blobs ??= {}; trace.record.blobs[hash] ??= text; }), "loom.task_id": taskId });
 		this.requests.set(taskId, span);
 		return span;
 	}

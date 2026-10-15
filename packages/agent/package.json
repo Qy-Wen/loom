@@ -9,6 +9,7 @@
     "./attachments": "./src/attachments.ts",
     "./composer-asset": "./src/composer-asset.ts",
     "./tool-permission": "./src/tool-permission.ts",
+    "./trace-blob": "./src/trace-blob.ts",
     "./durable": "./src/durable.ts"
   },
   "imports": {

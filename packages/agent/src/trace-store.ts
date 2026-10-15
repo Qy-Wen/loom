@@ -11,6 +11,8 @@ export interface LoomTraceRecord {
 	revision: number;
 	status: LoomTraceStatus;
 	spans: LoomTraceSpan[];
+	/** Full texts that request inputs show as previews, by content hash. One copy per text in the record. */
+	blobs?: Record<string, string>;
 }
 
 /** Local diagnostic store, independent of durable checkpoints. No automatic history deletion. */
