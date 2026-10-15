@@ -20,8 +20,6 @@ export default defineConfig(({ command }) => {
 				externalizeDeps: { exclude: ["@loom/agent", "@loom/core", "@earendil-works/pi-codemode"] },
 				rollupOptions: {
 					input: { index: resolve(__dirname, "src/main/index.ts") },
-					// Photon loads its wasm from the package directory. Keep the require external.
-					external: ["@silvia-odwyer/photon-node"],
 				},
 			},
 		},

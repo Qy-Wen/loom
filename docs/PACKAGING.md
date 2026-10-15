@@ -20,14 +20,14 @@ App id is `com.loom.app`, the same id the Windows taskbar uses. Product name is 
 `out/` goes in the asar. These stay real files, because something loads them by path:
 
 - `better-sqlite3` and the sqlite-vec loadable extension
-- `@silvia-odwyer/photon-node` and `@ladybugdb/wasm-core`, with the Node packages their unpacked scripts require (`threads`, `uuid`, and the rest of that chain)
+- `@ladybugdb/wasm-core`, with the Node packages its unpacked scripts require (`threads`, `uuid`, and the rest of that chain)
 - `@anthropic-ai/sandbox-runtime`, including `vendor/srt-win`, and the packages it requires from the unpacked tree
 
 `srt-win.exe` and the sqlite-vec extension are addressed from inside the package. A path that lands in `app.asar` is rewritten to the same relative path under `app.asar.unpacked`.
 
 FFmpeg for that platform is copied from `packages/core/vendor/ffmpeg/<platform>-<arch>/` to `resources/ffmpeg/`. [binaries.ts](../packages/core/src/media/binaries.ts) already looks there for `ffmpeg` and `ffprobe`.
 
-`@loom/core` and `@loom/agent` are bundled into the main process. A package stays external only when `@loom/app` lists it. After the build, every runtime `require` in `out/main` is an app dependency. Production `node_modules` are assembled in the repo and passed to electron-builder.
+`@loom/core` and `@loom/agent` are bundled into the main process. Renderer packages are bundled into `out/renderer` and listed as dev dependencies of `@loom/app`, so they are not copied into the installer. Dependencies the main process loads at runtime stay in the package. Source maps are left out. Ladybug keeps only its `nodejs` build. `esbuild` and the `js-tiktoken` copy already bundled into the main process are left out. `better-sqlite3` keeps the current platform's prebuild and not the C sources. Production `node_modules` are assembled in the repo and passed to electron-builder.
 
 `better-sqlite3` already ships `darwin-arm64`, `darwin-x64`, and `win32-x64` prebuilds. Photon and Ladybug are wasm. `srt-win.exe` is already in `sandbox-runtime`. sqlite-vec publishes one optional package per platform. pnpm `supportedArchitectures` includes darwin, win32, arm64, and x64, and `@loom/app` depends directly on `sqlite-vec-darwin-x64` and `sqlite-vec-windows-x64`, so an arm64 Mac installs those too. FFmpeg for all three platforms comes from `pnpm vendor:ffmpeg --all`.
 
