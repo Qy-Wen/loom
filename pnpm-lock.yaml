@@ -94,6 +94,9 @@ importers:
       '@modelcontextprotocol/sdk':
         specifier: 1.30.1
         version: 1.30.1(@cfworker/json-schema@4.1.1)(zod@3.25.76)
+      '@silvia-odwyer/photon':
+        specifier: 0.3.3
+        version: 0.3.3
       better-sqlite3:
         specifier: 13.0.3
         version: 13.0.3

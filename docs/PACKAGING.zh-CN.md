@@ -27,7 +27,7 @@
 
 该平台的 FFmpeg 从 `packages/core/vendor/ffmpeg/<platform>-<arch>/` 复制到 `resources/ffmpeg/`。[binaries.ts](../packages/core/src/media/binaries.ts) 已经在那里找 `ffmpeg` 和 `ffprobe`。
 
-`@loom/core` 和 `@loom/agent` 打进主进程。界面用的包打进 `out/renderer`，在 `@loom/app` 里列为开发依赖，不进安装包。主进程运行时要加载的依赖留在包里。source map 不进安装包。Ladybug 只留 `nodejs` 这一份。`esbuild` 和已经打进主进程的 `js-tiktoken` 不进安装包。`better-sqlite3` 只留当前平台的预编译文件，不带 C 源码。生产依赖在仓库里装好再交给 electron-builder。
+`@loom/core` 和 `@loom/agent` 打进主进程。界面用的包打进 `out/renderer`，在 `@loom/app` 里列为开发依赖，不进安装包。主进程运行时要加载的依赖留在包里。Photon 列为 app 的直接依赖，供打包后的图像处理器定位 WASM；它的 JS 仍打进主进程，WASM 由 Electron 从 asar 读取。source map 不进安装包。Ladybug 只留 `nodejs` 这一份。`esbuild` 和已经打进主进程的 `js-tiktoken` 不进安装包。`better-sqlite3` 只留当前平台的预编译文件，不带 C 源码。生产依赖在仓库里装好再交给 electron-builder。
 
 `better-sqlite3` 已经带了 `darwin-arm64`、`darwin-x64` 和 `win32-x64` 的预编译文件。Photon 和 Ladybug 是 wasm。`srt-win.exe` 已经在 `sandbox-runtime` 里。sqlite-vec 每个平台一个可选包。pnpm 的 `supportedArchitectures` 包含 darwin、win32、arm64 和 x64，`@loom/app` 直接依赖 `sqlite-vec-darwin-x64` 和 `sqlite-vec-windows-x64`，这样在 arm64 Mac 上也会装上这两份。三个平台的 FFmpeg 用 `pnpm vendor:ffmpeg --all` 一次下齐。
 

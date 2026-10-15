@@ -16,8 +16,9 @@ export default defineConfig(({ command }) => {
 			build: {
 				// Workspace packages expose TypeScript source: bundle them instead of
 				// externalizing (Node cannot load their .ts entry points). Real npm deps
-				// stay external and are required at runtime.
-				externalizeDeps: { exclude: ["@loom/agent", "@loom/core", "@earendil-works/pi-codemode"] },
+				// stay external and are required at runtime. Photon stays bundled because
+				// its JS is bundler-oriented; its WASM resolves from the app's runtime dependency.
+				externalizeDeps: { exclude: ["@loom/agent", "@loom/core", "@earendil-works/pi-codemode", "@silvia-odwyer/photon"] },
 				rollupOptions: {
 					input: { index: resolve(__dirname, "src/main/index.ts") },
 				},
