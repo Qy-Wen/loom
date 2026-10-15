@@ -20,12 +20,6 @@ Adapters for Xiaohongshu, Douyin, and other platforms.
 
 ---
 
-## Step 3: Packaging
-
-Installable macOS and Windows builds. Spec and steps: [PACKAGING](./PACKAGING.md).
-
----
-
-## Step 4: Deeper memory
+## Step 3: Deeper memory
 
 `MEMORY.md` is only an index. Entry bodies live elsewhere. A dreaming pass may consolidate, merge, and forget while idle.

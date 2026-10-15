@@ -6,6 +6,12 @@
 
 ---
 
+## 打包
+
+macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` 一次打出。发布用本机 `gh` 上传到 GitHub Release，版本从 `v0.1.0` 起按补丁号递增。不签名，不用 GitHub Actions。见 [PACKAGING](../PACKAGING.zh-CN.md)。
+
+---
+
 ## 按图检索
 
 有查询文本时，全文和向量用 RRF 合成候选后、重排前，从每条候选沿 `RELATED` 双向走一跳。邻居单独成行，带 `linkedFrom`（候选 id、关系类型、从该候选看出的方向）。已经在列表里的不重复。每条候选最多 8 个。类型和属性过滤只约束原来的候选。重排正文仍是段落、父段落或文件名。重排或 `limit` 丢掉的行不再补回。没有查询文本时不走图。检索专家点名相连文件时写 `<asset_ref>`，并带上关系类型。见 [TEXT](../RAG/TEXT.zh-CN.md)。

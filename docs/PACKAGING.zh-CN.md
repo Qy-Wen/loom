@@ -11,7 +11,7 @@
 | macOS arm64、macOS x64 | `.dmg` |
 | Windows x64 | 当前用户的 NSIS 安装程序 |
 
-平台和捆绑的 FFmpeg 一致：`darwin-arm64`、`darwin-x64`、`win32-x64`。`.dmg` 用 macOS 的磁盘工具生成，所以 `dist` 在 Mac 上跑，同一次打出 Windows 的 NSIS 安装程序。签名、公证和自动更新留到对外发布。
+平台和捆绑的 FFmpeg 一致：`darwin-arm64`、`darwin-x64`、`win32-x64`。`.dmg` 用 macOS 的磁盘工具生成，所以 `dist` 在 Mac 上跑，同一次打出 Windows 的 NSIS 安装程序。
 
 应用 id 是 `com.loom.app`，和 Windows 任务栏用的是同一个。产品名是 `Loom`。安装后的应用使用自己的用户数据目录。
 
@@ -39,11 +39,10 @@
 
 NSIS 安装程序按当前用户安装。开发时由 [ensure-windows-sandbox.mjs](../scripts/ensure-windows-sandbox.mjs) 在 `pnpm install` 里安装。打包后的应用没有这一步，所以 Windows 上沙箱开关打开时，启动调用 `ensureWindowsSandboxInstalled`，做同一次检查并请求管理员权限。已经装好则跳过。用户取消则沿用现有降级：关掉沙箱并记下原因。macOS 用 `sandbox-exec`，不需要额外安装。
 
-## 步骤
+## 发布
 
-1. 本文。
-2. 加上 electron-builder 配置，以及在 Mac 上打出上面全部安装包的 `dist`，包含拆包规则和 FFmpeg 资源复制。把命令写进 README。
-3. 装好生产依赖，包括 darwin-x64 和 win32-x64 的 sqlite-vec 包。
-4. 打包后的 Windows 应用在沙箱开关打开时，于启动时安装沙箱。
-5. 本机冒烟 macOS 包：打开素材库、加载 sqlite-vec、预览文件、解析 FFmpeg。在 Windows 上打开 Windows 安装包，并检查沙箱的权限提示。
-6. CI 用一个 macOS runner 打出全部安装包。
+本机 `pnpm dist` 之后，用 `gh` 把 `Loom-mac-arm64.dmg`、`Loom-mac-x64.dmg` 和 `Loom-win-x64.exe` 上传到 GitHub Release。不用 GitHub Actions。
+
+版本号取 GitHub 上最新的 `v*` Release，末段加一。还没有 Release 时从 `v0.1.0` 开始。
+
+公开仓库的下载地址是 `https://github.com/Qy-Wen/loom/releases/latest/download/` 加上文件名。安装包不签名，也不做公证和自动更新。

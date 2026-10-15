@@ -6,6 +6,12 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Packaging
+
+One `pnpm dist` on a Mac produces the macOS arm64, macOS x64, and Windows x64 installers. A release uploads them with local `gh` to a GitHub Release. Versions start at `v0.1.0` and increment the patch number. The installers are unsigned, and GitHub Actions is not used. See [PACKAGING](../PACKAGING.md).
+
+---
+
 ## Graph retrieval
 
 On a text query, after RRF fuses full-text and vector candidates and before rerank, walk one `RELATED` hop both ways from each candidate. A neighbor is its own row, with `linkedFrom` (candidate id, relation type, direction from that candidate). An id already in the list is not repeated. At most 8 neighbors per candidate. Type and property filters stay on the original candidates. The rerank document is still the passage, parent passage, or filename. Rows that rerank or the `limit` drop are not added back. A query with no text does not walk the graph. When the retrieve specialist names a connected file, it writes an `<asset_ref>` and the relation type. See [TEXT](../RAG/TEXT.md).

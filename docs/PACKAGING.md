@@ -11,7 +11,7 @@ Installable macOS and Windows builds. electron-builder packs the existing `elect
 | macOS arm64, macOS x64 | `.dmg` |
 | Windows x64 | per-user NSIS |
 
-Platforms match bundled FFmpeg: `darwin-arm64`, `darwin-x64`, `win32-x64`. The `.dmg` is built with macOS disk tools, so `dist` runs on a Mac and emits the Windows NSIS installer in the same run. Signing, notarization, and auto-update wait for a public release.
+Platforms match bundled FFmpeg: `darwin-arm64`, `darwin-x64`, `win32-x64`. The `.dmg` is built with macOS disk tools, so `dist` runs on a Mac and emits the Windows NSIS installer in the same run.
 
 App id is `com.loom.app`, the same id the Windows taskbar uses. Product name is `Loom`. The installed app keeps its own user-data directory.
 
@@ -39,11 +39,10 @@ Startup checks and failure reasons go to a local log, outside the library. macOS
 
 The NSIS installer is per-user. Development installs the sandbox from [ensure-windows-sandbox.mjs](../scripts/ensure-windows-sandbox.mjs) during `pnpm install`. A packaged app has no postinstall, so on Windows, with the sandbox setting on, startup calls `ensureWindowsSandboxInstalled` and runs the same check, which asks for administrator consent. An existing install is left alone. Cancelling uses the existing fallback: the sandbox turns off and the reason is saved. macOS uses `sandbox-exec` and needs no extra install.
 
-## Steps
+## Release
 
-1. This document.
-2. electron-builder config and a Mac `dist` that emits every installer above, including unpack rules and the FFmpeg resource copy. Add the command to the README.
-3. Assemble production dependencies, including the sqlite-vec packages for darwin-x64 and win32-x64.
-4. On a packaged Windows app, install the sandbox at startup when the setting is on.
-5. Smoke the local macOS package: open a library, load sqlite-vec, preview a file, and resolve FFmpeg. Open the Windows installer on a Windows machine and check the sandbox consent prompt.
-6. CI on one macOS runner produces every installer.
+After `pnpm dist` on this Mac, `gh` uploads `Loom-mac-arm64.dmg`, `Loom-mac-x64.dmg`, and `Loom-win-x64.exe` to a GitHub Release. GitHub Actions is not used.
+
+The version is the latest `v*` Release on GitHub with the last number incremented. The first Release is `v0.1.0`.
+
+On a public repo the download URL is `https://github.com/Qy-Wen/loom/releases/latest/download/` plus the filename. The installers are unsigned. There is no notarization and no auto-update.
