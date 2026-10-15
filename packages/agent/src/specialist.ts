@@ -2,6 +2,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { AssistantEntry, configure, defineExtension, defineTool, type Extension, type ToolRegistration } from "./durable-adapter.ts";
 import { userTextFromContent } from "./attachments.ts";
 import type { LoomTool } from "./types.ts";
+import { isMcpToolName } from "./tool-permission.ts";
 
 export const RETRIEVE_AGENT_TOOL = "run_retrieve_agent";
 export const CREATE_AGENT_TOOL = "run_create_agent";
@@ -21,12 +22,10 @@ export const RETRIEVE_SYSTEM_PROMPT =
 	"Reply with those blocks and the passages that answer the task.";
 
 export const CREATE_SYSTEM_PROMPT =
-	"You generate assets from the task. Use the MCP tools. Use write or bash only to place results inside the library. " +
-	"Do not search the library. Reply with the workspace-relative paths you wrote.";
-
-export function isMcpToolName(name: string): boolean {
-	return name.includes("__");
-}
+	"You handle the delegated creative task, primarily generating assets. You share the connected MCP tools with the main agent. Use the tools needed to complete only this task. " +
+	"Use write or bash only to place results inside the library. Do not search the library. " +
+	"If an external action times out, disconnects, or is interrupted, report that its outcome is unknown and check its status before retrying. " +
+	"Reply with a summary of the outcome and the workspace-relative paths you wrote, if any.";
 
 /** Split application tools into the parent chat, the retrieve specialist, and the create specialist. */
 export function partitionLibraryTools(tools: readonly LoomTool[]): {
@@ -39,8 +38,14 @@ export function partitionLibraryTools(tools: readonly LoomTool[]): {
 	const create: LoomTool[] = [];
 	for (const tool of tools) {
 		if (tool.name === RETRIEVE_AGENT_TOOL || tool.name === CREATE_AGENT_TOOL) continue;
-		if (RETRIEVE_LIBRARY_TOOLS.has(tool.name)) retrieve.push(tool);
-		else if (isMcpToolName(tool.name)) create.push(tool);
+		if (RETRIEVE_LIBRARY_TOOLS.has(tool.name)) {
+			parent.push(tool);
+			retrieve.push(tool);
+		}
+		else if (isMcpToolName(tool.name)) {
+			parent.push(tool);
+			create.push(tool);
+		}
 		else parent.push(tool);
 	}
 	return { parent, retrieve, create };
@@ -64,9 +69,9 @@ export function specialistParameters() {
 
 export function specialistDescription(role: SpecialistRole): string {
 	if (role === "retrieve") {
-		return "Search and inspect the open library in a fresh context. Pass the full question in goal, including asset ids when the task needs them. Returns asset ids and passages. Independent calls in the same turn run together.";
+		return "Consider delegation only when there are multiple independent retrieval tasks that can run in parallel. Handle a single retrieval task, including a multi-step one, directly with search_assets and inspect_asset. Pass each task's full question in goal, including asset ids when needed. Returns asset ids and passages. Independent calls in the same turn run together.";
 	}
-	return "Generate assets with MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Does not search the library. Returns library paths written. Independent calls in the same turn run together.";
+	return "Run a creative task with the shared MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Does not search the library. Returns an outcome summary and any library paths written. Independent calls in the same turn run together.";
 }
 
 /** Foreground owned conversations: durable controls Stop, busy state, and restart ownership. */

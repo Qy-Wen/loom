@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -48,6 +48,22 @@ describe("McpSettingsStore", () => {
 		const saved = JSON.parse(await readFile(dest, "utf8")) as { servers: Array<{ id: string }> };
 		assert.deepEqual(saved.servers.map((row) => row.id), ["cloud"]);
 		assert.deepEqual(draftsToFile([]), { servers: [] });
+	});
+
+	it("drops obsolete agent routing when saving existing servers", async () => {
+		const dir = await mkdtemp(join(tmpdir(), "loom-mcp-settings-"));
+		const path = join(dir, "mcp.json");
+		const store = new McpSettingsStore(path);
+		await writeFile(path, JSON.stringify({ servers: [
+			{ id: "publish", command: "node", agent: "main" },
+			{ id: "comfy", url: "http://localhost/mcp", agent: "create" },
+		] }));
+		const drafts = await store.drafts();
+		assert.equal(drafts[0]?.command, "node");
+		assert.equal(drafts[1]?.url, "http://localhost/mcp");
+		await store.save(drafts);
+		const saved = JSON.parse(await readFile(path, "utf8")) as { servers: Record<string, unknown>[] };
+		assert.ok(saved.servers.every((server) => !("agent" in server)));
 	});
 
 	it("rejects a server with no id or command", async () => {

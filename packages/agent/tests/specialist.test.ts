@@ -7,32 +7,91 @@ import { Type } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage as answer, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, createSpecialistExtension, defineExtension, defineTool,
-	LibraryAgent, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry,
+	LibraryAgent, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry, toDurableTool,
 } from "../src/durable.ts";
-import { partitionLibraryTools, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/specialist.ts";
+import { partitionLibraryTools, specialistDescription, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/specialist.ts";
 
 const call = (name: string, args = {}) => answer(fauxToolCall(name, args), { stopReason: "toolUse" });
 
-test("specialists partition search and MCP off the parent and accept only a self-contained task", () => {
+test("parent shares retrieval and MCP tools with the corresponding specialists", () => {
 	const split = partitionLibraryTools(["search_assets", "inspect_asset", "describe_image", "comfy__generate", "run_retrieve_agent"].map((name) => ({ name, description: name, parameters: Type.Object({}), execute: () => name })));
-	assert.deepEqual(split.parent.map((tool) => tool.name), ["describe_image"]);
+	assert.deepEqual(split.parent.map((tool) => tool.name), ["search_assets", "inspect_asset", "describe_image", "comfy__generate"]);
 	assert.deepEqual(split.retrieve.map((tool) => tool.name), ["search_assets", "inspect_asset"]);
 	assert.deepEqual(split.create.map((tool) => tool.name), ["comfy__generate"]);
 	assert.equal(specialistUserMessage(" find the dock "), "Task:\nfind the dock");
 	assert.match(RETRIEVE_SYSTEM_PROMPT, /asset_id.*inspect_asset.*exact id first; do not call search_assets/);
 	assert.match(RETRIEVE_SYSTEM_PROMPT, /read on the relativePath returned by inspect_asset/);
+	assert.match(specialistDescription("retrieve"), /only when there are multiple independent retrieval tasks that can run in parallel/);
+	assert.match(specialistDescription("retrieve"), /Handle a single retrieval task, including a multi-step one, directly/);
 });
 
-for (const action of ["approve", "reject", "stop", "reopen"] as const) {
-	test(`owned specialist ${action}: isolation, busy parent, approval and durable ownership`, { timeout: 10_000 }, async () => {
+test("parent and create share the same MCP tools while retrieve stays isolated", () => {
+	const tools = ["publish__video", "comfy__generate", "social__login"].map((name) => ({ name, description: name, parameters: Type.Object({}), execute: () => name }));
+	const split = partitionLibraryTools(tools);
+	assert.deepEqual(split.parent, tools);
+	assert.deepEqual(split.create, tools);
+	for (const [index, tool] of tools.entries()) {
+		assert.equal(split.parent[index], tool);
+		assert.equal(split.create[index], tool);
+	}
+	assert.deepEqual(split.retrieve, []);
+});
+
+test("parent can call an MCP tool directly and delegate a separate task using the same tool", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-shared-mcp-"));
+	const faux = fauxProvider();
+	const models = createModels();
+	models.setProvider(faux.provider);
+	const gate = new ToolGate();
+	gate.level = "full";
+	const briefs: string[] = [];
+	const grouped = partitionLibraryTools([{
+		name: "comfy__generate", description: "Generate an image", parameters: Type.Object({ brief: Type.String() }),
+		execute: (args) => { const { brief } = args as { brief: string }; briefs.push(brief); return `images/${brief}.png`; },
+	}]);
+	let owner: LibraryAgent | undefined;
+	try {
+		const permission = gate.extension(path, () => owner!.harness);
+		const specialist = createSpecialistExtension("create", grouped.create.map(toDurableTool), permission);
+		const parent = defineExtension({ name: "test.parent", tools: [...grouped.parent.map(toDurableTool), specialist.tool] });
+		owner = await LibraryAgent.open(path, {
+			models, resume: false, extensions: [parent, specialist.child, permission],
+			settings: { extensions: [parent, permission] },
+			agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },
+		}, context);
+		faux.setResponses([
+			(request) => {
+				assert.match(JSON.stringify(request), /"name":"comfy__generate"/);
+				assert.match(JSON.stringify(request), /"name":"run_create_agent"/);
+				return call("comfy__generate", { brief: "direct" });
+			},
+			call("run_create_agent", { goal: "Generate a separate image with brief delegated" }),
+			(request) => {
+				assert.match(JSON.stringify(request), /"name":"comfy__generate"/);
+				assert.doesNotMatch(JSON.stringify(request), /run_create_agent/);
+				return call("comfy__generate", { brief: "delegated" });
+			},
+			answer("images/delegated.png"), answer("Both images are ready"),
+		]);
+		owner.harness.resume();
+		const conversation = await owner.createConversation({}, context);
+		const submission = await conversation.submit({ type: "input", content: "Generate two different images", requestId: "shared-mcp" }, context);
+		assert.equal((await submission.wait(context)).status, "done");
+		assert.deepEqual(briefs, ["direct", "delegated"]);
+		assert.equal((await listLoomConversations(owner.harness, { includeOwned: true }, context)).length, 2);
+	} finally { await owner?.close(context); await rm(path, { recursive: true, force: true }); }
+});
+
+for (const toolName of ["write", "comfy__generate"]) for (const action of ["approve", "reject", "stop", "reopen"] as const) {
+	test(`owned specialist ${toolName} ${action}: isolation, busy parent, approval and durable ownership`, { timeout: 10_000 }, async () => {
 		const path = await mkdtemp(join(tmpdir(), "loom-specialist-"));
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 		let owner: LibraryAgent | undefined;
-		let gate = new ToolGate(); gate.level = "basic";
+		let gate = new ToolGate(); gate.level = toolName === "write" ? "basic" : "standard";
 		let writes = 0;
 		const open = async () => {
 			const permission = gate.extension(path, () => owner!.harness);
-			const specialist = createSpecialistExtension("create", [defineTool({ name: "write", description: "write", parameters: Type.Object({}), replay: "unsafe", execute: async () => { writes++; return { output: [{ type: "text", text: "saved" }] }; } })], permission);
+			const specialist = createSpecialistExtension("create", [defineTool({ name: toolName, description: toolName, parameters: Type.Object({}), replay: "unsafe", execute: async () => { writes++; return { output: [{ type: "text", text: "saved" }] }; } })], permission);
 			const parentExtension = defineExtension({ name: "parent", tools: [specialist.tool] });
 			return LibraryAgent.open(path, {
 				models, resume: false, extensions: [specialist.child, permission, parentExtension],
@@ -46,11 +105,11 @@ for (const action of ["approve", "reject", "stop", "reopen"] as const) {
 			faux.setResponses([
 				call("run_create_agent", { goal: "place the result" }),
 				(request) => {
-					assert.match(JSON.stringify(request), /"name":"write"/);
+					assert.ok(JSON.stringify(request).includes(`"name":"${toolName}"`));
 					assert.doesNotMatch(JSON.stringify(request), /run_create_agent/);
 					assert.match(JSON.stringify(request.messages), /Task:\\nplace the result/);
 					assert.doesNotMatch(JSON.stringify(request.messages), /parent-secret/);
-					return call("write");
+					return call(toolName);
 				}, answer("child-summary"), answer("parent-answer"),
 			]);
 			const parent = await owner.createConversation({}, context);
@@ -72,7 +131,7 @@ for (const action of ["approve", "reject", "stop", "reopen"] as const) {
 			if (action === "stop") await parent.abort(context);
 			else if (action === "reopen") {
 				unsubscribe(); await owner.close(context);
-				gate = new ToolGate(); gate.level = "basic";
+				gate = new ToolGate(); gate.level = toolName === "write" ? "basic" : "standard";
 				owner = await open();
 				await clearPendingApprovals(owner.harness);
 				assert.deepEqual((await owner.harness.snapshot(LoomApprovalsDoc, childId, context))?.pending, []);
@@ -90,7 +149,7 @@ for (const action of ["approve", "reject", "stop", "reopen"] as const) {
 			assert.equal(writes, action === "approve" ? 1 : 0);
 			assert.deepEqual((await owner.harness.snapshot(LoomApprovalsDoc, childId, context))?.pending, []);
 			const entries = (await resumed!.context(context)).entries;
-			assert.ok(!entries.some((entry) => ToolResultEntry.is(entry) && entry.model?.some((message) => message.role === "toolResult" && message.toolName === "write")));
+			assert.ok(!entries.some((entry) => ToolResultEntry.is(entry) && entry.model?.some((message) => message.role === "toolResult" && message.toolName === toolName)));
 			unsubscribe();
 		} finally { await owner?.close(context); await rm(path, { recursive: true, force: true }); }
 	});

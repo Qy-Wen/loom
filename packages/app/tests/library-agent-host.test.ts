@@ -4,7 +4,61 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
+import type { LoomTool } from "@loom/agent";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+
+test("MCP tools stay shared on live updates without reopening the library", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-mcp-"));
+	const publish: LoomTool = { name: "social__publish", description: "Publish", parameters: { type: "object" }, execute: () => "published" };
+	const generate: LoomTool = { name: "comfy__generate", description: "Generate", parameters: { type: "object" }, execute: () => "generated" };
+	const host = new LibraryAgentHost({ tools: [generate] });
+	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
+	try {
+		await host.openLibrary(path);
+		const owner = host.requireOwner();
+		const session = await host.createSession();
+		for (const extension of ["loom.library", "loom.create"]) {
+			assert.ok(names(extension).includes("comfy__generate"));
+			assert.ok(!names(extension).includes("social__publish"));
+		}
+		await host.setTools([publish, generate]);
+		assert.equal(host.requireOwner(), owner);
+		for (const extension of ["loom.library", "loom.create"]) {
+			assert.ok(names(extension).includes("social__publish"));
+			assert.ok(names(extension).includes("comfy__generate"));
+			assert.equal(owner.registry.snapshot().extension(extension)?.tools?.find((tool) => tool.name === "social__publish")?.replay, "unsafe");
+		}
+		assert.ok(!names("loom.retrieve").some((name) => name.includes("__")));
+		await host.setTools([publish]);
+		for (const extension of ["loom.library", "loom.create"]) {
+			assert.ok(names(extension).includes("social__publish"));
+			assert.ok(!names(extension).includes("comfy__generate"));
+		}
+		assert.equal((await host.getSession(session.id)).id, session.id);
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
+test("retrieval tools are available to the parent and retrieve specialist across live updates", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-retrieval-"));
+	const tools: LoomTool[] = ["search_assets", "inspect_asset"].map((name) => ({ name, description: name, parameters: { type: "object" }, execute: () => "found" }));
+	const host = new LibraryAgentHost({ tools });
+	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
+	try {
+		await host.openLibrary(path);
+		const owner = host.requireOwner();
+		for (const extension of ["loom.library", "loom.retrieve"]) {
+			assert.ok(names(extension).includes("search_assets"));
+			assert.ok(names(extension).includes("inspect_asset"));
+		}
+		assert.ok(!names("loom.create").some((name) => tools.some((tool) => tool.name === name)));
+		await host.setTools([tools[1]!]);
+		assert.equal(host.requireOwner(), owner);
+		for (const extension of ["loom.library", "loom.retrieve"]) {
+			assert.ok(!names(extension).includes("search_assets"));
+			assert.ok(names(extension).includes("inspect_asset"));
+		}
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
 
 test("app fork-before switches context, archives source, and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-"));

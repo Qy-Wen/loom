@@ -44,8 +44,12 @@ export function gatedToolNames(level: AgentPermissionLevel): ReadonlySet<string>
 	return new Set(BASIC_TOOLS);
 }
 
+export function isMcpToolName(name: string): boolean {
+	return name.includes("__");
+}
+
 export function toolNeedsApproval(level: AgentPermissionLevel, toolName: string): boolean {
-	return gatedToolNames(level).has(toolName);
+	return level !== "full" && (isMcpToolName(toolName) || gatedToolNames(level).has(toolName));
 }
 
 const UNICODE_SPACES = /[\u00A0\u2000-\u200A\u202F\u205F\u3000]/g;

@@ -51,6 +51,24 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolNeedsApproval("standard", "get_settings"), false);
 });
 
+test("MCP calls require approval in Basic and Standard and allow per-tool grants", () => {
+	for (const level of ["basic", "standard"] as const) {
+		for (const name of ["publish__video", "comfy__generate", "unknown__read"]) {
+			assert.equal(toolNeedsApproval(level, name), true);
+			assert.equal(toolCallNeedsApproval(level, name, "/lib", { path: "inside.mp4" }), true);
+			assert.equal(workspaceWriteNeedsApproval(level, name, "/lib", { path: "inside.mp4" }), true);
+		}
+		const grant = commandAllowKey("publish__video", { path: "first.mp4" });
+		assert.deepEqual(grant, { tool: "publish__video" });
+		assert.equal(toolCallNeedsApproval(level, "publish__video", "/lib", { path: "second.mp4" }, [grant!]), false);
+		assert.equal(workspaceWriteNeedsApproval(level, "publish__video", "/lib", {}, [grant!]), false);
+		assert.equal(toolCallNeedsApproval(level, "publish__comment", "/lib", {}, [grant!]), true);
+		assert.equal(toolCallNeedsApproval(level, "another__video", "/lib", {}, [grant!]), true);
+	}
+	assert.equal(toolNeedsApproval("full", "publish__video"), false);
+	assert.equal(workspaceWriteNeedsApproval("full", "publish__video", "/lib", {}), false);
+});
+
 test("standard follows a symlink out of the library", () => {
 	const root = mkdtempSync(join(tmpdir(), "loom-write-scope-"));
 	const outside = mkdtempSync(join(tmpdir(), "loom-write-out-"));

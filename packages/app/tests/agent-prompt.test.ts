@@ -19,6 +19,16 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /Media tools do not create relations/);
 	});
 
+	it("prefers direct retrieval and considers delegation only for parallel independent tasks", () => {
+		const prompt = systemPromptForLibrary("D:\\library");
+		assert.match(prompt, /Use search_assets and inspect_asset directly for normal library retrieval/);
+		assert.match(prompt, /inspect that exact id first; do not search for the same asset/);
+		assert.match(prompt, /use read on the relativePath returned by inspect_asset/);
+		assert.match(prompt, /Consider run_retrieve_agent only when there are multiple independent retrieval tasks that can run in parallel/);
+		assert.match(prompt, /For a single retrieval task, including a multi-step one, use search_assets and inspect_asset directly/);
+		assert.doesNotMatch(prompt, /You do not have search_assets or inspect_asset/);
+	});
+
 	it("refuses to invent a directory when no library is open", () => {
 		const prompt = systemPromptForLibrary(null);
 		assert.match(prompt, /No asset library is open/);
