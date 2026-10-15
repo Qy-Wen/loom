@@ -64,6 +64,8 @@ export function useResizableLayout(): {
 		if (event.button !== 0 || !shellRef.current) return;
 		event.preventDefault();
 		const bounds = shellRef.current.getBoundingClientRect();
+		const handle = event.currentTarget;
+		handle.classList.add("dragging");
 		document.body.classList.add("resizing-columns");
 
 		const onPointerMove = (moveEvent: PointerEvent) => {
@@ -85,6 +87,7 @@ export function useResizableLayout(): {
 		};
 
 		const onPointerUp = () => {
+			handle.classList.remove("dragging");
 			document.body.classList.remove("resizing-columns");
 			window.removeEventListener("pointermove", onPointerMove);
 			window.removeEventListener("pointerup", onPointerUp);

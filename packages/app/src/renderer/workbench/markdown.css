@@ -113,6 +113,8 @@
 	min-height: 0;
 	overflow: auto;
 	background: #fbfbfa;
+	/* Fill the workbench's 5px side padding under the resize handles. */
+	box-shadow: -5px 0 #fbfbfa, 5px 0 #fbfbfa;
 }
 
 .markdown-preview-body {

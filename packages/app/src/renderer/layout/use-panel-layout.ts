@@ -102,9 +102,11 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		return () => observer.disconnect();
 	});
 
-	function startPointer(onMove: (event: PointerEvent) => void, onUp: (event: PointerEvent) => void, className: string) {
+	function startPointer(onMove: (event: PointerEvent) => void, onUp: (event: PointerEvent) => void, className: string, handle?: HTMLElement) {
 		cleanupRef.current?.();
+		handle?.classList.add("dragging");
 		const stop = () => {
+			handle?.classList.remove("dragging");
 			document.body.classList.remove(className);
 			window.removeEventListener("pointermove", onMove);
 			window.removeEventListener("pointerup", end);
@@ -290,7 +292,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		if (!a || !b) return;
 		event.preventDefault(); document.body.classList.add("resizing-rows");
 		const original = stateRef.current;
-		startPointer((pointer) => update(resizeSlots(original, upper.id, lower.id, (pointer.clientY - a.top) / (b.bottom - a.top))), () => {}, "resizing-rows");
+		startPointer((pointer) => update(resizeSlots(original, upper.id, lower.id, (pointer.clientY - a.top) / (b.bottom - a.top))), () => {}, "resizing-rows", event.currentTarget);
 	}
 
 	function beginBandResize(mode: "bottom" | "above", event: ReactPointerEvent<HTMLElement>) {
@@ -302,7 +304,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		startPointer((pointer) => {
 			const value = mode === "bottom" ? bounds.bottom - pointer.clientY : height + y - pointer.clientY;
 			(mode === "bottom" ? setBottomHeight : setAboveHeight)(Math.min(bounds.height - 180, Math.max(160, value)));
-		}, () => {}, "resizing-rows");
+		}, () => {}, "resizing-rows", event.currentTarget);
 	}
 
 	return {
