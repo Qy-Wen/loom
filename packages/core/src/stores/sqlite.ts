@@ -9,6 +9,7 @@ import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmJobStatus, VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupJobStatus, AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type { NearestChildHit } from "../model/hybrid.ts";
+import { unpackAsarPath } from "../packaged-path.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
 import type {
 	ChildEmbeddingUpdate,
@@ -63,6 +64,7 @@ const requireSqlite = createRequire(import.meta.url);
 export class SqliteMetadataStore implements MetadataStore {
 	private database: Database.Database | null = null;
 	private vecLoaded = false;
+	private vecNote: string | undefined;
 
 	async open(paths: LibraryPaths): Promise<void> {
 		await this.close();
@@ -73,7 +75,9 @@ export class SqliteMetadataStore implements MetadataStore {
 			database.pragma("journal_mode = WAL");
 			database.pragma("foreign_keys = ON");
 			database.pragma("busy_timeout = 5000");
-			this.vecLoaded = loadSqliteVec(database);
+			const vec = loadSqliteVec(database);
+			this.vecLoaded = vec.loaded;
+			this.vecNote = vec.note;
 			this.ensureSchema(database);
 			this.database = database;
 			this.rebuildFtsIfStale();
@@ -83,10 +87,15 @@ export class SqliteMetadataStore implements MetadataStore {
 		}
 	}
 
+	sqliteVecNote(): string | undefined {
+		return this.vecNote;
+	}
+
 	async close(): Promise<void> {
 		const database = this.database;
 		this.database = null;
 		this.vecLoaded = false;
+		this.vecNote = undefined;
 		if (database?.open) database.close();
 	}
 
@@ -1082,13 +1091,14 @@ function deleteUnusedTags(database: Database.Database): void {
 	`).run();
 }
 
-function loadSqliteVec(database: Database.Database): boolean {
+function loadSqliteVec(database: Database.Database): { loaded: boolean; note: string } {
 	try {
-		const sqliteVec = requireSqlite("sqlite-vec") as { load: (db: Database.Database) => void };
-		sqliteVec.load(database);
-		database.prepare("SELECT vec_version()").get();
-		return true;
-	} catch {
-		return false;
+		const sqliteVec = requireSqlite("sqlite-vec") as { getLoadablePath: () => string };
+		database.loadExtension(unpackAsarPath(sqliteVec.getLoadablePath()));
+		const version = database.prepare("SELECT vec_version()").pluck().get();
+		return { loaded: true, note: `sqlite-vec ${String(version)}` };
+	} catch (error) {
+		const reason = error instanceof Error ? error.message : String(error);
+		return { loaded: false, note: `sqlite-vec failed to load: ${reason}` };
 	}
 }

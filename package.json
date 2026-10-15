@@ -12,6 +12,7 @@
     "test:e2e": "pnpm --filter @loom/app test:e2e",
     "test:e2e:attach": "pnpm --filter @loom/app test:e2e:attach",
     "dev": "pnpm --filter @loom/app dev",
+    "dist": "node scripts/dist.mjs",
     "postinstall": "node scripts/download-ffmpeg.mjs && node scripts/ensure-windows-sandbox.mjs",
     "vendor:sync": "pnpm --filter @loom/agent vendor:sync",
     "vendor:ffmpeg": "node scripts/download-ffmpeg.mjs"
@@ -20,6 +21,10 @@
     "@types/node": "22.19.19"
   },
   "pnpm": {
+    "supportedArchitectures": {
+      "os": ["darwin", "win32"],
+      "cpu": ["arm64", "x64"]
+    },
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "electron",

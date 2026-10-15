@@ -36,6 +36,10 @@
     "rxjs": "7.8.1",
     "sqlite-vec": "0.1.9"
   },
+  "optionalDependencies": {
+    "sqlite-vec-darwin-x64": "0.1.9",
+    "sqlite-vec-windows-x64": "0.1.9"
+  },
   "devDependencies": {
     "@assistant-ui/react-o11y": "0.0.46",
     "@assistant-ui/store": "0.3.17",
@@ -48,6 +52,7 @@
     "@types/react-dom": "19.2.1",
     "@vitejs/plugin-react": "5.2.0",
     "electron": "38.2.2",
+    "electron-builder": "26.15.3",
     "electron-vite": "5.0.0",
     "playwright": "^1.63.0",
     "typescript": "5.9.3",

@@ -11,6 +11,7 @@ node_modules/
 dist/
 out/
 build/
+release/
 *.tsbuildinfo
 
 # Loom library metadata (should never be committed)
