@@ -9,6 +9,8 @@ export interface PanelRegistration {
 	id: PanelId;
 	visible: boolean;
 	initialPlace?: PanelPlace;
+	/** On a fresh layout, append this panel to the first listed panel in the same region. */
+	initialJoin?: readonly PanelId[];
 	/** Applied once, when first shown. Saved user placement always wins. */
 	firstOpen?: { place: PanelPlace; join?: readonly PanelId[] };
 }
@@ -101,11 +103,22 @@ export function readPanelLayout(storage: Pick<Storage, "getItem">, registrations
 	const weights = stored<Record<string, number>>("loom.layout.dockWeights", {});
 	const split = positive(stored<number>("loom.layout.dockSplit", 0.5), 0.5);
 	const opened: string[] = [];
+	const savedPlacement = Boolean(storage.getItem("loom.layout.dockOrder") || storage.getItem("loom.layout.members") || storage.getItem("loom.layout.joined") || storage.getItem("loom.layout.dockWeights") || storage.getItem("loom.layout.dockSplit") || registrations.some((panel) => storage.getItem(`loom.layout.${panel.id}Place`)));
 	let slots = registrations.map((panel): PanelSlot => {
 		const place = parsePlace(stored(`loom.layout.${panel.id}Place`, null));
 		if (place || !panel.firstOpen) opened.push(panel.id);
 		return { id: panel.id, tabs: [panel.id], active: panel.id, place: place ?? panel.initialPlace ?? { mode: "dock" }, weight: positive(weights?.[panel.id], panel.id === "agent" ? split : panel.id === "details" ? Math.max(0.01, 1 - split) : 1) };
 	}).sort((a, b) => order.indexOf(a.id) - order.indexOf(b.id));
+	if (!savedPlacement) for (const panel of registrations) {
+		if (!panel.initialJoin?.length) continue;
+		const source = slots.find((slot) => slot.tabs.length === 1 && slot.id === panel.id);
+		if (!source) continue;
+		const target = panel.initialJoin.map((id) => slots.find((slot) => slot.tabs.includes(id) && slot !== source && slot.place.mode === source.place.mode)).find((slot) => slot !== undefined);
+		if (!target) continue;
+		const group = { ...target, tabs: [...target.tabs, panel.id], weight: target.weight + source.weight };
+		slots = slots.flatMap((slot) => slot === target ? [group] : slot === source ? [] : [slot]);
+		opened.push(panel.id);
+	}
 	const legacyMembers = storage.getItem("loom.layout.members") ?? (storage.getItem("loom.layout.joined") === "1" ? storage.getItem("loom.layout.tabOrder") ?? "agent,details" : "");
 	const members = unique(legacyMembers.split(",")).filter((id) => registrations.some((panel) => panel.id === id));
 	if (members.length > 1) {

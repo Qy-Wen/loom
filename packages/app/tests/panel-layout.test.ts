@@ -7,6 +7,19 @@ const storage = (rows: Record<string, string> = {}) => ({ getItem: (key: string)
 const initial = () => readPanelLayout(storage(), registrations);
 const join = (state: PanelLayoutState, id: string, target: string) => movePanel(state, { kind: "panel", id }, { kind: "join", target: slotFor(state, target)!.id });
 
+test("a fresh layout joins a panel into its anchor and leaves the anchor selected", () => {
+	const panels = registrations.map((panel) => panel.id === "details" ? { ...panel, initialJoin: ["chat"] } : panel);
+	const state = readPanelLayout(storage(), panels);
+	const slot = slotFor(state, "chat")!;
+	assert.deepEqual(slot.tabs, ["chat", "details"]);
+	assert.equal(slot.active, "chat");
+	assert.equal(slotFor(state, "details"), slot);
+	assert.ok(state.opened.includes("details"));
+	const saved = readPanelLayout(storage({ "loom.layout.chatPlace": '{"mode":"bottom"}' }), panels);
+	assert.deepEqual(slotFor(saved, "details")!.tabs, ["details"]);
+	assert.equal(slotFor(saved, "chat")!.place.mode, "bottom");
+});
+
 test("six registered panels support multiple independent tab groups and group-to-group merge", () => {
 	let state = join(initial(), "details", "chat");
 	state = join(state, "inspector", "timeline");

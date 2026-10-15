@@ -72,15 +72,15 @@ export function useResizableLayout(): {
 			if (side === "library") {
 				const taken = (besideOpen ? besideWidth + HANDLE_WIDTH : 0) + (sideOpen ? sideWidth + HANDLE_WIDTH : 0);
 				const room = bounds.width - taken - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
-				setLibraryWidth(clampColumn(moveEvent.clientX - bounds.left, room, MIN_LIBRARY_WIDTH, 360));
+				setLibraryWidth(clampColumn(moveEvent.clientX - bounds.left, room, MIN_LIBRARY_WIDTH));
 			} else if (side === "beside") {
 				const rightInset = sideOpen ? sideWidth + HANDLE_WIDTH : 0;
 				const room = bounds.width - libraryTaken - rightInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
-				setBesideWidth(clampColumn(bounds.right - rightInset - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
+				setBesideWidth(clampColumn(bounds.right - rightInset - moveEvent.clientX, room, MIN_SIDE_WIDTH));
 			} else {
 				const leftInset = besideOpen ? besideWidth + HANDLE_WIDTH : 0;
 				const room = bounds.width - libraryTaken - leftInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
-				setSideWidth(clampColumn(bounds.right - moveEvent.clientX, room, MIN_SIDE_WIDTH, 520));
+				setSideWidth(clampColumn(bounds.right - moveEvent.clientX, room, MIN_SIDE_WIDTH));
 			}
 		};
 
@@ -111,9 +111,9 @@ export function useResizableLayout(): {
 	};
 }
 
-/** Uses the preferred minimum only while the other columns still leave that much room. */
-function clampColumn(proposed: number, room: number, minimum: number, cap: number): number {
-	const ceiling = Math.min(cap, Math.max(room, 0));
+/** Stop at the other columns' reserved room. The preferred minimum yields when that room is smaller. */
+export function clampColumn(proposed: number, room: number, minimum: number): number {
+	const ceiling = Math.max(room, 0);
 	const floor = Math.min(minimum, ceiling);
-	return Math.min(Math.max(ceiling, floor), Math.max(floor, proposed));
+	return Math.min(ceiling, Math.max(floor, proposed));
 }

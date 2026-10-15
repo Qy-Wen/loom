@@ -21,7 +21,7 @@ async function resetFirstGradeOpen(page: Page) {
 	});
 }
 
-for (const grouped of [false, true]) test(`first Edit joins Grade into the right ${grouped ? "tab group" : "Details panel"} and remembers a later floating position`, async ({ loomPage: page }) => {
+for (const grouped of [false, true]) test(`first Edit joins Grade into the right ${grouped ? "saved" : "default"} tab group and remembers a later floating position`, async ({ loomPage: page }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
 	await expect(page.locator(".shell")).toBeVisible();
 	await page.evaluate((grouped) => {
@@ -39,7 +39,7 @@ for (const grouped of [false, true]) test(`first Edit joins Grade into the right
 	await expect(page.locator('.panel-tabs button[data-tab="details"]')).toBeVisible();
 	const saved = await savedPanel(page, "grade");
 	expect(saved.place).toEqual({ mode: "dock" });
-	expect(saved.members).toBe(grouped ? "agent,details,grade" : "details,grade");
+	expect(saved.members).toBe("agent,details,grade");
 	await expectDockLayout(page);
 	await page.locator(".preview-actions button").first().click();
 	await expect(gradeTab).toBeHidden();
@@ -572,4 +572,27 @@ test("dragging a docked grading panel out and back keeps the other panels in the
 		await expect(page.locator('.panel-tabs button[data-tab="grade"]')).toBeVisible();
 		await expectDockLayout(page);
 	} finally { await page.mouse.up(); }
+});
+
+test("library and side dividers grow past the old caps and still leave the workbench", async ({ loomPage: page, electronApp }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
+	await electronApp?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900));
+	await expect(page.locator(".shell")).toBeVisible();
+	const column = (name: string) => page.evaluate((name) => Number.parseFloat(getComputedStyle(document.querySelector(".shell")!).getPropertyValue(name)), name);
+	const drag = async (selector: string, dx: number) => {
+		const handle = await page.locator(selector).boundingBox();
+		expect(handle).toBeTruthy();
+		const x = handle!.x + handle!.width / 2;
+		const y = handle!.y + handle!.height / 2;
+		await page.mouse.move(x, y);
+		await page.mouse.down();
+		await page.mouse.move(x + dx, y, { steps: 10 });
+		await page.mouse.up();
+	};
+	await drag(".library-resize", 200);
+	expect(await column("--library-width")).toBeGreaterThan(360);
+	await drag(".side-resize", -200);
+	expect(await column("--side-width")).toBeGreaterThan(520);
+	const workbench = await page.locator(".workbench").boundingBox();
+	expect(workbench!.width).toBeGreaterThanOrEqual(240);
 });
