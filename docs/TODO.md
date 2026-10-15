@@ -22,7 +22,7 @@ Adapters for Xiaohongshu, Douyin, and other platforms.
 
 ## Step 3: Packaging
 
-Consider shipping installable builds for macOS and Windows.
+Installable macOS and Windows builds. Spec and steps: [PACKAGING](./PACKAGING.md).
 
 ---
 

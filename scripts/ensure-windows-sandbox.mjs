@@ -2,9 +2,10 @@ import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
-// One-time machine setup for the process sandbox. Re-running the installer
-// rotates the sandbox password and always shows UAC, so an existing install
-// is left alone. Cancelling UAC does not fail pnpm install.
+// One-time machine setup for the process sandbox during development.
+// A packaged app repeats this check at startup (ensureWindowsSandboxInstalled).
+// Re-running the installer rotates the sandbox password and always shows UAC,
+// so an existing install is left alone. Cancelling UAC does not fail pnpm install.
 if (process.platform !== "win32") process.exit(0);
 if (process.env.CI) {
 	console.log("CI: skipping Windows sandbox install.");

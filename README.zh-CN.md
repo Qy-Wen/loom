@@ -42,6 +42,7 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 pnpm install                          # 下载本机的 ffmpeg 和 ffprobe；Windows 上缺沙箱时安装一次
 pnpm vendor:ffmpeg --all              # win32-x64、darwin-arm64、darwin-x64
 pnpm dev                              # Electron 客户端（需 .env 里的 DEEPSEEK_API_KEY）
+pnpm dist                             # 在 Mac 上打出 macOS arm64/x64 的 dmg 和 Windows x64 安装包
 pnpm --filter @loom/app check:node-sqlite  # 验证真实 Electron 主进程的 SQLite
 pnpm --filter @loom/agent try:durable  # 真实模型/工具 + 临时 SQLite/重开冒烟测试
 pnpm test                            # 全部单元 / 集成测试

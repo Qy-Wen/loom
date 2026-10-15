@@ -22,7 +22,7 @@
 
 ## 第三步：打包
 
-考虑做成可安装的包，覆盖 macOS 和 Windows。
+做成 macOS 和 Windows 的安装包。规格和步骤见 [PACKAGING](./PACKAGING.zh-CN.md)。
 
 ---
 

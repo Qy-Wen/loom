@@ -3,8 +3,18 @@ import { existsSync, realpathSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { SandboxManager, VENDORED_SRT_WIN_EXE, type SandboxRuntimeConfig } from "@anthropic-ai/sandbox-runtime";
+import {
+	SandboxManager,
+	VENDORED_SRT_WIN_EXE,
+	getWindowsSandboxUserStatusAsync,
+	installWindowsSandboxAsync,
+	resolveSrtWin,
+	verifyWindowsWfpEgress,
+	type SandboxRuntimeConfig,
+	type SrtWinSpawn,
+} from "@anthropic-ai/sandbox-runtime";
 import { tryResolveMediaBinaries } from "../media/binaries.ts";
+import { unpackAsarPath } from "../packaged-path.ts";
 
 /**
  * Process sandbox for bash and bundled ffmpeg/ffprobe.
@@ -223,33 +233,82 @@ async function apply(wanted: string): Promise<void> {
 	} catch (cause) {
 		const error = refused(cause);
 		if (process.platform !== "win32") throw error;
-		// Keep the fallback policy, but hold every direct-execution entry until
-		// cleanup and failure reporting settle, including callers arriving now.
-		let finishFallback!: () => void;
-		fallbackPending = new Promise<void>((resolve) => { finishFallback = resolve; });
-		enabled = false;
+		await disableWindowsSandbox(error);
+	}
+}
+
+// Re-running the installer rotates the sandbox password and always shows UAC,
+// so an existing install is left alone. Keep the checks in sync with
+// scripts/ensure-windows-sandbox.mjs. Tests replace these methods.
+export const windowsSandboxSetup = {
+	resolve(path: string): SrtWinSpawn {
+		return resolveSrtWin({ path });
+	},
+	async ready(srtWin: SrtWinSpawn): Promise<boolean> {
+		const user = await getWindowsSandboxUserStatusAsync({ srtWin });
+		if (!user.provisioned || !user.credPresent) return false;
 		try {
-			let resetError: unknown;
-			try {
-				await SandboxManager.reset();
-			} catch (resetCause) {
-				resetError = resetCause;
-			} finally {
-				applied = undefined;
-			}
-			const reason = resetError === undefined
-				? error
-				: new Error(`${error.message} Cleanup also failed: ${resetError instanceof Error ? resetError.message : String(resetError)}`);
-			try {
-				await sandboxFailureHandler?.(reason);
-			} catch (handlerError) {
-				console.error("Could not persist Windows sandbox fallback:", handlerError);
-			}
-			if (!sandboxFailureHandler) console.warn("Windows sandbox disabled after initialization failure:", reason);
-		} finally {
-			fallbackPending = undefined;
-			finishFallback();
+			await verifyWindowsWfpEgress({ srtWin });
+			return true;
+		} catch {
+			return false;
 		}
+	},
+	install(srtWin: SrtWinSpawn) {
+		return installWindowsSandboxAsync({ srtWin, proxyPortRange: WINDOWS_PROXY_PORT_RANGE });
+	},
+};
+
+/**
+ * One-time Windows sandbox install for a packaged app. No-ops unless the
+ * platform is Windows and the sandbox setting is on. Returns a note when
+ * the install was already present or just completed. Cancelling the
+ * administrator prompt, or a failed install, turns the sandbox off and
+ * reports the reason through the failure handler.
+ */
+export async function ensureWindowsSandboxInstalled(): Promise<string | undefined> {
+	if (process.platform !== "win32") return;
+	if (fallbackPending) await fallbackPending;
+	if (!enabled) return;
+	try {
+		const srtWin = windowsSandboxSetup.resolve(unpackAsarPath(VENDORED_SRT_WIN_EXE));
+		if (await windowsSandboxSetup.ready(srtWin)) return "Windows sandbox already installed.";
+		const result = await windowsSandboxSetup.install(srtWin);
+		if (!result.cancelled) return "Windows sandbox installed.";
+		await disableWindowsSandbox(new Error("The administrator prompt was cancelled."));
+	} catch (cause) {
+		await disableWindowsSandbox(cause instanceof Error ? cause : new Error(String(cause)));
+	}
+	return undefined;
+}
+
+async function disableWindowsSandbox(error: Error): Promise<void> {
+	// Hold every direct-execution entry until cleanup and failure reporting
+	// settle, including callers arriving now.
+	let finishFallback!: () => void;
+	fallbackPending = new Promise<void>((resolve) => { finishFallback = resolve; });
+	enabled = false;
+	try {
+		let resetError: unknown;
+		try {
+			await SandboxManager.reset();
+		} catch (resetCause) {
+			resetError = resetCause;
+		} finally {
+			applied = undefined;
+		}
+		const reason = resetError === undefined
+			? error
+			: new Error(`${error.message} Cleanup also failed: ${resetError instanceof Error ? resetError.message : String(resetError)}`);
+		try {
+			await sandboxFailureHandler?.(reason);
+		} catch (handlerError) {
+			console.error("Could not persist Windows sandbox fallback:", handlerError);
+		}
+		if (!sandboxFailureHandler) console.warn("Windows sandbox disabled after initialization failure:", reason);
+	} finally {
+		fallbackPending = undefined;
+		finishFallback();
 	}
 }
 
@@ -271,7 +330,7 @@ function runtimeConfig(libraryRoot: string, shell: string): SandboxRuntimeConfig
 	};
 	if (process.platform === "win32") {
 		config.windows = {
-			srtWin: { path: VENDORED_SRT_WIN_EXE },
+			srtWin: { path: unpackAsarPath(VENDORED_SRT_WIN_EXE) },
 			// The package default 60080–60089 often sits inside a Windows excluded
 			// port range, so the proxy cannot bind. 20080–20089 stays clear of
 			// that band. Keep this in sync with scripts/ensure-windows-sandbox.mjs.

@@ -122,6 +122,10 @@ export class LocalCore {
 		});
 	}
 
+	sqliteVecNote(): string | undefined {
+		return this.metadataStore instanceof SqliteMetadataStore ? this.metadataStore.sqliteVecNote() : undefined;
+	}
+
 	async openLibrary(rootPath: string): Promise<LibrarySnapshot> {
 		await this.graphStore.close();
 		const paths = new LibraryPaths(rootPath);

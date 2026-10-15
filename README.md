@@ -42,6 +42,7 @@ Built on [pi durable](https://github.com/earendil-works/pi/tree/main/packages/du
 pnpm install                          # downloads ffmpeg and ffprobe; on Windows, installs the sandbox once
 pnpm vendor:ffmpeg --all              # win32-x64, darwin-arm64, and darwin-x64
 pnpm dev                              # Electron app (requires DEEPSEEK_API_KEY in .env)
+pnpm dist                             # On a Mac: macOS arm64/x64 dmg and the Windows x64 installer
 pnpm --filter @loom/app check:node-sqlite  # Verify SQLite in the real Electron main process
 pnpm --filter @loom/agent try:durable  # Live model/tool + temporary SQLite/reopen smoke test
 pnpm test                             # All unit and integration tests

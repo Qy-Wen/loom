@@ -4,10 +4,11 @@ import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { Readable } from "node:stream";
-import { setProcessSandboxEnabled, setProcessSandboxFailureHandler } from "@loom/core/sandbox";
+import { ensureWindowsSandboxInstalled, setProcessSandboxEnabled, setProcessSandboxFailureHandler } from "@loom/core/sandbox";
 import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
+	resolveMediaBinary,
 	gradeSiblingRelative,
 	gradeVideoSiblingRelative,
 	isGradeableVideo,
@@ -26,6 +27,7 @@ import {
 	implicitSelectionAttachments,
 	type LoomAgentOptions,
 } from "@loom/agent";
+import { appendAppLog, appLogDirectory } from "./app-log.ts";
 import { LibraryAgentHost } from "./library-agent-host.ts";
 import { BACKGROUND_CONTEXT as agentContext, foldUserText } from "@loom/agent";
 import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
@@ -77,6 +79,27 @@ import { ModelSettingsStore, resolveChatEndpoint, settingsView } from "./model-s
 
 const ASSET_SCHEME = "loom-asset";
 const DEFAULT_CDP_PORT = "9344";
+
+let writeAppLog = (_message: string): void => {};
+
+function appLog(message: string): void {
+	writeAppLog(message);
+}
+
+function logErrorText(error: unknown): string {
+	if (error instanceof Error) return error.stack ?? error.message;
+	return String(error);
+}
+
+function logMediaBinaries(): void {
+	for (const program of ["ffmpeg", "ffprobe"] as const) {
+		try {
+			appLog(`${program} ${resolveMediaBinary(program)}`);
+		} catch (error) {
+			appLog(`${program} unavailable: ${error instanceof Error ? error.message : String(error)}`);
+		}
+	}
+}
 
 function configureAutomation(): void {
 	if (process.env.LOOM_E2E === "1") {
@@ -305,6 +328,11 @@ async function applyProcessSandbox(): Promise<void> {
 	if (!agentSandbox) throw new Error("Settings store not started");
 	const setting = await agentSandbox.load();
 	await setProcessSandboxEnabled(processSandboxActive(setting, agentManager.getPermissionLevel()));
+	// Dev installs the sandbox from pnpm install. A packaged app has no
+	// postinstall, so Windows asks for the one-time administrator consent here.
+	if (!app.isPackaged) return;
+	const note = await ensureWindowsSandboxInstalled();
+	if (note) appLog(note);
 }
 
 function registerIpc(): void {
@@ -931,6 +959,11 @@ function registerIpc(): void {
 app
 	.whenReady()
 	.then(async () => {
+		const logDirectory = appLogDirectory();
+		writeAppLog = (message) => appendAppLog(logDirectory, message);
+		process.on("uncaughtException", (error) => appLog(`uncaught exception: ${logErrorText(error)}`));
+		process.on("unhandledRejection", (reason) => appLog(`unhandled rejection: ${logErrorText(reason)}`));
+		logMediaBinaries();
 		applyAppIcon();
 		// Development convenience: keep provider secrets in the workspace root.
 		// Production will source credentials from settings/keychain instead.
@@ -959,6 +992,7 @@ app
 			} catch (error) {
 				message += ` Settings could not be saved: ${error instanceof Error ? error.message : String(error)}`;
 			}
+			appLog(`Windows sandbox disabled: ${message}`);
 			const notice = await store.pendingNotice();
 			notifySettingsChanged();
 			if (notice) for (const window of BrowserWindow.getAllWindows()) {
@@ -994,6 +1028,7 @@ app
 		});
 	})
 	.catch((error) => {
+		appLog(`Failed to start Loom: ${logErrorText(error)}`);
 		console.error("Failed to start Loom", error);
 		app.quit();
 	});
@@ -1072,10 +1107,13 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 		setUiSelection(null);
 		return snapshot;
 	} catch (error) {
+		appLog(`Failed to open library: ${logErrorText(error)}`);
 		await agentManager.close();
 		await bindCommandAllows(null);
 		throw error;
 	} finally {
+		const vecNote = localCore.sqliteVecNote();
+		if (vecNote) appLog(vecNote);
 		openingLibrary = false;
 		const changes = pendingLibraryChanges;
 		pendingLibraryChanges = [];
