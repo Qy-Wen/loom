@@ -14,7 +14,6 @@ export interface PublicModelSlot {
 	model: string;
 	enabled: boolean;
 	hasApiKey: boolean;
-	contextWindow?: number;
 }
 
 export interface PublicMcpServer {
@@ -47,7 +46,6 @@ interface SlotPatch {
 	baseUrl?: string;
 	model?: string;
 	enabled?: boolean;
-	contextWindow?: number;
 	apiKey?: string;
 	clearApiKey?: boolean;
 }
@@ -75,7 +73,6 @@ export function publicModelSlot(slot: ModelSlotRecord): PublicModelSlot {
 		model: slot.model,
 		enabled: slot.enabled,
 		hasApiKey: slot.apiKey.trim().length > 0,
-		...(slot.contextWindow !== undefined ? { contextWindow: slot.contextWindow } : {}),
 	};
 }
 
@@ -107,40 +104,19 @@ export function modelChangeNotes(before: ModelSettingsFile, after: ModelSettings
 	return notes;
 }
 
-export function chatSlotChanged(before: ModelSettingsFile, after: ModelSettingsFile): boolean {
-	return JSON.stringify(chatIdentity(before)) !== JSON.stringify(chatIdentity(after));
-}
-
-function chatIdentity(file: ModelSettingsFile) {
-	const slot = file.chat;
-	return {
-		baseUrl: slot.baseUrl.trim(),
-		model: slot.model.trim(),
-		apiKey: slot.apiKey,
-		enabled: slot.enabled,
-		contextWindow: slot.contextWindow ?? 0,
-	};
-}
-
 export function modelDraftForPatch(file: ModelSettingsFile, patch: SettingsPatch["models"]): ModelSettingsDraft {
 	const draft = {} as ModelSettingsDraft;
-	for (const id of MODEL_SLOTS) draft[id] = slotDraft(file[id], patch?.[id], id);
+	for (const id of MODEL_SLOTS) draft[id] = slotDraft(file[id], patch?.[id]);
 	return draft;
 }
 
-function slotDraft(current: ModelSlotRecord, patch: SlotPatch | undefined, id: ModelSlotId): ModelSlotDraft {
+function slotDraft(current: ModelSlotRecord, patch: SlotPatch | undefined): ModelSlotDraft {
 	const next: ModelSlotDraft = {
 		baseUrl: patch?.baseUrl ?? current.baseUrl,
 		model: patch?.model ?? current.model,
 		enabled: patch?.enabled ?? current.enabled,
 	};
-	if (patch && Object.prototype.hasOwnProperty.call(patch, "contextWindow")) {
-		if (id !== "chat") throw new Error("contextWindow is only for the Chat slot.");
-		if (patch.contextWindow !== undefined && patch.contextWindow > 0) next.contextWindow = patch.contextWindow;
-	} else if (current.contextWindow !== undefined) {
-		next.contextWindow = current.contextWindow;
-	}
-	if (patch?.clearApiKey && patch.apiKey !== undefined) throw new Error(`Slot ${id} cannot set and clear its API key in one change.`);
+	if (patch?.clearApiKey && patch.apiKey !== undefined) throw new Error("A slot cannot set and clear its API key in one change.");
 	if (patch?.clearApiKey) next.clearApiKey = true;
 	else if (patch?.apiKey !== undefined) next.apiKey = patch.apiKey;
 	return next;
@@ -223,12 +199,6 @@ function parseSlot(value: unknown, id: string): SlotPatch {
 	if ("enabled" in record && record.enabled !== undefined) {
 		if (typeof record.enabled !== "boolean") throw new Error(`${id}.enabled must be true or false.`);
 		slot.enabled = record.enabled;
-	}
-	if ("contextWindow" in record && record.contextWindow !== undefined) {
-		if (typeof record.contextWindow !== "number" || !Number.isSafeInteger(record.contextWindow) || record.contextWindow < 0) {
-			throw new Error(`${id}.contextWindow must be a whole number of tokens. Use 0 to restore the 128k default.`);
-		}
-		slot.contextWindow = record.contextWindow;
 	}
 	if ("apiKey" in record && record.apiKey !== undefined) slot.apiKey = needString(record.apiKey, `${id}.apiKey`);
 	if ("clearApiKey" in record && record.clearApiKey !== undefined) {
@@ -315,7 +285,6 @@ const SLOT_FIELDS = {
 		baseUrl: { type: "string" },
 		model: { type: "string" },
 		enabled: { type: "boolean" },
-		contextWindow: { type: "number", description: "Chat only. Token window. 0 restores the 128k default." },
 		apiKey: { type: "string", description: "Replaces the stored key. The value remains in this chat." },
 		clearApiKey: { type: "boolean", description: "True removes the stored key." },
 	},
@@ -328,8 +297,8 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 		{
 			name: "get_settings",
 			description:
-				"Read app settings: five model slots (Chat, Embedding, Rerank, VLM, Audio), the process sandbox, standing instructions, and MCP servers. " +
-				"API keys are reported only as hasApiKey. MCP env and headers are reported only as hasEnv and hasHeaders.",
+				"Read app settings: four model slots (Embedding, Rerank, VLM, Audio), the process sandbox, standing instructions, and MCP servers. " +
+				"API keys are reported only as hasApiKey. MCP env and headers are reported only as hasEnv and hasHeaders. Chat models are configured in Settings - Models.",
 			parameters: { type: "object", properties: {}, additionalProperties: false },
 			execute: async () => JSON.stringify(await host.read(), null, 2),
 		},
@@ -337,11 +306,11 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 			name: "update_settings",
 			description:
 				"Change app settings. Omit a field to leave it unchanged. " +
-				"models accepts chat, embedding, rerank, vlm, and audio. contextWindow is Chat only. " +
+				"models accepts embedding, rerank, vlm, and audio; Chat models are configured in Settings - Models. " +
 				"apiKey replaces the stored key and stays in this chat; clearApiKey removes it. " +
 				"sandbox and instructions match Settings → Agent. Instructions apply on the next message, not this one. " +
 				"mcp.upsert adds or updates a server by id (stdio needs command; http needs url). mcp.remove deletes by id. Enabled servers reconnect. " +
-				"The Chat slot applies on the next message. Changing the embedding, VLM, or audio model leaves previous write-ups unused until those files are indexed again. " +
+				"Changing the embedding, VLM, or audio model leaves previous write-ups unused until those files are indexed again. " +
 				"Basic and Standard ask before this runs.",
 			parameters: {
 				type: "object",
@@ -349,8 +318,7 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 					models: {
 						type: "object",
 						properties: {
-							chat: SLOT_FIELDS,
-							embedding: SLOT_FIELDS,
+								embedding: SLOT_FIELDS,
 							rerank: SLOT_FIELDS,
 							vlm: SLOT_FIELDS,
 							audio: SLOT_FIELDS,

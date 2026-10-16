@@ -5,6 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./chat-models": "./src/chat-model-config.ts",
+    "./chat-runtime": "./src/chat-provider.ts",
     "./composer-image": "./src/composer-image.ts",
     "./attachments": "./src/attachments.ts",
     "./composer-asset": "./src/composer-asset.ts",

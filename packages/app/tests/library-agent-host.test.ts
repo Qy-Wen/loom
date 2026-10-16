@@ -6,12 +6,14 @@ import { test } from "node:test";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
 import type { LoomTool } from "@loom/agent";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
+import { createModels } from "@earendil-works/pi-ai/models";
 
 test("MCP tools stay shared on live updates without reopening the library", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-mcp-"));
 	const publish: LoomTool = { name: "social__publish", description: "Publish", parameters: { type: "object" }, execute: () => "published" };
 	const generate: LoomTool = { name: "comfy__generate", description: "Generate", parameters: { type: "object" }, execute: () => "generated" };
-	const host = new LibraryAgentHost({ tools: [generate] });
+	const host = new LibraryAgentHost({ tools: [generate], models: createModels() });
 	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
 	try {
 		await host.openLibrary(path);
@@ -41,7 +43,7 @@ test("MCP tools stay shared on live updates without reopening the library", asyn
 test("retrieval tools are available to the parent and retrieve specialist across live updates", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-retrieval-"));
 	const tools: LoomTool[] = ["search_assets", "inspect_asset"].map((name) => ({ name, description: name, parameters: { type: "object" }, execute: () => "found" }));
-	const host = new LibraryAgentHost({ tools });
+	const host = new LibraryAgentHost({ tools, models: createModels() });
 	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
 	try {
 		await host.openLibrary(path);
@@ -65,7 +67,7 @@ test("retrieval tools are available to the parent and retrieve specialist across
 
 test("app fork-before switches context, archives source, and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-"));
-	const host = new LibraryAgentHost({});
+	const host = new LibraryAgentHost({ models: createModels() });
 	try {
 		await host.openLibrary(path);
 		const record = await host.createSession();
@@ -91,7 +93,8 @@ test("app fork-before switches context, archives source, and hides deletion with
 
 test("compaction and reopen preserve paginated chat history and forks before compacted messages", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-history-"));
-	const host = new LibraryAgentHost({ chat: { baseUrl: "http://localhost/v1", model: "demo" } });
+	const runtime = await testChatRuntime("http://localhost/v1");
+	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const session = await host.createSession();
@@ -137,7 +140,7 @@ test("compaction and reopen preserve paginated chat history and forks before com
 
 test("closing empty conversations hides them, while sent or inherited history remains archived", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-empty-close-"));
-	const host = new LibraryAgentHost({});
+	const host = new LibraryAgentHost({ models: createModels() });
 	try {
 		await host.openLibrary(path);
 		const empty = await host.createSession();
@@ -163,22 +166,23 @@ test("closing empty conversations hides them, while sent or inherited history re
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 
-test("model and instruction edits apply to both existing and subsequently created conversations", async () => {
+test("instruction edits apply to both existing and subsequently created conversations; model defaults affect new sessions only", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-defaults-"));
-	const host = new LibraryAgentHost({});
+	const runtime = await testChatRuntime("http://localhost/v1");
+	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const first = await host.createSession();
 		await host.setInstructions("Updated instructions");
-		await host.setChat({ baseUrl: "http://localhost/v1", model: "next-model", contextWindow: 64_000 });
+		const secondRuntime = await testChatRuntime("http://localhost/v1", { model: "next-model", contextWindow: 64_000, providerId: "test-next", models: runtime.models });
+		host.setChatDefault({ provider: secondRuntime.providerId, modelId: secondRuntime.modelId, thinkingLevel: "off" });
 		const next = await host.createSession();
-		for (const id of [first.id, next.id]) {
-			const agent = await (await host.conversation(id)).agent(context);
-			assert.equal(agent.instructions, "Updated instructions");
-			assert.equal(agent.model?.modelId, "next-model");
-			assert.deepEqual((await host.getSession(id)).context, { tokens: 0, window: 64_000, percent: 0 });
-		}
-		await host.setChat(undefined);
-		assert.equal((await host.getSession(first.id)).context, undefined);
+		const agent = await (await host.conversation(next.id)).agent(context);
+		assert.equal(agent.instructions, "Updated instructions");
+		assert.equal(agent.model?.modelId, "next-model");
+		assert.deepEqual((await host.getSession(next.id)).context, { tokens: 0, window: 64_000, percent: 0 });
+		assert.equal((await (await host.conversation(first.id)).agent(context)).model?.modelId, runtime.modelId);
+		// Defaults only steer new conversations; clearing them never rewrites existing ones.
+		assert.deepEqual((await host.getSession(first.id)).context, { tokens: 0, window: 128_000, percent: 0 });
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });

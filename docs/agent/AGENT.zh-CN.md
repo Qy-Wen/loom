@@ -4,6 +4,8 @@
 
 Loom 的创作素材 Agent 使用源码级 vendor 的 `pi-durable`。模型接入使用 npm `pi-ai`，前端协议是 AG-UI。参见 [MIGRATION](./MIGRATION.zh-CN.md)、[EVALS](./EVALS.zh-CN.md)、[MEMORY](./MEMORY.zh-CN.md)、[PERMISSION](./PERMISSION.zh-CN.md)。
 
+Chat 的 Provider/目录/鉴权与会话独立模型接入方案（含 OAuth）见 [CHAT_MODELS](./CHAT_MODELS.zh-CN.md)。P1 存储与 P2 运行时/Host 注入已实现，但未接入生产启动；该文档为实施清单，下文仍描述当前运行时。
+
 ## 1. 边界
 
 ```
@@ -26,7 +28,7 @@ Vendor：pi-durable + pi-codemode
 
 | 职责 | 模块 |
 |---|---|
-| 原生边界与模型配置 | `index`、`durable`、`durable-adapter`、`pi-adapter` |
+| 原生边界与模型配置 | `index`、`durable`、`durable-adapter`、`chat-provider` |
 | 库级 owner 与会话元数据 | `library-agent`、`conversation-metadata`、`session-title` |
 | 工具、specialist、权限 | `pi-tools`、`specialist`、`tool-gate`、`tool-permission`、`workspace-path` |
 | Prompt sections | `library-extension`、`library-auto-memory`、`library-skills` |

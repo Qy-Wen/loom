@@ -8,13 +8,18 @@
 
 ---
 
+## Chat models
+
+Chat is no longer a form slot. Settings → Models starts with a provider-based Chat area: sign in to a native pi-ai provider (API key or OAuth, credentials encrypted with the OS key store in `chat-credentials.json`), add OpenAI-compatible custom endpoints, pick the default model and thinking level, and refresh dynamic catalogs. Configuration persists in `chat-models.json`; saves are immediate. App defaults affect only new independent conversations. Without saved configuration, `DEEPSEEK_API_KEY` enables the native DeepSeek provider once. See [CHAT_MODELS](./agent/CHAT_MODELS.md).
+
 ## Model slots
+
+The four remaining slots (Embedding, Rerank, VLM, Audio) share one form:
 
 One Settings page. Same form for every role. Local and remote are the same fields: a URL is local if it points at this machine; a remote vendor is the same HTTP call plus an API key.
 
 | Slot | Used for | Wire |
 |---|---|---|
-| Chat | Agent loop | OpenAI-compatible `POST /v1/chat/completions`. Same three fields as the other slots: `baseUrl`, optional API key, `model`. Composer attaches are library refs, not `image_url`. Not a hardcoded DeepSeek provider. |
 | Text embedding | Text RAG index | OpenAI-compatible `POST /v1/embeddings` |
 | Rerank | Reorder Hybrid Search hits after RRF | Cohere/Jina `POST /v1/rerank` (`query` + `documents`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`. Optional. |
 | VLM | Image captions / tags; video file-level write-up | Same OpenAI-compatible `POST /v1/chat/completions`. Images use `image_url`. Video prefers a native video part when the endpoint allows it; otherwise FFmpeg frames as `image_url`. Vision only. |
@@ -27,7 +32,7 @@ Each slot stores:
 - `model`
 - `enabled` (the switch on the right of each slot)
 
-Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Chat / Embedding / Rerank / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
+Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Embedding / Rerank / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
 
 Loom never loads or runs a model. It is only an HTTP client.
 
@@ -61,7 +66,6 @@ Green on the switch means the URL is reachable (`GET /v1/models`). It does not p
 - Last opened library path is `last-library.json` in app user data. Startup reopens it when General says so and that folder still exists; a missing folder leaves the empty state and keeps the remembered path (a disconnected drive can come back). E2E uses its own userData, so it does not restore a host library.
 - `<library>/.loom/config.json` stays library preferences only.
 - Keys stay in app user data, not the library. Settings shows the key masked (`••••`); an eye toggle reveals the real value. Later they can move to the OS keychain.
-- Chat is user-configured like Embedding. If the Chat slot is empty, Main may prefill once from `.env` (`DEEPSEEK_API_KEY` and a DeepSeek `baseUrl`) so existing dev setups still start. After the user saves Chat, that slot is the only source.
 
 ---
 
@@ -73,5 +77,5 @@ Green on the switch means the URL is reachable (`GET /v1/models`). It does not p
 - Changing the embedding `model` invalidates existing text-RAG rows; see [TEXT.md](./RAG/TEXT.md). Changing the VLM `model` invalidates existing image and video write-ups; see [MEDIA.md](./RAG/MEDIA.md). Changing the Audio `model` invalidates existing audio write-ups.
 - MCP: add/remove servers. The form matches a Cursor `mcp.json` entry: name, then `command` + `args` (local) or `url` (remote). Env / headers / cwd sit under Advanced. The switch connects or disconnects that server. **Save** writes General, Models, MCP, and Agent together. On app start, only enabled servers connect. Stored in app user data `mcp.json` (or `LOOM_MCP_CONFIG`). Starts empty; ComfyUI is one possible server, not a built-in.
 - Agent: a process-sandbox switch, on by default, stored in app user data `agent-sandbox.json`. What it wraps, and how Full permission overrides it, is in [PERMISSION](./AGENT/PERMISSION.md). Below it, standing instructions stay a free-text box in app user-data `AGENTS.md`, not in the library. The next session appends them at the end of the system prompt. Empty adds nothing. The session that is already running keeps the text it started with. About 40,000 characters; Save refuses anything longer. Retrieve and create specialists do not receive them. **Save** writes General, Models, MCP, and Agent together.
-- Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; the Chat slot does not set prices.
-- `get_settings` and `update_settings` read and patch Models, MCP, and Agent. Reads omit API keys and MCP env/headers. A key passed to `update_settings` is stored and remains in that chat. Basic and Standard ask before the write. An open Settings window reloads. Chat and instructions apply on the next message. Permission and stats stay out of these tools. See [PERMISSION](./AGENT/PERMISSION.md).
+- Stats: lifetime Chat usage. Prompt-cache hit rate is `cacheRead / (input + cacheRead + cacheWrite)`, the same formula as the agent eval. Also show the pi `SessionStats.usage` totals (input, output, cache read/write, turn count). Cost is omitted; catalog prices are estimates and unknown prices are not zeroed.
+- `get_settings` and `update_settings` read and patch the four model slots, MCP, and Agent. Reads omit API keys and MCP env/headers. A key passed to `update_settings` is stored and remains in that chat. Basic and Standard ask before the write. An open Settings window reloads. Chat providers are configured in Settings → Models, not through these tools; instructions apply on the next message. Permission and stats stay out of these tools. See [PERMISSION](./AGENT/PERMISSION.md).

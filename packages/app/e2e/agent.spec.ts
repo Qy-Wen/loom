@@ -2,7 +2,7 @@ import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, test } from "./loom.ts";
+import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 function reply(response: ServerResponse, tool?: string, args = {}) {
 	response.writeHead(200, { "content-type": "text/event-stream" });
@@ -25,11 +25,8 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
 		const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`;
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-			await window.loom.setAgentPermission("basic");
-		}, url);
+		await saveChatEndpoint(loomPage, url);
+		await loomPage.evaluate(() => window.loom.setAgentPermission("basic"));
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
@@ -81,10 +78,7 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", contextWindow: 50_000, apiKey: "test", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 128_000 });
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
@@ -138,10 +132,7 @@ test(`editing ${editedQuestion} sends once on the new branch and streams before 
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
@@ -189,10 +180,7 @@ test("Electron streams successive turns after reasoning and durable user admissi
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
@@ -229,10 +217,7 @@ test("Electron shows partial text before the model finishes streaming", async ({
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 		const count = (await loomPage.evaluate(() => window.loom.listSessions())).length;
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
@@ -253,13 +238,13 @@ test("Electron shows partial text before the model finishes streaming", async ({
 		await loomPage.reload(); await indicator.click();
 		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.8% / 128k");
 		await loomPage.evaluate(async () => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { ...current.chat, contextWindow: 64_000 } });
+			const view = await window.loom.getChatSettings();
+			await window.loom.saveChatSettings({ ...view.config, default: { ...view.config.default!, thinkingLevel: "off" } });
 		});
 		await expect(loomPage.locator(".session-context-value")).toHaveText("~1.6% / 64k");
 		await loomPage.evaluate(async () => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { ...current.chat, enabled: false } });
+			const view = await window.loom.getChatSettings();
+			await window.loom.saveChatSettings({ ...view.config, default: undefined });
 		});
 		await expect(indicator).toHaveCount(0);
 	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
@@ -281,10 +266,7 @@ test("identical queued follow-ups are admitted once each and stop showing as que
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(loomPage.getByRole("tab", { name: "New session", exact: true, selected: true })).toBeVisible();
 		const composer = loomPage.getByRole("textbox");

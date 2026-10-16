@@ -1,7 +1,7 @@
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { fileURLToPath } from "node:url";
-import { expect, test } from "./loom.ts";
+import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 function reply(response: ServerResponse, image: boolean) {
 	response.writeHead(200, { "content-type": "text/event-stream" });
@@ -24,9 +24,8 @@ test("MCP tool images render live and after reloading the conversation", async (
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
 		await expect(loomPage.locator(".shell")).toBeVisible();
-		await loomPage.evaluate(async ({ baseUrl, command, script }) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await loomPage.evaluate(async ({ command, script }) => {
 			await window.loom.setAgentPermission("full");
 			const draft = {
 				id: "fixture", transport: "stdio" as const, command, argsText: `--experimental-strip-types\n${script}`,

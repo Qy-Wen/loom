@@ -688,3 +688,73 @@
 .settings-actions .primary-button:hover:not(:disabled) {
 	background: #3c4043;
 }
+
+/* Chat provider rows (Settings → Models) */
+.settings-chat-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	align-items: center;
+	margin: 8px 0;
+}
+
+.settings-chat-row button,
+.settings-chat-row select {
+	border: 1px solid #dadce0;
+	border-radius: 6px;
+	padding: 6px 10px;
+	background: #fff;
+	font: inherit;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.settings-chat-row button:hover:not(:disabled) {
+	background: #eeeeeb;
+}
+
+.settings-login-overlay {
+	position: fixed;
+	inset: 0;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	background: rgba(32, 33, 36, 0.45);
+	z-index: 40;
+}
+
+.settings-login-card {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	width: min(420px, 90vw);
+	padding: 18px;
+	border-radius: 10px;
+	background: #fff;
+	box-shadow: 0 12px 32px rgba(32, 33, 36, 0.25);
+}
+
+.settings-login-card h3 {
+	margin: 0;
+}
+
+.settings-login-card input,
+.settings-login-card select {
+	border: 1px solid #dadce0;
+	border-radius: 6px;
+	padding: 8px 10px;
+	font: inherit;
+}
+
+.settings-login-card button {
+	border: 1px solid #dadce0;
+	border-radius: 6px;
+	padding: 7px 12px;
+	background: #fff;
+	font: inherit;
+	cursor: pointer;
+}
+
+.settings-login-card button:hover:not(:disabled) {
+	background: #eeeeeb;
+}

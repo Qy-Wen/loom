@@ -7,7 +7,6 @@ import { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/conte
 import { Type } from "@earendil-works/pi-ai";
 import {
 	AssistantEntry,
-	buildChatModels,
 	createRegistry,
 	defineExtension,
 	defineTool,
@@ -17,13 +16,14 @@ import {
 	section,
 	type Harness as HarnessHandle,
 } from "@loom/agent/durable";
+import { evalChatModels, type EvalChatEndpoint } from "../evals/runtime.ts";
 
 async function main() {
 	const apiKey = process.env.LOOM_CHAT_API_KEY ?? process.env.DEEPSEEK_API_KEY;
 	if (!apiKey) throw new Error("Set LOOM_CHAT_API_KEY or DEEPSEEK_API_KEY in .env.");
-	const chat = {
+	const chat: EvalChatEndpoint = {
 		baseUrl: process.env.LOOM_CHAT_BASE_URL ?? "https://api.deepseek.com",
-		model: process.env.LOOM_CHAT_MODEL ?? "deepseek-v4-flash",
+		model: process.env.LOOM_CHAT_MODEL ?? "deepseek-chat",
 		apiKey,
 	};
 	const directory = await mkdtemp(join(tmpdir(), "loom-try-durable-"));
@@ -33,7 +33,7 @@ async function main() {
 	const timeout = setTimeout(() => controller.abort(new Error("Smoke test timed out")), 60_000);
 	let harness: HarnessHandle | undefined;
 	try {
-		const { models, model } = buildChatModels(chat);
+		const built = await evalChatModels(chat);
 		const registry = createRegistry();
 		let echoCalls = 0;
 		registry.install(defineExtension({
@@ -49,9 +49,9 @@ async function main() {
 			})],
 		}));
 		harness = await Harness.open(await openNodeSqliteStorage(file), {
-			models, registry, settings: { stream: { timeoutMs: 30_000 }, retry: { maxRetries: 0 } },
+			models: built.models, registry, settings: { stream: { timeoutMs: 30_000 }, retry: { maxRetries: 0 } },
 		}, context);
-		const root = await harness.root(context, { agent: { model: { provider: model.provider, modelId: model.id } } });
+		const root = await harness.root(context, { agent: { model: { provider: built.selection.provider, modelId: built.selection.modelId } } });
 		const draft = { type: "input", content: "Please echo the phrase: Loom is alive.", requestId: "smoke-1" } as const;
 		const submission = await root.submit(draft, context);
 		const settled = await submission.wait(context);
@@ -68,13 +68,13 @@ async function main() {
 		const rootId = root.id;
 		await harness.close(BACKGROUND_CONTEXT);
 		harness = undefined;
-		const reopenedModels = buildChatModels(chat);
-		harness = await Harness.open(await openNodeSqliteStorage(file), { models: reopenedModels.models, registry }, context);
-		const reopened = await harness.root(context);
-		assert.equal(reopened.id, rootId);
-		assert.deepEqual((await reopened.entries({ order: "ascending" }, 50, undefined, context)).items, entries);
+		const reopened = await evalChatModels(chat);
+		harness = await Harness.open(await openNodeSqliteStorage(file), { models: reopened.models, registry }, context);
+		const reopenedRoot = await harness.root(context);
+		assert.equal(reopenedRoot.id, rootId);
+		assert.deepEqual((await reopenedRoot.entries({ order: "ascending" }, 50, undefined, context)).items, entries);
 		assert.deepEqual(await harness.snapshot(ProviderDoc, rootId, context), provider);
-		assert.equal((await reopened.submit(draft, context)).id, submission.id);
+		assert.equal((await reopenedRoot.submit(draft, context)).id, submission.id);
 		assert.equal((await harness.submission(submission.id, context))?.id, submission.id);
 		console.log(`PASS: ${chat.model}: submit/wait, tool execution, SQLite reopen, persisted provider identity, request deduplication`);
 	} finally {

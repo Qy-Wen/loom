@@ -114,6 +114,23 @@ const api: LoomApi = {
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
 	probeModelSlot: (draft) => ipcRenderer.invoke(IPC.probeModelSlot, draft),
+	getChatSettings: () => ipcRenderer.invoke(IPC.getChatSettings),
+	saveChatSettings: (config) => ipcRenderer.invoke(IPC.saveChatSettings, config),
+	chatProviderCatalog: () => ipcRenderer.invoke(IPC.chatProviderCatalog),
+	chatLogin: (providerId, type) => ipcRenderer.invoke(IPC.chatLogin, providerId, type),
+	chatLoginResponse: (value) => ipcRenderer.invoke(IPC.chatLoginResponse, value),
+	chatCancelLogin: () => ipcRenderer.invoke(IPC.chatCancelLogin),
+	chatRefresh: () => ipcRenderer.invoke(IPC.chatRefresh),
+	onChatLoginPrompt: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, prompt: unknown) => listener(prompt as Parameters<typeof listener>[0]);
+		ipcRenderer.on(IPC.chatLoginPrompt, handler as Parameters<typeof ipcRenderer.on>[1]);
+		return () => ipcRenderer.removeListener(IPC.chatLoginPrompt, handler as Parameters<typeof ipcRenderer.removeListener>[1]);
+	},
+	onChatSettingsChanged: (listener) => {
+		const handler = () => listener();
+		ipcRenderer.on(IPC.chatSettingsChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.chatSettingsChanged, handler);
+	},
 	getMcpSettings: () => ipcRenderer.invoke(IPC.getMcpSettings),
 	saveMcpSettings: (servers) => ipcRenderer.invoke(IPC.saveMcpSettings, servers),
 	setMcpServerLive: (server) => ipcRenderer.invoke(IPC.setMcpServerLive, server),

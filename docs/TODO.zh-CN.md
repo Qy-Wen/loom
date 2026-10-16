@@ -2,9 +2,15 @@
 
 # TODO
 
-> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./AGENT.zh-CN.md)，模型端点见 [SETTINGS.md](./SETTINGS.zh-CN.md)，检索见 [RAG](./RAG/RAG.zh-CN.md)。
+> 平铺的待办清单。产品设计见 [PRODUCT.md](./PRODUCT.zh-CN.md)，Agent 方案见 [AGENT.md](./agent/AGENT.zh-CN.md)，模型端点见 [SETTINGS.md](./SETTINGS.zh-CN.md)，检索见 [RAG](./RAG/RAG.zh-CN.md)。
 > 只详细列最近几步，后续只做概述。
 > 创作工具（ComfyUI 以及以后的）以 MCP server 挂上。Loom 自管库：检索、FFmpeg、工作区工具。文件用 write/bash 落到库里，watcher 负责索引。
+
+---
+
+## 当前：Chat 完整接入 pi-ai
+
+已确认范围与分阶段清单见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。原生 Provider/目录、API Key/OAuth 登录、Chat 凭据加密与 Provider/默认值设置 UI 已上线生产；旧端点兼容已移除。应用默认值只影响新会话，其他模型槽位不变。剩余：会话级模型选择（P4）与 Windows/真实 OAuth 回归（P5）。
 
 ---
 
@@ -28,7 +34,7 @@
 
 ## 第四步：模型配置易用性
 
-降低模型配置门槛，让用户更容易完成服务商、模型和连接参数的选择与设置。
+Chat 配置已纳入当前的 [pi-ai 接入](./agent/CHAT_MODELS.zh-CN.md)。后续再降低其他模型槽位的配置门槛。
 
 ---
 

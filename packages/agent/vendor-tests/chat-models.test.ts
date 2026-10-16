@@ -8,32 +8,43 @@ import { test } from "node:test";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import {
 	AssistantEntry,
-	buildChatModels,
-	chatEndpointReady,
+	createChatCustomProvider,
 	createRegistry,
-	DEFAULT_CHAT_CONTEXT_WINDOW,
 	Harness,
 	openNodeSqliteStorage,
 	ProviderDoc,
 	watchEvents,
 	type AgentEvent,
 } from "@loom/agent/durable";
+import { createModels } from "@earendil-works/pi-ai/models";
+import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 
-test("buildChatModels preserves Loom endpoint configuration and auth", async () => {
-	assert.equal(chatEndpointReady(undefined), false);
-	assert.equal(chatEndpointReady({ baseUrl: " ", model: "demo" }), false);
-	assert.equal(chatEndpointReady({ baseUrl: "https://example.com", model: " " }), false);
-	assert.throws(() => buildChatModels({ baseUrl: " ", model: "demo" }), /Chat is not configured/);
-	const { models, model } = buildChatModels({ baseUrl: " https://example.com/v1/// ", model: " demo ", apiKey: " test-key ", contextWindow: 200_000 });
+/** Custom provider assembly around one OpenAI-compatible endpoint, with an in-memory key. */
+async function buildChatModels(endpoint: { baseUrl: string; model: string; apiKey?: string; contextWindow?: number }) {
+	const providerId = "loom-chat";
+	const credentials = new InMemoryCredentialStore();
+	if (endpoint.apiKey) await credentials.modify(providerId, async () => ({ type: "api_key", key: endpoint.apiKey }));
+	const models = createModels({ credentials, authContext: { env: async () => undefined, fileExists: async () => false } });
+	models.setProvider(createChatCustomProvider({
+		id: providerId, kind: "custom", enabled: true,
+		baseUrl: endpoint.baseUrl.trim().replace(/\/+$/, ""), api: "openai-completions", generation: { maxTokens: 8192 },
+		models: [{ id: endpoint.model.trim(), name: endpoint.model.trim(), reasoning: false, input: ["text", "image"], contextWindow: endpoint.contextWindow ?? 128_000, maxTokens: 8192, compat: { supportsStore: false, supportsDeveloperRole: false, maxTokensField: "max_tokens" } }],
+	}));
+	const model = models.getModel(providerId, endpoint.model.trim())!;
+	return { models, model };
+}
+
+test("custom Chat provider preserves endpoint configuration and auth", async () => {
+	const { models, model } = await buildChatModels({ baseUrl: "https://example.com/v1/", model: "demo", apiKey: "test-key", contextWindow: 200_000 });
 	assert.equal(model.baseUrl, "https://example.com/v1");
 	assert.equal(model.id, "demo");
 	assert.equal(model.api, "openai-completions");
 	assert.equal(model.contextWindow, 200_000);
 	assert.equal(model.maxTokens, 8192);
 	assert.deepEqual(model.input, ["text", "image"]);
-	assert.deepEqual(model.compat, { supportsStore: false, supportsDeveloperRole: false, maxTokensField: "max_tokens" });
-	assert.deepEqual(await models.getAuth(model), { auth: { apiKey: "test-key" }, source: "settings" });
-	assert.equal(buildChatModels({ baseUrl: "https://example.com", model: "demo" }).model.contextWindow, DEFAULT_CHAT_CONTEXT_WINDOW);
+	assert.equal((await models.getAuth(model))?.auth.apiKey, "test-key");
+	assert.equal((await models.getAuth(model))?.source, "stored credential");
+	assert.equal((await buildChatModels({ baseUrl: "https://example.com", model: "demo" })).model.contextWindow, 128_000);
 });
 
 test("Loom Chat uses OpenAI SSE on SQLite, restores context, and deduplicates after reopen", { timeout: 15_000 }, async () => {
@@ -62,10 +73,10 @@ test("Loom Chat uses OpenAI SSE on SQLite, restores context, and deduplicates af
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	const directory = await mkdtemp(join(tmpdir(), "loom-chat-sqlite-"));
 	const file = join(directory, "session.sqlite");
-	const endpoint = { baseUrl: ` http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/ `, model: " demo ", apiKey: " test-key " };
+	const endpoint = { baseUrl: ` http://127.0.0.1:${(server.address() as AddressInfo).port}/v1/ `, model: " demo ", apiKey: "test-key" };
 	let harness: Harness | undefined;
 	try {
-		const { models, model } = buildChatModels(endpoint);
+		const { models, model } = await buildChatModels(endpoint);
 		harness = await Harness.open(await openNodeSqliteStorage(file), { models, registry: createRegistry(), settings: { retry: { maxRetries: 0 } } }, BACKGROUND_CONTEXT);
 		const root = await harness.root(BACKGROUND_CONTEXT, { agent: { model: { provider: model.provider, modelId: model.id } } });
 		const stream = await watchEvents(harness, root.id, BACKGROUND_CONTEXT);
@@ -93,7 +104,7 @@ test("Loom Chat uses OpenAI SSE on SQLite, restores context, and deduplicates af
 		harness = undefined;
 
 		// Rebuild the model catalog as a fresh process would; SQLite supplies conversation state.
-		const next = buildChatModels(endpoint);
+		const next = await buildChatModels(endpoint);
 		harness = await Harness.open(await openNodeSqliteStorage(file), { models: next.models, registry: createRegistry() }, BACKGROUND_CONTEXT);
 		const reopened = await harness.root(BACKGROUND_CONTEXT);
 		assert.equal(reopened.id, rootId);

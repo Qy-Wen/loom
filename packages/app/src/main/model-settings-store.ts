@@ -1,20 +1,16 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import type { LoomChatEndpoint } from "@loom/agent";
 import {
 	MODEL_SLOTS,
 	type ModelSettingsDraft,
+	type ModelSlotId,
 	type ModelSettingsFile,
 	type ModelSettingsView,
-	type ModelSlotDraft,
 	type ModelSlotRecord,
 	type ModelSlotView,
 	emptySettingsFile,
 } from "../shared/model-settings.ts";
-
-const DEEPSEEK_CHAT_URL = "https://api.deepseek.com";
-const DEEPSEEK_CHAT_MODEL = "deepseek-v4-flash";
 
 export function emptySlot(): ModelSlotRecord {
 	return { baseUrl: "", apiKey: "", model: "", enabled: false };
@@ -23,18 +19,11 @@ export function emptySlot(): ModelSlotRecord {
 function asRecord(value: unknown): ModelSlotRecord {
 	if (!value || typeof value !== "object") return emptySlot();
 	const row = value as Partial<ModelSlotRecord>;
-	const baseUrl = typeof row.baseUrl === "string" ? row.baseUrl : "";
-	const apiKey = typeof row.apiKey === "string" ? row.apiKey : "";
-	const model = typeof row.model === "string" ? row.model : "";
-	const contextWindow = typeof row.contextWindow === "number" && Number.isSafeInteger(row.contextWindow) && row.contextWindow > 0
-		? row.contextWindow
-		: undefined;
 	return {
-		baseUrl,
-		apiKey,
-		model,
-		enabled: typeof row.enabled === "boolean" ? row.enabled : Boolean(baseUrl.trim() && model.trim()),
-		...(contextWindow !== undefined ? { contextWindow } : {}),
+		baseUrl: typeof row.baseUrl === "string" ? row.baseUrl : "",
+		apiKey: typeof row.apiKey === "string" ? row.apiKey : "",
+		model: typeof row.model === "string" ? row.model : "",
+		enabled: typeof row.enabled === "boolean" ? row.enabled : Boolean((row.baseUrl ?? "").trim() && (row.model ?? "").trim()),
 	};
 }
 
@@ -51,7 +40,6 @@ export function slotView(slot: ModelSlotRecord): ModelSlotView {
 		model: slot.model,
 		apiKey: slot.apiKey,
 		enabled: slot.enabled,
-		...(slot.contextWindow !== undefined ? { contextWindow: slot.contextWindow } : {}),
 	};
 }
 
@@ -61,16 +49,12 @@ export function settingsView(file: ModelSettingsFile): ModelSettingsView {
 	return next;
 }
 
-export function applySlotDraft(current: ModelSlotRecord, draft: ModelSlotDraft): ModelSlotRecord {
-	const contextWindow = typeof draft.contextWindow === "number" && Number.isSafeInteger(draft.contextWindow) && draft.contextWindow > 0
-		? draft.contextWindow
-		: undefined;
+export function applySlotDraft(current: ModelSlotRecord, draft: ModelSettingsDraft[ModelSlotId]): ModelSlotRecord {
 	const next = {
 		baseUrl: draft.baseUrl.trim(),
 		model: draft.model.trim(),
 		apiKey: current.apiKey,
 		enabled: draft.enabled,
-		...(contextWindow !== undefined ? { contextWindow } : {}),
 	};
 	if (draft.clearApiKey) next.apiKey = "";
 	else if (draft.apiKey !== undefined) next.apiKey = draft.apiKey;
@@ -81,57 +65,6 @@ export function applySettingsDraft(current: ModelSettingsFile, draft: ModelSetti
 	const next = emptySettingsFile();
 	for (const id of MODEL_SLOTS) next[id] = applySlotDraft(current[id], draft[id]);
 	return next;
-}
-
-/** First save of the .env Chat prefill must persist the key, not only URL + model. */
-export function copyBootstrapChatKey(
-	next: ModelSettingsFile,
-	draft: ModelSettingsDraft,
-	env: NodeJS.ProcessEnv = process.env,
-): void {
-	if (draft.chat.clearApiKey || draft.chat.apiKey !== undefined) return;
-	if (next.chat.apiKey.trim()) return;
-	const boot = resolveChatEndpoint(emptySettingsFile(), env, true);
-	if (!boot?.apiKey) return;
-	if (next.chat.baseUrl !== boot.baseUrl || next.chat.model !== boot.model) return;
-	next.chat.apiKey = boot.apiKey;
-}
-
-/** Chat from saved settings, or DeepSeek env only before the user has saved Settings. */
-export function resolveChatEndpoint(
-	file: ModelSettingsFile,
-	env: NodeJS.ProcessEnv = process.env,
-	allowEnvBootstrap = true,
-): LoomChatEndpoint | undefined {
-	const saved = file.chat;
-	if (saved.baseUrl.trim() && saved.model.trim()) {
-		if (!saved.enabled) return undefined;
-		return {
-			baseUrl: saved.baseUrl.trim(),
-			model: saved.model.trim(),
-			apiKey: saved.apiKey.trim() || undefined,
-			...(saved.contextWindow !== undefined ? { contextWindow: saved.contextWindow } : {}),
-		};
-	}
-	if (!allowEnvBootstrap) return undefined;
-	const bootstrap = env.DEEPSEEK_API_KEY?.trim();
-	if (!bootstrap) return undefined;
-	return {
-		baseUrl: DEEPSEEK_CHAT_URL,
-		model: DEEPSEEK_CHAT_MODEL,
-		apiKey: bootstrap,
-	};
-}
-
-export function bootstrapChatView(
-	file: ModelSettingsFile,
-	env: NodeJS.ProcessEnv = process.env,
-	allowEnvBootstrap = true,
-): ModelSlotView {
-	const chat = resolveChatEndpoint(file, env, allowEnvBootstrap);
-	if (!chat) return slotView(file.chat);
-	if (file.chat.baseUrl.trim() && file.chat.model.trim()) return slotView(file.chat);
-	return { baseUrl: chat.baseUrl, model: chat.model, apiKey: chat.apiKey ?? "", enabled: true };
 }
 
 export class ModelSettingsStore {
@@ -155,10 +88,8 @@ export class ModelSettingsStore {
 		await writeFile(this.filePath, `${JSON.stringify(file, null, "\t")}\n`, "utf8");
 	}
 
-	async update(draft: ModelSettingsDraft, env: NodeJS.ProcessEnv = process.env): Promise<ModelSettingsFile> {
-		const existed = this.exists();
+	async update(draft: ModelSettingsDraft): Promise<ModelSettingsFile> {
 		const next = applySettingsDraft(await this.load(), draft);
-		if (!existed) copyBootstrapChatKey(next, draft, env);
 		await this.save(next);
 		return next;
 	}
@@ -167,14 +98,7 @@ export class ModelSettingsStore {
 		return existsSync(this.filePath);
 	}
 
-	async view(env: NodeJS.ProcessEnv = process.env): Promise<ModelSettingsView> {
-		const file = await this.load();
-		const view = settingsView(file);
-		view.chat = bootstrapChatView(file, env, !this.exists());
-		return view;
-	}
-
-	async chat(env: NodeJS.ProcessEnv = process.env): Promise<LoomChatEndpoint | undefined> {
-		return resolveChatEndpoint(await this.load(), env, !this.exists());
+	async view(): Promise<ModelSettingsView> {
+		return settingsView(await this.load());
 	}
 }

@@ -1,4 +1,4 @@
-import { expect, test } from "./loom.ts";
+import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 /** Optional live acceptance; never log the key or request payload. */
 test("real Chat model streams both first and subsequent turns before RUN_FINISHED", async ({ loomPage }) => {
@@ -6,13 +6,21 @@ test("real Chat model streams both first and subsequent turns before RUN_FINISHE
 	test.setTimeout(150_000);
 	const chat = {
 		baseUrl: process.env.LOOM_CHAT_BASE_URL?.trim() || "https://api.deepseek.com",
-		model: process.env.LOOM_CHAT_MODEL?.trim() || "deepseek-v4-flash",
+		model: process.env.LOOM_CHAT_MODEL?.trim() || "deepseek-chat",
 		apiKey: process.env.LOOM_CHAT_API_KEY?.trim() || process.env.DEEPSEEK_API_KEY?.trim(),
 	};
 	if (!chat.apiKey) throw new Error("A Chat API key is required for live acceptance");
-	await loomPage.evaluate(async (chat) => {
-		const current = await window.loom.getModelSettings();
-		await window.loom.saveModelSettings({ ...current, chat: { ...chat, enabled: true } });
+	await saveChatEndpoint(loomPage, chat.baseUrl, { model: chat.model });
+	// Feed the API key into the custom provider's login prompt automatically.
+	await loomPage.evaluate(async (apiKey) => {
+		const answer = new Promise<void>((resolve) => {
+			const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
+				if (prompt.type === "secret") { void window.loom.chatLoginResponse(apiKey); resolve(); }
+			});
+			setTimeout(() => { unsubscribe(); resolve(); }, 10_000);
+		});
+		const login = window.loom.chatLogin("e2e-chat", "api_key");
+		await answer; await login;
 		const original = window.fetch;
 		const progress = { finished: false, partialBeforeFinish: false };
 		(window as unknown as { liveProgress: typeof progress }).liveProgress = progress;
@@ -43,7 +51,7 @@ test("real Chat model streams both first and subsequent turns before RUN_FINISHE
 			}
 			return response;
 		};
-	}, chat);
+	}, chat.apiKey);
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 	const count = (await loomPage.evaluate(() => window.loom.listSessions())).length;
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();

@@ -7,6 +7,19 @@ import { fileURLToPath } from "node:url";
 import { test as base, chromium, expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
 
+/** Point the app's Chat runtime at an OpenAI-compatible test endpoint (keyless custom provider). */
+export async function saveChatEndpoint(page: Page, baseUrl: string, options: { model?: string; contextWindow?: number } = {}): Promise<void> {
+	await page.evaluate(async ({ baseUrl, model, contextWindow }) => {
+		const view = await window.loom.getChatSettings();
+		const providers = view.config.providers.filter((provider) => provider.id !== "e2e-chat");
+		providers.push({
+			kind: "custom", id: "e2e-chat", enabled: true, baseUrl, api: "openai-completions", allowUnauthenticated: true,
+			models: [{ id: model ?? "demo", reasoning: false, input: ["text"], contextWindow: contextWindow ?? 128_000, maxTokens: 8192 }],
+		});
+		await window.loom.saveChatSettings({ ...view.config, providers, default: { provider: "e2e-chat", modelId: model ?? "demo", thinkingLevel: "off" } });
+	}, { baseUrl, model: options.model, contextWindow: options.contextWindow });
+}
+
 const require = createRequire(import.meta.url);
 const appRoot = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9344";

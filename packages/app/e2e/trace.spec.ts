@@ -5,7 +5,7 @@ import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { test, expect } from "@playwright/test";
 import type { ElectronApplication, Page } from "playwright";
-import { launchTestElectron } from "./loom.ts";
+import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 test("trace window updates live and reads persisted runs after Electron restarts", async () => {
 	test.skip(process.env.LOOM_E2E_TRACE !== "1", "build with LOOM_E2E_TRACE=1 for isolated trace-window acceptance");
@@ -34,10 +34,7 @@ test("trace window updates live and reads persisted runs after Electron restarts
 		await writeFile(join(userData, "general.json"), JSON.stringify({ language: "en", reopenLastLibrary: true }));
 		app = await launchTestElectron(userData); let page = await app.firstWindow();
 		await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
-		await page.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "trace-private-key", enabled: true } });
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		let trace = await openTrace(page);
 		for (let turn = 1; turn <= 2; turn++) {
 			await page.getByRole("textbox").fill(`trace question ${turn}`); await page.getByRole("textbox").press("Enter");

@@ -1,6 +1,4 @@
 // The only Loom import boundary for vendored durable. Keep assembly in separate modules.
-export { buildChatModels, chatEndpointReady, DEFAULT_CHAT_CONTEXT_WINDOW } from "./pi-adapter.ts";
-export type { LoomChatEndpoint } from "./types.ts";
 export * from "#vendor/pi-durable";
 export {
 	CodingTools,

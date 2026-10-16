@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import type { ElectronApplication } from "playwright";
-import { launchTestElectron } from "./loom.ts";
+import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 function reply(response: ServerResponse, tool?: string, args = {}) {
 	response.writeHead(200, { "content-type": "text/event-stream" });
@@ -46,11 +46,8 @@ test("hard-killed Electron recovers the same owned child and asks for approval a
 		let page = await app.firstWindow();
 		await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
 		const session = (await page.evaluate(() => window.loom.listSessions()))[0]!;
-		await page.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-			await window.loom.setAgentPermission("basic");
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await page.evaluate(() => window.loom.setAgentPermission("basic"));
 		await page.getByRole("textbox").fill("Recover this task"); await page.getByRole("textbox").press("Enter");
 		await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
 		const childBefore = (await page.getByRole("button", { name: "write waiting", exact: true }).count());
@@ -106,12 +103,11 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 			let page = await app.firstWindow();
 			await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
 			const session = (await page.evaluate(() => window.loom.listSessions()))[0]!;
-			await page.evaluate(async (baseUrl) => {
-				const current = await window.loom.getModelSettings();
-				await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
+			await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+			await page.evaluate(async () => {
 				await window.loom.setAgentPermission("full");
 				await window.loom.saveAgentSandbox(false);
-			}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+			});
 			await page.getByRole("textbox").fill(`Crash during ${boundary}`); await page.getByRole("textbox").press("Enter");
 			if (boundary === "streaming") await expect(page.getByText("Unfinished before crash", { exact: true })).toBeVisible();
 			else await expect.poll(() => readFile(join(library, "started.txt"), "utf8").catch(() => "")).toBe("started");

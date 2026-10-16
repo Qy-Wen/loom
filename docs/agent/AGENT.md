@@ -4,6 +4,8 @@
 
 Loom's creative-asset agent runs on vendored `pi-durable`. Model/provider integration uses npm `pi-ai`; AG-UI is the frontend protocol. See [MIGRATION](./MIGRATION.md), [EVALS](./EVALS.md), [MEMORY](./MEMORY.md), and [PERMISSION](./PERMISSION.md).
 
+Chat Provider/catalog/auth integration and provider login are live: [CHAT_MODELS](./CHAT_MODELS.md). Per-conversation model selection remains in progress; the architecture below describes current behavior.
+
 ## 1. Boundaries
 
 ```
@@ -26,7 +28,7 @@ Vendor: pi-durable + pi-codemode
 
 | Responsibility | Modules |
 |---|---|
-| Native boundary and model configuration | `index`, `durable`, `durable-adapter`, `pi-adapter` |
+| Native boundary and model configuration | `index`, `durable`, `durable-adapter`, `chat-provider` |
 | Library owner and conversation metadata | `library-agent`, `conversation-metadata`, `session-title` |
 | Tools, specialists, permissions | `pi-tools`, `specialist`, `tool-gate`, `tool-permission`, `workspace-path` |
 | Prompt sections | `library-extension`, `library-auto-memory`, `library-skills` |
@@ -56,7 +58,7 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 - `LibraryAgent.open(root, options, context)` opens `<library>/.loom/loom.sqlite` with `node:sqlite`, creating one Harness and Registry. Close delegates to durable and leaves unfinished tasks recoverable.
 - Canonical-path reservation prevents duplicate owners within a process. Electron uses an app single-instance lock; other programs must not open the same store as a second active owner. WAL is not owner coordination. Windows runtime validation remains pending.
 - `LibraryAgentHost` installs resources before `resume()`, clears stale approval documents, records the usage baseline, then resumes native recovery.
-- New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Model/instruction edits configure existing conversations and update defaults for subsequent chats; tools replace registry extensions in place.
+- New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Default model changes affect only subsequent new conversations; existing conversations keep their saved selection. Tools replace registry extensions in place.
 - `LoomConversationDoc` stores latest title/archive/hidden/creation metadata outside model context. Forks append `（分支）`, clear archive/hidden, and leave the source unchanged.
 - Chat DTOs paginate native fork-aware `conversation.entries()` history, not compacted `context().entries`. Compaction summaries are not user messages. List/record timestamps use the last non-system, non-compaction message.
 - Fork-before finds the preceding entry in full history, including a start anchor for the first question and messages removed from model context by compaction. Branch-before creates the fork and archives the source. Closing an empty conversation (no chat messages or pending input) hides it without adding History; conversations with messages are archived. Internal start/system entries do not count as chat; inherited fork messages do. Delete hides the conversation, preserving ancestry and files already written.

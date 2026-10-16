@@ -19,7 +19,6 @@ export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResul
 		if (!model) throw new Error("Model is required");
 		const apiKey = draft.apiKey?.trim() ?? "";
 		switch (draft.slot) {
-			case "chat":
 			case "vlm":
 			case "audio":
 				await probeChatLike(baseUrl, model, apiKey);

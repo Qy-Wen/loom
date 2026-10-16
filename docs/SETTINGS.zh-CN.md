@@ -8,13 +8,18 @@
 
 ---
 
+## Chat 模型
+
+Chat 不再是表单槽位。设置 → Models 顶部是 Provider 式的 Chat 区域：登录原生 pi-ai Provider（API Key 或 OAuth，凭据用系统钥匙串加密存于 `chat-credentials.json`）、添加 OpenAI 兼容自定义端点、选择默认模型和思考等级、刷新动态目录。配置存 `chat-models.json`，即时保存。应用默认值只影响新独立会话。没有已保存配置时，`DEEPSEEK_API_KEY` 会一次性启用原生 DeepSeek Provider。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
+
 ## 模型槽位
+
+其余四个槽位（Embedding、Rerank、VLM、Audio）共用一套表单：
 
 一个设置页。每种角色同一套表单。本地和远程字段相同：URL 指本机就是本地；远程供应商是同一套 HTTP，外加 API key。
 
 | 槽位 | 用途 | 报文 |
 |---|---|---|
-| Chat | Agent 循环 | OpenAI 兼容 `POST /v1/chat/completions`。和其它槽位一样填 `baseUrl`、可选 API key、`model`。输入框贴的是库引用，不发 `image_url`。不写死 DeepSeek。 |
 | Text embedding | 文本 RAG 索引 | OpenAI 兼容 `POST /v1/embeddings` |
 | Rerank | Hybrid Search 融合后再排一次 | Cohere/Jina `POST /v1/rerank`（`query` + `documents`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`。可选。 |
 | VLM | 图片 caption / 标签；视频文件级说明 | 和 Chat 一样走 OpenAI 兼容 `POST /v1/chat/completions`。图片用 `image_url`。视频能 native 就带 video 部分；否则 FFmpeg 抽帧再当 `image_url`。只做视觉。 |
@@ -27,7 +32,7 @@
 - `model`
 - `enabled`（每个槽位右边的开关）
 
-打开开关会 ping（先 `GET /v1/models`，没有这个路由再发一个很小的 POST）。通了绿灯，失败红灯并写出原因。保存只写配置文件，不负责连服务。关掉的 Chat / Embedding / Rerank / VLM / Audio 运行时不会用。旧文件没有 `enabled` 时，只要已经填了 URL 和 model，就当作开着。
+打开开关会 ping（先 `GET /v1/models`，没有这个路由再发一个很小的 POST）。通了绿灯，失败红灯并写出原因。保存只写配置文件，不负责连服务。关掉的 Embedding / Rerank / VLM / Audio 运行时不会用。旧文件没有 `enabled` 时，只要已经填了 URL 和 model，就当作开着。
 
 Loom 不加载、不运行模型。只当 HTTP 客户端。
 
@@ -61,7 +66,6 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - 上次打开的素材库路径记在应用用户数据 `last-library.json`。通用设置允许时，启动会在目录还在的情况下自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
 - `<library>/.loom/config.json` 只放库级偏好。
 - 密钥留在应用用户数据，不进素材库。设置页默认掩码（`••••`），旁边眼睛可显示明文。以后可以再进系统钥匙串。
-- Chat 和 Embedding 一样由用户配置。Chat 槽位为空时，Main 可以从 `.env`（`DEEPSEEK_API_KEY` 和 DeepSeek 的 `baseUrl`）预填一次，方便现有开发环境启动。用户保存 Chat 之后，只认这个槽位。
 
 ---
 
@@ -73,5 +77,5 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [MEDIA.md](./RAG/MEDIA.zh-CN.md)。改 Audio 的 `model` 会使已有音频说明作废。
 - MCP：加减 server。表单按 Cursor `mcp.json` 来：名字，然后本地填 `command` + `args`，远程填 `url`。Env / headers / cwd 放在 Advanced。开关连接或断开那一台。**Save** 同时写入通用、Models、MCP 和 Agent。启动时只连已开启的 server。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。默认空列表；ComfyUI 只是其中一种，不是内置。
 - Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。大约 40000 字，超出则 Save 拒绝。检索专职和生成专职拿不到这段。**Save** 同时写入通用、Models、MCP 和 Agent。
-- Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；当前 Chat 槽位没有标价。
-- `get_settings` 和 `update_settings` 读取并修改 Models、MCP、Agent。读取不返回 API key，也不返回 MCP 的 env / headers。写进 `update_settings` 的钥匙会保存，同时留在那条对话里。Basic 和 Standard 在写入前要确认。设置窗口开着时会重新加载。Chat 和 Instructions 从下一条消息起生效。权限档位和用量不走这两个工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
+- Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。
+- `get_settings` 和 `update_settings` 读取并修改四个模型槽位、MCP、Agent。读取不返回 API key，也不返回 MCP 的 env / headers。写进 `update_settings` 的钥匙会保存，同时留在那条对话里。Basic 和 Standard 在写入前要确认。设置窗口开着时会重新加载。Chat Provider 在设置 → Models 配置，不走这两个工具；Instructions 从下一条消息起生效。权限档位和用量不走这两个工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。

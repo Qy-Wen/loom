@@ -10,6 +10,7 @@
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:node-sqlite": "node scripts/check-node-sqlite.cjs",
+    "check:chat-platform": "node scripts/check-chat-platform.cjs",
     "test": "node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test --test-force-exit tests/*.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:attach": "playwright test"
@@ -19,6 +20,7 @@
     "@ag-ui/core": "1.0.1",
     "@anthropic-ai/sandbox-runtime": "0.0.78",
     "@copilotkit/runtime": "1.77.0",
+    "@earendil-works/pi-ai": "1.1.0",
     "@ladybugdb/wasm-core": "0.20.4",
     "@loom/agent": "workspace:*",
     "@loom/core": "workspace:*",
@@ -26,6 +28,7 @@
     "@silvia-odwyer/photon": "0.3.3",
     "better-sqlite3": "13.0.3",
     "markdown-it": "15.0.2",
+    "proper-lockfile": "4.1.2",
     "rxjs": "7.8.1",
     "sqlite-vec": "0.1.9"
   },
@@ -42,6 +45,7 @@
     "@types/katex": "^0.16.8",
     "@types/markdown-it": "14.2.0",
     "@types/node": "22.19.19",
+    "@types/proper-lockfile": "4.1.4",
     "@types/react": "19.2.2",
     "@types/react-dom": "19.2.1",
     "@vitejs/plugin-react": "5.2.0",

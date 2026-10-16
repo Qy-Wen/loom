@@ -5,8 +5,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { BACKGROUND_CONTEXT as context } from "@loom/agent";
+import { createModels } from "@earendil-works/pi-ai/models";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
-import { launchTestElectron } from "./loom.ts";
+import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 test("large saved tool results do not duplicate user bubbles or interrupt subsequent streamed replies", async () => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated library required");
@@ -28,8 +29,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	const chat = { baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, model: "demo", apiKey: "test", contextWindow: 100_000_000, enabled: true };
-	const host = new LibraryAgentHost({});
+	const host = new LibraryAgentHost({ models: createModels() });
 	let app: Awaited<ReturnType<typeof launchTestElectron>> | undefined;
 	try {
 		await mkdir(library);
@@ -59,10 +59,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 			if (response.headers()["content-type"]?.includes("text/event-stream")) void response.body().then((body) => streamSizes.push(body.length)).catch(() => {});
 		});
 		await expect(page.getByRole("tab", { name: "Large history", selected: true, exact: true })).toBeVisible();
-		await page.evaluate(async (chat) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat });
-		}, chat);
+		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 100_000_000 });
 		const question = "Ask the same question again";
 		const bubbles = page.getByTestId("copilot-user-message").filter({ hasText: question });
 		for (let turn = 0; turn < 2; turn++) {

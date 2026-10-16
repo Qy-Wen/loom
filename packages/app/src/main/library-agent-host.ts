@@ -1,11 +1,19 @@
 import {
-	BACKGROUND_CONTEXT as context, buildChatModels, chatEndpointReady, clearPendingApprovals,
-	createLibraryExtension, createModels, createSpecialistExtension, createToolResultStorage, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
+	BACKGROUND_CONTEXT as context, clearPendingApprovals,
+	createLibraryExtension, createSpecialistExtension, createToolResultStorage, partitionLibraryTools, createWorkspaceTools, toDurableTool, LibraryAgent, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	DurableTrace, TraceStore, type LoomTraceRecord,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
-import type { LoomAgentOptions, LoomChatEndpoint, LoomTool } from "@loom/agent";
+import type { LoomAgentOptions, LoomTool } from "@loom/agent";
+import type { Models } from "@earendil-works/pi-ai/models";
+import type { ChatSelection } from "@loom/agent/chat-models";
+
+export type LibraryAgentHostOptions = LoomAgentOptions & {
+	/** The app owns the execution collection; the Host never builds Providers. */
+	models: Models;
+	chatDefault?: ChatSelection;
+};
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
 
 const idOf = <T extends ConversationId | EntryId>(id: string): T => {
@@ -18,7 +26,7 @@ const idOf = <T extends ConversationId | EntryId>(id: string): T => {
 export class LibraryAgentHost {
 	owner: LibraryAgent | undefined;
 	readonly gate = new ToolGate();
-	readonly #options: LoomAgentOptions;
+	readonly #options: LibraryAgentHostOptions;
 	#instructions = "";
 	readonly #agentDefaults: { -readonly [Key in keyof AgentChange]: AgentChange[Key] } = {};
 	#unsubscribe: (() => void) | undefined;
@@ -32,7 +40,15 @@ export class LibraryAgentHost {
 	setTracePublisher(publish: (record: LoomTraceRecord | null) => void) { this.#tracePublisher = publish; }
 	listTraces(limit = 40, before?: { at: number; id: string }): LoomTraceRecord[] { return this.#trace?.store.list(limit, before) ?? []; }
 
-	constructor(options: LoomAgentOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
+	constructor(options: LibraryAgentHostOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
+	readonly #chatSecrets = new Set<string>();
+	setChatSecrets(values: readonly string[]) { for (const value of values) if (value) this.#chatSecrets.add(value); this.#trace?.setSecrets([...this.#chatSecrets]); }
+	/** Changes defaults only: existing conversations/forks/owned agents are never configured here. */
+	setChatDefault(selection: ChatSelection | undefined) {
+		this.#options.chatDefault = selection && structuredClone(selection);
+		this.#agentDefaults.model = selection ? { provider: selection.provider, modelId: selection.modelId } : undefined;
+		this.#agentDefaults.thinkingLevel = selection?.thinkingLevel;
+	}
 	getPermissionLevel() { return this.gate.level; }
 	setPermissionLevel(level: AgentPermissionLevel) { this.gate.setLevel(level); }
 	setCommandAllows(allows: readonly CommandAllow[]) { this.gate.allows = allows; }
@@ -42,18 +58,16 @@ export class LibraryAgentHost {
 
 	async openLibrary(root: string): Promise<void> {
 		await this.close();
-		const ready = chatEndpointReady(this.#options.chat);
-		const chat = ready ? buildChatModels(this.#options.chat!) : undefined;
 		if (this.#tracePublisher) {
 			try {
 				this.#trace = new DurableTrace(await TraceStore.open(root), (record) => this.#tracePublisher?.(record), () => { /* Diagnostics must not fail a run. */ });
-				this.#trace.setSecrets(this.#options.chat?.apiKey ? [this.#options.chat.apiKey] : []);
+				this.#trace.setSecrets([...this.#chatSecrets]);
 			} catch { /* A read-only/unavailable diagnostic store does not prevent opening Chat. */ }
 		}
 		const permission = this.gate.extension(root, () => this.requireOwner().harness);
 		const { assembly, specialists, sharedExtensions } = await this.assemble(root, permission);
-		this.#models = chat?.models ?? createModels();
-		this.#agentDefaults.model = chat ? { provider: chat.model.provider, modelId: chat.model.id } : undefined;
+		this.#models = this.#options.models;
+		this.setChatDefault(this.#options.chatDefault);
 		this.#agentDefaults.instructions = this.#instructions;
 		try { this.owner = await LibraryAgent.open(root, {
 			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...specialists, ...sharedExtensions],
@@ -175,24 +189,31 @@ export class LibraryAgentHost {
 		await this.archiveSession(id);
 		return fork;
 	}
-	async setChat(chat: LoomChatEndpoint | undefined) {
-		this.#options.chat = chat;
-		this.#trace?.setSecrets(chat?.apiKey ? [chat.apiKey] : []);
+	#models: Models | undefined;
+	/** Guard Provider edits/publication atomically against public Session admission; no scheduler queue. */
+	async withIdleChatProviders<T>(ids: readonly string[], operation: () => Promise<T>): Promise<T> {
 		const owner = this.owner;
-		if (!owner) return;
-		const built = chatEndpointReady(chat) ? buildChatModels(chat) : undefined;
-		this.#agentDefaults.model = built ? { provider: built.model.provider, modelId: built.model.id } : undefined;
-		// Provider object replacement is supported without replacing the Harness's Models collection.
-		if (built) {
-			this.#models?.setProvider(built.models.getProvider(built.model.provider)!);
-			for (const row of await listLoomConversations(owner.harness, { includeOwned: true }, context)) {
-				await (await owner.harness.conversation(row.id, context))!.configure({ model: { provider: built.model.provider, modelId: built.model.id } }, context);
-			}
-		} else this.#models?.deleteProvider("loom-chat");
-		// Context-window-only edits and disabling Chat may not change pi.agent.
-		await this.publish();
+		if (!owner || !ids.length) return operation();
+		return owner.harness.commit(async (tx) => {
+			let cursor: Cursor | undefined;
+			do {
+				const page = await tx.scanConversations({}, 256, cursor);
+				for (const record of page.items) {
+					const agent = await tx.doc(AgentDoc, record.id);
+					if (!agent.model || !ids.includes(agent.model.provider)) continue;
+					const live = await tx.doc(LiveDoc, record.id);
+					const inbox = await tx.doc(InboxDoc, record.id);
+					if (live.run || inbox.items.length) throw new Error("Chat provider is busy");
+					for (const status of ["pending", "running", "waiting", "completing"] as const) {
+						if ((await tx.scanTasks({ conversationId: record.id, status }, 1)).items.length) throw new Error("Chat provider is busy");
+					}
+				}
+				cursor = page.next;
+			} while (cursor !== undefined);
+			// This callback must not call Harness/Session APIs while their public mutation line is held.
+			return operation();
+		}, context);
 	}
-	#models: ReturnType<typeof createModels> | undefined;
 	async setInstructions(text: string) {
 		this.#instructions = text;
 		this.#agentDefaults.instructions = text;

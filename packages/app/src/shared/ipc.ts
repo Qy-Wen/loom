@@ -31,6 +31,34 @@ import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
 import type { GeneralSettings } from "./general-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
+import type { ChatModelsConfig, ChatThinkingLevel } from "@loom/agent/chat-models";
+import type { ChatAuthStatus, ChatModelView } from "./chat-models.ts";
+
+export type ChatSettingsView = {
+	config: ChatModelsConfig;
+	models: ChatModelView[];
+	auth: ChatAuthStatus[];
+	refreshErrors: Record<string, string>;
+};
+
+/** Built-in provider catalog row for the settings UI. */
+export type ChatProviderCatalogEntry = {
+	id: string;
+	name: string;
+	apiKeyAuth: boolean;
+	oauthAuth: boolean;
+};
+
+/** Login prompt forwarded from Main to the renderer during a login flow. */
+export type ChatLoginPrompt =
+	| { type: "text"; message: string; placeholder?: string }
+	| { type: "secret"; message: string; placeholder?: string }
+	| { type: "select"; message: string; options: { id: string; label: string; description?: string }[] }
+	| { type: "manual_code"; message: string; placeholder?: string }
+	| { type: "auth_url"; url: string; instructions?: string }
+	| { type: "device_code"; userCode: string; verificationUri: string; intervalSeconds?: number; expiresInSeconds?: number }
+	| { type: "info"; message: string; links?: { url: string; label?: string }[] }
+	| { type: "progress"; message: string };
 
 export type AssetContextAction =
 	| "add_to_chat"
@@ -141,6 +169,15 @@ export const IPC = {
 	getModelSettings: "loom:getModelSettings",
 	saveModelSettings: "loom:saveModelSettings",
 	probeModelSlot: "loom:probeModelSlot",
+	getChatSettings: "loom:getChatSettings",
+	saveChatSettings: "loom:saveChatSettings",
+	chatProviderCatalog: "loom:chatProviderCatalog",
+	chatLogin: "loom:chatLogin",
+	chatLoginPrompt: "loom:chatLoginPrompt",
+	chatLoginResponse: "loom:chatLoginResponse",
+	chatCancelLogin: "loom:chatCancelLogin",
+	chatRefresh: "loom:chatRefresh",
+	chatSettingsChanged: "loom:chatSettingsChanged",
 	getMcpSettings: "loom:getMcpSettings",
 	saveMcpSettings: "loom:saveMcpSettings",
 	setMcpServerLive: "loom:setMcpServerLive",
@@ -259,6 +296,17 @@ export interface LoomApi {
 	getModelSettings: () => Promise<ModelSettingsView>;
 	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
 	probeModelSlot: (draft: ModelProbeDraft) => Promise<ProbeResult>;
+	getChatSettings: () => Promise<ChatSettingsView>;
+	saveChatSettings: (config: ChatModelsConfig) => Promise<ChatSettingsView>;
+	chatProviderCatalog: () => Promise<ChatProviderCatalogEntry[]>;
+	/** Resolves when the whole flow settles; prompts arrive via onChatLoginPrompt. */
+	chatLogin: (providerId: string, type: "api_key" | "oauth") => Promise<void>;
+	/** Answer the pending prompt; rejects when no prompt is pending. */
+	chatLoginResponse: (value: string) => Promise<void>;
+	chatCancelLogin: () => Promise<void>;
+	chatRefresh: () => Promise<ChatSettingsView>;
+	onChatLoginPrompt: (listener: (prompt: ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" }) => void) => () => void;
+	onChatSettingsChanged: (listener: () => void) => () => void;
 	getMcpSettings: () => Promise<McpSettingsView>;
 	saveMcpSettings: (servers: McpServerDraft[]) => Promise<McpSettingsView>;
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;

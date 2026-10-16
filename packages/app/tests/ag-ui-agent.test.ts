@@ -8,6 +8,7 @@ import { EventType } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
 import { lastValueFrom, timeout, toArray } from "rxjs";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
 import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
 import { DurableAgentRunner } from "../src/main/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
@@ -26,7 +27,8 @@ async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => 
 		response.end('data: {"id":"reply","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":null}]}\n\ndata: {"id":"reply","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n');
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	const host = new LibraryAgentHost({ chat: { baseUrl: `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, model: "demo", apiKey: "test" } });
+	const runtime = await testChatRuntime(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try { await host.openLibrary(directory); await run(host, new LoomAgUiAgent(host)); }
 	finally { await host.close(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
 }
@@ -207,18 +209,8 @@ test("context reports provider usage, survives reopen, and publishes window-only
 		const root = host.requireOwner().libraryPath;
 		await host.close(); await host.openLibrary(root);
 		assert.deepEqual((await host.getSession(session.id)).context, usage);
-		const updated = Promise.withResolvers<void>();
-		const unsubscribe = host.subscribeSessions(() => updated.resolve());
-		try {
-			await host.setChat({ baseUrl: "http://localhost/v1", model: "demo", contextWindow: 64_000 });
-			await updated.promise;
-			assert.deepEqual((await host.getSession(session.id)).context, { ...usage, window: 64_000, percent: 1020 / 64_000 * 100 });
-			await host.setChat({ baseUrl: "http://localhost/v1", model: "other", contextWindow: 32_000 });
-			const conversation = await host.conversation(session.id);
-			assert.deepEqual((await host.getSession(session.id)).context, contextUsage(await conversation.context(context), { provider: "loom-chat", modelId: "other" }, 32_000));
-			await host.setChat(undefined);
-			assert.equal((await host.getSession(session.id)).context, undefined);
-		} finally { unsubscribe(); }
+		// Defaults steer only new conversations; usage on existing ones is never rewritten.
+		assert.deepEqual((await host.getSession(session.id)).context, usage);
 	}, (_request, response) => {
 		response.writeHead(200, { "content-type": "text/event-stream" });
 		response.end('data: {"id":"reply","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"hello"},"finish_reason":"stop"}],"usage":{"prompt_tokens":1000,"completion_tokens":20,"total_tokens":1020}}\n\ndata: [DONE]\n\n');

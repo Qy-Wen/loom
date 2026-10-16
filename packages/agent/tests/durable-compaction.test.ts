@@ -6,7 +6,6 @@ import {
 	BACKGROUND_CONTEXT as context, CompactionEntry, createRegistry, Harness, MemoryStorage, watchEvents,
 	type AgentEvent, type HarnessSettings,
 } from "../src/durable.ts";
-import { chatEndpointReady } from "../src/pi-adapter.ts";
 
 async function fixture(settings: HarnessSettings, run: (harness: Harness, faux: ReturnType<typeof fauxProvider>) => Promise<void>) {
 	const faux = fauxProvider({ models: [{ id: "test", contextWindow: 1000, maxTokens: 200 }] });
@@ -15,12 +14,6 @@ async function fixture(settings: HarnessSettings, run: (harness: Harness, faux: 
 	harness.resume();
 	try { await run(harness, faux); } finally { await harness.close(context); }
 }
-
-test("Chat readiness needs a trimmed URL and model, not a key", () => {
-	assert.equal(chatEndpointReady({ baseUrl: " ", model: "demo" }), false);
-	assert.equal(chatEndpointReady({ baseUrl: "http://localhost/v1", model: " " }), false);
-	assert.equal(chatEndpointReady({ baseUrl: "http://localhost/v1", model: "demo" }), true);
-});
 
 for (const reason of ["threshold", "overflow"] as const) {
 	test(`durable ${reason} compaction records a summary and retries the answer`, { timeout: 10_000 }, async () => {

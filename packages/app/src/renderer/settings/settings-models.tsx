@@ -3,22 +3,6 @@ import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSl
 import { useLocale } from "../locale.tsx";
 import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
 
-const HIDDEN_KEYS: Record<ModelSlotId, boolean> = {
-	chat: true,
-	embedding: true,
-	rerank: true,
-	vlm: true,
-	audio: true,
-};
-
-const IDLE: Record<ModelSlotId, { state: ProbeState; error?: string }> = {
-	chat: { state: "idle" },
-	embedding: { state: "idle" },
-	rerank: { state: "idle" },
-	vlm: { state: "idle" },
-	audio: { state: "idle" },
-};
-
 function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
 	return (
 		<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
@@ -62,9 +46,9 @@ interface SettingsModelsProps {
 }
 
 export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.JSX.Element {
-	const [hidden, setHidden] = useState(HIDDEN_KEYS);
-	const [probes, setProbes] = useState(IDLE);
-	const generation = useRef<Record<ModelSlotId, number>>({ chat: 0, embedding: 0, rerank: 0, vlm: 0, audio: 0 });
+	const [hidden, setHidden] = useState<Record<ModelSlotId, boolean>>({ embedding: true, rerank: true, vlm: true, audio: true });
+	const [probes, setProbes] = useState<Record<ModelSlotId, { state: ProbeState; error?: string }>>({ embedding: { state: "idle" }, rerank: { state: "idle" }, vlm: { state: "idle" }, audio: { state: "idle" } });
+	const generation = useRef<Record<ModelSlotId, number>>({ embedding: 0, rerank: 0, vlm: 0, audio: 0 });
 	const debounce = useRef<Partial<Record<ModelSlotId, number>>>({});
 	const draftRef = useRef(draft);
 	draftRef.current = draft;
@@ -115,13 +99,6 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 		debounce.current[id] = window.setTimeout(() => {
 			void runProbe(id, draftRef.current[id]);
 		}, 500);
-	}
-
-	function patchContextWindow(value: string): void {
-		const parsed = Number(value.replace(/[^0-9]/g, ""));
-		const contextWindow = Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
-		draftRef.current = { ...draftRef.current, chat: { ...draftRef.current.chat, contextWindow } };
-		onChange("chat", { contextWindow });
 	}
 
 	function patchEnabled(id: ModelSlotId, enabled: boolean): void {
@@ -193,19 +170,6 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 							</button>
 						</div>
 					</div>
-					{id === "chat" && (
-						<label>
-							{t.settings.contextWindow}
-							<input
-								type="text"
-								inputMode="numeric"
-								value={draft.chat.contextWindow ?? ""}
-								onChange={(event) => patchContextWindow(event.target.value)}
-								placeholder={t.settings.contextPlaceholder}
-								autoComplete="off"
-							/>
-						</label>
-					)}
 					{probes[id].state === "ok" && (
 						<p className="settings-status-ok">{t.settings.connected}</p>
 					)}

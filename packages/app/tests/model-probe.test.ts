@@ -21,7 +21,7 @@ test("probeModelSlot succeeds on GET /v1/models", async () => {
 		return new Response(JSON.stringify({ data: [{ id: "llama" }] }), { status: 200 });
 	}) as typeof fetch;
 	const result = await probeModelSlot({
-		slot: "chat",
+		slot: "vlm",
 		baseUrl: "http://127.0.0.1:1234",
 		model: "llama",
 	});
@@ -32,7 +32,7 @@ test("probeModelSlot succeeds on GET /v1/models", async () => {
 test("probeModelSlot treats 401 as a hard failure", async () => {
 	globalThis.fetch = (async () => new Response("nope", { status: 401 })) as typeof fetch;
 	const result = await probeModelSlot({
-		slot: "chat",
+		slot: "vlm",
 		baseUrl: "https://api.example.com",
 		model: "gpt",
 		apiKey: "bad",
@@ -45,7 +45,7 @@ test("probeModelSlot keeps the full HTTP error body", async () => {
 	const body = `{"error":"${"x".repeat(400)}"}`;
 	globalThis.fetch = (async () => new Response(body, { status: 500 })) as typeof fetch;
 	const result = await probeModelSlot({
-		slot: "chat",
+		slot: "vlm",
 		baseUrl: "https://api.example.com",
 		model: "gpt",
 	});

@@ -1,6 +1,6 @@
 // Application facade: generic durable handles plus Loom assembly and plain IPC types.
 export * from "./durable.ts";
-export type { LoomChatEndpoint, LoomAgentOptions, LoomTool, LoomToolContentPart, LoomToolResult, LoomTranscriptMessage } from "./types.ts";
+export type { LoomAgentOptions, LoomTool, LoomToolContentPart, LoomToolResult, LoomTranscriptMessage } from "./types.ts";
 export * from "./attachments.ts";
 export * from "./composer-asset.ts";
 export * from "./composer-image.ts";

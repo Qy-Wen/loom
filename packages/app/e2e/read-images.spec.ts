@@ -2,7 +2,7 @@ import { writeFile, rm } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import { expect, test } from "./loom.ts";
+import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 const filename = "photon-read-test.webp";
 // A valid 2x2 WebP. Preparing even a small inline image loads Photon's WASM and decodes it.
@@ -37,11 +37,8 @@ test("bundled Electron read resolves Photon WASM and returns a WebP image", asyn
 		expect(root).toBeTruthy();
 		path = join(root!, filename);
 		await writeFile(path, Buffer.from(webp, "base64"));
-		await loomPage.evaluate(async (baseUrl) => {
-			const current = await window.loom.getModelSettings();
-			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
-			await window.loom.setAgentPermission("full");
-		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await loomPage.evaluate(() => window.loom.setAgentPermission("full"));
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
