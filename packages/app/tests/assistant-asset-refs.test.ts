@@ -41,6 +41,20 @@ describe("prepareAssistantContent", () => {
 		assert.equal(markdown, "[clips/hero.mp4](#loom-asset:asset-1)");
 	});
 
+	it("reads the attribute form a model may write instead of the block", () => {
+		const selfClosing = prepareAssistantContent('见 <asset_ref path="clips/old.mp4" asset_id="asset-2" type="video" />', library);
+		const paired = prepareAssistantContent("<asset_ref path='clips/hero.mp4'></asset_ref>", library);
+		assert.equal(selfClosing.rawTail, "");
+		assert.equal(selfClosing.markdown, "见 [archive/hero.mp4](#loom-asset:asset-2)");
+		assert.equal(paired.markdown, "[clips/hero.mp4](#loom-asset:asset-1)");
+	});
+
+	it("keeps an unfinished attribute tag out of markdown", () => {
+		const { markdown, rawTail } = prepareAssistantContent('找到了 <asset_ref path="clips/hero.mp4"', library);
+		assert.equal(markdown, "找到了 ");
+		assert.equal(rawTail, '<asset_ref path="clips/hero.mp4"');
+	});
+
 	it("keeps an unfinished block out of markdown", () => {
 		const text = "找到了\n<asset_ref>\npath: clips/hero.mp4";
 		const { markdown, rawTail } = prepareAssistantContent(text, library);

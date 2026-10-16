@@ -1,5 +1,6 @@
 /**
  * An assistant reply names a library file with the same `<asset_ref>` block the composer stores.
+ * A model that writes the attribute form (`<asset_ref path="…" asset_id="…" />`) is read the same way.
  * `asset_id` is looked up first. A miss falls back to `path`. Anything else stays visible and is not a link.
  * An unfinished block is split off so markdown does not drop it while it streams.
  */
@@ -14,11 +15,24 @@ export function prepareAssistantContent(
 	for (const [assetId, asset] of library) {
 		if (!byPath.has(asset.path)) byPath.set(asset.path, assetId);
 	}
-	const linked = head.replace(ASSET_BLOCK, (_raw, path: string, assetId: string | undefined) => mention(path, assetId, library, byPath));
+	const linked = head
+		.replace(ASSET_BLOCK, (_raw, path: string, assetId: string | undefined) => mention(path, assetId, library, byPath))
+		.replace(ASSET_TAG, (_raw, attributes: string) => {
+			const { path, asset_id: assetId } = readAttributes(attributes);
+			return path === undefined ? _raw : mention(path, assetId, library, byPath);
+		});
 	return { markdown: linked, rawTail };
 }
 
 const ASSET_BLOCK = /<asset_ref>\npath: ([^\n]*)\n(?:asset_id: ([^\n]*)\n)?(?:type: [^\n]*\n)?<\/asset_ref>/g;
+
+const ASSET_TAG = /<asset_ref\s+([^<>]*?)\s*(?:\/>|>\s*<\/asset_ref>)/g;
+
+function readAttributes(text: string): Record<string, string> {
+	const found: Record<string, string> = {};
+	for (const match of text.matchAll(/([\w-]+)\s*=\s*(?:"([^"]*)"|'([^']*)')/g)) found[match[1]!] = match[2] ?? match[3] ?? "";
+	return found;
+}
 
 function mention(
 	path: string,
@@ -45,6 +59,7 @@ function unclosedAssetBlock(text: string): number {
 	if (open < 0) return -1;
 	const end = text.indexOf(">", open);
 	if (end < 0) return open;
+	if (text[end - 1] === "/") return -1;
 	return text.indexOf("</asset_ref>", end) >= 0 ? -1 : open;
 }
 
