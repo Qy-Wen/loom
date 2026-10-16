@@ -13,7 +13,7 @@ export { loadLibrarySkills, formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR } fr
 export type { Skill, SkillDiagnostic } from "./library-skills.ts";
 export { createAutoMemoryTool } from "./library-auto-memory.ts";
 export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tool-gate.ts";
-export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage } from "./session-dto.ts";
+export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage, LoomSessionModel } from "./session-dto.ts";
 export { contextUsage } from "./context-usage.ts";
 export { DurableTrace } from "./durable-trace.ts";
 export { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";

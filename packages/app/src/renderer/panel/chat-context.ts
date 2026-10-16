@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react";
 import type { Message } from "@ag-ui/core";
-import type { AssetRefAttachment, LoomContextUsage, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
+import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 
 export type PendingEdit = { threadId: string; text: string };
 export type BranchActions = {
@@ -25,6 +25,9 @@ export type ChatSession = {
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	usage: LoomContextUsage | null;
+	model: LoomSessionModel | undefined;
+	/** Refresh the session record after a per-conversation model change. */
+	onModelChanged: () => void;
 };
 
 export const ChatSessionContext = createContext<ChatSession | null>(null);

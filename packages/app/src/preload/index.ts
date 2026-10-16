@@ -74,6 +74,7 @@ const api: LoomApi = {
 	pathForFile: (file) => webUtils.getPathForFile(file),
 	followUp: (id, text, clientMessageId) => ipcRenderer.invoke(IPC.followUp, id, text, clientMessageId),
 	branchBefore: (id, entryId) => ipcRenderer.invoke(IPC.branchBefore, id, entryId),
+	setSessionModel: (id, selection) => ipcRenderer.invoke(IPC.setSessionModel, id, selection),
 	forkBefore: (id, entryId) => ipcRenderer.invoke(IPC.forkBefore, id, entryId),
 	archiveSession: (id) => ipcRenderer.invoke(IPC.archiveSession, id),
 	unarchiveSession: (id) => ipcRenderer.invoke(IPC.unarchiveSession, id),

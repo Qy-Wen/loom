@@ -157,6 +157,7 @@ export const IPC = {
 	pickComposerExternalFiles: "loom:pickComposerExternalFiles",
 	followUp: "loom:followUp",
 	branchBefore: "loom:branchBefore",
+	setSessionModel: "loom:setSessionModel",
 	forkBefore: "loom:forkBefore",
 	archiveSession: "loom:archiveSession",
 	unarchiveSession: "loom:unarchiveSession",
@@ -283,6 +284,8 @@ export interface LoomApi {
 	followUp: (id: string, text: string, clientMessageId?: string) => Promise<void>;
 	/** Move the active path to just before this user question. */
 	branchBefore: (id: string, entryId: string) => Promise<SessionRecord>;
+	/** Persist this conversation's model/thinking; applies from the next request. Rejects while busy. */
+	setSessionModel: (id: string, selection: { provider: string; modelId: string; thinkingLevel?: string }) => Promise<SessionRecord>;
 	/** Open a new session from the prefix before this question. */
 	forkBefore: (id: string, entryId: string) => Promise<SessionRecord>;
 	archiveSession: (id: string) => Promise<void>;

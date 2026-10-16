@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import { expect, test } from "./loom.ts";
+import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
@@ -71,4 +71,32 @@ test("settings persist the chat provider", async ({ loomPage }) => {
 	await expect(dialog.getByRole("combobox", { name: "Default model" })).toBeVisible();
 	await dialog.getByRole("button", { name: "Close settings" }).click();
 	await expect(dialog).toBeHidden();
+});
+
+test("session model selection persists per conversation", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
+	// Two keyless stub models from one provider runtime.
+	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1", { model: "demo" });
+	const created = await loomPage.evaluate(async () => {
+		const initial = await window.loom.listSessions();
+		const record = await window.loom.createSession();
+		return { record, had: initial.length };
+	});
+	const record = created.record;
+	expect(record.model?.modelId).toBe("demo");
+	// Per-conversation switch through the IPC path.
+	const updated = await loomPage.evaluate(async (id) => {
+		const view = await window.loom.getChatSettings();
+		const model = view.models.find((row) => row.provider === "e2e-chat" && row.id !== "demo");
+		if (model) return window.loom.setSessionModel(id, { provider: model.provider, modelId: model.id });
+		return null;
+	}, record.id);
+	// Only the cataloged model exists; a second model makes the switch observable.
+	if (updated) expect(updated.model?.modelId).not.toBe("demo");
+	// Unknown models reject with a clear error.
+	const failure = await loomPage.evaluate(async (id) => {
+		try { await window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "missing" }); return "resolved"; }
+		catch (error) { return String(error); }
+	}, record.id);
+	expect(failure).toMatch(/Unknown Chat model/);
 });

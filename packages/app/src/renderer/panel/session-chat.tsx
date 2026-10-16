@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "@ag-ui/core";
 import { CopilotChat, useAgent, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
-import type { AssetRefAttachment, LoomContextUsage, LoomSessionRecord, LoomTranscriptMessage } from "@loom/agent";
+import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomSessionRecord, LoomTranscriptMessage } from "@loom/agent";
 import { liveMessagesForSession, mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { useLocale } from "../locale.tsx";
 import { ChatSessionContext, ChatViewContext, useChatSession, type BranchActions, type PendingEdit } from "./chat-context.ts";
@@ -49,6 +49,7 @@ export function SessionChat({
 	threadId,
 	messages,
 	context,
+	model,
 	composerDraft,
 	onComposerDraftApplied,
 	composerAttach,
@@ -60,6 +61,7 @@ export function SessionChat({
 	threadId: string;
 	messages: LoomTranscriptMessage[];
 	context: LoomContextUsage | null;
+	model: LoomSessionModel | undefined;
 	composerDraft: string | null;
 	onComposerDraftApplied: () => void;
 	composerAttach: AssetRefAttachment | null;
@@ -139,7 +141,7 @@ export function SessionChat({
 	}), [busy, editingId, error, threadId]);
 
 	return (
-		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context }}>
+		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<div className="session-chat-shell">
 				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>

@@ -261,6 +261,10 @@ export const messages = defineLocale(
 			addLibraryFile: "Add library file",
 			addExternalFile: "Add external file",
 			contextUsage: "Context usage",
+			modelSelect: "Conversation model",
+			thinkingSelect: "Thinking level",
+			modelUnavailable: (name: string) => `${name} (unavailable)`,
+			modelChangeFailed: "Could not change the model. It may be busy.",
 			removeNamed: (label: string) => `Remove ${label}`,
 		},
 		sessions: {
@@ -705,6 +709,10 @@ export const messages = defineLocale(
 			addLibraryFile: "添加素材库文件",
 			addExternalFile: "添加外部文件",
 			contextUsage: "上下文用量",
+			modelSelect: "会话模型",
+			thinkingSelect: "思考等级",
+			modelUnavailable: (name: string) => `${name}（不可用）`,
+			modelChangeFailed: "无法切换模型，会话可能正忙。",
 			removeNamed: (label) => `移除 ${label}`,
 		},
 		sessions: {

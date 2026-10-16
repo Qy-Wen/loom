@@ -13,6 +13,7 @@ import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerA
 import { editableText, placedChips } from "./chat-content.ts";
 import { AddFilesButton, ComposerTextArea, ImageSendButton } from "./chat-composer-input.tsx";
 import { ContextIndicator } from "./chat-context-usage.tsx";
+import { ChatModelSelect } from "./chat-model-select.tsx";
 import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
 type QueuedFollowUp = { id: string; label: string };
@@ -28,7 +29,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
-	const { threadId, branch, pendingEdit, editSubmitted, draft, onDraftApplied, composerAttach, onComposerAttachApplied, transcript, usage } = useChatSession();
+	const { threadId, branch, pendingEdit, editSubmitted, draft, onDraftApplied, composerAttach, onComposerAttachApplied, transcript, usage, model, onModelChanged } = useChatSession();
 	const { messages: visible, connecting, threadReady } = useContext(ChatViewContext);
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
@@ -384,6 +385,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				{toolbar && createPortal(
 					<div className="session-composer-meta" onMouseDown={(event) => event.stopPropagation()}>
 						<AgentPermissionSelect />
+						<ChatModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={Boolean(isRunning)} />
 						<ContextIndicator context={usage} />
 					</div>,
 					toolbar,

@@ -3,7 +3,9 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, InboxDoc } from "@loom/agent/durable";
 import type { LoomTool } from "@loom/agent";
 import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
@@ -185,4 +187,57 @@ test("instruction edits apply to both existing and subsequently created conversa
 		// Defaults only steer new conversations; clearing them never rewrites existing ones.
 		assert.deepEqual((await host.getSession(first.id)).context, { tokens: 0, window: 128_000, percent: 0 });
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
+test("setSessionModel persists per-conversation selection, rejects while busy, and survives reopen", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-model-"));
+	const runtime = await testChatRuntime("http://localhost/v1");
+	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	try {
+		await host.openLibrary(path);
+		const first = await host.createSession();
+		assert.deepEqual((await host.getSession(first.id)).model, { provider: "test-chat", modelId: "demo", thinkingLevel: "off" });
+		// A second provider in the same collection; switching affects only this conversation.
+		const second = await testChatRuntime("http://localhost/v1", { model: "other", providerId: "test-other", models: runtime.models });
+		const record = await host.setSessionModel(first.id, { provider: second.providerId, modelId: second.modelId });
+		assert.equal(record.model?.provider, "test-other");
+		const fresh = await host.createSession();
+		assert.equal((await host.getSession(fresh.id)).model?.provider, "test-chat");
+		await host.close(); await host.openLibrary(path);
+		assert.equal((await host.getSession(first.id)).model?.modelId, "other");
+		assert.equal((await host.getSession(fresh.id)).model?.modelId, "demo");
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
+test("setSessionModel rejects while a request is streaming", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-model-busy-"));
+	// A local server that holds the SSE stream open until released.
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const server = createServer((_request, response) => {
+		entered.resolve();
+		response.writeHead(200, { "content-type": "text/event-stream" });
+		void release.promise.then(() => response.end('data: {"id":"r","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const runtime = await testChatRuntime(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	try {
+		await host.openLibrary(path);
+		const session = await host.createSession();
+		const conversation = await host.conversation(session.id);
+		const submission = await conversation.submit({ type: "input", content: "work" }, context);
+		await entered.promise;
+		await assert.rejects(() => host.setSessionModel(session.id, { provider: runtime.providerId, modelId: runtime.modelId }), /busy/i);
+		release.resolve();
+		assert.equal((await submission.wait(context)).status, "done");
+		// Settled work no longer blocks the change.
+		await host.setSessionModel(session.id, { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" });
+	} finally {
+		release.resolve();
+		await host.close();
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+		await rm(path, { recursive: true, force: true });
+	}
 });

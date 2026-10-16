@@ -124,6 +124,7 @@ export function AgentPanel({
 									threadId={sessionId}
 									messages={record!.messages}
 									context={record!.context ?? null}
+									model={record!.model}
 									composerDraft={composerDraft?.sessionId === sessionId ? composerDraft.text : null}
 									onComposerDraftApplied={() => setComposerDraft(null)}
 									composerAttach={composerAttach}

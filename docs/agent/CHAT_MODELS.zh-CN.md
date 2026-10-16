@@ -2,7 +2,7 @@
 
 # Chat 模型完整接入 pi-ai
 
-> 状态：旧 Chat 端点兼容路径已移除（产品未发布）。原生运行时已接管生产启动、存储、设置/OAuth UI 与 Provider 登录。会话级模型选择（P4）与 Windows/真实 OAuth 验收（P5）仍待完成。
+> 状态：旧 Chat 端点兼容路径已移除（产品未发布）。原生运行时已接管生产启动、存储、设置/OAuth UI、Provider 登录与会话级模型选择。Windows/真实 OAuth 验收（P5）仍待完成。
 > 当前实现见 [AGENT](./AGENT.zh-CN.md)、[SETTINGS](../SETTINGS.zh-CN.md)。依据项目安装的 `@earendil-works/pi-ai@1.1.0`；参考实现位于 `agent/pi/packages/ai` 和 `agent/pi/packages/coding-agent/src/core`。
 
 ## 1. 范围与确定的原则
@@ -160,7 +160,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 
 - `packages/agent/src/chat-provider.ts` 装配原生工厂与四种显式自定义协议。薄覆盖保留 auth/filter/refresh/dispatch，仅合并已声明的元数据/默认值；自定义无鉴权连接需明确允许，自定义 ID 不得与内置 ID 冲突。
 - `packages/app/src/main/chat-model-service.ts` 持有一个长期执行集合，注册已启用 Provider，恢复/刷新原生目录并返回无凭据视图。未知价格不返回费率；只改默认值时保留 Provider 对象与动态状态。Headers 仅在 Main 内存解析，不进入普通 DTO 或缓存。
-- 注入式 `LibraryAgentHost` 仅为新独立会话写入默认模型/思考等级，fork/reopen 保留原选择。Provider 编辑/发布在公开 Session commit 内检查 live tasks/inbox，覆盖压缩；直接请求活动也受保护。会话 UI/configure 限制仍属 P4。
+- 注入式 `LibraryAgentHost` 仅为新独立会话写入默认模型/思考等级，fork/reopen 保留原选择。Provider 编辑/发布在公开 Session commit 内检查 live tasks/inbox，覆盖压缩；直接请求活动也受保护。会话级变更使用同一 busy 检查（`setSessionModel`）。
 - 已知请求/鉴权秘密传给 trace 脱敏，并在 durable 记账前从 Provider 错误文本中移除。真实旧请求 checkpoint 恢复与 800-token 压缩上限已通过新服务验证。
 - **生产启动已切换：** `app.whenReady()` 用 `createChatStorage(userData)` 构建 `ChatModelService`，初始化（首跑环境引导）后把长期 `Models` 与默认值注入 `LibraryAgentHost`。Host 不再构建 Provider；秘密经 `onSecrets` 传入 trace 脱敏。
 - Chat IPC：`getChatSettings`/`saveChatSettings`（无凭据视图）、`chatProviderCatalog`、`chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin`（API Key + OAuth 交互桥接到 renderer）、`chatRefresh`、`chatSettingsChanged`。设置工具不再暴露 Chat 槽位。
@@ -209,9 +209,10 @@ P0 原型仍仅用于测试；生产启动已切换到原生运行时，旧 Chat
 
 ### P4：会话选择
 
-- [ ] 接入模型/思考等级的 DTO、IPC、UI 与 native configure，按会话保存。
-- [ ] 验证默认值只影响新会话、重开/fork/specialist 继承、busy 切换限制。
-- [ ] 刷新上下文圆环和图片能力提示；Provider 失效不自动换模型。
+- [x] `LoomSessionRecord.model` 暴露持久化选择；`setSessionModel` IPC 按运行时校验模型与思考等级，再经原生 `conversation.configure()` 生效。
+- [x] 输入区工具栏的 `ChatModelSelect`：模型列表来自实时目录（不可用模型禁用），思考等级在支持等级间循环；忙碌时禁用，变更从下一次请求生效。
+- [x] Host 测试覆盖会话级持久化（重开保留）、默认值只影响新会话、流式请求中 busy 拒绝；smoke E2E 覆盖 IPC 链路含未知模型拒绝。
+- [ ] 切模型后的上下文圆环刷新与图片能力提示留作 P5 打磨；Provider 失效不自动换模型。
 
 ### P5：回归与交付
 

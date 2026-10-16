@@ -983,3 +983,62 @@
 .agent-content .copilotKitAssistantMessage table :is(th, td) {
 	padding: 8px 12px;
 }
+
+/* Per-conversation model picker (composer toolbar) */
+.session-model-select {
+	position: relative;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
+	max-width: 40%;
+	color: #5c5f64;
+	font-size: 12px;
+}
+
+.session-model-select > button {
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	min-width: 0;
+	padding: 3px 7px;
+	border: 0;
+	border-radius: 6px;
+	outline: none;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.session-model-select > button:hover:not(:disabled),
+.session-model-select > button[aria-expanded="true"] {
+	background: rgba(32, 33, 36, 0.06);
+}
+
+.session-model-select > button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.session-model-label {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.session-model-error {
+	color: #c5221f;
+}
+
+.session-model-menu {
+	min-width: 220px;
+	max-width: 320px;
+}
+
+.session-model-menu button span,
+.session-model-empty {
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

@@ -2,7 +2,7 @@
 
 # Full Chat Model Integration with pi-ai
 
-> Status: legacy Chat endpoint compatibility has been removed (product is unreleased). The native runtime owns production startup, storage, settings/OAuth UI, and provider login. Per-conversation model selection (P4) and Windows/live-OAuth acceptance (P5) remain.
+> Status: legacy Chat endpoint compatibility has been removed (product is unreleased). The native runtime owns production startup, storage, settings/OAuth UI, provider login, and per-conversation model selection. Windows/live-OAuth acceptance (P5) remains.
 > Current behavior: [AGENT](./AGENT.md), [SETTINGS](../SETTINGS.md). Baseline: installed `@earendil-works/pi-ai@1.1.0`; reference sources: `agent/pi/packages/ai` and `agent/pi/packages/coding-agent/src/core`.
 
 ## 1. Scope and decisions
@@ -160,7 +160,7 @@ The public busy probe shows running generations via `Harness.inspect()` and conf
 
 - `packages/agent/src/chat-provider.ts` assembles native factories and four explicit custom protocols. Thin overlays preserve auth/filter/refresh/dispatch and merge only declared metadata/defaults. API-keyless custom connections require explicit permission; custom IDs cannot collide with native IDs.
 - `packages/app/src/main/chat-model-service.ts` owns one long-lived execution collection, registers enabled Providers, restores/refreshes native catalogs, and emits credential-free views. Unknown prices omit rates; default-only saves retain Provider objects and dynamic state. Headers are resolved only in Main memory, not public DTOs or cache.
-- The injected `LibraryAgentHost` path persists defaults only for new independent conversations; tests retain old selections on fork/reopen. Provider edits/publication hold a public Session commit while checking live tasks/inbox, including compaction; direct request activity is also guarded. Per-conversation UI/configure guards remain P4.
+- The injected `LibraryAgentHost` path persists defaults only for new independent conversations; tests retain old selections on fork/reopen. Provider edits/publication hold a public Session commit while checking live tasks/inbox, including compaction; direct request activity is also guarded. Per-conversation changes use the same busy guards (`setSessionModel`).
 - Known request/auth secrets feed trace redaction and are removed from provider error messages before durable bookkeeping. Real legacy interrupted-request recovery and the 800-token compaction cap pass through the new service.
 - **Production startup is switched:** `app.whenReady()` builds `ChatModelService` from `createChatStorage(userData)`, initializes it (env bootstrap on first run), and injects the long-lived `Models` plus defaults into `LibraryAgentHost`. The Host never builds Providers; secrets feed trace redaction through `onSecrets`.
 - Chat IPC: `getChatSettings`/`saveChatSettings` (credential-free views), `chatProviderCatalog`, `chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin` (API-key + OAuth interaction bridged to the renderer), `chatRefresh`, `chatSettingsChanged`. Settings tools no longer expose a Chat slot.
@@ -209,9 +209,10 @@ P0 prototypes remain test-only; P2 assembly/service code and the Host injection 
 
 ### P4: Conversation selection
 
-- [ ] Add model/thinking DTOs, IPC, UI, and native per-conversation configuration.
-- [ ] Verify new-conversation-only defaults, reopen/fork/specialist inheritance, and busy restrictions.
-- [ ] Refresh context occupancy/image notices; no automatic switch for unavailable Providers.
+- [x] `LoomSessionRecord.model` exposes the persisted selection; `setSessionModel` IPC validates the model and thinking level against the runtime, then configures through native `conversation.configure()`.
+- [x] `ChatModelSelect` in the composer toolbar: model list from the live catalog (unavailable models disabled), thinking level cycles through supported levels; runs while busy are disabled and the change applies from the next request.
+- [x] Host tests cover per-conversation persistence across reopen, new-conversation-only defaults, and busy rejection while a request streams; smoke E2E covers the IPC path including unknown-model rejection.
+- [ ] Context-ring refresh on model change and image-capability notices remain P5 polish; unavailable providers never switch automatically.
 
 ### P5: Regression and delivery
 

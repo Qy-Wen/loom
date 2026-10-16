@@ -79,6 +79,7 @@ import { ModelSettingsStore, settingsView } from "./model-settings-store.ts";
 import { createChatStorage } from "./chat-storage.ts";
 import { ChatModelService } from "./chat-model-service.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 
 const ASSET_SCHEME = "loom-asset";
 const DEFAULT_CDP_PORT = "9344";
@@ -744,6 +745,23 @@ function registerIpc(): void {
 		}, agentContext);
 	});
 	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string) => chatRecord(await requireAgentManager().branchBefore(id, entryId)));
+	ipcMain.handle(IPC.setSessionModel, async (_event, id: string, raw: unknown) => {
+		if (typeof id !== "string" || !raw || typeof raw !== "object") throw new Error("Invalid model selection");
+		const draft = raw as { provider?: unknown; modelId?: unknown; thinkingLevel?: unknown };
+		if (typeof draft.provider !== "string" || !draft.provider.trim() || typeof draft.modelId !== "string" || !draft.modelId.trim()) throw new Error("Model selection needs a provider and a model");
+		const service = requireChatService();
+		const model = service.models.getModel(draft.provider, draft.modelId);
+		if (!model) throw new Error("Unknown Chat model");
+		let thinkingLevel: import("@earendil-works/pi-ai").ModelThinkingLevel | undefined;
+		if (typeof draft.thinkingLevel === "string" && draft.thinkingLevel !== "off") {
+			const levels = getSupportedThinkingLevels(model);
+			if (!levels.includes(draft.thinkingLevel as never)) throw new Error(`Thinking level ${draft.thinkingLevel} is not supported by this model`);
+			thinkingLevel = draft.thinkingLevel as import("@earendil-works/pi-ai").ModelThinkingLevel;
+		}
+		const record = await requireAgentManager().setSessionModel(id, { provider: draft.provider, modelId: draft.modelId, ...(thinkingLevel ? { thinkingLevel } : {}) });
+		notifySettingsChanged();
+		return chatRecord(record);
+	});
 	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await requireAgentManager().forkBefore(id, entryId)));
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => requireAgentManager().archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => requireAgentManager().unarchiveSession(id));

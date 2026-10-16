@@ -7,7 +7,7 @@ import { toolResultParts } from "../src/shared/tool-result-content.ts";
 test("chat records reference even very large images without changing durable content", () => {
 	const data = "a".repeat(11 * 1024 * 1024);
 	const content = [{ type: "text", text: "image result" }, { type: "image", data, mimeType: "image/png" }];
-	const original = { id: "1", title: "history", status: "open" as const, createdAt: 1, updatedAt: 2, context: undefined, messages: [{ id: "2", role: "toolResult", toolCallId: "1/tool", content }] };
+	const original = { id: "1", title: "history", status: "open" as const, createdAt: 1, updatedAt: 2, context: undefined, model: undefined, messages: [{ id: "2", role: "toolResult", toolCallId: "1/tool", content }] };
 	const record = chatRecord(original);
 	assert.equal(original.messages[0]!.content[1]!.data, data);
 	assert.ok(JSON.stringify(record).length < 1024);

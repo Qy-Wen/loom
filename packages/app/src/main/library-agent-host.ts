@@ -146,9 +146,28 @@ export class LibraryAgentHost {
 		const ref = agent.model;
 		const model = ref && this.#models?.getModel(ref.provider, ref.modelId);
 		const usage = ref && model && model.contextWindow > 0 ? contextUsage(await conversation.context(context), ref, model.contextWindow) : undefined;
-		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage };
+		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage,
+			model: ref ? { provider: ref.provider, modelId: ref.modelId, ...(agent.thinkingLevel ? { thinkingLevel: agent.thinkingLevel } : {}) } : undefined };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireOwner().harness, idOf(id), title, context); }
+	/** Persist a conversation's model/thinking selection. Busy conversations reject; the change applies from the next request. */
+	async setSessionModel(id: string, selection: { provider: string; modelId: string; thinkingLevel?: import("@earendil-works/pi-ai").ModelThinkingLevel }): Promise<LoomSessionRecord> {
+		const owner = this.requireOwner();
+		const conversation = await this.conversation(id);
+		await owner.harness.commit(async (tx) => {
+			const live = await tx.doc(LiveDoc, conversation.id);
+			const inbox = await tx.doc(InboxDoc, conversation.id);
+			if (live.run || inbox.items.length) throw new Error("Conversation is busy");
+			for (const status of ["pending", "running", "waiting", "completing"] as const) {
+				if ((await tx.scanTasks({ conversationId: conversation.id, status }, 1)).items.length) throw new Error("Conversation is busy");
+			}
+		}, context);
+		await conversation.configure({
+			model: { provider: selection.provider, modelId: selection.modelId },
+			...(selection.thinkingLevel ? { thinkingLevel: selection.thinkingLevel } : {}),
+		}, context);
+		return this.getSession(id);
+	}
 	async archiveSession(id: string) {
 		const conversation = await this.conversation(id);
 		await conversation.commit(async (tx) => {
