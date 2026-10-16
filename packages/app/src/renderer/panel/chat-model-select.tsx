@@ -9,7 +9,6 @@ type ModelChoice = {
 	modelId: string;
 	label: string;
 	thinkingLevels: string[];
-	available: boolean;
 };
 
 /** Per-conversation model/thinking picker in the composer toolbar. Applies from the next request. */
@@ -39,12 +38,11 @@ export function ChatModelSelect({
 		const load = () => {
 			void window.loom.getChatSettings().then((view) => {
 				if (cancelled) return;
-				setModels(view.models.map((row): ModelChoice => ({
+				setModels(view.models.filter((row) => row.available).map((row): ModelChoice => ({
 					provider: row.provider,
 					modelId: row.id,
 					label: `${row.name} (${row.provider})`,
 					thinkingLevels: row.thinkingLevels,
-					available: row.available,
 				})));
 			}).catch(() => { if (!cancelled) setModels([]); });
 		};
@@ -170,10 +168,9 @@ export function ChatModelSelect({
 							type="button"
 							role="option"
 							aria-selected={row.provider === model?.provider && row.modelId === model?.modelId}
-							disabled={!row.available}
 							onClick={() => { void choose(row); }}
 						>
-							{row.available ? row.label : t.chat.modelUnavailable(row.label)}
+							{row.label}
 						</button>
 					))}
 					{models.length === 0 && <span className="session-model-empty">{t.settings.chat.noModels}</span>}
