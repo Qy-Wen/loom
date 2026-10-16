@@ -264,3 +264,47 @@ test("Electron shows partial text before the model finishes streaming", async ({
 		await expect(indicator).toHaveCount(0);
 	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
+
+test("identical queued follow-ups are admitted once each and stop showing as queued", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated library required");
+	const releases = Array.from({ length: 3 }, () => Promise.withResolvers<void>());
+	let requests = 0;
+	const server = createServer((request, response) => {
+		request.resume();
+		request.on("end", () => {
+			const turn = requests++;
+			const chunk = (content: string, finish_reason: string | null = null) => `data: ${JSON.stringify({ id: `queued-${turn}`, object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content }, finish_reason }] })}\n\n`;
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.write(chunk(`QUEUED_PARTIAL_${turn}`));
+			void (releases[turn]?.promise ?? Promise.resolve()).then(() => response.end(chunk(" complete", "stop") + "data: [DONE]\n\n"));
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await loomPage.evaluate(async (baseUrl) => {
+			const current = await window.loom.getModelSettings();
+			await window.loom.saveModelSettings({ ...current, chat: { baseUrl, model: "demo", apiKey: "test", enabled: true } });
+		}, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect(loomPage.getByRole("tab", { name: "New session", exact: true, selected: true })).toBeVisible();
+		const composer = loomPage.getByRole("textbox");
+		await composer.fill("Start queued follow-up test"); await composer.press("Enter");
+		await expect(loomPage.getByText("QUEUED_PARTIAL_0", { exact: true })).toBeVisible();
+		for (let index = 0; index < 2; index++) {
+			await composer.fill("Same queued question"); await composer.press("Enter");
+			await expect(loomPage.locator(".session-follow-up li")).toHaveCount(index + 1);
+		}
+		for (let turn = 0; turn < 3; turn++) {
+			await expect(loomPage.getByText(`QUEUED_PARTIAL_${turn}`, { exact: true })).toBeVisible();
+			await expect(loomPage.locator(".session-follow-up li")).toHaveCount(Math.max(0, 2 - turn));
+			releases[turn]!.resolve();
+			await expect(loomPage.getByText(`QUEUED_PARTIAL_${turn} complete`, { exact: true })).toBeVisible();
+		}
+		await expect(loomPage.getByTestId("copilot-user-message").filter({ hasText: "Same queued question" })).toHaveCount(2);
+		expect(requests).toBe(3);
+	} finally {
+		for (const release of releases) release.resolve();
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});

@@ -101,14 +101,18 @@ for (const caller of ["main", "create"] as const) {
 				const imageResult = events.find((event) => event.type === EventType.TOOL_CALL_RESULT && "content" in event && toolResultParts(event.content));
 				assert.ok(imageResult && "content" in imageResult && "toolCallId" in imageResult);
 				const parts = toolResultParts(imageResult.content)!;
-				assert.ok(parts.some((part) => part.type === "image" && part.data === data));
+				const image = parts.find((part) => part.type === "image");
+				assert.ok(image && "url" in image);
+				const imageUrl = new URL(image.url);
+				const [conversationId, entryId, contentIndex] = imageUrl.pathname.slice(1).split("/");
+				assert.equal((await host.getChatImage(conversationId!, entryId!, Number(contentIndex)))?.data, data);
 				const resultConversation = String(imageResult.toolCallId).split("/")[0]!;
 				const root = host.requireOwner().libraryPath;
 				await host.close(); await host.openLibrary(root);
 				const messages = toAgUiMessages((await host.getSession(resultConversation)).messages);
 				const restored = messages.find((message) => message.role === "tool" && toolResultParts(message.content));
 				assert.ok(restored && "content" in restored);
-				assert.ok(toolResultParts(restored.content)?.some((part) => part.type === "image" && part.data === data));
+				assert.ok(toolResultParts(restored.content)?.some((part) => part.type === "image" && "data" in part && part.data === data));
 			} finally { await mcp.close(); }
 		}, (request, response) => {
 			let body = "";
@@ -135,6 +139,26 @@ test("durable AG-UI adapter produces text, committed IDs, snapshots, and a finis
 		assert.ok(events.some((event) => event.type === EventType.MESSAGES_SNAPSHOT));
 		assert.equal((await host.getSession(session.id)).messages.length, 2);
 		assert.equal((await host.getSession(session.id)).title, "question");
+	});
+});
+
+test("saved history stays off the live stream and incremental reads return only new committed entries", { timeout: 10_000 }, async () => {
+	await fixture(async (host, adapter) => {
+		const session = await host.createSession();
+		const conversation = await host.conversation(session.id);
+		await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "LEGACY_HISTORY_".repeat(1000), timestamp: 1 }] }), context);
+		const history = await host.getSession(session.id);
+		const tail = String(history.messages.at(-1)!.id);
+		assert.deepEqual((await host.getSession(session.id, tail)).messages, []);
+		const events = await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+		assert.equal(JSON.stringify(events).includes("LEGACY_HISTORY_"), false);
+		assert.ok(JSON.stringify(events).length < 10_000);
+		const delta = await host.getSession(session.id, tail);
+		assert.deepEqual(delta.messages.map((message) => message.role), ["user", "assistant"]);
+		assert.equal(delta.messages[0]?.clientMessageId, "user");
+		assert.deepEqual((await host.getSession(session.id, String(delta.messages.at(-1)!.id))).messages, []);
+		const connected = await lastValueFrom(adapter.connectThread(session.id).pipe(toArray()));
+		assert.equal(JSON.stringify(connected).includes("LEGACY_HISTORY_"), false);
 	});
 });
 

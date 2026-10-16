@@ -6,8 +6,9 @@ import {
 	DEFAULT_SESSION_TITLE, type AgentEvent, type ComposerImageInput, type AssetRefAttachment, type UiSelectionFields, type DocumentWatch, type PendingToolApproval, type ConversationId,
 } from "@loom/agent";
 import type { LibraryAgentHost } from "./library-agent-host.ts";
-import { toAgUiMessages, toolResultContent, transcriptText } from "../shared/ag-ui-messages.ts";
+import { toolResultContent, transcriptText } from "../shared/ag-ui-messages.ts";
 import { formatChatError } from "../shared/chat-error.ts";
+import { chatContent } from "./chat-record.ts";
 import { Observable } from "rxjs";
 
 let next = 0;
@@ -118,7 +119,8 @@ export class LoomAgUiAgent extends AbstractAgent {
 						const restoreChild = async (snapshot: typeof child.snapshot) => {
 							for (const slot of snapshot.tools) {
 								const args = snapshot.entries.flatMap((entry) => entry.model ?? []).flatMap((message) => message.role === "assistant" ? message.content : []).find((part) => part.type === "toolCall" && part.id === slot.callId);
-								startTool(toolEventId(id as ConversationId, slot.callId), slot.name, args?.type === "toolCall" ? args.arguments : {});
+								const parent = snapshot.entries.find((entry) => entry.model?.some((message) => message.role === "assistant" && message.content.some((part) => part.type === "toolCall" && part.id === slot.callId)));
+								if (slot.status !== "done") startTool(toolEventId(id as ConversationId, slot.callId), slot.name, args?.type === "toolCall" ? args.arguments : {}, parent ? String(parent.id) : undefined);
 							}
 						};
 						await restoreChild(child.snapshot);
@@ -129,7 +131,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								if (event.type === "tool_execution_end") {
 									const toolId = toolEventId(id as ConversationId, event.toolCallId); const result = event.entry?.model?.[0];
 									emit({ type: EventType.TOOL_CALL_END, toolCallId: toolId });
-									emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? toolId), toolCallId: toolId, role: "tool", content: result && "content" in result ? toolResultContent(result.content) : "" });
+									emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? toolId), toolCallId: toolId, role: "tool", content: result && "content" in result ? toolResultContent(chatContent(result.content, String(id), String(event.entry?.id))) : "" });
 									if (result?.role === "toolResult" && result.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: toolId, toolName: event.toolName, isError: result.isError, details: result.details } });
 								}
 							}
@@ -143,7 +145,6 @@ export class LoomAgUiAgent extends AbstractAgent {
 						}
 					};
 					const knownTools = new Set<string>();
-					const snapshottedTools = new Set<string>();
 					const progress = new Map<string, string>();
 					let submittedEntry: string | undefined;
 					// A follow-up run starts in the same commit that ends the previous one.
@@ -156,36 +157,31 @@ export class LoomAgUiAgent extends AbstractAgent {
 						boundaryWait = Promise.withResolvers<void>();
 						current.resolve();
 					};
-					const startTool = (id: string, name: string, args: unknown) => {
+					const startTool = (id: string, name: string, args: unknown, parentMessageId = messageId) => {
 						if (knownTools.has(id)) return;
 						close(); knownTools.add(id);
-						emit({ type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: name, parentMessageId: messageId });
-						if (!snapshottedTools.has(id)) emit({ type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: JSON.stringify(args) });
+						emit({ type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: name, parentMessageId });
+						emit({ type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: JSON.stringify(args) });
 					};
 					const existingRequest = submit ? await owner.harness.commit((tx) => tx.submissionByRequest(conversation.id, input.runId), context) : undefined;
-					const snapshotMessages = async () => {
-						const messages = toAgUiMessages((await this.host.getSession(input.threadId)).messages);
-						const optimisticUser = input.messages.findLast((message) => message.role === "user");
-						// Before admission, keep the current user row. Removing it makes the renderer
-						// mistake the live assistant/tool messages for another thread's continuation.
-						if (submit && !existingRequest && !submittedEntry && optimisticUser) messages.push(optimisticUser);
-						return messages;
-					};
+					const optimisticUser = input.messages.findLast((message) => message.role === "user");
 					const onEvent = async (event: AgentEvent) => {
 						if (cancelled) return;
 						switch (event.type) {
 							case "snapshot": {
-								const messages = await snapshotMessages();
-								for (const message of messages) if (message.role === "assistant") for (const call of message.toolCalls ?? []) snapshottedTools.add(call.id);
-								emit({ type: EventType.MESSAGES_SNAPSHOT, messages });
-								if (!submit && event.generation?.message) {
+								// History is loaded once over IPC. This stream owns only optimistic input and active work.
+								close();
+								messageId = temporaryId(); sentText = ""; sentThinking = ""; partialBlocks.clear(); knownTools.clear();
+								emit({ type: EventType.MESSAGES_SNAPSHOT, messages: submit && !existingRequest && !submittedEntry && optimisticUser ? [optimisticUser] : [] });
+								if (event.generation?.message) {
 									partialBlocks.clear();
 									event.generation.message.content.forEach((block, index) => partialBlocks.set(index, { ...block }));
 									renderPartial();
 								}
 								for (const slot of event.tools) {
 									const args = event.entries.flatMap((entry) => entry.model ?? []).flatMap((message) => message.role === "assistant" ? message.content : []).find((part) => part.type === "toolCall" && part.id === slot.callId);
-									if (slot.status !== "done") startTool(toolEventId(conversation.id, slot.callId), slot.name, args?.type === "toolCall" ? args.arguments : {});
+									const parent = event.entries.find((entry) => entry.model?.some((message) => message.role === "assistant" && message.content.some((part) => part.type === "toolCall" && part.id === slot.callId)));
+									if (slot.status !== "done") startTool(toolEventId(conversation.id, slot.callId), slot.name, args?.type === "toolCall" ? args.arguments : {}, parent ? String(parent.id) : undefined);
 									const childId = (slot.details as { conversationId?: number } | undefined)?.conversationId;
 									if (childId) await watchChild(childId);
 								}
@@ -217,8 +213,8 @@ export class LoomAgUiAgent extends AbstractAgent {
 								const message = event.entry.model?.[0];
 								if (message?.role === "user") {
 									const id = String(event.entry.id);
-									if (!submittedEntry) { submittedEntry = id; emit({ type: EventType.CUSTOM, name: "loom.user_entry", value: { entryId: id } }); }
-									else { emit({ type: EventType.TEXT_MESSAGE_START, role: "user", messageId: id }); emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: id, delta: (event.entry.data as { text?: string })?.text ?? transcriptText(message.content) }); emit({ type: EventType.TEXT_MESSAGE_END, messageId: id }); }
+									if (submit && !submittedEntry) { submittedEntry = id; emit({ type: EventType.CUSTOM, name: "loom.user_entry", value: { fromId: optimisticUser?.id, entryId: id } }); }
+									else { emit({ type: EventType.TEXT_MESSAGE_START, role: "user", messageId: id, metadata: { "loom.clientMessageId": (event.entry.data as { clientMessageId?: string })?.clientMessageId ?? "" } }); emit({ type: EventType.TEXT_MESSAGE_CONTENT, messageId: id, delta: (event.entry.data as { text?: string })?.text ?? transcriptText(message.content) }); emit({ type: EventType.TEXT_MESSAGE_END, messageId: id }); }
 									break;
 								}
 								if (message?.role !== "assistant") break;
@@ -245,7 +241,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 								const id = toolEventId(conversation.id, event.toolCallId); const result = event.entry?.model?.[0];
 								emit({ type: EventType.TOOL_CALL_END, toolCallId: id });
 								emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: `loom-tool-${id}`, activityType: "loom.tool_progress", content: { name: event.toolName, text: "", hidden: true } });
-								emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? id), toolCallId: id, role: "tool", content: result && "content" in result ? toolResultContent(result.content) : JSON.stringify(event.result?.structuredOutput ?? "") });
+								emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(event.entry?.id ?? id), toolCallId: id, role: "tool", content: result && "content" in result ? toolResultContent(chatContent(result.content, input.threadId, String(event.entry?.id))) : JSON.stringify(event.result?.structuredOutput ?? "") });
 								if (result?.role === "toolResult" && result.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: id, toolName: event.toolName, isError: result.isError, details: result.details } });
 								break;
 							}
@@ -307,7 +303,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 						}
 					};
 					if (submit) {
-						const submission = await conversation.submit({ type: "input", content, whenBusy: "reject", requestId: input.runId, entry: { kind: "loom.user", data: { text: body } } }, context);
+						const submission = await conversation.submit({ type: "input", content, whenBusy: "reject", requestId: input.runId, entry: { kind: "loom.user", data: { text: body, clientMessageId: optimisticUser?.id ?? "" } } }, context);
 						const settled = await submission.wait(context);
 						if (settled.status === "unanswered" && settled.reason !== "aborted") throw new Error(typeof settled.detail === "string" ? settled.detail : settled.reason);
 						const answerSeen = settled.status === "done" && settled.type === "input" && stream.snapshot.entries.some((entry) => entry.id === settled.answer);
@@ -321,7 +317,7 @@ export class LoomAgUiAgent extends AbstractAgent {
 						} else if (!cancelled) await drainFollowUps(false);
 					} else if (stream.snapshot.run || await placedInput()) await drainFollowUps(true);
 					close();
-					if (!cancelled) { emit({ type: EventType.MESSAGES_SNAPSHOT, messages: toAgUiMessages((await this.host.getSession(input.threadId)).messages) }); emit({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId }); }
+					if (!cancelled) { emit({ type: EventType.CUSTOM, name: "loom.history_changed", value: { threadId: input.threadId } }); emit({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId }); }
 				} catch (error) {
 					if (!cancelled) emit({ type: EventType.RUN_ERROR, message: formatChatError(error) });
 				} finally {

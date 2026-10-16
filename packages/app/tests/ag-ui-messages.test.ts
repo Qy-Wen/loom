@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { adoptMessageId, adoptUserEntryId, freshUserTurn, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
+import { adoptMessageId, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
 import { formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
@@ -84,105 +84,34 @@ test("live messages from another session stay hidden", () => {
 	assert.deepEqual(liveMessagesForSession("", "session-b", next, null), []);
 });
 
-test("mergeChatMessages keeps stored history when live is empty and appends new turns", () => {
+test("committed history and live increments merge by stable ID", () => {
 	const stored = toAgUiMessages([
-		{ role: "user", content: "old" },
-		{ role: "assistant", content: "reply" },
+		{ id: "u0", role: "user", content: "first" },
+		{ id: "a0", role: "assistant", content: [{ type: "thinking", thinking: "reasoning" }, { type: "text", text: "answer" }] },
+		{ id: "u1", role: "user", content: "next" },
 	]);
-	assert.equal(mergeChatMessages(stored, []).length, 2);
-	const live = [
-		{ id: "n1", role: "user" as const, content: "new" },
-		{ id: "n2", role: "assistant" as const, content: "ok" },
-	];
-	assert.deepEqual(
-		mergeChatMessages(stored, live).map((message) => ("content" in message ? message.content : "")),
-		["old", "reply", "new", "ok"],
-	);
-	assert.equal(mergeChatMessages(stored, stored).length, 2);
-	const branched = [
-		{ id: "u1", role: "user" as const, content: "old" },
-		{ id: "a2", role: "assistant" as const, content: "other reply" },
-	];
-	const stale = [
-		{ id: "u1", role: "user" as const, content: "old" },
-		{ id: "a1", role: "assistant" as const, content: "reply" },
-	];
-	assert.equal(mergeChatMessages(branched, stale)[1]?.id, "a2");
-	const storedTurn = [
-		{ id: "user-1", role: "user" as const, content: "背一首李白的诗" },
-		{ id: "asst-1-thinking", role: "reasoning" as const, content: "think" },
-		{ id: "asst-1", role: "assistant" as const, content: "望庐山瀑布" },
-	];
-	const streamingTurn = [
-		{ id: "user-1", role: "user" as const, content: "背一首李白的诗" },
-		{ id: "think-1", role: "reasoning" as const, content: "think" },
-		{ id: "asst-1", role: "assistant" as const, content: "望庐山瀑布" },
-		{ id: "user-2", role: "user" as const, content: "创建一个pdf" },
-		{ id: "think-2", role: "reasoning" as const, content: "planning" },
-		{ id: "msg-2", role: "assistant" as const, content: "looking" },
-	];
-	const continued = mergeChatMessages(storedTurn, streamingTurn);
-	assert.deepEqual(continued.map((message) => message.id), ["user-1", "asst-1-thinking", "asst-1", "user-2", "think-2", "msg-2"]);
-	const reloaded = [{ id: "entry-1", role: "user" as const, content: "bicycles" }];
-	const streaming = [
-		{ id: "ck-1", role: "user" as const, content: "bicycles" },
-		{ id: "ck-2", role: "assistant" as const, content: "looking" },
-	];
-	assert.equal(mergeChatMessages(reloaded, streaming).at(-1)?.content, "looking");
-	const saved = [
-		{ id: "user-0", role: "user" as const, content: "你好" },
-		{ id: "asst-0", role: "assistant" as const, content: "你好" },
-		{ id: "user-1", role: "user" as const, content: "背一首宋徽宗的诗" },
-		{ id: "asst-1-thinking", role: "reasoning" as const, content: "The user asks" },
-		{ id: "asst-1", role: "assistant" as const, content: "秋劲拒霜盛" },
-	];
-	const liveFinished = [
-		{ id: "user-1", role: "user" as const, content: "背一首宋徽宗的诗" },
-		{ id: "think-1", role: "reasoning" as const, content: "The user asks" },
-		{ id: "asst-1", role: "assistant" as const, content: "秋劲拒霜盛" },
-	];
-	assert.deepEqual(mergeChatMessages(saved, liveFinished).map((message) => message.id), saved.map((message) => message.id));
-	const streamingOnly = saved.slice(0, 2);
-	assert.deepEqual(
-		mergeChatMessages(streamingOnly, liveFinished).map((message) => message.id),
-		["user-0", "asst-0", "user-1", "think-1", "asst-1"],
-	);
+	const live = [...stored, { id: "live-thinking", role: "reasoning" as const, content: "thinking" }, { id: "live-answer", role: "assistant" as const, content: "partial" }];
+	assert.deepEqual(mergeChatMessages(stored, []), stored);
+	assert.deepEqual(mergeChatMessages(stored, stored), stored);
+	assert.deepEqual(mergeChatMessages(stored, live), [...stored, ...live.slice(stored.length)]);
+	const adopted = adoptMessageId(live, "live-answer", "a1")!;
+	const complete = [...stored, { id: "a1", role: "assistant" as const, content: "complete" }];
+	assert.equal(mergeChatMessages(complete, adopted).find((message) => message.id === "a1")?.content, "complete");
 });
 
-test("later streamed turns remain visible after user admission despite historical reasoning ID differences", () => {
-	const saved = [
-		{ id: "u0", role: "user" as const, content: "first" },
-		{ id: "a0-thinking", role: "reasoning" as const, content: "reasoning" },
-		{ id: "a0", role: "assistant" as const, content: "first answer" },
-		{ id: "u1", role: "user" as const, content: "second" },
-	];
-	const live = [
-		saved[0]!, { ...saved[1]!, id: "live0-thinking" }, saved[2]!, saved[3]!,
-		{ id: "live1-thinking", role: "reasoning" as const, content: "next reasoning" },
-		{ id: "live1", role: "assistant" as const, content: "partial" },
-	];
-	assert.deepEqual(mergeChatMessages(saved, live), [...saved, ...live.slice(4)]);
-	assert.deepEqual(mergeChatMessages(saved, live.slice(3)), [...saved, ...live.slice(4)]);
-	assert.equal(mergeChatMessages(saved, [...live.slice(0, -1), { ...live.at(-1)!, content: "partial plus more" }]).at(-1)?.content, "partial plus more");
-	const completed = [...saved, { id: "a1-thinking", role: "reasoning" as const, content: "next reasoning" }, { id: "a1", role: "assistant" as const, content: "complete" }];
-	const ended = [...live.slice(0, -1), completed.at(-1)!];
-	assert.deepEqual(mergeChatMessages(completed, ended), completed, "saved completion must not duplicate historical reasoning");
+test("admission before its stream event replaces only the matching optimistic user", () => {
+	const stored = toAgUiMessages([{ id: "saved", role: "user", content: "question", clientMessageId: "optimistic" }]);
+	const live = [{ id: "optimistic", role: "user" as const, content: "question" }, { id: "different", role: "user" as const, content: "question" }];
+	assert.deepEqual(mergeChatMessages(stored, live).map((message) => message.id), ["saved", "different"]);
 });
 
-test("mergeChatMessages treats spacing around a chip as the same turn", () => {
-	const block = "<asset_ref>\npath: clips/hero.png\nasset_id: asset-1\ntype: image\n</asset_ref>";
-	const stored = toAgUiMessages([
-		{ role: "user", content: `${block}\n\n这是啥` },
-		{ role: "assistant", content: "一只金毛" },
-	]);
-	const live = [
-		{ id: "ck-1", role: "user" as const, content: `\n\n${block}\n\n这是啥` },
-		{ id: "ck-2", role: "assistant" as const, content: "一只金毛" },
-	];
-	const merged = mergeChatMessages(stored, live);
-	assert.equal(merged.length, 2);
-	assert.match(String(merged[0] && "content" in merged[0] ? merged[0].content : ""), /<asset_ref>/);
-	assert.equal(merged[1] && "content" in merged[1] ? merged[1].content : "", "一只金毛");
+test("live specialist calls remain visible alongside their committed parent", () => {
+	const parent = { id: "a", role: "assistant" as const, content: "delegating", toolCalls: [{ id: "parent", type: "function" as const, function: { name: "run_create_agent", arguments: "{}" } }] };
+	const child = { id: "child", type: "function" as const, function: { name: "write", arguments: '{"path":"output.txt"}' } };
+	const merged = mergeChatMessages([parent], [{ ...parent, content: "", toolCalls: [...parent.toolCalls, child] }]);
+	assert.equal(merged.length, 1);
+	assert.equal(merged[0]?.content, "delegating");
+	assert.deepEqual(merged[0]?.role === "assistant" ? merged[0].toolCalls : [], [...parent.toolCalls, child]);
 });
 
 test("toAgUiMessages collapses offline retry attempts into one request failure", () => {
@@ -213,27 +142,11 @@ test("toAgUiMessages drops failed attempts once a reply arrives", () => {
 	);
 });
 
-test("a saved user entry id replaces the on-screen id and is visible as a new turn", () => {
-	const previous = [
-		{ id: "old-user", role: "user" as const, content: "first" },
-		{ id: "old-assistant", role: "assistant" as const, content: "reply" },
-	];
-	const before = new Set(previous.map((message) => message.id));
-	assert.equal(freshUserTurn(previous, before), false);
-	const adopted = adoptUserEntryId([
-		...previous,
-		{ id: "local-user", role: "user", content: "edited" },
-	], "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f");
-	assert.equal(adopted?.[adopted.length - 1]?.id, "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f");
-	assert.equal(adoptUserEntryId(adopted ?? [], "0192a1c0-7b3e-7c21-8d10-0a1b2c3d4e5f"), null);
-	const renamed = adoptMessageId([
-		{ id: "msg-1", role: "assistant", content: "hello" },
-		{ id: "tool-result-1", role: "tool", content: "ok", toolCallId: "call-1" },
-	], "tool-result-1", "0192a1c0-7b42-7abc-8000-abcdef012345");
-	assert.equal(renamed?.[1]?.id, "0192a1c0-7b42-7abc-8000-abcdef012345");
-	assert.equal(renamed?.[0]?.id, "msg-1");
-	assert.equal(adoptMessageId(renamed ?? [], "missing", "0192a1c0-7b42-7abc-8000-abcdef012345"), null);
-	assert.equal(freshUserTurn(adopted ?? [], before), true);
+test("adoption renames both answer and reasoning without touching other rows", () => {
+	const live = [{ id: "temporary-thinking", role: "reasoning" as const, content: "thinking" }, { id: "temporary", role: "assistant" as const, content: "answer" }, { id: "user", role: "user" as const, content: "same text" }];
+	const adopted = adoptMessageId(live, "temporary", "saved")!;
+	assert.deepEqual(adopted.map((message) => message.id), ["saved-thinking", "saved", "user"]);
+	assert.equal(adoptMessageId(adopted, "missing", "other"), null);
 });
 
 test("chat error message ids are distinct from model replies", () => {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import type {
 	Asset,
 	AssetEnrichment,
@@ -13,7 +13,7 @@ import type {
 	VideoVlmStatus,
 	AudioWriteupStatus,
 } from "@loom/core";
-import type { AssetRefAttachment, LoomContextUsage, LoomSessionRecord, LoomSessionSummary as SessionSummary, LoomTranscriptMessage } from "@loom/agent";
+import type { AssetRefAttachment } from "@loom/agent";
 import { formatBytes } from "../assets/asset-utils.ts";
 import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
@@ -25,6 +25,7 @@ import { SuggestInput } from "./suggest-input.tsx";
 import { TagEditor } from "./tag-editor.tsx";
 import { SessionBar } from "./session-bar.tsx";
 import { SessionChat } from "./session-chat.tsx";
+import { useSessions } from "./use-sessions.ts";
 import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
 import { setCommandAllows } from "./command-allows.ts";
@@ -71,27 +72,11 @@ export function AgentPanel({
 	onComposerAttachApplied,
 }: AgentPanelProps): React.JSX.Element {
 	const { t } = useLocale();
-	const [sessions, setSessions] = useState<SessionSummary[]>([]);
-	const [sessionId, setSessionId] = useState<string | null>(null);
-	const sessionIdRef = useRef<string | null>(null);
-	sessionIdRef.current = sessionId;
-	const [sessionMessages, setSessionMessages] = useState<LoomTranscriptMessage[]>([]);
-	const [sessionContext, setSessionContext] = useState<LoomContextUsage | null>(null);
-	const [composerDraft, setComposerDraft] = useState<{ sessionId: string; text: string } | null>(null);
-	const [sessionBusy, setSessionBusy] = useState(false);
-	const [sessionError, setSessionError] = useState<string | null>(null);
-
-	function applyRecord(record: LoomSessionRecord): void {
-		if (sessionIdRef.current !== record.id) return;
-		setSessionMessages(record.messages);
-		setSessionContext(record.context ?? null);
-	}
-	function activateRecord(record: LoomSessionRecord): void {
-		// Switch the async-response guard immediately, before React commits the new session.
-		sessionIdRef.current = record.id;
-		setSessionId(record.id);
-		applyRecord(record);
-	}
+	const {
+		sessions, record, busy: sessionBusy, error: sessionError, draft: composerDraft, setDraft: setComposerDraft,
+		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession,
+	} = useSessions(libraryRoot, t.sessions.deleteConfirm);
+	const sessionId = record?.id ?? null;
 
 	useEffect(() => {
 		if (!libraryRoot) {
@@ -111,133 +96,6 @@ export function AgentPanel({
 			stop();
 		};
 	}, [libraryRoot]);
-
-	useEffect(() => {
-		if (!libraryRoot) {
-			setSessions([]);
-			setSessionId(null);
-			setSessionMessages([]);
-			setSessionContext(null);
-			setComposerDraft(null);
-			setSessionError(null);
-			return;
-		}
-		let active = true;
-		void syncSessions();
-		const unsubscribe = window.loom.onSessionsChanged((list) => {
-			setSessions(list);
-			const current = sessionIdRef.current;
-			if (!current || !list.some((session) => session.id === current)) return;
-			void window.loom.getSession(current).then((record) => {
-				if (active && sessionIdRef.current === current) applyRecord(record);
-			}).catch(() => undefined);
-		});
-		return () => {
-			active = false;
-			unsubscribe();
-		};
-	}, [libraryRoot]);
-
-	async function refreshSessions(): Promise<SessionSummary[]> {
-		const list = await window.loom.listSessions();
-		setSessions(list);
-		return list;
-	}
-
-	async function syncSessions(preferId?: string): Promise<void> {
-		setSessionBusy(true);
-		setSessionError(null);
-		try {
-			const list = await refreshSessions();
-			const open = list.filter((session) => session.status === "open");
-			const next = (preferId && list.some((session) => session.id === preferId))
-				? preferId
-				: (open[0]?.id ?? null);
-			if (next) {
-				if (list.find((session) => session.id === next)?.status === "archived") {
-					await window.loom.unarchiveSession(next);
-				}
-				const record = await window.loom.openSession(next);
-				activateRecord(record);
-				setSessions(await window.loom.listSessions());
-				return;
-			}
-			const created = await window.loom.createSession();
-			activateRecord(created);
-			setSessions(await window.loom.listSessions());
-		} catch (cause) {
-			setSessionError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setSessionBusy(false);
-		}
-	}
-
-	async function createSession(): Promise<void> {
-		setSessionBusy(true);
-		setSessionError(null);
-		try {
-			const created = await window.loom.createSession();
-			activateRecord(created);
-			setSessions(await window.loom.listSessions());
-		} catch (cause) {
-			setSessionError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setSessionBusy(false);
-		}
-	}
-
-	async function selectSession(id: string): Promise<void> {
-		if (id === sessionId) return;
-		setSessionBusy(true);
-		setSessionError(null);
-		try {
-			const selected = sessions.find((session) => session.id === id);
-			if (selected?.status === "archived") await window.loom.unarchiveSession(id);
-			const record = await window.loom.openSession(id);
-			activateRecord(record);
-			setSessions(await window.loom.listSessions());
-		} catch (cause) {
-			setSessionError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setSessionBusy(false);
-		}
-	}
-
-	async function archiveSession(id: string): Promise<void> {
-		setSessionBusy(true);
-		setSessionError(null);
-		try {
-			await window.loom.archiveSession(id);
-			await syncSessions();
-		} catch (cause) {
-			setSessionError(cause instanceof Error ? cause.message : String(cause));
-			setSessionBusy(false);
-		}
-	}
-
-	async function deleteSession(id: string): Promise<void> {
-		if (!window.confirm(t.sessions.deleteConfirm)) return;
-		setSessionBusy(true);
-		setSessionError(null);
-		try {
-			if (id === sessionId) {
-				const fallback = sessions.find((session) => session.id !== id && session.status === "open");
-				if (fallback) {
-					const record = await window.loom.openSession(fallback.id);
-					activateRecord(record);
-				} else {
-					const created = await window.loom.createSession();
-					activateRecord(created);
-				}
-			}
-			await window.loom.deleteSession(id);
-			setSessions(await window.loom.listSessions());
-		} catch (cause) {
-			setSessionError(cause instanceof Error ? cause.message : String(cause));
-		} finally {
-			setSessionBusy(false);
-		}
-	}
 
 	return (
 		<div className="side-panel">
@@ -264,17 +122,18 @@ export function AgentPanel({
 								<ToolCallViews libraryRoot={libraryRoot} />
 								<SessionChat
 									threadId={sessionId}
-									messages={sessionMessages}
-									context={sessionContext}
+									messages={record!.messages}
+									context={record!.context ?? null}
 									composerDraft={composerDraft?.sessionId === sessionId ? composerDraft.text : null}
 									onComposerDraftApplied={() => setComposerDraft(null)}
 									composerAttach={composerAttach}
 									onComposerAttachApplied={onComposerAttachApplied}
 									onSessionRecord={activateRecord}
+									onHistoryChanged={() => { void refreshCurrent(); }}
 									onForked={(record, text) => {
 										activateRecord(record);
 										setComposerDraft({ sessionId: record.id, text });
-										void window.loom.listSessions().then(setSessions).catch(() => undefined);
+										void refreshSessions().catch(() => undefined);
 									}}
 								/>
 							</div>

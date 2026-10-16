@@ -108,22 +108,31 @@ export class LibraryAgentHost {
 	}
 	async createSession() { const conversation = await this.requireOwner().createConversation({}, context); return this.getSession(String(conversation.id)); }
 	async openSession(id: string) { return this.getSession(id); }
-	async getSession(id: string): Promise<LoomSessionRecord> {
+	async getChatImage(id: string, entryId: string, contentIndex: number): Promise<{ data: string; mimeType: string } | undefined> {
+		if (!Number.isSafeInteger(contentIndex) || contentIndex < 0) return undefined;
+		const conversation = await this.conversation(id);
+		const entry = (await conversation.entries({ maxEntryId: idOf<EntryId>(entryId) }, 1, undefined, context)).items[0];
+		if (String(entry?.id) !== entryId) return undefined;
+		const content = entry?.model?.[0]?.content;
+		const part = Array.isArray(content) ? content[contentIndex] : undefined;
+		return part?.type === "image" ? { data: part.data, mimeType: part.mimeType } : undefined;
+	}
+	async getSession(id: string, afterEntryId?: string): Promise<LoomSessionRecord> {
 		const owner = this.requireOwner();
 		const conversation = await this.conversation(id);
 		const metadata = await owner.harness.snapshot(LoomConversationDoc, conversation.id, context);
-		const entries = await this.history(conversation);
+		const entries = await this.history(conversation, afterEntryId);
 		const messages = entries.flatMap((entry) => (entry.model ?? []).filter((message) => message.role !== "system").map((message) => ({
 			...message, id: String(entry.id),
 			...(message.role === "assistant" ? { content: message.content.map((part) => part.type === "toolCall" ? { ...part, id: toolEventId(entry.conversationId, part.id) } : part) } : {}),
 			...(message.role === "toolResult" ? { toolCallId: toolEventId(entry.conversationId, message.toolCallId) } : {}),
-			...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text } : {}),
+			...(entry.kind === "loom.user" ? { displayContent: (entry.data as { text?: string })?.text, clientMessageId: (entry.data as { clientMessageId?: string })?.clientMessageId } : {}),
 		})));
 		const agent = await conversation.agent(context);
 		const ref = agent.model;
 		const model = ref && this.#models?.getModel(ref.provider, ref.modelId);
 		const usage = ref && model && model.contextWindow > 0 ? contextUsage(await conversation.context(context), ref, model.contextWindow) : undefined;
-		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage };
+		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireOwner().harness, idOf(id), title, context); }
 	async archiveSession(id: string) {
@@ -201,13 +210,13 @@ export class LibraryAgentHost {
 		for (const child of specialists) this.owner.registry.install(child);
 	}
 	/** UI transcript is fork-aware history, not the model's compacted active context. */
-	private async history(conversation: Conversation): Promise<EntryRecord[]> {
+	private async history(conversation: Conversation, afterEntryId?: string): Promise<EntryRecord[]> {
 		const tail = (await conversation.entries({}, 1, undefined, context)).items[0]?.id;
 		if (tail === undefined) return [];
 		const entries: EntryRecord[] = [];
 		let cursor: Cursor | undefined;
 		do {
-			const page = await conversation.entries({ order: "ascending", maxEntryId: tail }, 256, cursor, context);
+			const page = await conversation.entries({ order: "ascending", maxEntryId: tail, ...(afterEntryId ? { minEntryId: (idOf<EntryId>(afterEntryId) + 1) as EntryId } : {}) }, 256, cursor, context);
 			entries.push(...page.items.filter((entry) => !CompactionEntry.is(entry)));
 			cursor = page.next;
 		} while (cursor !== undefined);

@@ -88,7 +88,7 @@ function ToolCallCard({
 			) : null}
 			{images.length > 0 ? (
 				<div className="tool-call-images">
-					{images.map((part, index) => <img key={index} src={`data:${part.mimeType};base64,${part.data}`} alt={`${t.tool.image} ${index + 1}`} />)}
+					{images.map((part, index) => <img key={index} src={"url" in part ? part.url : `data:${part.mimeType};base64,${part.data}`} loading="lazy" decoding="async" alt={`${t.tool.image} ${index + 1}`} />)}
 				</div>
 			) : null}
 			{refs ? (

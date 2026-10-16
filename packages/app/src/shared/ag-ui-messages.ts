@@ -1,6 +1,5 @@
 import type { Message, ToolCall } from "@ag-ui/core";
 import type { LoomTranscriptMessage } from "@loom/agent";
-import { splitStoredAssetText } from "@loom/agent/composer-asset";
 import { CHAT_ERROR_ID_PREFIX, formatChatError } from "./chat-error.ts";
 import { toolResultParts } from "./tool-result-content.ts";
 
@@ -88,7 +87,7 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 		const message = messages[index]!;
 		const id = typeof message.id === "string" && message.id ? message.id : `loom-${index}`;
 		if (message.role === "user") {
-			out.push({ id, role: "user", content: userBubbleContent(message) });
+			out.push({ id, role: "user", content: userBubbleContent(message), ...(typeof message.clientMessageId === "string" && message.clientMessageId ? { metadata: { "loom.clientMessageId": message.clientMessageId } } : {}) });
 			continue;
 		}
 		if (message.role === "assistant" && isBlankTerminalAssistant(message)) {
@@ -146,93 +145,14 @@ function userBubbleContent(message: LoomTranscriptMessage): string {
 	return transcriptText(message.displayContent ?? message.content).replaceAll("\u200b", "");
 }
 
-function textOf(message: Message): string {
-	const content = "content" in message ? message.content : "";
-	return transcriptText(content).replaceAll("\u200b", "");
-}
-
-/** Words plus placed asset ids, so spacing around a chip does not look like a new turn. */
-function comparableUserText(text: string): string {
-	const parts = splitStoredAssetText(text);
-	const words = parts.flatMap((part) => part.type === "text" ? [part.text] : []).join("").replace(/\s+/g, " ").trim();
-	const ids = parts.flatMap((part) => part.type === "asset" ? [part.assetId] : []).sort();
-	return `${words}\0${ids.join(",")}`;
-}
-
-function fingerprint(message: Message): string {
-	const text = textOf(message);
-	return `${message.role}:${message.role === "user" ? comparableUserText(text) : text}`;
-}
-
-function overlayComposerImages(stored: Message[], live: Message[]): Message[] {
-	return live.map((message, index) => {
-		const prior = stored[index];
-		if (!prior || prior.role !== "user" || message.role !== "user") return message;
-		if (comparableUserText(textOf(prior)) !== comparableUserText(textOf(message))) return message;
-		if (textOf(prior) === textOf(message) && !Array.isArray(prior.content)) return message;
-		return { ...message, content: prior.content };
-	});
-}
-
-/**
- * Same ids, then a different successor: the live list is a path we already left.
- * A new session's first disk reload uses harness ids while the stream uses its own,
- * so a mismatch before any shared id is not a branch.
- */
-function diverged(stored: Message[], live: Message[]): boolean {
-	const limit = Math.min(stored.length, live.length);
-	let matched = false;
-	for (let index = 0; index < limit; index++) {
-		const storedId = stored[index]?.id;
-		const liveId = live[index]?.id;
-		if (!storedId || !liveId) return false;
-		if (storedId !== liveId) return matched;
-		matched = true;
-	}
-	return false;
-}
-
-/**
- * Append new user turns or increments after the shared saved tail. Historical reasoning
- * IDs may differ; do not append completed live turns and duplicate their thinking.
- */
-function continuation(stored: Message[], live: Message[]): Message[] | null {
-	const storedUsers = new Set(stored.flatMap((message) => message.role === "user" && message.id ? [message.id] : []));
-	const start = live.findIndex((message) => message.role === "user" && !!message.id && !storedUsers.has(message.id));
-	if (start >= 0) return [...stored, ...live.slice(start)];
-	// Admission gives the current user its durable ID before its answer commits.
-	// Historical reasoning IDs may differ, but a shared transcript tail still anchors live increments.
-	const tail = stored.at(-1);
-	if (!tail?.id) return null;
-	const anchor = live.findLastIndex((message) => message.id === tail.id && fingerprint(message) === fingerprint(tail));
-	return anchor < 0 ? null : [...stored, ...live.slice(anchor + 1)];
-}
-
-/** Replace one on-screen message id with the entry id assigned when it was saved. */
+/** Rename the streamed answer and its reasoning together when durable assigns the entry ID. */
 export function adoptMessageId(messages: readonly Message[], fromId: string, entryId: string): Message[] | null {
-	const index = messages.findIndex((message) => message.id === fromId);
-	if (index < 0 || messages[index]?.id === entryId) return null;
-	const next = messages.slice();
-	next[index] = { ...messages[index]!, id: entryId };
-	return next;
-}
-
-/** Point the latest on-screen user message at the entry id assigned when it was saved. */
-export function adoptUserEntryId(messages: readonly Message[], entryId: string): Message[] | null {
-	for (let index = messages.length - 1; index >= 0; index--) {
-		const message = messages[index];
-		if (!message || message.role !== "user") continue;
-		if (message.id === entryId) return null;
-		const next = messages.slice();
-		next[index] = { ...message, id: entryId };
-		return next;
-	}
-	return null;
-}
-
-/** A user message whose id was not already on this list. */
-export function freshUserTurn(messages: readonly Message[], beforeIds: ReadonlySet<string>): boolean {
-	return messages.some((message) => message.role === "user" && !!message.id && !beforeIds.has(message.id));
+	if (fromId === entryId || !messages.some((message) => message.id === fromId || message.id === `${fromId}-thinking`)) return null;
+	return messages.map((message) => {
+		if (message.id === fromId) return { ...message, id: entryId };
+		if (message.id === `${fromId}-thinking`) return { ...message, id: `${entryId}-thinking` };
+		return message;
+	});
 }
 
 /**
@@ -254,15 +174,21 @@ export function liveMessagesForSession(
 	return live as Message[];
 }
 
-/** Show disk history when the live agent is empty; append new turns; avoid duplicates. */
+/** Durable rows are authoritative. Overlay only uncommitted/live rows, using IDs rather than text or list lengths. */
 export function mergeChatMessages(stored: Message[], live: Message[]): Message[] {
-	if (stored.length === 0) return live;
-	if (live.length === 0) return stored;
-	if (fingerprint(stored[0]!) === fingerprint(live[0]!)) {
-		if (diverged(stored, live)) return continuation(stored, live) ?? stored;
-		const chosen = live.length >= stored.length ? live : stored;
-		return chosen === live ? overlayComposerImages(stored, live) : stored;
+	const committed = new Set(stored.map((message) => message.id));
+	for (const message of stored) {
+		const clientId = message.metadata?.["loom.clientMessageId"];
+		if (typeof clientId === "string") committed.add(clientId);
 	}
-	// The agent often holds only the current turn, so it does not start like the transcript.
-	return continuation(stored, live) ?? stored;
+	const byId = new Map(live.map((message) => [message.id, message]));
+	const history = stored.map((message) => {
+		const current = byId.get(message.id);
+		if (message.role !== "assistant" || current?.role !== "assistant") return message;
+		// Specialist activity can add child calls to an already committed parent row.
+		const calls = new Set(message.toolCalls?.map((call) => call.id));
+		const added = current.toolCalls?.filter((call) => !calls.has(call.id)) ?? [];
+		return added.length ? { ...message, toolCalls: [...(message.toolCalls ?? []), ...added] } : message;
+	});
+	return [...history, ...live.filter((message) => !committed.has(message.id))];
 }

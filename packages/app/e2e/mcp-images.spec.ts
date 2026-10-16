@@ -44,11 +44,24 @@ test("MCP tool images render live and after reloading the conversation", async (
 		await composer.press("Enter");
 		const image = loomPage.locator(".tool-call-images img").first();
 		await expect(image).toBeVisible();
+		await expect(image).toHaveAttribute("src", /^loom-asset:\/\/chat-image\//);
 		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(loomPage.getByText("Image result received", { exact: true }).first()).toBeVisible();
 		const card = loomPage.locator(".tool-call").filter({ has: image });
 		await expect(card.locator(".tool-call-result")).toContainText("Image from MCP");
 		await expect(card.locator(".tool-call-result")).not.toContainText("base64");
+		await loomPage.reload();
+		await expect(image).toBeVisible();
+		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await loomPage.getByRole("textbox").fill("Keep the previous image in a branch");
+		await loomPage.getByRole("textbox").press("Enter");
+		await expect(loomPage.getByText("Image result received", { exact: true })).toHaveCount(2);
+		await loomPage.evaluate(async () => {
+			const session = (await window.loom.listSessions()).find((session) => session.title === "Return an image from the MCP test tool")!;
+			const record = await window.loom.getSession(session.id);
+			const latestUser = record.messages.findLast((message) => message.role === "user")!;
+			await window.loom.branchBefore(session.id, String(latestUser.id));
+		});
 		await loomPage.reload();
 		await expect(image).toBeVisible();
 		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);

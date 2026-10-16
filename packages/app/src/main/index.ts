@@ -29,6 +29,7 @@ import {
 } from "@loom/agent";
 import { appendAppLog, appLogDirectory } from "./app-log.ts";
 import { LibraryAgentHost } from "./library-agent-host.ts";
+import { chatRecord } from "./chat-record.ts";
 import { BACKGROUND_CONTEXT as agentContext, foldUserText } from "@loom/agent";
 import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
@@ -258,6 +259,12 @@ function registerAssetProtocol(): void {
 	protocol.handle(ASSET_SCHEME, async (request) => {
 		try {
 			const url = new URL(request.url);
+			if (url.hostname === "chat-image") {
+				const match = /^\/([1-9]\d*)\/([1-9]\d*)\/(\d+)$/.exec(url.pathname);
+				const image = match ? await agentManager.getChatImage(match[1]!, match[2]!, Number(match[3])) : undefined;
+				if (!image || !/^image\/[a-z0-9.+-]+$/i.test(image.mimeType)) return new Response("Image not found", { status: 404 });
+				return new Response(Buffer.from(image.data, "base64"), { headers: { "Content-Type": image.mimeType, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" } });
+			}
 			if (url.hostname !== "asset") return new Response("Not found", { status: 404 });
 
 			const assetId = decodeURIComponent(url.pathname.slice(1));
@@ -569,9 +576,9 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => agentManager.listSessions());
-	ipcMain.handle(IPC.createSession, () => agentManager.createSession());
-	ipcMain.handle(IPC.openSession, (_event, id: string) => agentManager.openSession(id));
-	ipcMain.handle(IPC.getSession, (_event, id: string) => agentManager.getSession(id));
+	ipcMain.handle(IPC.createSession, async () => chatRecord(await agentManager.createSession()));
+	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await agentManager.openSession(id)));
+	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await agentManager.getSession(id, afterEntryId)));
 	ipcMain.handle(IPC.stageComposerImages, (_event, id: string, images: unknown) => {
 		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
 		stageComposerImages(id, images);
@@ -619,7 +626,7 @@ function registerIpc(): void {
 		if (result.canceled || result.filePaths.length === 0) return [];
 		return draftsFromAssets(await localCore.importExternalFiles(result.filePaths));
 	});
-	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string) => {
+	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string, clientMessageId?: string) => {
 		const session = await agentManager.getSession(id);
 		const images = await takeComposerImages(id);
 		const chips = await takeLiveComposerAssets(id);
@@ -630,11 +637,11 @@ function registerIpc(): void {
 		await (await agentManager.conversation(id)).submit({
 			type: "input", whenBusy: "followUp",
 			content: images.length ? [{ type: "text", text: content }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : content,
-			entry: { kind: "loom.user", data: { text: body } },
+			entry: { kind: "loom.user", data: { text: body, clientMessageId: clientMessageId ?? "" } },
 		}, agentContext);
 	});
-	ipcMain.handle(IPC.branchBefore, (_event, id: string, entryId: string) => agentManager.branchBefore(id, entryId));
-	ipcMain.handle(IPC.forkBefore, (_event, id: string, entryId: string) => agentManager.forkBefore(id, entryId));
+	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string) => chatRecord(await agentManager.branchBefore(id, entryId)));
+	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await agentManager.forkBefore(id, entryId)));
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => agentManager.archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => agentManager.unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {

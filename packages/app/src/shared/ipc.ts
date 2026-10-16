@@ -229,7 +229,8 @@ export interface LoomApi {
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;
 	openSession: (id: string) => Promise<SessionRecord>;
-	getSession: (id: string) => Promise<SessionRecord>;
+	/** Load full history initially, then only entries after the last committed ID. */
+	getSession: (id: string, afterEntryId?: string) => Promise<SessionRecord>;
 	/** Hold composer images until the next prompt or follow-up on this session. */
 	stageComposerImages: (id: string, images: Array<{ filename: string; mimeType: string; data: string }>) => Promise<void>;
 	/** Hold composer library chips until the next prompt or follow-up on this session. */
@@ -242,7 +243,7 @@ export interface LoomApi {
 	pickComposerExternalFiles: () => Promise<UiSelectionDraft[]>;
 	pathForFile: (file: File) => string;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
-	followUp: (id: string, text: string) => Promise<void>;
+	followUp: (id: string, text: string, clientMessageId?: string) => Promise<void>;
 	/** Move the active path to just before this user question. */
 	branchBefore: (id: string, entryId: string) => Promise<SessionRecord>;
 	/** Open a new session from the prefix before this question. */

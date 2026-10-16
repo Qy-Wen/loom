@@ -80,7 +80,7 @@ Placed files become `<asset_ref>` blocks in user text. Implicit selection become
 
 `loom.user` entry data keeps display text, so bubbles omit the implicit reminder. Pictures are model image content. Repeated selection is detected in persisted folded content; existing messages are never rewritten. Asset refs copy stable IDs and library-relative paths; clicking resolves the current asset by ID, falling back to path.
 
-MCP forwards content blocks to the same `toDurableTool()` adapter as application tools: text/images remain native output; other blocks become JSON text. Durable applies its common text limits (2,000 lines / 50 KiB); images have no common size cap. There is no MCP-specific media processing, truncation, or file cache. AG-UI carries image results as serialized content blocks for live events and history snapshots. Tool cards show images separately from text, without printing base64 data. Text-only tool results keep their existing representation.
+MCP forwards content blocks to the same `toDurableTool()` adapter as application tools: text/images remain native output; other blocks become JSON text. Durable applies its common text limits (2,000 lines / 50 KiB); images have no common size cap. There is no MCP-specific media processing, truncation, or file cache. Original images remain in durable history for model input. UI history and live tool results carry only `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` references; tool cards load the bytes on demand instead of transporting base64 through IPC/SSE. Text-only tool results keep their existing representation.
 
 ## 6. AG-UI and live rendering
 
@@ -95,9 +95,14 @@ MCP forwards content blocks to the same `toDurableTool()` adapter as application
 | Approval document | `loom.tool_gate` activity |
 | Tool result details | `loom.tool_result` custom event |
 | Retry / compaction | retry activity / compaction custom event |
-| Attach / completion | messages snapshot |
+| Attach / reconnect | Snapshot of active work and unadmitted input only |
+| Completion | `loom.history_changed`, requesting newly committed entries |
 
-Partial updates are not only string deltas: durable also publishes whole messages and whole content blocks. Keep a per-block partial state and emit only the unseen text/thinking suffix. Initial snapshots preserve the optimistic user row until admission; otherwise the renderer's history/live merge hides the streaming continuation. Tool call IDs are namespaced by conversation in both live events and saved DTOs. When historical reasoning IDs differ from live IDs, a shared saved tail anchors subsequent increments after user admission; otherwise later turns show only a waiting dot. Acceptance covers first/later chunks across three consecutive turns and two real-model turns.
+History and live state are separate. `useSessions` initially loads full history over IPC, then requests entries after the last committed ID. It coalesces concurrent refreshes and rejects stale results after switching conversations or libraries. SSE does not send saved history; completion only invalidates it. Send requests contain only the current user message; durable builds model context.
+
+Partial state is maintained per block, emitting only unseen text/thinking suffixes. User admission persists the client message ID; assistant adoption renames both answer and reasoning IDs. History/live reconciliation uses IDs, with committed content authoritative while retaining live specialist calls. It never guesses from text, list lengths, or historical tails. Follow-ups also use client IDs to reconcile queued/admitted state. Tool call IDs are always namespaced by conversation.
+
+In the renderer, `session-chat` assembles session and branch actions; `use-sessions` owns selection and committed history, `use-chat-stream` owns live ID adoption and submission boundaries, `chat-composer` / `chat-composer-input` own input and attachments, and `chat-messages` / `chat-scroll` own display and scroll following.
 
 CopilotChat receives an explicit `threadId`, enabling native reconnect rather than manually claiming a random agent thread. Editing an earlier question forks and switches first, then submits once through the current CopilotChat send callback after the new thread connects; it does not reuse the old callback or force-replace live messages. Reload while a child waits for approval replays its card and pending state. Child tool/approval watchers attach through persisted specialist details and restore from their snapshots. Child text stays out of parent model history. Follow-ups use native `whenBusy: "followUp"`; Stop drops unadmitted inputs and aborts foreground owned work.
 

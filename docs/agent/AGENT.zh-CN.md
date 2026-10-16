@@ -79,7 +79,7 @@ git merge vendor-clean
 
 `loom.user` entry data 保存展示文字，气泡不显示隐式提醒；图片是 model image content。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
 
-MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。AG-UI 在实时事件和历史快照中用序列化内容块传递图片结果；工具卡片分别展示文字和图片，不打印 base64 数据。纯文字工具结果沿用原有表示。
+MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
 
 主 Agent 和专职 Agent 共用 `createToolResultStorage()`，在 durable 最终截断前通过 `afterTool` 保存超过 50 KiB 或 2,000 行的完整文字，路径为 `.agents/tool-results/<conversationId>/<taskId>.txt`。模型收到最多 2 KiB、UTF-8 安全的预览、完整路径和分段读取提示；图片、错误状态、UI details 和结构化结果不变。`read` 和已有 `full_output` 提示的结果不重复落盘。写入失败会警告并沿用 durable 截断。文件在重开和分支后仍保留，不自动过期；`.agents` 不作为素材索引。进入钩子前已被流式缓冲丢弃的文字无法恢复；shell 工具沿用现有落盘机制。
 
@@ -96,9 +96,14 @@ MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和�
 | 审批 document | `loom.tool_gate` activity |
 | 工具 details | `loom.tool_result` custom event |
 | 重试 / 压缩 | retry activity / compaction custom event |
-| 挂载 / 完成 | messages snapshot |
+| 挂载 / 重连 | 仅当前活动工作与待接纳输入的 snapshot |
+| 完成 | `loom.history_changed`，通知读取新增的已保存条目 |
 
-Partial 不只有字符串 delta，还有完整消息和完整内容块。按 block 维护 partial state，只发送尚未显示的 text/thinking 后缀。初始快照在 admission 前保留 optimistic user row，否则前端 history/live 合并会隐藏实时 continuation。工具 call ID 在实时事件和已保存 DTO 中都加 conversation 命名空间。历史 reasoning ID 与实时 ID 不同时，合并以共享的已保存尾消息锚定后续增量；当前 user admission 后仍保留回复流，避免第二轮起只显示等待点。验收覆盖同一会话连续三轮首块/后续块和真实模型连续两轮。
+历史与实时状态分开：`useSessions` 首次通过 IPC 加载完整历史，后续按最后一个 entry ID 读取新增条目；同一时刻只保留一次刷新请求，切换会话或素材库会拒绝过期结果。SSE 不发送已保存历史，完成时只发失效通知。发送请求只包含本次 user message，模型上下文由 durable 构建。
+
+Partial 按 block 维护，只发送尚未显示的 text/thinking 后缀。user admission 持久化客户端消息 ID；assistant 提交时同时替换正文和 reasoning ID。历史与实时消息只按 ID 合并，已保存内容为准，同时保留 live specialist 子工具调用；不按文字、数组长度或历史尾部猜测。follow-up 也使用客户端 ID 对齐排队与接纳状态。工具 call ID 始终带 conversation 命名空间。
+
+Renderer 中 `session-chat` 只组装会话与分支操作；`use-sessions` 管理选择和已保存历史，`use-chat-stream` 管理实时消息 ID 和提交边界，`chat-composer` / `chat-composer-input` 管理输入和附件，`chat-messages` / `chat-scroll` 分别管理展示和跟随滚动。
 
 CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随机 agent thread。编辑旧问题先 fork-and-switch，等待新线程连接完成后，通过当前 CopilotChat 发送入口提交一次；不复用旧线程发送回调或强制覆盖实时消息。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
 
