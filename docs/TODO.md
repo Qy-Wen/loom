@@ -35,9 +35,3 @@ Lower the barrier to model configuration, making it easier to choose and set up 
 ## Step 5: Multi-tab material viewing
 
 Consider supporting multiple tabs for viewing library items.
-
----
-
-## Step 6: Better image and video zoom controls
-
-Polish the zoom buttons shown on images and videos.

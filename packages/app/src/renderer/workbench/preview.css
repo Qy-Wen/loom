@@ -494,42 +494,62 @@
 .media-zoom-controls {
 	position: absolute;
 	z-index: 1;
-	top: 8px;
-	right: 8px;
+	top: 12px;
+	right: 12px;
 	display: flex;
 	align-items: center;
 	gap: 2px;
-	padding: 2px;
-	border-radius: 8px;
-	background: rgb(32 33 36 / 72%);
-	color: #fff;
+	padding: 3px;
+	border: 1px solid rgb(32 33 36 / 10%);
+	border-radius: 10px;
+	background: rgb(255 255 255 / 92%);
+	box-shadow: 0 2px 8px rgb(0 0 0 / 8%), 0 8px 24px rgb(0 0 0 / 4%);
+	backdrop-filter: blur(12px);
+	color: #5c5f66;
 	opacity: 0;
 	pointer-events: none;
+	transition: opacity 140ms ease;
 }
 
-.media-frame:hover .media-zoom-controls,
-.media-frame.is-zoomed .media-zoom-controls,
-.media-frame.is-panning .media-zoom-controls,
-.media-frame:focus-within .media-zoom-controls {
+.media-zoom-controls.is-visible,
+.media-zoom-controls:hover,
+.media-zoom-controls:has(:focus-visible) {
 	opacity: 1;
 	pointer-events: auto;
 }
 
 .media-zoom-controls button {
-	min-width: 22px;
-	height: 22px;
-	padding: 0 6px;
+	display: grid;
+	place-items: center;
+	flex: 0 0 auto;
+	width: 28px;
+	height: 28px;
+	padding: 0;
 	border: 0;
 	border-radius: 6px;
 	background: transparent;
 	color: inherit;
 	cursor: pointer;
-	font: 11px/1 inherit;
+	font: inherit;
+	font-size: 11px;
+	font-weight: 500;
+	line-height: 1;
 	font-variant-numeric: tabular-nums;
+	transition: background-color 100ms ease, color 100ms ease;
 }
 
 .media-zoom-controls button:hover:not(:disabled) {
-	background: rgb(255 255 255 / 16%);
+	background: rgb(32 33 36 / 6%);
+	color: #202124;
+}
+
+.media-zoom-controls button:active:not(:disabled) {
+	background: rgb(32 33 36 / 11%);
+}
+
+.media-zoom-controls button:focus-visible {
+	outline: 2px solid #5c5f66;
+	outline-offset: -2px;
 }
 
 .media-zoom-controls button:disabled {
@@ -537,8 +557,15 @@
 	cursor: default;
 }
 
-.media-zoom-percent {
-	min-width: 44px;
+.media-zoom-controls .media-zoom-percent {
+	width: 52px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.media-zoom-controls,
+	.media-zoom-controls button {
+		transition: none;
+	}
 }
 
 .media-transport {

@@ -9,7 +9,6 @@ import {
 	cursorFromViewport,
 	fittedMediaSize,
 	hasMediaSize,
-	isFittedMedia,
 	maxMediaScale,
 	mediaLayerTransform,
 	panMedia,
@@ -21,6 +20,7 @@ import {
 } from "./media-zoom.ts";
 
 const EMPTY_SIZE: MediaSize = { width: 0, height: 0 };
+const ZOOM_CONTROLS_HIDE_DELAY = 1500;
 
 function sameView(a: MediaView, b: MediaView): boolean {
 	return a.scale === b.scale && a.x === b.x && a.y === b.y;
@@ -68,15 +68,27 @@ export function MediaViewport({
 	const fitRef = useRef<MediaSize>(EMPTY_SIZE);
 	const maxRef = useRef(MAX_MEDIA_SCALE);
 	const dragRef = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+	const zoomControlsTimerRef = useRef<number | null>(null);
 	const [view, setView] = useState<MediaView>(FIT_MEDIA_VIEW);
 	const [fit, setFit] = useState<MediaSize>(EMPTY_SIZE);
 	const [maxScale, setMaxScale] = useState(MAX_MEDIA_SCALE);
 	const [media, setMedia] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
 	const [panning, setPanning] = useState(false);
+	const [zoomControlsVisible, setZoomControlsVisible] = useState(false);
 
 	function commit(next: MediaView): void {
 		viewRef.current = next;
 		setView((current) => (sameView(current, next) ? current : next));
+	}
+
+	function commitZoom(next: MediaView): void {
+		commit(next);
+		setZoomControlsVisible(true);
+		if (zoomControlsTimerRef.current !== null) window.clearTimeout(zoomControlsTimerRef.current);
+		zoomControlsTimerRef.current = window.setTimeout(() => {
+			zoomControlsTimerRef.current = null;
+			setZoomControlsVisible(false);
+		}, ZOOM_CONTROLS_HIDE_DELAY);
 	}
 
 	useLayoutEffect(() => {
@@ -88,6 +100,7 @@ export function MediaViewport({
 		setView(FIT_MEDIA_VIEW);
 		setFit(EMPTY_SIZE);
 		setMaxScale(MAX_MEDIA_SCALE);
+		setZoomControlsVisible(false);
 
 		const apply = () => {
 			const node = findMedia(viewport);
@@ -116,6 +129,8 @@ export function MediaViewport({
 		viewport.addEventListener("load", apply, true);
 		viewport.addEventListener("loadedmetadata", apply, true);
 		return () => {
+			if (zoomControlsTimerRef.current !== null) window.clearTimeout(zoomControlsTimerRef.current);
+			zoomControlsTimerRef.current = null;
 			observer.disconnect();
 			viewport.removeEventListener("load", apply, true);
 			viewport.removeEventListener("loadedmetadata", apply, true);
@@ -127,6 +142,7 @@ export function MediaViewport({
 		const viewport = viewportRef.current;
 		if (!frame || !viewport) return;
 		const onWheel = (event: WheelEvent) => {
+			if (event.deltaY === 0) return;
 			if (event.target instanceof Element && event.target.closest("[data-zoom-ui]")) return;
 			if (!hasMediaSize(fitRef.current)) return;
 			event.preventDefault();
@@ -140,7 +156,7 @@ export function MediaViewport({
 				fitRef.current,
 				maxRef.current,
 			);
-			commit(next);
+			commitZoom(next);
 		};
 		frame.addEventListener("wheel", onWheel, { passive: false });
 		return () => frame.removeEventListener("wheel", onWheel);
@@ -150,7 +166,7 @@ export function MediaViewport({
 		const viewport = viewportRef.current;
 		if (!viewport || !hasMediaSize(fitRef.current)) return;
 		const clip = viewportSize(viewport);
-		commit(zoomMediaAt(viewRef.current, { x: 0, y: 0 }, factor, clip, fitRef.current, maxRef.current));
+		commitZoom(zoomMediaAt(viewRef.current, { x: 0, y: 0 }, factor, clip, fitRef.current, maxRef.current));
 	}
 
 	function onPointerDown(event: ReactPointerEvent<HTMLDivElement>): void {
@@ -185,7 +201,7 @@ export function MediaViewport({
 		const viewport = viewportRef.current;
 		if (!viewport || !hasMediaSize(fitRef.current)) return;
 		const rect = viewport.getBoundingClientRect();
-		commit(toggleMediaZoom(
+		commitZoom(toggleMediaZoom(
 			viewRef.current,
 			cursorFromViewport(rect, event.clientX, event.clientY),
 			{ width: rect.width, height: rect.height },
@@ -195,13 +211,12 @@ export function MediaViewport({
 	}
 
 	const fitted = hasMediaSize(fit);
-	const zoomed = !isFittedMedia(view);
 	const video = kind === "video" && media instanceof HTMLVideoElement ? media : null;
 	const percent = `${Math.round(view.scale * 100)}%`;
 
 	return (
 		<div className="media-stage">
-			<div ref={frameRef} className={`media-frame${panning ? " is-panning" : ""}${zoomed ? " is-zoomed" : ""}`}>
+			<div ref={frameRef} className={`media-frame${panning ? " is-panning" : ""}`}>
 				<div
 					ref={viewportRef}
 					className="media-viewport"
@@ -223,7 +238,7 @@ export function MediaViewport({
 						{children}
 					</div>
 				</div>
-				<div className="media-zoom-controls" data-zoom-ui="">
+				<div className={`media-zoom-controls${zoomControlsVisible ? " is-visible" : ""}`} data-zoom-ui="">
 					<button
 						type="button"
 						title={t.preview.zoomOut}
@@ -231,9 +246,9 @@ export function MediaViewport({
 						disabled={!fitted || view.scale <= MIN_MEDIA_SCALE + 0.001}
 						onClick={() => zoomBy(1 / MEDIA_ZOOM_STEP)}
 					>
-						−
+						<ZoomStepIcon />
 					</button>
-					<button type="button" className="media-zoom-percent" title={t.preview.resetZoom} aria-label={t.preview.resetZoom} onClick={() => commit(FIT_MEDIA_VIEW)}>
+					<button type="button" className="media-zoom-percent" title={t.preview.resetZoom} aria-label={t.preview.resetZoom} onClick={() => commitZoom(FIT_MEDIA_VIEW)}>
 						{percent}
 					</button>
 					<button
@@ -243,7 +258,7 @@ export function MediaViewport({
 						disabled={!fitted || view.scale >= maxScale - 0.001}
 						onClick={() => zoomBy(MEDIA_ZOOM_STEP)}
 					>
-						+
+						<ZoomStepIcon increase />
 					</button>
 				</div>
 				{video && <VideoTransport video={video} actions={actions} />}
@@ -253,6 +268,15 @@ export function MediaViewport({
 }
 
 const PLAYBACK_RATES = [0.5, 0.75, 1, 1.25, 1.5, 2] as const;
+
+function ZoomStepIcon({ increase = false }: { increase?: boolean }): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true" focusable="false">
+			<path d="M3 8h10" />
+			{increase && <path d="M8 3v10" />}
+		</svg>
+	);
+}
 
 function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; actions?: ReactNode }): React.JSX.Element | null {
 	const { t } = useLocale();
