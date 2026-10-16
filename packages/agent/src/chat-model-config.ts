@@ -30,6 +30,8 @@ const customModel = object({ ...metadata, id: text, api: Type.Optional(literals(
 });
 const providerBase = {
 	id, name: Type.Optional(text), enabled: Type.Boolean(), baseUrl: Type.Optional(text),
+	// Picker visibility is independent of provider authentication and native model metadata.
+	modelEnabled: Type.Optional(Type.Record(text, Type.Boolean())),
 	// Values are references to encrypted provider secrets, never literal HTTP header values.
 	headers: Type.Optional(Type.Record(Type.String({ pattern: "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$" }), id)),
 	generation: Type.Optional(generation),
@@ -40,6 +42,7 @@ const provider = Type.Union([
 ]);
 export const ChatConfigSchema = object({
 	version: Type.Literal(CHAT_CONFIG_VERSION), providers: Type.Array(provider),
+	// Last composer selection, inherited only by new conversations. Not edited in Settings.
 	default: Type.Optional(object({ provider: id, modelId: text, thinkingLevel: literals(CHAT_THINKING_LEVELS) })),
 });
 export type ChatModelsConfig = Static<typeof ChatConfigSchema>;

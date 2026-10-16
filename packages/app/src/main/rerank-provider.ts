@@ -1,4 +1,5 @@
 import type { RerankProvider } from "@loom/core";
+import { modelRequestUrl } from "../shared/model-request-url.ts";
 
 export function looksLikeBailian(baseUrl: string): boolean {
 	return /dashscope|compatible-mode|compatible-api|\.maas\.aliyuncs\.com/i.test(baseUrl);
@@ -6,38 +7,6 @@ export function looksLikeBailian(baseUrl: string): boolean {
 
 export function usesBailianNativeRerank(model: string): boolean {
 	return /gte-rerank|qwen3\.7-text-rerank|qwen3-vl-rerank/i.test(model);
-}
-
-export function rerankUrl(baseUrl: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "");
-	if (!trimmed) throw new Error("Rerank base URL is required");
-	if (looksLikeBailian(trimmed)) return bailianCompatibleRerankUrl(trimmed);
-	if (/\/reranks$/i.test(trimmed)) return trimmed;
-	if (/\/rerank$/i.test(trimmed)) return trimmed;
-	if (/\/v\d+$/i.test(trimmed)) return `${trimmed}/rerank`;
-	return `${trimmed}/v1/rerank`;
-}
-
-export function bailianNativeRerankUrl(baseUrl: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "");
-	try {
-		const origin = new URL(trimmed).origin;
-		return `${origin}/api/v1/services/rerank/text-rerank/text-rerank`;
-	} catch {
-		return `${trimmed}/api/v1/services/rerank/text-rerank/text-rerank`;
-	}
-}
-
-/** qwen3-rerank: Chat-style DashScope URLs rewrite to compatible-api /reranks. */
-export function bailianCompatibleRerankUrl(baseUrl: string): string {
-	let base = baseUrl.trim().replace(/\/+$/, "").replace(/\/reranks?$/i, "");
-	base = base.replace(/\/compatible-mode(\/v\d+)?$/i, "/compatible-api$1");
-	base = base.replace(/\/api\/(v\d+)$/i, "/compatible-api/$1");
-	if (/\/compatible-api\/v\d+$/i.test(base)) return `${base}/reranks`;
-	if (/\/compatible-api$/i.test(base)) return `${base}/v1/reranks`;
-	if (/^https?:\/\/[^/]+$/i.test(base)) return `${base}/compatible-api/v1/reranks`;
-	if (/\/v\d+$/i.test(base)) return `${base}/reranks`;
-	return `${base}/compatible-api/v1/reranks`;
 }
 
 export function createHttpRerankProvider(slot: {
@@ -49,7 +18,7 @@ export function createHttpRerankProvider(slot: {
 	if (!modelId) throw new Error("Rerank model is required");
 	const apiKey = slot.apiKey.trim();
 	const native = looksLikeBailian(slot.baseUrl) && usesBailianNativeRerank(modelId);
-	const url = native ? bailianNativeRerankUrl(slot.baseUrl) : rerankUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.baseUrl);
 	return {
 		modelId,
 		async rerank(query: string, documents: string[], signal?: AbortSignal): Promise<number[]> {

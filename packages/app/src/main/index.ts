@@ -386,7 +386,7 @@ function registerChatIpc(): void {
 	ipcMain.handle(IPC.saveChatSettings, async (_event, raw: unknown) => {
 		const service = requireChatService();
 		await service.save(raw as Parameters<ChatModelService["save"]>[0]);
-		requireAgentManager().setChatDefault(service.defaultSelection);
+		requireAgentManager().setChatDefault(await service.selectionForNewSession());
 		notifyChatSettingsChanged();
 		return service.view();
 	});
@@ -680,7 +680,10 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => requireAgentManager().listSessions());
-	ipcMain.handle(IPC.createSession, async () => chatRecord(await requireAgentManager().createSession()));
+	ipcMain.handle(IPC.createSession, async () => {
+		requireAgentManager().setChatDefault(await requireChatService().selectionForNewSession());
+		return chatRecord(await requireAgentManager().createSession());
+	});
 	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireAgentManager().openSession(id)));
 	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await requireAgentManager().getSession(id, afterEntryId)));
 	ipcMain.handle(IPC.stageComposerImages, (_event, id: string, images: unknown) => {
@@ -752,14 +755,18 @@ function registerIpc(): void {
 		const service = requireChatService();
 		const model = service.models.getModel(draft.provider, draft.modelId);
 		if (!model) throw new Error("Unknown Chat model");
-		let thinkingLevel: import("@earendil-works/pi-ai").ModelThinkingLevel | undefined;
+		if (!service.isModelEnabled(draft.provider, draft.modelId)) throw new Error("Chat model is disabled");
+		let thinkingLevel: import("@earendil-works/pi-ai").ModelThinkingLevel = "off";
 		if (typeof draft.thinkingLevel === "string" && draft.thinkingLevel !== "off") {
 			const levels = getSupportedThinkingLevels(model);
-			if (!levels.includes(draft.thinkingLevel as never)) throw new Error(`Thinking level ${draft.thinkingLevel} is not supported by this model`);
+			if (!levels.some((level) => level === draft.thinkingLevel)) throw new Error(`Thinking level ${draft.thinkingLevel} is not supported by this model`);
 			thinkingLevel = draft.thinkingLevel as import("@earendil-works/pi-ai").ModelThinkingLevel;
 		}
-		const record = await requireAgentManager().setSessionModel(id, { provider: draft.provider, modelId: draft.modelId, ...(thinkingLevel ? { thinkingLevel } : {}) });
-		notifySettingsChanged();
+		const selection = { provider: draft.provider, modelId: draft.modelId, thinkingLevel };
+		const record = await requireAgentManager().setSessionModel(id, selection);
+		await service.rememberSelection(selection);
+		requireAgentManager().setChatDefault(await service.selectionForNewSession());
+		notifyChatSettingsChanged();
 		return chatRecord(record);
 	});
 	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await requireAgentManager().forkBefore(id, entryId)));
@@ -1102,9 +1109,9 @@ app
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		const chatStores = createChatStorage(app.getPath("userData"));
 		chatService = new ChatModelService(chatStores, { withIdleProviders: (ids, operation) => requireAgentManager().withIdleChatProviders(ids, operation) });
-		agentManager = new LibraryAgentHost({ ...AGENT_OPTIONS, models: chatService.models, chatDefault: chatService.defaultSelection }, (usage) => { void agentStats?.record(usage); });
+		agentManager = new LibraryAgentHost({ ...AGENT_OPTIONS, models: chatService.models }, (usage) => { void agentStats?.record(usage); });
 		await chatService.initialize(process.env);
-		requireAgentManager().setChatDefault(chatService.defaultSelection);
+		requireAgentManager().setChatDefault(await chatService.selectionForNewSession());
 		chatService.onSecrets((values) => requireAgentManager().setChatSecrets(values));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));

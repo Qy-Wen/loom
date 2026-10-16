@@ -42,7 +42,13 @@ describe("applySettingsDraft", () => {
 		assert.equal(cleared.embedding.apiKey, "");
 	});
 
-	it("includes the key in the Settings view so it can be revealed", () => {
+	it("keeps exact request URLs and rejects invalid nonempty URLs", () => {
+		const url = "https://proxy.example.com/inference/?region=cn";
+		assert.equal(applySettingsDraft(emptySettingsFile(), draft({ baseUrl: ` ${url} ` })).embedding.baseUrl, url);
+		assert.throws(() => applySettingsDraft(emptySettingsFile(), draft({ baseUrl: "not-a-url" })), /Request URL/);
+	});
+
+	it("includes the key in the Settings view for masked editing", () => {
 		const file = parseSettingsFile({ embedding: { baseUrl: "https://a", apiKey: "secret", model: "m" } });
 		assert.deepEqual(settingsView(file).embedding, { baseUrl: "https://a", model: "m", apiKey: "secret", enabled: true });
 	});

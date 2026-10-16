@@ -2,7 +2,15 @@ export const MODEL_SLOTS = ["embedding", "rerank", "vlm", "audio"] as const;
 
 export type ModelSlotId = (typeof MODEL_SLOTS)[number];
 
+export const MODEL_REQUEST_PLACEHOLDERS: Record<ModelSlotId, string> = {
+	embedding: "https://api.example.com/v1/embeddings",
+	rerank: "https://qianfan.baidubce.com/v2/rerank",
+	vlm: "https://api.example.com/v1/chat/completions",
+	audio: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+};
+
 export interface ModelSlotRecord {
+	/** Exact request URL for non-Chat slots; the persisted field name remains baseUrl. */
 	baseUrl: string;
 	apiKey: string;
 	model: string;
@@ -21,6 +29,7 @@ export interface ModelSlotView {
 export type ModelSettingsView = Record<ModelSlotId, ModelSlotView>;
 
 export interface ModelSlotDraft {
+	/** Exact request URL, including the operation path and any query parameters. */
 	baseUrl: string;
 	model: string;
 	enabled: boolean;

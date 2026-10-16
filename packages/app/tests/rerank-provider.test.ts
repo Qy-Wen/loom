@@ -1,42 +1,14 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
-	bailianCompatibleRerankUrl,
 	createHttpRerankProvider,
 	parseRerankResponse,
-	rerankUrl,
 } from "../src/main/rerank-provider.ts";
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
-});
-
-test("rerankUrl appends /v1/rerank", () => {
-	assert.equal(rerankUrl("https://api.example.com/v1"), "https://api.example.com/v1/rerank");
-	assert.equal(rerankUrl("https://api.example.com/v1/rerank"), "https://api.example.com/v1/rerank");
-	assert.equal(rerankUrl("http://127.0.0.1:8000"), "http://127.0.0.1:8000/v1/rerank");
-	assert.equal(rerankUrl("https://qianfan.baidubce.com/v2"), "https://qianfan.baidubce.com/v2/rerank");
-});
-
-test("rerankUrl rewrites DashScope Chat URLs to Bailian /reranks", () => {
-	assert.equal(
-		bailianCompatibleRerankUrl("https://dashscope.aliyuncs.com/compatible-mode/v1"),
-		"https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
-	);
-	assert.equal(
-		rerankUrl("https://dashscope.aliyuncs.com/compatible-mode/v1"),
-		"https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
-	);
-	assert.equal(
-		rerankUrl("https://dashscope-intl.aliyuncs.com/compatible-mode/v1"),
-		"https://dashscope-intl.aliyuncs.com/compatible-api/v1/reranks",
-	);
-	assert.equal(
-		rerankUrl("https://dashscope.aliyuncs.com/compatible-api/v1/reranks"),
-		"https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
-	);
 });
 
 test("createHttpRerankProvider posts query and documents", async () => {
@@ -52,13 +24,13 @@ test("createHttpRerankProvider posts query and documents", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://api.example.com/v1",
+		baseUrl: "https://api.example.com/v2/custom-rerank/?region=cn",
 		apiKey: "secret",
 		model: "jina-reranker-v2-base-multilingual",
 	});
 	const scores = await provider.rerank("bike", ["soup", "bicycle"]);
 	assert.deepEqual(scores, [0.1, 0.9]);
-	assert.equal(calls[0]?.url, "https://api.example.com/v1/rerank");
+	assert.equal(calls[0]?.url, "https://api.example.com/v2/custom-rerank/?region=cn");
 	const headers = new Headers(calls[0]?.init.headers);
 	assert.equal(headers.get("authorization"), "Bearer secret");
 	const body = JSON.parse(String(calls[0]?.init.body)) as {
@@ -84,7 +56,7 @@ test("createHttpRerankProvider posts Bailian qwen3-rerank to /reranks", async ()
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
 		apiKey: "sk-test",
 		model: "qwen3-rerank",
 	});
@@ -106,7 +78,7 @@ test("createHttpRerankProvider posts Bailian gte-rerank-v2 on the native path", 
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		baseUrl: "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
 		apiKey: "sk-test",
 		model: "gte-rerank-v2",
 	});

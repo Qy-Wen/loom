@@ -21,5 +21,7 @@ export type ChatModelView = {
 	priceSource: "catalog" | "override" | "unknown";
 	/** Missing means unknown; never expose pi-ai's zero/negative unknown-price placeholders as rates. */
 	cost?: import("@loom/agent/chat-models").ChatCustomModelConfig["cost"];
+	/** User-controlled picker visibility, independent of credential availability. */
+	enabled: boolean;
 	available: boolean;
 };

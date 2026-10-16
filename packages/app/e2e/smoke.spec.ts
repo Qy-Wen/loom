@@ -68,7 +68,12 @@ test("settings persist the chat provider", async ({ loomPage }) => {
 	await expect(dialog.getByRole("group", { name: "VLM" })).toBeVisible();
 	// Chat models is a provider-based section, saved immediately.
 	await expect(dialog.getByRole("combobox", { name: "Add provider" })).toBeVisible();
-	await expect(dialog.getByRole("combobox", { name: "Default model" })).toBeVisible();
+	await expect(dialog.getByRole("button", { name: "Refresh models" })).toBeVisible();
+	await expect(dialog.getByRole("group", { name: "Chat models", exact: true })).toBeVisible();
+	await expect(dialog.getByRole("columnheader", { name: "Enabled" }).first()).toBeVisible();
+	await expect(dialog.getByRole("columnheader", { name: "Default" })).toHaveCount(0);
+	await expect(dialog.getByRole("columnheader", { name: "Thinking" })).toHaveCount(0);
+	await expect(dialog.locator(".settings-chat-models select")).toHaveCount(0);
 	await dialog.getByRole("button", { name: "Close settings" }).click();
 	await expect(dialog).toBeHidden();
 });

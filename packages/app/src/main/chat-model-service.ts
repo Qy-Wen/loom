@@ -51,6 +51,24 @@ export class ChatModelService {
 	}
 	get config(): ChatModelsConfig { return structuredClone(this.#config); }
 	get defaultSelection(): ChatSelection | undefined { return this.#config.default && structuredClone(this.#config.default); }
+	isModelEnabled(providerId: string, modelId: string): boolean {
+		const provider = this.#config.providers.find((entry) => entry.id === providerId);
+		return !!provider?.enabled && provider.modelEnabled?.[modelId] !== false;
+	}
+	/** Remember only explicit composer choices; Settings never chooses a model. */
+	async rememberSelection(selection: ChatSelection): Promise<void> {
+		if (!this.isModelEnabled(selection.provider, selection.modelId)) throw new Error("Chat model is disabled");
+		await this.save({ ...this.config, default: selection });
+	}
+	/** Never pick a replacement when the last choice is disabled, missing, or unauthenticated. */
+	async selectionForNewSession(): Promise<ChatSelection | undefined> {
+		const selection = this.defaultSelection;
+		if (!selection || !this.isModelEnabled(selection.provider, selection.modelId)) return undefined;
+		try {
+			const available = await this.#native.getAvailable(selection.provider, { signal: AbortSignal.timeout(5000) });
+			return available.some((model) => model.id === selection.modelId) ? selection : undefined;
+		} catch { return undefined; }
+	}
 	onSecrets(listener: (values: readonly string[]) => void): () => void {
 		this.#secretListeners.add(listener); listener([...this.#secrets]); return () => { this.#secretListeners.delete(listener); };
 	}
@@ -90,6 +108,7 @@ export class ChatModelService {
 		const service = this;
 		const start = (model: Parameters<Models["streamSimple"]>[0], run: () => AssistantMessageEventStream) => {
 			if (service.#mutating.has(model.provider)) return lazyStream(model, async () => { throw new Error("Chat provider is being updated; retry after settings finish"); });
+			if (!service.isModelEnabled(model.provider, model.id)) return lazyStream(model, async () => { throw new Error("Chat model is disabled; choose an enabled model in the composer"); });
 			service.#active.set(model.provider, (service.#active.get(model.provider) ?? 0) + 1);
 			try { return service.protectStream(run(), model.provider); }
 			catch { service.#active.set(model.provider, (service.#active.get(model.provider) ?? 1) - 1); throw new Error("Chat request could not start"); }
@@ -167,7 +186,6 @@ export class ChatModelService {
 		const provider = deepseekProvider();
 		if (!provider.getModels().some((model) => model.id === "deepseek-flash")) throw new Error("DeepSeek bootstrap model is missing from the installed catalog");
 		config.providers.push({ kind: "builtin", id: provider.id, enabled: true });
-		config.default = { provider: provider.id, modelId: "deepseek-flash", thinkingLevel: "off" };
 		return config;
 	}
 	async save(input: ChatModelsConfig): Promise<void> {
@@ -228,6 +246,7 @@ export class ChatModelService {
 			provider: model.provider, id: model.id, name: model.name, api: model.api, input: [...model.input], contextWindow: model.contextWindow, maxTokens: model.maxTokens,
 			thinkingLevels: getSupportedThinkingLevels(model), priceSource: chatPriceSource(this.#config.providers.find((entry) => entry.id === model.provider), model),
 			...(chatPriceSource(this.#config.providers.find((entry) => entry.id === model.provider), model) !== "unknown" ? { cost: structuredClone(model.cost) } : {}),
+			enabled: this.isModelEnabled(model.provider, model.id),
 			available: available.has(`${model.provider}\0${model.id}`),
 		})));
 		return { config: this.config, models, auth, refreshErrors: Object.fromEntries(this.#refreshErrors) };

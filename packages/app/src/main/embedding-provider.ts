@@ -1,12 +1,5 @@
 import type { EmbeddingProvider } from "@loom/core";
-
-export function embeddingsUrl(baseUrl: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "");
-	if (!trimmed) throw new Error("Embedding base URL is required");
-	if (trimmed.endsWith("/embeddings")) return trimmed;
-	if (/\/v\d+$/.test(trimmed)) return `${trimmed}/embeddings`;
-	return `${trimmed}/v1/embeddings`;
-}
+import { modelRequestUrl } from "../shared/model-request-url.ts";
 
 export function createHttpEmbeddingProvider(slot: {
 	baseUrl: string;
@@ -14,7 +7,7 @@ export function createHttpEmbeddingProvider(slot: {
 	model: string;
 }): EmbeddingProvider {
 	const modelId = slot.model.trim();
-	const url = embeddingsUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.baseUrl);
 	if (!modelId) throw new Error("Embedding model is required");
 	const apiKey = slot.apiKey.trim();
 	return {

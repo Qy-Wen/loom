@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
+import { modelRequestUrl } from "../shared/model-request-url.ts";
 import {
 	MODEL_SLOTS,
 	type ModelSettingsDraft,
@@ -51,7 +52,7 @@ export function settingsView(file: ModelSettingsFile): ModelSettingsView {
 
 export function applySlotDraft(current: ModelSlotRecord, draft: ModelSettingsDraft[ModelSlotId]): ModelSlotRecord {
 	const next = {
-		baseUrl: draft.baseUrl.trim(),
+		baseUrl: draft.baseUrl.trim() ? modelRequestUrl(draft.baseUrl) : "",
 		model: draft.model.trim(),
 		apiKey: current.apiKey,
 		enabled: draft.enabled,

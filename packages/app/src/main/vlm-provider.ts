@@ -15,6 +15,7 @@ import {
 	type VideoVlmProvider,
 } from "@loom/core";
 import { extname } from "node:path";
+import { modelRequestUrl } from "../shared/model-request-url.ts";
 
 const IMAGE_MEDIA_TYPES: Record<string, string> = {
 	".jpg": "image/jpeg",
@@ -51,14 +52,6 @@ export function resetNativeVideoProbeForTests(): void {
 	audioUrlRejected.clear();
 }
 
-export function vlmChatUrl(baseUrl: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "");
-	if (!trimmed) throw new Error("VLM base URL is required");
-	if (trimmed.toLowerCase().endsWith("/chat/completions")) return trimmed;
-	if (/\/v\d+$/i.test(trimmed)) return `${trimmed}/chat/completions`;
-	return `${trimmed}/v1/chat/completions`;
-}
-
 export function imageDataUrl(image: ImageVlmInput): string {
 	const mediaType = IMAGE_MEDIA_TYPES[extname(image.filename).toLowerCase()];
 	if (!mediaType) throw new Error("VLM accepts JPEG, PNG, WebP, or BMP images");
@@ -84,7 +77,7 @@ export function createHttpVlmProvider(slot: {
 	model: string;
 }): ImageVlmProvider {
 	const modelId = slot.model.trim();
-	const url = vlmChatUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.baseUrl);
 	if (!modelId) throw new Error("VLM model is required");
 	const apiKey = slot.apiKey.trim();
 	return {
@@ -101,7 +94,7 @@ export function createHttpVideoVlmProvider(slot: {
 	model: string;
 }): VideoVlmProvider {
 	const modelId = slot.model.trim();
-	const url = vlmChatUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.baseUrl);
 	if (!modelId) throw new Error("VLM model is required");
 	const apiKey = slot.apiKey.trim();
 	const probeKey = `${url}|${modelId}`;
@@ -171,7 +164,7 @@ export function createHttpAudioProvider(slot: {
 	model: string;
 }): AudioWriteupProvider {
 	const modelId = slot.model.trim();
-	const url = vlmChatUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.baseUrl);
 	if (!modelId) throw new Error("Audio model is required");
 	const apiKey = slot.apiKey.trim();
 	const probeKey = `${url}|${modelId}`;

@@ -10,7 +10,13 @@
 
 ## Chat models
 
-Chat is no longer a form slot. Settings → Models starts with a provider-based Chat area: sign in to a native pi-ai provider (API key or OAuth, credentials encrypted with the OS key store in `chat-credentials.json`), add OpenAI-compatible custom endpoints, pick the default model and thinking level, and refresh dynamic catalogs. Configuration persists in `chat-models.json`; saves are immediate. App defaults affect only new independent conversations. Without saved configuration, `DEEPSEEK_API_KEY` enables the native DeepSeek provider once. See [CHAT_MODELS](./agent/CHAT_MODELS.md).
+Settings → Models has one Chat card sharing the scrollbar with the four other model slots. Each model has an enable switch, not a default-model or thinking control. Provider headers show an auth-status dot; red dots expose an error tooltip. API key/OAuth, Edit, and Remove actions sit below the model list. Chat saves immediately; credentials are OS-encrypted in `chat-credentials.json` and never returned in ordinary reads.
+
+The Add provider dropdown includes Custom provider. Its inline editor supports name, complete Request URL, model IDs/display names, and adding/removing models. Advanced fields declare context/output ceilings and image/reasoning support. Only Save provider publishes the draft; Cancel creates nothing. Editing preserves provider identity, credentials, and unexposed metadata. Configure API keys through the separate button after saving. Keyless local servers that ignore authentication can use a placeholder key.
+
+Custom Chat infers the protocol from the complete URL: `/chat/completions`, `/responses`, `/v1/messages`, or `/models/{model-id}:streamGenerateContent`. Standard paths show the detected protocol without a dropdown. Loom extracts the base prefix; pi-ai/SDK retains ownership of path construction, auth and streaming. Gemini URLs prefill a blank first model ID; requests use each configured model ID. Unknown paths can explicitly switch to Base URL + manual protocol mode, which still uses SDK-appended paths. Unsupported query parameters are rejected rather than dropped; native `beta=true` / `alt=sse` flags are accepted.
+
+The composer chooses the conversation model/thinking. New independent conversations inherit the last explicit choice only if it is enabled and available; otherwise they require manual selection. Existing conversations/forks retain their selection without automatic failover. Config and the remembered choice persist in `chat-models.json`. First-run `DEEPSEEK_API_KEY` enables native DeepSeek but does not select a model. See [CHAT_MODELS](./agent/CHAT_MODELS.md).
 
 ## Model slots
 
@@ -27,12 +33,12 @@ One Settings page. Same form for every role. Local and remote are the same field
 
 Each slot stores:
 
-- `baseUrl`
+- `baseUrl`: complete HTTP(S) **Request URL**, including operation path and optional query. No version/path is appended or rewritten. Examples: `https://…/v1/embeddings`, `https://…/v2/rerank`, `https://…/v1/chat/completions`.
 - `apiKey` (hosted APIs usually need it; local servers often omit it)
 - `model`
 - `enabled` (the switch on the right of each slot)
 
-Turn a slot on to ping it (`GET /v1/models`, then a tiny POST if that route is missing). Green is reachable; red shows the error. Save writes the file only. It does not connect. Disabled Embedding / Rerank / VLM / Audio slots are not used at runtime. Existing files without `enabled` stay on if they already had a URL and model.
+Turn a slot on to send a tiny POST to its exact Request URL; no `/models` lookup or alternate route is tried. Embedding/Rerank checks use their native request/response shapes; VLM/Audio checks send text only and do not prove media capability. Green means the check passed; red shows the error. Save persists the configuration only. Disabled slots are not used at runtime. Previous base-only addresses are not migrated; enter full request URLs.
 
 Loom never loads or runs a model. It is only an HTTP client.
 
@@ -42,8 +48,8 @@ TEI-native rerank (`texts` instead of `documents`) is not the first adapter. A s
 
 LM Studio has no `/v1/rerank`. Empty slot keeps RRF.
 
-- **Baidu Qianfan:** Base URL `https://qianfan.baidubce.com/v2`, model `bce-reranker-base`, Qianfan key.
-- **Alibaba Bailian:** same DashScope Chat URL is fine (`https://dashscope.aliyuncs.com/compatible-mode/v1` or intl). Loom rewrites it to `.../compatible-api/v1/reranks`. Model `qwen3-rerank` (not the old `gte-rerank`). `gte-rerank-v2` uses DashScope’s native text-rerank path. Same DashScope key as Audio.
+- **Baidu Qianfan:** Request URL `https://qianfan.baidubce.com/v2/rerank`, model `bce-reranker-base`, Qianfan key.
+- **Alibaba Bailian:** Request URL `https://dashscope.aliyuncs.com/compatible-api/v1/reranks` (or intl), model `qwen3-rerank`. For `gte-rerank-v2`, enter `https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank`; its native payload is retained. URLs are never rewritten. Same DashScope key as Audio.
 
 The Rerank switch POSTs a tiny rerank call. Green means that path worked, not `GET /v1/models`.
 
@@ -51,12 +57,12 @@ The Rerank switch POSTs a tiny rerank call. Green means that path worked, not `G
 
 LM Studio and typical OpenAI-compatible local servers only accept `text` / `image_url` on `/v1/chat/completions`. Baidu Qianfan’s compatible chat has no audio part. The remote path that works is **Alibaba DashScope compatible-mode** (user-filled; not a product default):
 
-- China: `https://dashscope.aliyuncs.com/compatible-mode/v1`
-- International: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- China: `https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`
+- International: `https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions`
 - Model: e.g. `qwen3-omni-flash` (or `qwen3.5-omni-plus` / `qwen3.8-omni-flash`)
 - API key: a DashScope key
 
-Green on the switch means the URL is reachable (`GET /v1/models`). It does not prove audio parts work. DashScope’s encoded audio cap is 10 MB; Loom still compacts files over 32 MB first.
+Green on the switch means a tiny text POST to the exact endpoint succeeded. It does not prove audio parts work. DashScope’s encoded audio cap is 10 MB; Loom still compacts files over 32 MB first.
 
 ---
 
@@ -65,7 +71,7 @@ Green on the switch means the URL is reachable (`GET /v1/models`). It does not p
 - Persist in the app user data directory, not `<library>/.loom/`. Copying a library must not copy API keys.
 - Last opened library path is `last-library.json` in app user data. Startup reopens it when General says so and that folder still exists; a missing folder leaves the empty state and keeps the remembered path (a disconnected drive can come back). E2E uses its own userData, so it does not restore a host library.
 - `<library>/.loom/config.json` stays library preferences only.
-- Keys stay in app user data, not the library. Settings shows the key masked (`••••`); an eye toggle reveals the real value. Later they can move to the OS keychain.
+- Keys stay in app user data, not the library. Each non-Chat slot has an API key button opening a masked input dialog. Confirm updates the draft; Settings Save persists it. Cancel/Escape discard dialog edits, and an empty confirmed value clears the key. Storage is unchanged; OS-keychain storage for these four slots remains future work.
 
 ---
 

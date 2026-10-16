@@ -2,7 +2,6 @@ import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
 import {
 	createHttpEmbeddingProvider,
-	embeddingsUrl,
 	parseEmbeddingResponse,
 } from "../src/main/embedding-provider.ts";
 
@@ -10,13 +9,6 @@ const originalFetch = globalThis.fetch;
 
 afterEach(() => {
 	globalThis.fetch = originalFetch;
-});
-
-test("embeddingsUrl appends /v1/embeddings", () => {
-	assert.equal(embeddingsUrl("http://127.0.0.1:11434"), "http://127.0.0.1:11434/v1/embeddings");
-	assert.equal(embeddingsUrl("http://127.0.0.1:11434/v1/"), "http://127.0.0.1:11434/v1/embeddings");
-	assert.equal(embeddingsUrl("http://127.0.0.1:11434/v1/embeddings"), "http://127.0.0.1:11434/v1/embeddings");
-	assert.equal(embeddingsUrl("https://qianfan.baidubce.com/v2"), "https://qianfan.baidubce.com/v2/embeddings");
 });
 
 test("createHttpEmbeddingProvider posts OpenAI-compatible embeddings", async () => {
@@ -32,13 +24,13 @@ test("createHttpEmbeddingProvider posts OpenAI-compatible embeddings", async () 
 	}) as typeof fetch;
 
 	const provider = createHttpEmbeddingProvider({
-		baseUrl: "https://api.example.com/v1",
+		baseUrl: "https://api.example.com/custom-embed/?version=2",
 		apiKey: "secret",
 		model: "text-embedding-3-small",
 	});
 	const vectors = await provider.embed(["a", "b"]);
 	assert.deepEqual(vectors, [[0.1, 0.3], [0.2, 0.4]]);
-	assert.equal(calls[0]?.url, "https://api.example.com/v1/embeddings");
+	assert.equal(calls[0]?.url, "https://api.example.com/custom-embed/?version=2");
 	const headers = new Headers(calls[0]?.init.headers);
 	assert.equal(headers.get("authorization"), "Bearer secret");
 	assert.equal(JSON.parse(String(calls[0]?.init.body)).model, "text-embedding-3-small");

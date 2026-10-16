@@ -282,7 +282,7 @@ function needStringMap(value: unknown, label: string): Record<string, string> {
 const SLOT_FIELDS = {
 	type: "object",
 	properties: {
-		baseUrl: { type: "string" },
+		baseUrl: { type: "string", description: "Complete HTTP(S) request URL including the operation path. Used exactly as supplied; no version/path is appended or rewritten." },
 		model: { type: "string" },
 		enabled: { type: "boolean" },
 		apiKey: { type: "string", description: "Replaces the stored key. The value remains in this chat." },

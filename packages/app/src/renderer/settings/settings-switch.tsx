@@ -23,7 +23,7 @@ export function SettingsSwitch({
 }: SettingsSwitchProps): React.JSX.Element {
 	return (
 		<span className="settings-slot-controls">
-			<ProbeMark status={status} error={error} />
+			<SettingsStatus status={status} error={error} />
 			<label className="settings-switch">
 				<input
 					type="checkbox"
@@ -39,15 +39,21 @@ export function SettingsSwitch({
 	);
 }
 
-function ProbeMark({ status, error }: { status: ProbeState; error?: string }): React.JSX.Element {
+export function SettingsStatus({ status, error, label, errorTitle, dotOnly = false }: {
+	status: ProbeState;
+	error?: string;
+	label?: string;
+	errorTitle?: string;
+	dotOnly?: boolean;
+}): React.JSX.Element {
 	if (status === "error") {
-		return <ErrorProbe error={error?.trim() || "Connection failed"} />;
+		return <ErrorProbe error={error?.trim() || "Connection failed"} label={label} title={errorTitle} dotOnly={dotOnly} />;
 	}
-	const label = status === "checking" ? "Checking connection" : status === "ok" ? "Connected" : "Not connected";
-	return <span className={`settings-probe is-${status}`} title={label} aria-label={label} />;
+	const text = label ?? (status === "checking" ? "Checking connection" : status === "ok" ? "Connected" : "Not connected");
+	return <span className={`settings-probe is-${status}`} title={text} aria-label={text} />;
 }
 
-function ErrorProbe({ error }: { error: string }): React.JSX.Element {
+function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: string; title?: string; dotOnly: boolean }): React.JSX.Element {
 	const { t } = useLocale();
 	const wrapRef = useRef<HTMLSpanElement>(null);
 	const tipRef = useRef<HTMLDivElement>(null);
@@ -106,8 +112,8 @@ function ErrorProbe({ error }: { error: string }): React.JSX.Element {
 		>
 			<button
 				type="button"
-				className="settings-probe-error"
-				aria-label={t.settings.connectionError}
+				className={dotOnly ? "settings-probe-error settings-probe-error-dot" : "settings-probe-error"}
+				aria-label={label ?? t.settings.connectionError}
 				aria-expanded={open}
 				aria-describedby={open ? tipId : undefined}
 				onFocus={show}
@@ -117,7 +123,7 @@ function ErrorProbe({ error }: { error: string }): React.JSX.Element {
 				}}
 				onClick={show}
 			>
-				<ErrorIcon />
+				{dotOnly ? <span className="settings-probe is-error" aria-hidden="true" /> : <ErrorIcon />}
 			</button>
 			{open && createPortal(
 				<div
@@ -130,7 +136,7 @@ function ErrorProbe({ error }: { error: string }): React.JSX.Element {
 					onMouseLeave={hideSoon}
 				>
 					<div className="settings-probe-tip-head">
-						<span>{t.settings.connectionFailed}</span>
+						<span>{title ?? t.settings.connectionFailed}</span>
 						<button
 							type="button"
 							className="settings-probe-copy"

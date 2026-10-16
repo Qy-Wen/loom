@@ -10,7 +10,13 @@
 
 ## Chat 模型
 
-Chat 不再是表单槽位。设置 → Models 顶部是 Provider 式的 Chat 区域：登录原生 pi-ai Provider（API Key 或 OAuth，凭据用系统钥匙串加密存于 `chat-credentials.json`）、添加 OpenAI 兼容自定义端点、选择默认模型和思考等级、刷新动态目录。配置存 `chat-models.json`，即时保存。应用默认值只影响新独立会话。没有已保存配置时，`DEEPSEEK_API_KEY` 会一次性启用原生 DeepSeek Provider。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
+设置 → Models 的 Chat 区域只有一个外框，与其他四个模型槽位共用滚动条。每个模型只有启用开关，不设置默认模型或思考等级。服务商标题旁用状态点表示鉴权状态，红点悬停显示错误；API 密钥/OAuth、编辑、移除按钮位于模型列表下方。Chat 修改即时保存；凭据用系统加密存于 `chat-credentials.json`，普通读取不返回凭据。
+
+“添加服务商”下拉框包含“自定义服务商”。内联编辑器支持名称、完整请求 URL、模型 ID/显示名、模型增删；高级配置声明上下文/输出上限及图片/思考能力。只有“保存服务商”才发布草稿，取消不会创建占位条目。编辑保留服务商身份、凭据与未暴露的元数据。保存后通过独立按钮配置 API 密钥；不校验鉴权的本地服务可使用占位密钥。
+
+自定义 Chat 根据完整 URL 的路径识别协议：`/chat/completions`、`/responses`、`/v1/messages` 或 `/models/{model-id}:streamGenerateContent`。标准路径只显示识别结果，不显示协议下拉框。Loom 提取基础地址，路径拼接、鉴权与流式解析仍由 pi-ai/SDK 负责。Gemini 地址会预填空白的首个模型 ID，调用使用各模型配置的 ID。未知路径可明确切换到 Base URL + 手选协议模式，仍由 SDK 追加路径。不支持的查询参数会报错而非被丢弃；接受原生 `beta=true` / `alt=sse` 标志。
+
+模型与思考等级在会话输入区选择。新独立会话仅在上次明确选择仍启用且可用时沿用它，否则要求手动选择；既有会话/fork 保留原选择，不自动换模型。配置与记忆选择存于 `chat-models.json`。首次 `DEEPSEEK_API_KEY` 引导只启用原生 DeepSeek，不自动选择模型。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
 
 ## 模型槽位
 
@@ -27,12 +33,12 @@ Chat 不再是表单槽位。设置 → Models 顶部是 Provider 式的 Chat �
 
 每个槽位存：
 
-- `baseUrl`
+- `baseUrl`：完整 HTTP(S) **请求 URL**，包含接口路径及可选查询参数。不补版本/路径，不改写地址。例如 `https://…/v1/embeddings`、`https://…/v2/rerank`、`https://…/v1/chat/completions`。
 - `apiKey`（远程托管一般要填；本地服务常常不需要）
 - `model`
 - `enabled`（每个槽位右边的开关）
 
-打开开关会 ping（先 `GET /v1/models`，没有这个路由再发一个很小的 POST）。通了绿灯，失败红灯并写出原因。保存只写配置文件，不负责连服务。关掉的 Embedding / Rerank / VLM / Audio 运行时不会用。旧文件没有 `enabled` 时，只要已经填了 URL 和 model，就当作开着。
+打开开关会向填写的请求 URL 发一个很小的 POST，不查询 `/models`，不尝试替代路径。Embedding/Rerank 使用各自的请求/响应格式；VLM/Audio 只发送文本，不证明媒体能力。检查通过绿灯，失败红灯显示原因。保存只持久化配置，禁用槽位运行时不会用。不迁移旧的基础地址，请重新填写完整请求 URL。
 
 Loom 不加载、不运行模型。只当 HTTP 客户端。
 
@@ -42,8 +48,8 @@ TEI 原生存根（字段叫 `texts` 不叫 `documents`）不做第一家。只�
 
 LM Studio 没有 `/v1/rerank`。槽位空着就保持 RRF。
 
-- **百度千帆：** Base URL `https://qianfan.baidubce.com/v2`，模型 `bce-reranker-base`，用千帆的 key。
-- **阿里云百炼：** 可以填和 Chat 一样的 DashScope URL（`https://dashscope.aliyuncs.com/compatible-mode/v1` 或国际站）。Loom 会改写成 `.../compatible-api/v1/reranks`。模型用 `qwen3-rerank`（不要用已下线的 `gte-rerank`）。`gte-rerank-v2` 走 DashScope 原生 text-rerank。Key 和 Audio 同一把 DashScope key。
+- **百度千帆：** 请求 URL `https://qianfan.baidubce.com/v2/rerank`，模型 `bce-reranker-base`，用千帆的 key。
+- **阿里云百炼：** 请求 URL `https://dashscope.aliyuncs.com/compatible-api/v1/reranks`（或国际站），模型 `qwen3-rerank`。`gte-rerank-v2` 填 `https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank`，保留其原生报文格式。地址不再改写。Key 和 Audio 同一把 DashScope key。
 
 Rerank 开关会发一次很小的 rerank POST。绿灯表示这条路径通了，不是 `GET /v1/models`。
 
@@ -51,12 +57,12 @@ Rerank 开关会发一次很小的 rerank POST。绿灯表示这条路径通了�
 
 LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `text` / `image_url`。百度千帆兼容 chat 没有音频部分。能用的远程是 **阿里云 DashScope compatible-mode**（用户自己填，不是产品默认）：
 
-- 国内：`https://dashscope.aliyuncs.com/compatible-mode/v1`
-- 国际：`https://dashscope-intl.aliyuncs.com/compatible-mode/v1`
+- 国内：`https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions`
+- 国际：`https://dashscope-intl.aliyuncs.com/compatible-mode/v1/chat/completions`
 - 模型：例如 `qwen3-omni-flash`（或 `qwen3.5-omni-plus` / `qwen3.8-omni-flash`）
 - API key：DashScope 的 key
 
-开关绿灯只表示 URL 通了（`GET /v1/models`），不表示音频部分可用。DashScope 编码后音频上限 10 MB；Loom 仍先把超过 32 MB 的文件压一遍。
+开关绿灯只表示向该完整接口地址发送的小文本 POST 成功，不表示音频部分可用。DashScope 编码后音频上限 10 MB；Loom 仍先把超过 32 MB 的文件压一遍。
 
 ---
 
@@ -65,7 +71,7 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - 落在应用用户数据目录，不进 `<library>/.loom/`。拷贝素材库时不能把 API key 一起拷走。
 - 上次打开的素材库路径记在应用用户数据 `last-library.json`。通用设置允许时，启动会在目录还在的情况下自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
 - `<library>/.loom/config.json` 只放库级偏好。
-- 密钥留在应用用户数据，不进素材库。设置页默认掩码（`••••`），旁边眼睛可显示明文。以后可以再进系统钥匙串。
+- 密钥留在应用用户数据，不进素材库。每个非 Chat 槽位提供 API 密钥按钮，点击弹出掩码输入框；确认更新草稿，设置页保存才持久化。取消/Escape 丢弃弹窗改动，确认空值可清除密钥。存储方式不变，这四个槽位的系统钥匙串存储仍待后续处理。
 
 ---
 

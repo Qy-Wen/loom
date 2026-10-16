@@ -26,6 +26,15 @@ test("Chat config permits missing prices and unavailable/disabled defaults witho
 	assert.doesNotThrow(() => parseChatConfig({ version: 1, providers: [{ kind: "builtin", id: "openai", enabled: false }], default: { provider: "openai", modelId: "uncataloged-old-id", thinkingLevel: "off" } }));
 });
 
+test("Chat config persists per-model enable switches without changing capabilities or remembered selection", () => {
+	const input = fixture(); input.providers[0]!.modelEnabled = { "qwen:latest": false, "future-model": true };
+	const parsed = parseChatConfig(input);
+	assert.deepEqual(parsed.providers[0]!.modelEnabled, { "qwen:latest": false, "future-model": true });
+	assert.deepEqual(parsed.default, input.default);
+	assert.equal((parsed.providers[0] as ChatCustomProviderConfig).models[0]!.reasoning, true);
+	assert.throws(() => parseChatConfig({ ...input, providers: [{ ...input.providers[0], modelEnabled: { demo: "yes" } }] }), /Invalid/);
+});
+
 test("Chat config treats header values as secret references and rejects duplicate names", () => {
 	const provider = custom(); provider.headers = { Authorization: "proxy-auth" };
 	assert.equal(parseChatConfig({ version: 1, providers: [provider] }).providers[0]!.headers!.Authorization, "proxy-auth");

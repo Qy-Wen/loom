@@ -1,44 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSlotId } from "../../shared/model-settings.ts";
+import { MODEL_REQUEST_PLACEHOLDERS, MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSlotId } from "../../shared/model-settings.ts";
 import { useLocale } from "../locale.tsx";
 import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
-
-function EyeIcon({ open }: { open: boolean }): React.JSX.Element {
-	return (
-		<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-			{open ? (
-				<>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinecap="round"
-						d="M3 3l18 18"
-					/>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						d="M10.6 10.7a2.2 2.2 0 0 0 3 3M9.5 5.6A10.4 10.4 0 0 1 12 5.3c5.2 0 8.8 4.2 9.7 6.7a1 1 0 0 1 0 .7 12 12 0 0 1-4.2 5.1M6.2 6.4A12 12 0 0 0 2.3 12.3a1 1 0 0 0 0 .7C3.2 15.5 6.8 19.7 12 19.7c1.5 0 2.8-.3 4-.8"
-					/>
-				</>
-			) : (
-				<>
-					<path
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.8"
-						strokeLinejoin="round"
-						d="M2.3 12.3a1 1 0 0 1 0-.6C3.2 8.5 6.8 4.3 12 4.3s8.8 4.2 9.7 7.4a1 1 0 0 1 0 .6C20.8 15.5 17.2 19.7 12 19.7S3.2 15.5 2.3 12.3Z"
-					/>
-					<circle cx="12" cy="12" r="2.4" fill="none" stroke="currentColor" strokeWidth="1.8" />
-				</>
-			)}
-		</svg>
-	);
-}
+import { SettingsApiKey } from "./settings-api-key.tsx";
 
 interface SettingsModelsProps {
 	draft: ModelSettingsDraft;
@@ -46,7 +10,6 @@ interface SettingsModelsProps {
 }
 
 export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.JSX.Element {
-	const [hidden, setHidden] = useState<Record<ModelSlotId, boolean>>({ embedding: true, rerank: true, vlm: true, audio: true });
 	const [probes, setProbes] = useState<Record<ModelSlotId, { state: ProbeState; error?: string }>>({ embedding: { state: "idle" }, rerank: { state: "idle" }, vlm: { state: "idle" }, audio: { state: "idle" } });
 	const generation = useRef<Record<ModelSlotId, number>>({ embedding: 0, rerank: 0, vlm: 0, audio: 0 });
 	const debounce = useRef<Partial<Record<ModelSlotId, number>>>({});
@@ -116,8 +79,7 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 
 	const { t } = useLocale();
 	return (
-		<div className="settings-form settings-form-docked">
-			<div className="settings-form-scroll">
+		<div className="settings-form settings-models-form">
 			{MODEL_SLOTS.map((id) => (
 				<fieldset key={id} className="settings-slot" aria-label={t.settings.slots[id].title}>
 					<div className="settings-slot-head">
@@ -132,11 +94,11 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 					</div>
 					<p>{t.settings.slots[id].hint}</p>
 					<label>
-						{t.settings.baseUrl}
+						{t.settings.requestUrl}
 						<input
 							value={draft[id].baseUrl}
 							onChange={(event) => patchField(id, "baseUrl", event.target.value)}
-							placeholder="https://api.example.com"
+							placeholder={MODEL_REQUEST_PLACEHOLDERS[id]}
 							autoComplete="off"
 						/>
 					</label>
@@ -149,26 +111,13 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 							autoComplete="off"
 						/>
 					</label>
-					<div className="settings-secret">
-						<span>{t.settings.apiKey}</span>
-						<div className="settings-secret-row">
-							<input
-								type={hidden[id] ? "password" : "text"}
-								value={draft[id].apiKey ?? ""}
-								onChange={(event) => patchField(id, "apiKey", event.target.value)}
-								placeholder={t.settings.slots[id].keyHint}
-								autoComplete="off"
-								aria-label={t.settings.apiKeyOf(t.settings.slots[id].title)}
-							/>
-							<button
-								className="settings-reveal"
-								type="button"
-								aria-label={hidden[id] ? t.settings.showKey(t.settings.slots[id].title) : t.settings.hideKey(t.settings.slots[id].title)}
-								onClick={() => setHidden((current) => ({ ...current, [id]: !current[id] }))}
-							>
-								<EyeIcon open={!hidden[id]} />
-							</button>
-						</div>
+					<div className="settings-actions settings-model-key-actions">
+						<SettingsApiKey
+							label={t.settings.apiKeyOf(t.settings.slots[id].title)}
+							value={draft[id].apiKey ?? ""}
+							placeholder={t.settings.slots[id].keyHint}
+							onConfirm={(key) => patchField(id, "apiKey", key)}
+						/>
 					</div>
 					{probes[id].state === "ok" && (
 						<p className="settings-status-ok">{t.settings.connected}</p>
@@ -178,7 +127,6 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 					)}
 				</fieldset>
 			))}
-			</div>
 		</div>
 	);
 }

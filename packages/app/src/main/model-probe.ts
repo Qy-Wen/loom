@@ -1,21 +1,14 @@
 import type { ModelProbeDraft, ProbeResult } from "../shared/model-settings.ts";
-import { embeddingsUrl } from "./embedding-provider.ts";
-import { createHttpRerankProvider, rerankUrl } from "./rerank-provider.ts";
-import { vlmChatUrl } from "./vlm-provider.ts";
+import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
+import { createHttpRerankProvider } from "./rerank-provider.ts";
+import { modelRequestUrl } from "../shared/model-request-url.ts";
 
 const TIMEOUT_MS = 8_000;
 
-export function modelsUrl(baseUrl: string): string {
-	return openaiLeafUrl(baseUrl, "models");
-}
-
-export { rerankUrl };
-
 export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResult> {
 	try {
-		const baseUrl = draft.baseUrl.trim();
+		const baseUrl = modelRequestUrl(draft.baseUrl);
 		const model = draft.model.trim();
-		if (!baseUrl) throw new Error("Base URL is required");
 		if (!model) throw new Error("Model is required");
 		const apiKey = draft.apiKey?.trim() ?? "";
 		switch (draft.slot) {
@@ -36,17 +29,9 @@ export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResul
 	}
 }
 
-function openaiLeafUrl(baseUrl: string, leaf: string): string {
-	const trimmed = baseUrl.trim().replace(/\/+$/, "");
-	if (!trimmed) throw new Error("Base URL is required");
-	if (trimmed.toLowerCase().endsWith(`/${leaf}`)) return trimmed;
-	if (/\/v\d+$/i.test(trimmed)) return `${trimmed}/${leaf}`;
-	return `${trimmed}/v1/${leaf}`;
-}
-
+// A tiny text request checks the exact endpoint, not image/audio capability.
 async function probeChatLike(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	if (await probeModelsList(baseUrl, apiKey)) return;
-	await probeJson("POST", vlmChatUrl(baseUrl), apiKey, {
+	await probeJson("POST", baseUrl, apiKey, {
 		model,
 		max_tokens: 1,
 		messages: [{ role: "user", content: "ping" }],
@@ -54,24 +39,11 @@ async function probeChatLike(baseUrl: string, model: string, apiKey: string): Pr
 }
 
 async function probeEmbedding(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	if (await probeModelsList(baseUrl, apiKey)) return;
-	await probeJson("POST", embeddingsUrl(baseUrl), apiKey, { model, input: ["ping"] });
+	await createHttpEmbeddingProvider({ baseUrl, apiKey, model }).embed(["ping"], AbortSignal.timeout(TIMEOUT_MS));
 }
 
 async function probeRerank(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	await createHttpRerankProvider({ baseUrl, apiKey, model }).rerank("ping", ["pong"]);
-}
-
-/** GET /v1/models: 200 JSON is enough. 401/403 fail. Missing route falls through. */
-async function probeModelsList(baseUrl: string, apiKey: string): Promise<boolean> {
-	const result = await request("GET", modelsUrl(baseUrl), apiKey);
-	if (result.status === 401 || result.status === 403) {
-		throw httpError(result.status, result.body);
-	}
-	if (result.status === 200 && looksLikeJson(result.body)) return true;
-	if (result.status === 404 || result.status === 405 || result.status === 501) return false;
-	if (result.status >= 200 && result.status < 300) return false;
-	throw httpError(result.status, result.body);
+	await createHttpRerankProvider({ baseUrl, apiKey, model }).rerank("ping", ["pong"], AbortSignal.timeout(TIMEOUT_MS));
 }
 
 async function probeJson(

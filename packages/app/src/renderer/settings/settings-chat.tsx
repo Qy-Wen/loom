@@ -1,8 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatLoginPrompt, ChatProviderCatalogEntry, ChatSettingsView } from "../../shared/ipc.ts";
-import type { ChatModelsConfig, ChatProviderConfig, ChatThinkingLevel } from "@loom/agent/chat-models";
+import type { ChatCustomProviderConfig, ChatModelsConfig, ChatProviderConfig } from "@loom/agent/chat-models";
 import type { ChatModelView } from "../../shared/chat-models.ts";
 import { useLocale } from "../locale.tsx";
+import { SettingsStatus } from "./settings-switch.tsx";
+import { SettingsChatCustom } from "./settings-chat-custom.tsx";
+import { putCustomProvider } from "./chat-custom-draft.ts";
 
 type LoginPromptEvent = ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" };
 
@@ -20,6 +23,8 @@ export function SettingsChat(): React.JSX.Element {
 	const [login, setLogin] = useState<LoginUiState | null>(null);
 	const [loginInput, setLoginInput] = useState("");
 	const [loginBusy, setLoginBusy] = useState(false);
+	const [loginAnswerBusy, setLoginAnswerBusy] = useState(false);
+	const [customEditor, setCustomEditor] = useState<{ id: string; provider?: ChatCustomProviderConfig } | null>(null);
 	const loginWindow = useRef<Window | null>(null);
 
 	async function reload(): Promise<void> {
@@ -46,6 +51,7 @@ export function SettingsChat(): React.JSX.Element {
 	useEffect(() => {
 		const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
 			setLogin({ prompt });
+			setLoginAnswerBusy(false);
 			if (prompt.type === "text" || prompt.type === "secret" || prompt.type === "manual_code") setLoginInput("");
 			if (prompt.type === "auth_url") {
 				loginWindow.current = window.open(prompt.type === "auth_url" ? prompt.url : "", "_blank", "noopener,noreferrer");
@@ -68,13 +74,17 @@ export function SettingsChat(): React.JSX.Element {
 		}
 	}
 
-	async function save(next: ChatModelsConfig): Promise<void> {
+	async function save(next: ChatModelsConfig): Promise<boolean> {
 		const saved = await run(() => window.loom.saveChatSettings(next));
-		if (saved) setView(saved);
+		if (!saved) return false;
+		setView(saved);
+		return true;
 	}
 
 	async function startLogin(providerId: string, type: "api_key" | "oauth"): Promise<void> {
 		setLoginBusy(true);
+		setLoginAnswerBusy(false);
+		setLoginInput("");
 		setError(null);
 		setLogin(null);
 		try {
@@ -83,6 +93,8 @@ export function SettingsChat(): React.JSX.Element {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			setLoginBusy(false);
+			setLoginAnswerBusy(false);
+			setLoginInput("");
 			setLogin(null);
 			loginWindow.current?.close();
 			loginWindow.current = null;
@@ -96,17 +108,15 @@ export function SettingsChat(): React.JSX.Element {
 			await window.loom.chatCancelLogin();
 			return;
 		}
+		if (loginAnswerBusy) return;
+		setLoginAnswerBusy(true);
 		try {
 			await window.loom.chatLoginResponse(value);
+			setLoginInput("");
 		} catch (cause) {
+			setLoginAnswerBusy(false);
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
-	}
-
-	function patchProvider(providerId: string, patch: Partial<ChatProviderConfig>): void {
-		if (!view) return;
-		const providers = view.config.providers.map((provider) => provider.id === providerId ? { ...provider, ...patch } as ChatProviderConfig : provider);
-		void save({ ...view.config, providers });
 	}
 
 	async function addBuiltin(entry: ChatProviderCatalogEntry): Promise<void> {
@@ -115,22 +125,26 @@ export function SettingsChat(): React.JSX.Element {
 		await save({ ...view.config, providers });
 	}
 
-	async function addCustom(baseUrl: string): Promise<void> {
-		if (!view) return;
-		const id = `custom-${Date.now().toString(36)}`;
-		const providers = [...view.config.providers, {
-			kind: "custom", id, enabled: true, baseUrl,
-			api: "openai-completions",
-			models: [{ id: "custom-model", reasoning: false, input: ["text"], contextWindow: 128_000, maxTokens: 8192 }],
-		} as ChatProviderConfig];
-		await save({ ...view.config, providers });
+	async function saveCustom(provider: ChatCustomProviderConfig): Promise<boolean> {
+		if (!view) return false;
+		const saved = await save(putCustomProvider(view.config, provider));
+		if (saved) setCustomEditor(null);
+		return saved;
 	}
 
 	async function removeProvider(providerId: string): Promise<void> {
 		if (!view) return;
-		const defaultNext = view.config.default?.provider === providerId ? undefined : view.config.default;
-		const providers = view.config.providers.filter((provider) => provider.id !== providerId);
-		await save({ ...view.config, providers, ...(defaultNext === undefined && view.config.default ? {} : { default: defaultNext }) });
+		const next = { ...view.config, providers: view.config.providers.filter((provider) => provider.id !== providerId) };
+		if (next.default?.provider === providerId) delete next.default;
+		await save(next);
+	}
+
+	async function setModelEnabled(providerId: string, modelId: string, enabled: boolean): Promise<void> {
+		if (!view) return;
+		const providers = view.config.providers.map((provider) => provider.id === providerId
+			? { ...provider, modelEnabled: { ...provider.modelEnabled, [modelId]: enabled } }
+			: provider);
+		await save({ ...view.config, providers });
 	}
 
 	const authByProvider = useMemo(() => new Map((view?.auth ?? []).map((row) => [row.providerId, row])), [view?.auth]);
@@ -149,101 +163,122 @@ export function SettingsChat(): React.JSX.Element {
 	const availableBuiltin = catalog.filter((entry) => !view.config.providers.some((provider) => provider.id === entry.id));
 
 	return (
-		<div className="settings-form settings-form-docked">
-			<div className="settings-form-scroll">
-				<p>{t.settings.chat.lead}</p>
-				{error && <div className="session-error">{error}</div>}
+		<fieldset className="settings-slot settings-chat-form" aria-label={t.settings.chat.title}>
+			<div className="settings-slot-head"><span className="settings-slot-title">{t.settings.chat.title}</span></div>
+			<p>{t.settings.chat.lead}</p>
+			{error && <div className="session-error">{error}</div>}
 
 				{view.config.providers.map((provider) => {
 					const auth = authByProvider.get(provider.id);
 					const catalogEntry = catalog.find((entry) => entry.id === provider.id);
 					const models = modelsByProvider.get(provider.id) ?? [];
-					const isDefault = view.config.default?.provider === provider.id;
+					const authError = auth?.error === "auth_not_configured" ? t.settings.chat.authMissing : t.settings.chat.authCheckFailed;
+					const statusError = view.refreshErrors[provider.id] ? t.settings.chat.catalogRefreshFailed : !auth?.configured ? authError : undefined;
+					const status = !provider.enabled ? "idle" : statusError ? "error" : "ok";
 					return (
-						<fieldset key={provider.id} className="settings-slot">
-							<div className="settings-slot-head">
-								<span className="settings-slot-title">{provider.name ?? catalogEntry?.name ?? provider.id}</span>
-								<span className="settings-status-ok">{auth?.configured ? t.settings.chat.signedIn : t.settings.chat.notSignedIn}</span>
+						<div key={provider.id} className="settings-chat-provider">
+							<div className="settings-chat-provider-head">
+								<span className="settings-chat-provider-name">{provider.name ?? catalogEntry?.name ?? provider.id}</span>
+								<SettingsStatus
+									status={status}
+									error={statusError}
+									label={status === "idle" ? t.settings.chat.providerDisabled : status === "ok" ? t.settings.chat.authConfigured : view.refreshErrors[provider.id] ? t.settings.chat.providerProblem : t.settings.chat.authProblem}
+									errorTitle={t.settings.chat.providerProblem}
+									dotOnly
+								/>
 							</div>
-							<div className="settings-chat-row">
-								{catalogEntry?.apiKeyAuth && (
-									<button type="button" disabled={loginBusy} onClick={() => void startLogin(provider.id, "api_key")}>
+							{models.length > 0 ? (
+								<table className="settings-chat-models">
+									<thead>
+										<tr>
+											<th scope="col">{t.settings.chat.modelsCol}</th>
+											<th scope="col">{t.settings.chat.enabledCol}</th>
+										</tr>
+									</thead>
+									<tbody>
+										{models.map((model) => {
+											return (
+												<tr key={model.id}>
+													<td title={`${model.provider} / ${model.id} · ${model.contextWindow.toLocaleString()} ctx · ${model.maxTokens.toLocaleString()} max`}>
+														{model.name}
+													</td>
+													<td>
+														<label className="settings-switch">
+															<input
+																type="checkbox"
+																role="switch"
+																aria-label={t.settings.chat.enableModel(model.name)}
+																checked={provider.modelEnabled?.[model.id] !== false}
+																disabled={busy || loginBusy || !!customEditor || !provider.enabled}
+																onChange={(event) => void setModelEnabled(model.provider, model.id, event.target.checked)}
+															/>
+															<span className="settings-switch-ui" aria-hidden="true" />
+														</label>
+													</td>
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							) : (
+								<p>{t.settings.chat.noModels}</p>
+							)}
+							{customEditor?.id === provider.id && (
+								<SettingsChatCustom key={customEditor.id} {...customEditor} busy={busy || loginBusy} onSave={saveCustom} onCancel={() => setCustomEditor(null)} />
+							)}
+							<div className="settings-chat-provider-actions">
+								{(provider.kind === "custom" || catalogEntry?.apiKeyAuth) && (
+									<button type="button" disabled={busy || loginBusy || !!customEditor || !provider.enabled} onClick={() => void startLogin(provider.id, "api_key")}>
 										{t.settings.chat.signInApiKey}
 									</button>
 								)}
 								{catalogEntry?.oauthAuth && (
-									<button type="button" disabled={loginBusy} onClick={() => void startLogin(provider.id, "oauth")}>
+									<button type="button" disabled={busy || loginBusy || !!customEditor || !provider.enabled} onClick={() => void startLogin(provider.id, "oauth")}>
 										{t.settings.chat.signInOauth}
 									</button>
 								)}
-								<button type="button" disabled={busy} onClick={() => void removeProvider(provider.id)}>
+								{provider.kind === "custom" && (
+									<button type="button" disabled={busy || loginBusy || !!customEditor} onClick={() => setCustomEditor({ id: provider.id, provider: structuredClone(provider) })}>
+										{t.common.edit}
+									</button>
+								)}
+								<button type="button" disabled={busy || loginBusy || !!customEditor} onClick={() => void removeProvider(provider.id)}>
 									{t.settings.chat.removeProvider}
 								</button>
 							</div>
-							{models.length > 0 && (
-								<label>
-									{isDefault ? t.settings.chat.defaultModel : ""}
-									<select
-										value={isDefault ? `${provider.id}:${view.config.default!.modelId}` : ""}
-										onChange={(event) => {
-											const [nextProvider, nextModel] = event.target.value.split(":");
-											if (nextProvider && nextModel) void save({ ...view.config, default: { provider: nextProvider, modelId: nextModel, thinkingLevel: view.config.default?.thinkingLevel ?? "off" } });
-										}}
-									>
-										{!isDefault && <option value="">{t.settings.chat.defaultModel}</option>}
-										{models.map((model) => (
-											<option key={model.id} value={`${provider.id}:${model.id}`}>
-												{model.name} ({model.id}){model.available ? "" : " —"}
-											</option>
-										))}
-									</select>
-								</label>
-							)}
-							{isDefault && models.length > 0 && (
-								<label>
-									{t.settings.chat.thinking}
-									<select
-										value={view.config.default!.thinkingLevel}
-										onChange={(event) => void save({ ...view.config, default: { ...view.config.default!, thinkingLevel: event.target.value as ChatThinkingLevel } })}
-									>
-										{(["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).map((level) => (
-											<option key={level} value={level}>{level}</option>
-										))}
-									</select>
-								</label>
-							)}
-							{models.length === 0 && <p>{t.settings.chat.noModels}</p>}
-						</fieldset>
+						</div>
 					);
 				})}
 
-				<div className="settings-chat-row">
+				<div className="settings-chat-add">
 					<select
+						disabled={busy || loginBusy || !!customEditor}
 						value=""
 						onChange={(event) => {
+							if (event.target.value === "__custom__") {
+								setError(null);
+								setCustomEditor({ id: `custom-${crypto.randomUUID()}` });
+								return;
+							}
 							const entry = catalog.find((row) => row.id === event.target.value);
 							if (entry) void addBuiltin(entry);
 						}}
 						aria-label={t.settings.chat.addProvider}
 					>
 						<option value="">{t.settings.chat.addProvider}</option>
+						<option value="__custom__">{t.settings.chat.custom}</option>
 						{availableBuiltin.map((entry) => (
 							<option key={entry.id} value={entry.id}>{entry.name}</option>
 						))}
 					</select>
-					<button
-						type="button"
-						disabled={busy}
-						onClick={() => void addCustom("https://api.example.com/v1")}
-					>
-						{t.settings.chat.custom}
-					</button>
-					<button type="button" disabled={busy} onClick={() => void run(async () => setView(await window.loom.chatRefresh()))}>
+					<button type="button" disabled={busy || loginBusy || !!customEditor} onClick={() => void run(async () => setView(await window.loom.chatRefresh()))}>
 						{busy ? t.settings.chat.refreshing : t.settings.chat.refresh}
 					</button>
 				</div>
-				{view.config.default === undefined && <p className="settings-path">{t.settings.chat.notConfigured}</p>}
-			</div>
+				{customEditor && !customEditor.provider && (
+					<SettingsChatCustom key={customEditor.id} {...customEditor} busy={busy || loginBusy} onSave={saveCustom} onCancel={() => setCustomEditor(null)} />
+				)}
+				{view.config.providers.length === 0 && <p className="settings-path">{t.settings.chat.notConfigured}</p>}
 
 			{login && (
 				<div className="settings-login-overlay" role="dialog" aria-label={t.settings.chat.loginTitle}>
@@ -259,6 +294,7 @@ export function SettingsChat(): React.JSX.Element {
 							<input
 								type={login.prompt.type === "secret" ? "password" : "text"}
 								value={loginInput}
+								disabled={loginAnswerBusy}
 								placeholder={login.prompt.placeholder ?? (login.prompt.type === "manual_code" ? t.settings.chat.enterCode : "")}
 								autoComplete="off"
 								autoFocus
@@ -267,7 +303,7 @@ export function SettingsChat(): React.JSX.Element {
 							/>
 						)}
 						{login.prompt.type === "select" && (
-							<select autoFocus defaultValue="" onChange={(event) => { if (event.target.value) void answerLogin(event.target.value); }}>
+							<select autoFocus disabled={loginAnswerBusy} defaultValue="" onChange={(event) => { if (event.target.value) void answerLogin(event.target.value); }}>
 								<option value="" disabled>{t.settings.chat.selectMethod}</option>
 								{login.prompt.options.map((option) => (
 									<option key={option.id} value={option.id}>{option.label}</option>
@@ -278,14 +314,14 @@ export function SettingsChat(): React.JSX.Element {
 							<p className="settings-path">{login.prompt.userCode} — {login.prompt.verificationUri}</p>
 						)}
 						<div className="settings-chat-row">
-							{login.prompt.type !== "select" && login.prompt.type !== "device_code" && login.prompt.type !== "info" && login.prompt.type !== "progress" && (
-								<button className="primary-button" type="button" disabled={loginBusy} onClick={() => void answerLogin(loginInput)}>{t.settings.chat.loginAnswer}</button>
+							{(login.prompt.type === "text" || login.prompt.type === "secret" || login.prompt.type === "manual_code") && (
+								<button className="primary-button" type="button" disabled={loginAnswerBusy} onClick={() => void answerLogin(loginInput)}>{t.settings.chat.loginAnswer}</button>
 							)}
 							<button type="button" onClick={() => void answerLogin(undefined)}>{t.settings.chat.loginCancel}</button>
 						</div>
 					</div>
 				</div>
 			)}
-			</div>
+		</fieldset>
 	);
 }

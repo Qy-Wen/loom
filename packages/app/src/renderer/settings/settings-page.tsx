@@ -207,12 +207,12 @@ export function SettingsPage({ onClose }: SettingsPageProps): React.JSX.Element 
 					)
 					: <div className="empty">{t.common.loading}</div>)}
 				{tab === "models" && (
-					<>
+					<div className="settings-models-scroll">
 						<SettingsChat />
 						{draft
 							? <SettingsModels draft={draft} onChange={patchModel} />
 							: <div className="empty">{t.common.loading}</div>}
-					</>
+					</div>
 				)}
 				{tab === "mcp" && (mcp
 					? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} />

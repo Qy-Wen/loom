@@ -16,7 +16,6 @@ import {
 	resetNativeVideoProbeForTests,
 	shouldFallbackFromAudioUrl,
 	shouldFallbackFromNativeVideo,
-	vlmChatUrl,
 	vlmFrameRequestBody,
 	vlmRequestBody,
 	vlmVideoRequestBody,
@@ -29,13 +28,6 @@ afterEach(() => {
 	resetNativeVideoProbeForTests();
 });
 
-test("vlmChatUrl appends /v1/chat/completions", () => {
-	assert.equal(vlmChatUrl("http://127.0.0.1:1234"), "http://127.0.0.1:1234/v1/chat/completions");
-	assert.equal(vlmChatUrl("http://127.0.0.1:1234/v1"), "http://127.0.0.1:1234/v1/chat/completions");
-	assert.equal(vlmChatUrl("https://api.openai.com/v1"), "https://api.openai.com/v1/chat/completions");
-	assert.equal(vlmChatUrl("http://127.0.0.1:11434"), "http://127.0.0.1:11434/v1/chat/completions");
-});
-
 test("createHttpVlmProvider posts OpenAI chat/completions with image_url", async () => {
 	const calls: Array<{ url: string; init: RequestInit }> = [];
 	globalThis.fetch = (async (url, init) => {
@@ -46,13 +38,13 @@ test("createHttpVlmProvider posts OpenAI chat/completions with image_url", async
 	}) as typeof fetch;
 
 	const provider = createHttpVlmProvider({
-		baseUrl: "http://127.0.0.1:1234",
+		baseUrl: "http://127.0.0.1:1234/custom/vision/?region=cn",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
 	const text = await provider.describe({ filename: "shot.jpg", bytes: new Uint8Array([9]) });
 	assert.match(text, /Green/);
-	assert.equal(calls[0]?.url, "http://127.0.0.1:1234/v1/chat/completions");
+	assert.equal(calls[0]?.url, "http://127.0.0.1:1234/custom/vision/?region=cn");
 	const headers = new Headers(calls[0]?.init.headers);
 	assert.equal(headers.get("authorization"), null);
 	const body = JSON.parse(String(calls[0]?.init.body)) as {
@@ -75,7 +67,7 @@ test("createHttpVlmProvider sends a Bearer key for remote APIs", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpVlmProvider({
-		baseUrl: "https://api.example.com/v1",
+		baseUrl: "https://api.example.com/v1/chat/completions",
 		apiKey: "secret",
 		model: "gpt-4o-mini",
 	});
@@ -117,7 +109,7 @@ test("createHttpVideoVlmProvider posts video_url then falls back to stills", asy
 	}) as typeof fetch;
 
 	const provider = createHttpVideoVlmProvider({
-		baseUrl: "http://127.0.0.1:1234",
+		baseUrl: "http://127.0.0.1:1234/custom/video",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
@@ -132,6 +124,7 @@ test("createHttpVideoVlmProvider posts video_url then falls back to stills", asy
 	assert.match(text, /From stills/);
 	assert.equal(extracted, 1);
 	assert.equal(calls.length, 2);
+	assert.ok(calls.every((call) => call.url === "http://127.0.0.1:1234/custom/video"));
 	const nativeBody = JSON.parse(String(calls[0]?.init.body)) as {
 		messages: Array<{ content: Array<{ type: string }> }>;
 	};
@@ -156,7 +149,7 @@ test("createHttpVideoVlmProvider uses native video when the endpoint accepts it"
 	}) as typeof fetch;
 
 	const provider = createHttpVideoVlmProvider({
-		baseUrl: "http://127.0.0.1:1234",
+		baseUrl: "http://127.0.0.1:1234/v1/chat/completions",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
@@ -189,13 +182,14 @@ test("createHttpAudioProvider posts audio_url then falls back to input_audio", a
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "http://127.0.0.1:8000",
+		baseUrl: "http://127.0.0.1:8000/custom/audio/?region=cn",
 		apiKey: "",
 		model: "qwen2-audio-7b-instruct",
 	});
 	const text = await provider.describe({ filename: "clip.wav", bytes: new Uint8Array([9]) });
 	assert.match(text, /From input_audio/);
 	assert.equal(calls.length, 2);
+	assert.ok(calls.every((call) => call.url === "http://127.0.0.1:8000/custom/audio/?region=cn"));
 	const first = JSON.parse(String(calls[0]?.init.body)) as {
 		messages: Array<{ content: Array<{ type: string }> }>;
 	};
@@ -220,7 +214,7 @@ test("createHttpAudioProvider uses audio_url when the endpoint accepts it", asyn
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "http://127.0.0.1:8000",
+		baseUrl: "http://127.0.0.1:8000/v1/chat/completions",
 		apiKey: "",
 		model: "qwen2-audio-7b-instruct",
 	});
@@ -276,7 +270,7 @@ test("createHttpAudioProvider streams Omni on DashScope URLs", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 		apiKey: "sk-test",
 		model: "qwen3-omni-flash",
 	});

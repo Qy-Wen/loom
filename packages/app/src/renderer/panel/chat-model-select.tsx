@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { LoomSessionModel } from "@loom/agent";
-import type { ChatModelView } from "../../shared/chat-models.ts";
 import { useLocale } from "../locale.tsx";
 
 type ModelChoice = {
@@ -38,7 +37,7 @@ export function ChatModelSelect({
 		const load = () => {
 			void window.loom.getChatSettings().then((view) => {
 				if (cancelled) return;
-				setModels(view.models.filter((row) => row.available).map((row): ModelChoice => ({
+				setModels(view.models.filter((row) => row.enabled && row.available).map((row): ModelChoice => ({
 					provider: row.provider,
 					modelId: row.id,
 					label: `${row.name} (${row.provider})`,
@@ -87,17 +86,14 @@ export function ChatModelSelect({
 
 	if (!models) return null;
 	const current = model ? models.find((row) => row.provider === model.provider && row.modelId === model.modelId) : undefined;
-	// The provider runtime is absent (no configured Chat) — hide rather than block the toolbar.
-	if (!model && models.length === 0) return null;
 	const label = current
 		? current.label
 		: model
 			? `${model.provider} / ${model.modelId}`
-			: t.settings.chat.defaultModel;
+			: t.chat.chooseModel;
 
 	async function choose(next: ModelChoice): Promise<void> {
 		setOpen(false);
-		if (current && next.provider === current.provider && next.modelId === current.modelId) return;
 		setError(null);
 		try {
 			// Keep the current thinking level when the new model supports it; otherwise reset.
@@ -121,7 +117,7 @@ export function ChatModelSelect({
 		}
 	}
 
-	const thinking = current && model?.thinkingLevel && current.thinkingLevels.length > 1;
+	const thinking = current && current.thinkingLevels.length > 1;
 
 	return (
 		<div className="session-model-select" ref={rootRef}>
@@ -151,7 +147,7 @@ export function ChatModelSelect({
 					disabled={disabled}
 					onClick={() => void cycleThinking()}
 				>
-					<span>{model!.thinkingLevel}</span>
+					<span>{model?.thinkingLevel ?? "off"}</span>
 				</button>
 			)}
 			{open && createPortal(
@@ -173,7 +169,7 @@ export function ChatModelSelect({
 							{row.label}
 						</button>
 					))}
-					{models.length === 0 && <span className="session-model-empty">{t.settings.chat.noModels}</span>}
+					{models.length === 0 && <span className="session-model-empty">{t.chat.noEnabledModels}</span>}
 				</div>,
 				document.body,
 			)}
