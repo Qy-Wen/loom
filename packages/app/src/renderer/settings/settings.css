@@ -591,10 +591,6 @@
 	background: #fafaf9;
 }
 
-.settings-dialog-actions .settings-add {
-	margin-right: auto;
-}
-
 .settings-actions button {
 	box-sizing: border-box;
 	margin: 0;
@@ -797,17 +793,6 @@
 	background: #eeeeeb;
 }
 
-/* Login prompt dialog rows (kept for the overlay card) */
-.settings-chat-row {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	align-items: center;
-	margin: 8px 0;
-}
-
-
-
 .settings-login-overlay {
 	position: fixed;
 	inset: 0;
@@ -821,16 +806,37 @@
 .settings-login-card {
 	display: flex;
 	flex-direction: column;
-	gap: 10px;
+	gap: 14px;
 	width: min(420px, 90vw);
-	padding: 18px;
+	padding: 20px;
+	border: 1px solid #dededb;
 	border-radius: 10px;
-	background: #fff;
-	box-shadow: 0 12px 32px rgba(32, 33, 36, 0.25);
+	background: #fafaf9;
+	box-shadow: 0 16px 40px rgb(32 33 36 / 18%);
 }
 
 .settings-login-card h3 {
 	margin: 0;
+	color: #292a2d;
+	font-size: 14px;
+	font-weight: 620;
+}
+
+.settings-login-card p {
+	margin: 0;
+	color: #6f7379;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.settings-login-actions {
+	align-items: center;
+	gap: 8px;
+	margin-top: 2px;
+}
+
+.settings-login-actions button {
+	min-width: 72px;
 }
 
 .settings-login-card input,
@@ -841,7 +847,8 @@
 	font: inherit;
 }
 
-.settings-login-card button {
+.settings-login-card > button {
+	margin: 0;
 	border: 1px solid #dadce0;
 	border-radius: 6px;
 	padding: 7px 12px;
@@ -852,4 +859,47 @@
 
 .settings-login-card button:hover:not(:disabled) {
 	background: #eeeeeb;
+}
+
+.settings-secret-input {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) 36px;
+	align-items: center;
+	min-height: 36px;
+	border: 1px solid #d4d4d0;
+	border-radius: 6px;
+	background: #fff;
+}
+
+.settings-secret-input:focus-within {
+	border-color: #8b8e93;
+	box-shadow: 0 0 0 2px rgb(32 33 36 / 6%);
+}
+
+.settings-secret-input input,
+.settings-secret-input input:focus {
+	min-width: 0;
+	width: 100%;
+	box-sizing: border-box;
+	border: 0;
+	outline: none;
+	box-shadow: none;
+	background: transparent;
+	color: #292a2d;
+	font-size: 12px;
+}
+
+.settings-secret-input .settings-secret-toggle {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	color: #6f7379;
+	background: transparent;
+	cursor: pointer;
 }

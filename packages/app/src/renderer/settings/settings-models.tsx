@@ -7,12 +7,12 @@ import { SettingsApiKey } from "./settings-api-key.tsx";
 interface SettingsModelsProps {
 	draft: ModelSettingsDraft;
 	onChange: (id: ModelSlotId, patch: Partial<ModelSlotDraft>) => void;
+	onCommit: (id: ModelSlotId, patch?: Partial<ModelSlotDraft>) => Promise<boolean>;
 }
 
-export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.JSX.Element {
+export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProps): React.JSX.Element {
 	const [probes, setProbes] = useState<Record<ModelSlotId, { state: ProbeState; error?: string }>>({ embedding: { state: "idle" }, rerank: { state: "idle" }, vlm: { state: "idle" }, audio: { state: "idle" } });
 	const generation = useRef<Record<ModelSlotId, number>>({ embedding: 0, rerank: 0, vlm: 0, audio: 0 });
-	const debounce = useRef<Partial<Record<ModelSlotId, number>>>({});
 	const draftRef = useRef(draft);
 	draftRef.current = draft;
 
@@ -33,10 +33,11 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 		}));
 	}
 
-	function clearTimer(id: ModelSlotId): void {
-		const timer = debounce.current[id];
-		if (timer !== undefined) window.clearTimeout(timer);
-		debounce.current[id] = undefined;
+	async function commitSlot(id: ModelSlotId): Promise<boolean> {
+		const slot = draftRef.current[id];
+		if (!await onCommit(id)) return false;
+		if (slot.enabled) void runProbe(id, slot);
+		return true;
 	}
 
 	useEffect(() => {
@@ -46,35 +47,27 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 		return () => {
 			for (const id of MODEL_SLOTS) {
 				generation.current[id] += 1;
-				clearTimer(id);
 			}
 		};
 		// Probe saved-on slots once when the form mounts.
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	function patchField(id: ModelSlotId, field: "baseUrl" | "model" | "apiKey", value: string): void {
+	function patchField(id: ModelSlotId, field: "baseUrl" | "model", value: string): void {
 		const next = { ...draftRef.current[id], [field]: value };
 		draftRef.current = { ...draftRef.current, [id]: next };
 		onChange(id, { [field]: value });
-		if (!next.enabled) return;
-		clearTimer(id);
-		debounce.current[id] = window.setTimeout(() => {
-			void runProbe(id, draftRef.current[id]);
-		}, 500);
 	}
 
 	function patchEnabled(id: ModelSlotId, enabled: boolean): void {
 		const next = { ...draftRef.current[id], enabled };
 		draftRef.current = { ...draftRef.current, [id]: next };
 		onChange(id, { enabled });
-		clearTimer(id);
 		if (!enabled) {
 			generation.current[id] += 1;
 			setProbes((current) => ({ ...current, [id]: { state: "idle" } }));
-			return;
 		}
-		void runProbe(id, next);
+		void onCommit(id, { enabled }).then((saved) => { if (saved && enabled) void runProbe(id, next); });
 	}
 
 	const { t } = useLocale();
@@ -98,6 +91,8 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 						<input
 							value={draft[id].baseUrl}
 							onChange={(event) => patchField(id, "baseUrl", event.target.value)}
+							onBlur={() => void commitSlot(id)}
+							onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
 							placeholder={MODEL_REQUEST_PLACEHOLDERS[id]}
 							autoComplete="off"
 						/>
@@ -107,6 +102,8 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 						<input
 							value={draft[id].model}
 							onChange={(event) => patchField(id, "model", event.target.value)}
+							onBlur={() => void commitSlot(id)}
+							onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
 							placeholder="model id"
 							autoComplete="off"
 						/>
@@ -116,7 +113,11 @@ export function SettingsModels({ draft, onChange }: SettingsModelsProps): React.
 							label={t.settings.apiKeyOf(t.settings.slots[id].title)}
 							value={draft[id].apiKey ?? ""}
 							placeholder={t.settings.slots[id].keyHint}
-							onConfirm={(key) => patchField(id, "apiKey", key)}
+							onConfirm={async (key) => {
+								const saved = await onCommit(id, { apiKey: key });
+								if (saved && draftRef.current[id].enabled) void runProbe(id, { ...draftRef.current[id], apiKey: key });
+								return saved;
+							}}
 						/>
 					</div>
 					{probes[id].state === "ok" && (

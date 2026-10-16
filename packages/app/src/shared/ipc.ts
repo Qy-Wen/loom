@@ -52,7 +52,7 @@ export type ChatProviderCatalogEntry = {
 /** Login prompt forwarded from Main to the renderer during a login flow. */
 export type ChatLoginPrompt =
 	| { type: "text"; message: string; placeholder?: string }
-	| { type: "secret"; message: string; placeholder?: string }
+	| { type: "secret"; message: string; placeholder?: string; /** Only in explicit API-key editing flows; never ordinary settings reads. */ initialValue?: string }
 	| { type: "select"; message: string; options: { id: string; label: string; description?: string }[] }
 	| { type: "manual_code"; message: string; placeholder?: string }
 	| { type: "auth_url"; url: string; instructions?: string }

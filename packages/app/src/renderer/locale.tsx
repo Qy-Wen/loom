@@ -5,8 +5,6 @@ import { messagesFor, type Messages } from "../shared/locale.ts";
 interface LocaleValue {
 	language: AppLanguage;
 	t: Messages;
-	previewLanguage: (choice: AppLanguageChoice) => void;
-	restoreLanguage: () => void;
 	commitLanguage: (choice: AppLanguageChoice) => void;
 }
 
@@ -14,8 +12,7 @@ const LocaleContext = createContext<LocaleValue | null>(null);
 
 export function LocaleProvider({ children }: { children: ReactNode }): React.JSX.Element {
 	const [choice, setChoice] = useState<AppLanguageChoice>("system");
-	const [preview, setPreview] = useState<AppLanguageChoice | null>(null);
-	const language = resolveAppLanguage(preview ?? choice, navigator.language);
+	const language = resolveAppLanguage(choice, navigator.language);
 	const t = messagesFor(language);
 
 	useEffect(() => {
@@ -28,16 +25,11 @@ export function LocaleProvider({ children }: { children: ReactNode }): React.JSX
 		document.documentElement.lang = language;
 	}, [language]);
 
-	const previewLanguage = useCallback((next: AppLanguageChoice) => setPreview(next), []);
-	const restoreLanguage = useCallback(() => setPreview(null), []);
-	const commitLanguage = useCallback((next: AppLanguageChoice) => {
-		setChoice(next);
-		setPreview(null);
-	}, []);
+	const commitLanguage = useCallback((next: AppLanguageChoice) => setChoice(next), []);
 
 	const value = useMemo(
-		() => ({ language, t, previewLanguage, restoreLanguage, commitLanguage }),
-		[language, t, previewLanguage, restoreLanguage, commitLanguage],
+		() => ({ language, t, commitLanguage }),
+		[language, t, commitLanguage],
 	);
 
 	return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>;

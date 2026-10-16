@@ -43,6 +43,61 @@ test("runtime registers enabled Providers only, browses native catalogs offline,
 	view.config.providers[0]!.name = "detached"; assert.equal(service.config.providers[0]!.name, undefined);
 });
 
+test("API-key editing prefills only its explicit secret prompt and cancellation keeps the stored key", async (t) => {
+	const { stores } = await workspace(t);
+	await stores.config.save(config());
+	await stores.credentials.modify("local", async () => ({ type: "api_key", key: "STORED_PRIVATE" }));
+	const service = new ChatModelService(stores, { authContext: noEnv }); await service.initialize();
+	const observed = new Set<string>(); service.onSecrets((values) => values.forEach((value) => observed.add(value)));
+	await assert.rejects(() => service.login("local", "api_key", {
+		prompt: async (prompt) => { assert.equal(prompt.type, "secret"); assert.equal(prompt.initialValue, "STORED_PRIVATE"); throw new Error("cancelled"); },
+		notify: () => {},
+	}), /cancelled/);
+	assert.equal((await stores.credentials.read("local"))?.type, "api_key");
+	await service.login("local", "api_key", {
+		prompt: async (prompt) => { assert.equal(prompt.initialValue, "STORED_PRIVATE"); return "REPLACEMENT_PRIVATE"; }, notify: () => {},
+	});
+	const credential = await stores.credentials.read("local");
+	assert.ok(credential?.type === "api_key"); assert.equal(credential.key, "REPLACEMENT_PRIVATE");
+	assert.ok(observed.has("STORED_PRIVATE")); assert.ok(observed.has("REPLACEMENT_PRIVATE"));
+	assert.ok(!JSON.stringify(await service.view()).includes("PRIVATE"));
+	assert.ok(!(await readFile(stores.credentials.file.path, "utf8")).includes("PRIVATE"));
+});
+
+test("API-key editor can prefill ambient keys without persisting them on cancel", async (t) => {
+	const { stores } = await workspace(t);
+	await stores.config.save({ version: 1, providers: [{ kind: "builtin", id: "deepseek", enabled: true }] });
+	const service = new ChatModelService(stores, { authContext: { ...noEnv, env: async (name) => name === "DEEPSEEK_API_KEY" ? "ENV_PRIVATE" : undefined } });
+	await service.initialize();
+	await assert.rejects(() => service.login("deepseek", "api_key", {
+		prompt: async (prompt) => { assert.equal(prompt.initialValue, "ENV_PRIVATE"); throw new Error("cancelled"); }, notify: () => {},
+	}), /cancelled/);
+	assert.deepEqual(await stores.credentials.list(), []);
+	assert.ok(!JSON.stringify(await service.view()).includes("ENV_PRIVATE"));
+});
+
+test("OAuth edit flows never prefill access/refresh tokens or resolve OAuth for API-key editing", async (t) => {
+	const { stores } = await workspace(t); let refreshes = 0;
+	const faux = fauxProvider({ provider: "dual" });
+	const oauth = { type: "oauth", access: "ACCESS_PRIVATE", refresh: "REFRESH_PRIVATE", expires: Date.now() + 60_000 } as const;
+	const provider = createProvider({ id: "dual", models: faux.models, api: faux.provider, auth: {
+		apiKey: { name: "API key", resolve: async () => undefined, login: async (interaction) => ({ type: "api_key", key: await interaction.prompt({ type: "secret", message: "Key" }) }) },
+		oauth: {
+			name: "OAuth",
+			login: async (interaction) => { await interaction.prompt({ type: "secret", message: "OAuth verification" }); return oauth; },
+			refresh: async () => { refreshes++; return oauth; }, toAuth: async () => ({ apiKey: "ACCESS_PRIVATE" }),
+		},
+	} });
+	await stores.config.save({ version: 1, providers: [{ kind: "builtin", id: "dual", enabled: true }] });
+	await stores.credentials.modify("dual", async () => oauth);
+	const service = new ChatModelService(stores, { builtins: [provider], authContext: noEnv }); await service.initialize();
+	for (const type of ["api_key", "oauth"] as const) await assert.rejects(() => service.login("dual", type, {
+		prompt: async (prompt) => { assert.equal(prompt.initialValue, undefined); throw new Error("cancelled"); }, notify: () => {},
+	}), /cancelled/);
+	assert.equal(refreshes, 0); assert.deepEqual(await stores.credentials.read("dual"), oauth);
+	assert.ok(!JSON.stringify(await service.view()).includes("PRIVATE"));
+});
+
 test("save validates before replacement, clamps native thinking, retains unknown selections and old collection identity", async (t) => {
 	const { stores } = await workspace(t); const input = config();
 	(input.providers[0] as ChatCustomProviderConfig).allowUnauthenticated = true;

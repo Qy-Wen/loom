@@ -1,28 +1,39 @@
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../locale.tsx";
+import { SettingsSecretInput } from "./settings-secret-input.tsx";
 
-/** The dialog edits the settings draft only; the outer Settings Save persists it. */
+/** Confirm persists the key; Cancel discards only this dialog's edits. */
 export function SettingsApiKey({ label, value, placeholder, onConfirm }: {
 	label: string;
 	value: string;
 	placeholder: string;
-	onConfirm: (key: string) => void;
+	onConfirm: (key: string) => Promise<boolean>;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const [open, setOpen] = useState(false);
 	const [input, setInput] = useState("");
+	const [saving, setSaving] = useState(false);
+	const [error, setError] = useState(false);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 	const dialogRef = useRef<HTMLDivElement>(null);
 
-	function close(): void { setOpen(false); setInput(""); }
-	function confirm(): void { onConfirm(input); close(); }
+	function close(): void { if (saving) return; setOpen(false); setInput(""); setError(false); }
+	async function confirm(): Promise<void> {
+		if (saving) return;
+		setSaving(true); setError(false);
+		try {
+			if (await onConfirm(input)) { setOpen(false); setInput(""); } else setError(true);
+		} catch { setError(true); }
+		finally { setSaving(false); }
+	}
 
 	useEffect(() => {
 		if (!open) return;
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key === "Escape") {
-				event.preventDefault(); event.stopPropagation(); close();
+				event.preventDefault(); event.stopPropagation();
+				if (!dialogRef.current?.querySelector("input")?.disabled) close();
 				return;
 			}
 			if (event.key !== "Tab") return;
@@ -36,7 +47,7 @@ export function SettingsApiKey({ label, value, placeholder, onConfirm }: {
 		window.addEventListener("keydown", onKey, true);
 		return () => {
 			window.removeEventListener("keydown", onKey, true);
-			buttonRef.current?.focus();
+			buttonRef.current?.focus({ preventScroll: true });
 		};
 	}, [open]);
 
@@ -53,21 +64,22 @@ export function SettingsApiKey({ label, value, placeholder, onConfirm }: {
 					<div ref={dialogRef} className="settings-login-card" role="dialog" aria-modal="true" aria-label={label}>
 						<h3>{label}</h3>
 						<p>{t.settings.apiKeyDialogNote}</p>
-						<input
-							type="password"
+						<SettingsSecretInput
+							label={label}
 							value={input}
+							disabled={saving}
 							placeholder={placeholder}
-							aria-label={label}
 							autoComplete="off"
 							autoFocus
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={(event) => {
-								if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); confirm(); }
+								if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); void confirm(); }
 							}}
 						/>
-						<div className="settings-actions">
-							<button type="button" onClick={close}>{t.common.cancel}</button>
-							<button className="primary-button" type="button" onClick={confirm}>{t.settings.apiKeyConfirm}</button>
+						{error && <p className="settings-status-error" role="alert">{t.settings.apiKeySaveFailed}</p>}
+						<div className="settings-actions settings-login-actions">
+							<button type="button" disabled={saving} onClick={close}>{t.common.cancel}</button>
+							<button className="primary-button" type="button" disabled={saving} onClick={() => void confirm()}>{t.settings.apiKeyConfirm}</button>
 						</div>
 					</div>
 				</div>,

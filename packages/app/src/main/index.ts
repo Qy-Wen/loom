@@ -369,7 +369,7 @@ const loginPromptState = {
 	signal: undefined as AbortController | undefined,
 };
 
-function askLoginPrompt(window: Electron.BrowserWindow | undefined, providerId: string, type: "api_key" | "oauth", prompt: import("@earendil-works/pi-ai").AuthPrompt, signal?: AbortSignal): Promise<string> {
+function askLoginPrompt(window: Electron.BrowserWindow | undefined, providerId: string, type: "api_key" | "oauth", prompt: import("@earendil-works/pi-ai").AuthPrompt & { initialValue?: string }, signal?: AbortSignal): Promise<string> {
 	return new Promise<string>((resolve, reject) => {
 		loginPromptState.pending = resolve;
 		loginPromptState.reject = reject;
@@ -779,7 +779,8 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getMcpSettings, async () => mcpSettingsView());
 	ipcMain.handle(IPC.saveMcpSettings, async (_event, drafts: McpServerDraft[]) => {
 		if (!mcpSettings) throw new Error("Settings store not started");
-		await mcpSettings.save(drafts);
+		const configs = await mcpSettings.save(drafts);
+		await reconnectMcp(configs);
 		return mcpSettingsView();
 	});
 	ipcMain.handle(IPC.setMcpServerLive, async (_event, draft: McpServerDraft) => {

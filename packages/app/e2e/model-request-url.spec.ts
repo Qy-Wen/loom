@@ -38,7 +38,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 			await toggle.locator("..").click();
 			await expect(slot.getByText("Connected", { exact: true })).toBeVisible();
 		}
-		await settings.getByRole("button", { name: "Save", exact: true }).click();
+		await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 		await expect(settings).toHaveCount(0);
 		const saved = await loomPage.evaluate(() => window.loom.getModelSettings());
 		for (const row of rows) {
@@ -51,6 +51,14 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 		for (const row of rows) {
 			await expect(settings.getByRole("group", { name: row.title, exact: true }).getByRole("textbox", { name: "Request URL", exact: true })).toHaveValue(origin + row.path);
 		}
+		const embedding = settings.getByRole("group", { name: "Text embedding", exact: true });
+		const url = embedding.getByRole("textbox", { name: "Request URL", exact: true });
+		await url.fill("invalid-in-progress"); await url.press("Tab");
+		await expect(settings.getByRole("alert")).toContainText("Request URL");
+		await embedding.getByRole("switch", { name: "Enable Text embedding", exact: true }).locator("..").click();
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.enabled).toBe(false);
+		expect((await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.baseUrl).toBe(origin + rows[0].path);
+		await expect(url).toHaveValue("invalid-in-progress");
 	} finally {
 		if (await settings.count()) await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 		await loomPage.evaluate((draft) => window.loom.saveModelSettings(draft), original);

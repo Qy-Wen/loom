@@ -7,6 +7,8 @@ interface SettingsMcpProps {
 	view: McpSettingsView;
 	onChange: (servers: McpServerDraft[]) => void;
 	onStatus: (status: McpServerStatus) => void;
+	onSave: (index: number) => Promise<McpSettingsView | undefined>;
+	onRemove: (index: number) => Promise<boolean>;
 }
 
 type LocalProbe = { state: ProbeState; error?: string };
@@ -27,7 +29,7 @@ function hasAdvanced(server: McpServerDraft): boolean {
 	return Boolean(server.envText.trim() || server.cwd.trim());
 }
 
-export function SettingsMcp({ view, onChange, onStatus }: SettingsMcpProps): React.JSX.Element {
+export function SettingsMcp({ view, onChange, onStatus, onSave, onRemove }: SettingsMcpProps): React.JSX.Element {
 	const [busy, setBusy] = useState<Record<number, boolean>>({});
 	const [local, setLocal] = useState<Record<number, LocalProbe>>({});
 	const [advanced, setAdvanced] = useState<Record<number, boolean>>({});
@@ -42,33 +44,22 @@ export function SettingsMcp({ view, onChange, onStatus }: SettingsMcpProps): Rea
 		});
 	}
 
-	async function setEnabled(index: number, enabled: boolean): Promise<void> {
-		const server = { ...view.servers[index], enabled };
-		onChange(view.servers.map((row, i) => i === index ? server : row));
+	async function saveServer(index: number, server = view.servers[index]!): Promise<void> {
 		setBusy((current) => ({ ...current, [index]: true }));
-		if (!enabled) {
-			setLocal((current) => ({ ...current, [index]: { state: "idle" } }));
-			try {
-				onStatus(await window.loom.setMcpServerLive(server));
-			} finally {
-				setBusy((current) => ({ ...current, [index]: false }));
-			}
-			return;
-		}
-		setLocal((current) => ({ ...current, [index]: { state: "checking" } }));
+		setLocal((current) => ({ ...current, [index]: { state: server.enabled ? "checking" : "idle" } }));
 		try {
-			const status = await window.loom.setMcpServerLive(server);
-			onStatus(status);
-			setLocal((current) => ({
-				...current,
-				[index]: status.error ? { state: "error", error: status.error } : { state: "ok" },
-			}));
-		} catch (error) {
-			const message = error instanceof Error ? error.message : String(error);
-			setLocal((current) => ({ ...current, [index]: { state: "error", error: message } }));
-		} finally {
-			setBusy((current) => ({ ...current, [index]: false }));
-		}
+			const saved = await onSave(index);
+			if (!saved) { setLocal((current) => ({ ...current, [index]: { state: "idle" } })); return; }
+			const status = saved.status.find((row) => row.id === server.id.trim());
+			if (status) onStatus(status);
+			setLocal((current) => ({ ...current, [index]: probeFromStatus(server, status) }));
+		} finally { setBusy((current) => ({ ...current, [index]: false })); }
+	}
+
+	async function setEnabled(index: number, enabled: boolean): Promise<void> {
+		const server = { ...view.servers[index]!, enabled };
+		onChange(view.servers.map((row, i) => i === index ? server : row));
+		await saveServer(index, server);
 	}
 
 	const { t } = useLocale();
@@ -84,7 +75,7 @@ export function SettingsMcp({ view, onChange, onStatus }: SettingsMcpProps): Rea
 				const probe = local[index] ?? probeFromStatus(server, status);
 				const title = server.id.trim() || t.settings.server(index + 1);
 				return (
-					<fieldset key={index} className="settings-slot" aria-label={title}>
+					<fieldset key={index} className="settings-slot" aria-label={title} disabled={Object.values(busy).some(Boolean)}>
 						<div className="settings-slot-head">
 							<input
 								className="settings-slot-name"
@@ -205,17 +196,11 @@ export function SettingsMcp({ view, onChange, onStatus }: SettingsMcpProps): Rea
 							</p>
 						)}
 						<div className="settings-actions">
-							<button
-								type="button"
-								onClick={() => {
-									if (server.enabled && server.id.trim()) {
-										void window.loom.setMcpServerLive({ ...server, enabled: false });
-									}
-									onChange(view.servers.filter((_, i) => i !== index));
-								}}
-							>
-								{t.common.remove}
-							</button>
+							<button type="button" onClick={() => {
+								setBusy((current) => ({ ...current, [index]: true }));
+								void onRemove(index).then((removed) => { if (removed) { setLocal({}); setAdvanced({}); } }).finally(() => setBusy({}));
+							}}>{t.common.remove}</button>
+							<button className="primary-button" type="button" onClick={() => void saveServer(index)}>{t.settings.saveServer}</button>
 						</div>
 					</fieldset>
 				);

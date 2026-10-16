@@ -1,7 +1,8 @@
-import type { AssistantMessage, AssistantMessageEventStream, AuthContext, AuthInteraction, AuthType, Credential, CredentialStore } from "@earendil-works/pi-ai";
+import type { AssistantMessage, AssistantMessageEventStream, AuthContext, AuthInteraction, AuthPrompt, AuthType, Credential, CredentialStore } from "@earendil-works/pi-ai";
 import { createModels, clampThinkingLevel, getSupportedThinkingLevels, type Models, type MutableModels, type Provider } from "@earendil-works/pi-ai/models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { lazyStream } from "@earendil-works/pi-ai/api/lazy";
+import { defaultProviderAuthContext } from "@earendil-works/pi-ai";
 import { assembleChatProviders, chatPriceSource, type ChatProviderAssemblyOptions } from "@loom/agent/chat-runtime";
 import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import { emptyChatConfig, parseChatConfig, type ChatModelsConfig, type ChatSelection } from "@loom/agent/chat-models";
@@ -10,6 +11,10 @@ import type { ChatConfigStore } from "./chat-config-store.ts";
 import type { ChatCredentialStore } from "./chat-credential-store.ts";
 import type { ChatCatalogStore } from "./chat-catalog-store.ts";
 
+type ApiKeyEditInteraction = Omit<AuthInteraction, "prompt"> & {
+	/** Initial secrets may only leave Main in the explicit API-key editor's prompt event. */
+	prompt: (prompt: AuthPrompt & { initialValue?: string }) => Promise<string>;
+};
 type ChatStores = { config: ChatConfigStore; credentials: ChatCredentialStore; catalog: ChatCatalogStore };
 export type ChatModelServiceOptions = Pick<ChatProviderAssemblyOptions, "builtins" | "apis"> & {
 	authContext?: AuthContext;
@@ -202,12 +207,42 @@ export class ChatModelService {
 		});
 	}
 	/** Run a provider login flow (API key or OAuth) and persist the returned credential. */
-	async login(providerId: string, type: AuthType, interaction: AuthInteraction, options?: { signal?: AbortSignal }): Promise<void> {
+	async login(providerId: string, type: AuthType, interaction: ApiKeyEditInteraction, options?: { signal?: AbortSignal }): Promise<void> {
 		if (!this.#initialized) throw new Error("Chat runtime is not initialized");
 		const provider = this.#providers.get(providerId) ?? this.#builtins.find((row) => row.id === providerId);
 		if (!provider) throw new Error("Unknown Chat provider");
-		await this.mutation([providerId], () => this.#native.login(providerId, type, interaction, { agentName: "Loom" }));
+		let firstSecret = true;
+		await this.mutation([providerId], () => this.#native.login(providerId, type, {
+			...interaction,
+			prompt: async (prompt) => {
+				if (type !== "api_key" || prompt.type !== "secret" || !firstSecret) return interaction.prompt(prompt);
+				firstSecret = false;
+				const parentSignal = prompt.signal ?? interaction.signal;
+				const signal = AbortSignal.any([...(parentSignal ? [parentSignal] : []), AbortSignal.timeout(5000)]);
+				const initialValue = await this.apiKeyForEdit(provider, signal);
+				signal.throwIfAborted();
+				return interaction.prompt({ ...prompt, ...(initialValue !== undefined ? { initialValue } : {}) });
+			},
+		}, { agentName: "Loom" }));
 		await this.refreshNative({ providers: [providerId], allowNetwork: false, signal: options?.signal ?? AbortSignal.timeout(10_000) });
+	}
+	/** Read only stored/ambient API-key auth, never resolve or refresh OAuth tokens. */
+	private async apiKeyForEdit(provider: Provider, signal: AbortSignal): Promise<string | undefined> {
+		try {
+			const credential = await this.stores.credentials.read(provider.id, { signal });
+			this.rememberCredential(credential);
+			if (credential?.type === "api_key" && credential.key !== undefined) return credential.key;
+			const resolved = await provider.auth.apiKey?.resolve({
+				ctx: this.options.authContext ?? defaultProviderAuthContext(),
+				credential: credential?.type === "api_key" ? credential : undefined,
+				signal,
+			});
+			this.remember([resolved?.auth.apiKey]);
+			return resolved?.auth.apiKey;
+		} catch {
+			signal.throwIfAborted();
+			throw new Error("Could not load the configured API key");
+		}
 	}
 	async logout(providerId: string): Promise<void> {
 		if (!this.#initialized) throw new Error("Chat runtime is not initialized");

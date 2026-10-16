@@ -6,6 +6,7 @@ import { useLocale } from "../locale.tsx";
 import { SettingsStatus } from "./settings-switch.tsx";
 import { SettingsChatCustom } from "./settings-chat-custom.tsx";
 import { putCustomProvider } from "./chat-custom-draft.ts";
+import { SettingsSecretInput } from "./settings-secret-input.tsx";
 
 type LoginPromptEvent = ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" };
 
@@ -26,6 +27,7 @@ export function SettingsChat(): React.JSX.Element {
 	const [loginAnswerBusy, setLoginAnswerBusy] = useState(false);
 	const [customEditor, setCustomEditor] = useState<{ id: string; provider?: ChatCustomProviderConfig } | null>(null);
 	const loginWindow = useRef<Window | null>(null);
+	const loginAttempt = useRef<{ cancelled: boolean } | null>(null);
 
 	async function reload(): Promise<void> {
 		try {
@@ -50,9 +52,12 @@ export function SettingsChat(): React.JSX.Element {
 
 	useEffect(() => {
 		const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
-			setLogin({ prompt });
+			if (loginAttempt.current?.cancelled) return;
+			setLogin({ prompt: prompt.type === "secret" ? { ...prompt, initialValue: undefined } : prompt });
 			setLoginAnswerBusy(false);
-			if (prompt.type === "text" || prompt.type === "secret" || prompt.type === "manual_code") setLoginInput("");
+			if (prompt.type === "text" || prompt.type === "secret" || prompt.type === "manual_code") {
+				setLoginInput(prompt.type === "secret" && prompt.authType === "api_key" ? prompt.initialValue ?? "" : "");
+			}
 			if (prompt.type === "auth_url") {
 				loginWindow.current = window.open(prompt.type === "auth_url" ? prompt.url : "", "_blank", "noopener,noreferrer");
 			}
@@ -82,6 +87,9 @@ export function SettingsChat(): React.JSX.Element {
 	}
 
 	async function startLogin(providerId: string, type: "api_key" | "oauth"): Promise<void> {
+		if (loginAttempt.current) return;
+		const attempt = { cancelled: false };
+		loginAttempt.current = attempt;
 		setLoginBusy(true);
 		setLoginAnswerBusy(false);
 		setLoginInput("");
@@ -90,7 +98,7 @@ export function SettingsChat(): React.JSX.Element {
 		try {
 			await window.loom.chatLogin(providerId, type);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (!attempt.cancelled) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			setLoginBusy(false);
 			setLoginAnswerBusy(false);
@@ -98,13 +106,16 @@ export function SettingsChat(): React.JSX.Element {
 			setLogin(null);
 			loginWindow.current?.close();
 			loginWindow.current = null;
-			void reload();
+			loginAttempt.current = null;
+			// Cancel changes no settings: avoid a transient error row and needless reloading.
+			if (!attempt.cancelled) void reload();
 		}
 	}
 
 	async function answerLogin(value: string | undefined): Promise<void> {
 		if (!login) return;
 		if (value === undefined) {
+			if (loginAttempt.current) loginAttempt.current.cancelled = true;
 			await window.loom.chatCancelLogin();
 			return;
 		}
@@ -290,9 +301,22 @@ export function SettingsChat(): React.JSX.Element {
 								{t.settings.chat.openUrl}
 							</button>
 						)}
-						{(login.prompt.type === "text" || login.prompt.type === "secret" || login.prompt.type === "manual_code") && (
+						{login.prompt.type === "secret" && (
+							<SettingsSecretInput
+								key={`${login.prompt.providerId}:${login.prompt.authType}:${login.prompt.message}`}
+								label={login.prompt.authType === "api_key" ? t.settings.apiKey : login.prompt.message}
+								value={loginInput}
+								disabled={loginAnswerBusy}
+								placeholder={login.prompt.placeholder ?? ""}
+								autoComplete="off"
+								autoFocus
+								onChange={(event) => setLoginInput(event.target.value)}
+								onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); void answerLogin(loginInput); } }}
+							/>
+						)}
+						{(login.prompt.type === "text" || login.prompt.type === "manual_code") && (
 							<input
-								type={login.prompt.type === "secret" ? "password" : "text"}
+								type="text"
 								value={loginInput}
 								disabled={loginAnswerBusy}
 								placeholder={login.prompt.placeholder ?? (login.prompt.type === "manual_code" ? t.settings.chat.enterCode : "")}
@@ -313,11 +337,11 @@ export function SettingsChat(): React.JSX.Element {
 						{login.prompt.type === "device_code" && (
 							<p className="settings-path">{login.prompt.userCode} — {login.prompt.verificationUri}</p>
 						)}
-						<div className="settings-chat-row">
+						<div className="settings-actions settings-login-actions">
+							<button type="button" onClick={() => void answerLogin(undefined)}>{t.settings.chat.loginCancel}</button>
 							{(login.prompt.type === "text" || login.prompt.type === "secret" || login.prompt.type === "manual_code") && (
 								<button className="primary-button" type="button" disabled={loginAnswerBusy} onClick={() => void answerLogin(loginInput)}>{t.settings.chat.loginAnswer}</button>
 							)}
-							<button type="button" onClick={() => void answerLogin(undefined)}>{t.settings.chat.loginCancel}</button>
 						</div>
 					</div>
 				</div>

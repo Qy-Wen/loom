@@ -91,11 +91,69 @@ test("custom provider can be created, authenticated, edited and used for streami
 
 		await provider.locator(".settings-chat-provider-actions").getByRole("button", { name: "API key", exact: true }).click();
 		const login = loomPage.getByRole("dialog", { name: "Provider sign-in", exact: true });
-		await login.locator('input[type="password"]').fill(key);
+		const keyInput = login.getByLabel("API key", { exact: true });
+		await expect(keyInput).toHaveAttribute("type", "password");
+		await expect(keyInput).toHaveValue("");
+		await keyInput.focus();
+		const secretFocusStyle = await keyInput.evaluate((input) => ({
+			innerShadow: getComputedStyle(input).boxShadow,
+			innerBorder: getComputedStyle(input).borderRightWidth,
+			outerShadow: getComputedStyle(input.parentElement!).boxShadow,
+		}));
+		expect(secretFocusStyle.innerShadow).toBe("none");
+		expect(secretFocusStyle.innerBorder).toBe("0px");
+		expect(secretFocusStyle.outerShadow).not.toBe("none");
+		await keyInput.fill(key);
+		await login.getByRole("button", { name: "Show API key", exact: true }).click();
+		await expect(keyInput).toHaveAttribute("type", "text");
+		await expect(keyInput).toHaveValue(key);
+		await login.getByRole("button", { name: "Hide API key", exact: true }).click();
+		await expect(keyInput).toHaveAttribute("type", "password");
 		await expect(login.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+		const loginButtonLayout = await login.locator(".settings-login-actions").evaluate((element) => {
+			const [cancel, proceed] = Array.from(element.querySelectorAll("button")).map((button) => button.getBoundingClientRect());
+			return { topDelta: Math.abs(proceed!.top - cancel!.top), heightDelta: Math.abs(proceed!.height - cancel!.height), rightAligned: proceed!.left > cancel!.right };
+		});
+		expect(loginButtonLayout.topDelta).toBeLessThan(1);
+		expect(loginButtonLayout.heightDelta).toBeLessThan(1);
+		expect(loginButtonLayout.rightAligned).toBe(true);
 		await login.getByRole("button", { name: "Continue", exact: true }).click();
 		await expect(login).toBeHidden();
 		await expect(provider.locator(".settings-probe.is-ok")).toBeVisible();
+		await provider.locator(".settings-chat-provider-actions").getByRole("button", { name: "API key", exact: true }).click();
+		await expect(keyInput).toHaveValue(key);
+		await expect(keyInput).toHaveAttribute("type", "password");
+		await login.getByRole("button", { name: "Show API key", exact: true }).click();
+		await expect(keyInput).toHaveAttribute("type", "text");
+		await keyInput.fill("discarded-replacement");
+		await loomPage.evaluate(() => {
+			const scope = window as typeof window & { cancelErrorObserver?: MutationObserver; cancelErrors?: string[] };
+			scope.cancelErrors = [];
+			scope.cancelErrorObserver = new MutationObserver((records) => {
+				for (const record of records) for (const node of record.addedNodes) {
+					if (!(node instanceof Element)) continue;
+					if (node.matches(".session-error")) scope.cancelErrors!.push(node.textContent ?? "");
+					for (const error of node.querySelectorAll(".session-error")) scope.cancelErrors!.push(error.textContent ?? "");
+				}
+			});
+			scope.cancelErrorObserver.observe(document.querySelector(".settings-chat-form")!, { childList: true, subtree: true });
+		});
+		await login.getByRole("button", { name: "Cancel", exact: true }).click();
+		await expect(login).toBeHidden();
+		await expect(provider.locator(".settings-chat-provider-actions").getByRole("button", { name: "API key", exact: true })).toBeEnabled();
+		const cancelErrors = await loomPage.evaluate(() => {
+			const scope = window as typeof window & { cancelErrorObserver?: MutationObserver; cancelErrors?: string[] };
+			scope.cancelErrorObserver?.disconnect();
+			const errors = scope.cancelErrors ?? [];
+			delete scope.cancelErrorObserver; delete scope.cancelErrors;
+			return errors;
+		});
+		expect(cancelErrors).toEqual([]);
+		await provider.locator(".settings-chat-provider-actions").getByRole("button", { name: "API key", exact: true }).click();
+		await expect(keyInput).toHaveValue(key);
+		await expect(keyInput).toHaveAttribute("type", "password");
+		await login.getByRole("button", { name: "Continue", exact: true }).click();
+		await expect(login).toBeHidden();
 		expect(JSON.stringify(await loomPage.evaluate(() => window.loom.getChatSettings()))).not.toContain(key);
 		const userData = await electronApp!.evaluate(({ app }) => app.getPath("userData"));
 		for (const file of ["chat-models.json", "chat-credentials.json"]) expect(await readFile(join(userData, file), "utf8")).not.toContain(key);
