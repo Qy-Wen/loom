@@ -17,6 +17,17 @@ interface Drag {
 	rect: FloatRect;
 	target: Target | null;
 }
+interface DropGeometry {
+	bounds: DOMRect;
+	rows: { slot: PanelSlot; box: DOMRect; joinFrame: FloatRect; layer: number }[];
+	regions: Partial<Record<PanelRegion, DOMRect>>;
+	bandTops: Partial<Record<"bottom" | "above", number>>;
+}
+
+function previewsLayout(target: Target | null): target is Target {
+	const drop = target?.drop;
+	return !!drop && (drop.kind === "split" || drop.kind === "band" || (drop.kind === "place" && (drop.place.mode === "above" || drop.place.mode === "bottom")));
+}
 interface TabReorder {
 	id: PanelId;
 	slotId: string;
@@ -67,7 +78,9 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		if (slot) setLayers((current) => ({ ...current, [slot.id]: Math.max(0, ...Object.values(current)) + 1 }));
 	}
 	const extracted = drag && extractPanel(state, drag.move);
-	const effective = extracted ? { ...extracted.state, slots: [...extracted.state.slots, { ...extracted.slot, place: { mode: "float", ...drag!.rect } as PanelPlace }] } : state;
+	const preview = drag && previewsLayout(drag.target) ? drag.target : null;
+	const effective = preview ? movePanel(state, drag!.move, preview.drop)
+		: extracted ? { ...extracted.state, slots: [...extracted.state.slots, { ...extracted.slot, place: { mode: "float", ...drag!.rect } as PanelPlace }] } : state;
 	const slots = effective.slots.filter((slot) => visibleTabs(slot, registrations).length > 0);
 	const regionSlots = (region: PanelRegion) => slots.filter((slot) => slot.place.mode === region);
 	const hasRegion = (region: PanelRegion) => regionSlots(region).length > 0;
@@ -121,33 +134,45 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		window.addEventListener("pointercancel", cancel);
 	}
 
-	function targetAt(move: PanelMove, x: number, y: number, bounds: DOMRect): Target | null {
+	function measureDropGeometry(move: PanelMove, bounds: DOMRect): DropGeometry | null {
 		const current = extractPanel(stateRef.current, move);
 		const shell = shellRef.current;
 		if (!current || !shell) return null;
 		const remaining = current.state.slots.filter((slot) => visibleTabs(slot, registrationsRef.current).length);
 		const rows = remaining.flatMap((slot) => {
 			const element = [...shell.querySelectorAll<HTMLElement>("[data-slot]")].find((element) => element.dataset.slot === slot.id);
-			return element ? [{ slot, element, box: element.getBoundingClientRect() }] : [];
+			if (!element) return [];
+			const box = element.getBoundingClientRect();
+			const title = element.querySelector<HTMLElement>(":scope > .panel-tabs, :scope > .work-panel > .work-panel-title");
+			const top = (slot.place.mode === "bottom" || slot.place.mode === "above") && title ? title.getBoundingClientRect().top - readCssPx(shell, "--join-border-width", 2) : box.top;
+			return [{ slot, box, layer: Number.parseFloat(getComputedStyle(element).zIndex) || 0,
+				joinFrame: { x: box.left - bounds.left, y: top - bounds.top, width: box.width, height: box.bottom - top } }];
 		}).filter(({ box }) => box.width > 1 && box.height > 1);
-		const regionBox = (mode: PanelRegion) => shell.querySelector<HTMLElement>(`.panel-region[data-region="${mode}"]`)?.getBoundingClientRect();
-		const heading = (element: HTMLElement) => element.querySelector<HTMLElement>(":scope > .panel-tabs, :scope > .work-panel > .work-panel-title");
-		const mergeRect = (element: HTMLElement, box: DOMRect, mode: PanelPlace["mode"]) => {
-			const title = heading(element);
-			const top = (mode === "bottom" || mode === "above") && title ? title.getBoundingClientRect().top - readCssPx(shell, "--join-border-width", 2) : box.top;
-			return { x: box.left - bounds.left, y: top - bounds.top, width: box.width, height: box.bottom - top };
-		};
-		const strokeTop = (mode: "bottom" | "above", fallback: number) => {
+		const regions: DropGeometry["regions"] = {};
+		for (const mode of ["dock", "beside", "above", "bottom"] as const) {
+			const box = shell.querySelector<HTMLElement>(`.panel-region[data-region="${mode}"]`)?.getBoundingClientRect();
+			if (box) regions[mode] = box;
+		}
+		const bandTops: DropGeometry["bandTops"] = {};
+		for (const mode of ["bottom", "above"] as const) {
 			const divider = shell.querySelector(`.${mode}-resize`);
 			const top = divider && Number.parseFloat(getComputedStyle(divider, "::after").top);
-			return divider && typeof top === "number" && Number.isFinite(top) ? divider.getBoundingClientRect().top + top : fallback;
-		};
+			if (divider && typeof top === "number" && Number.isFinite(top)) bandTops[mode] = divider.getBoundingClientRect().top + top;
+		}
+		return { bounds, rows, regions, bandTops };
+	}
+
+	function targetAt(geometry: DropGeometry | null, x: number, y: number): Target | null {
+		const shell = shellRef.current;
+		if (!geometry || !shell) return null;
+		const { bounds, rows } = geometry;
+		const remaining = rows.map(({ slot }) => slot);
+		const regionBox = (mode: PanelRegion) => geometry.regions[mode];
+		const strokeTop = (mode: "bottom" | "above", fallback: number) => geometry.bandTops[mode] ?? fallback;
 		// Later DOM siblings win equal z-index, matching what the user can see.
-		const under = [...rows].reverse().filter(({ box }) => pointerInside(x, y, box)).sort((a, b) =>
-			(Number.parseFloat(getComputedStyle(b.element).zIndex) || 0) - (Number.parseFloat(getComputedStyle(a.element).zIndex) || 0),
-		)[0];
+		const under = [...rows].reverse().filter(({ box }) => pointerInside(x, y, box)).sort((a, b) => b.layer - a.layer)[0];
 		if (under) {
-			const { slot, element, box } = under;
+			const { slot, box, joinFrame } = under;
 			const edge = dockSplitEdge(x, y, box);
 			// Preserve the two central bands: inserting above a bottom panel creates
 			// the upper band, inserting below moves its whole band above the new one.
@@ -172,7 +197,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 				const width = readCssPx(shell, "--beside-width", 300);
 				return { kind: "splice", drop: { kind: "place", place: { mode: "beside" } }, frame: beside ? relativeRect(beside, bounds) : { x: dock.left - bounds.left - width, y: dock.top - bounds.top, width, height: bottom ? bottom.top - dock.top : dock.height } };
 			}
-			return { kind: "join", drop: { kind: "join", target: slot.id }, frame: mergeRect(element, box, slot.place.mode) };
+			return { kind: "join", drop: { kind: "join", target: slot.id }, frame: joinFrame };
 		}
 		// A little slack above the bottom band / left of the dock is still a splice target.
 		const bottom = regionBox("bottom");
@@ -210,9 +235,10 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		const startX = event.clientX, startY = event.clientY;
 		let moved = false;
 		let target: Target | null = null;
-		let armed = !(move.kind === "panel" && slotFor(stateRef.current, move.id)!.tabs.length > 1);
+		let geometry: DropGeometry | null = null;
 		const onMove = (pointer: PointerEvent) => {
 			const box = shell.getBoundingClientRect();
+			const starting = !moved;
 			if (!moved) {
 				if (!immediate && Math.hypot(pointer.clientX - startX, pointer.clientY - startY) < 4) return;
 				moved = true;
@@ -220,8 +246,10 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 				if (rect.height > box.height * 0.62) { rect.height = Math.max(MIN_PANEL_HEIGHT, Math.round(box.height * 0.55)); grabY = Math.min(grabY, rect.height - 24); }
 			}
 			rect = clampFloat({ ...rect, x: pointer.clientX - box.left - grabX, y: pointer.clientY - box.top - grabY }, box);
-			if (!armed && !pointerInside(pointer.clientX, pointer.clientY, origin)) armed = true;
-			target = armed ? targetAt(move, pointer.clientX, pointer.clientY, box) : null;
+			// Hit-test the layout before previewing it, so a shrinking target cannot
+			// change its own drop zones. Refresh after returning to a floating drag.
+			if (!previewsLayout(target)) geometry = measureDropGeometry(move, box);
+			target = starting ? null : targetAt(geometry, pointer.clientX, pointer.clientY);
 			setDrag({ move, rect, target });
 		};
 		startPointer(onMove, (pointer) => {
@@ -231,8 +259,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 				if (pointer.detail >= 2) update(movePanel(stateRef.current, move, { kind: "place", place: { mode: "dock" } }));
 				return;
 			}
-			// Resolve against the settled DOM at release, not a pre-layout pointer sample.
-			const settled = armed ? targetAt(move, pointer.clientX, pointer.clientY, shell.getBoundingClientRect()) : null;
+			const settled = targetAt(previewsLayout(target) ? geometry : measureDropGeometry(move, shell.getBoundingClientRect()), pointer.clientX, pointer.clientY);
 			update(movePanel(stateRef.current, move, settled?.drop ?? { kind: "place", place: { mode: "float", ...rect } }));
 		}, "dragging-panel");
 		if (immediate) onMove(event as PointerEvent);
@@ -312,6 +339,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		activeTab: (slot: PanelSlot) => activeTab(slot, registrations),
 		visibleTabs: (slot: PanelSlot) => visibleTabs(slot, registrations),
 		isDragging: (slot: PanelSlot) => !!drag && slot.id === extracted?.slot.id,
+		isPreview: (slot: PanelSlot) => !!preview && slot.id === extracted?.slot.id,
 		beginDrag: (id: PanelId, event: ReactPointerEvent<HTMLElement>) => beginDrag({ kind: "panel", id }, event),
 		beginGroupDrag: (slotId: string, event: ReactPointerEvent<HTMLElement>) => beginDrag({ kind: "slot", id: slotId }, event),
 		beginTabDrag, beginResize, beginSlotResize,

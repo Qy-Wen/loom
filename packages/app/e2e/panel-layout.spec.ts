@@ -133,6 +133,15 @@ async function expectDockLayout(page: Page): Promise<void> {
 	for (let index = 1; index < ordered.length; index++) expect(ordered[index].top, "docked panels must not overlap").toBeGreaterThanOrEqual(ordered[index - 1].bottom - 1);
 }
 
+async function expectLowerPreviewBorder(page: Page): Promise<void> {
+	const boundary = await page.locator(".panel-slot.drop-preview").evaluate((slot) => {
+		const divider = slot.previousElementSibling!;
+		return { preview: slot.getBoundingClientRect().top,
+			line: divider.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(divider, "::after").top) };
+	});
+	expect(boundary.line, "the upper divider aligns with the lower preview's blue border").toBeCloseTo(boundary.preview, 1);
+}
+
 for (const sourceMode of ["dock", "float", "bottom", "beside"] as const) test(`tab-merge hover from ${sourceMode} aligns with the right sidebar and landed tabs`, async ({ loomPage: page }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
 	await expect(page.locator(".shell")).toBeVisible();
@@ -263,17 +272,17 @@ for (const existingAbove of [false, true]) test(`upper splice preview meets the 
 		await page.mouse.move(handle!.x + handle!.width / 2, handle!.y + handle!.height / 2);
 		await page.mouse.down();
 		await page.mouse.move(target!.x + target!.width * 0.65, target!.y + 12, { steps: 12 });
-		await expect(agent).toHaveClass(/\bfloat\b/);
+		await expect(agent).toHaveClass(/\babove\b/);
 		await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
 		const current = await details.boundingBox();
 		await page.mouse.move(current!.x + current!.width * 0.65, current!.y + 12);
 		await expect(page.locator(".shell.splice-target")).toBeVisible();
 		const geometry = await page.evaluate(() => {
 			const shell = document.querySelector(".shell")!;
-			const css = getComputedStyle(shell, "::before");
+			const preview = shell.querySelector(".panel-slot.drop-preview")!;
 			const divider = shell.querySelector(".bottom-resize")!;
 			return {
-				previewBottom: shell.getBoundingClientRect().top + Number.parseFloat(css.top) + Number.parseFloat(css.height),
+				previewBottom: preview.getBoundingClientRect().bottom - Number.parseFloat(getComputedStyle(preview, "::after").bottom),
 				lineTop: divider.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(divider, "::after").top),
 			};
 		});
@@ -314,9 +323,11 @@ for (const grouped of [false, true]) test(`Chat can stack below a lower ${groupe
 		await expect(page.locator(".shell.join-target")).toHaveCount(0);
 		const preview = await page.evaluate(() => {
 			const shell = document.querySelector(".shell")!;
-			const css = getComputedStyle(shell, "::before");
+			const slot = shell.querySelector(".panel-slot.drop-preview")!;
+			const box = slot.getBoundingClientRect();
+			const css = getComputedStyle(slot, "::after");
 			const divider = shell.querySelector(".bottom-resize")!;
-			return { top: shell.getBoundingClientRect().top + Number.parseFloat(css.top), bottom: shell.getBoundingClientRect().top + Number.parseFloat(css.top) + Number.parseFloat(css.height), line: divider.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(divider, "::after").top), shellBottom: shell.getBoundingClientRect().bottom };
+			return { top: box.top + Number.parseFloat(css.top), bottom: box.bottom - Number.parseFloat(css.bottom), line: divider.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(divider, "::after").top), shellBottom: shell.getBoundingClientRect().bottom };
 		});
 		expect(preview.top, "lower landing preview starts at the divider line").toBeCloseTo(preview.line, 1);
 		expect(preview.bottom).toBeCloseTo(preview.shellBottom, 1);
@@ -374,17 +385,15 @@ for (const edge of ["top", "bottom"] as const) test(`dragging onto the right pan
 		await page.mouse.move(x + 1, y);
 		await expect(page.locator(".shell.dock-split-target")).toBeVisible();
 		await expect(page.locator(".shell.join-target")).toHaveCount(0);
-		const preview = await page.evaluate(() => {
-			const shell = document.querySelector(".shell")!;
-			const style = getComputedStyle(shell, "::before");
-			const bounds = shell.getBoundingClientRect();
-			return { left: bounds.left + Number.parseFloat(style.left), top: bounds.top + Number.parseFloat(style.top), width: Number.parseFloat(style.width), height: Number.parseFloat(style.height) };
-		});
-		expect(preview.left).toBeCloseTo(target!.x, 1);
-		expect(preview.width).toBeCloseTo(target!.width, 1);
-		expect(preview.height).toBeCloseTo(target!.height / 2, 1);
-		expect(preview.top).toBeCloseTo(target!.y + (edge === "top" ? 0 : target!.height / 2), 1);
+		await expect(agent).toHaveClass(/\bdock\b/);
+		const preview = { agent: (await agent.boundingBox())!, details: (await details.boundingBox())! };
+		expect(preview.details.height).toBeLessThan(target!.height * 0.6);
+		expect(preview.agent.height).toBeCloseTo(preview.details.height, 1);
+		if (edge === "bottom") await expectLowerPreviewBorder(page);
+		expect((await savedPanel(page, "agent")).place.mode).toBe("float");
 		await page.mouse.up();
+		expect(await agent.boundingBox()).toEqual(preview.agent);
+		expect(await details.boundingBox()).toEqual(preview.details);
 		await expect(agent).toHaveClass(/\bdock\b/);
 		await expect(page.locator(".panel-tabs")).toHaveCount(0);
 		await expectDockLayout(page);
@@ -405,6 +414,81 @@ for (const edge of ["top", "bottom"] as const) test(`dragging onto the right pan
 		expect((await above.boundingBox())!.y).toBeLessThan((await below.boundingBox())!.y);
 		expect((await above.boundingBox())!.height).toBeCloseTo(resized!.height, 1);
 	} finally { await page.mouse.up(); }
+});
+
+for (const id of ["agent", "details"] as const) for (const edge of ["top", "bottom"] as const) test(`detached ${id} tab previews the ${edge} split without leaving the sidebar`, async ({ loomPage: page }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
+	await configurePanels(page, ["dock", "dock", "float"], ["agent", "details"]);
+	const tab = await page.locator(`.panel-tabs button[data-tab="${id}"]`).boundingBox();
+	const bar = await page.locator(".panel-tabs").boundingBox();
+	const target = await page.locator(".side-stack.joined").boundingBox();
+	const dragged = page.locator(`.work-panel[data-panel="${id}"]`);
+	const remaining = page.locator(`.work-panel[data-panel="${id === "agent" ? "details" : "agent"}"]`);
+	const x = tab!.x + tab!.width / 2;
+	try {
+		await page.mouse.move(x, tab!.y + tab!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(x, bar!.y + bar!.height + 20, { steps: 8 });
+		const y = target!.y + (edge === "top" ? 12 : target!.height - 16);
+		await page.mouse.move(x, y, { steps: 15 });
+		await expect(page.locator(".shell.dock-split-target")).toBeVisible();
+		await expect(page.locator(".shell.join-target")).toHaveCount(0);
+		await expect(dragged).toHaveClass(/\bdock\b/);
+		const preview = { dragged: (await dragged.boundingBox())!, remaining: (await remaining.boundingBox())! };
+		expect(preview.remaining.height).toBeLessThan(target!.height * 0.6);
+		if (edge === "bottom") await expectLowerPreviewBorder(page);
+		expect((await savedPanel(page, id)).members).toBe("agent,details");
+		await page.mouse.move(x + 1, y);
+		await expect(page.locator(".shell.dock-split-target")).toBeVisible();
+		await page.mouse.up();
+		expect(await dragged.boundingBox()).toEqual(preview.dragged);
+		expect(await remaining.boundingBox()).toEqual(preview.remaining);
+		await expect(dragged).toHaveClass(/\bdock\b/);
+		await expect(page.locator(".panel-tabs")).toHaveCount(0);
+		const assertOrder = async () => {
+			await expectDockLayout(page);
+			const a = (await dragged.boundingBox())!, b = (await remaining.boundingBox())!;
+			expect(edge === "top" ? a.y : b.y).toBeLessThan(edge === "top" ? b.y : a.y);
+		};
+		await assertOrder();
+		await page.reload();
+		await assertOrder();
+	} finally { await page.mouse.up().catch(() => {}); }
+});
+
+test("split previews restore the original layout when leaving the target or cancelling", async ({ loomPage: page }, testInfo) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
+	await configurePanels(page, ["dock", "dock", "float"], ["agent", "details"]);
+	const original = await page.locator(".side-stack.joined").boundingBox();
+	const saved = await page.evaluate(() => localStorage.getItem("loom.layout.panels"));
+	const tab = await page.locator('.panel-tabs button[data-tab="agent"]').boundingBox();
+	const agent = page.locator('.work-panel[data-panel="agent"]');
+	const details = page.locator('.work-panel[data-panel="details"]');
+	const x = original!.x + original!.width * 0.65, y = original!.y + original!.height - 16;
+	try {
+		await page.mouse.move(tab!.x + tab!.width / 2, tab!.y + tab!.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(500, 180, { steps: 10 });
+		await page.mouse.move(x, y, { steps: 12 });
+		await expect(page.locator(".panel-slot.drop-preview")).toBeVisible();
+		expect((await details.boundingBox())!.height).toBeLessThan(original!.height * 0.6);
+		const highlight = await page.locator(".panel-slot.drop-preview").evaluate((element) => {
+			const style = getComputedStyle(element, "::after");
+			return { border: style.borderTopWidth, color: style.borderTopColor, background: style.backgroundColor, content: style.content, pointerEvents: style.pointerEvents };
+		});
+		expect(highlight).toEqual({ border: "2px", color: "rgb(120, 150, 200)", background: "rgba(120, 150, 200, 0.12)", content: '""', pointerEvents: "none" });
+		await page.screenshot({ path: testInfo.outputPath("split-preview.png") });
+		await page.mouse.move(500, 180, { steps: 12 });
+		await expect(page.locator(".panel-slot.drop-preview")).toHaveCount(0);
+		await expect(agent).toHaveClass(/\bfloat\b/);
+		expect((await details.boundingBox())!.height).toBeCloseTo(original!.height, 1);
+		await page.mouse.move(x, y, { steps: 12 });
+		await expect(page.locator(".panel-slot.drop-preview")).toBeVisible();
+		await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointercancel")));
+		await expect(page.locator(".panel-slot.drop-preview")).toHaveCount(0);
+		expect(await page.locator(".side-stack.joined").boundingBox()).toEqual(original);
+		expect(await page.evaluate(() => localStorage.getItem("loom.layout.panels"))).toBe(saved);
+	} finally { await page.mouse.up().catch(() => {}); }
 });
 
 test("a Grade tab can be detached into a vertical dock slot then merged back through the center", async ({ loomPage: page }) => {
@@ -429,10 +513,9 @@ test("a Grade tab can be detached into a vertical dock slot then merged back thr
 		await expect(page.locator(".panel-tabs")).toHaveCount(0);
 		expect((await grade.boundingBox())!.y).toBeGreaterThan((await details.boundingBox())!.y);
 		const detached = await grade.locator(".work-panel-title").boundingBox();
-		const center = await details.boundingBox();
 		await page.mouse.move(detached!.x + detached!.width / 2, detached!.y + detached!.height / 2);
 		await page.mouse.down();
-		await page.mouse.move(center!.x + center!.width * 0.65, center!.y + center!.height / 2, { steps: 12 });
+		await page.mouse.move(500, 200, { steps: 12 });
 		await expect(grade).toHaveClass(/\bfloat\b/);
 		const current = await details.boundingBox();
 		await page.mouse.move(current!.x + current!.width * 0.65, current!.y + current!.height / 2);

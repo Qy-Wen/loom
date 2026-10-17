@@ -49,6 +49,11 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.dock-split-target::before { left: var(--dock-split-x); top: var(--dock-split-y); width: var(--dock-split-w); height: var(--dock-split-h); border: 2px solid #7896c8; background: rgb(120 150 200 / 12%); }
 .shell.join-target::before { left: var(--join-x); top: var(--join-y); width: var(--join-w); height: var(--join-h); border: var(--join-border-width) dashed #5d7eaf; background: transparent; }
 .shell.join-target.window-corner::before { border-bottom-right-radius: var(--window-corner); }
+.shell:has(.panel-slot.drop-preview)::before { display: none; }
+.panel-slot.drop-preview::after { position: absolute; inset: 0; z-index: 50; box-sizing: border-box; border: 2px solid #7896c8; background: rgb(120 150 200 / 12%); content: ""; pointer-events: none; }
+.panel-region.above-band > .panel-slot.drop-preview:first-child::after,
+.panel-region.bottom-band > .panel-slot.drop-preview:first-child::after { top: calc(0px - var(--join-border-width)); }
+.shell.has-above.has-bottom > .panel-region.above-band > .panel-slot.drop-preview:last-child::after { bottom: calc(var(--join-border-width) - 10px); }
 .work-panel.join-target > .work-panel-title,
 .panel-slot.join-target > .panel-tabs { background: rgb(120 150 200 / 28%); box-shadow: inset 0 -2px 0 #5d7eaf; }
 
@@ -68,6 +73,8 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .work-panel-edge.corner { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 .resize-handle.row { flex: 0 0 10px; cursor: row-resize; }
 .resize-handle.row::after { top: 4px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
+.panel-region > .resize-handle.row { margin-top: -5px; margin-bottom: -5px; }
+.panel-region > .resize-handle.row::after { top: 5px; }
 .resize-handle.row:hover::after, .resize-handle.row.dragging::after { width: auto; height: 1px; background: #7896c8; }
 .resize-handle.bottom-resize::after, .resize-handle.above-resize::after { top: calc(100% - var(--join-border-width)); bottom: auto; }
 .shell.library-collapsed > .workbench,

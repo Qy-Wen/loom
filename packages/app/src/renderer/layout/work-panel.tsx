@@ -20,7 +20,7 @@ function PanelSlotView({ slot, layout, panels }: { slot: PanelSlot; layout: Layo
 	return (
 		<div
 			data-slot={slot.id}
-			className={`panel-slot${joined ? ` side-stack joined ${regionClass}` : ""}${layout.isDragging(slot) ? " group-drag" : ""}${target ? " join-target" : ""}`}
+			className={`panel-slot${joined ? ` side-stack joined ${regionClass}` : ""}${layout.isDragging(slot) ? " group-drag" : ""}${layout.isPreview(slot) ? " drop-preview" : ""}${target ? " join-target" : ""}`}
 			style={layout.slotStyle(slot)}
 		>
 			{joined && <div className={`panel-tabs${layout.tabReorder?.slotId === slot.id ? " reordering" : ""}`} onPointerDown={(event) => {
