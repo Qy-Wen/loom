@@ -2,7 +2,7 @@
 
 # Chat 模型完整接入 pi-ai
 
-> 状态：旧 Chat 端点兼容路径已移除（产品未发布）。原生运行时已接管生产启动、存储、设置/OAuth UI、Provider 登录与会话级模型选择。Windows/真实 OAuth 验收（P5）仍待完成。
+> 状态：原生运行时已接管生产 Chat，旧端点兼容路径已移除。Windows 自动测试、系统加密/模拟 OAuth 回调和原生 DeepSeek 真实对话已验收；真实 OAuth、其他原生服务及安装包验收仍待完成。
 > 当前实现见 [AGENT](./AGENT.zh-CN.md)、[SETTINGS](../SETTINGS.zh-CN.md)。依据项目安装的 `@earendil-works/pi-ai@1.1.0`；参考实现位于 `agent/pi/packages/ai` 和 `agent/pi/packages/coding-agent/src/core`。
 
 ## 1. 范围与确定的原则
@@ -164,64 +164,34 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 - 已知请求/鉴权秘密传给 trace 脱敏，并在 durable 记账前从 Provider 错误文本中移除。真实旧请求 checkpoint 恢复与 800-token 压缩上限已通过新服务验证。
 - **生产启动已切换：** `app.whenReady()` 用 `createChatStorage(userData)` 构建 `ChatModelService`，初始化（首跑环境引导）后把长期 `Models` 与默认值注入 `LibraryAgentHost`。Host 不再构建 Provider；秘密经 `onSecrets` 传入 trace 脱敏。
 - Chat IPC：`getChatSettings`/`saveChatSettings`（无凭据视图）、`chatProviderCatalog`、`chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin`（API Key + OAuth 交互桥接到 renderer）、`chatRefresh`、`chatSettingsChanged`。设置工具不再暴露 Chat 槽位。
-- Renderer：设置 → Models 的 `SettingsChat` 管理 Provider（添加/移除、API Key/OAuth 登录弹窗）、默认模型/思考等级与刷新；即时保存，不参与四槽位批量 Save。
+- Renderer：设置 → Models 的 `SettingsChat` 管理 Provider、API Key/OAuth 登录、模型启停和刷新；输入区为每个会话选择模型，思考强度在模型的二级菜单中选择。
 - eval/smoke 脚本与 vendor 测试通过 `createChatCustomProvider` + 内存凭据构建自定义 Provider；`LoomChatEndpoint` 消费者已移除。
 
 ### 可复现入口
 
 ```bash
 pnpm typecheck
-pnpm --filter @loom/agent test                 # 152 项通过
-pnpm --filter @loom/app test                   # 247 项通过
+pnpm --filter @loom/agent test
+pnpm --filter @loom/app test
 pnpm --filter @loom/app build
 pnpm --filter @loom/app check:chat-platform    # 独立临时 userData、假凭据、模拟回调；需本机 Electron/OS 加密
 ```
 
 P0 原型仍仅用于测试；生产启动已切换到原生运行时，旧 Chat 端点路径已删除。
 
-## 9. 实施顺序与验收清单
+## 9. 剩余验收清单
 
-### P0：接口验证与最小原型
-
-- [x] 核对已安装 pi-ai 的 Provider/auth/refresh/协议与 OAuth 能力，不以参考仓库更新版本的行为代替。
-- [x] 验证内置 Provider 薄覆盖仍保留 auth、模型过滤、动态目录和混合协议分发。
-- [x] 确认原生恢复（A）；验证当前请求快照、公开 busy 检查/configure 行为、显式参数优先与真实压缩预算。生产 busy 限制留在 P2/P4 实现。
-- [x] macOS Electron 的 lazy SDK/OAuth、模拟浏览器回调与 `safeStorage` 验证完成；打包修正与 Windows/真实登录待后续阶段。
-
-### P1：配置与存储
-
-- [x] 定义独立的版本化 Chat 配置与脱敏目录/鉴权 DTO，其余槽位不变。
-- [x] 实现并测试加密 `CredentialStore`、`ModelsStore`、原子持久化及跨进程写入协调（macOS；Windows 实测仍属 P5）。
-- [x] 实现并测试旧配置分阶段迁移/cutover、失败/重启恢复、已确认的环境引导及真实旧请求 checkpoint 恢复；生产启动切换仍列在下方。
-
-### P2：模型运行时
-
-- [x] 建立应用级 `Models`，复用内置工厂，校验自定义协议/能力/默认值，返回安全的目录/鉴权/可用状态。
-- [x] 接入原生刷新/缓存/超时/取消，保留元数据/思考/费用；普通费率不返回未知价格占位值。
-- [x] Host 注入路径已测试；生产启动已切换到原生运行时，旧 endpoint 构造/批量 configure 已移除。安装包内容检查仍属 P5。
-- [x] 验证生产 wrapper 的默认/显式参数优先级、真实压缩预算与已知鉴权/错误脱敏；完整 trace/真实服务回归仍属 P5。
-
-### P3：Provider 设置与登录
-
-- [x] Provider 列表/添加/移除、自定义 OpenAI 兼容连接、默认模型/思考等级 UI，中英文文案。
-- [x] 通过 IPC prompt 桥接 API Key/OAuth 交互（文本/密码/选择/手工代码/授权 URL/设备码），支持取消。注销语义仍属 P5。
-- [x] 设置工具不再暴露 Chat 槽位；Provider 状态来自运行时。显式连接测试仍属 P5。
+已完成项及验收结果见[归档](../archive/ARCHIVE.zh-CN.md#windows-chat-验收)。
 
 ### P4：会话选择
 
-- [x] `LoomSessionRecord.model` 暴露持久化选择；`setSessionModel` IPC 按运行时校验模型与思考等级，再经原生 `conversation.configure()` 生效。
-- [x] 输入区工具栏的 `ChatModelSelect`：模型列表来自实时目录（不可用模型禁用），思考等级在支持等级间循环；忙碌时禁用，变更从下一次请求生效。
-- [x] Host 测试覆盖会话级持久化（重开保留）、默认值只影响新会话、流式请求中 busy 拒绝；smoke E2E 覆盖 IPC 链路含未知模型拒绝。
-- [ ] 切模型后的上下文圆环刷新与图片能力提示留作 P5 打磨；Provider 失效不自动换模型。
+- [ ] 切模型后的图片能力提示；Provider 失效不自动换模型。
 
 ### P5：回归与交付
 
-- [ ] 单元测试：配置/覆盖/协议选择、能力/思考校验、鉴权来源、缓存、迁移、未知价格。
-- [ ] 鉴权测试：并发刷新只执行一次，失败不丢凭据，取消、登录/注销竞态、加密失败；秘密不进入 DTO/日志/trace。
-- [ ] 本地 mock 集成：Chat Completions、Responses、Anthropic、Google 的文本/工具/usage/取消与跨 Provider 历史转换。
-- [ ] durable/Electron：并行会话、独立模型、specialist、图片、阈值/溢出压缩、fork/reload、请求中 SIGKILL 恢复，无重复输入或 unsafe 工具重放。
-- [ ] 授权的真实服务验收：现有 DeepSeek 路径、OpenAI/Anthropic/Google 原生路径，以及已声明支持的 OAuth 登录/刷新；未实测项标明，不宣称全 Provider 均通过。
-- [ ] macOS 和 Windows 的登录回调、加密重开、文件锁/替换、lazy SDK 打包与运行测试。
-- [ ] agent/app/vendor 类型检查和现有测试通过；更新当前架构、设置文档与本清单，删除过渡实现。
+- [ ] 交互式登录与注销并发的完整验收。
+- [ ] 补齐四种协议的工具/usage/取消与跨协议/Provider 历史转换矩阵。
+- [ ] OpenAI/Anthropic/Google 原生服务，以及真实 OAuth 登录/刷新/注销。
+- [ ] macOS 实机复测，以及 macOS/Windows 安装包运行验收。
 
 完成标准：用户能从内置目录或自定义连接配置 Chat，使用 API Key/OAuth，创建与恢复各自选择模型的会话；工具、思考、usage、压缩、取消与恢复继续走 pi-ai/durable 原生链路，秘密不落素材库或普通查询。文档未勾选的项不视为已完成。

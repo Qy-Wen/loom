@@ -1,3 +1,5 @@
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 test("Settings enable switches control the picker and new sessions remember only explicit choices", async ({ loomPage }) => {
@@ -51,6 +53,57 @@ test("Settings enable switches control the picker and new sessions remember only
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	await expect(demo).not.toBeChecked();
 	await settings.getByRole("button", { name: "Close settings" }).click();
+});
+
+test("switching models refreshes the context ring without reusing the previous model's usage", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data required");
+	const server = createServer((request, response) => {
+		let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const { model } = JSON.parse(body) as { model: string };
+			const chunk = { id: "context", object: "chat.completion.chunk", model,
+				choices: [{ index: 0, delta: { content: "CONTEXT_RING_OK" }, finish_reason: "stop" }],
+				usage: { prompt_tokens: 32768, completion_tokens: 8, total_tokens: 32776 } };
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.end(`data: ${JSON.stringify(chunk)}\n\ndata: [DONE]\n\n`);
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 64000 });
+		await loomPage.evaluate(async () => {
+			const view = await window.loom.getChatSettings();
+			const provider = view.config.providers.find((entry) => entry.id === "e2e-chat");
+			if (provider?.kind !== "custom") throw new Error("Missing test provider");
+			provider.models.push({ ...provider.models[0]!, id: "small-window", contextWindow: 32000 });
+			await window.loom.saveChatSettings(view.config);
+		});
+		const before = await loomPage.evaluate(() => window.loom.listSessions());
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		const id = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((old) => old.id === row.id))!.id;
+		const record = () => loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id);
+		await loomPage.getByRole("textbox").fill("Reply briefly without using tools.");
+		await loomPage.getByRole("textbox").press("Enter");
+		await expect(loomPage.getByText("CONTEXT_RING_OK", { exact: true })).toBeVisible();
+		await expect.poll(async () => (await record()).context?.tokens).toBe(32776);
+		const picker = loomPage.getByRole("button", { name: "Conversation model", exact: true });
+		await expect(picker).toBeEnabled();
+		await picker.click();
+		await loomPage.getByRole("menuitemradio", { name: "small-window (e2e-chat)", exact: true }).click();
+		await expect(picker).toHaveText("small-window (e2e-chat)");
+		await expect.poll(async () => (await record()).context?.window).toBe(32000);
+		const context = (await record()).context!;
+		expect(context.tokens).toBeGreaterThan(0);
+		expect(context.tokens).toBeLessThan(32776);
+		await loomPage.getByRole("button", { name: "Context usage", exact: true }).click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText(`~${context.percent!.toFixed(1)}% / 32k`);
+		await loomPage.reload();
+		await expect(picker).toHaveText("small-window (e2e-chat)");
+		await loomPage.getByRole("button", { name: "Context usage", exact: true }).click();
+		await expect(loomPage.locator(".session-context-value")).toHaveText(`~${context.percent!.toFixed(1)}% / 32k`);
+	} finally {
+		server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
 });
 
 test("model reasoning submenus support mouse, keyboard and persisted per-model choices", async ({ loomPage }, testInfo) => {

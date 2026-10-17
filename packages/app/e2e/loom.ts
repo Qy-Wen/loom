@@ -8,13 +8,13 @@ import { test as base, chromium, expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
 
 /** Native OpenAI adapters require a key even for mock servers that ignore authentication. */
-export async function saveChatEndpoint(page: Page, baseUrl: string, options: { model?: string; contextWindow?: number } = {}): Promise<void> {
-	await page.evaluate(async ({ baseUrl, model, contextWindow }) => {
+export async function saveChatEndpoint(page: Page, baseUrl: string, options: { model?: string; contextWindow?: number; input?: ("text" | "image")[] } = {}): Promise<void> {
+	await page.evaluate(async ({ baseUrl, model, contextWindow, input }) => {
 		const view = await window.loom.getChatSettings();
 		const providers = view.config.providers.filter((provider) => provider.id !== "e2e-chat");
 		providers.push({
 			kind: "custom", id: "e2e-chat", enabled: true, baseUrl, api: "openai-completions", allowUnauthenticated: true,
-			models: [{ id: model ?? "demo", reasoning: false, input: ["text"], contextWindow: contextWindow ?? 128_000, maxTokens: 8192 }],
+			models: [{ id: model ?? "demo", reasoning: false, input: input ?? ["text"], contextWindow: contextWindow ?? 128_000, maxTokens: 8192 }],
 		});
 		await window.loom.saveChatSettings({ ...view.config, providers, default: { provider: "e2e-chat", modelId: model ?? "demo", thinkingLevel: "off" } });
 		const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
@@ -22,7 +22,7 @@ export async function saveChatEndpoint(page: Page, baseUrl: string, options: { m
 		});
 		try { await window.loom.chatLogin("e2e-chat", "api_key"); }
 		finally { unsubscribe(); }
-	}, { baseUrl, model: options.model, contextWindow: options.contextWindow });
+	}, { baseUrl, model: options.model, contextWindow: options.contextWindow, input: options.input });
 }
 
 const require = createRequire(import.meta.url);

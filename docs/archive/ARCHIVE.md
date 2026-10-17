@@ -6,6 +6,59 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Parallel conversations with independent models
+
+Windows Electron tests use isolated user data and controlled local SSE servers. Different models from one provider and identically named models from different providers each passed three repeats: six tests passed, alongside the App typecheck.
+
+Coverage includes overlapping requests; endpoint/model/credential routing; isolated history and tool results with repeated raw tool-call IDs; independent usage/windows; busy model-change rejection; idle model changes while another stream runs; per-conversation cancellation/failure; reload/reconnect; full process restart and continued parallel chat; and forked model selection. Other native services and the cross-protocol matrix remain pending.
+
+Reproduce: `pnpm --filter @loom/app exec playwright test e2e/parallel-chat.spec.ts --repeat-each=3` (build the app first).
+
+---
+
+## Windows Chat acceptance
+
+Acceptance date: 2026-10-17.
+
+Environment: Windows x64, Node 22.23.3, Electron 38.2.2, pi-ai 1.1.0. Electron tests use isolated temporary user data and libraries.
+
+| Check | Result |
+| --- | --- |
+| Workspace/vendor typechecks and app build | Passed |
+| Core unit tests | 140 passed, 1 skipped |
+| Agent unit tests | 153 passed |
+| App unit tests | 296 passed |
+| Vendor contracts | 34 passed |
+| Full Electron regression | 73 passed, 8 skipped, 1 panel-drag timeout; three isolated repeats and all 43 panel tests passed on rerun, without reproducing the timeout |
+| `check:chat-platform` | OS encryption/cross-process decrypt, mock OAuth callback validation/cancellation, and four lazy SDKs passed |
+| Live native DeepSeek | Two native requests and two-turn Electron chat, usage, reopened history, and model selection passed |
+
+To reproduce DeepSeek acceptance, set `LOOM_E2E_LIVE_CHAT=1` and run `pnpm --filter @loom/app exec playwright test e2e/live-chat.spec.ts --grep "native DeepSeek provider"`. It uses `DEEPSEEK_API_KEY` from the workspace environment and caps each response at 64 tokens. Mock callbacks do not replace real OAuth authorization acceptance.
+
+The eight skipped tests require either a dedicated panel build (six) or an explicit live-request opt-in (two); the native DeepSeek case was enabled and passed separately. The panel timeout remains recorded as intermittent, so the full run is not reported as a clean pass.
+
+---
+
+## Agent model configuration
+
+The Agent can use `get_settings` / `update_settings` to inspect and configure Chat providers and models, plus request URLs, models, API keys, and enablement for Embedding, Rerank, VLM, and Audio. Reads omit keys, and the UI synchronizes after changes. Basic and Standard require user approval before writes. See [SETTINGS](../SETTINGS.md).
+
+---
+
+## Publishing via MCP
+
+Publishing to Xiaohongshu, Douyin, and other platforms connects through MCP servers, with the Agent calling the corresponding MCP tools. Loom uses its existing MCP connections, tool registration, and permission controls.
+
+---
+
+## Chat integration with pi-ai and per-conversation model selection
+
+Production Chat uses native pi-ai Providers, model catalogs, protocols, and API-key/OAuth login, with OS-encrypted credentials. Settings supports built-in and custom providers, protocol inference from complete request URLs, model enablement, and key editing; `get_settings` / `update_settings` can inspect and change Chat configuration. Legacy Chat endpoints and compatibility paths are removed. See [CHAT_MODELS](../agent/CHAT_MODELS.md) and [SETTINGS](../SETTINGS.md).
+
+Each conversation persists its own model and thinking level, retained across reopening and forks. The composer model menu lists only enabled, available models, with thinking levels in a model submenu. Busy conversations reject changes; selections apply from the next request. New independent conversations inherit the last explicit choice only while it remains enabled and available, without automatic replacement.
+
+---
+
 ## Packaging
 
 One `pnpm dist` on a Mac produces the macOS arm64, macOS x64, and Windows x64 installers. A release uploads them with local `gh` to a GitHub Release. Versions start at `v0.1.0` and increment the patch number. The installers are unsigned, and GitHub Actions is not used. See [PACKAGING](../PACKAGING.md).

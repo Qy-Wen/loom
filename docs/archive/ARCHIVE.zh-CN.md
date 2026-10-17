@@ -6,6 +6,59 @@
 
 ---
 
+## 并行会话独立模型验收
+
+Windows Electron 使用隔离用户数据和本地可控 SSE 服务，覆盖同一 Provider 的不同模型，以及不同 Provider 的同名模型；两组各重复 3 次，6 项全部通过，App 类型检查通过。
+
+验证两个请求同时运行、端点/模型/密钥路由、历史与工具结果隔离、重复工具调用 ID、独立 usage/窗口、忙碌时禁止切模型、空闲会话切模型不影响另一条流，以及单会话取消/失败、刷新重连、完整进程重启后继续并行对话和分支模型继承。其他原生服务与跨协议矩阵仍待验收。
+
+复现：`pnpm --filter @loom/app exec playwright test e2e/parallel-chat.spec.ts --repeat-each=3`（需先构建应用）。
+
+---
+
+## Windows Chat 验收
+
+验收日期：2026-10-17。
+
+环境：Windows x64、Node 22.23.3、Electron 38.2.2、pi-ai 1.1.0。Electron 测试使用独立临时用户数据与素材库。
+
+| 检查 | 结果 |
+| --- | --- |
+| 工作区及 vendor 类型检查、应用构建 | 通过 |
+| Core 单元测试 | 140 通过，1 跳过 |
+| Agent 单元测试 | 153 通过 |
+| App 单元测试 | 296 通过 |
+| vendor 契约测试 | 34 通过 |
+| Electron 全量回归 | 73 通过、8 跳过、1 个面板拖拽用例超时；该用例单独重复 3 次及面板整组 43 项复跑均通过，暂未复现 |
+| `check:chat-platform` | 系统加密/跨进程解密、模拟 OAuth 回调校验与取消、四种 lazy SDK 加载通过 |
+| 原生 DeepSeek 真实验收 | 两轮原生接口请求，以及 Electron 两轮对话、usage、重开历史和模型选择均通过 |
+
+DeepSeek 复现入口：设置 `LOOM_E2E_LIVE_CHAT=1`，运行 `pnpm --filter @loom/app exec playwright test e2e/live-chat.spec.ts --grep "native DeepSeek provider"`。使用仓库环境中的 `DEEPSEEK_API_KEY`；测试配置限制单次输出 64 tokens。模拟回调不替代真实 OAuth 授权验收。
+
+全量回归的 8 项跳过包括 6 项需专用面板构建的用例和 2 项需显式开启的真实请求用例；原生 DeepSeek 用例已单独开启并通过。面板超时仍按间歇失败记录，不计为全量一次通过。
+
+---
+
+## Agent 自主配置模型
+
+Agent 可通过 `get_settings` / `update_settings` 查询和配置 Chat 服务商及模型，以及 Embedding、Rerank、VLM、Audio 槽位的请求 URL、模型、密钥和启停状态。读取不返回密钥，修改后界面同步；Basic 和 Standard 写入前需用户确认。见 [SETTINGS](../SETTINGS.zh-CN.md)。
+
+---
+
+## 发布走 MCP
+
+小红书、抖音等平台的发布能力通过 MCP server 接入，Agent 调用对应的 MCP 工具完成发布。Loom 使用现有 MCP 连接、工具注册和权限机制。
+
+---
+
+## Chat 接入 pi-ai 与会话模型选择
+
+生产 Chat 使用 pi-ai 原生 Provider、模型目录、协议与 API Key/OAuth 登录，凭据通过系统加密保存。设置支持内置与自定义服务商、完整请求 URL 的协议推断、模型启停和密钥编辑；`get_settings` / `update_settings` 可查询和修改 Chat 配置。旧 Chat 端点与兼容路径已移除。见 [CHAT_MODELS](../agent/CHAT_MODELS.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)。
+
+每个会话独立保存模型与思考强度，重开和 fork 保留选择。输入区模型菜单只显示启用且可用的模型，思考强度在模型的二级菜单中选择；忙碌时不能切换，从下一次请求生效。新独立会话仅在上次明确选择仍启用且可用时沿用它，不自动换模型。
+
+---
+
 ## 打包
 
 macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` 一次打出。发布用本机 `gh` 上传到 GitHub Release，版本从 `v0.1.0` 起按补丁号递增。不签名，不用 GitHub Actions。见 [PACKAGING](../PACKAGING.zh-CN.md)。

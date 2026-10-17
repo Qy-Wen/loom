@@ -60,6 +60,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		});
 		await expect(page.getByRole("tab", { name: "Large history", selected: true, exact: true })).toBeVisible();
 		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 100_000_000 });
+		await page.evaluate((id) => window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "demo", thinkingLevel: "off" }), session.id);
 		const question = "Ask the same question again";
 		const bubbles = page.getByTestId("copilot-user-message").filter({ hasText: question });
 		for (let turn = 0; turn < 2; turn++) {

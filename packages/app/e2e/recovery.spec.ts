@@ -13,10 +13,12 @@ function reply(response: ServerResponse, tool?: string, args = {}) {
 	response.end(`data: ${JSON.stringify({ id: "recover", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: "recover", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: {}, finish_reason: tool ? "tool_calls" : "stop" }] })}\n\ndata: [DONE]\n\n`);
 }
 
-async function killElectron(app: ElectronApplication): Promise<void> {
+async function killElectron(app: ElectronApplication, afterKill?: () => Promise<void>): Promise<void> {
 	const child = app.process();
 	const exited = new Promise<void>((resolve) => child.once("exit", () => resolve()));
 	child.kill("SIGKILL"); await exited;
+	// A surviving tool can hold Electron's stdout pipe open on Windows.
+	await afterKill?.();
 	await app.close().catch(() => {});
 }
 
@@ -47,6 +49,7 @@ test("hard-killed Electron recovers the same owned child and asks for approval a
 		await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
 		const session = (await page.evaluate(() => window.loom.listSessions()))[0]!;
 		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await page.evaluate((id) => window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "demo", thinkingLevel: "off" }), session.id);
 		await page.evaluate(() => window.loom.setAgentPermission("basic"));
 		await page.getByRole("textbox").fill("Recover this task"); await page.getByRole("textbox").press("Enter");
 		await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
@@ -104,6 +107,7 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 			await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
 			const session = (await page.evaluate(() => window.loom.listSessions()))[0]!;
 			await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+			await page.evaluate((id) => window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "demo", thinkingLevel: "off" }), session.id);
 			await page.evaluate(async () => {
 				await window.loom.setAgentPermission("full");
 				await window.loom.saveAgentSandbox(false);
@@ -112,7 +116,7 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 			if (boundary === "streaming") await expect(page.getByText("Unfinished before crash", { exact: true })).toBeVisible();
 			else await expect.poll(() => readFile(join(library, "started.txt"), "utf8").catch(() => "")).toBe("started");
 			expect(requests).toBe(1);
-			await killElectron(app); app = undefined;
+			await killElectron(app, boundary === "unsafe-bash" ? () => writeFile(join(library, "release.txt"), "release") : undefined); app = undefined;
 			app = await launchTestElectron(userData); page = await app.firstWindow();
 			await expect(page.getByText("Recovered and saved.", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
 			expect(requests).toBe(2);

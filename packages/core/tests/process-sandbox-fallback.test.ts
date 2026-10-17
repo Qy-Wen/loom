@@ -55,6 +55,10 @@ for (const failure of ["none", "cleanup", "handler"] as const) test(`concurrent 
 		});
 		pending.push(sandboxedArgv("echo initial", dir));
 		await cleanupStarted.promise;
+		// Real Windows child processes need the host system directories after the mocked setup fails.
+		for (const key of ["SystemRoot", "ProgramFiles"] as const) {
+			if (previous[key] === undefined) delete process.env[key]; else process.env[key] = previous[key];
+		}
 		assert.equal(processSandboxEnabled(), false);
 		const queue = (label: string) => {
 			const execution = { command: `echo ${label}`, cwd: dir, env: {} };

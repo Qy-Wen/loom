@@ -31,6 +31,7 @@ test("packaged Windows sandbox install checks readiness and falls back when cons
 		reasons.push(error.message);
 	});
 	try {
+		Object.defineProperty(process, "platform", { ...platform, value: "darwin" });
 		await setProcessSandboxEnabled(true);
 		await ensureWindowsSandboxInstalled();
 		assert.deepEqual(calls, [], "macOS and Linux do not install a Windows sandbox");

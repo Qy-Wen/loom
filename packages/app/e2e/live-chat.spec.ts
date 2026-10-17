@@ -1,5 +1,35 @@
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
+test("native DeepSeek provider completes two turns with persisted model selection and usage", async ({ loomPage }) => {
+	test.skip(process.env.LOOM_E2E_LIVE_CHAT !== "1", "set LOOM_E2E_LIVE_CHAT=1 to run live acceptance");
+	test.setTimeout(120_000);
+	await loomPage.evaluate(async () => {
+		const view = await window.loom.getChatSettings();
+		const provider = view.config.providers.find((row) => row.id === "deepseek");
+		if (!provider || !view.models.some((row) => row.provider === "deepseek" && row.id === "deepseek-flash" && row.available)) throw new Error("Native DeepSeek credentials and model are required");
+		provider.enabled = true;
+		provider.generation = { maxTokens: 64 };
+		await window.loom.saveChatSettings({ ...view.config, default: { provider: "deepseek", modelId: "deepseek-flash", thinkingLevel: "off" } });
+	});
+	const before = await loomPage.evaluate(() => window.loom.listSessions());
+	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+	const id = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((old) => old.id === row.id))!.id;
+	for (const marker of ["NATIVE_DEEPSEEK_FIRST_OK", "NATIVE_DEEPSEEK_SECOND_OK"]) {
+		await loomPage.getByRole("textbox").fill(`Reply only with ${marker}. Do not use tools.`);
+		await loomPage.getByRole("textbox").press("Enter");
+		await expect(loomPage.getByTestId("copilot-message-list").getByText(marker, { exact: true })).toBeVisible({ timeout: 45_000 });
+		await expect(loomPage.getByRole("button", { name: "Conversation model", exact: true })).toBeEnabled();
+	}
+	const record = await loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id);
+	expect(record.messages.filter((row) => row.role === "user")).toHaveLength(2);
+	expect(record.messages.filter((row) => row.role === "assistant")).toHaveLength(2);
+	expect(record.model).toEqual({ provider: "deepseek", modelId: "deepseek-flash", thinkingLevel: "off" });
+	expect(record.context?.tokens).toBeGreaterThan(0);
+	await loomPage.reload();
+	await expect(loomPage.getByTestId("copilot-message-list").getByText("NATIVE_DEEPSEEK_SECOND_OK", { exact: true })).toBeVisible();
+	expect((await loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id)).model).toEqual(record.model);
+});
+
 /** Optional live acceptance; never log the key or request payload. */
 test("real Chat model streams both first and subsequent turns before RUN_FINISHED", async ({ loomPage }) => {
 	test.skip(process.env.LOOM_E2E_LIVE_CHAT !== "1", "set LOOM_E2E_LIVE_CHAT=1 and load Chat credentials");

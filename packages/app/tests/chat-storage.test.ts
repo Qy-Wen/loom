@@ -134,6 +134,47 @@ test("native Models refreshes an expiring OAuth token exactly once across encryp
 	const text = await readFile(path, "utf8"); assert.ok(!text.includes("rotated-refresh")); assert.ok(!text.includes("ACCOUNT_PRIVATE"));
 });
 
+test("failed native OAuth refresh preserves encrypted credentials", async (t) => {
+	const { path, credentials } = await workspace(t);
+	const original = { type: "oauth", access: "OLD_PRIVATE", refresh: "REFRESH_PRIVATE", expires: 0 } as const;
+	await credentials.modify("oauth-test", async () => original);
+	const before = await readFile(path, "utf8");
+	const faux = fauxProvider();
+	const provider = createProvider({ id: "oauth-test", models: faux.models, api: faux.provider, auth: { oauth: {
+		name: "Test OAuth", login: async () => original,
+		refresh: async () => { throw new Error("Refresh unavailable"); }, toAuth: async (current) => ({ apiKey: current.access }),
+	} } });
+	const models = createModels({ credentials }); models.setProvider(provider);
+	await assert.rejects(() => models.getAuth("oauth-test"), /Refresh unavailable/);
+	assert.deepEqual(await credentials.read("oauth-test"), original);
+	assert.equal(await readFile(path, "utf8"), before);
+});
+
+test("logout waits for an active OAuth refresh and leaves no refreshed credential behind", async (t) => {
+	const { credentials } = await workspace(t);
+	const original = { type: "oauth", access: "OLD_PRIVATE", refresh: "REFRESH_PRIVATE", expires: 0 } as const;
+	await credentials.modify("oauth-test", async () => original);
+	const entered = Promise.withResolvers<void>(), release = Promise.withResolvers<void>();
+	const faux = fauxProvider();
+	const provider = createProvider({ id: "oauth-test", models: faux.models, api: faux.provider, auth: { oauth: {
+		name: "Test OAuth", login: async () => original,
+		refresh: async (current) => {
+			entered.resolve(); await release.promise;
+			return { ...current, access: "NEW_PRIVATE", expires: Date.now() + 60_000 };
+		}, toAuth: async (current) => ({ apiKey: current.access }),
+	} } });
+	const models = createModels({ credentials }); models.setProvider(provider);
+	const refresh = models.getAuth("oauth-test");
+	await entered.promise;
+	try {
+		const logout = models.logout("oauth-test");
+		release.resolve();
+		await Promise.all([refresh, logout]);
+		assert.equal(await credentials.read("oauth-test"), undefined);
+		assert.equal(await models.getAuth("oauth-test"), undefined);
+	} finally { release.resolve(); await refresh; }
+});
+
 test("native Models API-key login/logout uses encrypted storage and retains environment source labels", async (t) => {
 	const { credentials } = await workspace(t);
 	const models = createModels({ credentials, authContext: { env: async (name) => name === "DEEPSEEK_API_KEY" ? "ENV_PRIVATE" : undefined, fileExists: async () => false } });

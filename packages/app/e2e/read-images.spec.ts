@@ -37,7 +37,7 @@ test("bundled Electron read resolves Photon WASM and returns a WebP image", asyn
 		expect(root).toBeTruthy();
 		path = join(root!, filename);
 		await writeFile(path, Buffer.from(webp, "base64"));
-		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { input: ["text", "image"] });
 		await loomPage.evaluate(() => window.loom.setAgentPermission("full"));
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();

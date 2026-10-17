@@ -201,7 +201,8 @@ test("default durable bash fails closed without a sandbox library root", { timeo
 	});
 });
 
-test("durable bash's default prepare keeps writes in-library and blocks network", { timeout: 20_000 }, async () => {
+// Windows sandbox initialization may retry proxy-port admission for up to 45 seconds.
+test("durable bash's default prepare keeps writes in-library and blocks network", { timeout: process.platform === "win32" ? 90_000 : 20_000 }, async () => {
 	await temporary(async (path) => {
 		const outside = join(homedir(), `.loom-durable-sandbox-${Date.now()}`);
 		setProcessSandboxRoot(path);

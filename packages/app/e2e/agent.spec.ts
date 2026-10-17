@@ -78,7 +78,7 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
-		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 128_000 });
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 50_000 });
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
@@ -241,12 +241,15 @@ test("Electron shows partial text before the model finishes streaming", async ({
 			const view = await window.loom.getChatSettings();
 			await window.loom.saveChatSettings({ ...view.config, default: { ...view.config.default!, thinkingLevel: "off" } });
 		});
-		await expect(loomPage.locator(".session-context-value")).toHaveText("~1.6% / 64k");
+		// Remembered choices affect new conversations; this conversation keeps its context window.
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.8% / 128k");
 		await loomPage.evaluate(async () => {
 			const view = await window.loom.getChatSettings();
-			await window.loom.saveChatSettings({ ...view.config, default: undefined });
+			delete view.config.default;
+			await window.loom.saveChatSettings(view.config);
 		});
-		await expect(indicator).toHaveCount(0);
+		await expect(indicator).toBeVisible();
+		await expect(loomPage.locator(".session-context-value")).toHaveText("~0.8% / 128k");
 	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 

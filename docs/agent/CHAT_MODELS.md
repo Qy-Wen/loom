@@ -2,7 +2,7 @@
 
 # Full Chat Model Integration with pi-ai
 
-> Status: legacy Chat endpoint compatibility has been removed (product is unreleased). The native runtime owns production startup, storage, settings/OAuth UI, provider login, and per-conversation model selection. Windows/live-OAuth acceptance (P5) remains.
+> Status: the native runtime owns production Chat; legacy endpoint compatibility is removed. Windows automated tests, OS encryption/mock OAuth callbacks, and live native DeepSeek chat are verified. Real OAuth, other native services, and installer acceptance remain.
 > Current behavior: [AGENT](./AGENT.md), [SETTINGS](../SETTINGS.md). Baseline: installed `@earendil-works/pi-ai@1.1.0`; reference sources: `agent/pi/packages/ai` and `agent/pi/packages/coding-agent/src/core`.
 
 ## 1. Scope and decisions
@@ -164,64 +164,34 @@ The public busy probe shows running generations via `Harness.inspect()` and conf
 - Known request/auth secrets feed trace redaction and are removed from provider error messages before durable bookkeeping. Real legacy interrupted-request recovery and the 800-token compaction cap pass through the new service.
 - **Production startup is switched:** `app.whenReady()` builds `ChatModelService` from `createChatStorage(userData)`, initializes it (env bootstrap on first run), and injects the long-lived `Models` plus defaults into `LibraryAgentHost`. The Host never builds Providers; secrets feed trace redaction through `onSecrets`.
 - Chat IPC: `getChatSettings`/`saveChatSettings` (credential-free views), `chatProviderCatalog`, `chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin` (API-key + OAuth interaction bridged to the renderer), `chatRefresh`, `chatSettingsChanged`. Settings tools no longer expose a Chat slot.
-- Renderer: `SettingsChat` in Settings → Models manages providers (add/remove, API-key/OAuth sign-in with prompt dialog), default model/thinking, and refresh; saves immediately, outside the four-slot Save batch.
+- Renderer: `SettingsChat` manages providers, API-key/OAuth login, model enablement, and refresh. The composer selects each conversation's model, with thinking levels in a model submenu.
 - Eval/smoke scripts and vendor tests build custom providers through `createChatCustomProvider` with in-memory credentials; `LoomChatEndpoint` consumers are gone.
 
 ### Reproduction
 
 ```bash
 pnpm typecheck
-pnpm --filter @loom/agent test                 # 152 pass
-pnpm --filter @loom/app test                   # 247 pass
+pnpm --filter @loom/agent test
+pnpm --filter @loom/app test
 pnpm --filter @loom/app build
 pnpm --filter @loom/app check:chat-platform    # temporary userData, fake credentials/mock callbacks; requires Electron/OS encryption
 ```
 
-P0 prototypes remain test-only; P2 assembly/service code and the Host injection path are implemented. Production startup is not wired to them yet; user settings and libraries have not been switched.
+P0 prototypes remain test-only; production startup uses the native assembly/service and Host injection path.
 
-## 9. Implementation and acceptance checklist
+## 9. Remaining acceptance checklist
 
-### P0: API verification and minimal prototype
-
-- [x] Verify installed pi-ai Provider/auth/refresh/protocol/OAuth capabilities rather than assuming newer reference-source behavior.
-- [x] Verify thin built-in overrides preserve auth, filtering, dynamic catalogs, and mixed protocol dispatch.
-- [x] Confirm native recovery (A); probe request snapshots, public busy inspection/configure behavior, explicit parameter priority, and real compaction budgets. Production busy guards remain P2/P4.
-- [x] macOS Electron lazy SDK/OAuth, mock browser callbacks, and `safeStorage` verified; production packaging correction, Windows, and real login remain later work.
-
-### P1: Configuration and storage
-
-- [x] Define separate versioned Chat configuration and redacted catalog/auth DTOs; leave other slots unchanged.
-- [x] Implement/test encrypted `CredentialStore`, `ModelsStore`, atomic persistence, and cross-process write coordination (macOS; Windows validation remains P5).
-- [x] Implement/test encrypted stores, atomic persistence, cross-process write coordination, and the approved env bootstrap. Legacy migration staging was removed with the legacy path (product unreleased).
-
-### P2: Model runtime
-
-- [x] Build app-level `Models`, reuse native factories, validate custom protocols/capabilities/defaults, and emit safe catalog/auth/availability views.
-- [x] Add native refresh/cache/timeouts/cancellation; preserve metadata/thinking/costs and omit unknown-price placeholders from public rates.
-- [x] Injected Host path is tested; production startup switched to the native runtime and legacy endpoint construction/bulk configure removed. Installer contents remain P5.
-- [x] Verify production-wrapper default/explicit parameter priority, real compaction budgets, and known auth/error redaction; full trace/live regression remains P5.
-
-### P3: Provider settings and login
-
-- [x] Provider list/add/remove, custom OpenAI-compatible connections, default model/thinking UI, English/Chinese strings.
-- [x] Bridge API-key/OAuth interactions through IPC prompts (text/secret/select/manual code/auth URL/device code), with cancellation. Logout semantics remain P5.
-- [x] Settings tools no longer expose a Chat slot; provider status comes from the runtime. Explicit connection testing remains P5.
+Completed acceptance results are in the [archive](../archive/ARCHIVE.md#windows-chat-acceptance).
 
 ### P4: Conversation selection
 
-- [x] `LoomSessionRecord.model` exposes the persisted selection; `setSessionModel` IPC validates the model and thinking level against the runtime, then configures through native `conversation.configure()`.
-- [x] `ChatModelSelect` in the composer toolbar: model list from the live catalog (unavailable models disabled), thinking level cycles through supported levels; runs while busy are disabled and the change applies from the next request.
-- [x] Host tests cover per-conversation persistence across reopen, new-conversation-only defaults, and busy rejection while a request streams; smoke E2E covers the IPC path including unknown-model rejection.
-- [ ] Context-ring refresh on model change and image-capability notices remain P5 polish; unavailable providers never switch automatically.
+- [ ] Image-capability notices after model changes; unavailable providers never switch automatically.
 
 ### P5: Regression and delivery
 
-- [ ] Units: configuration/overrides/protocol selection, capabilities/thinking, auth sources, cache, migration, unknown prices.
-- [ ] Auth: single concurrent refresh, credentials preserved on failure, cancellation/login/logout races, encryption failures; no secrets in DTOs/logs/trace.
-- [ ] Local mock integration: text/tools/usage/cancellation for Chat Completions, Responses, Anthropic, Google; cross-Provider history conversion.
-- [ ] Durable/Electron: parallel independent models, specialists, images, threshold/overflow compaction, fork/reload, SIGKILL recovery; no duplicate input/unsafe-tool replay.
-- [ ] Authorized live acceptance: existing DeepSeek, native OpenAI/Anthropic/Google, and declared OAuth login/refresh flows. Mark untested cases; do not claim every Provider passed.
-- [ ] macOS/Windows: login callbacks, encrypted reopen, locks/file replacement, lazy SDK packaging/runtime tests.
-- [ ] Agent/app/vendor typechecks and existing suites; update architecture/settings docs and checklist, remove transitional implementations.
+- [ ] Complete interactive login/logout race acceptance.
+- [ ] Complete the four-protocol tools/usage/cancellation and cross-protocol/provider history conversion matrix.
+- [ ] Native OpenAI/Anthropic/Google services and real OAuth login/refresh/logout.
+- [ ] Mac revalidation and macOS/Windows packaged-runtime acceptance.
 
 Done means users configure Chat from built-in catalogs or custom connections with API keys/OAuth and create/recover independently selected conversations. Tools, thinking, usage, compaction, cancellation, and recovery remain on native pi-ai/durable paths. Secrets never enter libraries or ordinary queries. Unchecked items are not complete.

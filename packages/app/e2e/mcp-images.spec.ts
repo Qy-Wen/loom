@@ -24,7 +24,7 @@ test("MCP tool images render live and after reloading the conversation", async (
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
 		await expect(loomPage.locator(".shell")).toBeVisible();
-		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { input: ["text", "image"] });
 		await loomPage.evaluate(async ({ command, script }) => {
 			await window.loom.setAgentPermission("full");
 			const draft = {
