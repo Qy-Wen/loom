@@ -173,7 +173,7 @@ test("custom provider can be created, authenticated, edited and used for streami
 		await settings.getByRole("button", { name: "Close settings" }).click();
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await loomPage.getByRole("button", { name: "Conversation model", exact: true }).click();
-		await loomPage.getByRole("option", { name: `First custom model (${saved.id})`, exact: true }).click();
+		await loomPage.getByRole("menuitemradio", { name: `First custom model (${saved.id})`, exact: true }).click();
 		await loomPage.getByRole("textbox").fill("Reply directly without using tools.");
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByTestId("copilot-message-list").getByText("CUSTOM_UI_STREAM_OK", { exact: true })).toBeVisible();

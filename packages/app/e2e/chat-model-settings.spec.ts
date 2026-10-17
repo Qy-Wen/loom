@@ -16,7 +16,7 @@ test("Settings enable switches control the picker and new sessions remember only
 	const picker = loomPage.getByRole("button", { name: "Conversation model", exact: true });
 	await expect(picker).toHaveText("Choose a model");
 	await picker.click();
-	await loomPage.getByRole("option", { name: "demo (e2e-chat)", exact: true }).click();
+	await loomPage.getByRole("menuitemradio", { name: "demo (e2e-chat)", exact: true }).click();
 	await expect(picker).toHaveText("demo (e2e-chat)");
 	await expect.poll(() => loomPage.evaluate(async () => (await window.loom.getChatSettings()).config.default?.modelId)).toBe("demo");
 
@@ -35,15 +35,15 @@ test("Settings enable switches control the picker and new sessions remember only
 	await settings.getByRole("button", { name: "Close settings" }).click();
 
 	await picker.click();
-	await expect(loomPage.getByRole("option", { name: "demo (e2e-chat)", exact: true })).toHaveCount(0);
-	await expect(loomPage.getByRole("option", { name: "second-model (e2e-chat)", exact: true })).toBeVisible();
+	await expect(loomPage.getByRole("menuitemradio", { name: "demo (e2e-chat)", exact: true })).toHaveCount(0);
+	await expect(loomPage.getByRole("menuitemradio", { name: "second-model (e2e-chat)", exact: true })).toBeVisible();
 	await loomPage.keyboard.press("Escape");
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 	await expect(picker).toHaveText("Choose a model");
 	// The other enabled model is not automatically selected.
 	await expect.poll(() => loomPage.evaluate(async () => (await window.loom.getChatSettings()).config.default?.modelId)).toBe("demo");
 	await picker.click();
-	await loomPage.getByRole("option", { name: "second-model (e2e-chat)", exact: true }).click();
+	await loomPage.getByRole("menuitemradio", { name: "second-model (e2e-chat)", exact: true }).click();
 	await expect(picker).toHaveText("second-model (e2e-chat)");
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 	await expect(picker).toHaveText("second-model (e2e-chat)");
@@ -51,6 +51,86 @@ test("Settings enable switches control the picker and new sessions remember only
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	await expect(demo).not.toBeChecked();
 	await settings.getByRole("button", { name: "Close settings" }).click();
+});
+
+test("model reasoning submenus support mouse, keyboard and persisted per-model choices", async ({ loomPage }, testInfo) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data required");
+	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1");
+	await loomPage.evaluate(async () => {
+		const view = await window.loom.getChatSettings();
+		const provider = view.config.providers.find((entry) => entry.id === "e2e-chat");
+		if (provider?.kind !== "custom") throw new Error("Missing test provider");
+		const plain = provider.models[0]!;
+		provider.models.push({ ...plain, id: "limited", name: "Limited reasoning", reasoning: true,
+			thinkingLevelMap: { off: null, minimal: null, low: null } });
+		provider.models.push(...Array.from({ length: 12 }, (_, i) => ({ ...plain, id: `plain-${i}` })));
+		provider.models.push({ ...plain, id: "reasoning", name: "Reasoning model", reasoning: true,
+			thinkingLevelMap: { minimal: null, xhigh: "xhigh" } });
+		await window.loom.saveChatSettings(view.config);
+	});
+	const before = await loomPage.evaluate(() => window.loom.listSessions());
+	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+	const sessionId = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((old) => old.id === row.id))!.id;
+	const selection = () => loomPage.evaluate(async (id) => (await window.loom.getSession(id)).model, sessionId);
+	const picker = loomPage.getByRole("button", { name: "Conversation model", exact: true });
+	const menu = loomPage.getByRole("menu", { name: "Conversation model", exact: true });
+	const thinking = loomPage.getByRole("menu", { name: "Thinking level", exact: true });
+	const reasoning = menu.getByRole("menuitemradio", { name: "Reasoning model (e2e-chat)", exact: true });
+	const limited = menu.getByRole("menuitemradio", { name: "Limited reasoning (e2e-chat)", exact: true });
+	await expect(loomPage.locator(".session-model-select > button")).toHaveCount(1);
+	await picker.click();
+	await reasoning.hover();
+	await expect(thinking).toBeVisible();
+	await expect(thinking.getByRole("menuitemradio")).toHaveText(["Off", "Low", "Medium", "High", "Extra high"]);
+	expect((await selection())?.modelId).toBe("demo");
+	const bounds = await thinking.boundingBox();
+	const viewport = await loomPage.evaluate(() => ({ width: innerWidth, height: innerHeight }));
+	expect(bounds!.x).toBeGreaterThanOrEqual(8);
+	expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(viewport.width - 8);
+	expect(bounds!.y).toBeGreaterThanOrEqual(8);
+	expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(viewport.height - 8);
+	await loomPage.screenshot({ path: testInfo.outputPath("model-thinking-menu.png") });
+	await thinking.getByRole("menuitemradio", { name: "High", exact: true }).click();
+	await expect(menu).toHaveCount(0);
+	await expect.poll(selection).toMatchObject({ modelId: "reasoning", thinkingLevel: "high" });
+
+	await picker.click();
+	await expect(reasoning).toBeFocused();
+	await reasoning.press("ArrowRight");
+	await expect(thinking.getByRole("menuitemradio", { name: "High", exact: true })).toBeFocused();
+	await loomPage.keyboard.press("Escape");
+	await expect(thinking).toHaveCount(0);
+	await expect(reasoning).toBeFocused();
+	await expect(menu).toBeVisible();
+	await reasoning.press("ArrowRight");
+	await loomPage.keyboard.press("ArrowUp");
+	await expect(thinking.getByRole("menuitemradio", { name: "Medium", exact: true })).toBeFocused();
+	await loomPage.keyboard.press("Enter");
+	await expect.poll(selection).toMatchObject({ modelId: "reasoning", thinkingLevel: "medium" });
+
+	await picker.click();
+	await limited.hover();
+	await limited.locator(".session-model-effort").click();
+	await expect(thinking.getByRole("menuitemradio")).toHaveText(["Medium", "High"]);
+	await thinking.getByRole("menuitemradio", { name: "High", exact: true }).click();
+	await expect.poll(selection).toMatchObject({ modelId: "limited", thinkingLevel: "high" });
+	await loomPage.reload();
+	await expect(picker).toHaveText("Limited reasoning (e2e-chat)");
+	await picker.click();
+	await limited.hover();
+	await expect(thinking.getByRole("menuitemradio", { name: "High", exact: true })).toHaveAttribute("aria-checked", "true");
+	await menu.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+	await expect(thinking).toHaveCount(0);
+	await loomPage.getByRole("heading", { name: "Choose an asset", exact: true }).click();
+	await expect(menu).toHaveCount(0);
+
+	await picker.click();
+	const plain = menu.getByRole("menuitemradio", { name: "demo (e2e-chat)", exact: true });
+	await plain.hover();
+	await expect(plain).not.toHaveAttribute("aria-haspopup", "menu");
+	await expect(thinking).toHaveCount(0);
+	await plain.click();
+	await expect.poll(selection).toMatchObject({ modelId: "demo", thinkingLevel: "off" });
 });
 
 test("Chat provider status uses green/red dots and shares the MCP error tooltip", async ({ loomPage }) => {

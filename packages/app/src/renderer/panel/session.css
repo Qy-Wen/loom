@@ -1032,14 +1032,69 @@
 }
 
 .session-model-menu {
-	min-width: 220px;
-	max-width: 320px;
+	box-sizing: border-box;
+	width: min(320px, calc(100vw - 16px));
+	min-width: 0;
 	max-height: min(280px, 40vh);
 	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
 }
 
-.session-model-menu button span,
+.session-model-menu button,
+.session-thinking-menu button {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.session-model-menu button:focus-visible,
+.session-model-menu button[aria-expanded="true"],
+.session-thinking-menu button:focus-visible {
+	outline: none;
+	background: #f4f4f2;
+}
+
+.session-model-select > button:focus-visible {
+	outline: 2px solid #a3a6ac;
+	outline-offset: 2px;
+}
+
+.session-model-check {
+	flex: 0 0 auto;
+}
+
+.session-model-menu .session-model-label {
+	flex: 1;
+	min-width: 0;
+}
+
+.session-model-effort {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	margin-left: auto;
+	color: #777b83;
+	font-size: 11px;
+}
+
+.session-thinking-menu {
+	box-sizing: border-box;
+	width: 160px;
+	max-height: calc(100vh - 16px);
+	overflow-y: auto;
+	overscroll-behavior: contain;
+}
+
+.session-thinking-heading {
+	padding: 5px 10px 7px;
+	color: #777b83;
+	font-size: 11px;
+}
+
 .session-model-empty {
+	display: block;
+	padding: 6px 10px;
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
