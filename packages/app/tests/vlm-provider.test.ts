@@ -38,7 +38,7 @@ test("createHttpVlmProvider posts OpenAI chat/completions with image_url", async
 	}) as typeof fetch;
 
 	const provider = createHttpVlmProvider({
-		baseUrl: "http://127.0.0.1:1234/custom/vision/?region=cn",
+		requestUrl: "http://127.0.0.1:1234/custom/vision/?region=cn",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
@@ -67,7 +67,7 @@ test("createHttpVlmProvider sends a Bearer key for remote APIs", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpVlmProvider({
-		baseUrl: "https://api.example.com/v1/chat/completions",
+		requestUrl: "https://api.example.com/v1/chat/completions",
 		apiKey: "secret",
 		model: "gpt-4o-mini",
 	});
@@ -109,7 +109,7 @@ test("createHttpVideoVlmProvider posts video_url then falls back to stills", asy
 	}) as typeof fetch;
 
 	const provider = createHttpVideoVlmProvider({
-		baseUrl: "http://127.0.0.1:1234/custom/video",
+		requestUrl: "http://127.0.0.1:1234/custom/video",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
@@ -149,7 +149,7 @@ test("createHttpVideoVlmProvider uses native video when the endpoint accepts it"
 	}) as typeof fetch;
 
 	const provider = createHttpVideoVlmProvider({
-		baseUrl: "http://127.0.0.1:1234/v1/chat/completions",
+		requestUrl: "http://127.0.0.1:1234/v1/chat/completions",
 		apiKey: "",
 		model: "qwen/qwen3-vl-4b",
 	});
@@ -182,7 +182,7 @@ test("createHttpAudioProvider posts audio_url then falls back to input_audio", a
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "http://127.0.0.1:8000/custom/audio/?region=cn",
+		requestUrl: "http://127.0.0.1:8000/custom/audio/?region=cn",
 		apiKey: "",
 		model: "qwen2-audio-7b-instruct",
 	});
@@ -214,7 +214,7 @@ test("createHttpAudioProvider uses audio_url when the endpoint accepts it", asyn
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "http://127.0.0.1:8000/v1/chat/completions",
+		requestUrl: "http://127.0.0.1:8000/v1/chat/completions",
 		apiKey: "",
 		model: "qwen2-audio-7b-instruct",
 	});
@@ -270,7 +270,7 @@ test("createHttpAudioProvider streams Omni on DashScope URLs", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpAudioProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
+		requestUrl: "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions",
 		apiKey: "sk-test",
 		model: "qwen3-omni-flash",
 	});

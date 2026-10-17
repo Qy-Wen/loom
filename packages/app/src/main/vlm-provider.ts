@@ -72,12 +72,12 @@ export function shouldFallbackFromNativeVideo(status: number, body: string): boo
 }
 
 export function createHttpVlmProvider(slot: {
-	baseUrl: string;
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 }): ImageVlmProvider {
 	const modelId = slot.model.trim();
-	const url = modelRequestUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.requestUrl);
 	if (!modelId) throw new Error("VLM model is required");
 	const apiKey = slot.apiKey.trim();
 	return {
@@ -89,12 +89,12 @@ export function createHttpVlmProvider(slot: {
 }
 
 export function createHttpVideoVlmProvider(slot: {
-	baseUrl: string;
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 }): VideoVlmProvider {
 	const modelId = slot.model.trim();
-	const url = modelRequestUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.requestUrl);
 	if (!modelId) throw new Error("VLM model is required");
 	const apiKey = slot.apiKey.trim();
 	const probeKey = `${url}|${modelId}`;
@@ -143,8 +143,8 @@ export function shouldFallbackFromAudioUrl(status: number, body: string): boolea
 	return /audio_url|unsupported.*audio|invalid.*content|unknown.*type|does not support|stream/i.test(body);
 }
 
-export function looksLikeHostedOmni(baseUrl: string): boolean {
-	return /dashscope|compatible-mode/i.test(baseUrl);
+export function looksLikeHostedOmni(requestUrl: string): boolean {
+	return /dashscope|compatible-mode/i.test(requestUrl);
 }
 
 export function explainAudioEndpoint(error: unknown): Error {
@@ -159,16 +159,16 @@ export function explainAudioEndpoint(error: unknown): Error {
 }
 
 export function createHttpAudioProvider(slot: {
-	baseUrl: string;
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 }): AudioWriteupProvider {
 	const modelId = slot.model.trim();
-	const url = modelRequestUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.requestUrl);
 	if (!modelId) throw new Error("Audio model is required");
 	const apiKey = slot.apiKey.trim();
 	const probeKey = `${url}|${modelId}`;
-	const hostedOmni = looksLikeHostedOmni(slot.baseUrl);
+	const hostedOmni = looksLikeHostedOmni(slot.requestUrl);
 	return {
 		modelId,
 		async describe(audio: AudioWriteupInput, signal?: AbortSignal): Promise<string> {

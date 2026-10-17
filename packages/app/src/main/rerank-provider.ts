@@ -1,8 +1,8 @@
 import type { RerankProvider } from "@loom/core";
 import { modelRequestUrl } from "../shared/model-request-url.ts";
 
-export function looksLikeBailian(baseUrl: string): boolean {
-	return /dashscope|compatible-mode|compatible-api|\.maas\.aliyuncs\.com/i.test(baseUrl);
+export function looksLikeBailian(requestUrl: string): boolean {
+	return /dashscope|compatible-mode|compatible-api|\.maas\.aliyuncs\.com/i.test(requestUrl);
 }
 
 export function usesBailianNativeRerank(model: string): boolean {
@@ -10,15 +10,15 @@ export function usesBailianNativeRerank(model: string): boolean {
 }
 
 export function createHttpRerankProvider(slot: {
-	baseUrl: string;
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 }): RerankProvider {
 	const modelId = slot.model.trim();
 	if (!modelId) throw new Error("Rerank model is required");
 	const apiKey = slot.apiKey.trim();
-	const native = looksLikeBailian(slot.baseUrl) && usesBailianNativeRerank(modelId);
-	const url = modelRequestUrl(slot.baseUrl);
+	const native = looksLikeBailian(slot.requestUrl) && usesBailianNativeRerank(modelId);
+	const url = modelRequestUrl(slot.requestUrl);
 	return {
 		modelId,
 		async rerank(query: string, documents: string[], signal?: AbortSignal): Promise<number[]> {

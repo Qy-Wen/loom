@@ -1,4 +1,3 @@
-import { existsSync } from "node:fs";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import { modelRequestUrl } from "../shared/model-request-url.ts";
@@ -14,17 +13,17 @@ import {
 } from "../shared/model-settings.ts";
 
 export function emptySlot(): ModelSlotRecord {
-	return { baseUrl: "", apiKey: "", model: "", enabled: false };
+	return { requestUrl: "", apiKey: "", model: "", enabled: false };
 }
 
 function asRecord(value: unknown): ModelSlotRecord {
 	if (!value || typeof value !== "object") return emptySlot();
 	const row = value as Partial<ModelSlotRecord>;
 	return {
-		baseUrl: typeof row.baseUrl === "string" ? row.baseUrl : "",
+		requestUrl: typeof row.requestUrl === "string" ? row.requestUrl : "",
 		apiKey: typeof row.apiKey === "string" ? row.apiKey : "",
 		model: typeof row.model === "string" ? row.model : "",
-		enabled: typeof row.enabled === "boolean" ? row.enabled : Boolean((row.baseUrl ?? "").trim() && (row.model ?? "").trim()),
+		enabled: row.enabled === true,
 	};
 }
 
@@ -37,7 +36,7 @@ export function parseSettingsFile(value: unknown): ModelSettingsFile {
 
 export function slotView(slot: ModelSlotRecord): ModelSlotView {
 	return {
-		baseUrl: slot.baseUrl,
+		requestUrl: slot.requestUrl,
 		model: slot.model,
 		apiKey: slot.apiKey,
 		enabled: slot.enabled,
@@ -52,7 +51,7 @@ export function settingsView(file: ModelSettingsFile): ModelSettingsView {
 
 export function applySlotDraft(current: ModelSlotRecord, draft: ModelSettingsDraft[ModelSlotId]): ModelSlotRecord {
 	const next = {
-		baseUrl: draft.baseUrl.trim() ? modelRequestUrl(draft.baseUrl) : "",
+		requestUrl: draft.requestUrl.trim() ? modelRequestUrl(draft.requestUrl) : "",
 		model: draft.model.trim(),
 		apiKey: current.apiKey,
 		enabled: draft.enabled,
@@ -93,10 +92,6 @@ export class ModelSettingsStore {
 		const next = applySettingsDraft(await this.load(), draft);
 		await this.save(next);
 		return next;
-	}
-
-	exists(): boolean {
-		return existsSync(this.filePath);
 	}
 
 	async view(): Promise<ModelSettingsView> {

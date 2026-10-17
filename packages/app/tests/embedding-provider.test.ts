@@ -24,7 +24,7 @@ test("createHttpEmbeddingProvider posts OpenAI-compatible embeddings", async () 
 	}) as typeof fetch;
 
 	const provider = createHttpEmbeddingProvider({
-		baseUrl: "https://api.example.com/custom-embed/?version=2",
+		requestUrl: "https://api.example.com/custom-embed/?version=2",
 		apiKey: "secret",
 		model: "text-embedding-3-small",
 	});

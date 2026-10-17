@@ -4,7 +4,6 @@ import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { lazyStream } from "@earendil-works/pi-ai/api/lazy";
 import { defaultProviderAuthContext } from "@earendil-works/pi-ai";
 import { assembleChatProviders, chatPriceSource, type ChatProviderAssemblyOptions } from "@loom/agent/chat-runtime";
-import { deepseekProvider } from "@earendil-works/pi-ai/providers/deepseek";
 import { emptyChatConfig, parseChatConfig, type ChatModelsConfig, type ChatSelection } from "@loom/agent/chat-models";
 import type { ChatAuthStatus, ChatModelView } from "../shared/chat-models.ts";
 import type { ChatConfigStore } from "./chat-config-store.ts";
@@ -188,9 +187,7 @@ export class ChatModelService {
 	private envBootstrap(env: NodeJS.ProcessEnv): ChatModelsConfig {
 		const config = emptyChatConfig();
 		if (!env.DEEPSEEK_API_KEY?.trim()) return config;
-		const provider = deepseekProvider();
-		if (!provider.getModels().some((model) => model.id === "deepseek-flash")) throw new Error("DeepSeek bootstrap model is missing from the installed catalog");
-		config.providers.push({ kind: "builtin", id: provider.id, enabled: true });
+		config.providers.push({ kind: "builtin", id: "deepseek", enabled: true });
 		return config;
 	}
 	async save(input: ChatModelsConfig, apiKeys: readonly { providerId: string; key: string | null }[] = []): Promise<void> {
@@ -264,9 +261,6 @@ export class ChatModelService {
 	async logout(providerId: string): Promise<void> {
 		if (!this.#initialized) throw new Error("Chat runtime is not initialized");
 		await this.mutation([providerId], () => this.#native.logout(providerId));
-	}
-	async checkAuth(providerId: string): Promise<import("@earendil-works/pi-ai").AuthCheck | undefined> {
-		return this.#native.checkAuth(providerId);
 	}
 	async refresh(options: { providers?: readonly string[]; allowNetwork?: boolean; force?: boolean; signal?: AbortSignal; timeoutMs?: number } = {}): Promise<{ aborted: boolean; errors: Record<string, string> }> {
 		const ids = this.#native.getProviders().filter((provider) => provider.refreshModels && (!options.providers || options.providers.includes(provider.id))).map((provider) => provider.id);

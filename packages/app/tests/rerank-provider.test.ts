@@ -24,7 +24,7 @@ test("createHttpRerankProvider posts query and documents", async () => {
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://api.example.com/v2/custom-rerank/?region=cn",
+		requestUrl: "https://api.example.com/v2/custom-rerank/?region=cn",
 		apiKey: "secret",
 		model: "jina-reranker-v2-base-multilingual",
 	});
@@ -56,7 +56,7 @@ test("createHttpRerankProvider posts Bailian qwen3-rerank to /reranks", async ()
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
+		requestUrl: "https://dashscope.aliyuncs.com/compatible-api/v1/reranks",
 		apiKey: "sk-test",
 		model: "qwen3-rerank",
 	});
@@ -78,7 +78,7 @@ test("createHttpRerankProvider posts Bailian gte-rerank-v2 on the native path", 
 	}) as typeof fetch;
 
 	const provider = createHttpRerankProvider({
-		baseUrl: "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
+		requestUrl: "https://dashscope.aliyuncs.com/api/v1/services/rerank/text-rerank/text-rerank",
 		apiKey: "sk-test",
 		model: "gte-rerank-v2",
 	});

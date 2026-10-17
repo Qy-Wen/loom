@@ -30,7 +30,7 @@ Do not stuff the library into the prompt. Do not run this on the whole library b
 
 The user or the Agent requests one image. Import does not run it.
 
-- **VLM:** the existing VLM slot. Wire is OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes `image_url` (a data URI for a local file). Local servers and remote APIs are the same form; hosted APIs usually need a key, local servers often omit it. Loom does not load or run the model.
+- **VLM:** the existing VLM slot. Wire is OpenAI-compatible `POST {requestUrl}`; the user message includes `image_url` (a data URI for a local file). Local servers and remote APIs are the same form; hosted APIs usually need a key, local servers often omit it. Loom does not load or run the model.
 - **Output:** caption / tags; visible text in the image may go into that write-up. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
 - **Do not embed the image itself.** The retrieve path is the Markdown, then text embeddings.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the VLM model invalidates the write-up. Changing the embedding model invalidates the chunk vectors.
@@ -75,7 +75,7 @@ A user can ask “find the shot where the person gets out of the car.” The Age
 
 Standalone audio files. On-demand file-level write-up, same idea as image VLM: one model that can describe music and ambient sound, and transcribe speech when there is any. Import does not run it. Do not reuse the VLM slot (that slot is vision-only).
 
-- **Audio slot:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`; the user message includes an audio part. Local and remote are the same fields. There is no built-in default vendor. Loom does not load or run the model. LM Studio cannot take audio on `/v1/chat/completions`. Qianfan compatible chat has no audio part. Hosted Qwen-Omni is DashScope compatible-mode (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Local OpenAI-compatible audio servers still try `audio_url` then `input_audio`.
+- **Audio slot:** OpenAI-compatible `POST {requestUrl}`; the user message includes an audio part. Local and remote are the same fields. There is no built-in default vendor. Loom does not load or run the model. LM Studio cannot take audio on `/v1/chat/completions`. Qianfan compatible chat has no audio part. Hosted Qwen-Omni is DashScope compatible-mode (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Local OpenAI-compatible audio servers still try `audio_url` then `input_audio`.
 - **Output:** caption / tags; speech goes under Transcript when present. Fold into fixed Markdown, then hand it to the Embedding slot. If that slot is empty, the text still stays.
 - **Do not embed the waveform.** The retrieve path is the Markdown, then text embeddings.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the Audio model invalidates the write-up. Changing the embedding model invalidates the chunk vectors.
@@ -99,8 +99,8 @@ Shape:
 
 Loom is only an HTTP client. The VLM and Audio models do not run in-process.
 
-- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/chat/completions`. Images use `image_url` (a data URI for a local file). Video tries `video_url` (data URI, up to 32 MB) when the endpoint allows it; otherwise extracted frames as `image_url`. Audio uses the Audio slot: hosted Omni is streamed `input_audio`; other endpoints try `audio_url` / `input_audio`. Not the VLM slot.
-- **Local or remote:** the same fields (`baseUrl`, optional API key, `model`). Local is a server the user runs. Remote audio that works today is DashScope compatible-mode Qwen-Omni, not Qianfan. See [SETTINGS.md](../SETTINGS.md).
+- **Wire:** OpenAI-compatible `POST {requestUrl}`. Images use `image_url` (a data URI for a local file). Video tries `video_url` (data URI, up to 32 MB) when the endpoint allows it; otherwise extracted frames as `image_url`. Audio uses the Audio slot: hosted Omni is streamed `input_audio`; other endpoints try `audio_url` / `input_audio`. Not the VLM slot.
+- **Local or remote:** the same fields (`requestUrl`, optional API key, `model`). Local is a server the user runs. Remote audio that works today is DashScope compatible-mode Qwen-Omni, not Qianfan. See [SETTINGS.md](../SETTINGS.md).
 - Endpoints are user-configured. There is no built-in default vendor. See [SETTINGS.md](../SETTINGS.md).
 
 ---

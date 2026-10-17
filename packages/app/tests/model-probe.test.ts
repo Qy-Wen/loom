@@ -15,7 +15,7 @@ for (const slot of ["vlm", "audio", "embedding", "rerank"] as const) {
 					: { choices: [{ message: { content: "pong" } }] }));
 		}) as typeof fetch;
 		const url = "https://proxy.example.com/custom/inference/?region=cn";
-		assert.deepEqual(await probeModelSlot({ slot, baseUrl: url, model: "test", apiKey: "test-key" }), { ok: true });
+		assert.deepEqual(await probeModelSlot({ slot, requestUrl: url, model: "test", apiKey: "test-key" }), { ok: true });
 		assert.equal(calls.length, 1);
 		assert.equal(calls[0]?.url, url);
 		assert.equal(calls[0]?.init.method, "POST");
@@ -31,7 +31,7 @@ for (const slot of ["vlm", "audio", "embedding", "rerank"] as const) {
 
 test("probeModelSlot treats 401 as a hard failure", async () => {
 	globalThis.fetch = (async () => new Response("nope", { status: 401 })) as typeof fetch;
-	const result = await probeModelSlot({ slot: "vlm", baseUrl: "https://api.example.com/chat", model: "gpt", apiKey: "bad" });
+	const result = await probeModelSlot({ slot: "vlm", requestUrl: "https://api.example.com/chat", model: "gpt", apiKey: "bad" });
 	assert.equal(result.ok, false);
 	assert.match(result.error ?? "", /401/);
 });
@@ -39,21 +39,21 @@ test("probeModelSlot treats 401 as a hard failure", async () => {
 test("probeModelSlot keeps the full HTTP error body", async () => {
 	const body = `{"error":"${"x".repeat(400)}"}`;
 	globalThis.fetch = (async () => new Response(body, { status: 500 })) as typeof fetch;
-	const result = await probeModelSlot({ slot: "vlm", baseUrl: "https://api.example.com/chat", model: "gpt" });
+	const result = await probeModelSlot({ slot: "vlm", requestUrl: "https://api.example.com/chat", model: "gpt" });
 	assert.equal(result.error, `HTTP 500: ${body}`);
 });
 
 test("probeModelSlot does not try alternative routes on 404", async () => {
 	let calls = 0;
 	globalThis.fetch = (async () => { calls++; return new Response("missing", { status: 404 }); }) as typeof fetch;
-	assert.equal((await probeModelSlot({ slot: "embedding", baseUrl: "https://api.example.com/embed", model: "m" })).ok, false);
+	assert.equal((await probeModelSlot({ slot: "embedding", requestUrl: "https://api.example.com/embed", model: "m" })).ok, false);
 	assert.equal(calls, 1);
 });
 
 test("probeModelSlot requires an HTTP(S) URL and model before making requests", async () => {
 	globalThis.fetch = (async () => { throw new Error("should not fetch"); }) as typeof fetch;
-	for (const baseUrl of ["", "invalid", "file:///tmp/model"]) {
-		assert.match((await probeModelSlot({ slot: "vlm", baseUrl, model: "m" })).error ?? "", /Request URL/);
+	for (const requestUrl of ["", "invalid", "file:///tmp/model"]) {
+		assert.match((await probeModelSlot({ slot: "vlm", requestUrl, model: "m" })).error ?? "", /Request URL/);
 	}
-	assert.match((await probeModelSlot({ slot: "vlm", baseUrl: "https://example.com/chat", model: "" })).error ?? "", /Model is required/);
+	assert.match((await probeModelSlot({ slot: "vlm", requestUrl: "https://example.com/chat", model: "" })).error ?? "", /Model is required/);
 });

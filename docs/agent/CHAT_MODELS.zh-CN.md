@@ -126,7 +126,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 - 产品未发布，不做旧兼容：`LoomChatEndpoint`、`buildChatModels`、`pi-adapter.ts`、Host 旧 `setChat`/批量 configure 路径与分阶段 `chat-migration.ts` 已删除。
 - `model-settings.json` 只保留四个非 Chat 槽位；旧文件中的 Chat 条目直接忽略，引用 `loom-chat` 的旧中断请求不保证续跑。
 - 不改写历史/transcript。引用已移除模型的旧会话保留记录，存在匹配 Provider 时才重新解析模型。
-- 无已保存配置时，环境引导启用原生 DeepSeek Provider 与目录默认 `deepseek-flash`（来自 `DEEPSEEK_API_KEY`，仅环境生效、不持久化）。新鉴权走 pi-ai 原生环境支持。
+- 无已保存配置时，`DEEPSEEK_API_KEY` 启用原生 DeepSeek Provider，不自动选择模型。环境密钥不持久化；鉴权走 pi-ai 原生环境支持。
 
 ## 8. 验证与实施状态
 
@@ -154,7 +154,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 - `@loom/agent/chat-models` 定义 v1 schema、自定义能力/协议、生成默认值、可选价格覆盖与 header 秘密引用；shared 目录/鉴权 DTO 不携带凭据。未知自定义价格保持缺省，不写成 0。
 - Main 分开保存配置、OS 加密凭据/header 值与原生目录。凭据修改在整个 OAuth refresh 期间持有带心跳的跨进程锁。JSON 用同目录临时文件、文件 sync、受限权限及 Windows 重试替换；无效数据/解密失败不静默重置。
 - 目录测试覆盖全部 42 个原生工厂，包括混合操作类型、ambient 云端空地址、原生未知价格负值标记与 Radius 的路由鉴权来源字面引用。缓存不保存 headers，后续 runtime 必须重新应用。
-- **已确认的引导：** 首次运行且无已保存配置时，用 `DEEPSEEK_API_KEY` 启用原生 DeepSeek Provider 与 `deepseek-flash`；环境密钥仅环境生效、从不持久化。
+- **环境引导：** 首次运行且无已保存配置时，存在 `DEEPSEEK_API_KEY` 就启用原生 DeepSeek Provider，由用户选择会话模型；环境密钥不持久化。
 
 ### P2 运行时基础
 

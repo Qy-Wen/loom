@@ -2,12 +2,12 @@ import type { EmbeddingProvider } from "@loom/core";
 import { modelRequestUrl } from "../shared/model-request-url.ts";
 
 export function createHttpEmbeddingProvider(slot: {
-	baseUrl: string;
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 }): EmbeddingProvider {
 	const modelId = slot.model.trim();
-	const url = modelRequestUrl(slot.baseUrl);
+	const url = modelRequestUrl(slot.requestUrl);
 	if (!modelId) throw new Error("Embedding model is required");
 	const apiKey = slot.apiKey.trim();
 	return {

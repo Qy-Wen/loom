@@ -10,8 +10,8 @@ export const MODEL_REQUEST_PLACEHOLDERS: Record<ModelSlotId, string> = {
 };
 
 export interface ModelSlotRecord {
-	/** Exact request URL for non-Chat slots; the persisted field name remains baseUrl. */
-	baseUrl: string;
+	/** Exact HTTP(S) request URL, including the operation path and optional query parameters. */
+	requestUrl: string;
 	apiKey: string;
 	model: string;
 	enabled: boolean;
@@ -20,7 +20,7 @@ export interface ModelSlotRecord {
 export type ModelSettingsFile = Record<ModelSlotId, ModelSlotRecord>;
 
 export interface ModelSlotView {
-	baseUrl: string;
+	requestUrl: string;
 	model: string;
 	apiKey: string;
 	enabled: boolean;
@@ -30,7 +30,7 @@ export type ModelSettingsView = Record<ModelSlotId, ModelSlotView>;
 
 export interface ModelSlotDraft {
 	/** Exact request URL, including the operation path and any query parameters. */
-	baseUrl: string;
+	requestUrl: string;
 	model: string;
 	enabled: boolean;
 	/** Set only when the user typed a new key. Omit to keep the stored key. */
@@ -42,7 +42,7 @@ export type ModelSettingsDraft = Record<ModelSlotId, ModelSlotDraft>;
 
 export type ModelProbeDraft = {
 	slot: ModelSlotId;
-	baseUrl: string;
+	requestUrl: string;
 	model: string;
 	apiKey?: string;
 };
@@ -53,7 +53,7 @@ export type ProbeResult = {
 };
 
 export function emptySettingsFile(): ModelSettingsFile {
-	const empty = { baseUrl: "", apiKey: "", model: "", enabled: false };
+	const empty = { requestUrl: "", apiKey: "", model: "", enabled: false };
 	const next = {} as ModelSettingsFile;
 	for (const id of MODEL_SLOTS) next[id] = { ...empty };
 	return next;

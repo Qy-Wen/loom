@@ -12,9 +12,9 @@ import {
 import { emptySettingsFile, type ModelSettingsDraft } from "../src/shared/model-settings.ts";
 
 function draft(overrides: Partial<ModelSettingsDraft["embedding"]> = {}): ModelSettingsDraft {
-	const empty = { baseUrl: "", model: "", enabled: false };
+	const empty = { requestUrl: "", model: "", enabled: false };
 	return {
-		embedding: { baseUrl: "", model: "", enabled: false, ...overrides },
+		embedding: { requestUrl: "", model: "", enabled: false, ...overrides },
 		rerank: empty,
 		vlm: empty,
 		audio: empty,
@@ -22,10 +22,11 @@ function draft(overrides: Partial<ModelSettingsDraft["embedding"]> = {}): ModelS
 }
 
 describe("parseSettingsFile", () => {
-	it("treats a filled slot without enabled as on", () => {
-		const file = parseSettingsFile({ embedding: { baseUrl: "https://e", model: "embed" } });
-		assert.equal(file.embedding.enabled, true);
+	it("requires explicit enablement for a filled slot", () => {
+		const file = parseSettingsFile({ embedding: { requestUrl: "https://e/v1/embeddings", model: "embed" } });
+		assert.equal(file.embedding.enabled, false);
 		assert.equal(file.rerank.enabled, false);
+		assert.equal(parseSettingsFile({ embedding: { ...file.embedding, enabled: true } }).embedding.enabled, true);
 	});
 });
 
@@ -33,24 +34,24 @@ describe("applySettingsDraft", () => {
 	it("keeps the stored key unless replaced or cleared", () => {
 		const current = emptySettingsFile();
 		current.embedding.apiKey = "kept";
-		const kept = applySettingsDraft(current, draft({ baseUrl: "https://a", model: "m", enabled: true }));
+		const kept = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", enabled: true }));
 		assert.equal(kept.embedding.apiKey, "kept");
 		assert.equal(kept.embedding.enabled, true);
-		const replaced = applySettingsDraft(current, draft({ baseUrl: "https://a", model: "m", apiKey: "new", enabled: true }));
+		const replaced = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", apiKey: "new", enabled: true }));
 		assert.equal(replaced.embedding.apiKey, "new");
-		const cleared = applySettingsDraft(current, draft({ baseUrl: "https://a", model: "m", clearApiKey: true, enabled: true }));
+		const cleared = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", clearApiKey: true, enabled: true }));
 		assert.equal(cleared.embedding.apiKey, "");
 	});
 
 	it("keeps exact request URLs and rejects invalid nonempty URLs", () => {
 		const url = "https://proxy.example.com/inference/?region=cn";
-		assert.equal(applySettingsDraft(emptySettingsFile(), draft({ baseUrl: ` ${url} ` })).embedding.baseUrl, url);
-		assert.throws(() => applySettingsDraft(emptySettingsFile(), draft({ baseUrl: "not-a-url" })), /Request URL/);
+		assert.equal(applySettingsDraft(emptySettingsFile(), draft({ requestUrl: ` ${url} ` })).embedding.requestUrl, url);
+		assert.throws(() => applySettingsDraft(emptySettingsFile(), draft({ requestUrl: "not-a-url" })), /Request URL/);
 	});
 
 	it("includes the key in the Settings view for masked editing", () => {
-		const file = parseSettingsFile({ embedding: { baseUrl: "https://a", apiKey: "secret", model: "m" } });
-		assert.deepEqual(settingsView(file).embedding, { baseUrl: "https://a", model: "m", apiKey: "secret", enabled: true });
+		const file = parseSettingsFile({ embedding: { requestUrl: "https://a", apiKey: "secret", model: "m", enabled: true } });
+		assert.deepEqual(settingsView(file).embedding, { requestUrl: "https://a", model: "m", apiKey: "secret", enabled: true });
 	});
 });
 
@@ -60,14 +61,14 @@ describe("ModelSettingsStore", () => {
 		const store = new ModelSettingsStore(filePath);
 		assert.deepEqual(await store.view(), emptySettingsFile());
 		const saved = await store.update(draft({
-			baseUrl: "https://api.example.com",
+			requestUrl: "https://api.example.com",
 			model: "bge-m3",
 			enabled: true,
 		}));
 		assert.equal(saved.embedding.apiKey, "");
 		assert.match(await readFile(filePath, "utf8"), /bge-m3/);
 		const later = await store.view();
-		assert.equal(later.embedding.baseUrl, "https://api.example.com");
+		assert.equal(later.embedding.requestUrl, "https://api.example.com");
 		assert.equal(later.embedding.model, "bge-m3");
 	});
 });

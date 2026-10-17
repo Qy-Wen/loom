@@ -126,7 +126,7 @@ Proposed storage in Electron `userData`, never the library:
 - The product is unreleased, so no legacy compatibility is kept: `LoomChatEndpoint`, `buildChatModels`, `pi-adapter.ts`, the legacy Host `setChat`/bulk-configure path, and the staged `chat-migration.ts` cutover are deleted.
 - `model-settings.json` keeps only the four non-Chat slots. Old Chat entries in existing files are ignored; interrupted requests that referenced `loom-chat` are not expected to resume.
 - History/transcripts are never rewritten. Old conversations that referenced removed models keep their records; models are re-resolved when a matching Provider exists.
-- DeepSeek onboarding without saved configuration uses the native Provider and cataloged default `deepseek-flash` from `DEEPSEEK_API_KEY` (environmental only; never persisted). New auth uses pi-ai's native environment support.
+- Without saved configuration, `DEEPSEEK_API_KEY` enables the native DeepSeek Provider without selecting a model. Environment secrets are never persisted; authentication uses pi-ai's native environment support.
 
 ## 8. Verification and implementation status
 
@@ -154,7 +154,7 @@ The public busy probe shows running generations via `Harness.inspect()` and conf
 - `@loom/agent/chat-models` defines schema v1, explicit custom capabilities/protocols, generation defaults, optional price overrides, and header-secret references. Shared catalog/auth DTOs contain no credentials. Unknown custom prices remain absent, not zeroed.
 - Main stores configuration, OS-encrypted credentials/header values, and native catalogs separately. Credential mutations hold a heartbeat-backed cross-process lock through OAuth refresh. JSON replacements use same-directory temporary files, file sync, restrictive permissions, and Windows retry handling; malformed/decryption-failed data is not silently reset.
 - Catalog tests cover all 42 native factories, including mixed operation types, blank ambient cloud endpoints, native negative unknown-price markers, and Radius's literal routing auth-source references. Headers are omitted from cache and must be reapplied by the runtime.
-- **Approved bootstrap:** first run without saved configuration enables the native DeepSeek Provider with `deepseek-flash` from `DEEPSEEK_API_KEY`; environment secrets remain environmental and are never persisted.
+- **Environment bootstrap:** first run without saved configuration enables the native DeepSeek Provider when `DEEPSEEK_API_KEY` is present; users choose the conversation model. Environment secrets are never persisted.
 
 ### P2 runtime foundation
 

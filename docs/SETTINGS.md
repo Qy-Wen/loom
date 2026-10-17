@@ -33,7 +33,7 @@ One Settings page. Same form for every role. Local and remote are the same field
 
 Each slot stores:
 
-- `baseUrl`: complete HTTP(S) **Request URL**, including operation path and optional query. No version/path is appended or rewritten. Examples: `https://…/v1/embeddings`, `https://…/v2/rerank`, `https://…/v1/chat/completions`.
+- `requestUrl`: complete HTTP(S) **Request URL**, including operation path and optional query. No version/path is appended or rewritten. Examples: `https://…/v1/embeddings`, `https://…/v2/rerank`, `https://…/v1/chat/completions`.
 - `apiKey` (hosted APIs usually need it; local servers often omit it)
 - `model`
 - `enabled` (the switch on the right of each slot)

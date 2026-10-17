@@ -12,7 +12,7 @@ import {
 } from "../shared/model-settings.ts";
 
 export interface PublicModelSlot {
-	baseUrl: string;
+	requestUrl: string;
 	model: string;
 	enabled: boolean;
 	hasApiKey: boolean;
@@ -49,7 +49,7 @@ export interface SettingsPatch {
 }
 
 interface SlotPatch {
-	baseUrl?: string;
+	requestUrl?: string;
 	model?: string;
 	enabled?: boolean;
 	apiKey?: string;
@@ -75,7 +75,7 @@ export interface SettingsToolHost {
 
 export function publicModelSlot(slot: ModelSlotRecord): PublicModelSlot {
 	return {
-		baseUrl: slot.baseUrl,
+		requestUrl: slot.requestUrl,
 		model: slot.model,
 		enabled: slot.enabled,
 		hasApiKey: slot.apiKey.trim().length > 0,
@@ -118,7 +118,7 @@ export function modelDraftForPatch(file: ModelSettingsFile, patch: SettingsPatch
 
 function slotDraft(current: ModelSlotRecord, patch: SlotPatch | undefined): ModelSlotDraft {
 	const next: ModelSlotDraft = {
-		baseUrl: patch?.baseUrl ?? current.baseUrl,
+		requestUrl: patch?.requestUrl ?? current.requestUrl,
 		model: patch?.model ?? current.model,
 		enabled: patch?.enabled ?? current.enabled,
 	};
@@ -205,8 +205,9 @@ function parseModels(value: unknown): NonNullable<SettingsPatch["models"]> {
 
 function parseSlot(value: unknown, id: string): SlotPatch {
 	const record = asRecord(value, `Slot ${id} must be an object`);
+	if (Object.keys(record).some((key) => !Object.hasOwn(SLOT_FIELDS.properties, key))) throw new Error(`Unknown field in model slot ${id}.`);
 	const slot: SlotPatch = {};
-	if ("baseUrl" in record && record.baseUrl !== undefined) slot.baseUrl = needString(record.baseUrl, `${id}.baseUrl`);
+	if ("requestUrl" in record && record.requestUrl !== undefined) slot.requestUrl = needString(record.requestUrl, `${id}.requestUrl`);
 	if ("model" in record && record.model !== undefined) slot.model = needString(record.model, `${id}.model`);
 	if ("enabled" in record && record.enabled !== undefined) {
 		if (typeof record.enabled !== "boolean") throw new Error(`${id}.enabled must be true or false.`);
@@ -294,7 +295,7 @@ function needStringMap(value: unknown, label: string): Record<string, string> {
 const SLOT_FIELDS = {
 	type: "object",
 	properties: {
-		baseUrl: { type: "string", description: "Complete HTTP(S) request URL including the operation path. Used exactly as supplied; no version/path is appended or rewritten." },
+		requestUrl: { type: "string", description: "Complete HTTP(S) request URL including the operation path. Used exactly as supplied; no version/path is appended or rewritten." },
 		model: { type: "string" },
 		enabled: { type: "boolean" },
 		apiKey: { type: "string", description: "Replaces the stored key. The value remains in this chat." },

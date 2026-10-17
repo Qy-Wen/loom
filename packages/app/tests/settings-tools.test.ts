@@ -17,7 +17,7 @@ import {
 describe("settings tools", () => {
 	it("hides keys", () => {
 		const file = emptySettingsFile();
-		file.embedding = { baseUrl: "http://localhost:11434/v1", apiKey: "secret", model: "bge", enabled: true };
+		file.embedding = { requestUrl: "http://localhost:11434/v1", apiKey: "secret", model: "bge", enabled: true };
 		assert.equal(publicModelSlot(file.embedding).hasApiKey, true);
 		assert.equal(JSON.stringify(publicModelSlot(file.embedding)).includes("secret"), false);
 		const draft = modelDraftForPatch(file, { embedding: { model: "bge-m3" } });
@@ -40,6 +40,13 @@ describe("settings tools", () => {
 
 	it("requires at least one change", () => {
 		assert.throws(() => parseSettingsPatch({}), /at least one change/);
+	});
+
+	it("patches non-Chat request URLs and rejects unknown slot fields", () => {
+		const requestUrl = "https://example.com/v1/embeddings";
+		const patch = parseSettingsPatch({ models: { embedding: { requestUrl } } });
+		assert.equal(modelDraftForPatch(emptySettingsFile(), patch.models).embedding.requestUrl, requestUrl);
+		assert.throws(() => parseSettingsPatch({ models: { embedding: { baseUrl: requestUrl, enabled: true } } }), /Unknown field/);
 	});
 
 	it("keeps MCP env when an update omits it and hides the value", () => {
@@ -75,10 +82,10 @@ describe("settings tools", () => {
 			language: "en",
 			chat: { providers: [], models: [], catalog: [], refreshErrors: {} },
 			models: {
-				embedding: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
-				rerank: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
-				vlm: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
-				audio: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
+				embedding: { requestUrl: "", model: "", enabled: false, hasApiKey: false },
+				rerank: { requestUrl: "", model: "", enabled: false, hasApiKey: false },
+				vlm: { requestUrl: "", model: "", enabled: false, hasApiKey: false },
+				audio: { requestUrl: "", model: "", enabled: false, hasApiKey: false },
 			},
 			sandbox: true,
 			instructions: "",

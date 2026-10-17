@@ -36,7 +36,7 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
   4. A short file stays one chunk.
 - **Parent / child:** children first, then pack. Children find the hit; parents fill in context. Cut all child slices first (structure, then 512 / 64). Then group consecutive children into parents until the source span would exceed **2048** tokens (about four children). Parent text is that source span, not a concat of overlapping child strings. Do not use heading level as the parent boundary. `parent_id` is null on a root parent. Only children get embeddings.
 - **Input:** the Level 1 extract. If it is missing, failed, or stale, extract first. Embed is a separate user or Agent action.
-- **Provider:** an `EmbeddingProvider`. Loom never loads or runs a model. Wire format is OpenAI-compatible `POST /v1/embeddings`. `baseUrl`, API key, and `model` come from the Embedding slot in [Settings](../SETTINGS.md).
+- **Provider:** an `EmbeddingProvider`. Loom never loads or runs a model. Wire format is OpenAI-compatible `POST /v1/embeddings`. `requestUrl`, API key, and `model` come from the Embedding slot in [Settings](../SETTINGS.md).
 - **Store:** `text_chunks` keyed by `asset_id` (chunk id, `parent_id`, role, offsets, text, mtime; child rows also have vector + model id). Not a blob in `asset_metadata`. sqlite-vec loads on open and scores those blobs with `vec_distance_cosine`. There is no `vec0` table: dimension follows the Embedding slot. If the extension is missing, the same cosine runs in JavaScript.
 - **Invalidation:** same mtime rule as Level 1. Rename/move does not rerun. Changing the embedding model invalidates the rows.
 
@@ -59,6 +59,6 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 
 Loom is only an HTTP client. It does not ship weights, ONNX, or an in-process runtime.
 
-- **Wire:** OpenAI-compatible `POST {baseUrl}/v1/embeddings` with `{ model, input }`.
+- **Wire:** OpenAI-compatible `POST {requestUrl}` with `{ model, input }`.
 - **Local or remote:** same fields. Local is a user-run server (Ollama, TEI, …). Remote is the same call plus an API key.
 - Endpoints are user-configured. There is no built-in default vendor. Chat, embedding, rerank, VLM, and Audio share one Settings page; see [SETTINGS.md](../SETTINGS.md).

@@ -22,7 +22,7 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 		setProbes((current) => ({ ...current, [id]: { state: "checking" } }));
 		const result = await window.loom.probeModelSlot({
 			slot: id,
-			baseUrl: slot.baseUrl,
+			requestUrl: slot.requestUrl,
 			model: slot.model,
 			apiKey: slot.apiKey,
 		});
@@ -53,7 +53,7 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 		// eslint-disable-next-line react-hooks/exhaustive-deps
 	}, []);
 
-	function patchField(id: ModelSlotId, field: "baseUrl" | "model", value: string): void {
+	function patchField(id: ModelSlotId, field: "requestUrl" | "model", value: string): void {
 		const next = { ...draftRef.current[id], [field]: value };
 		draftRef.current = { ...draftRef.current, [id]: next };
 		onChange(id, { [field]: value });
@@ -89,8 +89,8 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 					<label>
 						{t.settings.requestUrl}
 						<input
-							value={draft[id].baseUrl}
-							onChange={(event) => patchField(id, "baseUrl", event.target.value)}
+							value={draft[id].requestUrl}
+							onChange={(event) => patchField(id, "requestUrl", event.target.value)}
 							onBlur={() => void commitSlot(id)}
 							onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
 							placeholder={MODEL_REQUEST_PLACEHOLDERS[id]}

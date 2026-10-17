@@ -36,7 +36,7 @@
   4. 短文一篇一段。
 - **父子：** 先切子切片，再聚合父切片。子切片用来找得准，父切片用来补上下文。先按结构 + 512 / 64 切出全部子切片，再把连续的子切片收成父切片，源文跨度不超过 **2048** token（大约四个子切片）。父切片正文是这段源文，不要把互相重叠的子切片字符串拼起来。父边界不按标题级别。根父节点的 `parent_id` 为空。只有子切片做 embedding。
 - **输入：** Level 1 摘录。没有、失败或过期就先摘录。embed 是单独的用户或 Agent 动作。
-- **Provider：** `EmbeddingProvider`。Loom 不加载、不运行模型。报文是 OpenAI 兼容的 `POST /v1/embeddings`。`baseUrl`、API key、`model` 来自设置页的 Embedding 槽位，见 [设置](../SETTINGS.zh-CN.md)。
+- **Provider：** `EmbeddingProvider`。Loom 不加载、不运行模型。报文是 OpenAI 兼容的 `POST /v1/embeddings`。`requestUrl`、API key、`model` 来自设置页的 Embedding 槽位，见 [设置](../SETTINGS.zh-CN.md)。
 - **存储：** `text_chunks` 按 `asset_id`（切片 id、`parent_id`、角色、偏移、原文、mtime；子切片另存向量 + 模型名）。不塞进 `asset_metadata`。打开库时加载 sqlite-vec，用 `vec_distance_cosine` 打这些 blob。不上 `vec0` 表：维度跟着 Embedding 槽位。扩展没有就用 JavaScript 算同一套余弦。
 - **失效：** 和 Level 1 一样看 mtime。rename/move 不重跑。换 embedding 模型则这些行作废。
 
@@ -59,6 +59,6 @@
 
 Loom 只当 HTTP 客户端。不随包装权重，不上 ONNX，不在进程里跑模型。
 
-- **报文：** OpenAI 兼容的 `POST {baseUrl}/v1/embeddings`，body 为 `{ model, input }`。
+- **报文：** OpenAI 兼容的 `POST {requestUrl}`，body 为 `{ model, input }`。
 - **本地或远程：** 同一套字段。本地是用户自己起的服务（Ollama、TEI 等）。远程是同一套调用，外加 API key。
 - 端点由用户配置，不内置默认供应商。Chat、embedding、rerank、VLM、Audio 共用一个设置页，见 [SETTINGS.md](../SETTINGS.zh-CN.md)。

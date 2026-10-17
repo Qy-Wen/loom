@@ -42,7 +42,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 		await expect(settings).toHaveCount(0);
 		const saved = await loomPage.evaluate(() => window.loom.getModelSettings());
 		for (const row of rows) {
-			expect(saved[row.id].baseUrl).toBe(origin + row.path);
+			expect(saved[row.id].requestUrl).toBe(origin + row.path);
 			expect(calls.filter((call) => call.model === `test-${row.id}`)).toEqual([
 				{ path: row.path, method: "POST", model: `test-${row.id}` },
 			]);
@@ -57,7 +57,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 		await expect(settings.getByRole("alert")).toContainText("Request URL");
 		await embedding.getByRole("switch", { name: "Enable Text embedding", exact: true }).locator("..").click();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.enabled).toBe(false);
-		expect((await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.baseUrl).toBe(origin + rows[0].path);
+		expect((await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.requestUrl).toBe(origin + rows[0].path);
 		await expect(url).toHaveValue("invalid-in-progress");
 	} finally {
 		if (await settings.count()) await settings.getByRole("button", { name: "Close settings", exact: true }).click();

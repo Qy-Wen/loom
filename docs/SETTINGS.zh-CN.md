@@ -33,7 +33,7 @@
 
 每个槽位存：
 
-- `baseUrl`：完整 HTTP(S) **请求 URL**，包含接口路径及可选查询参数。不补版本/路径，不改写地址。例如 `https://…/v1/embeddings`、`https://…/v2/rerank`、`https://…/v1/chat/completions`。
+- `requestUrl`：完整 HTTP(S) **请求 URL**，包含接口路径及可选查询参数。不补版本/路径，不改写地址。例如 `https://…/v1/embeddings`、`https://…/v2/rerank`、`https://…/v1/chat/completions`。
 - `apiKey`（远程托管一般要填；本地服务常常不需要）
 - `model`
 - `enabled`（每个槽位右边的开关）

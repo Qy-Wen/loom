@@ -1214,14 +1214,14 @@ async function embedAssetWithSettings(assetId: string, signal?: AbortSignal) {
 async function embeddingProviderFromSettings(): Promise<EmbeddingProvider | undefined> {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).embedding;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) return undefined;
+	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) return undefined;
 	return createHttpEmbeddingProvider(slot);
 }
 
 async function rerankProviderFromSettings(): Promise<RerankProvider | undefined> {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).rerank;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) return undefined;
+	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) return undefined;
 	return createHttpRerankProvider(slot);
 }
 
@@ -1276,7 +1276,7 @@ async function restoreLastLibrary(): Promise<void> {
 async function describeImageWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).vlm;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
 	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), signal);
@@ -1285,7 +1285,7 @@ async function describeImageWithSettings(assetId: string, signal?: AbortSignal) 
 async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).vlm;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the VLM slot in Settings first.");
 	}
 	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), signal);
@@ -1294,7 +1294,7 @@ async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) 
 async function describeAudioWithSettings(assetId: string, signal?: AbortSignal) {
 	if (!modelSettings) throw new Error("Settings store not started");
 	const slot = (await modelSettings.load()).audio;
-	if (!slot.enabled || !slot.baseUrl.trim() || !slot.model.trim()) {
+	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
 		throw new Error("Enable the Audio slot in Settings first.");
 	}
 	return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), signal);

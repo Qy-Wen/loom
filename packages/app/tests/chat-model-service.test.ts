@@ -219,14 +219,14 @@ test("native dynamic refresh/cache restoration preserves native metadata and ret
 	assert.equal(fetches, 2); assert.equal(reopened.models.getModel("dynamic", "published")!.contextWindow, 32000);
 });
 
-test("runtime env bootstrap uses deepseek-flash and does not overwrite existing prepared configuration", async (t) => {
+test("runtime env bootstrap enables DeepSeek without choosing a model or overwriting saved configuration", async (t) => {
 	const { stores } = await workspace(t);
 	const env = { DEEPSEEK_API_KEY: "ENV_PRIVATE" };
 	const service = new ChatModelService(stores, { authContext: { ...noEnv, env: async (name) => env[name as keyof typeof env] } });
 	await service.initialize(env);
 	assert.equal(service.defaultSelection, undefined);
 	assert.equal(await service.selectionForNewSession(), undefined);
-	assert.equal(service.isModelEnabled("deepseek", "deepseek-flash"), true);
+	assert.deepEqual(service.config.providers, [{ kind: "builtin", id: "deepseek", enabled: true }]);
 	assert.deepEqual(await stores.credentials.list(), []); assert.ok(!JSON.stringify(await service.view()).includes("ENV_PRIVATE"));
 	await service.save({ version: 1, providers: [] });
 	const reopen = new ChatModelService(stores); await reopen.initialize(env);

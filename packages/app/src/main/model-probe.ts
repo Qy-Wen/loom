@@ -7,20 +7,20 @@ const TIMEOUT_MS = 8_000;
 
 export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResult> {
 	try {
-		const baseUrl = modelRequestUrl(draft.baseUrl);
+		const requestUrl = modelRequestUrl(draft.requestUrl);
 		const model = draft.model.trim();
 		if (!model) throw new Error("Model is required");
 		const apiKey = draft.apiKey?.trim() ?? "";
 		switch (draft.slot) {
 			case "vlm":
 			case "audio":
-				await probeChatLike(baseUrl, model, apiKey);
+				await probeChatLike(requestUrl, model, apiKey);
 				break;
 			case "embedding":
-				await probeEmbedding(baseUrl, model, apiKey);
+				await probeEmbedding(requestUrl, model, apiKey);
 				break;
 			case "rerank":
-				await probeRerank(baseUrl, model, apiKey);
+				await probeRerank(requestUrl, model, apiKey);
 				break;
 		}
 		return { ok: true };
@@ -30,20 +30,20 @@ export async function probeModelSlot(draft: ModelProbeDraft): Promise<ProbeResul
 }
 
 // A tiny text request checks the exact endpoint, not image/audio capability.
-async function probeChatLike(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	await probeJson("POST", baseUrl, apiKey, {
+async function probeChatLike(requestUrl: string, model: string, apiKey: string): Promise<void> {
+	await probeJson("POST", requestUrl, apiKey, {
 		model,
 		max_tokens: 1,
 		messages: [{ role: "user", content: "ping" }],
 	});
 }
 
-async function probeEmbedding(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	await createHttpEmbeddingProvider({ baseUrl, apiKey, model }).embed(["ping"], AbortSignal.timeout(TIMEOUT_MS));
+async function probeEmbedding(requestUrl: string, model: string, apiKey: string): Promise<void> {
+	await createHttpEmbeddingProvider({ requestUrl, apiKey, model }).embed(["ping"], AbortSignal.timeout(TIMEOUT_MS));
 }
 
-async function probeRerank(baseUrl: string, model: string, apiKey: string): Promise<void> {
-	await createHttpRerankProvider({ baseUrl, apiKey, model }).rerank("ping", ["pong"], AbortSignal.timeout(TIMEOUT_MS));
+async function probeRerank(requestUrl: string, model: string, apiKey: string): Promise<void> {
+	await createHttpRerankProvider({ requestUrl, apiKey, model }).rerank("ping", ["pong"], AbortSignal.timeout(TIMEOUT_MS));
 }
 
 async function probeJson(

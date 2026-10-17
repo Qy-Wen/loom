@@ -141,8 +141,8 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		const slot = { ...modelDraft.current[id], ...patch };
 		const onlyDisable = patch?.enabled === false;
 		try {
-			if (!onlyDisable && slot.baseUrl.trim()) modelRequestUrl(slot.baseUrl);
-			if (slot.enabled && (!slot.baseUrl.trim() || !slot.model.trim())) throw new Error(t.settings.modelNeedsEndpoint);
+			if (!onlyDisable && slot.requestUrl.trim()) modelRequestUrl(slot.requestUrl);
+			if (slot.enabled && (!slot.requestUrl.trim() || !slot.model.trim())) throw new Error(t.settings.modelNeedsEndpoint);
 		} catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); return false; }
 		const saved = await persist(async () => {
 			const committedSlot = onlyDisable ? { ...savedModels.current![id], enabled: false } : slot;

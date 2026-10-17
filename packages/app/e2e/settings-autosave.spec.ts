@@ -69,7 +69,7 @@ test("model text saves on Enter or blur; invalid sibling drafts do not block oth
 		const url = slot.getByRole("textbox", { name: "Request URL", exact: true });
 		const model = slot.getByRole("textbox", { name: "Model", exact: true });
 		await url.fill("https://example.com/v2/embeddings"); await url.press("Enter");
-		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.baseUrl).toBe("https://example.com/v2/embeddings");
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.requestUrl).toBe("https://example.com/v2/embeddings");
 		await model.fill("saved-model"); await model.press("Tab");
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.model).toBe("saved-model");
 		await url.fill("invalid-url"); await url.press("Tab");
@@ -86,7 +86,7 @@ test("model text saves on Enter or blur; invalid sibling drafts do not block oth
 		await other.getByRole("textbox", { name: "Model", exact: true }).fill("other-saved-model");
 		await other.getByRole("textbox", { name: "Model", exact: true }).press("Enter");
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).rerank.model).toBe("other-saved-model");
-		expect((await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.baseUrl).toBe("https://example.com/v2/embeddings");
+		expect((await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.requestUrl).toBe("https://example.com/v2/embeddings");
 		await expect(url).toHaveValue("invalid-url");
 		await url.fill("https://example.com/v2/embeddings"); await url.press("Enter");
 		await slot.getByRole("button", { name: "Text embedding API key", exact: true }).click();
