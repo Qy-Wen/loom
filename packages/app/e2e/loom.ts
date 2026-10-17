@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { test as base, chromium, expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
 
-/** Point the app's Chat runtime at an OpenAI-compatible test endpoint (keyless custom provider). */
+/** Native OpenAI adapters require a key even for mock servers that ignore authentication. */
 export async function saveChatEndpoint(page: Page, baseUrl: string, options: { model?: string; contextWindow?: number } = {}): Promise<void> {
 	await page.evaluate(async ({ baseUrl, model, contextWindow }) => {
 		const view = await window.loom.getChatSettings();
@@ -17,6 +17,11 @@ export async function saveChatEndpoint(page: Page, baseUrl: string, options: { m
 			models: [{ id: model ?? "demo", reasoning: false, input: ["text"], contextWindow: contextWindow ?? 128_000, maxTokens: 8192 }],
 		});
 		await window.loom.saveChatSettings({ ...view.config, providers, default: { provider: "e2e-chat", modelId: model ?? "demo", thinkingLevel: "off" } });
+		const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
+			if (prompt.type === "secret") void window.loom.chatLoginResponse("e2e-placeholder");
+		});
+		try { await window.loom.chatLogin("e2e-chat", "api_key"); }
+		finally { unsubscribe(); }
 	}, { baseUrl, model: options.model, contextWindow: options.contextWindow });
 }
 

@@ -78,6 +78,7 @@ import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store
 import { ModelSettingsStore, settingsView } from "./model-settings-store.ts";
 import { createChatStorage } from "./chat-storage.ts";
 import { ChatModelService } from "./chat-model-service.ts";
+import { applyChatSettingsPatch, publicChatSettings } from "./chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 
@@ -189,7 +190,7 @@ const BUILTIN_TOOLS = [
 	...createRelationTools(localCore),
 	...createPropertyTools(localCore),
 	...createSettingsTools({
-		read: () => readPublicSettings(),
+		read: (chatProvider) => readPublicSettings(chatProvider),
 		apply: (patch) => applySettingsPatch(patch),
 	}),
 ];
@@ -1366,22 +1367,38 @@ function notifySettingsChanged(): void {
 	}
 }
 
-async function readPublicSettings(): Promise<PublicSettings> {
-	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
-	const [models, servers, sandbox, instructions] = await Promise.all([
+async function readPublicSettings(chatProvider?: string): Promise<PublicSettings> {
+	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions || !generalSettings) throw new Error("Settings store not started");
+	const [models, servers, sandbox, instructions, general, chat] = await Promise.all([
 		modelSettings.load(),
 		mcpSettings.drafts(),
 		agentSandbox.load(),
 		agentInstructions.load(),
+		generalSettings.load(),
+		publicChatSettings(requireChatService(), chatProvider),
 	]);
 	const slots = {} as PublicSettings["models"];
 	for (const id of Object.keys(models) as Array<keyof typeof models>) slots[id] = publicModelSlot(models[id]);
-	return { models: slots, sandbox, instructions, mcp: servers.map(publicMcpServer) };
+	return { language: general.language, chat, models: slots, sandbox, instructions, mcp: servers.map(publicMcpServer) };
 }
 
 async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string[]; settings: PublicSettings }> {
 	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
 	const notes: string[] = [];
+	if (patch.language !== undefined) {
+		if (!generalSettings) throw new Error("Settings store not started");
+		await generalSettings.save({ ...await generalSettings.load(), language: patch.language });
+		notes.push("Interface language saved.");
+		notifySettingsChanged();
+	}
+	if (patch.chat) {
+		const service = requireChatService();
+		try { notes.push(...await applyChatSettingsPatch(service, patch.chat)); }
+		finally {
+			requireAgentManager().setChatDefault(await service.selectionForNewSession());
+			notifyChatSettingsChanged();
+		}
+	}
 	if (patch.models) {
 		const before = await modelSettings.load();
 		const file = await modelSettings.update(modelDraftForPatch(before, patch.models));

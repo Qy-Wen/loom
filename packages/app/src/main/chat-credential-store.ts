@@ -77,11 +77,19 @@ export class ChatCredentialStore implements CredentialStore {
 			return { value: next, result: structuredClone(payload.credential) };
 		}, options);
 	}
+	/** Clear a stored API key without racing OAuth updates or removing encrypted header secrets. */
+	async clearApiKey(id: string, options?: StorageOptions): Promise<void> {
+		return this.removeCredential(id, true, options);
+	}
 	async delete(id: string, options?: StorageOptions): Promise<void> {
+		return this.removeCredential(id, false, options);
+	}
+	private async removeCredential(id: string, apiKeyOnly: boolean, options?: StorageOptions): Promise<void> {
 		validateStorageId(id);
 		await this.file.update(async (current) => {
 			if (!this.entry(current, id)) return { result: undefined };
 			const payload = this.decode(this.entry(current, id));
+			if (apiKeyOnly && payload.credential?.type !== "api_key") return { result: undefined };
 			delete payload.credential;
 			if (Object.keys(payload.secrets).length) current!.entries[id] = this.encode(payload);
 			else delete current!.entries[id];

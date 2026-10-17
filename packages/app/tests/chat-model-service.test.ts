@@ -267,6 +267,8 @@ test("Host guards atomic Provider publication against running/queued/compaction 
 	try {
 		const changed = structuredClone(input); changed.providers[0]!.enabled = false;
 		await assert.rejects(() => service.save(changed), /busy/);
+		await assert.rejects(() => service.save(input, [{ providerId: "local", key: "busy-private" }]), /busy/);
+		assert.equal(await stores.credentials.read("local"), undefined);
 		await assert.rejects(() => host.withIdleChatProviders(["local"], async () => {}), /busy/);
 		await service.save({ ...input, default: { ...input.default!, thinkingLevel: "off" } });
 	} finally { release.resolve(); await submission.wait(context); await queued.wait(context); }
@@ -278,7 +280,11 @@ test("Host guards atomic Provider publication against running/queued/compaction 
 	host.requireOwner().registry.install(compactHook); await conversation.configure({ extensions: { add: [compactHook] } }, context);
 	await conversation.commit(async (tx) => { for (let i = 0; i < 4; i++) await tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "old context ".repeat(5000), timestamp: i }] }); }, context);
 	const task = await conversation.compact(undefined, context); await compactEntered.promise;
-	try { await assert.rejects(() => host.withIdleChatProviders(["local"], async () => {}), /busy/); }
+	try {
+		await assert.rejects(() => host.withIdleChatProviders(["local"], async () => {}), /busy/);
+		await assert.rejects(() => service.save(input, [{ providerId: "local", key: "compact-private" }]), /busy/);
+		assert.equal(await stores.credentials.read("local"), undefined);
+	}
 	finally { compactRelease.resolve(); await host.requireOwner().harness.waitForTask(task, context); }
 	const changed = structuredClone(input); changed.providers[0]!.enabled = false; await service.save(changed);
 	assert.equal(service.models.getProvider("local"), undefined);

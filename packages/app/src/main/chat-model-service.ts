@@ -193,17 +193,25 @@ export class ChatModelService {
 		config.providers.push({ kind: "builtin", id: provider.id, enabled: true });
 		return config;
 	}
-	async save(input: ChatModelsConfig): Promise<void> {
+	async save(input: ChatModelsConfig, apiKeys: readonly { providerId: string; key: string | null }[] = []): Promise<void> {
 		if (!this.#initialized) throw new Error("Chat runtime is not initialized");
 		const prepared = await this.assemble(input);
 		const old = new Map(this.#config.providers.map((provider) => [provider.id, JSON.stringify(provider)]));
 		const next = new Map(prepared.config.providers.map((provider) => [provider.id, JSON.stringify(provider)]));
 		const changed = [...new Set([...old.keys(), ...next.keys()])].filter((id) => old.get(id) !== next.get(id));
-		await this.mutation(changed, async () => {
+		for (const { providerId, key } of apiKeys) {
+			if (!prepared.providers.get(providerId)?.auth.apiKey) throw new Error("Chat provider does not support API-key configuration");
+			if (key !== null && !key.trim()) throw new Error("API key must not be empty; use clearApiKey instead");
+			this.remember([key ?? undefined]);
+		}
+		// Include key-only edits in the same busy-provider admission guard as config changes.
+		const affected = [...new Set([...changed, ...apiKeys.map((row) => row.providerId)])];
+		await this.mutation(affected, async () => {
+			for (const { providerId, key } of apiKeys) await this.writeApiKey(providerId, key);
 			await this.stores.config.save(prepared.config);
 			this.publish(prepared.config, prepared.providers, changed);
 			// Restore offline without releasing the admission/publication guard after the config commit.
-			if (changed.length) await this.refreshNative({ providers: changed, allowNetwork: false, signal: AbortSignal.timeout(10_000) });
+			if (affected.length) await this.refreshNative({ providers: affected, allowNetwork: false, signal: AbortSignal.timeout(10_000) });
 		});
 	}
 	/** Run a provider login flow (API key or OAuth) and persist the returned credential. */
@@ -243,6 +251,15 @@ export class ChatModelService {
 			signal.throwIfAborted();
 			throw new Error("Could not load the configured API key");
 		}
+	}
+	private async writeApiKey(providerId: string, key: string | null): Promise<void> {
+		try {
+			if (key === null) { await this.stores.credentials.clearApiKey(providerId); return; }
+			await this.stores.credentials.modify(providerId, async (current) => {
+				this.rememberCredential(current);
+				return { type: "api_key", key, ...(current?.type === "api_key" && current.env ? { env: current.env } : {}) };
+			});
+		} catch { throw new Error("Could not save the Chat API key"); }
 	}
 	async logout(providerId: string): Promise<void> {
 		if (!this.#initialized) throw new Error("Chat runtime is not initialized");

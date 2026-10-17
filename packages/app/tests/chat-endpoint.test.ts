@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chatEndpointUrl, ChatEndpointError, detectChatEndpoint, parseChatEndpoint } from "../src/renderer/settings/chat-endpoint.ts";
+import { chatEndpointUrl, ChatEndpointError, detectChatEndpoint, parseChatEndpoint } from "../src/shared/chat-endpoint.ts";
 import { buildCustomProvider, customProviderDraft, CustomDraftError } from "../src/renderer/settings/chat-custom-draft.ts";
 
 for (const [url, api, baseUrl] of [

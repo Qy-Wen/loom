@@ -16,9 +16,15 @@ export function LocaleProvider({ children }: { children: ReactNode }): React.JSX
 	const t = messagesFor(language);
 
 	useEffect(() => {
-		void window.loom.getGeneralSettings().then((settings) => {
-			setChoice(settings.language);
-		}).catch(() => undefined);
+		let disposed = false;
+		const reload = () => {
+			void window.loom.getGeneralSettings().then((settings) => {
+				if (!disposed) setChoice(settings.language);
+			}).catch(() => undefined);
+		};
+		reload();
+		const unsubscribe = window.loom.onSettingsChanged(reload);
+		return () => { disposed = true; unsubscribe(); };
 	}, []);
 
 	useEffect(() => {

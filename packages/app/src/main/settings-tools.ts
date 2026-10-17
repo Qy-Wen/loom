@@ -1,4 +1,6 @@
 import type { LoomTool } from "@loom/agent";
+import { APP_LANGUAGE_CHOICES, type AppLanguageChoice } from "../shared/general-settings.ts";
+import { chatSettingsPatchSchema, parseChatSettingsPatch, type ChatSettingsPatch, type publicChatSettings } from "./chat-settings-tools.ts";
 import { emptyMcpServerDraft, envToText, linesOf, type McpServerDraft } from "../shared/mcp-settings.ts";
 import {
 	MODEL_SLOTS,
@@ -29,6 +31,8 @@ export interface PublicMcpServer {
 }
 
 export interface PublicSettings {
+	language: AppLanguageChoice;
+	chat: Awaited<ReturnType<typeof publicChatSettings>>;
 	models: Record<ModelSlotId, PublicModelSlot>;
 	sandbox: boolean;
 	instructions: string;
@@ -36,6 +40,8 @@ export interface PublicSettings {
 }
 
 export interface SettingsPatch {
+	language?: AppLanguageChoice;
+	chat?: ChatSettingsPatch;
 	models?: Partial<Record<ModelSlotId, SlotPatch>>;
 	sandbox?: boolean;
 	instructions?: string;
@@ -63,7 +69,7 @@ interface McpUpsert {
 }
 
 export interface SettingsToolHost {
-	read(): Promise<PublicSettings>;
+	read(chatProvider?: string): Promise<PublicSettings>;
 	apply(patch: SettingsPatch): Promise<{ notes: string[]; settings: PublicSettings }>;
 }
 
@@ -163,7 +169,13 @@ function mergeMcpServer(current: McpServerDraft | undefined, upsert: McpUpsert):
 
 export function parseSettingsPatch(value: unknown): SettingsPatch {
 	const record = asRecord(value, "update_settings arguments must be an object");
+	if (Object.keys(record).some((key) => !["language", "chat", "models", "sandbox", "instructions", "mcp"].includes(key))) throw new Error("Unknown settings field");
 	const patch: SettingsPatch = {};
+	if ("language" in record && record.language !== undefined) {
+		if (!(APP_LANGUAGE_CHOICES as readonly unknown[]).includes(record.language)) throw new Error("language must be system, en, or zh-CN");
+		patch.language = record.language as AppLanguageChoice;
+	}
+	if ("chat" in record && record.chat !== undefined) patch.chat = parseChatSettingsPatch(record.chat);
 	if ("models" in record && record.models !== undefined) patch.models = parseModels(record.models);
 	if ("sandbox" in record && record.sandbox !== undefined) {
 		if (typeof record.sandbox !== "boolean") throw new Error("sandbox must be true or false.");
@@ -174,7 +186,7 @@ export function parseSettingsPatch(value: unknown): SettingsPatch {
 		patch.instructions = record.instructions;
 	}
 	if ("mcp" in record && record.mcp !== undefined) patch.mcp = parseMcp(record.mcp);
-	if (!patch.models && patch.sandbox === undefined && patch.instructions === undefined && !patch.mcp) {
+	if (patch.language === undefined && !patch.chat && !patch.models && patch.sandbox === undefined && patch.instructions === undefined && !patch.mcp) {
 		throw new Error("update_settings needs at least one change.");
 	}
 	return patch;
@@ -297,16 +309,24 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 		{
 			name: "get_settings",
 			description:
-				"Read app settings: four model slots (Embedding, Rerank, VLM, Audio), the process sandbox, standing instructions, and MCP servers. " +
-				"API keys are reported only as hasApiKey. MCP env and headers are reported only as hasEnv and hasHeaders. Chat models are configured in Settings - Models.",
-			parameters: { type: "object", properties: {}, additionalProperties: false },
-			execute: async () => JSON.stringify(await host.read(), null, 2),
+				"Read app language, Chat providers/model capabilities/auth status, four other model slots, sandbox, instructions, and MCP. " +
+				"Secrets are never returned. Chat catalog lists provider summaries; pass chatProvider to inspect that provider's model catalog before configuring it.",
+			parameters: { type: "object", properties: { chatProvider: { type: "string", description: "Provider ID whose full Chat model catalog should be included (configured or built-in)." } }, additionalProperties: false },
+			execute: async (raw) => {
+				const args = asRecord(raw, "get_settings arguments must be an object");
+				if (Object.keys(args).some((key) => key !== "chatProvider")) throw new Error("Unknown get_settings argument");
+				const chatProvider = args.chatProvider === undefined ? undefined : needString(args.chatProvider, "chatProvider");
+				return JSON.stringify(await host.read(chatProvider), null, 2);
+			},
 		},
 		{
 			name: "update_settings",
 			description:
 				"Change app settings. Omit a field to leave it unchanged. " +
-				"models accepts embedding, rerank, vlm, and audio; Chat models are configured in Settings - Models. " +
+				"language accepts system, en, zh-CN. chat.upsert adds/patches built-in or custom providers; chat.remove removes them; chat.refresh refreshes supported catalogs. " +
+				"Custom providers need kind=custom, models and requestUrl (auto protocol) or baseUrl + api. models replaces a custom model list; modelEnabled merges per-ID switches. " +
+				"Chat apiKey/clearApiKey are write-only and use encrypted storage; clearing preserves OAuth and cannot clear environmental keys. No interactive OAuth or conversation-model changes. Existing conversations keep their choices. " +
+				"models accepts embedding, rerank, vlm, and audio. " +
 				"apiKey replaces the stored key and stays in this chat; clearApiKey removes it. " +
 				"sandbox and instructions match Settings → Agent. Instructions apply on the next message, not this one. " +
 				"mcp.upsert adds or updates a server by id (stdio needs command; http needs url). mcp.remove deletes by id. Enabled servers reconnect. " +
@@ -315,10 +335,12 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 			parameters: {
 				type: "object",
 				properties: {
+					language: { type: "string", enum: [...APP_LANGUAGE_CHOICES] },
+					chat: chatSettingsPatchSchema(),
 					models: {
 						type: "object",
 						properties: {
-								embedding: SLOT_FIELDS,
+							embedding: SLOT_FIELDS,
 							rerank: SLOT_FIELDS,
 							vlm: SLOT_FIELDS,
 							audio: SLOT_FIELDS,

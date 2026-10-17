@@ -2,7 +2,7 @@ import {
 	parseChatConfig, validateChatBaseUrl,
 	type ChatApi, type ChatCustomModelConfig, type ChatCustomProviderConfig, type ChatModelsConfig,
 } from "@loom/agent/chat-models";
-import { chatEndpointUrl, ChatEndpointError, parseChatEndpoint } from "./chat-endpoint.ts";
+import { chatEndpointUrl, ChatEndpointError, parseChatEndpoint } from "../../shared/chat-endpoint.ts";
 
 export type CustomModelDraft = {
 	key: number;

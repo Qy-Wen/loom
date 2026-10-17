@@ -26,6 +26,18 @@ describe("settings tools", () => {
 		assert.equal(draft.embedding.enabled, true);
 	});
 
+	it("supports only the requested language choices", () => {
+		for (const language of ["system", "en", "zh-CN"] as const) assert.deepEqual(parseSettingsPatch({ language }), { language });
+		for (const language of ["zh", "fr", null, true]) assert.throws(() => parseSettingsPatch({ language }), /language/);
+		assert.throws(() => parseSettingsPatch({ reopenLastLibrary: true }));
+	});
+
+	it("accepts Chat key writes, but not OAuth tokens or composer defaults", () => {
+		assert.deepEqual(parseSettingsPatch({ chat: { upsert: [{ id: "openai", enabled: true, apiKey: "write-only" }] } }), { chat: { upsert: [{ id: "openai", enabled: true, apiKey: "write-only" }] } });
+		assert.throws(() => parseSettingsPatch({ chat: { upsert: [{ id: "openai", access: "oauth-private" }] } }), /Unknown Chat/);
+		assert.throws(() => parseSettingsPatch({ chat: { default: { provider: "openai", modelId: "demo" } } }), /Unknown Chat/);
+	});
+
 	it("requires at least one change", () => {
 		assert.throws(() => parseSettingsPatch({}), /at least one change/);
 	});
@@ -60,6 +72,8 @@ describe("settings tools", () => {
 
 	it("reads through get_settings and writes a partial patch", async () => {
 		const settings: PublicSettings = {
+			language: "en",
+			chat: { providers: [], models: [], catalog: [], refreshErrors: {} },
 			models: {
 				embedding: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
 				rerank: { baseUrl: "", model: "", enabled: false, hasApiKey: false },
@@ -71,14 +85,17 @@ describe("settings tools", () => {
 			mcp: [],
 		};
 		let seen: SettingsPatch | undefined;
+		let providerRead: string | undefined;
 		const [getSettings, updateSettings] = createSettingsTools({
-			read: async () => settings,
+			read: async (provider) => { providerRead = provider; return settings; },
 			apply: async (patch) => {
 				seen = patch;
 				return { notes: ["saved"], settings };
 			},
 		});
 		assert.equal(await getSettings?.execute({}), JSON.stringify(settings, null, 2));
+		await getSettings?.execute({ chatProvider: "openai" });
+		assert.equal(providerRead, "openai");
 		const raw = await updateSettings?.execute({ sandbox: false, models: { embedding: { model: "demo", apiKey: "sk-test" } } });
 		assert.equal(seen?.sandbox, false);
 		assert.equal(seen?.models?.embedding?.model, "demo");

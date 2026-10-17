@@ -2,7 +2,7 @@ import { useRef, useState } from "react";
 import { CHAT_APIS, validateChatBaseUrl, type ChatApi, type ChatCustomProviderConfig } from "@loom/agent/chat-models";
 import { useLocale } from "../locale.tsx";
 import { buildCustomProvider, customModelDraft, customProviderDraft, CustomDraftError, type CustomModelDraft } from "./chat-custom-draft.ts";
-import { chatEndpointUrl, detectChatEndpoint } from "./chat-endpoint.ts";
+import { chatEndpointUrl, detectChatEndpoint } from "../../shared/chat-endpoint.ts";
 
 const API_LABELS: Record<ChatApi, string> = {
 	"openai-completions": "OpenAI Chat Completions",
