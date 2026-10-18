@@ -5,15 +5,15 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fork } from "node:child_process";
 import { once } from "node:events";
-import { traceModels } from "../src/trace-models.ts";
+import { traceModels } from "../src/trace/trace-models.ts";
 import { Type } from "@earendil-works/pi-ai";
 import { fauxProvider, fauxAssistantMessage as answer, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, DurableTrace, TraceStore,
 	defineExtension, defineTool, createSpecialistExtension, ToolGate, LoomApprovalsDoc, clearPendingApprovals,
 } from "../src/durable.ts";
-import { TracePrivacy } from "../src/trace-privacy.ts";
-import { splitTraceBlobs } from "../src/trace-blob.ts";
+import { TracePrivacy } from "../src/trace/trace-privacy.ts";
+import { splitTraceBlobs } from "../src/trace/trace-blob.ts";
 
 async function temporary(run: (root: string) => Promise<void>) {
 	const root = await mkdtemp(join(tmpdir(), "loom-trace-"));

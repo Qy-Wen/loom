@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, test } from "node:test";
-import { probeModelSlot } from "../src/main/model-probe.ts";
+import { probeModelSlot } from "../src/main/models/model-probe.ts";
 
 const originalFetch = globalThis.fetch;
 afterEach(() => { globalThis.fetch = originalFetch; });

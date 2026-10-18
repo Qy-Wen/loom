@@ -51,9 +51,10 @@ import {
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
 import { LibraryOpenButton, LibrarySidebar, SettingsButton, SidebarToggle, TracesButton } from "./library/library-sidebar.tsx";
-import { ErrorToast } from "./panel/error-toast.tsx";
-import { runActivityRenderers } from "./panel/run-activity.tsx";
-import { AgentPanel, DetailsPanel } from "./panel/side-panel.tsx";
+import { ErrorToast } from "./components/error-toast.tsx";
+import { runActivityRenderers } from "./chat/run-activity.tsx";
+import { AgentPanel } from "./chat/agent-panel.tsx";
+import { DetailsPanel } from "./details/details-panel.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";

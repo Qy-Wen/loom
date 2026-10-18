@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
 import type { LoomToolResult } from "@loom/agent";
-import { createRelationTools } from "../src/main/relation-tools.ts";
+import { createRelationTools } from "../src/main/tools/relation-tools.ts";
 
 test("create_relation and remove_relation write and delete one edge", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-relation-tools-"));

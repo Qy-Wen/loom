@@ -12,7 +12,7 @@ import {
 	publicModelSlot,
 	type PublicSettings,
 	type SettingsPatch,
-} from "../src/main/settings-tools.ts";
+} from "../src/main/tools/settings-tools.ts";
 
 describe("settings tools", () => {
 	it("hides keys", () => {

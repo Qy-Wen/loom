@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { CHAT_APIS, emptyChatConfig, parseChatConfig, type ChatCustomProviderConfig, type ChatModelsConfig } from "../src/chat-model-config.ts";
+import { CHAT_APIS, emptyChatConfig, parseChatConfig, type ChatCustomProviderConfig, type ChatModelsConfig } from "../src/models/chat-model-config.ts";
 
 function custom(): ChatCustomProviderConfig { return { kind: "custom", id: "local", enabled: true, api: "openai-completions", baseUrl: "http://localhost:11434/v1", allowUnauthenticated: true,
 	models: [{ id: "qwen:latest", reasoning: true, input: ["text"], contextWindow: 32000, maxTokens: 8192, thinkingLevelMap: { high: "high" }, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 } }],

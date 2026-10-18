@@ -44,6 +44,12 @@ Built on [pi durable](https://github.com/earendil-works/pi/tree/main/packages/du
 
 These are code boundaries: core capabilities and the agent runtime currently run in the Electron main process.
 
+Source files follow feature ownership:
+
+- `agent/src`: `runtime`, `models`, `context`, `extensions`, `tools`, and `trace`; public facades, the vendor import boundary, and package-wide contracts stay at the root.
+- `app/src/main`: `desktop`, `chat`, `composer`, `models`, `settings`, `tools`, and `mcp`. Storage stays with its feature.
+- `app/src/renderer`: chat and asset details live in `chat` and `details`; shared UI controls live in `components`. `app/src/shared` holds cross-process contracts and pure helpers; `preload` bridges typed IPC.
+
 ## Development
 
 ```bash

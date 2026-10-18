@@ -12,7 +12,7 @@
 import { pathToFileURL } from "node:url";
 import { CompactionEntry, watchEvents, type AgentEvent } from "../src/durable.ts";
 import { estimateMessageTokens } from "@earendil-works/pi-ai/utils/estimate";
-import { userTextFromContent } from "../src/attachments.ts";
+import { userTextFromContent } from "../src/context/attachments.ts";
 import { openEvalAgent, context } from "./runtime.ts";
 
 /** Deliberately small so a few fat turns cross window - reserve. */

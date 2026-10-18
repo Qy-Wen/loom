@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { systemPromptForLibrary } from "../src/main/agent-prompt.ts";
+import { systemPromptForLibrary } from "../src/main/chat/agent-prompt.ts";
 
 describe("systemPromptForLibrary", () => {
 	it("names the open asset library as the working directory", () => {

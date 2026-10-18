@@ -1,5 +1,5 @@
 import { createCipheriv, createDecipheriv, randomBytes } from "node:crypto";
-import type { ChatSecretCipher } from "../../src/main/chat-credential-store.ts";
+import type { ChatSecretCipher } from "../../src/main/models/chat-credential-store.ts";
 
 /** Authenticated encryption for tests; production uses OS-backed Electron safeStorage only. */
 export function testChatCipher(key = randomBytes(32)): ChatSecretCipher {

@@ -12,10 +12,10 @@ import { createModels, createProvider } from "@earendil-works/pi-ai/models";
 import { fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { builtinProviders, getAllBuiltinModels } from "@earendil-works/pi-ai/providers/all";
 import type { AnyModel, Credential } from "@earendil-works/pi-ai";
-import { ChatCredentialStore } from "../src/main/chat-credential-store.ts";
-import { ChatCatalogStore } from "../src/main/chat-catalog-store.ts";
-import { ChatConfigStore } from "../src/main/chat-config-store.ts";
-import { atomicWrite } from "../src/main/chat-file.ts";
+import { ChatCredentialStore } from "../src/main/models/chat-credential-store.ts";
+import { ChatCatalogStore } from "../src/main/models/chat-catalog-store.ts";
+import { ChatConfigStore } from "../src/main/models/chat-config-store.ts";
+import { atomicWrite } from "../src/main/models/chat-file.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 
 async function workspace(t: { after(fn: () => Promise<void>): void }) {

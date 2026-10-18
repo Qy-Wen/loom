@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { appendAppLog, appLogDirectory } from "../src/main/app-log.ts";
+import { appendAppLog, appLogDirectory } from "../src/main/desktop/app-log.ts";
 
 test("app log directory follows the platform logs folder", () => {
 	assert.equal(appLogDirectory("darwin", {}, "/Users/loom"), join("/Users/loom", "Library", "Logs", "Loom"));

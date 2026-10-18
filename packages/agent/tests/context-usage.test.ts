@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { fauxAssistantMessage, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { calculateContextTokens, estimateMessageTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { BACKGROUND_CONTEXT as context, CompactionEntry, createModels, createRegistry, Harness, MemoryStorage } from "../src/durable.ts";
-import { contextUsage } from "../src/context-usage.ts";
+import { contextUsage } from "../src/runtime/context-usage.ts";
 
 async function fixture(run: (conversation: Awaited<ReturnType<Harness["createConversation"]>>) => Promise<void>) {
 	const harness = await Harness.open(new MemoryStorage(), { models: createModels(), registry: createRegistry() }, context);

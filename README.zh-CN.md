@@ -44,6 +44,12 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 
 这是代码职责边界：core 能力和 Agent 运行时目前都运行在 Electron 主进程。
 
+源文件按功能归属组织：
+
+- `agent/src`：`runtime`、`models`、`context`、`extensions`、`tools`、`trace`；根目录保留公开入口、vendor 导入边界与包级契约。
+- `app/src/main`：`desktop`、`chat`、`composer`、`models`、`settings`、`tools`、`mcp`；存储跟随所属功能。
+- `app/src/renderer`：聊天和素材详情分别放在 `chat`、`details`，共用 UI 控件放在 `components`。`app/src/shared` 存放跨进程契约和纯函数，`preload` 桥接类型化 IPC。
+
 ## 开发
 
 ```bash

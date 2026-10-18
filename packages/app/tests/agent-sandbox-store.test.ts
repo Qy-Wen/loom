@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AgentSandboxStore } from "../src/main/agent-sandbox-store.ts";
+import { AgentSandboxStore } from "../src/main/settings/agent-sandbox-store.ts";
 import { processSandboxActive } from "../src/shared/agent-sandbox.ts";
 
 test("AgentSandboxStore defaults on and round-trips the switch", async () => {

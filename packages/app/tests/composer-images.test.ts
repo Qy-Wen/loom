@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { COMPOSER_IMAGE_MAX_BYTES } from "@loom/agent/composer-image";
-import { stageComposerInput, takeComposerImages } from "../src/main/composer-images.ts";
-import { takeComposerAssets } from "../src/main/composer-assets.ts";
-import { importComposerFiles } from "../src/main/composer-import.ts";
-import { composerFileInputs } from "../src/renderer/panel/composer-files.ts";
+import { stageComposerInput, takeComposerImages } from "../src/main/composer/composer-images.ts";
+import { takeComposerAssets } from "../src/main/composer/composer-assets.ts";
+import { importComposerFiles } from "../src/main/composer/composer-import.ts";
+import { composerFileInputs } from "../src/renderer/chat/composer-files.ts";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const chip = { assetId: "image-1", path: "old.png", assetType: "image" };

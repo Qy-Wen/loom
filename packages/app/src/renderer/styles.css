@@ -7,8 +7,8 @@
 @import "./workbench/preview.css";
 @import "./workbench/markdown.css";
 @import "./layout/dock.css";
-@import "./panel/session.css";
-@import "./panel/activity.css";
-@import "./panel/details.css";
+@import "./chat/session.css";
+@import "./chat/activity.css";
+@import "./details/details.css";
 @import "./workbench/table.css";
 @import "./settings/settings.css";

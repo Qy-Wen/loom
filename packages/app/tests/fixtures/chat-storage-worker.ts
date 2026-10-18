@@ -1,4 +1,4 @@
-import { ChatCredentialStore } from "../../src/main/chat-credential-store.ts";
+import { ChatCredentialStore } from "../../src/main/models/chat-credential-store.ts";
 import { testChatCipher } from "./chat-storage-cipher.ts";
 
 const [path, key] = process.argv.slice(2);

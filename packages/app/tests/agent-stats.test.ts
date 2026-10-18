@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { cacheHitRate, statsView, usagesFromMessages } from "../src/shared/agent-stats.ts";
-import { AgentStatsStore } from "../src/main/agent-stats-store.ts";
+import { AgentStatsStore } from "../src/main/chat/agent-stats-store.ts";
 
 describe("cacheHitRate", () => {
 	it("is cacheRead over the prompt token sum", () => {

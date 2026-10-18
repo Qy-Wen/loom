@@ -5,13 +5,13 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./chat-models": "./src/chat-model-config.ts",
-    "./chat-runtime": "./src/chat-provider.ts",
-    "./composer-image": "./src/composer-image.ts",
-    "./attachments": "./src/attachments.ts",
-    "./composer-asset": "./src/composer-asset.ts",
-    "./tool-permission": "./src/tool-permission.ts",
-    "./trace-blob": "./src/trace-blob.ts",
+    "./chat-models": "./src/models/chat-model-config.ts",
+    "./chat-runtime": "./src/models/chat-provider.ts",
+    "./composer-image": "./src/context/composer-image.ts",
+    "./attachments": "./src/context/attachments.ts",
+    "./composer-asset": "./src/context/composer-asset.ts",
+    "./tool-permission": "./src/tools/tool-permission.ts",
+    "./trace-blob": "./src/trace/trace-blob.ts",
     "./durable": "./src/durable.ts"
   },
   "imports": {

@@ -8,7 +8,7 @@ import {
 	applySettingsDraft,
 	parseSettingsFile,
 	settingsView,
-} from "../src/main/model-settings-store.ts";
+} from "../src/main/models/model-settings-store.ts";
 import { emptySettingsFile, type ModelSettingsDraft } from "../src/shared/model-settings.ts";
 
 function draft(overrides: Partial<ModelSettingsDraft["embedding"]> = {}): ModelSettingsDraft {

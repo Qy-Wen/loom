@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore, tryResolveMediaBinaries } from "@loom/core";
 import { BACKGROUND_CONTEXT, toDurableTool, type LoomToolResult, type ToolExecutionApi } from "@loom/agent";
-import { createFfmpegTools } from "../src/main/ffmpeg-tools.ts";
+import { createFfmpegTools } from "../src/main/tools/ffmpeg-tools.ts";
 
 test("ffmpeg tools require a path and an argv array", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-ffmpeg-tools-"));

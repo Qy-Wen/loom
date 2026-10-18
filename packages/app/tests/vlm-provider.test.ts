@@ -19,7 +19,7 @@ import {
 	vlmFrameRequestBody,
 	vlmRequestBody,
 	vlmVideoRequestBody,
-} from "../src/main/vlm-provider.ts";
+} from "../src/main/models/vlm-provider.ts";
 
 const originalFetch = globalThis.fetch;
 

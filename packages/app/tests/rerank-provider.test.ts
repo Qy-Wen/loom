@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import {
 	createHttpRerankProvider,
 	parseRerankResponse,
-} from "../src/main/rerank-provider.ts";
+} from "../src/main/models/rerank-provider.ts";
 
 const originalFetch = globalThis.fetch;
 

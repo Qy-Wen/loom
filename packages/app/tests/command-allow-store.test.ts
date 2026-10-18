@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { CommandAllowStore } from "../src/main/command-allow-store.ts";
+import { CommandAllowStore } from "../src/main/settings/command-allow-store.ts";
 
 describe("CommandAllowStore", () => {
 	it("keeps remembered commands in the library and forgets them", async () => {

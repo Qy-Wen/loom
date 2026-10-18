@@ -1,7 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { dirname, join } from "node:path";
 import { DEV_TRACE_IPC, type DevTraceRecord } from "../shared/dev-trace.ts";
-import { loadAppIcon } from "./app-icon.ts";
+import { loadAppIcon } from "./desktop/app-icon.ts";
 
 const TITLE = "Traces";
 

@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryRuntime, createModels } from "../src/durable.ts";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
-import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/library-skills.ts";
+import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/extensions/library-skills.ts";
 
 const BODY = "SECRET_BODY_MUST_STAY_OUT_OF_THE_CATALOG";
 

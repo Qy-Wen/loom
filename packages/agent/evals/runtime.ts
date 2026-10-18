@@ -8,7 +8,7 @@ import {
 	createChatCustomProvider,
 	type LibraryRuntimeOptions,
 } from "../src/durable.ts";
-import type { ChatSelection } from "../src/chat-model-config.ts";
+import type { ChatSelection } from "../src/models/chat-model-config.ts";
 import type { LoomTool } from "../src/types.ts";
 
 export type EvalChatEndpoint = { baseUrl: string; apiKey?: string; model: string; contextWindow?: number };

@@ -11,7 +11,7 @@ import {
 	readLibraryAutoMemory,
 	formatAutoMemoryForSystemPrompt,
 	updateLibraryAutoMemory,
-} from "../src/library-auto-memory.ts";
+} from "../src/extensions/library-auto-memory.ts";
 
 test("formatAutoMemoryForSystemPrompt formats saved facts and skips an empty note", () => {
 	assert.equal(formatAutoMemoryForSystemPrompt(""), "");

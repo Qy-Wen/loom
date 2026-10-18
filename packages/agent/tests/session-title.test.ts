@@ -1,4 +1,4 @@
-import { DEFAULT_SESSION_TITLE, titleFromUserText } from "../src/session-title.ts";
+import { DEFAULT_SESSION_TITLE, titleFromUserText } from "../src/runtime/session-title.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 

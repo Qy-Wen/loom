@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
 import type { LoomToolResult } from "@loom/agent";
-import { createPropertyTools } from "../src/main/property-tools.ts";
+import { createPropertyTools } from "../src/main/tools/property-tools.ts";
 
 test("property tools add a column, write a cell, and delete the column", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-property-tools-"));

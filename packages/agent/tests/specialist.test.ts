@@ -9,7 +9,7 @@ import {
 	BACKGROUND_CONTEXT as context, createModels, createSpecialistExtension, defineExtension, defineTool,
 	LibraryRuntime, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry, toDurableTool,
 } from "../src/durable.ts";
-import { partitionLibraryTools, specialistDescription, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/specialist.ts";
+import { partitionLibraryTools, specialistDescription, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/extensions/specialist.ts";
 
 const call = (name: string, args = {}) => answer(fauxToolCall(name, args), { stopReason: "toolUse" });
 

@@ -3,21 +3,21 @@ export * from "./durable-adapter.ts";
 export { createModels } from "@earendil-works/pi-ai/models";
 export type { Context } from "@earendil-works/chord";
 export { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
-export { LibraryRuntime, type LibraryRuntimeOptions } from "./library-runtime.ts";
-export { createChatCustomProvider } from "./chat-provider.ts";
-export { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "./pi-tools.ts";
-export { createToolResultStorage } from "./tool-result-storage.ts";
-export { createLibraryExtension, LoomMemoryDoc, type LibraryExtensionOptions } from "./library-extension.ts";
-export { createChatExtensions } from "./chat-extensions.ts";
-export { createSpecialistExtension, partitionLibraryTools } from "./specialist.ts";
-export { loadLibrarySkills, formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR } from "./library-skills.ts";
-export type { Skill, SkillDiagnostic } from "./library-skills.ts";
-export { createAutoMemoryTool } from "./library-auto-memory.ts";
-export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tool-gate.ts";
-export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage, LoomSessionModel } from "./session-dto.ts";
-export { contextUsage } from "./context-usage.ts";
-export { DurableTrace } from "./durable-trace.ts";
-export { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";
+export { LibraryRuntime, type LibraryRuntimeOptions } from "./runtime/library-runtime.ts";
+export { createChatCustomProvider } from "./models/chat-provider.ts";
+export { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "./tools/pi-tools.ts";
+export { createToolResultStorage } from "./tools/tool-result-storage.ts";
+export { createLibraryExtension, LoomMemoryDoc, type LibraryExtensionOptions } from "./extensions/library-extension.ts";
+export { createChatExtensions } from "./extensions/chat-extensions.ts";
+export { createSpecialistExtension, partitionLibraryTools } from "./extensions/specialist.ts";
+export { loadLibrarySkills, formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR } from "./extensions/library-skills.ts";
+export type { Skill, SkillDiagnostic } from "./extensions/library-skills.ts";
+export { createAutoMemoryTool } from "./extensions/library-auto-memory.ts";
+export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tools/tool-gate.ts";
+export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage, LoomSessionModel } from "./runtime/session-dto.ts";
+export { contextUsage } from "./runtime/context-usage.ts";
+export { DurableTrace } from "./trace/durable-trace.ts";
+export { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace/trace-store.ts";
 export {
 	FORK_TITLE_SUFFIX,
 	LoomConversationDoc,
@@ -27,4 +27,4 @@ export {
 	type LoomConversationMetadata,
 	type LoomConversationSummary,
 	type LoomConversationListOptions,
-} from "./conversation-metadata.ts";
+} from "./runtime/conversation-metadata.ts";

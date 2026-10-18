@@ -27,22 +27,22 @@ import {
 	parseAgentPermissionLevel,
 	type LoomAgentOptions,
 } from "@loom/agent";
-import { appendAppLog, appLogDirectory } from "./app-log.ts";
-import { ChatService } from "./chat-service.ts";
-import { chatRecord } from "./chat-record.ts";
-import { composerAssetsAtSend, takeComposerAssets } from "./composer-assets.ts";
-import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
-import { stageComposerInput, takeComposerImages } from "./composer-images.ts";
-import { importComposerFiles } from "./composer-import.ts";
+import { appendAppLog, appLogDirectory } from "./desktop/app-log.ts";
+import { ChatService } from "./chat/chat-service.ts";
+import { chatRecord } from "./chat/chat-record.ts";
+import { composerAssetsAtSend, takeComposerAssets } from "./composer/composer-assets.ts";
+import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer/composer-library-pick.ts";
+import { stageComposerInput, takeComposerImages } from "./composer/composer-images.ts";
+import { importComposerFiles } from "./composer/composer-import.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
-import { applyAppIcon, loadAppIcon } from "./app-icon.ts";
-import { clipboardHasFiles, readFileClipboard } from "./file-clipboard.ts";
-import { type AgentServer, startAgentServer } from "./agent-server.ts";
-import { systemPromptForLibrary } from "./agent-prompt.ts";
-import { createAssetTools } from "./asset-tools.ts";
-import { createFfmpegTools } from "./ffmpeg-tools.ts";
-import { createPropertyTools } from "./property-tools.ts";
-import { createRelationTools } from "./relation-tools.ts";
+import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
+import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
+import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
+import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
+import { createAssetTools } from "./tools/asset-tools.ts";
+import { createFfmpegTools } from "./tools/ffmpeg-tools.ts";
+import { createPropertyTools } from "./tools/property-tools.ts";
+import { createRelationTools } from "./tools/relation-tools.ts";
 import {
 	createSettingsTools,
 	mergeMcpServers,
@@ -52,33 +52,33 @@ import {
 	publicModelSlot,
 	type PublicSettings,
 	type SettingsPatch,
-} from "./settings-tools.ts";
+} from "./tools/settings-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
-import { AgentInstructionsStore } from "./agent-instructions-store.ts";
-import { AgentSandboxStore } from "./agent-sandbox-store.ts";
-import { AgentStatsStore } from "./agent-stats-store.ts";
-import { parseByteRange } from "./byte-range.ts";
+import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
+import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
+import { AgentStatsStore } from "./chat/agent-stats-store.ts";
+import { parseByteRange } from "./desktop/byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
-import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./ui-selection.ts";
+import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettings, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
 import type { McpServerDraft } from "../shared/mcp-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
-import { createHttpEmbeddingProvider } from "./embedding-provider.ts";
-import { createHttpRerankProvider } from "./rerank-provider.ts";
-import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./vlm-provider.ts";
-import { probeModelSlot } from "./model-probe.ts";
+import { createHttpEmbeddingProvider } from "./models/embedding-provider.ts";
+import { createHttpRerankProvider } from "./models/rerank-provider.ts";
+import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./models/vlm-provider.ts";
+import { probeModelSlot } from "./models/model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
-import { AgentPermissionStore } from "./agent-permission-store.ts";
-import { CommandAllowStore } from "./command-allow-store.ts";
+import { AgentPermissionStore } from "./settings/agent-permission-store.ts";
+import { CommandAllowStore } from "./settings/command-allow-store.ts";
 import { parseCommandAllow, type CommandAllowView } from "@loom/agent/tool-permission";
-import { GeneralSettingsStore } from "./general-settings-store.ts";
-import { LastLibraryStore, lastLibraryStillOpenable } from "./last-library-store.ts";
-import { ModelSettingsStore, settingsView } from "./model-settings-store.ts";
-import { createChatStorage } from "./chat-storage.ts";
-import { ChatModelService } from "./chat-model-service.ts";
-import { applyChatSettingsPatch, publicChatSettings } from "./chat-settings-tools.ts";
+import { GeneralSettingsStore } from "./settings/general-settings-store.ts";
+import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-library-store.ts";
+import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
+import { createChatStorage } from "./models/chat-storage.ts";
+import { ChatModelService } from "./models/chat-model-service.ts";
+import { applyChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 

@@ -3,7 +3,7 @@ import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
 import { fauxAssistantMessage } from "@earendil-works/pi-ai/providers/faux";
 import type { ConversationId, EntryId } from "@loom/agent";
-import { createAgUiEvents } from "../src/main/ag-ui-events.ts";
+import { createAgUiEvents } from "../src/main/chat/ag-ui-events.ts";
 
 test("interleaved partial blocks emit each delta once and adopt the committed entry", async () => {
 	const output: Array<Record<string, unknown>> = [];

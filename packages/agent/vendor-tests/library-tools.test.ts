@@ -19,7 +19,7 @@ import {
 	type ToolExecutionApi,
 	withAbortSignal,
 } from "@loom/agent/durable";
-import { libraryAutoMemoryFile, updateLibraryAutoMemory } from "../src/library-auto-memory.ts";
+import { libraryAutoMemoryFile, updateLibraryAutoMemory } from "../src/extensions/library-auto-memory.ts";
 import { releaseProcessSandbox, setProcessSandboxRoot } from "@loom/core/sandbox";
 
 async function temporary(run: (path: string) => Promise<void>) {

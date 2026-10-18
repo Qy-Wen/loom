@@ -10,7 +10,7 @@ import {
 } from "./graph-layout.ts";
 import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
-import { SuggestInput } from "../panel/suggest-input.tsx";
+import { SuggestInput } from "../components/suggest-input.tsx";
 import { useGraphSimulation } from "./graph-simulation.ts";
 
 interface GraphViewProps {

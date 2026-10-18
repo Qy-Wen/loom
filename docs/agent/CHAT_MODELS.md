@@ -43,7 +43,7 @@ Names describe proposed responsibilities, not a requirement to split files mecha
 |---|---|
 | `packages/agent/src` | Replace endpoint-only adapter: Provider assembly, custom model validation, model metadata/thinking levels; no Electron, app storage, or UI dependencies |
 | `packages/app/src/main` | One long-lived app-level Chat runtime; configuration, encrypted credentials, catalog cache, login lifecycle, IPC |
-| `packages/app/src/main/chat-service.ts` | Receive `Models` and new-conversation defaults; configure selected conversations, not temporary single-model collections or all history |
+| `packages/app/src/main/chat/chat-service.ts` | Receive `Models` and new-conversation defaults; configure selected conversations, not temporary single-model collections or all history |
 | `packages/app/src/shared` | JSON config/catalog/auth-status/login DTOs; no Provider/durable handles or credential objects |
 | `packages/app/src/renderer` | Settings and conversation UI; requests and auth execute in Main |
 
@@ -158,8 +158,8 @@ The public busy probe shows running generations via `Harness.inspect()` and conf
 
 ### P2 runtime foundation
 
-- `packages/agent/src/chat-provider.ts` assembles native factories and four explicit custom protocols. Thin overlays preserve auth/filter/refresh/dispatch and merge only declared metadata/defaults. API-keyless custom connections require explicit permission; custom IDs cannot collide with native IDs.
-- `packages/app/src/main/chat-model-service.ts` owns one long-lived execution collection, registers enabled Providers, restores/refreshes native catalogs, and emits credential-free views. Unknown prices omit rates; default-only saves retain Provider objects and dynamic state. Headers are resolved only in Main memory, not public DTOs or cache.
+- `packages/agent/src/models/chat-provider.ts` assembles native factories and four explicit custom protocols. Thin overlays preserve auth/filter/refresh/dispatch and merge only declared metadata/defaults. API-keyless custom connections require explicit permission; custom IDs cannot collide with native IDs.
+- `packages/app/src/main/models/chat-model-service.ts` owns one long-lived execution collection, registers enabled Providers, restores/refreshes native catalogs, and emits credential-free views. Unknown prices omit rates; default-only saves retain Provider objects and dynamic state. Headers are resolved only in Main memory, not public DTOs or cache.
 - The injected `ChatService` path persists defaults only for new independent conversations; tests retain old selections on fork/reopen. Provider edits/publication hold a public Session commit while checking live tasks/inbox, including compaction; direct request activity is also guarded. Per-conversation changes use the same busy guards (`setSessionModel`).
 - Known request/auth secrets feed trace redaction and are removed from provider error messages before durable bookkeeping. Real legacy interrupted-request recovery and the 800-token compaction cap pass through the new service.
 - **Production startup is switched:** `app.whenReady()` builds `ChatModelService` from `createChatStorage(userData)`, initializes it (env bootstrap on first run), and injects the long-lived `Models` plus defaults into `ChatService`. ChatService never builds Providers; secrets feed trace redaction through `onSecrets`.

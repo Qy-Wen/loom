@@ -5,11 +5,11 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";
 import { emptyChatConfig } from "@loom/agent/chat-models";
-import { applyChatSettingsPatch, chatConfigForPatch, chatSettingsPatchSchema, parseChatSettingsPatch, publicChatSettings } from "../src/main/chat-settings-tools.ts";
-import { ChatModelService } from "../src/main/chat-model-service.ts";
-import { ChatCredentialStore } from "../src/main/chat-credential-store.ts";
-import { ChatConfigStore } from "../src/main/chat-config-store.ts";
-import { ChatCatalogStore } from "../src/main/chat-catalog-store.ts";
+import { applyChatSettingsPatch, chatConfigForPatch, chatSettingsPatchSchema, parseChatSettingsPatch, publicChatSettings } from "../src/main/tools/chat-settings-tools.ts";
+import { ChatModelService } from "../src/main/models/chat-model-service.ts";
+import { ChatCredentialStore } from "../src/main/models/chat-credential-store.ts";
+import { ChatConfigStore } from "../src/main/models/chat-config-store.ts";
+import { ChatCatalogStore } from "../src/main/models/chat-catalog-store.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 
 async function workspace(t: { after(fn: () => Promise<void>): void }) {

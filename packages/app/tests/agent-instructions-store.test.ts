@@ -3,7 +3,7 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { AgentInstructionsStore } from "../src/main/agent-instructions-store.ts";
+import { AgentInstructionsStore } from "../src/main/settings/agent-instructions-store.ts";
 import { INSTRUCTIONS_CHAR_LIMIT } from "../src/shared/agent-instructions.ts";
 
 test("AgentInstructionsStore round-trips text and refuses an overflow", async () => {

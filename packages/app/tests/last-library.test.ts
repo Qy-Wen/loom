@@ -7,7 +7,7 @@ import {
 	LastLibraryStore,
 	lastLibraryStillOpenable,
 	parseLastLibrary,
-} from "../src/main/last-library-store.ts";
+} from "../src/main/desktop/last-library-store.ts";
 
 describe("parseLastLibrary", () => {
 	it("reads a non-empty rootPath", () => {

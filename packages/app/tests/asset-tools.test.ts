@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
 import type { LoomToolResult } from "@loom/agent";
-import { createAssetTools } from "../src/main/asset-tools.ts";
+import { createAssetTools } from "../src/main/tools/asset-tools.ts";
 
 test("asset tools return structured safe results", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-asset-tools-"));

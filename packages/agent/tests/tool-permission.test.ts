@@ -14,8 +14,8 @@ import {
 	pathInsideWorkspace,
 	toolCallNeedsApproval,
 	toolNeedsApproval,
-} from "../src/tool-permission.ts";
-import { workspaceWriteNeedsApproval } from "../src/workspace-path.ts";
+} from "../src/tools/tool-permission.ts";
+import { workspaceWriteNeedsApproval } from "../src/tools/workspace-path.ts";
 
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { composerAssetsAtSend } from "../src/main/composer-assets.ts";
+import { composerAssetsAtSend } from "../src/main/composer/composer-assets.ts";
 
 const chip = {
 	type: "asset_ref" as const,

@@ -3,7 +3,7 @@ import { afterEach, test } from "node:test";
 import {
 	createHttpEmbeddingProvider,
 	parseEmbeddingResponse,
-} from "../src/main/embedding-provider.ts";
+} from "../src/main/models/embedding-provider.ts";
 
 const originalFetch = globalThis.fetch;
 

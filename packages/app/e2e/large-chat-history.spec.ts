@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { BACKGROUND_CONTEXT as context } from "@loom/agent";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { ChatService } from "../src/main/chat-service.ts";
+import { ChatService } from "../src/main/chat/chat-service.ts";
 import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 test("large saved tool results do not duplicate user bubbles or interrupt subsequent streamed replies", async () => {

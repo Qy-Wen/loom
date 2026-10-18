@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "../src/main/ui-selection.ts";
+import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "../src/main/composer/ui-selection.ts";
 
 describe("parseUiSelectionDraft", () => {
 	it("accepts a library asset snapshot and rejects junk", () => {

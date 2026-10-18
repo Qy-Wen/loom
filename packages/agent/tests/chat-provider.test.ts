@@ -4,8 +4,8 @@ import { InMemoryCredentialStore, Type, type Api, type Model } from "@earendil-w
 import { createModels, getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";
-import { assembleChatProviders, chatGenerationOptions, chatPriceSource, mergeChatHeaders } from "../src/chat-provider.ts";
-import type { ChatCustomProviderConfig } from "../src/chat-model-config.ts";
+import { assembleChatProviders, chatGenerationOptions, chatPriceSource, mergeChatHeaders } from "../src/models/chat-provider.ts";
+import type { ChatCustomProviderConfig } from "../src/models/chat-model-config.ts";
 const noEnv = { env: async () => undefined, fileExists: async () => false };
 const custom = (): ChatCustomProviderConfig => ({ kind: "custom", id: "local", enabled: true, baseUrl: "http://localhost:11434/v1", api: "openai-completions", models: [{ id: "custom", reasoning: false, input: ["text"], contextWindow: 32000, maxTokens: 8192 }] });
 

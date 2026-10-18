@@ -11,7 +11,7 @@ import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import { EVAL_FILES } from "../../core/evals/library.ts";
-import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, type AssetRefAttachment } from "../src/attachments.ts";
+import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, type AssetRefAttachment } from "../src/context/attachments.ts";
 import { watchEvents, type AgentEvent, type LibraryRuntime } from "../src/durable.ts";
 import { openEvalAgent, context } from "./runtime.ts";
 import type { LoomTool } from "../src/types.ts";

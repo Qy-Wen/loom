@@ -99,3 +99,22 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.panel-collapse-above .panel-region.above-band .work-panel-title,
 .shell.panel-collapse-above .panel-region.above-band .panel-tabs { padding-right: 40px; }
 .shell.panels-collapsed > .panel-region, .shell.panels-collapsed > .panel-slot { display: none; }
+
+.side-panel {
+	display: flex;
+	min-width: 0;
+	min-height: 0;
+	flex: 1;
+	flex-direction: column;
+	background: #fff;
+}
+
+.panel-content {
+	display: none;
+	flex: 1;
+	min-height: 0;
+}
+
+.panel-content.active {
+	display: block;
+}

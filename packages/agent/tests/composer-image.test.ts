@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { parseComposerImageInputs, sniffComposerImage } from "../src/composer-image.ts";
+import { parseComposerImageInputs, sniffComposerImage } from "../src/context/composer-image.ts";
 
 const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
 const image = { filename: "picture.png", mimeType: "image/png", data: png.toString("base64") };

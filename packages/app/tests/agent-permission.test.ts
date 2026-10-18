@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 import { DEFAULT_AGENT_PERMISSION } from "@loom/agent";
-import { AgentPermissionStore } from "../src/main/agent-permission-store.ts";
+import { AgentPermissionStore } from "../src/main/settings/agent-permission-store.ts";
 
 describe("AgentPermissionStore", () => {
 	it("defaults to standard and persists the chosen level", async () => {

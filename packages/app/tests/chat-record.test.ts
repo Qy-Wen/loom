@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { chatContent, chatRecord } from "../src/main/chat-record.ts";
+import { chatContent, chatRecord } from "../src/main/chat/chat-record.ts";
 import { toAgUiMessages } from "../src/shared/ag-ui-messages.ts";
 import { toolResultParts } from "../src/shared/tool-result-content.ts";
 

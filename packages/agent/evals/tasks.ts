@@ -1,4 +1,4 @@
-import type { LoomAssetType } from "../src/attachments.ts";
+import type { LoomAssetType } from "../src/context/attachments.ts";
 
 export type AgentEvalTask = {
 	id: string;

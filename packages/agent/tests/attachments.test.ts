@@ -8,8 +8,8 @@ import {
 	promptAttachments,
 	uiSelectionToAttach,
 	userTextFromContent,
-} from "../src/attachments.ts";
-import { assetRefBlocks, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/composer-asset.ts";
+} from "../src/context/attachments.ts";
+import { assetRefBlocks, composerLayoutText, displayAssetRefs, parseComposerAssetInputs, splitStoredAssetText, storedAssetRefs, stripInlineAssetRefs } from "../src/context/composer-asset.ts";
 
 const fields = {
 	assetId: "asset-1",
