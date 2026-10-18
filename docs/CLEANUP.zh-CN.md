@@ -7,48 +7,7 @@
 
 ---
 
-## 1. composer 图片直传已成死路径
-
-**状态：** 死代码，等待"删除或重新接线"的决定。
-
-图片早期以 base64 image 块随用户消息发送。`545fd9b feat(agent): send composer pictures as image parts` 加入，第二天 `cb6fb3b feat(agent): import composer attaches into the library as chips` 删掉了 renderer 的调用，改成"所有拖入文件导入素材库，变成 `asset_ref` chip"。管线留了下来。
-
-**没有任何地方调用 `stageComposerImages`。** 已核对 `packages/`，不含 `packages/app/out/` 构建产物：
-
-```
-packages/app/src/preload/index.ts:69      暴露给 renderer
-packages/app/src/main/index.ts:690        IPC handler
-packages/app/src/main/composer-images.ts  暂存 Map + take
-packages/agent/src/composer-image.ts      类型、解析、限制
-```
-
-**后果：**
-
-- `takeComposerImages()` 恒返回 `[]`，`ag-ui-agent.ts:275` 与 `index.ts:747` 的 `images.length ? [...] : content` 永远走 else 分支。
-- `LoomAgUiAgent.takeComposerImages` 和 `startAgentServer` 对应参数实际恒为 `undefined`/空。
-- `IPC.stageComposerImages` 及其 preload、类型声明描述了一项应用并不具备的能力。
-- `composer-image.ts` 的限制（最多 4 张、每张 8 MB、MIME 嗅探）与其测试覆盖的是一条走不到的路径。
-
-**同一区域的命名债：** renderer 用图片名指代 chip——`chat-composer.tsx:320-321` 的 `actions.sendImageOnly` 和 `actions.hasAssets` 指的是 `asset_ref` chip，不是图片。
-
-**需要决定：**
-
-- *删除* —— 删掉 `composer-image.ts` 及其测试、`composer-images.ts`、`IPC.stageComposerImages` 通道、preload 方法与类型、`takeComposerImages` 整条参数链（`agent-server.ts` → `ag-ui-agent.ts`）、两处 `images` 分支，以及 `followUp` content 里的 `image` 部分。把 `sendImageOnly`/`hasAssets` 改成 chip 语义。
-- *重新接线* —— 保留代码，补上缺失的 renderer 调用：`image/*` 的拖入与粘贴走 `stageComposerImages`，其余走 `importComposerFiles`。
-
-未决之前代码保持原样：它是空转的，不产生问题。
-
----
-
-## 2. 图片进入模型上下文只剩工具一条路
-
-不是失效代码，但应与第 1 条放在一起记录的行为变化。`cb6fb3b` 之后，图片只有在工具返回时才会进入模型上下文：`read` 读图片文件（durable `tools/read.ts`），或 MCP 工具返回 `image` 内容块（`pi-tools.ts`）。用户拖进输入框的图片变成库内 chip，模型只看到路径，必须自己去读。
-
-如果这是想要的产品行为，就清掉第 1 条的残留；如果不是，就把它接回来。
-
----
-
-## 3. `LoomAgUiAgent.observe()` 是一个 290 行的巨型闭包
+## 1. `LoomAgUiAgent.observe()` 是一个 290 行的巨型闭包
 
 **状态：** 结构问题；拆分边界需要先确认，暂不动代码。
 
@@ -67,7 +26,7 @@ packages/agent/src/composer-image.ts      类型、解析、限制
 
 ---
 
-## 4. Loom 的用词与 durable 对齐：`session` → `conversation`
+## 2. Loom 的用词与 durable 对齐：`session` → `conversation`
 
 **状态：** 计划，未开工；范围已定（标识符、文案、CSS 全改）。
 
@@ -80,7 +39,7 @@ durable 侧早就叫 conversation：`ConversationId`、`harness.conversation()`�
 - `McpSession`、`McpSessionFactory`、`openSdkSession`、`toolsFromMcpSession` —— MCP 传输层 session。
 - `streamSimple` 选项里的 `sessionId` 与 durable `ProviderDoc.sessionId` —— provider 侧的会话身份，归 vendor。
 - `workbench/graph-simulation.ts` 的 `sessionPositions` —— 进程内布局记忆。
-- `.loom/harness-sessions/` —— 只剩历史目录名，见 §5。
+- `.loom/harness-sessions/` —— 只剩历史目录名，见 §3。
 
 **已定：** 一次性全改，含用户可见文案和 CSS 选择器。随之要做两件事。
 
@@ -98,7 +57,7 @@ durable 侧早就叫 conversation：`ConversationId`、`harness.conversation()`�
 
 ---
 
-## 5. `.loom/harness-sessions/` 已经没有运行时对应物
+## 3. `.loom/harness-sessions/` 已经没有运行时对应物
 
 **状态：** 已定，未施工；不改行为。
 

@@ -11,7 +11,8 @@ import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { useOpenAsset } from "./asset-open.tsx";
 import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerActions, type PendingEdit } from "./chat-context.ts";
 import { editableText, placedChips } from "./chat-content.ts";
-import { AddFilesButton, ComposerTextArea, ImageSendButton } from "./chat-composer-input.tsx";
+import { AddFilesButton, ComposerTextArea, AssetSendButton } from "./chat-composer-input.tsx";
+import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { ChatModelSelect } from "./chat-model-select.tsx";
 import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
@@ -24,7 +25,7 @@ function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]):
 	return next.length === items.length ? items : next;
 }
 
-/** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an image restores Send. */
+/** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an asset restores Send. */
 export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props }: CopilotChatInputProps) => {
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
@@ -33,7 +34,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const { messages: visible, connecting, threadReady } = useContext(ChatViewContext);
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
-	const [imageError, setImageError] = useState<string | null>(null);
+	const [attachmentError, setAttachmentError] = useState<string | null>(null);
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
 	const valueRef = useRef(value);
@@ -53,7 +54,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	useEffect(() => {
 		setAssets([]);
 		setQueued([]);
-		setImageError(null);
+		setAttachmentError(null);
 		if (!draftRef.current) onChangeRef.current?.("");
 	}, [threadId]);
 	const appliedDraft = useRef<string | null>(null);
@@ -73,10 +74,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				}),
 			]);
 			try {
-				if (chips.length > 0) await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
 				await onSubmitMessage(contentWithPlacedAssets(text, chips));
 			} catch (cause) {
-				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 				onChange?.(text);
 			}
 		})();
@@ -103,7 +104,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				requestAnimationFrame(run);
 				return;
 			}
-			setImageError(null);
+			setAttachmentError(null);
 			const assetId = composerAttach.assetId;
 			try {
 				rememberComposerAsset(composerAttach);
@@ -124,7 +125,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 					window.setTimeout(activate, 50);
 				});
 			} catch (cause) {
-				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 			}
 			onComposerAttachApplied();
 		};
@@ -167,10 +168,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		void (async () => {
 			let queuedId: string | null = null;
 			try {
-				if (assetPayload.length > 0) await window.loom.stageComposerAssets(threadId, assetPayload.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				await window.loom.stageComposerAssets(threadId, assetPayload.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
 				if (activeThread.current !== threadId) return;
 				setAssets([]);
-				setImageError(null);
+				setAttachmentError(null);
 				const body = contentWithPlacedAssets(text, placedChips(assetPayload));
 				if (!isRunning) {
 					void onSubmitMessage(body || "\u200b");
@@ -188,7 +189,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				if (activeThread.current !== threadId) return;
 				if (queuedId) setQueued((items) => items.filter((item) => item.id !== queuedId));
 				setAssets(assetPayload);
-				setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 				onChange?.(raw);
 			} finally {
 				submitting.current = false;
@@ -198,24 +199,14 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 
 	async function importDroppedFiles(files: File[]): Promise<void> {
 		if (typeof window.loom.importComposerFiles !== "function" || typeof window.loom.pathForFile !== "function") {
-			setImageError(t.chat.restartToAttach);
+			setAttachmentError(t.chat.restartToAttach);
 			return;
 		}
-		const paths: string[] = [];
-		for (const file of files) {
-			try {
-				const path = window.loom.pathForFile(file);
-				if (path) paths.push(path);
-			} catch {
-				// Skip files without a local path.
-			}
-		}
-		if (paths.length === 0) {
-			setImageError(t.chat.readFailed);
-			return;
-		}
+		const importThread = threadId;
 		try {
-			const picked = await window.loom.importComposerFiles(paths);
+			const { paths, images } = await composerFileInputs(files, (file) => window.loom.pathForFile(file));
+			const picked = await window.loom.importComposerFiles(paths, images);
+			if (activeThread.current !== importThread) return;
 			if (picked.length === 0) return;
 			appendAssets(picked.map((asset) => ({
 				type: "asset_ref",
@@ -224,14 +215,15 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+			if (activeThread.current !== importThread) return;
+			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
 	function appendAssets(items: LoomUserAttachment[]): void {
 		const parsed = parseComposerAssetInputs(items);
 		if (parsed.length === 0) return;
-		setImageError(null);
+		setAttachmentError(null);
 		const editor = editorRef.current;
 		for (const asset of parsed) {
 			rememberComposerAsset(asset);
@@ -261,7 +253,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 
 	async function pickLibraryFiles(): Promise<void> {
 		if (typeof window.loom.pickComposerLibraryAssets !== "function") {
-			setImageError(t.chat.restartToAttachLibrary);
+			setAttachmentError(t.chat.restartToAttachLibrary);
 			return;
 		}
 		try {
@@ -274,13 +266,13 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
 	async function pickExternalFiles(): Promise<void> {
 		if (typeof window.loom.pickComposerExternalFiles !== "function") {
-			setImageError(t.chat.restartToAttach);
+			setAttachmentError(t.chat.restartToAttach);
 			return;
 		}
 		try {
@@ -293,12 +285,12 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				assetType: asset.assetType,
 			})));
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
 	function placeAsset(value: unknown, x: number, y: number): void {
-		setImageError(null);
+		setAttachmentError(null);
 		try {
 			const asset = parseComposerAssetInputs([value])[0];
 			if (!asset) return;
@@ -309,7 +301,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			if (placed && editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
 			else onChange?.(`${valueRef.current ?? ""} `);
 		} catch (cause) {
-			setImageError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
 	}
 
@@ -317,7 +309,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		importFiles: (files) => { void importDroppedFiles(files); },
 		pickLibrary: () => { void pickLibraryFiles(); },
 		pickExternal: () => { void pickExternalFiles(); },
-		sendImageOnly: () => deliverRef.current((valueRef.current ?? "").trim() || "\u200b"),
+		sendAssets: () => deliverRef.current((valueRef.current ?? "").trim() || "\u200b"),
 		hasAssets: assets.length > 0,
 		assets,
 		bindEditor: (editor) => {
@@ -359,7 +351,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 						const dropped = readAssetDrag(event.dataTransfer);
 						if (dropped) placeAsset(dropped, event.clientX, event.clientY);
 					} catch {
-						setImageError(t.chat.attachFailed);
+						setAttachmentError(t.chat.attachFailed);
 					}
 					return;
 				}
@@ -370,7 +362,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			}}
 		>
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
-			{imageError && <div className="session-branch-note session-branch-error">{imageError}</div>}
+			{attachmentError && <div className="session-branch-note session-branch-error">{attachmentError}</div>}
 			{queued.length > 0 && (
 				<section className="session-follow-up" aria-label={t.chat.queued}>
 					<div className="session-follow-up-label">{t.chat.queued}</div>
@@ -402,7 +394,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 					]}
 					addMenuButton={AddFilesButton}
 					textArea={ComposerTextArea}
-					sendButton={assets.length > 0 ? ImageSendButton : undefined}
+					sendButton={assets.length > 0 ? AssetSendButton : undefined}
 					onSubmitMessage={threadReady && onSubmitMessage ? (submitted) => {
 						deliverRef.current(submitted);
 					} : undefined}

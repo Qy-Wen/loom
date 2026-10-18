@@ -101,7 +101,7 @@ export const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentP
 				const words = stripInlineAssetRefs(String(props.value ?? "")).trim();
 				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions?.hasAssets && !words) {
 					event.preventDefault();
-					actions.sendImageOnly();
+					actions.sendAssets();
 					return;
 				}
 				props.onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>);
@@ -176,7 +176,7 @@ export function AddFilesButton({ className, disabled }: { className?: string; di
 	);
 }
 
-export function ImageSendButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
+export function AssetSendButton(props: React.ButtonHTMLAttributes<HTMLButtonElement>): React.JSX.Element {
 	const actions = useContext(ComposerActionsContext);
 	return (
 		<CopilotChatInput.SendButton
@@ -184,7 +184,7 @@ export function ImageSendButton(props: React.ButtonHTMLAttributes<HTMLButtonElem
 			disabled={false}
 			onClick={(event) => {
 				event.preventDefault();
-				actions?.sendImageOnly();
+				actions?.sendAssets();
 			}}
 		/>
 	);

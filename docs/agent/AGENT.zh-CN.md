@@ -79,7 +79,7 @@ git merge vendor-clean
 
 放进输入框的文件成为 user text 的 `<asset_ref>`；隐式选区成为文字之后 `<system-reminder>` 中的 `<ui_selection>`。**submit 前折叠一次**，持久化后的 model content 不再改写；不需要 attachments 旁路字段或请求时转换。
 
-`loom.user` entry data 保存展示文字，气泡不显示隐式提醒；图片是 model image content。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
+`loom.user` entry data 保存展示文字，气泡不显示隐式提醒。显式添加的 JPEG/PNG/GIF/WebP 芯片还会把图片内容附到普通消息和排队追加消息里（最多 4 张，每张 8 MiB），发送前按素材 ID 读取库内当前文件。其他图片格式保留为引用；纯文字模型收到 pi-ai 的图片省略占位文字。没有磁盘路径的剪贴板截图先导入 `Inbox/`，再成为芯片。移除芯片也会移除下一条消息里的对应图片。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
 
 MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
 

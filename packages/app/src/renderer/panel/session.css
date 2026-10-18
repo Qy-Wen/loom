@@ -551,8 +551,7 @@
 	box-shadow: none;
 }
 
-.session-composer-box .session-asset-chips,
-.session-composer-box .session-composer-images {
+.session-composer-box .session-asset-chips {
 	margin: 0;
 	padding: 12px 16px 0;
 }
@@ -742,45 +741,6 @@
 .tool-call-refs-empty {
 	color: #6b6b66;
 	font-size: 12px;
-}
-
-.session-composer-images {
-	display: flex;
-	flex-wrap: wrap;
-	gap: 8px;
-	margin: 0 0 8px;
-	pointer-events: auto;
-}
-
-.session-composer-image {
-	position: relative;
-	width: 64px;
-	height: 64px;
-}
-
-.session-composer-image img {
-	width: 64px;
-	height: 64px;
-	object-fit: cover;
-	border-radius: 12px;
-	background: #f4f4f2;
-}
-
-.session-composer-image button {
-	position: absolute;
-	top: 2px;
-	right: 2px;
-	width: 18px;
-	height: 18px;
-	padding: 0;
-	border: 0;
-	border-radius: 999px;
-	background: #fff;
-	color: #202124;
-	font-size: 14px;
-	line-height: 18px;
-	box-shadow: 0 0 1px #0000009e;
-	cursor: pointer;
 }
 
 .session-follow-up {

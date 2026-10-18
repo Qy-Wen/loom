@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Composer image input
+
+Explicit JPEG/PNG/GIF/WebP attachments keep their library chips and send native image blocks through pi-ai, including queued follow-ups and edited questions. Clipboard screenshots without paths import into `Inbox/`. Image bytes stay in durable history; renderer records use media URLs. The unused image-staging IPC and old image-only names/styles are removed. See [AGENT](../agent/AGENT.md).
+
+macOS validation: workspace typecheck, app build, 301 app unit tests, six composer Electron tests, and the existing read/MCP image Electron tests passed. Composer tests cover paste, drop, both file pickers, edits, queued follow-ups, text-only models, history reload, and subsequent text without stale images.
+
+---
+
 ## Parallel conversations with independent models
 
 Windows Electron tests use isolated user data and controlled local SSE servers. Different models from one provider and identically named models from different providers each passed three repeats: six tests passed, alongside the App typecheck.

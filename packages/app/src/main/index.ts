@@ -31,9 +31,10 @@ import { appendAppLog, appLogDirectory } from "./app-log.ts";
 import { LibraryAgentHost } from "./library-agent-host.ts";
 import { chatRecord } from "./chat-record.ts";
 import { BACKGROUND_CONTEXT as agentContext, foldUserText } from "@loom/agent";
-import { composerAssetsAtSend, stageComposerAssets, takeComposerAssets } from "./composer-assets.ts";
+import { composerAssetsAtSend, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
-import { stageComposerImages, takeComposerImages } from "./composer-images.ts";
+import { stageComposerInput, takeComposerImages } from "./composer-images.ts";
+import { importComposerFiles } from "./composer-import.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { applyAppIcon, loadAppIcon } from "./app-icon.ts";
 import { clipboardHasFiles, readFileClipboard } from "./file-clipboard.ts";
@@ -687,13 +688,9 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireAgentManager().openSession(id)));
 	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await requireAgentManager().getSession(id, afterEntryId)));
-	ipcMain.handle(IPC.stageComposerImages, (_event, id: string, images: unknown) => {
+	ipcMain.handle(IPC.stageComposerAssets, async (_event, id: string, assets: unknown) => {
 		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
-		stageComposerImages(id, images);
-	});
-	ipcMain.handle(IPC.stageComposerAssets, (_event, id: string, assets: unknown) => {
-		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
-		stageComposerAssets(id, assets);
+		await stageComposerInput(id, assets, (assetId) => localCore.getAssetFilePath(assetId));
 	});
 	ipcMain.handle(IPC.pickComposerLibraryAssets, async (event): Promise<UiSelectionDraft[]> => {
 		const snapshot = await localCore.getLibrarySnapshot();
@@ -711,13 +708,10 @@ function registerIpc(): void {
 		if (result.canceled || result.filePaths.length === 0) return [];
 		return composerAssetsFromPickedFiles(snapshot.rootPath, result.filePaths, snapshot.assets);
 	});
-	ipcMain.handle(IPC.importComposerFiles, async (_event, filePaths: unknown): Promise<UiSelectionDraft[]> => {
-		if (!Array.isArray(filePaths) || filePaths.some((path) => typeof path !== "string")) {
-			throw new Error("Composer files must be a list of paths");
-		}
+	ipcMain.handle(IPC.importComposerFiles, async (_event, filePaths: unknown, images: unknown): Promise<UiSelectionDraft[]> => {
 		const snapshot = await localCore.getLibrarySnapshot();
 		if (!snapshot.rootPath) throw new Error("Open a library first.");
-		return draftsFromAssets(await localCore.importExternalFiles(filePaths));
+		return draftsFromAssets(await importComposerFiles(filePaths, images, (paths) => localCore.importExternalFiles(paths)));
 	});
 	ipcMain.handle(IPC.pickComposerExternalFiles, async (event): Promise<UiSelectionDraft[]> => {
 		const snapshot = await localCore.getLibrarySnapshot();

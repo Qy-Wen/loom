@@ -23,6 +23,7 @@ import type {
 	AgentPermissionLevel,
 	CommandAllow,
 	CommandAllowView,
+	ComposerImageInput,
 	LoomSessionRecord as SessionRecord,
 	LoomSessionSummary as SessionSummary,
 	ToolGateDecision,
@@ -150,7 +151,6 @@ export const IPC = {
 	createSession: "loom:createSession",
 	openSession: "loom:openSession",
 	getSession: "loom:getSession",
-	stageComposerImages: "loom:stageComposerImages",
 	stageComposerAssets: "loom:stageComposerAssets",
 	pickComposerLibraryAssets: "loom:pickComposerLibraryAssets",
 	importComposerFiles: "loom:importComposerFiles",
@@ -269,14 +269,12 @@ export interface LoomApi {
 	openSession: (id: string) => Promise<SessionRecord>;
 	/** Load full history initially, then only entries after the last committed ID. */
 	getSession: (id: string, afterEntryId?: string) => Promise<SessionRecord>;
-	/** Hold composer images until the next prompt or follow-up on this session. */
-	stageComposerImages: (id: string, images: Array<{ filename: string; mimeType: string; data: string }>) => Promise<void>;
-	/** Hold composer library chips until the next prompt or follow-up on this session. */
+	/** Stage library chips and supported image bytes for the next prompt or follow-up. */
 	stageComposerAssets: (id: string, assets: Array<{ assetId: string; path: string; assetType: string }>) => Promise<void>;
 	/** Open a file dialog inside the library and return indexed assets as composer chips. */
 	pickComposerLibraryAssets: () => Promise<UiSelectionDraft[]>;
 	/** Copy files into Inbox (or reuse if they are already in the library) and return composer chips. */
-	importComposerFiles: (filePaths: string[]) => Promise<UiSelectionDraft[]>;
+	importComposerFiles: (filePaths: string[], images?: ComposerImageInput[]) => Promise<UiSelectionDraft[]>;
 	/** Open a file dialog anywhere, import into Inbox, and return composer chips. */
 	pickComposerExternalFiles: () => Promise<UiSelectionDraft[]>;
 	pathForFile: (file: File) => string;

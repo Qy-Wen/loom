@@ -43,7 +43,7 @@ export type ComposerActions = {
 	importFiles: (files: File[]) => void;
 	pickLibrary: () => void;
 	pickExternal: () => void;
-	sendImageOnly: () => void;
+	sendAssets: () => void;
 	hasAssets: boolean;
 	assets: readonly LoomUserAttachment[];
 	bindEditor: (editor: HTMLDivElement | null) => void;

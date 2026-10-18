@@ -7,48 +7,7 @@
 
 ---
 
-## 1. Composer image pass-through is a dead path
-
-**Status:** dead code, pending decision to remove or reconnect.
-
-Pictures used to be sent as base64 image parts on the user message. `545fd9b feat(agent): send composer pictures as image parts` added it; `cb6fb3b feat(agent): import composer attaches into the library as chips` removed the renderer call one day later and replaced it with "import every dropped file into the library as an `asset_ref` chip". The plumbing stayed behind.
-
-**Nothing calls `stageComposerImages`.** Verified across `packages/`, excluding build output in `packages/app/out/`:
-
-```
-packages/app/src/preload/index.ts:69      exposes it to the renderer
-packages/app/src/main/index.ts:690        IPC handler
-packages/app/src/main/composer-images.ts  staged Map + take
-packages/agent/src/composer-image.ts      types, parsing, limits
-```
-
-**Consequences:**
-
-- `takeComposerImages()` always returns `[]`, so the `images.length ? [...] : content` ternaries in `ag-ui-agent.ts:275` and `index.ts:747` always take the else branch.
-- `LoomAgUiAgent.takeComposerImages` and the matching `startAgentServer` parameter are always `undefined`/empty in practice.
-- `IPC.stageComposerImages` and its preload/type declarations describe a capability the app does not have.
-- `composer-image.ts` limits (4 images, 8 MB each, MIME sniffing) and their tests cover an unreachable path.
-
-**Unrelated naming debt in the same area:** the renderer names chips "images" — `actions.sendImageOnly` and `actions.hasAssets` in `chat-composer.tsx:320-321` refer to `asset_ref` chips, not pictures.
-
-**Decision needed:**
-
-- *Remove* — delete `composer-image.ts` and its tests, `composer-images.ts`, the `IPC.stageComposerImages` channel, preload method and type, the `takeComposerImages` parameter chain (`agent-server.ts` → `ag-ui-agent.ts`), both `images` branches, and the `image` part in the `followUp` content. Rename `sendImageOnly`/`hasAssets` to chip terms.
-- *Reconnect* — keep the code and add the missing renderer calls: route `image/*` drops and pastes to `stageComposerImages`, route everything else to `importComposerFiles`.
-
-Until decided, the code stays as is; it is inert, not harmful.
-
----
-
-## 2. Rendering a picture into the model context is now tool-only
-
-Not stale code, but a behavior worth recording beside entry 1. After `cb6fb3b`, a picture reaches the model only when a tool returns one: `read` on an image file (durable `tools/read.ts`) or an MCP tool returning an `image` content part (`pi-tools.ts`). A picture the user drops into the composer becomes a library chip, so the model sees a path and must read it.
-
-If that is the intended product behavior, delete the leftovers of entry 1. If not, reconnect it.
-
----
-
-## 3. `LoomAgUiAgent.observe()` is one 290-line closure
+## 1. `LoomAgUiAgent.observe()` is one 290-line closure
 
 **Status:** structural; split boundaries need confirmation before any code moves.
 
@@ -67,7 +26,7 @@ If that is the intended product behavior, delete the leftovers of entry 1. If no
 
 ---
 
-## 4. Align Loom's vocabulary with durable: `session` → `conversation`
+## 2. Align Loom's vocabulary with durable: `session` → `conversation`
 
 **Status:** plan, not started; scope decided (identifiers, copy and CSS all move).
 
@@ -80,7 +39,7 @@ Size: `session` occurs 21× in `packages/agent/src`, 622× in `packages/app/src`
 - `McpSession`, `McpSessionFactory`, `openSdkSession`, `toolsFromMcpSession` — MCP transport session.
 - `sessionId` in `streamSimple` options and durable `ProviderDoc.sessionId` — provider-side conversation identity, vendor-owned.
 - `sessionPositions` in `workbench/graph-simulation.ts` — process-local layout memory.
-- `.loom/harness-sessions/` — historical directory name only; see §5.
+- `.loom/harness-sessions/` — historical directory name only; see §3.
 
 **Decided:** rename everything in one program, including user-facing copy and CSS selectors. Two consequences to implement with it.
 
@@ -98,7 +57,7 @@ Size: `session` occurs 21× in `packages/agent/src`, 622× in `packages/app/src`
 
 ---
 
-## 5. `.loom/harness-sessions/` has no runtime referent
+## 3. `.loom/harness-sessions/` has no runtime referent
 
 **Status:** decided, edit not applied; no behavior change.
 
