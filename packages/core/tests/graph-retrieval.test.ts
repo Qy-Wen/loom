@@ -8,7 +8,7 @@ import type { Asset, AssetType } from "../src/model/asset.ts";
 import type { NearestChildHit } from "../src/model/hybrid.ts";
 import { toSearchItem, type AssetSearchItem } from "../src/model/retrieval.ts";
 import { expandSearchCandidates, SEARCH_NEIGHBORS_PER_SEED } from "../src/retrieval/graph.ts";
-import type { AssetRelation } from "../src/stores/types.ts";
+import type { AssetRelation } from "../src/index.ts";
 
 function asset(assetId: string, relativePath: string, type: AssetType = "image"): Asset {
 	const filename = relativePath.split("/").pop() ?? relativePath;

@@ -8,6 +8,7 @@ import { Library } from "./library/library.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
+import type { AssetRelation } from "./model/relation.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
 import type { NearestChildHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
@@ -63,7 +64,6 @@ import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
 import {
 	normalizeRelationType,
-	type AssetRelation,
 	type GraphStore,
 	type MetadataStore,
 } from "./stores/types.ts";
@@ -73,10 +73,10 @@ export interface LocalCoreOptions {
 	graphStore?: GraphStore;
 }
 
-/** Main-process facade. Renderer code talks to this only through typed IPC. */
+/** Library domain facade. Desktop integration and provider implementations live in app. */
 export class LocalCore {
-	readonly metadataStore: MetadataStore;
-	readonly graphStore: GraphStore;
+	private readonly metadataStore: MetadataStore;
+	private readonly graphStore: GraphStore;
 	private readonly library: Library;
 	private readonly enrichment: EnrichmentService;
 	private readonly textEmbed: TextEmbedService;
@@ -147,6 +147,10 @@ export class LocalCore {
 
 	removeAssetTag(assetId: string, tagId: string): Promise<void> {
 		return this.library.removeAssetTag(assetId, tagId);
+	}
+
+	getAsset(assetId: string): Promise<Asset | undefined> {
+		return this.metadataStore.getAsset(assetId);
 	}
 
 	getAssetFilePath(assetId: string): Promise<string | undefined> {

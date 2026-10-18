@@ -1,7 +1,7 @@
 import type { Asset } from "../model/asset.ts";
 import type { NearestChildHit } from "../model/hybrid.ts";
 import { toSearchItem, type AssetPropertyView, type AssetSearchItem, type SearchLink } from "../model/retrieval.ts";
-import type { AssetRelation } from "../stores/types.ts";
+import type { AssetRelation } from "../model/relation.ts";
 
 /** One-hop neighbors added per search candidate, before rerank. */
 export const SEARCH_NEIGHBORS_PER_SEED = 8;

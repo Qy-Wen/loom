@@ -57,13 +57,8 @@ test("Library keeps asset id when a folder is renamed while open", async () => {
 		const initial = await core.openLibrary(root);
 		const id = initial.assets[0]?.assetId;
 		assert.ok(id);
-		await core.metadataStore.createProperty({
-			propertyId: "status",
-			name: "Status",
-			type: "text",
-			createdAt: 1,
-		});
-		await core.metadataStore.setAssetProperty({ assetId: id, propertyId: "status", value: "Selected" });
+		const status = await core.createProperty("Status", "text");
+		await core.setAssetProperty(id, status.propertyId, "Selected");
 
 		await renameRetry(join(root, "shots"), join(root, "stills"));
 		const snap = await waitUntil(
@@ -74,7 +69,8 @@ test("Library keeps asset id when a folder is renamed while open", async () => {
 		assert.equal(snap.assets.find((asset) => asset.relativePath === "stills/a.jpg")?.assetId, id);
 		assert.equal(snap.assets.length, 1);
 		assert.deepEqual(snap.folders, ["stills"]);
-		assert.equal((await core.metadataStore.listAssetProperties(id))[0]?.value, "Selected");
+		assert.equal((await core.getAsset(id))?.relativePath, "stills/a.jpg");
+		assert.equal((await core.inspectAsset(id)).properties[0]?.value, "Selected");
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

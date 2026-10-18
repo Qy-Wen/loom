@@ -1,4 +1,5 @@
 import type { Asset } from "../model/asset.ts";
+import type { AssetRelation } from "../model/relation.ts";
 import type { AssetTag, Tag } from "../model/tag.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
@@ -75,13 +76,6 @@ export function normalizeRelationType(type: string): string {
 	if (value.length > MAX_RELATION_TYPE_LENGTH) throw new Error("Relationship type is too long");
 	if (value.toUpperCase() === RELATED) throw new Error("RELATED is reserved");
 	return value;
-}
-
-export interface AssetRelation {
-	relationId: string;
-	fromAssetId: string;
-	toAssetId: string;
-	type: string;
 }
 
 /** Persistence boundary for relationships keyed by stable asset UUIDs. */

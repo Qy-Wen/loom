@@ -3,7 +3,9 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
-import { ENRICHMENT_VERSION, LocalCore } from "../src/index.ts";
+import { LocalCore } from "../src/index.ts";
+import { ENRICHMENT_VERSION } from "../src/model/enrichment.ts";
+import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 import { compileFtsQuery, searchableEnrichmentTexts } from "../src/retrieval/text.ts";
 
 test("LocalCore searches and inspects assets without exposing absolute paths", async () => {
@@ -15,6 +17,8 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 		const snapshot = await core.openLibrary(root);
 		const image = snapshot.assets.find((asset) => asset.relativePath === "sunset-final.jpg");
 		assert.ok(image);
+		assert.deepEqual(await core.getAsset(image.assetId), image);
+		assert.equal(await core.getAsset("missing"), undefined);
 
 		const rating = await core.createProperty("Rating", "number");
 		const status = await core.createProperty("Status", "text");
@@ -55,7 +59,8 @@ test("LocalCore searches and inspects assets without exposing absolute paths", a
 
 test("search_assets matches Level 1 text and camera extracts", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-search-enrich-"));
-	const core = new LocalCore();
+	const metadataStore = new SqliteMetadataStore();
+	const core = new LocalCore({ metadataStore });
 	try {
 		await writeFile(join(root, "brief.md"), "Launch the amber harvest campaign next week.");
 		await writeFile(join(root, "other.txt"), "unrelated");
@@ -65,7 +70,7 @@ test("search_assets matches Level 1 text and camera extracts", async () => {
 		const shot = snapshot.assets.find((asset) => asset.relativePath === "shot.jpg");
 		assert.ok(brief && shot);
 		await core.analyzeAsset(brief.assetId);
-		await core.metadataStore.upsertAssetEnrichment({
+		await metadataStore.upsertAssetEnrichment({
 			assetId: shot.assetId,
 			version: ENRICHMENT_VERSION,
 			sourceModifiedAt: shot.modifiedAt,

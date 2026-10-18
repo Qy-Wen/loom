@@ -3,10 +3,10 @@ import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
+import { LocalCore, tryResolveMediaBinaries } from "../src/index.ts";
 import {
 	FULL_IMAGE_CROP,
 	IDENTITY_IMAGE_GRADE,
-	LocalCore,
 	adjustCrop,
 	buildGradeImageArgs,
 	buildGradeVideoArgs,
@@ -22,8 +22,7 @@ import {
 	isNeutralImageGrade,
 	normalizeImageGrade,
 	rotateCrop,
-	tryResolveMediaBinaries,
-} from "../src/index.ts";
+} from "../src/grade/index.ts";
 
 test("an unchanged grade produces no filtergraph", () => {
 	assert.equal(buildImageGradeFilter(IDENTITY_IMAGE_GRADE), null);

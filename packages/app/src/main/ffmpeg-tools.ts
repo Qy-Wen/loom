@@ -1,4 +1,5 @@
-import { normalizeImageGrade, type LocalCore, type MediaJobResult } from "@loom/core";
+import type { LocalCore, MediaJobResult } from "@loom/core";
+import { normalizeImageGrade } from "@loom/core/grade";
 import type { LoomTool, LoomToolResult } from "@loom/agent";
 
 /**

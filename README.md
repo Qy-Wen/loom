@@ -36,6 +36,14 @@ Built on [pi durable](https://github.com/earendil-works/pi/tree/main/packages/du
 - **Sandbox.** Chat permission is Basic, Standard (default), or Full. With the process sandbox on (the default), `bash`, `ffmpeg`, and `ffprobe` may write only the open library and the temp directory, cannot read the user profile, and have no network. Full permission runs those processes directly. MCP servers stay outside this sandbox.
 - **MCP.** Supports local stdio and Streamable HTTP. Settings manages connected servers. Tools register as `server__tool` and are shared by the main agent and create specialist. The main agent chooses direct execution or delegation; the retrieve specialist has no MCP tools. Basic and Standard require approval for MCP calls from either agent, with per-tool remembered grants; Full runs them directly. When a server writes a file outside the library, `write` or `bash` copies it in, and the watcher indexes it.
 
+## Package boundaries
+
+- `core` owns library files and stable asset IDs, metadata and relations, retrieval, and media processing. `LocalCore` is the domain facade; storage and internal services are private. The root entry exports the facade, domain types, provider contracts, and shared path/binary helpers. Grading helpers and process sandboxing use `@loom/core/grade` and `@loom/core/sandbox`.
+- `agent` owns the library-scoped conversation runtime and agent policies. It depends on `core`.
+- `app` owns Electron, UI, IPC, settings and credentials, HTTP providers, MCP connections, and chat/tool integration. It calls `LocalCore` and injects provider implementations through core contracts. It does not access core stores directly.
+
+These are code boundaries: core capabilities and the agent runtime currently run in the Electron main process.
+
 ## Development
 
 ```bash

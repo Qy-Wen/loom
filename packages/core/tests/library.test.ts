@@ -3,7 +3,9 @@ import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
-import { LocalCore, LibraryPaths, SqliteMetadataStore, statVolumeId, type LibraryChange } from "../src/index.ts";
+import { LocalCore, LibraryPaths, type LibraryChange } from "../src/index.ts";
+import { statVolumeId } from "../src/library/file-identity.ts";
+import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 
 function waitForChange(
 	core: LocalCore,
@@ -45,6 +47,7 @@ test("Library scans, ignores metadata, watches changes, and preserves identity o
 		const renamed = await core.renameAsset(cover.assetId, "hero");
 		assert.equal(renamed.assetId, cover.assetId);
 		assert.equal(renamed.relativePath, "hero.jpg");
+		assert.deepEqual(await core.getAsset(cover.assetId), renamed);
 
 		const duplicate = await core.duplicateAsset(renamed.assetId);
 		assert.equal(duplicate.relativePath, "hero copy.jpg");

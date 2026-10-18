@@ -9,11 +9,6 @@ import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
 	resolveMediaBinary,
-	gradeSiblingRelative,
-	gradeVideoSiblingRelative,
-	isGradeableVideo,
-	isGradeExportPath,
-	isGradeVideoExportPath,
 	type EmbeddingProvider,
 	type RerankProvider,
 	type LibraryChange,
@@ -21,6 +16,13 @@ import {
 	type PropertyType,
 	type PropertyValue,
 } from "@loom/core";
+import {
+	gradeSiblingRelative,
+	gradeVideoSiblingRelative,
+	isGradeableVideo,
+	isGradeExportPath,
+	isGradeVideoExportPath,
+} from "@loom/core/grade";
 import {
 	parseAgentPermissionLevel,
 	type LoomAgentOptions,
@@ -879,7 +881,7 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.saveImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		const source = await localCore.metadataStore.getAsset(assetId);
+		const source = await localCore.getAsset(assetId);
 		if (!source) throw new Error("Asset not found");
 		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, false) : undefined;
 		const result = await localCore.gradeImage({
@@ -920,7 +922,7 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.saveVideoGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		const source = await localCore.metadataStore.getAsset(assetId);
+		const source = await localCore.getAsset(assetId);
 		if (!source) throw new Error("Asset not found");
 		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, true) : undefined;
 		const result = await localCore.gradeVideo({
@@ -939,7 +941,7 @@ function registerIpc(): void {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
 		const snapshot = await localCore.getLibrarySnapshot();
 		if (!snapshot.rootPath) throw new Error("Open a library first.");
-		const source = await localCore.metadataStore.getAsset(assetId);
+		const source = await localCore.getAsset(assetId);
 		if (!source) throw new Error("Asset not found");
 		const video = isGradeableVideo(source.relativePath);
 		const suggested = freeGradeSibling(snapshot.rootPath, source.relativePath, video);

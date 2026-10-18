@@ -36,6 +36,14 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 - **沙箱。** 对话权限分为 Basic、Standard（默认）和 Full。进程沙箱默认开启：`bash`、`ffmpeg`、`ffprobe` 只能写当前库和临时目录，读不到用户主目录，也不能联网。Full 下这些进程直接运行。MCP 服务不进入这层沙箱。
 - **MCP。** 支持本地 stdio 和 Streamable HTTP，设置里管理连接的服务。工具注册成 `server__tool`，由主 Agent 和创作专职共享；主 Agent 按任务选择直接调用或委托，检索专职不接入 MCP。Basic 和 Standard 下，无论谁调用 MCP，默认都等待确认，可按工具始终允许；Full 下直接执行。服务把文件写到库外时，由 `write` 或 `bash` 拷回库，再由监视器索引。
 
+## 包边界
+
+- `core` 负责库文件、稳定素材 ID、元数据与关系、检索和媒体处理。`LocalCore` 是领域入口，存储与内部服务不对外公开。根入口导出领域入口、领域类型、provider 接口及共用的路径和二进制定位工具；调色工具与进程沙箱分别走 `@loom/core/grade`、`@loom/core/sandbox`。
+- `agent` 负责每库的对话运行时与 Agent 策略，依赖 `core`。
+- `app` 负责 Electron、UI、IPC、设置与凭据、HTTP provider、MCP 连接，以及聊天和工具接线。通过 `LocalCore` 调用领域能力，按 core 的接口注入 provider 实现，不直接访问 core 的存储。
+
+这是代码职责边界：core 能力和 Agent 运行时目前都运行在 Electron 主进程。
+
 ## 开发
 
 ```bash

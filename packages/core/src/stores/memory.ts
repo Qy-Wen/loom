@@ -19,7 +19,8 @@ import type {
 import type { NearestChildHit } from "../model/hybrid.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
 import { documentMatchesTokens, searchDocument, searchTokens } from "../retrieval/text.ts";
-import type { AssetRelation, GraphStore, MetadataStore } from "./types.ts";
+import type { AssetRelation } from "../model/relation.ts";
+import type { GraphStore, MetadataStore } from "./types.ts";
 
 /** Volatile MetadataStore used by focused tests and explicit dependency injection. */
 export class InMemoryMetadataStore implements MetadataStore {

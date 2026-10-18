@@ -1,43 +1,75 @@
-export * from "./grade/index.ts";
-export * from "./grade/store.ts";
-export * from "./enrichment/extract.ts";
-export * from "./enrichment/service.ts";
-export * from "./library/file-identity.ts";
-export * from "./model/enrichment.ts";
-export * from "./library/handlers.ts";
-export * from "./library/library.ts";
-export * from "./library/names.ts";
-export * from "./library/paths.ts";
-export * from "./library/reconcile.ts";
-export * from "./library/watcher.ts";
-export * from "./local-core.ts";
-export * from "./media/binaries.ts";
-export * from "./media/operations.ts";
-export * from "./media/policy.ts";
-export * from "./model/asset.ts";
-export * from "./model/tag.ts";
-export * from "./model/media.ts";
-export * from "./model/property.ts";
-export * from "./model/retrieval.ts";
-export * from "./model/hybrid.ts";
-export * from "./model/image-vlm.ts";
-export * from "./model/text-embed.ts";
-export * from "./model/rerank.ts";
-export * from "./model/video-vlm.ts";
-export * from "./model/audio-writeup.ts";
-export * from "./rag/chunk.ts";
-export * from "./rag/image-vlm.ts";
-export * from "./rag/markdown.ts";
-export * from "./rag/service.ts";
-export * from "./rag/video-frames.ts";
-export * from "./rag/video-vlm.ts";
-export * from "./rag/audio-prepare.ts";
-export * from "./rag/audio-writeup.ts";
-export * from "./rag/tokenize.ts";
-export * from "./retrieval/rrf.ts";
-export * from "./retrieval/rerank.ts";
-export * from "./retrieval/graph.ts";
-export * from "./stores/ladybug.ts";
-export * from "./stores/memory.ts";
-export * from "./stores/sqlite.ts";
-export * from "./stores/types.ts";
+// Public library API. Storage and service implementations stay internal.
+// Pure grading helpers and process sandboxing have their own package entry points.
+export { LocalCore } from "./local-core.ts";
+export { LibraryPaths } from "./library/paths.ts";
+export { resolveMediaBinary, tryResolveMediaBinaries } from "./media/binaries.ts";
+export type { MediaProgram } from "./media/binaries.ts";
+
+export type { Asset, AssetType, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
+export type { AssetTag, Tag } from "./model/tag.ts";
+export type { AssetRelation } from "./model/relation.ts";
+export type {
+	AssetPropertyValue,
+	PropertyDefinition,
+	PropertySnapshot,
+	PropertyType,
+	PropertyValue,
+} from "./model/property.ts";
+export type {
+	AssetEnrichment,
+	AudioEnrichmentData,
+	EnrichmentData,
+	EnrichmentStatus,
+	ImageEnrichmentData,
+	TextEnrichmentData,
+	VideoEnrichmentData,
+} from "./model/enrichment.ts";
+export type {
+	AssetDetailResult,
+	AssetLinkView,
+	AssetPropertyFilter,
+	AssetPropertyView,
+	AssetRelationsResult,
+	AssetRelationView,
+	AssetSearchItem,
+	AssetSearchQuery,
+	AssetSearchResult,
+	PropertyFilterOperator,
+	SearchLink,
+} from "./model/retrieval.ts";
+export type {
+	ConvertFormatArgs,
+	CropVideoArgs,
+	ExtractClipArgs,
+	ExtractFrameArgs,
+	GradeImageArgs,
+	GradeImageResult,
+	GradeVideoArgs,
+	GradeVideoResult,
+	MediaInfoResult,
+	MediaJobResult,
+	PreviewVideoGradeArgs,
+	ResizeVideoArgs,
+	RunFfmpegArgs,
+} from "./model/media.ts";
+
+export type { EmbeddingProvider, TextEmbedStatus, TextEmbedStatusKind } from "./model/text-embed.ts";
+export type { RerankProvider } from "./model/rerank.ts";
+export { IMAGE_VLM_SYSTEM_PROMPT, IMAGE_VLM_USER_PROMPT } from "./model/image-vlm.ts";
+export type { ImageVlmInput, ImageVlmProvider, ImageVlmStatus, ImageVlmStatusKind } from "./model/image-vlm.ts";
+export { VIDEO_VLM_FRAMES_PROMPT, VIDEO_VLM_SYSTEM_PROMPT, VIDEO_VLM_USER_PROMPT } from "./model/video-vlm.ts";
+export type {
+	VideoVlmDescribeRequest,
+	VideoVlmFrame,
+	VideoVlmNativeInput,
+	VideoVlmProvider,
+	VideoVlmStatus,
+	VideoVlmStatusKind,
+} from "./model/video-vlm.ts";
+export { AUDIO_WRITEUP_SYSTEM_PROMPT, AUDIO_WRITEUP_USER_PROMPT } from "./model/audio-writeup.ts";
+export type {
+	AudioWriteupInput,
+	AudioWriteupProvider,
+	AudioWriteupStatus,
+	AudioWriteupStatusKind,
+} from "./model/audio-writeup.ts";
