@@ -8,4 +8,8 @@ server.registerTool("image", { description: "Return a test image", inputSchema: 
 	{ type: "text", text: "Image from MCP" },
 	{ type: "image", data, mimeType: "image/png" },
 ] }));
+if (process.argv.includes("--embedded")) server.registerTool("embedded_image", { description: "Return an embedded test image", inputSchema: {} }, async () => ({ content: [
+	{ type: "resource", resource: { uri: "file:///caption.txt", text: "Image from MCP", mimeType: "text/plain" } },
+	{ type: "resource", resource: { uri: "file:///still.png", blob: data, mimeType: "image/png" } },
+] }));
 await server.connect(new StdioServerTransport());

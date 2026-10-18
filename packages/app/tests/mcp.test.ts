@@ -44,6 +44,20 @@ describe("MCP config", () => {
 });
 
 describe("MCP tools", () => {
+	it("discards a result that arrives after cancellation", async () => {
+		const controller = new AbortController();
+		const session: McpSession = {
+			listTools: async () => [],
+			callTool: async () => {
+				controller.abort(new Error("Cancelled before completion"));
+				return { content: "Late result" };
+			},
+			close: async () => undefined,
+		};
+		const [tool] = toolsFromMcpSession("demo", session, [{ name: "late" }]);
+		await assert.rejects(async () => tool!.execute({}, controller.signal), /Cancelled before completion/);
+	});
+
 	it("passes content unchanged to the same result adapter as application tools", async () => {
 		const content = [
 			{ type: "text", text: "Scan", annotations: { audience: ["assistant"] } },
@@ -60,7 +74,7 @@ describe("MCP tools", () => {
 		assert.ok(mcp);
 		const raw = await mcp.execute({});
 		assert.ok(typeof raw !== "string");
-		assert.equal(raw.content, content);
+		assert.deepEqual(raw.content, content);
 		const direct = { name: "result", description: "Result", parameters: { type: "object" }, execute: () => ({ content }) };
 		const api = {} as ToolExecutionApi;
 		assert.deepEqual(
@@ -153,6 +167,20 @@ describe("resolveStdioCommand", () => {
 });
 
 describe("McpHost", () => {
+	it("closes a connected session when tool discovery fails", async () => {
+		let closed = false;
+		const host = new McpHost(async () => ({
+			listTools: async () => { throw new Error("Discovery failed"); },
+			callTool: async () => ({ content: "unused" }),
+			close: async () => { closed = true; },
+		}));
+		try {
+			assert.deepEqual(await host.connect([{ id: "bad", command: "echo", enabled: true }]), []);
+			assert.equal(host.lastStatus()[0]?.error, "Discovery failed");
+			assert.equal(closed, true);
+		} finally { await host.close(); }
+	});
+
 	it("loads tools from healthy servers and skips broken ones", async () => {
 		const host = new McpHost(async (config) => {
 			if (config.id === "bad") throw new Error("offline");

@@ -26,16 +26,6 @@ Remaining acceptance checklist: [CHAT_MODELS](./agent/CHAT_MODELS.md) P4/P5.
 
 ---
 
-## MCP client
-
-Consider replacing the official `@modelcontextprotocol/sdk` client with pi's `@earendil-works/pi-mcp`. Loom's implementation is `packages/app/src/main/mcp/` (config, host, store, tools, types); only `host.ts`'s session factory and `tools.ts`'s content mapping would change. Config persistence, status reporting, and the permission gate stay app-owned.
-
-- `pi-mcp` is standalone (no MCP SDK dependency, `cross-spawn` only), ships stdio and Streamable HTTP transports, an in-memory testing transport, an `oauth` subpath Loom has no equivalent for, and `toLlmContent()` that already matches `pi-ai`'s text/image content.
-- Verify before switching: content parity (text, image, embedded resources, `structuredContent`), `isError` semantics, OAuth and auth-refresh behaviour, and that the Basic/Standard approval flow is unchanged.
-- Benefit: one less independently-versioned dependency surface, and MCP behaviour tracks the same upstream as durable.
-
----
-
 ## Step 1: LangGraph
 
 Add a controlled-flow branch beside the chat Agent, and run tasks through fixed steps. See [PRODUCT](./PRODUCT.md) §10.

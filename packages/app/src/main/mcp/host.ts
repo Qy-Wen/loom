@@ -1,6 +1,5 @@
 import { existsSync } from "node:fs";
 import { basename, delimiter, dirname, isAbsolute, join } from "node:path";
-import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport, getDefaultEnvironment } from "@modelcontextprotocol/sdk/client/stdio.js";
 import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
@@ -8,6 +7,7 @@ import type { LoomTool } from "@loom/agent";
 import type { McpServerStatus } from "../../shared/mcp-settings.ts";
 import { isHttpServer, type McpServerConfig, type McpSession } from "./types.ts";
 import { toolsFromMcpSession } from "./tools.ts";
+import { McpClient } from "./client.ts";
 
 export type McpSessionFactory = (config: McpServerConfig) => Promise<McpSession>;
 
@@ -65,8 +65,9 @@ export class McpHost {
 	}
 
 	private async connectOne(config: McpServerConfig): Promise<ConnectOne> {
+		let session: McpSession | undefined;
 		try {
-			const session = await this.openSession(config);
+			session = await this.openSession(config);
 			if (this.closed) {
 				await session.close();
 				return { tools: [], status: { id: config.id, tools: [] } };
@@ -85,6 +86,7 @@ export class McpHost {
 				live: { config, session, tools },
 			};
 		} catch (error) {
+			await session?.close().catch(() => undefined);
 			const message = error instanceof Error ? error.message : String(error);
 			console.error(`Failed to connect MCP server ${config.id}`, error);
 			return { tools: [], status: { id: config.id, tools: [], error: message } };
@@ -99,15 +101,15 @@ export class McpHost {
 }
 
 export async function openSdkSession(config: McpServerConfig): Promise<McpSession> {
-	const client = new Client({ name: "loom", version: "0.0.0" });
+	const client = new McpClient({ name: "loom", version: "0.0.0" });
+	let transport: StdioClientTransport | StreamableHTTPClientTransport;
 	if (isHttpServer(config)) {
-		const transport = new StreamableHTTPClientTransport(new URL(config.url), {
+		transport = new StreamableHTTPClientTransport(new URL(config.url), {
 			requestInit: config.headers ? { headers: config.headers } : undefined,
 		});
-		await client.connect(transport);
 	} else {
 		const launch = stdioLaunch(config);
-		const transport = new StdioClientTransport({
+		transport = new StdioClientTransport({
 			command: launch.command,
 			args: launch.args,
 			cwd: config.cwd,
@@ -122,8 +124,9 @@ export async function openSdkSession(config: McpServerConfig): Promise<McpSessio
 			const text = String(chunk).trimEnd();
 			if (text) console.error(`MCP ${config.id}:`, text);
 		});
-		await client.connect(transport);
 	}
+	try { await client.connect(transport); }
+	catch (error) { await client.close().catch(() => undefined); throw error; }
 	return {
 		async listTools() {
 			const listed = await client.listTools();
@@ -137,6 +140,7 @@ export async function openSdkSession(config: McpServerConfig): Promise<McpSessio
 			const result = await client.callTool({ name, arguments: args }, undefined, signal ? { signal } : undefined) as CallToolResult;
 			return {
 				content: result.content,
+				structuredContent: result.structuredContent,
 				isError: result.isError === true,
 			};
 		},

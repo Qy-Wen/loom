@@ -26,16 +26,6 @@
 
 ---
 
-## MCP 客户端
-
-考虑把官方 `@modelcontextprotocol/sdk` 客户端换成 pi 的 `@earendil-works/pi-mcp`。Loom 的实现在 `packages/app/src/main/mcp/`（config、host、store、tools、types）；真正会变的只有 `host.ts` 的 session 工厂和 `tools.ts` 的内容映射。配置持久化、状态上报、权限门禁仍属应用层。
-
-- `pi-mcp` 独立（不依赖 MCP SDK，只有 `cross-spawn`），自带 stdio 与 Streamable HTTP 传输、内存测试传输、Loom 当前没有对应实现的 `oauth` 子导出，以及已经对齐 `pi-ai` 文本/图片类型的 `toLlmContent()`。
-- 切换前核对：内容等价（文本、图片、内嵌资源、`structuredContent`）、`isError` 语义、OAuth 与鉴权刷新行为，以及 Basic/Standard 的确认流程不变。
-- 收益：少一个独立版本化的依赖面，MCP 行为与 durable 跟同一上游演进。
-
----
-
 ## 第一步：LangGraph
 
 在现有对话 Agent 之外加一条受控流程，用固定步骤执行任务。见 [PRODUCT](./PRODUCT.zh-CN.md) §10。

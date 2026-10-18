@@ -1,5 +1,6 @@
 import type { LoomTool } from "@loom/agent";
 import type { McpSession } from "./types.ts";
+import { mcpToolContent } from "./content.ts";
 
 export function mcpToolName(serverId: string, toolName: string): string {
 	return `${sanitize(serverId)}__${sanitize(toolName)}`;
@@ -13,13 +14,16 @@ export function toolsFromMcpSession(serverId: string, session: McpSession, specs
 			: `MCP tool ${spec.name} from ${serverId}`,
 		parameters: spec.inputSchema ?? { type: "object", properties: {} },
 		execute: async (rawArgs, signal) => {
+			signal?.throwIfAborted();
 			const args = asObject(rawArgs);
 			const result = await session.callTool(spec.name, args, signal);
+			signal?.throwIfAborted();
+			const content = mcpToolContent(result);
 			if (result.isError) {
-				const message = typeof result.content === "string" ? result.content : result.content.flatMap((part) => part.type === "text" && typeof part.text === "string" ? [part.text] : []).join("\n");
+				const message = typeof content === "string" ? content : content.flatMap((part) => part.type === "text" && typeof part.text === "string" ? [part.text] : []).join("\n");
 				throw new Error(message || `MCP tool ${spec.name} failed`);
 			}
-			return typeof result.content === "string" ? result.content : { content: result.content };
+			return typeof content === "string" ? content : { content };
 		},
 	}));
 }

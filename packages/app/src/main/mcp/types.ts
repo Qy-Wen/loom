@@ -28,12 +28,18 @@ export interface McpToolSpec {
 	inputSchema?: unknown;
 }
 
+export interface McpToolResult {
+	content: LoomToolResult["content"];
+	structuredContent?: unknown;
+	isError?: boolean;
+}
+
 export interface McpSession {
 	listTools(): Promise<McpToolSpec[]>;
 	callTool(
 		name: string,
 		args: Record<string, unknown>,
 		signal?: AbortSignal,
-	): Promise<{ content: LoomToolResult["content"]; isError?: boolean }>;
+	): Promise<McpToolResult>;
 	close(): Promise<void>;
 }

@@ -6,6 +6,16 @@
 
 ---
 
+## MCP 结果与传输契约
+
+MCP 继续使用官方 SDK。工具发现合并全部分页后统一交给 SDK 缓存，保留各页工具的输出 schema 校验和任务要求；重复游标与超量分页报告失败，连接或工具发现失败时关闭会话。
+
+内嵌文本和图片资源展开为原生内容，`content` 为空时使用 `structuredContent` 的 JSON 表示；已有内容优先，其余内容块沿用共用工具适配器的 JSON 表示。`isError` 提取可读文字报告失败。取消传到服务端，预先取消的调用不派发，取消后的迟到结果不提交。客户端替换不再作为独立待办；需要 MCP OAuth 时再评估授权接线和客户端选择。
+
+macOS 验证通过：工作区类型检查、Core 139 项测试（2 项跳过）、Agent 153 项、App 317 项、应用构建。App 包含 stdio / Streamable HTTP 各 5 项真实 SDK 契约，覆盖分页、校验、内容、错误与取消；2 项 Electron 用例验证普通及内嵌图片到达模型，并在实时结果、重载与分支后显示。
+
+---
+
 ## 聊天运行时、应用服务与协议边界
 
 `LibraryRuntime` 持有素材库的 Harness、Registry 和存储。`ChatService` 统一普通/追加消息的准备与提交，以及权限、默认配置、DTO 和变更通知。`AgUiAdapter` 管理连接生命周期，`ag-ui-events.ts` 只转换 durable 事件，不提交任务。`DurableAgentRunner` 将运行状态与停止检查交给服务。切库后旧连接不会指向新运行时。应用与评测通过 `createChatExtensions()` 共用主对话和子代理扩展组装。

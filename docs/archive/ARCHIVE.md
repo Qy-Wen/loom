@@ -6,6 +6,16 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## MCP results and transport contracts
+
+MCP uses the official SDK. Tool discovery aggregates all pages before SDK caching, preserving output-schema validation and task requirements for every page. Repeated cursors and excessive pagination fail explicitly; connection or discovery failures close the session.
+
+Embedded text and image resources become native content. Empty `content` falls back to JSON from `structuredContent`; existing content takes precedence, and other blocks retain the common tool adapter's JSON representation. `isError` reports readable text. Cancellation reaches the server; pre-aborted calls are not dispatched and late results are discarded. Client replacement is no longer a standalone backlog item; evaluate authorization integration and client choice when MCP OAuth is needed.
+
+macOS validation passed: workspace typecheck, 139 Core tests (2 skipped), 153 Agent tests, 317 App tests, and the app build. App includes five real-SDK contracts each for stdio and Streamable HTTP covering pagination, validation, content, errors, and cancellation. Two Electron cases verify ordinary and embedded images reach the model and display live, after reload, and on a branch.
+
+---
+
 ## Chat runtime, service, and protocol boundaries
 
 `LibraryRuntime` owns the library's Harness, Registry, and storage. `ChatService` centralizes ordinary/queued input preparation and submission, permissions, defaults, DTOs, and notifications. `AgUiAdapter` owns connection lifecycle; `ag-ui-events.ts` translates durable events without submitting work. `DurableAgentRunner` delegates running/stop checks to the service. Library switches cannot redirect old connections into the new runtime. Applications and evaluations share parent/specialist extension assembly through `createChatExtensions()`.

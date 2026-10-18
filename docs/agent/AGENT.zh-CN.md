@@ -85,7 +85,9 @@ git merge vendor-clean
 
 `loom.user` entry data 保存展示文字，气泡不显示隐式提醒。显式添加的 JPEG/PNG/GIF/WebP 芯片还会把图片内容附到普通消息和排队追加消息里（最多 4 张，每张 8 MiB），发送前按素材 ID 读取库内当前文件。其他图片格式保留为引用；纯文字模型收到 pi-ai 的图片省略占位文字。没有磁盘路径的剪贴板截图先导入 `Inbox/`，再成为芯片。移除芯片也会移除下一条消息里的对应图片。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
 
-MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
+MCP 使用官方 SDK，读完全部工具分页后统一缓存输出 schema 和任务要求。内嵌文本/图片资源先展开；`content` 为空时，`structuredContent` 转成 JSON 文本，已有内容优先于结构化回退。结果再交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。MCP 的 `isError` 使用可读文本报告工具失败；取消传到服务端，迟到结果会被丢弃。
+
+Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
 
 主 Agent 和专职 Agent 共用 `createToolResultStorage()`，在 durable 最终截断前通过 `afterTool` 保存超过 50 KiB 或 2,000 行的完整文字，路径为 `.agents/tool-results/<conversationId>/<taskId>.txt`。模型收到最多 2 KiB、UTF-8 安全的预览、完整路径和分段读取提示；图片、错误状态、UI details 和结构化结果不变。`read` 和已有 `full_output` 提示的结果不重复落盘。写入失败会警告并沿用 durable 截断。文件在重开和分支后仍保留，不自动过期；`.agents` 不作为素材索引。进入钩子前已被流式缓冲丢弃的文字无法恢复；shell 工具沿用现有落盘机制。
 
