@@ -9,7 +9,7 @@ import { traceModels } from "../src/trace-models.ts";
 import { Type } from "@earendil-works/pi-ai";
 import { fauxProvider, fauxAssistantMessage as answer, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
-	BACKGROUND_CONTEXT as context, createModels, LibraryAgent, DurableTrace, TraceStore,
+	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, DurableTrace, TraceStore,
 	defineExtension, defineTool, createSpecialistExtension, ToolGate, LoomApprovalsDoc, clearPendingApprovals,
 } from "../src/durable.ts";
 import { TracePrivacy } from "../src/trace-privacy.ts";
@@ -20,11 +20,11 @@ async function temporary(run: (root: string) => Promise<void>) {
 	try { await run(root); } finally { await rm(root, { recursive: true, force: true }); }
 }
 
-async function fixture(root: string, extra: Parameters<typeof LibraryAgent.open>[1] = { models: createModels() }) {
+async function fixture(root: string, extra: Parameters<typeof LibraryRuntime.open>[1] = { models: createModels() }) {
 	const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 	const trace = new DurableTrace(await TraceStore.open(root));
 	trace.setSecrets(["test-private-key"]);
-	const owner = await LibraryAgent.open(root, { ...extra, models: trace.models(models), resume: false,
+	const owner = await LibraryRuntime.open(root, { ...extra, models: trace.models(models), resume: false,
 		extensions: [...extra.extensions ?? [], trace.extension], settings: { ...extra.settings, extensions: [...extra.settings?.extensions ?? extra.extensions ?? [], trace.extension] },
 		agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id }, ...extra.agent },
 	}, context);
@@ -213,7 +213,7 @@ test("deferred request and polls are separate closed spans", { timeout: 10_000 }
 		const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 1 } });
 		const models = createModels(); models.setProvider(faux.provider);
 		const trace = new DurableTrace(await TraceStore.open(root));
-		const owner = await LibraryAgent.open(root, { models: trace.models(models), resume: false, extensions: [trace.extension], settings: { stream: { deferred: true } }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
+		const owner = await LibraryRuntime.open(root, { models: trace.models(models), resume: false, extensions: [trace.extension], settings: { stream: { deferred: true } }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
 		await trace.start(owner.harness);
 		try {
 			faux.setResponses([answer("deferred answer")]);
@@ -265,13 +265,13 @@ test("retry attempts, manual compaction, and Stop settle persisted spans", { tim
 test("approval wait survives owner reopen in the same persisted trace, then rejection settles spans", { timeout: 10_000 }, async () => {
 	await temporary(async (root) => {
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
-		let owner: LibraryAgent; let trace: DurableTrace; let gate = new ToolGate(); gate.level = "basic";
+		let owner: LibraryRuntime; let trace: DurableTrace; let gate = new ToolGate(); gate.level = "basic";
 		const open = async () => {
 			trace = new DurableTrace(await TraceStore.open(root));
 			const permission = gate.extension(root, () => owner.harness);
 			const tool = defineTool({ name: "write", description: "write", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: "saved" }] }) });
 			const extension = defineExtension({ name: "test", tools: [tool] });
-			owner = await LibraryAgent.open(root, { models: trace.models(models), resume: false, extensions: [extension, permission, trace.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } }, conversationCreated: async (tx, record) => { await tx.doc(LoomApprovalsDoc, record.id); } }, context);
+			owner = await LibraryRuntime.open(root, { models: trace.models(models), resume: false, extensions: [extension, permission, trace.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } }, conversationCreated: async (tx, record) => { await tx.doc(LoomApprovalsDoc, record.id); } }, context);
 			await trace.start(owner.harness);
 		};
 		await open();

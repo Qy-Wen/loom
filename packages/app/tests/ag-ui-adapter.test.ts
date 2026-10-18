@@ -7,9 +7,9 @@ import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
 import { lastValueFrom, timeout, toArray } from "rxjs";
-import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { ChatService } from "../src/main/chat-service.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
-import { LoomAgUiAgent } from "../src/main/ag-ui-agent.ts";
+import { AgUiAdapter } from "../src/main/ag-ui-adapter.ts";
 import { DurableAgentRunner } from "../src/main/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, contextUsage } from "@loom/agent";
@@ -19,7 +19,7 @@ import { McpHost } from "../src/main/mcp/host.ts";
 import { toAgUiMessages } from "../src/shared/ag-ui-messages.ts";
 import { toolResultParts } from "../src/shared/tool-result-content.ts";
 
-async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => Promise<void>, respond?: (request: IncomingMessage, response: ServerResponse) => void) {
+async function fixture(run: (host: ChatService, adapter: AgUiAdapter) => Promise<void>, respond?: (request: IncomingMessage, response: ServerResponse) => void) {
 	const directory = await mkdtemp(join(tmpdir(), "loom-ag-ui-"));
 	const server = createServer((_request, response) => {
 		if (respond) { respond(_request, response); return; }
@@ -28,8 +28,8 @@ async function fixture(run: (host: LibraryAgentHost, adapter: LoomAgUiAgent) => 
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	const runtime = await testChatRuntime(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
-	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
-	try { await host.openLibrary(directory); await run(host, new LoomAgUiAgent(host)); }
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	try { await host.openLibrary(directory); await run(host, new AgUiAdapter(host)); }
 	finally { await host.close(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); await rm(directory, { recursive: true, force: true }); }
 }
 const input = (threadId: string): RunAgentInput => ({ threadId, runId: `run-${threadId}`, messages: [{ id: "user", role: "user", content: "question" }], state: {}, tools: [], context: [], forwardedProps: {} });
@@ -50,7 +50,7 @@ for (const caller of ["main", "retrieve", "create"] as const) {
 			const path = /Full output: ([^\n]+)/.exec(String(result.content))?.[1];
 			assert.ok(path);
 			assert.equal(await readFile(path, "utf8"), full);
-			const owner = host.requireOwner();
+			const owner = host.requireRuntime();
 			const conversationId = Number(String(result.toolCallId).split("/")[0]) as ConversationId;
 			assert.equal(path.startsWith(join(owner.libraryPath, ".agents", "tool-results", String(conversationId))), true);
 			const conversation = await owner.harness.conversation(conversationId, context);
@@ -109,7 +109,7 @@ for (const caller of ["main", "create"] as const) {
 				const [conversationId, entryId, contentIndex] = imageUrl.pathname.slice(1).split("/");
 				assert.equal((await host.getChatImage(conversationId!, entryId!, Number(contentIndex)))?.data, data);
 				const resultConversation = String(imageResult.toolCallId).split("/")[0]!;
-				const root = host.requireOwner().libraryPath;
+				const root = host.requireRuntime().libraryPath;
 				await host.close(); await host.openLibrary(root);
 				const messages = toAgUiMessages((await host.getSession(resultConversation)).messages);
 				const restored = messages.find((message) => message.role === "tool" && toolResultParts(message.content));
@@ -176,7 +176,7 @@ test("trace persists streaming increments before completion and reloads from the
 		try {
 			await host.openLibrary(root);
 			const session = await host.createSession();
-			const adapter = new LoomAgUiAgent(host);
+			const adapter = new AgUiAdapter(host);
 			const run = lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
 			try {
 				await Promise.race([published.promise, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("No live trace before completion")), 2000); timer.unref(); })]);
@@ -206,7 +206,7 @@ test("context reports provider usage, survives reopen, and publishes window-only
 		await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
 		const usage = (await host.getSession(session.id)).context!;
 		assert.deepEqual(usage, { tokens: 1020, window: 128_000, percent: 1020 / 128_000 * 100 });
-		const root = host.requireOwner().libraryPath;
+		const root = host.requireRuntime().libraryPath;
 		await host.close(); await host.openLibrary(root);
 		assert.deepEqual((await host.getSession(session.id)).context, usage);
 		// Defaults steer only new conversations; usage on existing ones is never rewritten.
@@ -250,10 +250,10 @@ test("completed request reconnect after compaction returns full history without 
 		const conversation = await host.conversation(session.id);
 		const originalIds = (await host.getSession(session.id)).messages.map((message) => message.id);
 		await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "loom.user", model: [{ role: "user", content: "tail ".repeat(30_000), timestamp: Date.now() }] }), context);
-		host.requireOwner().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, { beforeCompact: async () => ({ summary: "First exchange summarized." }) })] }));
+		host.requireRuntime().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, { beforeCompact: async () => ({ summary: "First exchange summarized." }) })] }));
 		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
 		const task = await conversation.compact(undefined, context);
-		assert.equal((await host.requireOwner().harness.waitForTask(task, context)).state.outcome.status, "completed");
+		assert.equal((await host.requireRuntime().harness.waitForTask(task, context)).state.outcome.status, "completed");
 		await conversation.waitForIdle(context);
 		assert.ok(!(await conversation.context(context)).entries.some((entry) => String(entry.id) === originalIds[1]));
 		const replay = await lastValueFrom(adapter.clone().run(input(session.id)).pipe(timeout(1500), toArray()));
@@ -295,7 +295,7 @@ test("queued follow-ups stay one at a time and keep streaming after the first an
 				await waitFor("B-partial");
 				assert.equal(finished, false);
 				assert.equal(requests, 2);
-				const inspection = await host.requireOwner().harness.inspect(context);
+				const inspection = await host.requireRuntime().harness.inspect(context);
 				const queued = inspection.submissions.filter((row) => row.conversationId === conversation.id && row.type === "input" && row.status === "queued");
 				assert.equal(queued.length, 1);
 				release[1]!.resolve();
@@ -384,7 +384,7 @@ test("transport detach preserves work; durable reconnect and exact-run Stop need
 		assert.equal(await runner.isRunning({ threadId: session.id }), true);
 		await host.archiveSession(session.id);
 		assert.equal((await host.listSessions()).find((row) => row.id === session.id)?.status, "archived", "closing a busy sent conversation must keep its history");
-		const fresh = new DurableAgentRunner(host, new LoomAgUiAgent(host));
+		const fresh = new DurableAgentRunner(host, new AgUiAdapter(host));
 		const connected = lastValueFrom(fresh.connect({ threadId: session.id }).pipe(toArray()));
 		assert.equal(await fresh.stop({ threadId: session.id, runId: "another-run" }), false);
 		assert.equal(await fresh.isRunning({ threadId: session.id }), true);
@@ -423,8 +423,8 @@ for (const decision of ["approve", "reject", "stop"] as const) {
 				}
 			} });
 			assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
-			if (decision === "approve") assert.equal(await readFile(join(host.requireOwner().libraryPath, "generated.txt"), "utf8"), "generated");
-			else await assert.rejects(readFile(join(host.requireOwner().libraryPath, "generated.txt")), { code: "ENOENT" });
+			if (decision === "approve") assert.equal(await readFile(join(host.requireRuntime().libraryPath, "generated.txt"), "utf8"), "generated");
+			else await assert.rejects(readFile(join(host.requireRuntime().libraryPath, "generated.txt")), { code: "ENOENT" });
 			const gates = events.filter((event) => (event as { activityType?: string }).activityType === "loom.tool_gate") as unknown as Array<{ content: { toolCallId: string; pending: boolean } }>;
 			assert.ok(gates.some((event) => event.content.pending));
 			assert.ok(gates.some((event) => !event.content.pending));

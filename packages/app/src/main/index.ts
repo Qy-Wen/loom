@@ -23,14 +23,11 @@ import {
 } from "@loom/core";
 import {
 	parseAgentPermissionLevel,
-	contentWithPlacedAssets,
-	implicitSelectionAttachments,
 	type LoomAgentOptions,
 } from "@loom/agent";
 import { appendAppLog, appLogDirectory } from "./app-log.ts";
-import { LibraryAgentHost } from "./library-agent-host.ts";
+import { ChatService } from "./chat-service.ts";
 import { chatRecord } from "./chat-record.ts";
-import { BACKGROUND_CONTEXT as agentContext, foldUserText } from "@loom/agent";
 import { composerAssetsAtSend, takeComposerAssets } from "./composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer-library-pick.ts";
 import { stageComposerInput, takeComposerImages } from "./composer-images.ts";
@@ -200,7 +197,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 	tools: [...BUILTIN_TOOLS],
 };
 let modelSettings: ModelSettingsStore | null = null;
-let chatService: ChatModelService | null = null;
+let chatModels: ChatModelService | null = null;
 let mcpSettings: McpSettingsStore | null = null;
 let lastLibrary: LastLibraryStore | null = null;
 let generalSettings: GeneralSettingsStore | null = null;
@@ -217,11 +214,11 @@ let gradePreview: AbortController | null = null;
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
 let pendingLibraryChanges: LibraryChange[] = [];
-let agentManager: LibraryAgentHost | null = null;
+let chat: ChatService | null = null;
 
-function requireAgentManager(): LibraryAgentHost {
-	if (!agentManager) throw new Error("Agent runtime not started");
-	return agentManager;
+function requireChat(): ChatService {
+	if (!chat) throw new Error("Agent runtime not started");
+	return chat;
 }
 
 function sendLibraryChange(change: LibraryChange): void {
@@ -272,7 +269,7 @@ function registerAssetProtocol(): void {
 			const url = new URL(request.url);
 			if (url.hostname === "chat-image") {
 				const match = /^\/([1-9]\d*)\/([1-9]\d*)\/(\d+)$/.exec(url.pathname);
-				const image = match ? await requireAgentManager().getChatImage(match[1]!, match[2]!, Number(match[3])) : undefined;
+				const image = match ? await requireChat().getChatImage(match[1]!, match[2]!, Number(match[3])) : undefined;
 				if (!image || !/^image\/[a-z0-9.+-]+$/i.test(image.mimeType)) return new Response("Image not found", { status: 404 });
 				return new Response(Buffer.from(image.data, "base64"), { headers: { "Content-Type": image.mimeType, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" } });
 			}
@@ -345,7 +342,7 @@ function createWindow(): void {
 async function applyProcessSandbox(): Promise<void> {
 	if (!agentSandbox) throw new Error("Settings store not started");
 	const setting = await agentSandbox.load();
-	await setProcessSandboxEnabled(processSandboxActive(setting, requireAgentManager().getPermissionLevel()));
+	await setProcessSandboxEnabled(processSandboxActive(setting, requireChat().getPermissionLevel()));
 	// Dev installs the sandbox from pnpm install. A packaged app has no
 	// postinstall, so Windows asks for the one-time administrator consent here.
 	if (!app.isPackaged) return;
@@ -353,9 +350,9 @@ async function applyProcessSandbox(): Promise<void> {
 	if (note) appLog(note);
 }
 
-function requireChatService(): ChatModelService {
-	if (!chatService) throw new Error("Chat runtime not started");
-	return chatService;
+function requireChatModels(): ChatModelService {
+	if (!chatModels) throw new Error("Chat runtime not started");
+	return chatModels;
 }
 
 function notifyChatSettingsChanged(): void {
@@ -384,11 +381,11 @@ function askLoginPrompt(window: Electron.BrowserWindow | undefined, providerId: 
 }
 
 function registerChatIpc(): void {
-	ipcMain.handle(IPC.getChatSettings, async () => await requireChatService().view());
+	ipcMain.handle(IPC.getChatSettings, async () => await requireChatModels().view());
 	ipcMain.handle(IPC.saveChatSettings, async (_event, raw: unknown) => {
-		const service = requireChatService();
+		const service = requireChatModels();
 		await service.save(raw as Parameters<ChatModelService["save"]>[0]);
-		requireAgentManager().setChatDefault(await service.selectionForNewSession());
+		requireChat().setChatDefault(await service.selectionForNewSession());
 		notifyChatSettingsChanged();
 		return service.view();
 	});
@@ -412,7 +409,7 @@ function registerChatIpc(): void {
 			target.webContents.send(IPC.chatLoginPrompt, { ...value, providerId, authType: type });
 		};
 		try {
-			await requireChatService().login(providerId, type, {
+			await requireChatModels().login(providerId, type, {
 				signal: controller.signal,
 				prompt: (prompt) => askLoginPrompt(window, providerId, type, prompt, controller.signal),
 				notify,
@@ -441,7 +438,7 @@ function registerChatIpc(): void {
 		reject?.(new Error("Login canceled"));
 	});
 	ipcMain.handle(IPC.chatRefresh, async () => {
-		const service = requireChatService();
+		const service = requireChatModels();
 		await service.refresh({ allowNetwork: true });
 		notifyChatSettingsChanged();
 		return service.view();
@@ -681,13 +678,13 @@ function registerIpc(): void {
 		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
 	});
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
-	ipcMain.handle(IPC.listSessions, () => requireAgentManager().listSessions());
+	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.createSession, async () => {
-		requireAgentManager().setChatDefault(await requireChatService().selectionForNewSession());
-		return chatRecord(await requireAgentManager().createSession());
+		requireChat().setChatDefault(await requireChatModels().selectionForNewSession());
+		return chatRecord(await requireChat().createSession());
 	});
-	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireAgentManager().openSession(id)));
-	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await requireAgentManager().getSession(id, afterEntryId)));
+	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireChat().openSession(id)));
+	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await requireChat().getSession(id, afterEntryId)));
 	ipcMain.handle(IPC.stageComposerAssets, async (_event, id: string, assets: unknown) => {
 		if (typeof id !== "string" || !id.trim()) throw new Error("Session is missing");
 		await stageComposerInput(id, assets, (assetId) => localCore.getAssetFilePath(assetId));
@@ -728,26 +725,13 @@ function registerIpc(): void {
 		if (result.canceled || result.filePaths.length === 0) return [];
 		return draftsFromAssets(await localCore.importExternalFiles(result.filePaths));
 	});
-	ipcMain.handle(IPC.followUp, async (_event, id: string, text: string, clientMessageId?: string) => {
-		const session = await requireAgentManager().getSession(id);
-		const images = await takeComposerImages(id);
-		const chips = await takeLiveComposerAssets(id);
-		const attachments = implicitSelectionAttachments(chips, getUiSelection(), session.messages);
-		const raw = text.replaceAll("\u200b", "");
-		const body = contentWithPlacedAssets(raw.trim() ? raw : "", chips);
-		const content = foldUserText(body, attachments);
-		await (await requireAgentManager().conversation(id)).submit({
-			type: "input", whenBusy: "followUp",
-			content: images.length ? [{ type: "text", text: content }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : content,
-			entry: { kind: "loom.user", data: { text: body, clientMessageId: clientMessageId ?? "" } },
-		}, agentContext);
-	});
-	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string) => chatRecord(await requireAgentManager().branchBefore(id, entryId)));
+	ipcMain.handle(IPC.followUp, (_event, id: string, text: string, clientMessageId?: string) => requireChat().followUp(id, text, clientMessageId));
+	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string) => chatRecord(await requireChat().branchBefore(id, entryId)));
 	ipcMain.handle(IPC.setSessionModel, async (_event, id: string, raw: unknown) => {
 		if (typeof id !== "string" || !raw || typeof raw !== "object") throw new Error("Invalid model selection");
 		const draft = raw as { provider?: unknown; modelId?: unknown; thinkingLevel?: unknown };
 		if (typeof draft.provider !== "string" || !draft.provider.trim() || typeof draft.modelId !== "string" || !draft.modelId.trim()) throw new Error("Model selection needs a provider and a model");
-		const service = requireChatService();
+		const service = requireChatModels();
 		const model = service.models.getModel(draft.provider, draft.modelId);
 		if (!model) throw new Error("Unknown Chat model");
 		if (!service.isModelEnabled(draft.provider, draft.modelId)) throw new Error("Chat model is disabled");
@@ -758,15 +742,15 @@ function registerIpc(): void {
 			thinkingLevel = draft.thinkingLevel as import("@earendil-works/pi-ai").ModelThinkingLevel;
 		}
 		const selection = { provider: draft.provider, modelId: draft.modelId, thinkingLevel };
-		const record = await requireAgentManager().setSessionModel(id, selection);
+		const record = await requireChat().setSessionModel(id, selection);
 		await service.rememberSelection(selection);
-		requireAgentManager().setChatDefault(await service.selectionForNewSession());
+		requireChat().setChatDefault(await service.selectionForNewSession());
 		notifyChatSettingsChanged();
 		return chatRecord(record);
 	});
-	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await requireAgentManager().forkBefore(id, entryId)));
-	ipcMain.handle(IPC.archiveSession, (_event, id: string) => requireAgentManager().archiveSession(id));
-	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => requireAgentManager().unarchiveSession(id));
+	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await requireChat().forkBefore(id, entryId)));
+	ipcMain.handle(IPC.archiveSession, (_event, id: string) => requireChat().archiveSession(id));
+	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => requireChat().unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {
 		if (!modelSettings) throw new Error("Settings store not started");
 		return modelSettings.view();
@@ -792,7 +776,7 @@ function registerIpc(): void {
 		if (!agentInstructions) throw new Error("Settings store not started");
 		if (typeof text !== "string") throw new Error("Instructions must be text.");
 		const saved = await agentInstructions.save(text);
-		await requireAgentManager().setInstructions(saved);
+		await requireChat().setInstructions(saved);
 		return saved;
 	});
 	ipcMain.handle(IPC.getGeneralSettings, async () => {
@@ -835,11 +819,11 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.setUiSelection, (_event, raw: unknown) => {
 		setUiSelection(parseUiSelectionDraft(raw));
 	});
-	ipcMain.handle(IPC.getAgentPermission, (): string => requireAgentManager().getPermissionLevel());
+	ipcMain.handle(IPC.getAgentPermission, (): string => requireChat().getPermissionLevel());
 	ipcMain.handle(IPC.setAgentPermission, async (_event, raw: unknown) => {
 		if (!agentPermission) throw new Error("Permission store not started");
 		const level = await agentPermission.save(parseAgentPermissionLevel(raw));
-		requireAgentManager().setPermissionLevel(level);
+		requireChat().setPermissionLevel(level);
 		await applyProcessSandbox();
 		return level;
 	});
@@ -852,7 +836,7 @@ function registerIpc(): void {
 		const allow = parseCommandAllow(raw);
 		if (!allow) throw new Error("Remembered command is invalid");
 		const view = await commandAllows.remove(allow);
-		requireAgentManager().setCommandAllows(view.allows);
+		requireChat().setCommandAllows(view.allows);
 		notifyCommandAllows(view);
 		return view;
 	});
@@ -861,15 +845,15 @@ function registerIpc(): void {
 		if (decision !== "approve" && decision !== "reject" && decision !== "approve_always") throw new Error("Tool decision is invalid");
 		if (decision === "approve_always") {
 			if (!commandAllows) throw new Error("Permission store not started");
-			const allow = requireAgentManager().pendingCommandAllow(toolCallId);
+			const allow = requireChat().pendingCommandAllow(toolCallId);
 			if (!allow) throw new Error("This command cannot be remembered.");
 			const view = await commandAllows.add(allow);
-			requireAgentManager().setCommandAllows(view.allows);
-			const resolved = requireAgentManager().resolveToolGate(toolCallId, "approve");
+			requireChat().setCommandAllows(view.allows);
+			const resolved = requireChat().resolveToolGate(toolCallId, "approve");
 			notifyCommandAllows(view);
 			return resolved;
 		}
-		return requireAgentManager().resolveToolGate(toolCallId, decision);
+		return requireChat().resolveToolGate(toolCallId, decision);
 	});
 	ipcMain.handle(IPC.getImageGrade, async (_event, assetId: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
@@ -993,7 +977,7 @@ function registerIpc(): void {
 		return settingsView(file);
 	});
 
-	ipcMain.handle(IPC.deleteSession, (_event, id: string) => requireAgentManager().deleteSession(id));
+	ipcMain.handle(IPC.deleteSession, (_event, id: string) => requireChat().deleteSession(id));
 
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
@@ -1079,7 +1063,7 @@ function registerIpc(): void {
 		if (openingLibrary) pendingLibraryChanges.push(change);
 		else sendLibraryChange(change);
 	});
-	requireAgentManager().subscribeSessions((sessions) => {
+	requireChat().subscribeSessions((sessions) => {
 		for (const window of BrowserWindow.getAllWindows()) {
 			if (!window.isDestroyed()) window.webContents.send(IPC.sessionsChanged, sessions);
 		}
@@ -1104,19 +1088,23 @@ app
 
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		const chatStores = createChatStorage(app.getPath("userData"));
-		chatService = new ChatModelService(chatStores, { withIdleProviders: (ids, operation) => requireAgentManager().withIdleChatProviders(ids, operation) });
-		agentManager = new LibraryAgentHost({ ...AGENT_OPTIONS, models: chatService.models }, (usage) => { void agentStats?.record(usage); });
-		await chatService.initialize(process.env);
-		requireAgentManager().setChatDefault(await chatService.selectionForNewSession());
-		chatService.onSecrets((values) => requireAgentManager().setChatSecrets(values));
+		chatModels = new ChatModelService(chatStores, { withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });
+		chat = new ChatService({ ...AGENT_OPTIONS, models: chatModels.models, composer: {
+			getSelection: getUiSelection,
+			takeImages: takeComposerImages,
+			takeAssets: takeLiveComposerAssets,
+		} }, (usage) => { void agentStats?.record(usage); });
+		await chatModels.initialize(process.env);
+		requireChat().setChatDefault(await chatModels.selectionForNewSession());
+		chatModels.onSecrets((values) => requireChat().setChatSecrets(values));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
 		generalSettings = new GeneralSettingsStore(join(app.getPath("userData"), "general.json"));
 		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
 		commandAllows = new CommandAllowStore();
-		requireAgentManager().setPermissionLevel(await agentPermission.load());
+		requireChat().setPermissionLevel(await agentPermission.load());
 		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
-		await requireAgentManager().setInstructions(await agentInstructions.load());
+		await requireChat().setInstructions(await agentInstructions.load());
 		agentSandbox = new AgentSandboxStore(join(app.getPath("userData"), "agent-sandbox.json"));
 		setProcessSandboxFailureHandler(async (reason) => {
 			const store = agentSandbox!;
@@ -1140,15 +1128,10 @@ app
 		mcpHost = new McpHost();
 		if (import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) {
 			const devTrace = await import("./dev-trace-window.ts");
-			requireAgentManager().setTracePublisher(devTrace.publishDevTrace);
-			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), (limit, before) => requireAgentManager().listTraces(limit, before));
+			requireChat().setTracePublisher(devTrace.publishDevTrace);
+			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), (limit, before) => requireChat().listTraces(limit, before));
 		}
-		agentServer = await startAgentServer(
-			requireAgentManager(),
-			getUiSelection,
-			(id) => takeComposerImages(id),
-			(id) => takeLiveComposerAssets(id),
-		);
+		agentServer = await startAgentServer(requireChat());
 		registerAssetProtocol();
 		registerIpc();
 		registerChatIpc();
@@ -1183,7 +1166,7 @@ app.on("will-quit", (event) => {
 	mcpHost = null;
 	void libraryTransition.then(() => Promise.allSettled([
 		server?.close() ?? Promise.resolve(),
-		requireAgentManager().close(),
+		requireChat().close(),
 	])).then(() => Promise.allSettled([
 		localCore.close(),
 		host?.close() ?? Promise.resolve(),
@@ -1228,11 +1211,11 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 	openingLibrary = true;
 	try {
 		// Old asset tools must settle while LocalCore still points at the old library.
-		await requireAgentManager().close();
+		await requireChat().close();
 		const snapshot = await localCore.openLibrary(rootPath);
 		if (snapshot.rootPath) {
-			requireAgentManager().setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
-			await requireAgentManager().openLibrary(snapshot.rootPath);
+			requireChat().setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
+			await requireChat().openLibrary(snapshot.rootPath);
 			await lastLibrary?.remember(snapshot.rootPath);
 			await bindCommandAllows(snapshot.rootPath);
 		} else {
@@ -1242,7 +1225,7 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 		return snapshot;
 	} catch (error) {
 		appLog(`Failed to open library: ${logErrorText(error)}`);
-		await requireAgentManager().close();
+		await requireChat().close();
 		await bindCommandAllows(null);
 		throw error;
 	} finally {
@@ -1315,7 +1298,7 @@ async function setMcpServerLive(draft: McpServerDraft) {
 
 /** Replace registry tools without reopening the library or interrupting durable work. */
 async function syncAgentTools(): Promise<void> {
-	await requireAgentManager().setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
+	await requireChat().setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
 }
 
 function mcpConfigPath(): string {
@@ -1345,7 +1328,7 @@ async function reconnectMcp(
 async function bindCommandAllows(root: string | null): Promise<void> {
 	if (!commandAllows) return;
 	const view = await commandAllows.bind(root);
-	requireAgentManager().setCommandAllows(view.allows);
+	requireChat().setCommandAllows(view.allows);
 	notifyCommandAllows(view);
 }
 
@@ -1369,7 +1352,7 @@ async function readPublicSettings(chatProvider?: string): Promise<PublicSettings
 		agentSandbox.load(),
 		agentInstructions.load(),
 		generalSettings.load(),
-		publicChatSettings(requireChatService(), chatProvider),
+		publicChatSettings(requireChatModels(), chatProvider),
 	]);
 	const slots = {} as PublicSettings["models"];
 	for (const id of Object.keys(models) as Array<keyof typeof models>) slots[id] = publicModelSlot(models[id]);
@@ -1386,10 +1369,10 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 		notifySettingsChanged();
 	}
 	if (patch.chat) {
-		const service = requireChatService();
+		const service = requireChatModels();
 		try { notes.push(...await applyChatSettingsPatch(service, patch.chat)); }
 		finally {
-			requireAgentManager().setChatDefault(await service.selectionForNewSession());
+			requireChat().setChatDefault(await service.selectionForNewSession());
 			notifyChatSettingsChanged();
 		}
 	}
@@ -1405,7 +1388,7 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 	}
 	if (patch.instructions !== undefined) {
 		const saved = await agentInstructions.save(patch.instructions);
-		await requireAgentManager().setInstructions(saved);
+		await requireChat().setInstructions(saved);
 		notes.push("Instructions saved. This reply keeps the text it started with. The next message appends the new text.");
 	}
 	if (patch.mcp) {

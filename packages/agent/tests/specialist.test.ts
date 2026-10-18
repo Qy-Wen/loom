@@ -7,7 +7,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage as answer, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, createSpecialistExtension, defineExtension, defineTool,
-	LibraryAgent, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry, toDurableTool,
+	LibraryRuntime, listLoomConversations, LoomApprovalsDoc, clearPendingApprovals, ToolGate, ToolResultEntry, toDurableTool,
 } from "../src/durable.ts";
 import { partitionLibraryTools, specialistDescription, specialistUserMessage, RETRIEVE_SYSTEM_PROMPT } from "../src/specialist.ts";
 
@@ -57,12 +57,12 @@ test("parent can call an MCP tool directly and delegate a separate task using th
 		name: "comfy__generate", description: "Generate an image", parameters: Type.Object({ brief: Type.String() }),
 		execute: (args) => { const { brief } = args as { brief: string }; briefs.push(brief); return `images/${brief}.png`; },
 	}]);
-	let owner: LibraryAgent | undefined;
+	let owner: LibraryRuntime | undefined;
 	try {
 		const permission = gate.extension(path, () => owner!.harness);
 		const specialist = createSpecialistExtension("create", grouped.create.map(toDurableTool), permission);
 		const parent = defineExtension({ name: "test.parent", tools: [...grouped.parent.map(toDurableTool), specialist.tool] });
-		owner = await LibraryAgent.open(path, {
+		owner = await LibraryRuntime.open(path, {
 			models, resume: false, extensions: [parent, specialist.child, permission],
 			settings: { extensions: [parent, permission] },
 			agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },
@@ -94,14 +94,14 @@ for (const toolName of ["write", "comfy__generate"]) for (const action of ["appr
 	test(`owned specialist ${toolName} ${action}: isolation, busy parent, approval and durable ownership`, { timeout: 10_000 }, async () => {
 		const path = await mkdtemp(join(tmpdir(), "loom-specialist-"));
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
-		let owner: LibraryAgent | undefined;
+		let owner: LibraryRuntime | undefined;
 		let gate = new ToolGate(); gate.level = toolName === "write" ? "basic" : "standard";
 		let writes = 0;
 		const open = async () => {
 			const permission = gate.extension(path, () => owner!.harness);
 			const specialist = createSpecialistExtension("create", [defineTool({ name: toolName, description: toolName, parameters: Type.Object({}), replay: "unsafe", execute: async () => { writes++; return { output: [{ type: "text", text: "saved" }] }; } })], permission);
 			const parentExtension = defineExtension({ name: "parent", tools: [specialist.tool] });
-			return LibraryAgent.open(path, {
+			return LibraryRuntime.open(path, {
 				models, resume: false, extensions: [specialist.child, permission, parentExtension],
 				settings: { extensions: [parentExtension, permission] },
 				agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },
@@ -176,7 +176,7 @@ test("independent retrieve calls run concurrently with separate owned histories"
 	};
 	const specialist = createSpecialistExtension("retrieve", [], { name: "permission" });
 	const parent = defineExtension({ name: "parent", tools: [specialist.tool] });
-	const owner = await LibraryAgent.open(path, { models, extensions: [parent, specialist.child], settings: { extensions: [parent] }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
+	const owner = await LibraryRuntime.open(path, { models, extensions: [parent, specialist.child], settings: { extensions: [parent] }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
 	try {
 		faux.setResponses([answer([fauxToolCall("run_retrieve_agent", { goal: "alpha" }), fauxToolCall("run_retrieve_agent", { goal: "beta" })], { stopReason: "toolUse" }), childResponse, childResponse, answer("both found")]);
 		const conversation = await owner.createConversation({}, context);

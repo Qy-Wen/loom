@@ -9,7 +9,7 @@ import {
 	BACKGROUND_CONTEXT as context,
 	defineExtension,
 	defineTask,
-	LibraryAgent,
+	LibraryRuntime,
 	LoomConversationDoc,
 	listLoomConversations,
 	setConversationArchived,
@@ -33,7 +33,7 @@ test("library owner creates, lists, renames, archives, and reopens committed met
 		const legacy = join(path, ".loom", "harness-sessions");
 		await mkdir(legacy, { recursive: true });
 		await writeFile(join(legacy, "ignored.jsonl"), "invalid legacy session\n");
-		let owner = await LibraryAgent.open(path, options(), context);
+		let owner = await LibraryRuntime.open(path, options(), context);
 		try {
 			assert.equal(owner.storagePath, join(owner.libraryPath, ".loom", "loom.sqlite"));
 			assert.deepEqual(await listLoomConversations(owner.harness, {}, context), []);
@@ -48,7 +48,7 @@ test("library owner creates, lists, renames, archives, and reopens committed met
 			assert.deepEqual((await first.entries({}, 10, undefined, context)).items, []);
 			assert.deepEqual((await first.context(context)).messages, []); // Metadata is not a model message.
 			await owner.close(context);
-			owner = await LibraryAgent.open(path, options(), context);
+			owner = await LibraryRuntime.open(path, options(), context);
 			assert.equal((await owner.harness.conversation(first.id, context))?.id, first.id);
 			assert.deepEqual(await owner.harness.snapshot(LoomConversationDoc, first.id, context), { title: "Project", archived: true, hidden: false, createdAt: (await owner.harness.snapshot(LoomConversationDoc, first.id, context))!.createdAt });
 			await setConversationArchived(owner.harness, first.id, false, context);
@@ -62,7 +62,7 @@ test("library owner creates, lists, renames, archives, and reopens committed met
 
 test("native and raw forks add a branch suffix, reset archive, and retain source history", { timeout: 10_000 }, async () => {
 	await temporary(async (path) => {
-		let owner = await LibraryAgent.open(path, { ...options(), agent: { instructions: "initial" } }, context);
+		let owner = await LibraryRuntime.open(path, { ...options(), agent: { instructions: "initial" } }, context);
 		try {
 			const parent = await owner.createConversation({ title: "素材整理" }, context);
 			const entry = await parent.commit((tx) => tx.appendEntry(parent.id, {
@@ -84,7 +84,7 @@ test("native and raw forks add a branch suffix, reset archive, and retain source
 			assert.equal((await owner.harness.snapshot(LoomConversationDoc, parent.id, context))?.archived, true);
 			assert.equal((await parent.entries({}, 10, undefined, context)).items.length, 1);
 			await owner.close(context);
-			owner = await LibraryAgent.open(path, options(), context);
+			owner = await LibraryRuntime.open(path, options(), context);
 			assert.equal((await owner.harness.snapshot(LoomConversationDoc, fork.id, context))?.title, "素材整理新标题（分支）");
 			assert.equal((await (await owner.harness.conversation(fork.id, context))!.context(context)).messages.length, 1);
 		} finally { await owner.close(context); }
@@ -93,7 +93,7 @@ test("native and raw forks add a branch suffix, reset archive, and retain source
 
 test("metadata is watchable, raw creation initializes it, and unknown IDs do not create phantom docs", { timeout: 10_000 }, async () => {
 	await temporary(async (path) => {
-		const owner = await LibraryAgent.open(path, options(), context);
+		const owner = await LibraryRuntime.open(path, options(), context);
 		try {
 			const raw = await owner.harness.commit((tx) => tx.createConversation({ ownership: { kind: "ownerless" } }), context);
 			const watch = await owner.harness.watchDoc(LoomConversationDoc, raw.id, context);
@@ -115,7 +115,7 @@ test("metadata is watchable, raw creation initializes it, and unknown IDs do not
 
 test("owned conversations have metadata but stay out of the main list", { timeout: 10_000 }, async () => {
 	await temporary(async (path) => {
-		const owner = await LibraryAgent.open(path, options(), context);
+		const owner = await LibraryRuntime.open(path, options(), context);
 		try {
 			const parent = await owner.createConversation({}, context);
 			const task = await parent.commit((tx) => tx.createTask(defineTask<null, { phase: "run" }, null>({
@@ -137,14 +137,14 @@ test("one process cannot open the same library twice, including canonical path a
 		const alias = join(path, "alias");
 		await mkdir(root);
 		await symlink(root, alias, process.platform === "win32" ? "junction" : "dir");
-		const owners = await Promise.allSettled([LibraryAgent.open(root, options(), context), LibraryAgent.open(alias, options(), context)]);
+		const owners = await Promise.allSettled([LibraryRuntime.open(root, options(), context), LibraryRuntime.open(alias, options(), context)]);
 		const successes = owners.filter((result) => result.status === "fulfilled");
 		assert.equal(successes.length, 1);
 		const owner = successes[0]!.value;
 		try {
-			await assert.rejects(LibraryAgent.open(root, options(), context), /already open/);
+			await assert.rejects(LibraryRuntime.open(root, options(), context), /already open/);
 		} finally { await Promise.all([owner.close(context), owner.close(context)]); }
-		const reopened = await LibraryAgent.open(alias, options(), context);
+		const reopened = await LibraryRuntime.open(alias, options(), context);
 		await reopened.close(context);
 	});
 });
@@ -156,15 +156,15 @@ test("failed or cancelled open releases its library reservation; libraries remai
 		await mkdir(first);
 		await mkdir(second);
 		const broken = { ...options(), extensions: [{ name: "broken", get tasks(): Extension["tasks"] { throw new Error("bad extension"); } }] };
-		await assert.rejects(LibraryAgent.open(first, broken, context), /bad extension/);
-		await assert.rejects(LibraryAgent.open(first, options(), withAbortSignal(AbortSignal.abort(), context)));
-		const a = await LibraryAgent.open(first, options(), context);
-		const b = await LibraryAgent.open(second, options(), context);
+		await assert.rejects(LibraryRuntime.open(first, broken, context), /bad extension/);
+		await assert.rejects(LibraryRuntime.open(first, options(), withAbortSignal(AbortSignal.abort(), context)));
+		const a = await LibraryRuntime.open(first, options(), context);
+		const b = await LibraryRuntime.open(second, options(), context);
 		try {
 			await a.createConversation({ title: "only first" }, context);
 			assert.deepEqual(await listLoomConversations(b.harness, {}, context), []);
 			await a.harness.close(context); // Direct durable close also releases ownership.
-			const again = await LibraryAgent.open(first, options(), context);
+			const again = await LibraryRuntime.open(first, options(), context);
 			await again.close(context);
 		} finally { await a.close(context); await b.close(context); }
 	});
@@ -172,7 +172,7 @@ test("failed or cancelled open releases its library reservation; libraries remai
 
 test("registry hot replacement applies without reopening the library", { timeout: 10_000 }, async () => {
 	await temporary(async (path) => {
-		const owner = await LibraryAgent.open(path, options(), context);
+		const owner = await LibraryRuntime.open(path, options(), context);
 		try {
 			const conversation = await owner.createConversation({}, context);
 			const one = defineExtension({ name: "prompt", sections: [section("preamble", () => "one")] });
@@ -189,7 +189,7 @@ test("registry hot replacement applies without reopening the library", { timeout
 
 test("conversation listing reads every page in newest-first order", { timeout: 15_000 }, async () => {
 	await temporary(async (path) => {
-		const owner = await LibraryAgent.open(path, options(), context);
+		const owner = await LibraryRuntime.open(path, options(), context);
 		try {
 			for (let index = 0; index < 260; index++) await owner.createConversation({ title: `chat-${index}` }, context);
 			const rows = await listLoomConversations(owner.harness, {}, context);
@@ -206,13 +206,13 @@ test("owner installs model defaults for new chats without replacing persisted ag
 		const models = createModels();
 		models.setProvider(faux.provider);
 		const agent = { model: { provider: faux.models[0].provider, modelId: faux.models[0].id }, instructions: "default" };
-		let owner = await LibraryAgent.open(path, { models, agent }, context);
+		let owner = await LibraryRuntime.open(path, { models, agent }, context);
 		try {
 			const conversation = await owner.createConversation({ agent: { instructions: "custom" } }, context);
 			faux.setResponses([fauxAssistantMessage("answer")]);
 			assert.equal((await (await conversation.submit({ type: "input", content: "hi" }, context)).wait(context)).status, "done");
 			await owner.close(context);
-			owner = await LibraryAgent.open(path, { models, agent: { ...agent, instructions: "new default" } }, context);
+			owner = await LibraryRuntime.open(path, { models, agent: { ...agent, instructions: "new default" } }, context);
 			const reopened = await owner.harness.conversation(conversation.id, context);
 			assert.equal((await reopened!.agent(context)).instructions, "custom");
 			const fresh = await owner.createConversation({}, context);
@@ -242,14 +242,14 @@ test("close leaves unfinished work persisted and reopen delegates recovery to du
 			},
 		});
 		const settings = { ...options(), extensions: [defineExtension({ name: "work", tasks: [Work] })] };
-		let owner = await LibraryAgent.open(path, settings, context);
+		let owner = await LibraryRuntime.open(path, settings, context);
 		try {
 			const conversation = await owner.createConversation({}, context);
 			const id = await conversation.commit((tx) => tx.createTask(Work, null, { ownership: { kind: "conversation" } }), context);
 			await entered.promise;
 			await owner.close(context);
 			recovering = true;
-			owner = await LibraryAgent.open(path, settings, context);
+			owner = await LibraryRuntime.open(path, settings, context);
 			const done = await owner.harness.waitForTask(id, context);
 			assert.deepEqual(done.state.outcome, { status: "completed", result: "recovered" });
 			assert.equal(runs, 2);

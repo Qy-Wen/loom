@@ -35,6 +35,10 @@ test("trace window updates live and reads persisted runs after Electron restarts
 		app = await launchTestElectron(userData); let page = await app.firstWindow();
 		await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
 		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		const picker = page.getByRole("button", { name: "Conversation model", exact: true });
+		await picker.click();
+		await page.getByRole("menuitemradio", { name: "demo (e2e-chat)", exact: true }).click();
+		await expect(picker).toHaveText("demo (e2e-chat)");
 		let trace = await openTrace(page);
 		for (let turn = 1; turn <= 2; turn++) {
 			await page.getByRole("textbox").fill(`trace question ${turn}`); await page.getByRole("textbox").press("Enter");

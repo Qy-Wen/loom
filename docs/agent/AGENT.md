@@ -4,16 +4,16 @@
 
 Loom's creative-asset agent runs on vendored `pi-durable`. Model/provider integration uses npm `pi-ai`; AG-UI is the frontend protocol. See [MIGRATION](./MIGRATION.md), [EVALS](./EVALS.md), [MEMORY](./MEMORY.md), and [PERMISSION](./PERMISSION.md).
 
-Chat Provider/catalog/auth integration and provider login are live: [CHAT_MODELS](./CHAT_MODELS.md). Per-conversation model selection remains in progress; the architecture below describes current behavior.
+Chat provider/catalog/auth, provider login, and per-conversation model selection are live; see [CHAT_MODELS](./CHAT_MODELS.md).
 
 ## 1. Boundaries
 
 ```
 Renderer: CopilotChat + Loom session/tool views
     │ IPC (plain DTOs) / localhost HTTP SSE (AG-UI)
-Main: LibraryAgentHost + DurableAgentRunner + LoomAgUiAgent
+Main: ChatService + DurableAgentRunner + AgUiAdapter
     │ @loom/agent
-Loom: LibraryAgent + extensions/documents/tool adapters
+Loom: LibraryRuntime + extensions/documents/tool adapters
     │ durable-adapter.ts
 Vendor: pi-durable + pi-codemode
     │ pi-ai models / chord / node:sqlite
@@ -24,13 +24,15 @@ Vendor: pi-durable + pi-codemode
 - Durable owns scheduling, inboxes, retry, compaction, task cancellation, and recovery. Loom does not recreate lanes or a session manager.
 - Retrieval/index storage remains separate in `packages/core`.
 
+`LibraryRuntime` owns one library's Harness, Registry, and storage. App-scoped `ChatService` opens/closes that runtime and owns input preparation/submission, permissions, defaults, history DTOs, and notifications. `AgUiAdapter` and `DurableAgentRunner` handle the frontend protocol and connection lifecycle through the service. Connections retain their original library runtime when the app switches libraries. Parent/specialist extension assembly is shared with headless evaluations through `createChatExtensions()`.
+
 `packages/agent/src` groups by responsibility:
 
 | Responsibility | Modules |
 |---|---|
 | Native boundary and model configuration | `index`, `durable`, `durable-adapter`, `chat-provider` |
-| Library owner and conversation metadata | `library-agent`, `conversation-metadata`, `session-title` |
-| Tools, specialists, permissions | `pi-tools`, `specialist`, `tool-gate`, `tool-permission`, `workspace-path` |
+| Library owner and conversation metadata | `library-runtime`, `conversation-metadata`, `session-title` |
+| Tools, specialists, permissions | `pi-tools`, `chat-extensions`, `specialist`, `tool-gate`, `tool-permission`, `workspace-path` |
 | Prompt sections | `library-extension`, `library-auto-memory`, `library-skills` |
 | Composer and send-time context | `attachments`, `composer-asset`, `composer-image` |
 | Contracts and context occupancy | `types`, `session-dto`, `context-usage` |
@@ -55,14 +57,14 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 
 ## 3. Library ownership and persistence
 
-- `LibraryAgent.open(root, options, context)` opens `<library>/.loom/loom.sqlite` with `node:sqlite`, creating one Harness and Registry. Close delegates to durable and leaves unfinished tasks recoverable.
+- `LibraryRuntime.open(root, options, context)` opens `<library>/.loom/loom.sqlite` with `node:sqlite`, creating one Harness and Registry. Close delegates to durable and leaves unfinished tasks recoverable.
 - Canonical-path reservation prevents duplicate owners within a process. Electron uses an app single-instance lock; other programs must not open the same store as a second active owner. WAL is not owner coordination. Windows runtime validation remains pending.
-- `LibraryAgentHost` installs resources before `resume()`, clears stale approval documents, records the usage baseline, then resumes native recovery.
+- `ChatService` installs resources before `resume()`, clears stale approval documents, records the usage baseline, then resumes native recovery.
 - New independent conversations receive library cwd and current Chat/instruction defaults. Forks retain as-of agent configuration. Default model changes affect only subsequent new conversations; existing conversations keep their saved selection, and each conversation can switch its model/thinking in the composer toolbar (rejected while busy, effective from the next request). Tools replace registry extensions in place.
 - `LoomConversationDoc` stores latest title/archive/hidden/creation metadata outside model context. Forks append `（分支）`, clear archive/hidden, and leave the source unchanged.
 - Chat DTOs paginate native fork-aware `conversation.entries()` history, not compacted `context().entries`. Compaction summaries are not user messages. List/record timestamps use the last non-system, non-compaction message.
 - Fork-before finds the preceding entry in full history, including a start anchor for the first question and messages removed from model context by compaction. Branch-before creates the fork and archives the source. Closing an empty conversation (no chat messages or pending input) hides it without adding History; conversations with messages are archived. Internal start/system entries do not count as chat; inherited fork messages do. Delete hides the conversation, preserving ancestry and files already written.
-- Old `.loom/harness-sessions/` JSONL is ignored, not migrated.
+- Legacy directories under `.loom/` are ignored: neither read nor deleted.
 
 ## 4. Tools, specialists, prompt
 
@@ -80,13 +82,15 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 
 Placed files become `<asset_ref>` blocks in user text. Implicit selection becomes `<ui_selection>` inside a `<system-reminder>` after the words. Fold once **before submit**, then persist the resulting model content unchanged; no attachment sidecar or provider-time conversion is required.
 
+`ChatService.prepareTurn()` consumes staged inputs, folds context, validates empty input, and initializes the title for both ordinary turns and queued follow-ups. Admission waits until the transport observer is attached. Replaying an existing request reuses its submission without consuming the next draft.
+
 `loom.user` entry data keeps display text, so bubbles omit the implicit reminder. Explicit JPEG/PNG/GIF/WebP chips also attach native image content (up to 4, 8 MiB each) to prompts and queued follow-ups; bytes are resolved by live library ID before sending. Other formats remain references. Text-only models receive pi-ai's image-omitted placeholder. Clipboard screenshots without a disk path are imported into `Inbox/` before becoming chips. Removing a chip removes its image from the next message. Repeated selection is detected in persisted folded content; existing messages are never rewritten. Asset refs copy stable IDs and library-relative paths; clicking resolves the current asset by ID, falling back to path.
 
 MCP forwards content blocks to the same `toDurableTool()` adapter as application tools: text/images remain native output; other blocks become JSON text. Durable applies its common text limits (2,000 lines / 50 KiB); images have no common size cap. There is no MCP-specific media processing, truncation, or file cache. Original images remain in durable history for model input. UI history and live tool results carry only `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` references; tool cards load the bytes on demand instead of transporting base64 through IPC/SSE. Text-only tool results keep their existing representation.
 
 ## 6. AG-UI and live rendering
 
-`LoomAgUiAgent` extends `AbstractAgent`; clones retain the host and shared run lifecycle. `watchEvents` provides an atomic `stream.snapshot` separately from later commit batches; consume both.
+`AgUiAdapter` extends `AbstractAgent`; clones retain the chat service and shared connection lifecycle. `ag-ui-events.ts` translates durable events, including partial text/reasoning, child tools, and approvals, independently of submission and subscription management. `watchEvents` provides an atomic `stream.snapshot` separately from later commit batches; consume both.
 
 | Durable / Loom state | AG-UI |
 |---|---|

@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { Type } from "@earendil-works/pi-ai";
 import {
-	BACKGROUND_CONTEXT as context, createModels, LibraryAgent, ToolGate, LoomApprovalsDoc,
+	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, ToolGate, LoomApprovalsDoc,
 	clearPendingApprovals, defineExtension, defineTool,
 } from "@loom/agent/durable";
 
@@ -16,9 +16,9 @@ for (const action of ["approve", "reject", "abort"] as const) {
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 		const gate = new ToolGate(); gate.level = "basic";
 		let calls = 0;
-		let owner: LibraryAgent;
+		let owner: LibraryRuntime;
 		try {
-			owner = await LibraryAgent.open(directory, {
+			owner = await LibraryRuntime.open(directory, {
 				models, extensions: [gate.extension(directory, () => owner.harness), defineExtension({ name: "writes", tools: [defineTool({
 					name: "write", description: "write", parameters: Type.Object({}), execute: async () => { calls++; return { output: [{ type: "text", text: "saved" }] }; },
 				})] })], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },

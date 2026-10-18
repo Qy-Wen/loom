@@ -4,10 +4,9 @@ import { join } from "node:path";
 import { createModels, type Models } from "@earendil-works/pi-ai/models";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import {
-	BACKGROUND_CONTEXT as context, createLibraryExtension, createSpecialistExtension,
-	createWorkspaceTools, partitionLibraryTools, toDurableTool, LibraryAgent,
+	BACKGROUND_CONTEXT as context, createChatExtensions, LibraryRuntime,
 	createChatCustomProvider,
-	type LibraryAgentOptions,
+	type LibraryRuntimeOptions,
 } from "../src/durable.ts";
 import type { ChatSelection } from "../src/chat-model-config.ts";
 import type { LoomTool } from "../src/types.ts";
@@ -29,20 +28,15 @@ export async function evalChatModels(chat: EvalChatEndpoint): Promise<{ models: 
 }
 
 /** Eval fixture only: native handles, no compatibility manager or custom drive/recovery. */
-export async function openEvalAgent(chat: EvalChatEndpoint, options: { systemPrompt?: string; tools?: LoomTool[]; settings?: LibraryAgentOptions["settings"] } = {}) {
+export async function openEvalAgent(chat: EvalChatEndpoint, options: { systemPrompt?: string; tools?: LoomTool[]; settings?: LibraryRuntimeOptions["settings"] } = {}) {
 	const library = await mkdtemp(join(tmpdir(), "loom-eval-"));
 	try {
-	const built = await evalChatModels(chat);
-		const grouped = partitionLibraryTools(options.tools ?? []);
-		const workspace = await createWorkspaceTools({ images: false });
+		const built = await evalChatModels(chat);
 		const permission = { name: "eval.permission" };
-		const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], permission);
-		const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], permission);
-		const assembly = await createLibraryExtension(library, { systemPrompt: options.systemPrompt, tools: grouped.parent, autoMemory: false, skills: false, workspace: { images: false } });
-		const extension = { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] };
-		const owner = await LibraryAgent.open(library, {
-			models: built.models, extensions: [extension, retrieve.child, create.child, permission],
-			settings: { ...options.settings, extensions: [extension] },
+		const assembly = await createChatExtensions(library, { systemPrompt: options.systemPrompt, tools: options.tools, permission, autoMemory: false, skills: false, workspace: { images: false } });
+		const owner = await LibraryRuntime.open(library, {
+			models: built.models, extensions: [assembly.extension, ...assembly.specialists, permission],
+			settings: { ...options.settings, extensions: [assembly.extension] },
 			agent: { model: { provider: built.selection.provider, modelId: built.selection.modelId } },
 		}, context);
 		return { owner, library, async close() { try { await owner.close(context); } finally { await rm(library, { recursive: true, force: true }); } } };

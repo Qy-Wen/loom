@@ -5,14 +5,14 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";
 import {
-	BACKGROUND_CONTEXT as context, createModels, LibraryAgent, GenerationTask, defineExtension, hook,
+	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, GenerationTask, defineExtension, hook,
 } from "../src/durable.ts";
 import { withGenerationDefaults } from "./fixtures/chat-provider-prototype.ts";
 
 /** Approved A semantics: checkpoints retain selection, and recovery resolves current metadata/defaults. */
 test("P0: native recovery preserves model reference/memo and reapplies current metadata/defaults", { timeout: 10_000 }, async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-chat-request-p0-"));
-	let owner: LibraryAgent | undefined;
+	let owner: LibraryRuntime | undefined;
 	try {
 		const first = fauxProvider({ provider: "p0", models: [{ id: "same-model", contextWindow: 128000, maxTokens: 4096 }] });
 		const originalRef = { provider: "p0", modelId: "same-model" };
@@ -23,7 +23,7 @@ test("P0: native recovery preserves model reference/memo and reapplies current m
 			return undefined;
 		} })] });
 		const models = createModels(); models.setProvider(withGenerationDefaults(first.provider, { maxTokens: 64 }));
-		owner = await LibraryAgent.open(root, { models, extensions: [pin], agent: { model: originalRef }, settings: { retry: { enabled: false } } }, context);
+		owner = await LibraryRuntime.open(root, { models, extensions: [pin], agent: { model: originalRef }, settings: { retry: { enabled: false } } }, context);
 		const conversation = await owner.createConversation({}, context);
 		first.setResponses([async (_messages, options, _state, model) => {
 			assert.equal(options?.maxTokens, 64);
@@ -59,7 +59,7 @@ test("P0: native recovery preserves model reference/memo and reapplies current m
 			assert.equal(model.contextWindow, 32000, "the same reference resolves current catalog metadata");
 			return answer("recovered");
 		}]);
-		owner = await LibraryAgent.open(root, { models: reopenedModels, extensions: [restoredPin], resume: false }, context);
+		owner = await LibraryRuntime.open(root, { models: reopenedModels, extensions: [restoredPin], resume: false }, context);
 		const restoredConversation = await owner.harness.conversation(conversation.id, context);
 		assert.deepEqual((await restoredConversation!.agent(context)).model, originalRef);
 		owner.harness.resume();
@@ -74,11 +74,11 @@ test("P0: native recovery preserves model reference/memo and reapplies current m
 
 test("P0: real durable compaction cap takes priority over injected generation budget", { timeout: 10_000 }, async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-chat-compact-p0-"));
-	let owner: LibraryAgent | undefined;
+	let owner: LibraryRuntime | undefined;
 	try {
 		const faux = fauxProvider({ models: [{ id: "test", contextWindow: 128000, maxTokens: 8192 }] });
 		const models = createModels(); models.setProvider(withGenerationDefaults(faux.provider, { maxTokens: 4096 }));
-		owner = await LibraryAgent.open(root, { models, agent: { model: { provider: faux.provider.id, modelId: "test" } }, settings: { compaction: { reserveTokens: 1000, keepRecentTokens: 100, backgroundTokens: 0 }, retry: { enabled: false } } }, context);
+		owner = await LibraryRuntime.open(root, { models, agent: { model: { provider: faux.provider.id, modelId: "test" } }, settings: { compaction: { reserveTokens: 1000, keepRecentTokens: 100, backgroundTokens: 0 }, retry: { enabled: false } } }, context);
 		const conversation = await owner.createConversation({}, context);
 		await conversation.commit(async (tx) => {
 			for (let i = 0; i < 6; i++) await tx.appendEntry(conversation.id, { kind: "p0.user", model: [{ role: "user", content: "context ".repeat(100), timestamp: i }] });

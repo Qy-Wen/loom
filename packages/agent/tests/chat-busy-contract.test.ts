@@ -4,18 +4,18 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";
-import { BACKGROUND_CONTEXT as context, createModels, LibraryAgent } from "../src/durable.ts";
+import { BACKGROUND_CONTEXT as context, createModels, LibraryRuntime } from "../src/durable.ts";
 import { withGenerationDefaults } from "./fixtures/chat-provider-prototype.ts";
 
 test("P0: inspect exposes busy generations; configure is not a busy guard and active requests keep their snapshot", { timeout: 10_000 }, async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-chat-busy-p0-"));
-	let owner: LibraryAgent | undefined;
+	let owner: LibraryRuntime | undefined;
 	const release = Promise.withResolvers<void>();
 	try {
 		const first = fauxProvider({ provider: "first", models: [{ id: "model", contextWindow: 128000, maxTokens: 8192 }] });
 		const second = fauxProvider({ provider: "second", models: [{ id: "model", contextWindow: 32000, maxTokens: 8192 }] });
 		const models = createModels(); models.setProvider(withGenerationDefaults(first.provider, { maxTokens: 64 })); models.setProvider(second.provider);
-		owner = await LibraryAgent.open(root, { models, agent: { model: { provider: "first", modelId: "model" } }, settings: { retry: { enabled: false } } }, context);
+		owner = await LibraryRuntime.open(root, { models, agent: { model: { provider: "first", modelId: "model" } }, settings: { retry: { enabled: false } } }, context);
 		const conversation = await owner.createConversation({}, context);
 		const entered = Promise.withResolvers<void>();
 		first.setResponses([async (_messages, options, _state, model) => {

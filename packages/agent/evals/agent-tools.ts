@@ -12,7 +12,7 @@ import { pathToFileURL } from "node:url";
 import { Type } from "@earendil-works/pi-ai";
 import { EVAL_FILES } from "../../core/evals/library.ts";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, type AssetRefAttachment } from "../src/attachments.ts";
-import { watchEvents, type AgentEvent, type LibraryAgent } from "../src/durable.ts";
+import { watchEvents, type AgentEvent, type LibraryRuntime } from "../src/durable.ts";
 import { openEvalAgent, context } from "./runtime.ts";
 import type { LoomTool } from "../src/types.ts";
 import { answerFromEvents, callsFromEvents, scoreAgentTask, type AgentScore } from "./agent-score.ts";
@@ -221,7 +221,7 @@ export function startStubChat(): Promise<{ baseUrl: string; close: () => Promise
 }
 
 async function runTask(
-	owner: LibraryAgent,
+	owner: LibraryRuntime,
 	task: AgentEvalTask,
 ): Promise<AgentScore> {
 	const conversation = await owner.createConversation({}, context);

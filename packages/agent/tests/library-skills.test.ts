@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryAgent, createModels } from "../src/durable.ts";
+import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryRuntime, createModels } from "../src/durable.ts";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/library-skills.ts";
 
@@ -103,12 +103,12 @@ test("skills honor scoped ignores, stop at a skill root, diagnose malformed/dupl
 
 test("library skills section reloads the catalog on a later request without injecting bodies", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-section-"));
-	let owner: LibraryAgent | undefined;
+	let owner: LibraryRuntime | undefined;
 	try {
 		await writeSkill(root, "brand-voice", "A & B < C", BODY);
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 		const assembly = await createLibraryExtension(root, { autoMemory: false, workspace: { images: false } });
-		owner = await LibraryAgent.open(root, { models, extensions: [assembly.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, BACKGROUND_CONTEXT);
+		owner = await LibraryRuntime.open(root, { models, extensions: [assembly.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, BACKGROUND_CONTEXT);
 		const conversation = await owner.createConversation({}, BACKGROUND_CONTEXT);
 		for (const description of ["A &amp; B &lt; C", "New description"]) {
 			faux.setResponses([(request) => {

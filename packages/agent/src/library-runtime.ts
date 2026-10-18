@@ -20,7 +20,7 @@ import { initializeConversationMetadata, LoomConversationDoc } from "./conversat
 /** Storage identity is the library directory, not cwd or the currently selected conversation. */
 const openLibraries = new Set<string>();
 
-export type LibraryAgentOptions = {
+export type LibraryRuntimeOptions = {
 	models: Models;
 	/** Default true; hosts may delay recovery until approval/resources are initialized. */
 	resume?: boolean;
@@ -36,7 +36,7 @@ export type LibraryAgentOptions = {
 };
 
 /** One library, one Harness and Registry. Task scheduling/recovery belongs to durable, not this owner. */
-export class LibraryAgent {
+export class LibraryRuntime {
 	readonly libraryPath: string;
 	readonly storagePath: string;
 	readonly harness: Harness;
@@ -49,7 +49,7 @@ export class LibraryAgent {
 		this.registry = registry;
 	}
 
-	static async open(libraryPath: string, options: LibraryAgentOptions, context: Context): Promise<LibraryAgent> {
+	static async open(libraryPath: string, options: LibraryRuntimeOptions, context: Context): Promise<LibraryRuntime> {
 		context.abortSignal?.throwIfAborted();
 		const root = await realpath(libraryPath);
 		// realpath normalizes symlinks; Windows paths are case-insensitive.
@@ -81,7 +81,7 @@ export class LibraryAgent {
 			// Keep the reservation until durable has closed storage, including failure-driven close.
 			void harness.closed.then(() => openLibraries.delete(key));
 			if (options.resume !== false) harness.resume();
-			return new LibraryAgent(root, harness, registry);
+			return new LibraryRuntime(root, harness, registry);
 		} catch (error) {
 			try {
 				if (harness !== undefined) await harness.close(BACKGROUND_CONTEXT);

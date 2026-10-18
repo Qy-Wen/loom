@@ -4,16 +4,16 @@
 
 Loom 的创作素材 Agent 使用源码级 vendor 的 `pi-durable`。模型接入使用 npm `pi-ai`，前端协议是 AG-UI。参见 [MIGRATION](./MIGRATION.zh-CN.md)、[EVALS](./EVALS.zh-CN.md)、[MEMORY](./MEMORY.zh-CN.md)、[PERMISSION](./PERMISSION.zh-CN.md)。
 
-Chat 的 Provider/目录/鉴权与会话独立模型接入方案（含 OAuth）见 [CHAT_MODELS](./CHAT_MODELS.zh-CN.md)。P1 存储与 P2 运行时/Host 注入已实现，但未接入生产启动；该文档为实施清单，下文仍描述当前运行时。
+Chat 的 Provider/目录/鉴权、服务商登录和每条对话独立选择模型均已接入生产运行时，见 [CHAT_MODELS](./CHAT_MODELS.zh-CN.md)。
 
 ## 1. 边界
 
 ```
 Renderer：CopilotChat + Loom 会话/工具视图
     │ IPC（纯 DTO）/ localhost HTTP SSE（AG-UI）
-Main：LibraryAgentHost + DurableAgentRunner + LoomAgUiAgent
+Main：ChatService + DurableAgentRunner + AgUiAdapter
     │ @loom/agent
-Loom：LibraryAgent + extensions/documents/tool adapters
+Loom：LibraryRuntime + extensions/documents/tool adapters
     │ durable-adapter.ts
 Vendor：pi-durable + pi-codemode
     │ pi-ai models / chord / node:sqlite
@@ -24,13 +24,15 @@ Vendor：pi-durable + pi-codemode
 - 调度、inbox、重试、压缩、任务取消和恢复属于 durable。Loom 不重建 lane 或旧 session manager。
 - 检索与索引仍使用 `packages/core` 的独立存储。
 
+`LibraryRuntime` 持有一个素材库的 Harness、Registry 和存储。应用级 `ChatService` 打开/关闭运行时，并负责消息准备与提交、权限、默认配置、历史 DTO 和变更通知。`AgUiAdapter` 与 `DurableAgentRunner` 通过服务处理前端协议和连接生命周期。切换素材库后，旧连接仍绑定原运行时。应用与无界面评测通过 `createChatExtensions()` 共用主对话和子代理的扩展组装。
+
 `packages/agent/src` 按职责组织：
 
 | 职责 | 模块 |
 |---|---|
 | 原生边界与模型配置 | `index`、`durable`、`durable-adapter`、`chat-provider` |
-| 库级 owner 与会话元数据 | `library-agent`、`conversation-metadata`、`session-title` |
-| 工具、specialist、权限 | `pi-tools`、`specialist`、`tool-gate`、`tool-permission`、`workspace-path` |
+| 库级 owner 与会话元数据 | `library-runtime`、`conversation-metadata`、`session-title` |
+| 工具、specialist、权限 | `pi-tools`、`chat-extensions`、`specialist`、`tool-gate`、`tool-permission`、`workspace-path` |
 | Prompt sections | `library-extension`、`library-auto-memory`、`library-skills` |
 | 输入框与发送时上下文 | `attachments`、`composer-asset`、`composer-image` |
 | 契约与上下文占用 | `types`、`session-dto`、`context-usage` |
@@ -55,14 +57,14 @@ git merge vendor-clean
 
 ## 3. 库级 owner 与持久化
 
-- `LibraryAgent.open(root, options, context)` 用 `node:sqlite` 打开 `<library>/.loom/loom.sqlite`，创建一个 Harness 和 Registry。关闭委派 durable，未完成任务保留为可恢复状态。
+- `LibraryRuntime.open(root, options, context)` 用 `node:sqlite` 打开 `<library>/.loom/loom.sqlite`，创建一个 Harness 和 Registry。关闭委派 durable，未完成任务保留为可恢复状态。
 - Canonical path 预留防止同进程重复 owner；Electron 使用应用单实例锁。其他程序不得同时作为第二个活跃 owner 打开同一存储。WAL 不等于 owner 协调；Windows 运行时仍待实机验证。
-- `LibraryAgentHost` 先安装资源、清理过期审批、记录 usage 基线，再调用原生 `resume()`。
+- `ChatService` 先安装资源、清理过期审批、记录 usage 基线，再调用原生 `resume()`。
 - 新独立会话使用库 cwd 和当前 Chat/instructions 默认值。fork 保留 as-of agent 配置。修改模型/指令时 configure 现有会话并更新后续默认值；工具通过 registry extension 原地替换。
 - `LoomConversationDoc` 保存最新 title/archive/hidden/创建时间，不进入模型上下文。fork 标题追加 `（分支）`，清除 archive/hidden，不改变来源。
 - 聊天 DTO 使用原生 `conversation.entries()` 分页读取 fork-aware 完整历史，不使用压缩后的 `context().entries`；压缩摘要不充当用户消息。列表和记录的更新时间取最后一条非 system/compaction 消息。
 - fork-before 从完整历史取目标之前的 entry，首个问题使用初始 anchor，被压缩的旧消息也可分叉。branch-before 创建 fork 并归档来源。关闭空会话（无聊天消息或待处理输入）直接隐藏，不进入历史；有消息的会话仍归档。内部起始/system 记录不算聊天，fork 继承的消息算。删除只隐藏，保留祖先历史和已写入的文件。
-- 旧 `.loom/harness-sessions/` JSONL 直接忽略，不迁移。
+- `.loom/` 下的旧目录一律忽略，不读取也不删除。
 
 ## 4. 工具、specialist 与 prompt
 
@@ -79,6 +81,8 @@ git merge vendor-clean
 
 放进输入框的文件成为 user text 的 `<asset_ref>`；隐式选区成为文字之后 `<system-reminder>` 中的 `<ui_selection>`。**submit 前折叠一次**，持久化后的 model content 不再改写；不需要 attachments 旁路字段或请求时转换。
 
+普通消息与排队追加共用 `ChatService.prepareTurn()`，消费暂存输入、折叠上下文、检查空输入并初始化标题。传输层观察器接好之后才提交。重放已有 request 时复用原 submission，不消费下一份草稿。
+
 `loom.user` entry data 保存展示文字，气泡不显示隐式提醒。显式添加的 JPEG/PNG/GIF/WebP 芯片还会把图片内容附到普通消息和排队追加消息里（最多 4 张，每张 8 MiB），发送前按素材 ID 读取库内当前文件。其他图片格式保留为引用；纯文字模型收到 pi-ai 的图片省略占位文字。没有磁盘路径的剪贴板截图先导入 `Inbox/`，再成为芯片。移除芯片也会移除下一条消息里的对应图片。重复选区从已折叠内容识别，旧消息不改写。asset ref 复制稳定 ID 与库内相对路径，点击先按 ID 找当前素材，再回退到路径。
 
 MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和图片保留为原生结果，其他内容块转为 JSON 文字。Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
@@ -87,7 +91,7 @@ MCP 将内容块原样交给应用工具共用的 `toDurableTool()`：文字和�
 
 ## 6. AG-UI 与实时显示
 
-`LoomAgUiAgent` 继承 `AbstractAgent`；clone 保留 host 和共享运行生命周期。`watchEvents` 的原子 `stream.snapshot` 与后续 commit batch 分开提供，两者都需消费。
+`AgUiAdapter` 继承 `AbstractAgent`；clone 保留聊天服务和共享连接生命周期。`ag-ui-events.ts` 独立转换 durable 事件，处理文字/思考增量、子对话工具和审批，不负责提交或订阅管理。`watchEvents` 的原子 `stream.snapshot` 与后续 commit batch 分开提供，两者都需消费。
 
 | Durable / Loom 状态 | AG-UI |
 |---|---|

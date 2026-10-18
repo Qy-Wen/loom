@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { Type } from "@earendil-works/pi-ai";
 import { fauxAssistantMessage as answer, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
-	BACKGROUND_CONTEXT as context, createModels, defineExtension, LibraryAgent,
+	BACKGROUND_CONTEXT as context, createModels, defineExtension, LibraryRuntime,
 	LoomApprovalsDoc, ToolGate, toDurableTool,
 } from "../src/durable.ts";
 
@@ -20,7 +20,7 @@ for (const level of ["basic", "standard"] as const) {
 			const gate = new ToolGate();
 			gate.level = level;
 			const calls: unknown[] = [];
-			let owner: LibraryAgent | undefined;
+			let owner: LibraryRuntime | undefined;
 			try {
 				const permission = gate.extension(path, () => owner!.harness);
 				const tools = defineExtension({ name: "test.publish", tools: [toDurableTool({
@@ -28,7 +28,7 @@ for (const level of ["basic", "standard"] as const) {
 					parameters: Type.Object({ file: Type.String(), title: Type.String() }),
 					execute: (args) => { calls.push(args); return "published"; },
 				})] });
-				owner = await LibraryAgent.open(path, {
+				owner = await LibraryRuntime.open(path, {
 					models, resume: false, extensions: [tools, permission],
 					settings: { extensions: [tools, permission] },
 					agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },

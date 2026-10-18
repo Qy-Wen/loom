@@ -7,26 +7,98 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, InboxDoc } from "@loom/agent/durable";
 import type { LoomTool } from "@loom/agent";
-import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { ChatService } from "../src/main/chat-service.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
 import { createModels } from "@earendil-works/pi-ai/models";
+import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
+import type { AssetRefAttachment, ComposerImageInput } from "@loom/agent";
+
+test("normal turns and follow-ups share image/ref preparation; replay never consumes a new draft", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-chat-input-"));
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	const image: ComposerImageInput = { filename: "image.png", mimeType: "image/png", data: "iVBORw0KGgoAAAAA" };
+	const chip: AssetRefAttachment = { type: "asset_ref", assetId: "image-1", path: "Inbox/image.png", assetType: "image" };
+	let images: ComposerImageInput[] = [image];
+	let assets: AssetRefAttachment[] = [chip];
+	let consumed = 0;
+	const service = new ChatService({ models, chatDefault: { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" }, composer: {
+		takeImages: async () => { consumed++; return images.splice(0); },
+		takeAssets: async () => assets.splice(0),
+	} });
+	try {
+		await service.openLibrary(path);
+		const session = await service.createSession();
+		faux.setResponses([fauxAssistantMessage("first")]);
+		const first = await (await service.prepareTurn(session.id, "\u200blook", { requestId: "first", clientMessageId: "client-first" })).submit();
+		assert.equal((await service.waitForTurn(first)).status, "done");
+		const initial = await service.getSession(session.id);
+		assert.equal(initial.title, "look");
+		images = [image]; assets = [chip];
+		const replay = await service.prepareTurn(session.id, "", { requestId: "first" });
+		assert.equal((await replay.submit()).id, first.id);
+		assert.equal(consumed, 1);
+		assert.deepEqual((await service.getSession(session.id)).messages, initial.messages);
+		faux.setResponses([fauxAssistantMessage("second")]);
+		await service.followUp(session.id, "look", "client-followup");
+		await (await service.conversation(session.id)).waitForIdle(context);
+		const users = (await service.getSession(session.id)).messages.filter((message) => message.role === "user");
+		assert.equal(users.length, 2);
+		assert.deepEqual(users[0]!.content, users[1]!.content);
+		assert.ok(JSON.stringify(users[0]!.content).includes("asset_id: image-1"));
+		assert.ok(JSON.stringify(users[0]!.content).includes(image.data));
+		assert.equal(users[1]!.clientMessageId, "client-followup");
+		assert.equal(consumed, 2);
+	} finally { await service.close(); await rm(path, { recursive: true, force: true }); }
+});
+
+test("a connection from the previous library cannot submit to or cancel the new library", { timeout: 10_000 }, async () => {
+	const first = await mkdtemp(join(tmpdir(), "loom-chat-first-"));
+	const second = await mkdtemp(join(tmpdir(), "loom-chat-second-"));
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	const finish = Promise.withResolvers<void>();
+	const started = Promise.withResolvers<void>();
+	const service = new ChatService({ models, chatDefault: { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" } });
+	try {
+		await service.openLibrary(first);
+		const original = await service.createSession();
+		const stale = await service.connect(original.id);
+		await service.openLibrary(second);
+		const current = await service.createSession();
+		assert.equal(current.id, original.id, "IDs can collide across library databases");
+		faux.setResponses([async () => { started.resolve(); await finish.promise; return fauxAssistantMessage("still running in the new library"); }]);
+		const submission = await (await service.prepareTurn(current.id, "new library")).submit();
+		await started.promise;
+		assert.throws(() => stale.prepareTurn("old draft"), /library changed/);
+		await assert.rejects(stale.watch());
+		await stale.abort().catch(() => {});
+		assert.equal(await service.isRunning(current.id), true);
+		finish.resolve();
+		assert.equal((await service.waitForTurn(submission)).status, "done");
+		assert.deepEqual((await service.getSession(current.id)).messages.filter((message) => message.role === "user").map((message) => message.displayContent), ["new library"]);
+	} finally {
+		finish.resolve(); await service.close();
+		await rm(first, { recursive: true, force: true }); await rm(second, { recursive: true, force: true });
+	}
+});
 
 test("MCP tools stay shared on live updates without reopening the library", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-mcp-"));
 	const publish: LoomTool = { name: "social__publish", description: "Publish", parameters: { type: "object" }, execute: () => "published" };
 	const generate: LoomTool = { name: "comfy__generate", description: "Generate", parameters: { type: "object" }, execute: () => "generated" };
-	const host = new LibraryAgentHost({ tools: [generate], models: createModels() });
-	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
+	const host = new ChatService({ tools: [generate], models: createModels() });
+	const names = (extension: string) => host.requireRuntime().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
 	try {
 		await host.openLibrary(path);
-		const owner = host.requireOwner();
+		const owner = host.requireRuntime();
 		const session = await host.createSession();
 		for (const extension of ["loom.library", "loom.create"]) {
 			assert.ok(names(extension).includes("comfy__generate"));
 			assert.ok(!names(extension).includes("social__publish"));
 		}
 		await host.setTools([publish, generate]);
-		assert.equal(host.requireOwner(), owner);
+		assert.equal(host.requireRuntime(), owner);
 		for (const extension of ["loom.library", "loom.create"]) {
 			assert.ok(names(extension).includes("social__publish"));
 			assert.ok(names(extension).includes("comfy__generate"));
@@ -45,11 +117,11 @@ test("MCP tools stay shared on live updates without reopening the library", asyn
 test("retrieval tools are available to the parent and retrieve specialist across live updates", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-retrieval-"));
 	const tools: LoomTool[] = ["search_assets", "inspect_asset"].map((name) => ({ name, description: name, parameters: { type: "object" }, execute: () => "found" }));
-	const host = new LibraryAgentHost({ tools, models: createModels() });
-	const names = (extension: string) => host.requireOwner().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
+	const host = new ChatService({ tools, models: createModels() });
+	const names = (extension: string) => host.requireRuntime().registry.snapshot().extension(extension)?.tools?.map((tool) => tool.name) ?? [];
 	try {
 		await host.openLibrary(path);
-		const owner = host.requireOwner();
+		const owner = host.requireRuntime();
 		for (const extension of ["loom.library", "loom.retrieve"]) {
 			assert.ok(names(extension).includes("search_assets"));
 			assert.ok(names(extension).includes("inspect_asset"));
@@ -58,7 +130,7 @@ test("retrieval tools are available to the parent and retrieve specialist across
 		assert.ok(names("loom.create").includes("inspect_asset"));
 		for (const name of ["read", "edit", "write", "bash"]) assert.ok(names("loom.create").includes(name));
 		await host.setTools([tools[1]!]);
-		assert.equal(host.requireOwner(), owner);
+		assert.equal(host.requireRuntime(), owner);
 		for (const extension of ["loom.library", "loom.retrieve"]) {
 			assert.ok(!names(extension).includes("search_assets"));
 			assert.ok(names(extension).includes("inspect_asset"));
@@ -69,7 +141,7 @@ test("retrieval tools are available to the parent and retrieve specialist across
 
 test("app fork-before switches context, archives source, and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-"));
-	const host = new LibraryAgentHost({ models: createModels() });
+	const host = new ChatService({ models: createModels() });
 	try {
 		await host.openLibrary(path);
 		const record = await host.createSession();
@@ -96,7 +168,7 @@ test("app fork-before switches context, archives source, and hides deletion with
 test("compaction and reopen preserve paginated chat history and forks before compacted messages", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-history-"));
 	const runtime = await testChatRuntime("http://localhost/v1");
-	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const session = await host.createSession();
@@ -109,13 +181,13 @@ test("compaction and reopen preserve paginated chat history and forks before com
 			}));
 			return rows;
 		}, context);
-		host.requireOwner().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, {
+		host.requireRuntime().registry.install(defineExtension({ name: "test.summary", hooks: [hook(CompactionTask, {
 			beforeCompact: async () => ({ summary: "Earlier questions summarized." }),
 		})] }));
 		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
 		const beforeUsage = (await host.getSession(session.id)).context!;
 		const task = await conversation.compact(undefined, context);
-		assert.equal((await host.requireOwner().harness.waitForTask(task, context)).state.outcome.status, "completed");
+		assert.equal((await host.requireRuntime().harness.waitForTask(task, context)).state.outcome.status, "completed");
 		await conversation.waitForIdle(context);
 		const active = await conversation.context(context);
 		assert.ok(active.head, "a real compaction head must be placed");
@@ -142,7 +214,7 @@ test("compaction and reopen preserve paginated chat history and forks before com
 
 test("closing empty conversations hides them, while sent or inherited history remains archived", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-empty-close-"));
-	const host = new LibraryAgentHost({ models: createModels() });
+	const host = new ChatService({ models: createModels() });
 	try {
 		await host.openLibrary(path);
 		const empty = await host.createSession();
@@ -171,7 +243,7 @@ test("closing empty conversations hides them, while sent or inherited history re
 test("instruction edits apply to both existing and subsequently created conversations; model defaults affect new sessions only", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-defaults-"));
 	const runtime = await testChatRuntime("http://localhost/v1");
-	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const first = await host.createSession();
@@ -192,7 +264,7 @@ test("instruction edits apply to both existing and subsequently created conversa
 test("setSessionModel persists per-conversation selection, rejects while busy, and survives reopen", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-model-"));
 	const runtime = await testChatRuntime("http://localhost/v1");
-	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const first = await host.createSession();
@@ -221,7 +293,7 @@ test("setSessionModel rejects while a request is streaming", { timeout: 10_000 }
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	const runtime = await testChatRuntime(`http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
-	const host = new LibraryAgentHost({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
 	try {
 		await host.openLibrary(path);
 		const session = await host.createSession();

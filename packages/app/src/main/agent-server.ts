@@ -6,11 +6,10 @@
  * closed on app quit.
  */
 import { createServer, type Server } from "node:http";
-import type { AssetRefAttachment, ComposerImageInput, UiSelectionFields } from "@loom/agent";
 import { CopilotRuntime } from "@copilotkit/runtime/v2";
 import { createCopilotNodeListener } from "@copilotkit/runtime/v2/node";
-import type { LibraryAgentHost } from "./library-agent-host.ts";
-import { LoomAgUiAgent } from "./ag-ui-agent.ts";
+import type { ChatService } from "./chat-service.ts";
+import { AgUiAdapter } from "./ag-ui-adapter.ts";
 import { DurableAgentRunner } from "./durable-agent-runner.ts";
 
 export interface AgentServer {
@@ -24,19 +23,14 @@ export interface AgentServer {
 const ENDPOINT = "/api/copilotkit";
 const AGENT_ID = "loom";
 
-export async function startAgentServer(
-	manager: LibraryAgentHost,
-	getUiSelection?: () => UiSelectionFields | null,
-	takeComposerImages?: (sessionId: string) => Promise<ComposerImageInput[]>,
-	takeComposerAssets?: (sessionId: string) => Promise<AssetRefAttachment[]>,
-): Promise<AgentServer> {
+export async function startAgentServer(service: ChatService): Promise<AgentServer> {
 	// Local-first: opt out of CopilotKit's runtime telemetry.
 	process.env.COPILOTKIT_TELEMETRY_DISABLED ??= "true";
 
-	const agent = new LoomAgUiAgent(manager, getUiSelection, takeComposerImages, takeComposerAssets);
+	const agent = new AgUiAdapter(service);
 	const runtime = new CopilotRuntime({
 		agents: { [AGENT_ID]: agent },
-		runner: new DurableAgentRunner(manager, agent),
+		runner: new DurableAgentRunner(service, agent),
 	});
 
 	const listener = createCopilotNodeListener({ runtime, basePath: ENDPOINT });

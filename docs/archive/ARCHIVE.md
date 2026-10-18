@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Chat runtime, service, and protocol boundaries
+
+`LibraryRuntime` owns the library's Harness, Registry, and storage. `ChatService` centralizes ordinary/queued input preparation and submission, permissions, defaults, DTOs, and notifications. `AgUiAdapter` owns connection lifecycle; `ag-ui-events.ts` translates durable events without submitting work. `DurableAgentRunner` delegates running/stop checks to the service. Library switches cannot redirect old connections into the new runtime. Applications and evaluations share parent/specialist extension assembly through `createChatExtensions()`.
+
+macOS validation passed: workspace typechecks/unit tests, production and trace builds, 34 durable contracts, four offline agent/tool evaluations, and 27 relevant Electron tests including trace restart. Added focused coverage for input replay, library-switch isolation, interleaved stream blocks, and child tool/image events. Trace acceptance explicitly selects the configured model for its existing startup conversation.
+
+---
+
 ## Composer image input
 
 Explicit JPEG/PNG/GIF/WebP attachments keep their library chips and send native image blocks through pi-ai, including queued follow-ups and edited questions. Clipboard screenshots without paths import into `Inbox/`. Image bytes stay in durable history; renderer records use media URLs. The unused image-staging IPC and old image-only names/styles are removed. See [AGENT](../agent/AGENT.md).

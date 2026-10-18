@@ -33,7 +33,7 @@ Renderer：Provider 设置 / 登录交互 / 会话模型选择
 Main：ChatModelService + 配置/凭据/目录存储
     │ @loom/agent 的纯模型装配与配置契约
 pi-ai Models：内置 Provider + 自定义 Provider
-    │ 注入现有 LibraryAgentHost / LibraryAgent
+    │ 注入现有 ChatService / LibraryRuntime
 pi-durable Harness：会话选择、生成、压缩与恢复
 ```
 
@@ -43,7 +43,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 |---|---|
 | `packages/agent/src` | 替换现有 endpoint-only adapter：Provider 装配、自定义模型校验、模型元数据与思考等级；不依赖 Electron、app 存储或 UI |
 | `packages/app/src/main` | 一个应用级、长期存在的 Chat 模型运行时；配置、加密凭据、目录缓存、登录生命周期与 IPC |
-| `packages/app/src/main/library-agent-host.ts` | 接收 `Models` 与新会话默认值；配置指定会话，不再临时构造单模型集合或批量改历史会话 |
+| `packages/app/src/main/chat-service.ts` | 接收 `Models` 与新会话默认值；配置指定会话，不再临时构造单模型集合或批量改历史会话 |
 | `packages/app/src/shared` | JSON 配置/目录/鉴权状态/登录交互 DTO；不得携带 Provider、durable 句柄或凭据对象 |
 | `packages/app/src/renderer` | 设置与会话 UI，网络请求和鉴权在 Main 执行 |
 
@@ -160,9 +160,9 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 
 - `packages/agent/src/chat-provider.ts` 装配原生工厂与四种显式自定义协议。薄覆盖保留 auth/filter/refresh/dispatch，仅合并已声明的元数据/默认值；自定义无鉴权连接需明确允许，自定义 ID 不得与内置 ID 冲突。
 - `packages/app/src/main/chat-model-service.ts` 持有一个长期执行集合，注册已启用 Provider，恢复/刷新原生目录并返回无凭据视图。未知价格不返回费率；只改默认值时保留 Provider 对象与动态状态。Headers 仅在 Main 内存解析，不进入普通 DTO 或缓存。
-- 注入式 `LibraryAgentHost` 仅为新独立会话写入默认模型/思考等级，fork/reopen 保留原选择。Provider 编辑/发布在公开 Session commit 内检查 live tasks/inbox，覆盖压缩；直接请求活动也受保护。会话级变更使用同一 busy 检查（`setSessionModel`）。
+- 注入式 `ChatService` 仅为新独立会话写入默认模型/思考等级，fork/reopen 保留原选择。Provider 编辑/发布在公开 Session commit 内检查 live tasks/inbox，覆盖压缩；直接请求活动也受保护。会话级变更使用同一 busy 检查（`setSessionModel`）。
 - 已知请求/鉴权秘密传给 trace 脱敏，并在 durable 记账前从 Provider 错误文本中移除。真实旧请求 checkpoint 恢复与 800-token 压缩上限已通过新服务验证。
-- **生产启动已切换：** `app.whenReady()` 用 `createChatStorage(userData)` 构建 `ChatModelService`，初始化（首跑环境引导）后把长期 `Models` 与默认值注入 `LibraryAgentHost`。Host 不再构建 Provider；秘密经 `onSecrets` 传入 trace 脱敏。
+- **生产启动已切换：** `app.whenReady()` 用 `createChatStorage(userData)` 构建 `ChatModelService`，初始化（首跑环境引导）后把长期 `Models` 与默认值注入 `ChatService`。ChatService 不构建 Provider；秘密经 `onSecrets` 传入 trace 脱敏。
 - Chat IPC：`getChatSettings`/`saveChatSettings`（无凭据视图）、`chatProviderCatalog`、`chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin`（API Key + OAuth 交互桥接到 renderer）、`chatRefresh`、`chatSettingsChanged`。设置工具不再暴露 Chat 槽位。
 - Renderer：设置 → Models 的 `SettingsChat` 管理 Provider、API Key/OAuth 登录、模型启停和刷新；输入区为每个会话选择模型，思考强度在模型的二级菜单中选择。
 - eval/smoke 脚本与 vendor 测试通过 `createChatCustomProvider` + 内存凭据构建自定义 Provider；`LoomChatEndpoint` 消费者已移除。

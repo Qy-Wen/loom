@@ -10,7 +10,7 @@ import {
 	BACKGROUND_CONTEXT as context,
 	createLibraryExtension,
 	createWorkspaceTools,
-	LibraryAgent,
+	LibraryRuntime,
 	LoomMemoryDoc,
 	ToolResultEntry,
 	toDurableTool,
@@ -34,7 +34,7 @@ async function setup(path: string, extra: Parameters<typeof createLibraryExtensi
 	const models = createModels();
 	models.setProvider(faux.provider);
 	const assembly = await createLibraryExtension(path, extra);
-	const owner = await LibraryAgent.open(path, {
+	const owner = await LibraryRuntime.open(path, {
 		models,
 		extensions: [assembly.extension],
 		conversationCreated: assembly.conversationCreated,

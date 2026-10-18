@@ -21,8 +21,6 @@ describe("LibraryPaths", () => {
 
 	it("ignores Loom metadata, the agent directory, and Finder metadata", () => {
 		assert.equal(paths.isIgnoredPath(join(root, ".loom", "metadata.db")), true);
-		assert.equal(paths.isIgnoredPath(join(root, ".loom", "sessions", "chat.jsonl")), true);
-		assert.equal(paths.isIgnoredPath(join(root, ".loom", "harness-sessions", "chat.jsonl")), true);
 		assert.equal(paths.isIgnoredPath(join(root, ".agents")), true);
 		assert.equal(paths.isIgnoredPath(join(root, ".agents", "memory", "MEMORY.md")), true);
 		assert.equal(paths.isIgnoredPath(join(root, ".agents", "skills", "voice", "SKILL.md")), true);

@@ -33,7 +33,7 @@ Renderer: Provider settings / login interaction / conversation model picker
 Main: ChatModelService + config/credential/catalog storage
     │ pure model assembly and contracts from @loom/agent
 pi-ai Models: built-in + custom Providers
-    │ injected into existing LibraryAgentHost / LibraryAgent
+    │ injected into existing ChatService / LibraryRuntime
 pi-durable Harness: conversation selection, generation, compaction, recovery
 ```
 
@@ -43,7 +43,7 @@ Names describe proposed responsibilities, not a requirement to split files mecha
 |---|---|
 | `packages/agent/src` | Replace endpoint-only adapter: Provider assembly, custom model validation, model metadata/thinking levels; no Electron, app storage, or UI dependencies |
 | `packages/app/src/main` | One long-lived app-level Chat runtime; configuration, encrypted credentials, catalog cache, login lifecycle, IPC |
-| `packages/app/src/main/library-agent-host.ts` | Receive `Models` and new-conversation defaults; configure selected conversations, not temporary single-model collections or all history |
+| `packages/app/src/main/chat-service.ts` | Receive `Models` and new-conversation defaults; configure selected conversations, not temporary single-model collections or all history |
 | `packages/app/src/shared` | JSON config/catalog/auth-status/login DTOs; no Provider/durable handles or credential objects |
 | `packages/app/src/renderer` | Settings and conversation UI; requests and auth execute in Main |
 
@@ -160,9 +160,9 @@ The public busy probe shows running generations via `Harness.inspect()` and conf
 
 - `packages/agent/src/chat-provider.ts` assembles native factories and four explicit custom protocols. Thin overlays preserve auth/filter/refresh/dispatch and merge only declared metadata/defaults. API-keyless custom connections require explicit permission; custom IDs cannot collide with native IDs.
 - `packages/app/src/main/chat-model-service.ts` owns one long-lived execution collection, registers enabled Providers, restores/refreshes native catalogs, and emits credential-free views. Unknown prices omit rates; default-only saves retain Provider objects and dynamic state. Headers are resolved only in Main memory, not public DTOs or cache.
-- The injected `LibraryAgentHost` path persists defaults only for new independent conversations; tests retain old selections on fork/reopen. Provider edits/publication hold a public Session commit while checking live tasks/inbox, including compaction; direct request activity is also guarded. Per-conversation changes use the same busy guards (`setSessionModel`).
+- The injected `ChatService` path persists defaults only for new independent conversations; tests retain old selections on fork/reopen. Provider edits/publication hold a public Session commit while checking live tasks/inbox, including compaction; direct request activity is also guarded. Per-conversation changes use the same busy guards (`setSessionModel`).
 - Known request/auth secrets feed trace redaction and are removed from provider error messages before durable bookkeeping. Real legacy interrupted-request recovery and the 800-token compaction cap pass through the new service.
-- **Production startup is switched:** `app.whenReady()` builds `ChatModelService` from `createChatStorage(userData)`, initializes it (env bootstrap on first run), and injects the long-lived `Models` plus defaults into `LibraryAgentHost`. The Host never builds Providers; secrets feed trace redaction through `onSecrets`.
+- **Production startup is switched:** `app.whenReady()` builds `ChatModelService` from `createChatStorage(userData)`, initializes it (env bootstrap on first run), and injects the long-lived `Models` plus defaults into `ChatService`. ChatService never builds Providers; secrets feed trace redaction through `onSecrets`.
 - Chat IPC: `getChatSettings`/`saveChatSettings` (credential-free views), `chatProviderCatalog`, `chatLogin`/`chatLoginPrompt`/`chatLoginResponse`/`chatCancelLogin` (API-key + OAuth interaction bridged to the renderer), `chatRefresh`, `chatSettingsChanged`. Settings tools no longer expose a Chat slot.
 - Renderer: `SettingsChat` manages providers, API-key/OAuth login, model enablement, and refresh. The composer selects each conversation's model, with thinking levels in a model submenu.
 - Eval/smoke scripts and vendor tests build custom providers through `createChatCustomProvider` with in-memory credentials; `LoomChatEndpoint` consumers are gone.
@@ -177,7 +177,7 @@ pnpm --filter @loom/app build
 pnpm --filter @loom/app check:chat-platform    # temporary userData, fake credentials/mock callbacks; requires Electron/OS encryption
 ```
 
-P0 prototypes remain test-only; production startup uses the native assembly/service and Host injection path.
+P0 prototypes remain test-only; production startup uses the native assembly/service and ChatService injection path.
 
 ## 9. Remaining acceptance checklist
 

@@ -5,13 +5,13 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createProvider } from "@earendil-works/pi-ai/models";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";
-import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, LibraryAgent } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, LibraryRuntime } from "@loom/agent";
 import type { ChatModelsConfig, ChatCustomProviderConfig } from "@loom/agent/chat-models";
 import { ChatModelService } from "../src/main/chat-model-service.ts";
 import { ChatCredentialStore } from "../src/main/chat-credential-store.ts";
 import { ChatConfigStore } from "../src/main/chat-config-store.ts";
 import { ChatCatalogStore } from "../src/main/chat-catalog-store.ts";
-import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { ChatService } from "../src/main/chat-service.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 const noEnv = { env: async () => undefined, fileExists: async () => false };
 const custom = (id = "local"): ChatCustomProviderConfig => ({ kind: "custom", id, enabled: true, baseUrl: "http://localhost:11434/v1", api: "openai-completions", models: [{ id: "demo", reasoning: false, input: ["text"], contextWindow: 32000, maxTokens: 8192 }] });
@@ -123,7 +123,7 @@ test("model switches persist independently of auth and only explicit enabled cho
 	const service = new ChatModelService(stores, { authContext: noEnv });
 	await service.initialize();
 	assert.equal(await service.selectionForNewSession(), undefined, "first use requires an explicit choice");
-	const host = new LibraryAgentHost({ models: service.models });
+	const host = new ChatService({ models: service.models });
 	cleanup.push(() => host.close()); await host.openLibrary(dir);
 	const first = await host.createSession();
 	assert.equal(first.model, undefined);
@@ -236,7 +236,7 @@ test("runtime env bootstrap enables DeepSeek without choosing a model or overwri
 test("injected Host defaults affect only new independent conversations and retain selections across fork/reopen", async (t) => {
 	const { dir, stores, cleanup } = await workspace(t); const input = config(); input.providers.push(custom("second")); await stores.config.save(input);
 	const service = new ChatModelService(stores, { authContext: noEnv }); await service.initialize();
-	const host = new LibraryAgentHost({ models: service.models, chatDefault: service.defaultSelection });
+	const host = new ChatService({ models: service.models, chatDefault: service.defaultSelection });
 	cleanup.push(() => host.close()); await host.openLibrary(dir);
 	const first = await host.createSession(); const conversation = await host.conversation(first.id);
 	const entry = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "first", timestamp: 1 }] }), context);
@@ -254,10 +254,10 @@ test("injected Host defaults affect only new independent conversations and retai
 test("Host guards atomic Provider publication against running/queued/compaction work without blocking unrelated defaults", { timeout: 10_000 }, async (t) => {
 	const { dir, stores, cleanup } = await workspace(t); const input = config(); (input.providers[0] as ChatCustomProviderConfig).allowUnauthenticated = true;
 	await stores.config.save(input); const faux = fauxProvider();
-	let host: LibraryAgentHost;
+	let host: ChatService;
 	const service = new ChatModelService(stores, { authContext: noEnv, apis: { "openai-completions": faux.provider }, withIdleProviders: (ids, operation) => host.withIdleChatProviders(ids, operation) });
 	// Host is created before initialization so the gate also covers offline restoration.
-	host = new LibraryAgentHost({ models: service.models }); cleanup.push(() => host.close());
+	host = new ChatService({ models: service.models }); cleanup.push(() => host.close());
 	await service.initialize(); host.setChatDefault(service.defaultSelection); await host.openLibrary(dir);
 	const record = await host.createSession(); const conversation = await host.conversation(record.id);
 	const entered = Promise.withResolvers<void>(); const release = Promise.withResolvers<void>();
@@ -277,7 +277,7 @@ test("Host guards atomic Provider publication against running/queued/compaction 
 	const compactHook = defineExtension({ name: "test.compact", hooks: [hook(CompactionTask, { beforeCompact: async () => {
 		compactEntered.resolve(); await compactRelease.promise; return { summary: "summary" };
 	} })] });
-	host.requireOwner().registry.install(compactHook); await conversation.configure({ extensions: { add: [compactHook] } }, context);
+	host.requireRuntime().registry.install(compactHook); await conversation.configure({ extensions: { add: [compactHook] } }, context);
 	await conversation.commit(async (tx) => { for (let i = 0; i < 4; i++) await tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "old context ".repeat(5000), timestamp: i }] }); }, context);
 	const task = await conversation.compact(undefined, context); await compactEntered.promise;
 	try {
@@ -285,7 +285,7 @@ test("Host guards atomic Provider publication against running/queued/compaction 
 		await assert.rejects(() => service.save(input, [{ providerId: "local", key: "compact-private" }]), /busy/);
 		assert.equal(await stores.credentials.read("local"), undefined);
 	}
-	finally { compactRelease.resolve(); await host.requireOwner().harness.waitForTask(task, context); }
+	finally { compactRelease.resolve(); await host.requireRuntime().harness.waitForTask(task, context); }
 	const changed = structuredClone(input); changed.providers[0]!.enabled = false; await service.save(changed);
 	assert.equal(service.models.getProvider("local"), undefined);
 	assert.equal((await conversation.agent(context)).model!.provider, "local", "disabling does not rewrite history or fail over");
@@ -296,7 +296,7 @@ test("real durable compaction preserves its explicit cap through the production 
 	(input.providers[0] as ChatCustomProviderConfig).allowUnauthenticated = true; input.providers[0]!.generation = { maxTokens: 4096 };
 	await stores.config.save(input); const faux = fauxProvider();
 	const service = new ChatModelService(stores, { authContext: noEnv, apis: { "openai-completions": faux.provider } }); await service.initialize();
-	const owner = await LibraryAgent.open(dir, { models: service.models, agent: { model: { provider: "local", modelId: "demo" } }, settings: { compaction: { reserveTokens: 1000, keepRecentTokens: 100, backgroundTokens: 0 }, retry: { enabled: false } } }, context);
+	const owner = await LibraryRuntime.open(dir, { models: service.models, agent: { model: { provider: "local", modelId: "demo" } }, settings: { compaction: { reserveTokens: 1000, keepRecentTokens: 100, backgroundTokens: 0 }, retry: { enabled: false } } }, context);
 	cleanup.push(() => owner.close(context)); const conversation = await owner.createConversation({}, context);
 	await conversation.commit(async (tx) => { for (let i = 0; i < 6; i++) await tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "context ".repeat(100), timestamp: i }] }); }, context);
 	faux.setResponses([(_messages, options) => { assert.equal(options!.maxTokens, 800); assert.equal(options!.cacheRetention, "none"); return answer("summary"); }]);

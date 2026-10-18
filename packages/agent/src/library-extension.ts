@@ -35,7 +35,7 @@ export type LibraryExtensionOptions = {
 	skills?: boolean;
 };
 
-/** Assemble tools and stable prompt sections; pass conversationCreated to LibraryAgent.open(). */
+/** Assemble tools and stable prompt sections; pass conversationCreated to LibraryRuntime.open(). */
 export async function createLibraryExtension(root: string, options: LibraryExtensionOptions = {}) {
 	const memory = options.autoMemory !== false;
 	const workspace = await createWorkspaceTools(options.workspace);

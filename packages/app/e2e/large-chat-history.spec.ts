@@ -6,7 +6,7 @@ import { join } from "node:path";
 import { test, expect } from "@playwright/test";
 import { BACKGROUND_CONTEXT as context } from "@loom/agent";
 import { createModels } from "@earendil-works/pi-ai/models";
-import { LibraryAgentHost } from "../src/main/library-agent-host.ts";
+import { ChatService } from "../src/main/chat-service.ts";
 import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 test("large saved tool results do not duplicate user bubbles or interrupt subsequent streamed replies", async () => {
@@ -29,7 +29,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	const host = new LibraryAgentHost({ models: createModels() });
+	const host = new ChatService({ models: createModels() });
 	let app: Awaited<ReturnType<typeof launchTestElectron>> | undefined;
 	try {
 		await mkdir(library);

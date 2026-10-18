@@ -6,6 +6,14 @@
 
 ---
 
+## 聊天运行时、应用服务与协议边界
+
+`LibraryRuntime` 持有素材库的 Harness、Registry 和存储。`ChatService` 统一普通/追加消息的准备与提交，以及权限、默认配置、DTO 和变更通知。`AgUiAdapter` 管理连接生命周期，`ag-ui-events.ts` 只转换 durable 事件，不提交任务。`DurableAgentRunner` 将运行状态与停止检查交给服务。切库后旧连接不会指向新运行时。应用与评测通过 `createChatExtensions()` 共用主对话和子代理扩展组装。
+
+macOS 验证通过：工作区类型检查/单测、生产与 trace 构建、34 项 durable 契约、4 项离线 Agent/工具评测，以及包含 trace 重启的 27 项相关 Electron 测试。新增输入重放、切库隔离、交错流式内容块和子对话工具/图片事件的针对性覆盖。Trace 验收会为已有的启动对话显式选择配置的模型。
+
+---
+
 ## 输入框图片直传
 
 显式添加的 JPEG/PNG/GIF/WebP 保留素材库芯片，同时通过 pi-ai 发送原生图片块，覆盖排队追加消息和编辑重发。没有磁盘路径的剪贴板截图先导入 `Inbox/`。图片字节保留在 durable 历史里，renderer 记录使用媒体 URL。移除无人调用的图片暂存 IPC，以及旧的图片专用命名和样式。见 [AGENT](../agent/AGENT.zh-CN.md)。
