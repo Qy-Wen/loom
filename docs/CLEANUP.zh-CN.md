@@ -7,34 +7,71 @@
 
 ---
 
-## 1. Loom 的用词与 durable 对齐：`session` → `conversation`
+## 1. 统一设置持久化，修复并发保存
 
-**状态：** 计划，未开工；范围已定（标识符、文案、CSS 全改）。
+**问题：** `ModelSettingsStore.update()` 的读改写没有串行保护，`save()` 直接覆盖文件。设置 UI 与 Agent 的 `update_settings` 可并发进入；临时文件复现中出现更新丢失及无效 JSON。Renderer 的 `SettingsSaveQueue` 只覆盖当前设置页。
 
-durable 侧早就叫 conversation：`ConversationId`、`harness.conversation()`、`ConversationDoc`、`loom.conversation` 这个 doc kind、`conversation-metadata.ts`。从那一层往上，Loom 仍叫 session，同一个对象两个名字，而应用开发者先读到的是过时的那一个：`LoomSessionRecord`/`LoomSessionSummary`/`LoomSessionModel`（`session-dto.ts`）、`session-title.ts`、`ChatService.listSessions`、`IPC.loom:listSessions`、preload `window.loom.getSession`、`use-sessions.ts`、`session-chat.tsx`、`session-bar.tsx`、`ChatSessionContext`，以及 50 个 `.session-*` 选择器。
+**范围：** `app/src/main/models/model-settings-store.ts`、`main/settings/*-store.ts`、`main/mcp/store.ts`，以及 `main/index.ts` 的设置 IPC / `applySettingsPatch()`；现有原子写入和文件锁在 `main/models/chat-file.ts`。
 
-规模：`session` 在 `packages/agent/src` 出现 21 次、`packages/app/src` 622 次、`packages/app/tests` 217 次、`packages/app/e2e` 192 次。
+**方向：** 抽出共用文件持久化原语，在主进程串行执行读取、应用补丁和原子提交；调用方提交实际变化，避免用旧的全量草稿覆盖其他更新。各功能保留自己的校验与存储类型。
 
-**保留——只是同名，不是这个概念：**
+**验收：** UI 与 Agent 并发修改不同设置时，两边更新均保留；读者始终得到完整文件；失败写入不破坏上次保存结果。覆盖 macOS 与 Windows 的替换行为。
 
-- `McpSession`、`McpSessionFactory`、`openSdkSession`、`toolsFromMcpSession` —— MCP 传输层 session。
-- `streamSimple` 选项里的 `sessionId` 与 durable `ProviderDoc.sessionId` —— provider 侧的会话身份，归 vendor。
-- `workbench/graph-simulation.ts` 的 `sessionPositions` —— 进程内布局记忆。
-- `.loom/harness-sessions/` —— 仅历史数据，保留目录名。
+## 2. 素材任务绑定库生命周期
 
-**已定：** 一次性全改，含用户可见文案和 CSS 选择器。随之要做两件事。
+**问题：** `LocalCore.openLibrary()` / `close()` 切换或关闭存储，却没有收束 enrichment、embedding 与多模态任务。已复现图片描述：A 库开始请求，切到 B 库后返回 `Asset not found`；重新打开 A，记录仍是 `describing`，详情按钮被禁用。
 
-- **默认标题常量。** `DEFAULT_CONVERSATION_TITLE = "New conversation"` 会作为 `LoomConversationDoc.initial()` 的初值，新会话拿到新文案；已落库的文档仍保留 `"New session"`。Loom 判定“未命名”的两处（自动改标题的 `ChatService.prepareTurn()` 和 `ChatService` 的兼容取值 `ChatService.getSession()`）都要把两者都算作未命名，所以只导出一个 `isDefaultConversationTitle(title)`，`"New session"` 只出现在它内部。
-- **文案。** `t.sessions.*` → `t.conversations.*`："New session" → "New conversation"、"Starting a session…" → "Starting a conversation…"、"Delete this session?" → "Delete this conversation?"；中文里指这段聊天的地方把“会话”改为“对话”。e2e 用 role/name 匹配这些字符串，须同一改。`DEFAULT_SESSION_TITLE` 不能脱离该 helper 单独上线。
+**范围：** `core/src/local-core.ts`、`enrichment/service.ts`、`rag/service.ts`、`rag/{image-vlm,video-vlm,audio-writeup}.ts`；app 的 `applyOpenedLibrary()` 与详情状态展示。
 
-**阶段** —— 每阶段结束时 `pnpm typecheck && pnpm test` 全绿，不改行为，`vendor-pi-*` 不动：
+**方向：** 让任务及回写归属于启动时的库；切库、关闭时取消或等待任务收束，再切换存储。为中断遗留的 `describing` / `embedding` 状态提供恢复，禁止旧任务向新库写结果或发送更新。
 
-1. `@loom/agent`：`session-dto.ts` → `conversation-dto.ts`、`session-title.ts` → `conversation-title.ts`、`LoomSession{Record,Summary,Model}` → `LoomConversation*`、`DEFAULT_CONVERSATION_TITLE` 与 `isDefaultConversationTitle()`、`shared/ag-ui-messages.ts` 的 `liveMessagesForSession`/`agentSessionId`。消费方只通过 `durable.ts`/`index.ts` 的 re-export 受牵连。
-2. IPC 契约一个提交内改完：通道名（`loom:listSessions` → `loom:listConversations` 等）、`IPC` 方法名、preload 接口、`ChatService` 方法（`listSessions` → `listConversations`、`setSessionName` → `setConversationTitle`、`archiveSession`/`unarchiveSession`/`deleteSession`/`setSessionModel`）、`ipcMain.handle` 注册、`shared/ipc.ts` 类型，以及 `chat-service.ts` 里写死的 `"New session"` 回退值。
-3. Renderer：`use-sessions.ts` → `use-conversations.ts`、`session-chat.tsx`、`session-bar.tsx`、`chat-context.ts` 的 `ChatSessionContext`/`useChatSession`、`t.sessions` → `t.conversations`（中英双语文案），以及 `session.css`/`styles.css`/`dock.css` 里全部 50 个 `.session-*` 选择器。
-4. 测试、e2e 与文档：`packages/app/tests`、`packages/app/e2e`（如 `agent.spec.ts` 的 role/name 查询）、`docs/agent/AGENT*.md` §1/§3/§6、`docs/PRODUCT*.md`（`sessions/` 树）、`docs/TODO*.md`。
+**验收：** 请求中切库、排队时切库、关闭和重开均不会串库，也不会留下无法重试的运行状态。
 
-**验收：** `grep -rn session packages/{agent,app}/src` 只剩上面的保留清单，不存在 `.session-` 选择器；类型检查、单测与 e2e 全绿。
+## 3. 删除命令列表 UI 的残留接口
+
+**问题：** Remembered commands 列表 UI 已删除，`removeCommandAllow` 仍贯穿 main、preload 与 shared，仓库内没有调用方；`commandAllowLabel()` 只剩测试使用。
+
+**范围：** `app/src/main/index.ts` 的删除处理器、`src/preload/index.ts`、`src/shared/ipc.ts`、`main/settings/command-allow-store.ts` 的 `remove()`，以及 `agent/src/tools/tool-permission.ts` 的 `commandAllowLabel()` 和对应测试。
+
+**方向：** 删除无消费者的删除接口与展示辅助函数。批准记录的读取、写入、绑定、变更通知和权限判断仍由工具卡片及审批链消费，保留这些能力。
+
+**验收：** 无残留删除通道或展示辅助函数；按库记忆的批准与工具审批仍正常工作。
+
+## 4. 清理废代码并接回已有公共函数
+
+| 位置 / 符号 | 处理 |
+| --- | --- |
+| `core/src/library/handlers.ts`：`NoopGraphHandlers` | 无引用，删除。 |
+| `app/src/shared/agent-stats.ts`：`usagesFromMessages()` | 仅测试调用，生产统计走事件累计；删除该函数及对应旧测试，保留评测仍使用的 `usageFromMessage()`。 |
+| `app/src/renderer/workbench/graph-layout.ts`：`graphBounds()` | 仅测试调用，`graph-view.tsx` 手写相同边界计算；让生产代码复用该函数。 |
+| `work-panel.tsx` 的 `PanelId`、`shared/ipc.ts` 的 `ChatThinkingLevel`、`local-core.ts` 的 `AssetPropertyFilter` | 删除未用导入。 |
+| `agent/src/trace/durable-trace.ts` 的 `const wait = this.span(...)` | 删除未用绑定，保留创建 span 的调用。 |
+
+**验收：** 检查 `noUnusedLocals` / `noUnusedParameters`，逐项处理自有代码和测试中的诊断；回调所需的参数位置与有副作用的调用必须保留。内存 store、测试注入接口不能仅因没有生产调用而删除。
+
+## 5. 整合多模态描述服务的公共流程
+
+**问题：** `core/src/rag/image-vlm.ts`、`video-vlm.ts`、`audio-writeup.ts` 重复维护串行队列、缓存新鲜度、状态转换、错误处理和记录更新。
+
+**方向：** 先完成第 2 项的任务生命周期，再提取共用执行流程；图片读取、视频原生输入 / 抽帧、音频准备和各自的 provider 契约保留在媒体实现中。合并重复的状态处理，避免引入多层继承。
+
+**验收：** 三类媒体的缓存命中、失败、取消和状态通知使用一致规则；媒体特有的输入限制与处理方式继续由各自测试覆盖。
+
+## 6. 拆分职责过多的入口文件
+
+**问题：** 目录已经按功能分组，但 `app/src/main/index.ts`、`app/src/renderer/App.tsx`、`core/src/local-core.ts` 仍集中多个职责。
+
+**方向：** 优先从 main 入口移出素材协议、按功能分组的 IPC 注册和设置协调，入口保留启动装配与生命周期管理。App 抽出库操作、选区和素材任务状态；LocalCore 保留领域入口，将检索、媒体处理等实现归回对应模块。按职责逐步拆分，避免把原文件整体换个名字搬走。
+
+**验收：** UI 和工具继续通过同一领域入口工作；无重复业务规则，相关 IPC、桌面流程和领域测试通过。
+
+## 7. 对齐 Embedding 评测与生产 HTTP 实现
+
+**问题：** `core/evals/http-embed.ts` 与 `app/src/main/models/embedding-provider.ts` 重复实现请求和响应解析，URL 语义已分叉：评测自动补路径，生产使用完整请求 URL。
+
+**方向：** 共用独立于 Electron 的 HTTP 请求 / 响应适配，显式区分评测环境变量的 URL 装配与生产配置语义；core 不反向依赖 app。去重前先用相同协议样本覆盖两条入口。
+
+**验收：** 生产与评测共用协议契约测试，完整 URL 不被擅自改写；live 评测结果明确对应实际复用的实现。
 
 ---
 

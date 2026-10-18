@@ -7,34 +7,71 @@
 
 ---
 
-## 1. Align Loom's vocabulary with durable: `session` → `conversation`
+## 1. Unify settings persistence and fix concurrent saves
 
-**Status:** plan, not started; scope decided (identifiers, copy and CSS all move).
+**Problem:** `ModelSettingsStore.update()` does not serialize read-modify-write operations, and `save()` overwrites the file directly. Settings UI and the agent's `update_settings` can run concurrently; temporary-file reproductions lost updates and produced invalid JSON. Renderer `SettingsSaveQueue` protects only that settings page.
 
-Durable already says conversation: `ConversationId`, `harness.conversation()`, `ConversationDoc`, the `loom.conversation` doc kind, `conversation-metadata.ts`. Above that line Loom still says `session`, so one object has two names and the stale one is the one app developers read first: `LoomSessionRecord`/`LoomSessionSummary`/`LoomSessionModel` (`session-dto.ts`), `session-title.ts`, `ChatService.listSessions`, `IPC.loom:listSessions`, preload `window.loom.getSession`, `use-sessions.ts`, `session-chat.tsx`, `session-bar.tsx`, `ChatSessionContext`, and 50 distinct `.session-*` selectors.
+**Scope:** `app/src/main/models/model-settings-store.ts`, `main/settings/*-store.ts`, `main/mcp/store.ts`, and settings IPC / `applySettingsPatch()` in `main/index.ts`. Atomic writes and file locking already exist in `main/models/chat-file.ts`.
 
-Size: `session` occurs 21× in `packages/agent/src`, 622× in `packages/app/src`, 217× in `packages/app/tests`, 192× in `packages/app/e2e`.
+**Direction:** Extract shared file persistence primitives. Serialize reading, applying patches, and atomic commits in Main; callers submit actual changes so stale full drafts cannot overwrite other updates. Each feature retains its validation and storage types.
 
-**Keep — false friends, not this concept:**
+**Acceptance:** Concurrent UI and agent changes preserve both updates; readers always see complete files; failed writes preserve the last saved result. Cover replacement behavior on macOS and Windows.
 
-- `McpSession`, `McpSessionFactory`, `openSdkSession`, `toolsFromMcpSession` — MCP transport session.
-- `sessionId` in `streamSimple` options and durable `ProviderDoc.sessionId` — provider-side conversation identity, vendor-owned.
-- `sessionPositions` in `workbench/graph-simulation.ts` — process-local layout memory.
-- `.loom/harness-sessions/` — historical data; keep the directory name.
+## 2. Bind asset jobs to the library lifecycle
 
-**Decided:** rename everything in one program, including user-facing copy and CSS selectors. Two consequences to implement with it.
+**Problem:** `LocalCore.openLibrary()` / `close()` switch or close storage without settling enrichment, embedding, and multimodal jobs. Reproduced with image description: start in library A, switch to B, then receive `Asset not found`; reopening A leaves the record `describing` and the details button disabled.
 
-- **Title constant.** `DEFAULT_CONVERSATION_TITLE = "New conversation"` seeds `LoomConversationDoc.initial()`, so new conversations get the new text; documents already stored keep `"New session"`. Both must count as "untitled" where Loom auto-titles (`ChatService.prepareTurn()`) and where `ChatService` falls back (`ChatService.getSession()`), so expose one `isDefaultConversationTitle(title)` helper and keep `"New session"` inside it only.
-- **Locale.** `t.sessions.*` becomes `t.conversations.*`: "New session" → "New conversation", "Starting a session…" → "Starting a conversation…", "Delete this session?" → "Delete this conversation?"; Chinese 会话 → 对话 wherever it means the chat. E2e specs match these strings by role/name, so they move in the same change. `DEFAULT_SESSION_TITLE` must not ship without the helper.
+**Scope:** `core/src/local-core.ts`, `enrichment/service.ts`, `rag/service.ts`, `rag/{image-vlm,video-vlm,audio-writeup}.ts`, app `applyOpenedLibrary()`, and details status display.
 
-**Phases** — each ends with `pnpm typecheck && pnpm test` green, no behavior change, `vendor-pi-*` untouched:
+**Direction:** Bind jobs and writes to the library where they started. Cancel or drain jobs before switching storage or closing. Recover interrupted `describing` / `embedding` records; old jobs must not write results or emit updates into the new library.
 
-1. `@loom/agent`: `session-dto.ts` → `conversation-dto.ts`, `session-title.ts` → `conversation-title.ts`, `LoomSession{Record,Summary,Model}` → `LoomConversation*`, `DEFAULT_CONVERSATION_TITLE` + `isDefaultConversationTitle()`, `liveMessagesForSession`/`agentSessionId` in `shared/ag-ui-messages.ts`. Reached by consumers only through the `durable.ts`/`index.ts` re-exports.
-2. IPC contract in one commit: channel strings (`loom:listSessions` → `loom:listConversations` …), `IPC` method names, preload surface, `ChatService` methods (`listSessions` → `listConversations`, `setSessionName` → `setConversationTitle`, `archiveSession`/`unarchiveSession`/`deleteSession`/`setSessionModel`), `ipcMain.handle` registrations, `shared/ipc.ts` types, and the literal `"New session"` fallback in `chat-service.ts`.
-3. Renderer: `use-sessions.ts` → `use-conversations.ts`, `session-chat.tsx`, `session-bar.tsx`, `ChatSessionContext`/`useChatSession` in `chat-context.ts`, `t.sessions` → `t.conversations` with both locales' copy, and all 50 `.session-*` selectors in `session.css`/`styles.css`/`dock.css`.
-4. Tests, e2e specs, docs: `packages/app/tests`, `packages/app/e2e` (role/name lookups such as `agent.spec.ts`), `docs/agent/AGENT*.md` §1/§3/§6, `docs/PRODUCT*.md` (`sessions/` tree), `docs/TODO*.md`.
+**Acceptance:** Switching while requests run or queue, closing, and reopening cannot cross library boundaries or leave an operation permanently unavailable for retry.
 
-**Acceptance:** `grep -rn session packages/{agent,app}/src` leaves only the keep list, no `.session-` selector remains, and typecheck, unit tests and e2e are green.
+## 3. Remove interfaces left behind by the remembered-command list UI
+
+**Problem:** The Remembered commands list UI is gone, but `removeCommandAllow` still spans Main, preload, and shared with no in-repo consumer. Only tests call `commandAllowLabel()`.
+
+**Scope:** The removal handler in `app/src/main/index.ts`, `src/preload/index.ts`, `src/shared/ipc.ts`, `remove()` in `main/settings/command-allow-store.ts`, and `commandAllowLabel()` in `agent/src/tools/tool-permission.ts`, plus their tests.
+
+**Direction:** Delete the unused removal interface and display helper. Reading, saving, binding, change notifications, and permission matching still serve tool cards and approvals and must remain.
+
+**Acceptance:** No obsolete removal channel or display helper remains; per-library remembered grants and tool approvals still work.
+
+## 4. Remove dead code and reconnect existing shared functions
+
+| Location / symbol | Action |
+| --- | --- |
+| `core/src/library/handlers.ts`: `NoopGraphHandlers` | No references; delete. |
+| `app/src/shared/agent-stats.ts`: `usagesFromMessages()` | Tests only; production totals accumulate from events. Delete the function and its old tests; retain `usageFromMessage()`, which evaluations still use. |
+| `app/src/renderer/workbench/graph-layout.ts`: `graphBounds()` | Tests only, while `graph-view.tsx` repeats its bounds calculation. Use the helper in production. |
+| `PanelId` in `work-panel.tsx`, `ChatThinkingLevel` in `shared/ipc.ts`, `AssetPropertyFilter` in `local-core.ts` | Delete unused imports. |
+| `const wait = this.span(...)` in `agent/src/trace/durable-trace.ts` | Remove the unused binding; retain the span creation call. |
+
+**Acceptance:** Check `noUnusedLocals` / `noUnusedParameters` and resolve diagnostics in owned code and tests. Preserve required callback parameter positions and calls with side effects. Do not delete memory stores or test injection interfaces solely because production does not call them.
+
+## 5. Share the multimodal description workflow
+
+**Problem:** `core/src/rag/image-vlm.ts`, `video-vlm.ts`, and `audio-writeup.ts` repeat serial queues, cache freshness checks, status transitions, error handling, and record updates.
+
+**Direction:** Complete job lifecycle work in item 2 first, then extract the shared execution flow. Media implementations retain image reading, native video / frame extraction, audio preparation, and their provider contracts. Share status handling without introducing an inheritance hierarchy.
+
+**Acceptance:** All three media types follow consistent cache, failure, cancellation, and notification rules; media-specific input constraints and preparation retain their own coverage.
+
+## 6. Split entry files with mixed responsibilities
+
+**Problem:** Feature directories now exist, but `app/src/main/index.ts`, `app/src/renderer/App.tsx`, and `core/src/local-core.ts` still concentrate several responsibilities.
+
+**Direction:** First extract asset protocol handling, feature-specific IPC registration, and settings coordination from Main, leaving startup composition and lifecycle management. Extract library operations, selection, and asset job state from App. Keep LocalCore as the domain facade and place retrieval and media implementations in their respective modules. Split by responsibility rather than moving a whole large file under another name.
+
+**Acceptance:** UI and tools still share one domain entry; business rules are not duplicated; relevant IPC, desktop, and domain tests pass.
+
+## 7. Align evaluation and production Embedding HTTP implementations
+
+**Problem:** `core/evals/http-embed.ts` and `app/src/main/models/embedding-provider.ts` duplicate requests and response parsing. URL semantics have diverged: evaluation appends an operation path, while production accepts a complete request URL.
+
+**Direction:** Share HTTP request / response adaptation independently of Electron. Explicitly separate evaluation environment-variable URL assembly from production configuration semantics; core must not depend on app. Cover both entry points with the same protocol fixtures before deduplication.
+
+**Acceptance:** Production and evaluation share protocol contract tests; complete URLs are preserved; live evaluation results identify the implementation actually reused.
 
 ---
 
