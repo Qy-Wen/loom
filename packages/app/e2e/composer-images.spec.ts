@@ -96,6 +96,17 @@ for (const source of ["paste", "drop", "library", "external"] as const) {
 				await loomPage.locator(".session-inline-edit-send").click();
 				await expect(loomPage.getByText(`COMPOSER_${source}_3`, { exact: true }).first()).toBeVisible();
 				expect(lastUser(requests[2]!).content).toEqual(expect.arrayContaining([{ type: "image_url", image_url: { url: `data:image/png;base64,${data}` } }]));
+				const editedBubble = loomPage.getByTestId("copilot-user-message").first();
+				await editedBubble.hover();
+				await editedBubble.getByRole("button", { name: "Edit", exact: true }).click();
+				const editor = loomPage.locator(".session-inline-edit");
+				await editor.locator(".session-asset-chip-remove").click();
+				await expect(editor.locator(".session-inline-edit-send")).toBeDisabled();
+				await editor.getByRole("textbox", { name: "Edit question", exact: true }).fill("edited without image");
+				await editor.locator(".session-inline-edit-send").click();
+				await expect(loomPage.getByText(`COMPOSER_${source}_4`, { exact: true })).toBeVisible();
+				expect(JSON.stringify(lastUser(requests[3]!).content)).not.toContain("image_url");
+				expect(JSON.stringify(lastUser(requests[3]!).content)).not.toContain("<asset_ref>");
 			}
 		} finally {
 			await rm(temp, { recursive: true, force: true });

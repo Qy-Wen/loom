@@ -10,7 +10,7 @@ export type BranchActions = {
 	edit: (entryId: string) => void;
 	cancelEdit: () => void;
 	fork: (entryId: string, text: string) => void;
-	commitEdit: (text: string) => Promise<void>;
+	commitEdit: (text: string, model?: LoomSessionModel) => Promise<void>;
 };
 
 export type ChatSession = {

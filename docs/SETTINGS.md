@@ -18,6 +18,8 @@ Custom Chat infers the protocol from the complete URL: `/chat/completions`, `/re
 
 The composer model menu selects the conversation model. Hover a reasoning model or open its arrow to choose thinking strength in a submenu; keyboard users press Right to open it and Left to return. New conversations and existing conversations without a model prefer the last enabled, available choice, then the first enabled, available text model in configuration order. If none is available, the picker stays empty. Saved conversation/fork selections remain unchanged. Config and the remembered choice persist in `chat-models.json`. First-run `DEEPSEEK_API_KEY` enables native DeepSeek, making its models eligible for automatic selection. See [CHAT_MODELS](./agent/CHAT_MODELS.md).
 
+History editing uses the same composer styling and model/thinking menus. It starts with the current conversation model; changes remain a draft until sending and are applied when creating the branch. Canceling leaves the source model unchanged. Permission remains the current app-wide setting.
+
 ## Model slots
 
 The four remaining slots (Embedding, Rerank, VLM, Audio) share one form:

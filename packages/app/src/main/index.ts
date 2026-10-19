@@ -80,7 +80,6 @@ import { createChatStorage } from "./models/chat-storage.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
-import { getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 
 const ASSET_SCHEME = "loom-asset";
 const DEFAULT_CDP_PORT = "9344";
@@ -726,22 +725,14 @@ function registerIpc(): void {
 		return draftsFromAssets(await localCore.importExternalFiles(result.filePaths));
 	});
 	ipcMain.handle(IPC.followUp, (_event, id: string, text: string, clientMessageId?: string) => requireChat().followUp(id, text, clientMessageId));
-	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string) => chatRecord(await requireChat().branchBefore(id, entryId)));
+	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string, raw: unknown) => {
+		const model = raw === undefined ? undefined : requireChatModels().validateSelection(raw);
+		return chatRecord(await requireChat().branchBefore(id, entryId, model));
+	});
 	ipcMain.handle(IPC.setSessionModel, async (_event, id: string, raw: unknown) => {
-		if (typeof id !== "string" || !raw || typeof raw !== "object") throw new Error("Invalid model selection");
-		const draft = raw as { provider?: unknown; modelId?: unknown; thinkingLevel?: unknown };
-		if (typeof draft.provider !== "string" || !draft.provider.trim() || typeof draft.modelId !== "string" || !draft.modelId.trim()) throw new Error("Model selection needs a provider and a model");
+		if (typeof id !== "string") throw new Error("Invalid conversation ID");
 		const service = requireChatModels();
-		const model = service.models.getModel(draft.provider, draft.modelId);
-		if (!model) throw new Error("Unknown Chat model");
-		if (!service.isModelEnabled(draft.provider, draft.modelId)) throw new Error("Chat model is disabled");
-		let thinkingLevel: import("@earendil-works/pi-ai").ModelThinkingLevel = "off";
-		if (typeof draft.thinkingLevel === "string" && draft.thinkingLevel !== "off") {
-			const levels = getSupportedThinkingLevels(model);
-			if (!levels.some((level) => level === draft.thinkingLevel)) throw new Error(`Thinking level ${draft.thinkingLevel} is not supported by this model`);
-			thinkingLevel = draft.thinkingLevel as import("@earendil-works/pi-ai").ModelThinkingLevel;
-		}
-		const selection = { provider: draft.provider, modelId: draft.modelId, thinkingLevel };
+		const selection = service.validateSelection(raw);
 		const record = await requireChat().setSessionModel(id, selection);
 		await service.rememberSelection(selection);
 		notifyChatSettingsChanged();

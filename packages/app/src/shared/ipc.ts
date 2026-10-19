@@ -280,8 +280,8 @@ export interface LoomApi {
 	pathForFile: (file: File) => string;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
 	followUp: (id: string, text: string, clientMessageId?: string) => Promise<void>;
-	/** Move the active path to just before this user question. */
-	branchBefore: (id: string, entryId: string) => Promise<SessionRecord>;
+	/** Create a branch before this question with an optional model override, then archive the source. */
+	branchBefore: (id: string, entryId: string, model?: SessionRecord["model"]) => Promise<SessionRecord>;
 	/** Persist this conversation's model/thinking; applies from the next request. Rejects while busy. */
 	setSessionModel: (id: string, selection: { provider: string; modelId: string; thinkingLevel?: string }) => Promise<SessionRecord>;
 	/** Open a new session from the prefix before this question. */

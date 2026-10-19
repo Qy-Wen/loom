@@ -55,6 +55,21 @@ export class ChatModelService {
 	}
 	get config(): ChatModelsConfig { return structuredClone(this.#config); }
 	get defaultSelection(): ChatSelection | undefined { return this.#config.default && structuredClone(this.#config.default); }
+	validateSelection(raw: unknown): ChatSelection {
+		if (!raw || typeof raw !== "object") throw new Error("Invalid model selection");
+		const draft = raw as { provider?: unknown; modelId?: unknown; thinkingLevel?: unknown };
+		if (typeof draft.provider !== "string" || !draft.provider.trim() || typeof draft.modelId !== "string" || !draft.modelId.trim()) throw new Error("Model selection needs a provider and a model");
+		const model = this.models.getModel(draft.provider, draft.modelId);
+		if (!model) throw new Error("Unknown Chat model");
+		if (!this.isModelEnabled(draft.provider, draft.modelId)) throw new Error("Chat model is disabled");
+		let thinkingLevel: ChatSelection["thinkingLevel"] = "off";
+		if (typeof draft.thinkingLevel === "string" && draft.thinkingLevel !== "off") {
+			const levels = getSupportedThinkingLevels(model);
+			if (!levels.some((level) => level === draft.thinkingLevel)) throw new Error(`Thinking level ${draft.thinkingLevel} is not supported by this model`);
+			thinkingLevel = draft.thinkingLevel as ChatSelection["thinkingLevel"];
+		}
+		return { provider: draft.provider, modelId: draft.modelId, thinkingLevel };
+	}
 	isModelEnabled(providerId: string, modelId: string): boolean {
 		const provider = this.#config.providers.find((entry) => entry.id === providerId);
 		return !!provider?.enabled && provider.modelEnabled?.[modelId] !== false;

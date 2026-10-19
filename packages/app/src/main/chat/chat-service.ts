@@ -293,7 +293,7 @@ export class ChatService {
 		await conversation.abort(context);
 		await conversation.commit(async (tx) => { (await tx.doc(LoomConversationDoc, conversation.id)).hidden = true; }, context);
 	}
-	async forkBefore(id: string, entryId: string) {
+	async forkBefore(id: string, entryId: string, model?: ChatSelection) {
 		const conversation = await this.conversation(id);
 		await conversation.abort(context);
 		const history = (await conversation.entries({ maxEntryId: idOf<EntryId>(entryId) }, 2, undefined, context)).items;
@@ -301,11 +301,14 @@ export class ChatService {
 		// Fork before the user entry, not at it; a reset provides an empty-context anchor for first-entry forks.
 		const at = history[1]?.id;
 		if (!at) throw new Error("Cannot fork before the conversation's start anchor");
-		const fork = await conversation.fork(at, { ownership: { kind: "ownerless" } }, context);
+		const fork = await conversation.fork(at, {
+			ownership: { kind: "ownerless" },
+			agent: model ? { model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.thinkingLevel } : undefined,
+		}, context);
 		return this.getSession(String(fork.id));
 	}
-	async branchBefore(id: string, entryId: string) {
-		const fork = await this.forkBefore(id, entryId);
+	async branchBefore(id: string, entryId: string, model?: ChatSelection) {
+		const fork = await this.forkBefore(id, entryId, model);
 		await this.archiveSession(id);
 		return fork;
 	}

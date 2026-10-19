@@ -303,6 +303,27 @@ test("setSessionModel persists per-conversation selection, rejects while busy, a
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 
+test("editing history creates the branch with its chosen model and preserves the source configuration", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-edit-model-"));
+	const runtime = await testChatRuntime("http://localhost/v1");
+	const host = new ChatService({ models: runtime.models, chatDefault: { provider: runtime.providerId, modelId: runtime.modelId, thinkingLevel: "off" } });
+	try {
+		await host.openLibrary(path);
+		const source = await host.createSession();
+		const conversation = await host.conversation(source.id);
+		const entry = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "original", timestamp: 1 }] }), context);
+		const second = await testChatRuntime("http://localhost/v1", { model: "edited", models: runtime.models, providerId: "edit-provider" });
+		const selection = { provider: second.providerId, modelId: second.modelId, thinkingLevel: "off" } as const;
+		const branch = await host.branchBefore(source.id, String(entry.id), selection);
+		assert.deepEqual(branch.model, selection);
+		assert.deepEqual((await host.getSession(source.id)).model, source.model);
+		assert.equal((await host.getSession(source.id)).messages.length, 1);
+		assert.equal((await host.getSession(source.id)).status, "archived");
+		await host.close(); await host.openLibrary(path);
+		assert.deepEqual((await host.getSession(branch.id)).model, selection);
+	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
+});
+
 test("setSessionModel rejects while a request is streaming", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-model-busy-"));
 	// A local server that holds the SSE stream open until released.

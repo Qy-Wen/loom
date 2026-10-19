@@ -416,8 +416,12 @@
 	cursor: text;
 }
 
-.session-follow-up-slot [data-testid="copilot-chat-input"] {
+.session-follow-up-slot [data-testid="copilot-chat-input"],
+.session-inline-edit-pill {
+	border: 1px solid #dededa;
 	border-radius: 14px;
+	background: #fff;
+	box-shadow: 0 2px 5px rgb(0 0 0 / 5%);
 }
 
 .session-follow-up-slot [data-copilotkit] {
@@ -451,7 +455,10 @@
 }
 
 /* Compact mode only pads the right side, because the add button used to sit on the left. */
-.session-follow-up-slot [data-testid="copilot-chat-textarea"] {
+.session-follow-up-slot [data-testid="copilot-chat-textarea"],
+.session-inline-edit .session-inline-input {
+	font-size: 16px;
+	line-height: 24px;
 	padding-top: 6px;
 	padding-left: 4px;
 	padding-right: 4px;
@@ -462,12 +469,14 @@
 	margin-right: 4px;
 }
 
-.session-follow-up-slot [data-testid="copilot-send-button"] {
+.session-follow-up-slot [data-testid="copilot-send-button"],
+.session-inline-edit-send {
 	width: 30px;
 	height: 30px;
 }
 
-.session-follow-up-slot [data-testid="copilot-send-button"] svg {
+.session-follow-up-slot [data-testid="copilot-send-button"] svg,
+.session-inline-edit-send svg {
 	width: 16px;
 	height: 16px;
 }
@@ -810,7 +819,7 @@
 .session-inline-edit {
 	display: flex;
 	flex-direction: column;
-	align-items: flex-end;
+	align-items: stretch;
 	gap: 6px;
 	width: 100%;
 	/* Same offset the user bubble reserves above itself. */
@@ -819,32 +828,30 @@
 
 .session-inline-edit-pill {
 	display: flex;
-	align-items: flex-end;
-	gap: 2px;
-	width: min(80%, 100%);
+	flex-direction: column;
+	gap: 4px;
+	width: 100%;
 	box-sizing: border-box;
-	padding: 8px 8px 8px 16px;
-	border-radius: 28px;
-	background: #fff;
-	box-shadow: 0 4px 4px 0 #0000000a, 0 0 1px 0 #0000009e;
+	padding: 6px 10px;
 }
 
-.session-inline-edit .session-inline-input,
-.session-inline-edit textarea {
-	flex: 1;
+.session-inline-edit .session-inline-input {
 	min-width: 0;
+	max-height: 240px;
 	box-sizing: border-box;
 	margin: 0;
 	border: 0;
 	background: transparent;
-	padding: 12px 8px 12px 0;
 	color: inherit;
-	font: inherit;
-	font-size: 16px;
-	line-height: 24px;
-	resize: none;
-	overflow: hidden;
+	overflow: auto;
 	outline: none;
+}
+
+.session-inline-edit-toolbar {
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	min-width: 0;
 }
 
 .session-inline-edit-actions {
@@ -852,15 +859,15 @@
 	align-items: center;
 	gap: 2px;
 	flex: 0 0 auto;
-	padding-bottom: 5px;
+	margin-left: auto;
 }
 
 .session-inline-edit-actions button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
+	width: 30px;
+	height: 30px;
 	padding: 0;
 	border: 0;
 	border-radius: 999px;
@@ -876,11 +883,6 @@
 	background: #f8f8f8;
 }
 
-.session-inline-edit-send {
-	color: #fff;
-	background: #000;
-}
-
 .session-inline-edit-send:hover:not(:disabled) {
 	opacity: 0.7;
 }
@@ -892,15 +894,6 @@
 
 .session-inline-edit-cancel:disabled {
 	opacity: 0.5;
-}
-
-.session-inline-edit-send:disabled {
-	color: #0d0d0d;
-	background: #00000014;
-}
-
-.session-inline-edit .session-branch-note {
-	width: min(80%, 100%);
 }
 
 .session-chat-scroll-host {

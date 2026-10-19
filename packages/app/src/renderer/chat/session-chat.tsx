@@ -120,13 +120,13 @@ export function SessionChat({
 				setBusy(false);
 			}
 		},
-		async commitEdit(text) {
+		async commitEdit(text, model) {
 			const entryId = editingRef.current;
 			if (!entryId) return;
 			setBusy(true);
 			setError(null);
 			try {
-				const record = await window.loom.branchBefore(threadId, entryId);
+				const record = await window.loom.branchBefore(threadId, entryId, model);
 				if (activeThread.current !== threadId) return;
 				editingRef.current = null;
 				setEditingId(null);
