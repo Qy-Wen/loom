@@ -6,6 +6,8 @@ import {
 	type AgentPermissionLevel,
 } from "@loom/agent/tool-permission";
 import { useLocale } from "../locale.tsx";
+import { MenuCheck, MenuChevron } from "./composer-menu-icons.tsx";
+import { composerMenuPosition } from "./composer-menu-position.ts";
 
 const AgentPermissionContext = createContext<{
 	level: AgentPermissionLevel;
@@ -57,9 +59,10 @@ export function AgentPermissionSelect(): React.JSX.Element {
 	useLayoutEffect(() => {
 		if (!open) return;
 		const place = () => {
-			const rect = buttonRef.current?.getBoundingClientRect();
-			if (!rect) return;
-			setMenuStyle({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
+			const anchor = buttonRef.current;
+			const menu = menuRef.current;
+			if (!anchor || !menu) return;
+			setMenuStyle(composerMenuPosition(anchor, menu));
 		};
 		place();
 		window.addEventListener("resize", place);
@@ -111,13 +114,11 @@ export function AgentPermissionSelect(): React.JSX.Element {
 						setOpen(false);
 						return;
 					}
-					const rect = buttonRef.current?.getBoundingClientRect();
-					if (rect) setMenuStyle({ left: rect.left, bottom: window.innerHeight - rect.top + 6 });
 					setOpen(true);
 				}}
 			>
 				<span>{labels[level]}</span>
-				<Chevron />
+				<MenuChevron />
 			</button>
 			{open && createPortal(
 				<div
@@ -135,20 +136,13 @@ export function AgentPermissionSelect(): React.JSX.Element {
 							aria-selected={option.value === level}
 							onClick={() => choose(option.value)}
 						>
-							{labels[option.value]}
+							<MenuCheck selected={option.value === level} />
+							<span>{labels[option.value]}</span>
 						</button>
 					))}
 				</div>,
 				document.body,
 			)}
 		</div>
-	);
-}
-
-function Chevron(): React.JSX.Element {
-	return (
-		<svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true">
-			<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-		</svg>
 	);
 }

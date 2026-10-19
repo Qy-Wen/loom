@@ -15,7 +15,7 @@ import { editableText, placedChips } from "./chat-content.ts";
 import { AddFilesButton, ComposerTextArea, AssetSendButton } from "./chat-composer-input.tsx";
 import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
-import { ChatModelSelect } from "./chat-model-select.tsx";
+import { SessionModelSelect } from "./chat-model-select.tsx";
 import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
 type QueuedFollowUp = { id: string; label: string };
@@ -384,7 +384,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				{toolbar && createPortal(
 					<div className="session-composer-meta" onMouseDown={(event) => event.stopPropagation()}>
 						<AgentPermissionSelect />
-						<ChatModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={Boolean(isRunning)} />
+						<SessionModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={Boolean(isRunning)} />
 						<ContextIndicator context={usage} />
 					</div>,
 					toolbar,

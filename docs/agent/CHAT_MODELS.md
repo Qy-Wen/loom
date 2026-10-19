@@ -8,7 +8,7 @@
 ## 1. Scope and decisions
 
 - Chat uses pi-ai Providers, catalogs, native protocols, authentication, and capability metadata, including **API keys and OAuth login**.
-- **App defaults affect only new independent conversations.** Each conversation persists its model and thinking level, retains them on reopen, and forks retain the selection at the branch point. Specialists inherit their parent by default.
+- **App defaults fill new independent conversations and conversations without a model.** Each conversation persists its model and thinking level, retains them on reopen, and forks retain the selection at the branch point. Specialists inherit their parent by default.
 - Reuse built-in Provider factories. Custom connections cover proxies, local services, and uncataloged models. Do not disguise every connection as `loom-chat`.
 - Loom owns configuration, persistent credentials, UI, and selection policy. pi-ai owns protocol conversion, auth resolution, OAuth refresh, streaming events, and usage. Durable retains scheduling, retries, compaction, cancellation, and recovery.
 - Do not import the whole pi-coding-agent, edit vendor sources, or implement OAuth/LLM streaming protocols ourselves.
@@ -64,7 +64,7 @@ Proposed storage in Electron `userData`, never the library:
 
 - Preserve native Provider IDs. Assign stable custom IDs; renaming does not change identity. Equal model IDs on different Providers remain distinct.
 - One credential per Provider matches pi-ai. Switching API key/OAuth replaces the auth method rather than managing multiple accounts.
-- Default selection, conversation selection, and Provider enablement are independent. Disable/delete/logout does not rewrite history or select a fallback; show actual availability from remaining configuration/auth.
+- Default selection, conversation selection, and Provider enablement are independent. Disable/delete/logout does not replace saved conversation selections; unselected conversations can use another enabled, available model.
 - Persist an explicit model and thinking level when creating a conversation; do not let later app-default changes alter it implicitly.
 
 ### 4.2 Built-in and custom Providers

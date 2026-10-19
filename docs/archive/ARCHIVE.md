@@ -89,7 +89,7 @@ Publishing to Xiaohongshu, Douyin, and other platforms connects through MCP serv
 
 Production Chat uses native pi-ai Providers, model catalogs, protocols, and API-key/OAuth login, with OS-encrypted credentials. Settings supports built-in and custom providers, protocol inference from complete request URLs, model enablement, and key editing; `get_settings` / `update_settings` can inspect and change Chat configuration. Legacy Chat endpoints and compatibility paths are removed. See [CHAT_MODELS](../agent/CHAT_MODELS.md) and [SETTINGS](../SETTINGS.md).
 
-Each conversation persists its own model and thinking level, retained across reopening and forks. The composer model menu lists only enabled, available models, with thinking levels in a model submenu. Busy conversations reject changes; selections apply from the next request. New independent conversations inherit the last explicit choice only while it remains enabled and available, without automatic replacement.
+Each conversation persists its own model and thinking level, retained across reopening and forks. The composer model menu lists only enabled, available models, with thinking levels in a model submenu. Busy conversations reject changes; selections apply from the next request. New or unselected conversations prefer the last enabled, available choice, then the first enabled, available text model in configuration order; saved selections remain unchanged.
 
 ---
 

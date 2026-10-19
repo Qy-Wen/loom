@@ -16,7 +16,7 @@
 
 自定义 Chat 根据完整 URL 的路径识别协议：`/chat/completions`、`/responses`、`/v1/messages` 或 `/models/{model-id}:streamGenerateContent`。标准路径只显示识别结果，不显示协议下拉框。Loom 提取基础地址，路径拼接、鉴权与流式解析仍由 pi-ai/SDK 负责。Gemini 地址会预填空白的首个模型 ID，调用使用各模型配置的 ID。未知路径可明确切换到 Base URL + 手选协议模式，仍由 SDK 追加路径。不支持的查询参数会报错而非被丢弃；接受原生 `beta=true` / `alt=sse` 标志。
 
-会话输入区的模型菜单选择模型。悬停支持思考的模型或点击右侧箭头，在二级菜单中选择思考强度；键盘右方向键展开，左方向键返回。新独立会话仅在上次明确选择仍启用且可用时沿用它，否则要求手动选择；既有会话/fork 保留原选择，不自动换模型。配置与记忆选择存于 `chat-models.json`。首次 `DEEPSEEK_API_KEY` 引导只启用原生 DeepSeek，不自动选择模型。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
+会话输入区的模型菜单选择模型。悬停支持思考的模型或点击右侧箭头，在二级菜单中选择思考强度；键盘右方向键展开，左方向键返回。新会话及尚未选模型的已有会话优先沿用上次启用且可用的选择，否则按配置顺序选第一个启用且可用的文字模型；没有可用模型时留空。已有会话/fork 保存的选择不变。配置与记忆选择存于 `chat-models.json`。首次 `DEEPSEEK_API_KEY` 引导启用原生 DeepSeek，其模型可参与自动选择。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
 
 ## 模型槽位
 

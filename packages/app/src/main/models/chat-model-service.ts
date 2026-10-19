@@ -64,14 +64,25 @@ export class ChatModelService {
 		if (!this.isModelEnabled(selection.provider, selection.modelId)) throw new Error("Chat model is disabled");
 		await this.save({ ...this.config, default: selection });
 	}
-	/** Never pick a replacement when the last choice is disabled, missing, or unauthenticated. */
+	/** Prefer the remembered choice, then the first enabled, available text model in configuration order. */
 	async selectionForNewSession(): Promise<ChatSelection | undefined> {
 		const selection = this.defaultSelection;
-		if (!selection || !this.isModelEnabled(selection.provider, selection.modelId)) return undefined;
-		try {
-			const available = await this.#native.getAvailable(selection.provider, { signal: AbortSignal.timeout(5000) });
-			return available.some((model) => model.id === selection.modelId) ? selection : undefined;
-		} catch { return undefined; }
+		const available = new Map<string, Awaited<ReturnType<Models["getAvailable"]>>>();
+		const candidates = async (provider: string) => {
+			if (!available.has(provider)) {
+				try { available.set(provider, await this.#native.getAvailable(provider, { signal: AbortSignal.timeout(5000) })); }
+				catch { available.set(provider, []); }
+			}
+			return available.get(provider)!.filter((model) => model.input.includes("text") && this.isModelEnabled(provider, model.id));
+		};
+		if (selection && this.isModelEnabled(selection.provider, selection.modelId)
+			&& (await candidates(selection.provider)).some((model) => model.id === selection.modelId)) return selection;
+		for (const provider of this.#config.providers) {
+			if (!provider.enabled) continue;
+			const model = (await candidates(provider.id))[0];
+			if (model) return { provider: provider.id, modelId: model.id, thinkingLevel: clampThinkingLevel(model, "off") };
+		}
+		return undefined;
 	}
 	onSecrets(listener: (values: readonly string[]) => void): () => void {
 		this.#secretListeners.add(listener); listener([...this.#secrets]); return () => { this.#secretListeners.delete(listener); };

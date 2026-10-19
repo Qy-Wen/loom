@@ -387,7 +387,6 @@ function registerChatIpc(): void {
 	ipcMain.handle(IPC.saveChatSettings, async (_event, raw: unknown) => {
 		const service = requireChatModels();
 		await service.save(raw as Parameters<ChatModelService["save"]>[0]);
-		requireChat().setChatDefault(await service.selectionForNewSession());
 		notifyChatSettingsChanged();
 		return service.view();
 	});
@@ -682,7 +681,6 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.createSession, async () => {
-		requireChat().setChatDefault(await requireChatModels().selectionForNewSession());
 		return chatRecord(await requireChat().createSession());
 	});
 	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireChat().openSession(id)));
@@ -746,7 +744,6 @@ function registerIpc(): void {
 		const selection = { provider: draft.provider, modelId: draft.modelId, thinkingLevel };
 		const record = await requireChat().setSessionModel(id, selection);
 		await service.rememberSelection(selection);
-		requireChat().setChatDefault(await service.selectionForNewSession());
 		notifyChatSettingsChanged();
 		return chatRecord(record);
 	});
@@ -1091,13 +1088,12 @@ app
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		const chatStores = createChatStorage(app.getPath("userData"));
 		chatModels = new ChatModelService(chatStores, { withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });
-		chat = new ChatService({ ...AGENT_OPTIONS, models: chatModels.models, composer: {
+		chat = new ChatService({ ...AGENT_OPTIONS, models: chatModels.models, chatDefault: () => requireChatModels().selectionForNewSession(), composer: {
 			getSelection: getUiSelection,
 			takeImages: takeComposerImages,
 			takeAssets: takeLiveComposerAssets,
 		} }, (usage) => { void agentStats?.record(usage); });
 		await chatModels.initialize(process.env);
-		requireChat().setChatDefault(await chatModels.selectionForNewSession());
 		chatModels.onSecrets((values) => requireChat().setChatSecrets(values));
 		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
 		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
@@ -1374,7 +1370,6 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 		const service = requireChatModels();
 		try { notes.push(...await applyChatSettingsPatch(service, patch.chat)); }
 		finally {
-			requireChat().setChatDefault(await service.selectionForNewSession());
 			notifyChatSettingsChanged();
 		}
 	}

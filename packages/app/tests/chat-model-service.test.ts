@@ -114,7 +114,7 @@ test("save validates before replacement, clamps native thinking, retains unknown
 	assert.equal(await service.selectionForNewSession(), undefined);
 });
 
-test("model switches persist independently of auth and only explicit enabled choices seed new sessions", async (t) => {
+test("sessions prefer remembered models and fall back to an enabled available model without replacing saved choices", async (t) => {
 	const { dir, stores, cleanup } = await workspace(t);
 	const provider = custom();
 	provider.models.push({ ...provider.models[0]!, id: "other" });
@@ -122,15 +122,15 @@ test("model switches persist independently of auth and only explicit enabled cho
 	await stores.credentials.modify("local", async () => ({ type: "api_key", key: "test" }));
 	const service = new ChatModelService(stores, { authContext: noEnv });
 	await service.initialize();
-	assert.equal(await service.selectionForNewSession(), undefined, "first use requires an explicit choice");
-	const host = new ChatService({ models: service.models });
+	const selection = { provider: "local", modelId: "demo", thinkingLevel: "off" } as const;
+	assert.deepEqual(await service.selectionForNewSession(), selection);
+	assert.equal(service.defaultSelection, undefined, "automatic choices do not overwrite the remembered preference");
+	const host = new ChatService({ models: service.models, chatDefault: () => service.selectionForNewSession() });
 	cleanup.push(() => host.close()); await host.openLibrary(dir);
 	const first = await host.createSession();
-	assert.equal(first.model, undefined);
-	const selection = { provider: "local", modelId: "demo", thinkingLevel: "off" } as const;
+	assert.deepEqual(first.model, selection);
 	await host.setSessionModel(first.id, selection);
 	await service.rememberSelection(selection);
-	host.setChatDefault(await service.selectionForNewSession());
 	assert.equal((await host.createSession()).model?.modelId, "demo");
 
 	const input = service.config;
@@ -141,23 +141,36 @@ test("model switches persist independently of auth and only explicit enabled cho
 	assert.equal(disabled.enabled, false);
 	assert.equal(disabled.available, true, "auth availability is not the enable switch");
 	assert.equal(view.models.find((model) => model.provider === "local" && model.id === "other")!.enabled, true);
-	assert.equal(await service.selectionForNewSession(), undefined, "do not replace a disabled choice with another model");
+	assert.equal((await service.selectionForNewSession())?.modelId, "other");
 	await assert.rejects(() => service.rememberSelection(selection), /disabled/);
 	assert.equal((await host.getSession(first.id)).model?.modelId, "demo", "existing conversation selection is not rewritten");
-	host.setChatDefault(await service.selectionForNewSession());
-	assert.equal((await host.createSession()).model, undefined);
+	assert.equal((await host.createSession()).model?.modelId, "other");
 	const blocked = await service.models.completeSimple(service.models.getModel("local", "demo")!, { messages: [] });
 	assert.equal(blocked.stopReason, "error"); assert.match(blocked.errorMessage!, /disabled/);
 
 	const reopened = new ChatModelService(stores, { authContext: noEnv });
 	await reopened.initialize();
 	assert.equal(reopened.isModelEnabled("local", "demo"), false);
-	assert.equal(await reopened.selectionForNewSession(), undefined);
+	assert.equal((await reopened.selectionForNewSession())?.modelId, "other");
 	const restored = reopened.config; restored.providers[0]!.modelEnabled = { demo: true };
 	await reopened.save(restored);
 	assert.deepEqual(await reopened.selectionForNewSession(), selection);
 	await stores.credentials.delete("local");
-	assert.equal(await reopened.selectionForNewSession(), undefined, "unauthenticated choices need manual selection too");
+	assert.equal(await reopened.selectionForNewSession(), undefined, "models without required credentials are unavailable");
+});
+
+test("automatic selection skips unavailable providers and disabled models in configuration order", async (t) => {
+	const { stores } = await workspace(t);
+	const provider = custom();
+	provider.allowUnauthenticated = true;
+	provider.models.push({ ...provider.models[0]!, id: "last" });
+	provider.modelEnabled = { demo: false };
+	await stores.config.save({ version: 1, providers: [custom("needs-auth"), { ...custom("disabled"), enabled: false }, provider] });
+	const service = new ChatModelService(stores, { authContext: noEnv });
+	await service.initialize();
+	assert.equal((await service.selectionForNewSession())?.modelId, "last");
+	await service.save({ version: 1, providers: [] });
+	assert.equal(await service.selectionForNewSession(), undefined);
 });
 
 test("request/auth errors are redacted before durable can checkpoint them, without changing streams/usage", async (t) => {
@@ -219,13 +232,13 @@ test("native dynamic refresh/cache restoration preserves native metadata and ret
 	assert.equal(fetches, 2); assert.equal(reopened.models.getModel("dynamic", "published")!.contextWindow, 32000);
 });
 
-test("runtime env bootstrap enables DeepSeek without choosing a model or overwriting saved configuration", async (t) => {
+test("runtime env bootstrap makes DeepSeek selectable without overwriting the saved preference", async (t) => {
 	const { stores } = await workspace(t);
 	const env = { DEEPSEEK_API_KEY: "ENV_PRIVATE" };
 	const service = new ChatModelService(stores, { authContext: { ...noEnv, env: async (name) => env[name as keyof typeof env] } });
 	await service.initialize(env);
 	assert.equal(service.defaultSelection, undefined);
-	assert.equal(await service.selectionForNewSession(), undefined);
+	assert.equal((await service.selectionForNewSession())?.provider, "deepseek");
 	assert.deepEqual(service.config.providers, [{ kind: "builtin", id: "deepseek", enabled: true }]);
 	assert.deepEqual(await stores.credentials.list(), []); assert.ok(!JSON.stringify(await service.view()).includes("ENV_PRIVATE"));
 	await service.save({ version: 1, providers: [] });

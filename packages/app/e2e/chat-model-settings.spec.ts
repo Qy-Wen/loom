@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
-test("Settings enable switches control the picker and new sessions remember only explicit choices", async ({ loomPage }) => {
+test("sessions automatically select available models and prefer remembered choices", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data required");
 	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1");
 	await loomPage.evaluate(async () => {
@@ -10,13 +10,15 @@ test("Settings enable switches control the picker and new sessions remember only
 		const provider = view.config.providers.find((entry) => entry.id === "e2e-chat");
 		if (provider?.kind !== "custom") throw new Error("Missing test provider");
 		provider.models.push({ ...provider.models[0]!, id: "second-model" });
+		view.config.providers = [provider];
 		delete view.config.default;
 		await window.loom.saveChatSettings(view.config);
 	});
 
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 	const picker = loomPage.getByRole("button", { name: "Conversation model", exact: true });
-	await expect(picker).toHaveText("Choose a model");
+	await expect(picker).toHaveText("demo (e2e-chat)");
+	expect((await loomPage.evaluate(() => window.loom.getChatSettings())).config.default).toBeUndefined();
 	await picker.click();
 	await loomPage.getByRole("menuitemradio", { name: "demo (e2e-chat)", exact: true }).click();
 	await expect(picker).toHaveText("demo (e2e-chat)");
@@ -41,8 +43,7 @@ test("Settings enable switches control the picker and new sessions remember only
 	await expect(loomPage.getByRole("menuitemradio", { name: "second-model (e2e-chat)", exact: true })).toBeVisible();
 	await loomPage.keyboard.press("Escape");
 	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
-	await expect(picker).toHaveText("Choose a model");
-	// The other enabled model is not automatically selected.
+	await expect(picker).toHaveText("second-model (e2e-chat)");
 	await expect.poll(() => loomPage.evaluate(async () => (await window.loom.getChatSettings()).config.default?.modelId)).toBe("demo");
 	await picker.click();
 	await loomPage.getByRole("menuitemradio", { name: "second-model (e2e-chat)", exact: true }).click();
@@ -53,6 +54,30 @@ test("Settings enable switches control the picker and new sessions remember only
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	await expect(demo).not.toBeChecked();
 	await settings.getByRole("button", { name: "Close settings" }).click();
+});
+
+test("permission and model pickers share trigger and selected-item styles", async ({ loomPage }, testInfo) => {
+	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1");
+	await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+	const permission = loomPage.locator(".session-permission > button");
+	const model = loomPage.getByRole("button", { name: "Conversation model", exact: true });
+	await expect(model).toHaveText("demo (e2e-chat)");
+	const appearance = (selector: string) => loomPage.locator(selector).evaluate((element) => {
+		const style = getComputedStyle(element);
+		return Object.fromEntries(["font-size", "line-height", "padding", "border-radius", "color", "background-color", "gap"].map((key) => [key, style.getPropertyValue(key)]));
+	});
+	await permission.hover();
+	const permissionTrigger = await appearance(".session-permission > button");
+	await model.hover();
+	expect(await appearance(".session-model-select > button")).toEqual(permissionTrigger);
+	await permission.click();
+	const permissionOption = await appearance('.session-permission-menu [aria-selected="true"]');
+	await loomPage.screenshot({ path: testInfo.outputPath("permission-menu.png") });
+	await loomPage.keyboard.press("Escape");
+	await model.click();
+	expect(await appearance('.session-model-menu [aria-checked="true"]')).toEqual(permissionOption);
+	await loomPage.screenshot({ path: testInfo.outputPath("model-menu.png") });
+	await loomPage.keyboard.press("Escape");
 });
 
 test("switching models refreshes the context ring without reusing the previous model's usage", async ({ loomPage }) => {
@@ -82,6 +107,7 @@ test("switching models refreshes the context ring without reusing the previous m
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		const id = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((old) => old.id === row.id))!.id;
 		const record = () => loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id);
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		await loomPage.getByRole("textbox").fill("Reply briefly without using tools.");
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByText("CONTEXT_RING_OK", { exact: true })).toBeVisible();

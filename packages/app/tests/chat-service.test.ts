@@ -13,6 +13,28 @@ import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import type { AssetRefAttachment, ComposerImageInput } from "@loom/agent";
 
+test("unset conversations pick current defaults on open or send without overwriting explicit selections", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-default-model-"));
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	let selection: { provider: string; modelId: string; thinkingLevel: "off" } | undefined;
+	const service = new ChatService({ models, chatDefault: async () => selection });
+	try {
+		await service.openLibrary(path);
+		const session = await service.createSession();
+		assert.equal(session.model, undefined);
+		selection = { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" };
+		assert.deepEqual((await service.openSession(session.id)).model, selection);
+		const unselected = await service.requireRuntime().createConversation({}, context);
+		faux.setResponses([fauxAssistantMessage("automatic model reply")]);
+		const turn = await (await service.prepareTurn(String(unselected.id), "send before opening")).submit();
+		assert.equal((await service.waitForTurn(turn)).status, "done");
+		assert.deepEqual((await service.getSession(String(unselected.id))).model, selection);
+		selection = undefined;
+		assert.equal((await service.openSession(session.id)).model?.modelId, faux.models[0].id);
+	} finally { await service.close(); await rm(path, { recursive: true, force: true }); }
+});
+
 test("normal turns and follow-ups share image/ref preparation; replay never consumes a new draft", async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-chat-input-"));
 	const faux = fauxProvider();

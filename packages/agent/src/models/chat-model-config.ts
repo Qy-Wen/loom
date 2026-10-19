@@ -42,7 +42,7 @@ const provider = Type.Union([
 ]);
 export const ChatConfigSchema = object({
 	version: Type.Literal(CHAT_CONFIG_VERSION), providers: Type.Array(provider),
-	// Last composer selection, inherited only by new conversations. Not edited in Settings.
+	// Last explicit composer selection, preferred when assigning a conversation's first model. Not edited in Settings.
 	default: Type.Optional(object({ provider: id, modelId: text, thinkingLevel: literals(CHAT_THINKING_LEVELS) })),
 });
 export type ChatModelsConfig = Static<typeof ChatConfigSchema>;

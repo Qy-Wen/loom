@@ -1,5 +1,5 @@
 import {
-	BACKGROUND_CONTEXT as context, clearPendingApprovals,
+	BACKGROUND_CONTEXT as context, clearPendingApprovals, configure,
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	DurableTrace, TraceStore, watchEvents, type LoomTraceRecord, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
@@ -13,7 +13,8 @@ import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom
 export type ChatServiceOptions = LoomAgentOptions & {
 	/** The app owns the execution collection; this service never builds Providers. */
 	models: Models;
-	chatDefault?: ChatSelection;
+	/** Resolve current availability when assigning a model; static defaults also support headless hosts. */
+	chatDefault?: ChatSelection | (() => Promise<ChatSelection | undefined>);
 	composer?: {
 		getSelection?: () => UiSelectionFields | null;
 		takeImages?: (id: string) => Promise<ComposerImageInput[]>;
@@ -55,11 +56,26 @@ export class ChatService {
 	constructor(options: ChatServiceOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
 	readonly #chatSecrets = new Set<string>();
 	setChatSecrets(values: readonly string[]) { for (const value of values) if (value) this.#chatSecrets.add(value); this.#trace?.setSecrets([...this.#chatSecrets]); }
-	/** Changes defaults only: existing conversations/forks/owned agents are never configured here. */
+	/** Saved conversation selections are never replaced by defaults. */
 	setChatDefault(selection: ChatSelection | undefined) {
 		this.#options.chatDefault = selection && structuredClone(selection);
-		this.#agentDefaults.model = selection ? { provider: selection.provider, modelId: selection.modelId } : undefined;
-		this.#agentDefaults.thinkingLevel = selection?.thinkingLevel;
+	}
+	private async defaultAgent(): Promise<AgentChange> {
+		const value = this.#options.chatDefault;
+		const selection = typeof value === "function" ? await value() : value;
+		return selection ? { model: { provider: selection.provider, modelId: selection.modelId }, thinkingLevel: selection.thinkingLevel } : {};
+	}
+	private async ensureModel(conversation: Conversation): Promise<void> {
+		if ((await conversation.agent(context)).model) return;
+		const runtime = this.requireRuntime();
+		const defaults = await this.defaultAgent();
+		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		if (!defaults.model) return;
+		await conversation.commit(async (tx) => {
+			if ((await tx.doc(AgentDoc, conversation.id)).model || (await tx.doc(LiveDoc, conversation.id)).run
+				|| (await tx.doc(InboxDoc, conversation.id)).items.length) return;
+			await configure(tx, conversation.id, defaults);
+		}, context);
 	}
 	getPermissionLevel() { return this.gate.level; }
 	setPermissionLevel(level: AgentPermissionLevel) { this.gate.setLevel(level); }
@@ -80,7 +96,6 @@ export class ChatService {
 		const sharedExtensions = [createToolResultStorage(root), ...(this.#trace ? [this.#trace.extension] : [])];
 		const assembly = await this.assemble(root, permission, sharedExtensions);
 		this.#models = this.#options.models;
-		this.setChatDefault(this.#options.chatDefault);
 		this.#agentDefaults.instructions = this.#instructions;
 		try { this.runtime = await LibraryRuntime.open(root, {
 			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...assembly.specialists, ...sharedExtensions],
@@ -133,6 +148,7 @@ export class ChatService {
 		const requestId = options.requestId;
 		const existingRequest = requestId === undefined ? undefined : await runtime.harness.commit((tx) => tx.submissionByRequest(conversation.id, requestId), context);
 		if (existingRequest) return { existingRequest, submit: async () => (await runtime.harness.submission(existingRequest.id, context))! };
+		await this.ensureModel(conversation);
 		const record = await this.getSession(id);
 		if (this.runtime !== runtime) throw new Error("The open library changed.");
 		const images = await this.#options.composer?.takeImages?.(id) ?? [];
@@ -199,8 +215,14 @@ export class ChatService {
 			updatedAt: await this.lastMessageTimestamp((await runtime.harness.conversation(row.id, context))!) ?? row.createdAt,
 		})));
 	}
-	async createSession() { const conversation = await this.requireRuntime().createConversation({}, context); return this.getSession(String(conversation.id)); }
-	async openSession(id: string) { return this.getSession(id); }
+	async createSession() {
+		const runtime = this.requireRuntime();
+		const agent = await this.defaultAgent();
+		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		const conversation = await runtime.createConversation({ agent }, context);
+		return this.getSession(String(conversation.id));
+	}
+	async openSession(id: string) { await this.ensureModel(await this.conversation(id)); return this.getSession(id); }
 	async getChatImage(id: string, entryId: string, contentIndex: number): Promise<{ data: string; mimeType: string } | undefined> {
 		if (!Number.isSafeInteger(contentIndex) || contentIndex < 0) return undefined;
 		const conversation = await this.conversation(id);

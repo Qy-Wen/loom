@@ -3,6 +3,8 @@ import { createPortal } from "react-dom";
 import type { LoomSessionModel } from "@loom/agent";
 import type { ChatThinkingLevel } from "@loom/agent/chat-models";
 import { useLocale } from "../locale.tsx";
+import { MenuCheck, MenuChevron } from "./composer-menu-icons.tsx";
+import { composerMenuPosition } from "./composer-menu-position.ts";
 
 type ModelChoice = {
 	provider: string;
@@ -29,11 +31,10 @@ function navigateMenu(event: KeyboardEvent<HTMLDivElement>): void {
 	items[next]?.focus();
 }
 
-/** Per-conversation model picker with a reasoning submenu for each capable model. */
-export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
-	sessionId: string;
+/** Controlled picker, also used for an unsaved history-edit model choice. */
+export function ChatModelSelect({ model, onChange, disabled }: {
 	model: LoomSessionModel | undefined;
-	onChange: () => void;
+	onChange: (model: LoomSessionModel) => void | Promise<void>;
 	disabled: boolean;
 }): React.JSX.Element | null {
 	const { t } = useLocale();
@@ -72,18 +73,15 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 		if (restoreFocus) buttonRef.current?.focus();
 	}
 
-	useEffect(() => { close(); }, [sessionId, disabled]);
+	useEffect(() => { close(); }, [disabled]);
 
 	useLayoutEffect(() => {
 		if (!open) return;
 		const place = () => {
-			const rect = buttonRef.current?.getBoundingClientRect();
+			const anchor = buttonRef.current;
 			const menu = menuRef.current;
-			if (!rect || !menu) return;
-			setMenuStyle({
-				left: Math.max(8, Math.min(rect.left, window.innerWidth - menu.offsetWidth - 8)),
-				bottom: window.innerHeight - rect.top + 6,
-			});
+			if (!anchor || !menu) return;
+			setMenuStyle(composerMenuPosition(anchor, menu));
 		};
 		place();
 		const selected = menuRef.current?.querySelector<HTMLButtonElement>('[aria-checked="true"]')
@@ -157,8 +155,7 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 		close(true);
 		setError(null);
 		try {
-			await window.loom.setSessionModel(sessionId, { provider: next.provider, modelId: next.modelId, thinkingLevel });
-			onChange();
+			await onChange({ provider: next.provider, modelId: next.modelId, thinkingLevel });
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -179,7 +176,7 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 				}}
 			>
 				<span className="session-model-label">{label}</span>
-				<Chevron />
+				<MenuChevron />
 			</button>
 			{open && createPortal(<>
 				<div ref={menuRef} id={menuId} className="session-permission-menu session-model-menu" role="menu"
@@ -204,10 +201,10 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 								}
 							}}
 						>
-							<Check selected={isCurrent(row)} />
+							<MenuCheck selected={isCurrent(row)} />
 							<span className="session-model-label">{row.label}</span>
 							{adjustable && <span className="session-model-effort" aria-hidden="true">
-								{isCurrent(row) && t.chat.thinkingLevels[thinkingFor(row)]}<Chevron right />
+								{isCurrent(row) && t.chat.thinkingLevels[thinkingFor(row)]}<MenuChevron right />
 							</span>}
 						</button>;
 					})}
@@ -228,7 +225,7 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 						aria-checked={isCurrent(submenu.model) && (model?.thinkingLevel ?? "off") === level}
 						onClick={() => { void choose(submenu.model, level); }}
 					>
-						<Check selected={isCurrent(submenu.model) && (model?.thinkingLevel ?? "off") === level} />
+						<MenuCheck selected={isCurrent(submenu.model) && (model?.thinkingLevel ?? "off") === level} />
 						<span>{t.chat.thinkingLevels[level]}</span>
 					</button>)}
 				</div>}
@@ -237,14 +234,29 @@ export function ChatModelSelect({ sessionId, model, onChange, disabled }: {
 	);
 }
 
-function Check({ selected }: { selected: boolean }): React.JSX.Element {
-	return <svg className="session-model-check" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" style={{ visibility: selected ? "visible" : "hidden" }}>
-		<path d="m3.5 8 3 3 6-6" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-	</svg>;
-}
-
-function Chevron({ right = false }: { right?: boolean }): React.JSX.Element {
-	return <svg viewBox="0 0 10 6" width="10" height="6" aria-hidden="true" style={right ? { transform: "rotate(-90deg)" } : undefined}>
-		<path d="M1 1l4 4 4-4" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" />
-	</svg>;
+/** Persist bottom-composer choices; fill an unset model when settings/auth become available. */
+export function SessionModelSelect({ sessionId, model, onChange, disabled }: {
+	sessionId: string;
+	model: LoomSessionModel | undefined;
+	onChange: () => void;
+	disabled: boolean;
+}): React.JSX.Element {
+	const changed = useRef(onChange);
+	changed.current = onChange;
+	useEffect(() => {
+		if (model || disabled) return;
+		let active = true;
+		const fill = () => {
+			void window.loom.openSession(sessionId).then((record) => {
+				if (active && record.model) changed.current();
+			}).catch(() => {});
+		};
+		fill();
+		const stop = window.loom.onChatSettingsChanged(fill);
+		return () => { active = false; stop(); };
+	}, [sessionId, model, disabled]);
+	return <ChatModelSelect key={sessionId} model={model} disabled={disabled} onChange={async (selection) => {
+		await window.loom.setSessionModel(sessionId, selection);
+		onChange();
+	}} />;
 }

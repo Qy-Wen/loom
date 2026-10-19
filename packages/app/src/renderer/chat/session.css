@@ -275,7 +275,8 @@
 	margin-left: -3px;
 }
 
-.session-permission {
+.session-permission,
+.session-model-select {
 	position: relative;
 	display: flex;
 	align-items: center;
@@ -284,10 +285,12 @@
 	font-size: 12px;
 }
 
-.session-permission > button {
+.session-permission > button,
+.session-model-select > button {
 	display: inline-flex;
 	align-items: center;
 	gap: 5px;
+	min-width: 0;
 	max-width: 100%;
 	padding: 3px 7px;
 	border: 0;
@@ -299,20 +302,37 @@
 	cursor: pointer;
 }
 
-.session-permission > button span {
+.session-permission > button span,
+.session-model-label {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.session-permission > button svg {
+.session-permission > button svg,
+.session-model-select > button svg,
+.session-menu-check {
 	flex: 0 0 auto;
 }
 
-.session-permission > button:hover,
-.session-permission > button[aria-expanded="true"] {
+.session-permission > button:hover:not(:disabled),
+.session-permission > button[aria-expanded="true"],
+.session-model-select > button:hover:not(:disabled),
+.session-model-select > button[aria-expanded="true"] {
 	background: #f2f2f0;
 	color: #202124;
+}
+
+.session-permission > button:focus-visible,
+.session-model-select > button:focus-visible {
+	outline: 2px solid #a3a6ac;
+	outline-offset: 2px;
+}
+
+.session-permission > button:disabled,
+.session-model-select > button:disabled {
+	opacity: 0.55;
+	cursor: default;
 }
 
 .session-permission-menu {
@@ -327,7 +347,9 @@
 }
 
 .session-permission-menu button {
-	display: block;
+	display: flex;
+	align-items: center;
+	gap: 8px;
 	width: 100%;
 	padding: 6px 10px;
 	border: 0;
@@ -341,7 +363,11 @@
 }
 
 .session-permission-menu button:hover,
-.session-permission-menu button[aria-selected="true"] {
+.session-permission-menu button:focus-visible,
+.session-permission-menu button[aria-selected="true"],
+.session-permission-menu button[aria-checked="true"],
+.session-permission-menu button[aria-expanded="true"] {
+	outline: none;
 	background: #f4f4f2;
 }
 
@@ -927,45 +953,8 @@
 
 /* Per-conversation model picker (composer toolbar) */
 .session-model-select {
-	position: relative;
-	display: flex;
-	align-items: center;
 	gap: 4px;
-	min-width: 0;
 	max-width: 40%;
-	color: #5c5f64;
-	font-size: 12px;
-}
-
-.session-model-select > button {
-	display: inline-flex;
-	align-items: center;
-	gap: 5px;
-	min-width: 0;
-	padding: 3px 7px;
-	border: 0;
-	border-radius: 6px;
-	outline: none;
-	background: transparent;
-	color: inherit;
-	font: inherit;
-	cursor: pointer;
-}
-
-.session-model-select > button:hover:not(:disabled),
-.session-model-select > button[aria-expanded="true"] {
-	background: rgba(32, 33, 36, 0.06);
-}
-
-.session-model-select > button:disabled {
-	opacity: 0.55;
-	cursor: default;
-}
-
-.session-model-label {
-	overflow: hidden;
-	text-overflow: ellipsis;
-	white-space: nowrap;
 }
 
 .session-model-error {
@@ -980,29 +969,6 @@
 	overflow-y: auto;
 	overscroll-behavior: contain;
 	scrollbar-width: thin;
-}
-
-.session-model-menu button,
-.session-thinking-menu button {
-	display: flex;
-	align-items: center;
-	gap: 8px;
-}
-
-.session-model-menu button:focus-visible,
-.session-model-menu button[aria-expanded="true"],
-.session-thinking-menu button:focus-visible {
-	outline: none;
-	background: #f4f4f2;
-}
-
-.session-model-select > button:focus-visible {
-	outline: 2px solid #a3a6ac;
-	outline-offset: 2px;
-}
-
-.session-model-check {
-	flex: 0 0 auto;
 }
 
 .session-model-menu .session-model-label {
