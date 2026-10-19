@@ -98,8 +98,9 @@ export const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentP
 				document.execCommand("insertText", false, pasted);
 			}}
 			onKeyDown={(event) => {
-				const words = stripInlineAssetRefs(String(props.value ?? "")).trim();
-				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions?.hasAssets && !words) {
+				const words = stripInlineAssetRefs(readInlineEditor(event.currentTarget)).trim();
+				const hasAssets = event.currentTarget.querySelector("[data-asset-id]") !== null;
+				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions && hasAssets && !words) {
 					event.preventDefault();
 					actions.sendAssets();
 					return;

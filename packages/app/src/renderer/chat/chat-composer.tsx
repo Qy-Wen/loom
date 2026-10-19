@@ -5,7 +5,7 @@ import { CopilotChatInput, type CopilotChatInputProps } from "@copilotkit/react-
 import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { formatChatError } from "../../shared/chat-error.ts";
-import { assetRefBlocks, composerLayoutText, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
+import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
@@ -159,7 +159,8 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		if (submitting.current) return;
 		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : submitted).replaceAll("\u200b", "");
 		const text = editableText(raw) ? raw : "";
-		const assetPayload = assetsRef.current;
+		// Chips can reach the DOM before React commits the attachment state.
+		const assetPayload = editorRef.current ? displayAssetRefs(raw, assetsRef.current) : assetsRef.current;
 		if (!text && assetPayload.length === 0) return;
 		if (!onSubmitMessage || !threadReady) {
 			onChange?.(raw);
