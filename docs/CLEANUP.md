@@ -27,17 +27,7 @@
 
 **Acceptance:** Switching while requests run or queue, closing, and reopening cannot cross library boundaries or leave an operation permanently unavailable for retry.
 
-## 3. Remove interfaces left behind by the remembered-command list UI
-
-**Problem:** The Remembered commands list UI is gone, but `removeCommandAllow` still spans Main, preload, and shared with no in-repo consumer. Only tests call `commandAllowLabel()`.
-
-**Scope:** The removal handler in `app/src/main/index.ts`, `src/preload/index.ts`, `src/shared/ipc.ts`, `remove()` in `main/settings/command-allow-store.ts`, and `commandAllowLabel()` in `agent/src/tools/tool-permission.ts`, plus their tests.
-
-**Direction:** Delete the unused removal interface and display helper. Reading, saving, binding, change notifications, and permission matching still serve tool cards and approvals and must remain.
-
-**Acceptance:** No obsolete removal channel or display helper remains; per-library remembered grants and tool approvals still work.
-
-## 4. Share the multimodal description workflow
+## 3. Share the multimodal description workflow
 
 **Problem:** `core/src/rag/image-vlm.ts`, `video-vlm.ts`, and `audio-writeup.ts` repeat serial queues, cache freshness checks, status transitions, error handling, and record updates.
 
@@ -45,7 +35,7 @@
 
 **Acceptance:** All three media types follow consistent cache, failure, cancellation, and notification rules; media-specific input constraints and preparation retain their own coverage.
 
-## 5. Split entry files with mixed responsibilities
+## 4. Split entry files with mixed responsibilities
 
 **Problem:** Feature directories now exist, but `app/src/main/index.ts`, `app/src/renderer/App.tsx`, and `core/src/local-core.ts` still concentrate several responsibilities.
 
@@ -53,7 +43,7 @@
 
 **Acceptance:** UI and tools still share one domain entry; business rules are not duplicated; relevant IPC, desktop, and domain tests pass.
 
-## 6. Align evaluation and production Embedding HTTP implementations
+## 5. Align evaluation and production Embedding HTTP implementations
 
 **Problem:** `core/evals/http-embed.ts` and `app/src/main/models/embedding-provider.ts` duplicate requests and response parsing. URL semantics have diverged: evaluation appends an operation path, while production accepts a complete request URL.
 

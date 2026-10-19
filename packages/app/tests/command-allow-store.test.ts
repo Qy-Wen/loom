@@ -6,7 +6,7 @@ import { describe, it } from "node:test";
 import { CommandAllowStore } from "../src/main/settings/command-allow-store.ts";
 
 describe("CommandAllowStore", () => {
-	it("keeps remembered commands in the library and forgets them", async () => {
+	it("persists remembered commands per library and clears the bound view on close", async () => {
 		const root = await mkdtemp(join(tmpdir(), "loom-command-allows-"));
 		const unbound = new CommandAllowStore();
 		assert.deepEqual(await unbound.bind(null), { allows: [], libraryOpen: false, root: null });
@@ -30,11 +30,9 @@ describe("CommandAllowStore", () => {
 		assert.match(await readFile(join(root, ".loom", "command-allows.json"), "utf8"), /git status/);
 
 		const other = await mkdtemp(join(tmpdir(), "loom-command-allows-other-"));
-		const elsewhere = new CommandAllowStore();
-		assert.deepEqual(await elsewhere.bind(other), { allows: [], libraryOpen: true, root: other });
-
-		assert.deepEqual(await again.remove({ tool: "bash", match: "git status" }), { allows: [], libraryOpen: true, root });
-		assert.deepEqual((await again.bind(root)).allows, []);
+		assert.deepEqual(await again.bind(other), { allows: [], libraryOpen: true, root: other });
+		assert.deepEqual((await again.bind(root)).allows, [{ tool: "bash", match: "git status" }]);
+		assert.deepEqual(await again.bind(null), { allows: [], libraryOpen: false, root: null });
 	});
 
 	it("ignores a broken file until the next write", async () => {

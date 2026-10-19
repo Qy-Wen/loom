@@ -47,17 +47,6 @@ export class CommandAllowStore {
 		return this.view();
 	}
 
-	async remove(allow: CommandAllow): Promise<CommandAllowView> {
-		const root = this.requireRoot();
-		const id = commandAllowId(allow);
-		const next = this.allows.filter((row) => commandAllowId(row) !== id);
-		if (next.length !== this.allows.length) {
-			this.allows = next;
-			await this.write(root);
-		}
-		return this.view();
-	}
-
 	private requireRoot(): string {
 		if (!this.root) throw new Error("Open a library first.");
 		return this.root;

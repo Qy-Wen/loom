@@ -6,6 +6,14 @@
 
 ---
 
+## 命令列表 UI 残留接口清理
+
+删除 `removeCommandAllow` 的 main/preload/shared 通道、`CommandAllowStore.remove()` 和 `commandAllowLabel()`。按库批准记录的读取、写入、绑定、变更通知和权限匹配保留，工具卡片仍可选择始终批准。
+
+macOS 验证：Agent/App 类型检查（含 `noUnusedLocals` / `noUnusedParameters`）、153/319 项单测及应用构建通过。存储测试覆盖重开、切库和关闭，权限测试继续覆盖记忆匹配与审批规则。
+
+---
+
 ## 废代码与公共函数清理
 
 删除 `NoopGraphHandlers`、app 从历史消息重算 usage 的旧函数与测试，以及未用导入和绑定。评测保留自己的 `usageFromMessage()`。图谱视图复用 `graphBounds()`；审批 span 的创建调用和 Markdown 回调参数位置保留。

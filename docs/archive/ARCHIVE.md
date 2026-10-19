@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Remembered-command UI interface cleanup
+
+Removed the main/preload/shared `removeCommandAllow` channel, `CommandAllowStore.remove()`, and `commandAllowLabel()`. Per-library grant reads, writes, binding, change notifications, and permission matching remain; tool cards still support always allowing a command.
+
+macOS validation: Agent/App typechecks with `noUnusedLocals` / `noUnusedParameters`, 153/319 unit tests, and the app build passed. Store tests cover reopening, library switches, and closing; permission tests retain remembered-match and approval-rule coverage.
+
+---
+
 ## Dead code and shared-function cleanup
 
 Removed `NoopGraphHandlers`, the app's obsolete message-derived usage functions and tests, and unused imports and bindings. Evaluations retain their own `usageFromMessage()`. The graph view reuses `graphBounds()`; approval span creation and Markdown callback argument positions are preserved.

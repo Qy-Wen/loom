@@ -150,19 +150,6 @@ export function commandAllowId(allow: CommandAllow): string {
 	return allow.match === undefined ? allow.tool : `${allow.tool}\0${allow.match}`;
 }
 
-export function commandAllowLabel(allow: CommandAllow): string {
-	if (allow.tool === "run_ffmpeg" && allow.match) {
-		try {
-			const parsed: unknown = JSON.parse(allow.match);
-			if (Array.isArray(parsed) && parsed.every((item) => typeof item === "string")) return parsed.join(" ");
-		} catch {
-			return allow.match;
-		}
-	}
-	if (allow.match) return allow.tool === "bash" ? allow.match : `${allow.tool} ${allow.match}`;
-	return allow.tool;
-}
-
 /** Stable identity for "always allow". Undefined when the call has no specific command to remember. */
 export function commandAllowKey(toolName: string, args: unknown, root?: string | null): CommandAllow | undefined {
 	if (toolName === "bash") {

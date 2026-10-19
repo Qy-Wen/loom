@@ -6,7 +6,6 @@ import { join } from "node:path";
 import {
 	commandAllowId,
 	commandAllowKey,
-	commandAllowLabel,
 	DEFAULT_AGENT_PERMISSION,
 	parseCommandAllows,
 	gatedToolNames,
@@ -113,7 +112,6 @@ test("remembered commands skip the next matching call", () => {
 	assert.equal(ffmpeg?.match, JSON.stringify(["ffmpeg", "-i", "a.mp4"]));
 	assert.equal(commandAllowKey("run_ffmpeg", { program: "ffprobe", args: ["-i", "a.mp4"] })?.match, JSON.stringify(["ffprobe", "-i", "a.mp4"]));
 	assert.equal(commandAllowKey("run_ffmpeg", { args: "nope" }), undefined);
-	assert.equal(commandAllowLabel(ffmpeg!), "ffmpeg -i a.mp4");
 	assert.equal(toolCallNeedsApproval("basic", "run_ffmpeg", "/lib", { program: "ffmpeg", args: ["-i", "a.mp4"] }, ffmpeg ? [ffmpeg] : []), false);
 
 	assert.deepEqual(parseCommandAllows({

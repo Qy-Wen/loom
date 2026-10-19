@@ -72,7 +72,7 @@ import { probeModelSlot } from "./models/model-probe.ts";
 import { configFromDraft } from "./mcp/store.ts";
 import { AgentPermissionStore } from "./settings/agent-permission-store.ts";
 import { CommandAllowStore } from "./settings/command-allow-store.ts";
-import { parseCommandAllow, type CommandAllowView } from "@loom/agent/tool-permission";
+import type { CommandAllowView } from "@loom/agent/tool-permission";
 import { GeneralSettingsStore } from "./settings/general-settings-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-library-store.ts";
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
@@ -820,15 +820,6 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.getCommandAllows, () => {
 		if (!commandAllows) throw new Error("Permission store not started");
 		return commandAllows.view();
-	});
-	ipcMain.handle(IPC.removeCommandAllow, async (_event, raw: unknown) => {
-		if (!commandAllows) throw new Error("Permission store not started");
-		const allow = parseCommandAllow(raw);
-		if (!allow) throw new Error("Remembered command is invalid");
-		const view = await commandAllows.remove(allow);
-		requireChat().setCommandAllows(view.allows);
-		notifyCommandAllows(view);
-		return view;
 	});
 	ipcMain.handle(IPC.resolveToolGate, async (_event, toolCallId: unknown, decision: unknown) => {
 		if (typeof toolCallId !== "string" || !toolCallId.trim()) throw new Error("Tool call is missing");

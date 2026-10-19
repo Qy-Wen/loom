@@ -147,7 +147,6 @@ const api: LoomApi = {
 	setAgentPermission: (level) => ipcRenderer.invoke(IPC.setAgentPermission, level),
 	resolveToolGate: (toolCallId, decision) => ipcRenderer.invoke(IPC.resolveToolGate, toolCallId, decision),
 	getCommandAllows: () => ipcRenderer.invoke(IPC.getCommandAllows),
-	removeCommandAllow: (allow) => ipcRenderer.invoke(IPC.removeCommandAllow, allow),
 	onCommandAllowsChanged: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, view: Parameters<typeof listener>[0]) => listener(view);
 		ipcRenderer.on(IPC.commandAllowsChanged, handler);

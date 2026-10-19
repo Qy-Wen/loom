@@ -27,17 +27,7 @@
 
 **验收：** 请求中切库、排队时切库、关闭和重开均不会串库，也不会留下无法重试的运行状态。
 
-## 3. 删除命令列表 UI 的残留接口
-
-**问题：** Remembered commands 列表 UI 已删除，`removeCommandAllow` 仍贯穿 main、preload 与 shared，仓库内没有调用方；`commandAllowLabel()` 只剩测试使用。
-
-**范围：** `app/src/main/index.ts` 的删除处理器、`src/preload/index.ts`、`src/shared/ipc.ts`、`main/settings/command-allow-store.ts` 的 `remove()`，以及 `agent/src/tools/tool-permission.ts` 的 `commandAllowLabel()` 和对应测试。
-
-**方向：** 删除无消费者的删除接口与展示辅助函数。批准记录的读取、写入、绑定、变更通知和权限判断仍由工具卡片及审批链消费，保留这些能力。
-
-**验收：** 无残留删除通道或展示辅助函数；按库记忆的批准与工具审批仍正常工作。
-
-## 4. 整合多模态描述服务的公共流程
+## 3. 整合多模态描述服务的公共流程
 
 **问题：** `core/src/rag/image-vlm.ts`、`video-vlm.ts`、`audio-writeup.ts` 重复维护串行队列、缓存新鲜度、状态转换、错误处理和记录更新。
 
@@ -45,7 +35,7 @@
 
 **验收：** 三类媒体的缓存命中、失败、取消和状态通知使用一致规则；媒体特有的输入限制与处理方式继续由各自测试覆盖。
 
-## 5. 拆分职责过多的入口文件
+## 4. 拆分职责过多的入口文件
 
 **问题：** 目录已经按功能分组，但 `app/src/main/index.ts`、`app/src/renderer/App.tsx`、`core/src/local-core.ts` 仍集中多个职责。
 
@@ -53,7 +43,7 @@
 
 **验收：** UI 和工具继续通过同一领域入口工作；无重复业务规则，相关 IPC、桌面流程和领域测试通过。
 
-## 6. 对齐 Embedding 评测与生产 HTTP 实现
+## 5. 对齐 Embedding 评测与生产 HTTP 实现
 
 **问题：** `core/evals/http-embed.ts` 与 `app/src/main/models/embedding-provider.ts` 重复实现请求和响应解析，URL 语义已分叉：评测自动补路径，生产使用完整请求 URL。
 
