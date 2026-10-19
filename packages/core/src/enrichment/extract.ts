@@ -14,10 +14,10 @@ export function canExtractText(filename: string): boolean {
 	return TEXT_EXTENSIONS.has(extname(filename).toLowerCase());
 }
 
-export async function extractEnrichment(absolutePath: string, type: AssetType, filename: string): Promise<EnrichmentData> {
-	if (type === "image") return extractImage(absolutePath);
-	if (type === "video" || type === "audio") return extractMedia(absolutePath, type);
-	if (type === "text" && canExtractText(filename)) return extractText(absolutePath);
+export async function extractEnrichment(absolutePath: string, type: AssetType, filename: string, signal?: AbortSignal): Promise<EnrichmentData> {
+	if (type === "image") return extractImage(absolutePath, signal);
+	if (type === "video" || type === "audio") return extractMedia(absolutePath, type, signal);
+	if (type === "text" && canExtractText(filename)) return extractText(absolutePath, signal);
 	throw new Error("Asset type is not locally enrichable");
 }
 
@@ -29,15 +29,15 @@ export function shouldSkipAsset(asset: Asset): string | undefined {
 	return undefined;
 }
 
-async function extractText(absolutePath: string): Promise<EnrichmentData> {
-	const buffer = await readFile(absolutePath);
+async function extractText(absolutePath: string, signal?: AbortSignal): Promise<EnrichmentData> {
+	const buffer = await readFile(absolutePath, { signal });
 	const truncated = buffer.length > TEXT_ENRICHMENT_LIMIT;
 	const text = buffer.subarray(0, TEXT_ENRICHMENT_LIMIT).toString("utf8");
 	return { kind: "text", text, truncated, charCount: text.length };
 }
 
-async function extractImage(absolutePath: string): Promise<EnrichmentData> {
-	const buffer = await readFile(absolutePath);
+async function extractImage(absolutePath: string, signal?: AbortSignal): Promise<EnrichmentData> {
+	const buffer = await readFile(absolutePath, { signal });
 	const size = readImageSize(buffer);
 	if (!size) throw new Error("Unsupported or unreadable image format");
 	const exif = readJpegExif(buffer);
@@ -49,7 +49,7 @@ async function extractImage(absolutePath: string): Promise<EnrichmentData> {
 	};
 }
 
-async function extractMedia(absolutePath: string, type: "video" | "audio"): Promise<EnrichmentData> {
+async function extractMedia(absolutePath: string, type: "video" | "audio", signal?: AbortSignal): Promise<EnrichmentData> {
 	try {
 		resolveMediaBinary("ffprobe");
 	} catch {
@@ -57,6 +57,7 @@ async function extractMedia(absolutePath: string, type: "video" | "audio"): Prom
 	}
 	const { stdout } = await runMediaProcess({
 		program: "ffprobe",
+		signal,
 		args: ["-v", "error", "-print_format", "json", "-show_format", "-show_streams", absolutePath],
 	});
 	const probe = parseFfprobeJson(stdout);

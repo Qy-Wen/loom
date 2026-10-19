@@ -1,3 +1,4 @@
+import { abortableProviderCall } from "../library/task-scope.ts";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
@@ -36,7 +37,10 @@ export class ImageVlmService {
 	): Promise<ImageVlmStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
+		return this.enqueue(() => {
+			signal?.throwIfAborted();
+			return this.run(asset, provider, onUpdate, signal);
+		});
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -51,11 +55,17 @@ export class ImageVlmService {
 		onUpdate?: (status: ImageVlmStatus) => void,
 		signal?: AbortSignal,
 	): Promise<ImageVlmStatus> {
+		signal?.throwIfAborted();
+		const latest = await this.metadata.getAsset(asset.assetId);
+		if (!latest) throw new Error("Asset not found");
+		asset = latest;
+		signal?.throwIfAborted();
 		if (!canDescribeImage(asset)) return unsupportedStatus(asset);
 
 		const current = await this.currentIfFresh(asset, provider.modelId);
 		if (current) return current;
 
+		signal?.throwIfAborted();
 		await this.writeRecord(asset, {
 			status: "describing",
 			modelId: provider.modelId,
@@ -69,8 +79,9 @@ export class ImageVlmService {
 			}
 			const absolutePath = await this.resolvePath(asset.assetId);
 			if (!absolutePath) throw new Error("Asset not found");
-			const bytes = await readFile(absolutePath);
-			const markdown = normalizeImageVlmMarkdown(await provider.describe({ filename: asset.filename, bytes }, signal));
+			const bytes = await readFile(absolutePath, { signal });
+			const markdown = normalizeImageVlmMarkdown(await abortableProviderCall(() => provider.describe({ filename: asset.filename, bytes }, signal), signal));
+			signal?.throwIfAborted();
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,

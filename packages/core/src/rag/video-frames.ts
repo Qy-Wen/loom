@@ -37,11 +37,11 @@ export async function extractVideoFramesForVlm(
 				args: buildVlmStillArgs(absolutePath, output, time),
 				signal,
 			});
-			frames.push({ filename, bytes: await readFile(output) });
+			frames.push({ filename, bytes: await readFile(output, { signal }) });
 		}
 		if (frames.length === 0) throw new Error("FFmpeg extracted no frames");
 		return frames;
 	} finally {
-		await rm(dir, { recursive: true, force: true });
+		await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 	}
 }

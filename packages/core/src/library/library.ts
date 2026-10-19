@@ -60,7 +60,7 @@ export class Library {
 	}
 
 	async open(rootPath: string): Promise<LibrarySnapshot> {
-		await this.stopWatcher();
+		await this.stopWatching();
 		await this.metadata.close();
 
 		const info = await stat(rootPath);
@@ -73,6 +73,7 @@ export class Library {
 		try {
 			await mkdir(join(opened, ".agents", "memory"), { recursive: true });
 			await this.metadata.open(this.paths);
+			await this.metadata.recoverInterruptedJobs();
 			await this.syncFromDisk(false);
 
 			const watcher = new LibraryWatcher(this.paths);
@@ -442,15 +443,18 @@ export class Library {
 
 	async close(): Promise<void> {
 		const opened = this.paths?.root;
-		await this.stopWatcher();
+		await this.stopWatching();
 		await this.updateQueue;
 		this.paths = null;
 		this.folders.clear();
 		await this.metadata.close();
-		if (opened) await releaseProcessSandbox(opened);
+		if (opened) {
+			await releaseProcessSandbox(opened);
+			this.emit({ type: "reset", snapshot: await this.getSnapshot() });
+		}
 	}
 
-	private async stopWatcher(): Promise<void> {
+	async stopWatching(): Promise<void> {
 		await this.pauseWatcher();
 	}
 

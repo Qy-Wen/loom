@@ -1,3 +1,4 @@
+import { abortableProviderCall } from "../library/task-scope.ts";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
@@ -5,6 +6,7 @@ import { normalizeImageVlmMarkdown } from "../model/image-vlm.ts";
 import {
 	VIDEO_VLM_NATIVE_MAX_BYTES,
 	type VideoFrameExtractor,
+	type VideoVlmFrame,
 	type VideoVlmNativeInput,
 	type VideoVlmProvider,
 	type VideoVlmRecord,
@@ -44,7 +46,10 @@ export class VideoVlmService {
 	): Promise<VideoVlmStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
+		return this.enqueue(() => {
+			signal?.throwIfAborted();
+			return this.run(asset, provider, onUpdate, signal);
+		});
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -59,11 +64,17 @@ export class VideoVlmService {
 		onUpdate?: (status: VideoVlmStatus) => void,
 		signal?: AbortSignal,
 	): Promise<VideoVlmStatus> {
+		signal?.throwIfAborted();
+		const latest = await this.metadata.getAsset(asset.assetId);
+		if (!latest) throw new Error("Asset not found");
+		asset = latest;
+		signal?.throwIfAborted();
 		if (!canDescribeVideo(asset)) return unsupportedStatus(asset);
 
 		const current = await this.currentIfFresh(asset, provider.modelId);
 		if (current) return current;
 
+		signal?.throwIfAborted();
 		await this.writeRecord(asset, {
 			status: "describing",
 			modelId: provider.modelId,
@@ -74,11 +85,23 @@ export class VideoVlmService {
 		try {
 			const absolutePath = await this.resolvePath(asset.assetId);
 			if (!absolutePath) throw new Error("Asset not found");
-			const native = await nativeInput(asset, absolutePath);
-			const markdown = normalizeImageVlmMarkdown(await provider.describe({
-				native,
-				frames: () => this.extractFrames(absolutePath, signal),
-			}, signal));
+			const native = await nativeInput(asset, absolutePath, signal);
+			let extraction: Promise<VideoVlmFrame[]> | undefined;
+			let description: string;
+			try {
+				description = await abortableProviderCall(() => provider.describe({
+					native,
+					frames: () => {
+						signal?.throwIfAborted();
+						return extraction ??= this.extractFrames(absolutePath, signal);
+					},
+				}, signal), signal);
+			} finally {
+				// A provider may return or abort while its lazy extraction still owns temp files.
+				await extraction?.catch(() => undefined);
+			}
+			const markdown = normalizeImageVlmMarkdown(description);
+			signal?.throwIfAborted();
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,
@@ -144,9 +167,9 @@ export function canDescribeVideo(asset: Asset): boolean {
 	return asset.type === "video" && VIDEO_MEDIA_TYPES.has(extname(asset.filename).toLowerCase());
 }
 
-async function nativeInput(asset: Asset, absolutePath: string): Promise<VideoVlmNativeInput | undefined> {
+async function nativeInput(asset: Asset, absolutePath: string, signal?: AbortSignal): Promise<VideoVlmNativeInput | undefined> {
 	if (asset.size > VIDEO_VLM_NATIVE_MAX_BYTES) return undefined;
-	return { filename: asset.filename, bytes: await readFile(absolutePath) };
+	return { filename: asset.filename, bytes: await readFile(absolutePath, { signal }) };
 }
 
 function toStatus(asset: Asset, record: VideoVlmRecord, currentModelId?: string): VideoVlmStatus {

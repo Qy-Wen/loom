@@ -1,3 +1,4 @@
+import { abortableProviderCall } from "../library/task-scope.ts";
 import { randomUUID } from "node:crypto";
 import { isEnrichmentStale } from "../model/enrichment.ts";
 import type { Asset } from "../model/asset.ts";
@@ -44,7 +45,10 @@ export class TextEmbedService {
 	): Promise<TextEmbedStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
+		return this.enqueue(() => {
+			signal?.throwIfAborted();
+			return this.run(asset, provider, onUpdate, signal);
+		});
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -59,11 +63,17 @@ export class TextEmbedService {
 		onUpdate?: (status: TextEmbedStatus) => void,
 		signal?: AbortSignal,
 	): Promise<TextEmbedStatus> {
+		signal?.throwIfAborted();
+		const latest = await this.metadata.getAsset(asset.assetId);
+		if (!latest) throw new Error("Asset not found");
+		asset = latest;
+		signal?.throwIfAborted();
 		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
 
 		const current = await this.currentIfFresh(asset, provider.modelId);
 		if (current) return current;
 
+		signal?.throwIfAborted();
 		await this.writeJob(asset, {
 			status: "embedding",
 			modelId: provider.modelId,
@@ -74,7 +84,7 @@ export class TextEmbedService {
 		onUpdate?.(await this.statusFor(asset, provider.modelId));
 
 		try {
-			const source = await this.sourceMarkdown(asset);
+			const source = await this.sourceMarkdown(asset, signal);
 			if ("unsupported" in source) return unsupportedStatus(asset);
 			if ("error" in source) {
 				await this.writeJob(asset, {
@@ -89,6 +99,7 @@ export class TextEmbedService {
 
 			const plan = chunkMarkdown(source.text);
 			const chunks = toStoredChunks(asset.assetId, plan);
+			signal?.throwIfAborted();
 			await this.metadata.replaceTextChunks(asset.assetId, chunks);
 
 			const children = chunks.filter((chunk) => chunk.role === "child");
@@ -100,9 +111,11 @@ export class TextEmbedService {
 					embedding: vectors[index]!,
 					modelId: provider.modelId,
 				}));
+				signal?.throwIfAborted();
 				await this.metadata.updateChildEmbeddings(asset.assetId, updates);
 			}
 
+			signal?.throwIfAborted();
 			await this.writeJob(asset, {
 				status: "ready",
 				modelId: provider.modelId,
@@ -121,7 +134,7 @@ export class TextEmbedService {
 		}
 	}
 
-	private async ensureExtract(asset: Asset) {
+	private async ensureExtract(asset: Asset, signal?: AbortSignal) {
 		const existing = await this.metadata.getAssetEnrichment(asset.assetId);
 		if (
 			existing
@@ -131,12 +144,12 @@ export class TextEmbedService {
 		) {
 			return existing;
 		}
-		return this.enrichment.analyze(asset.assetId);
+		return this.enrichment.analyze(asset.assetId, signal);
 	}
 
-	private async sourceMarkdown(asset: Asset): Promise<{ text: string } | { error: string } | { unsupported: true }> {
+	private async sourceMarkdown(asset: Asset, signal?: AbortSignal): Promise<{ text: string } | { error: string } | { unsupported: true }> {
 		if (canEmbedMarkdown(asset.filename)) {
-			const extract = await this.ensureExtract(asset);
+			const extract = await this.ensureExtract(asset, signal);
 			if (extract.status !== "ready" || extract.data?.kind !== "text") {
 				return { error: extract.error ?? "Level 1 extract is not ready" };
 			}
@@ -281,7 +294,7 @@ async function embedBatched(
 	for (let index = 0; index < texts.length; index += EMBED_BATCH_SIZE) {
 		if (signal?.aborted) throw new Error("Operation aborted");
 		const batch = texts.slice(index, index + EMBED_BATCH_SIZE);
-		const part = await provider.embed(batch, signal);
+		const part = await abortableProviderCall(() => provider.embed(batch, signal), signal);
 		if (part.length !== batch.length) {
 			throw new Error("Embedding provider returned the wrong number of vectors");
 		}

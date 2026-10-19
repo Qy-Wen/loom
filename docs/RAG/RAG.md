@@ -26,6 +26,12 @@ First path is chunked Markdown. Rules: [TEXT.md](./TEXT.md). Image, video, and a
 
 ---
 
+## Library job lifecycle
+
+Each library opening owns a task scope. Switching or closing stops admission and the watcher, cancels jobs, drains storage writes and media cleanup, then closes storage. Queued jobs do not start after cancellation; late provider output cannot publish into another opening. Opening recovers interrupted description/embedding records as retryable failures. Detail reads and action results are checked against the current opening, selection, and request.
+
+---
+
 ## Enrichment levels
 
 Asset understanding deepens incrementally. Users control both scope and cost. **Not every file deserves AI analysis.** Users explicitly choose which assets receive embeddings or semantic analysis, avoiding uncontrolled API spending at import time.

@@ -416,6 +416,19 @@ export class SqliteMetadataStore implements MetadataStore {
 		this.refreshFts(this.requireDatabase(), record.assetId);
 	}
 
+	async recoverInterruptedJobs(): Promise<void> {
+		const database = this.requireDatabase();
+		database.transaction(() => {
+			for (const [table, status] of [
+				["text_embed_jobs", "embedding"], ["image_vlm", "describing"],
+				["video_vlm", "describing"], ["audio_writeup", "describing"],
+			]) {
+				database.prepare(`UPDATE ${table} SET status = 'failed', error = ?, updated_at = ? WHERE status = ?`)
+					.run("Library operation interrupted; retry to continue", Date.now(), status);
+			}
+		})();
+	}
+
 	async getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined> {
 		const row = this.requireDatabase()
 			.prepare("SELECT * FROM text_embed_jobs WHERE asset_id = ?")

@@ -7,25 +7,15 @@
 
 ---
 
-## 1. 素材任务绑定库生命周期
-
-**问题：** `LocalCore.openLibrary()` / `close()` 切换或关闭存储，却没有收束 enrichment、embedding 与多模态任务。已复现图片描述：A 库开始请求，切到 B 库后返回 `Asset not found`；重新打开 A，记录仍是 `describing`，详情按钮被禁用。
-
-**范围：** `core/src/local-core.ts`、`enrichment/service.ts`、`rag/service.ts`、`rag/{image-vlm,video-vlm,audio-writeup}.ts`；app 的 `applyOpenedLibrary()` 与详情状态展示。
-
-**方向：** 让任务及回写归属于启动时的库；切库、关闭时取消或等待任务收束，再切换存储。为中断遗留的 `describing` / `embedding` 状态提供恢复，禁止旧任务向新库写结果或发送更新。
-
-**验收：** 请求中切库、排队时切库、关闭和重开均不会串库，也不会留下无法重试的运行状态。
-
-## 2. 整合多模态描述服务的公共流程
+## 1. 整合多模态描述服务的公共流程
 
 **问题：** `core/src/rag/image-vlm.ts`、`video-vlm.ts`、`audio-writeup.ts` 重复维护串行队列、缓存新鲜度、状态转换、错误处理和记录更新。
 
-**方向：** 先完成第 1 项的任务生命周期，再提取共用执行流程；图片读取、视频原生输入 / 抽帧、音频准备和各自的 provider 契约保留在媒体实现中。合并重复的状态处理，避免引入多层继承。
+**方向：** 复用库任务作用域，提取共用执行流程；图片读取、视频原生输入 / 抽帧、音频准备和各自的 provider 契约保留在媒体实现中。合并重复的状态处理，避免引入多层继承。
 
 **验收：** 三类媒体的缓存命中、失败、取消和状态通知使用一致规则；媒体特有的输入限制与处理方式继续由各自测试覆盖。
 
-## 3. 拆分职责过多的入口文件
+## 2. 拆分职责过多的入口文件
 
 **问题：** 目录已经按功能分组，但 `app/src/main/index.ts`、`app/src/renderer/App.tsx`、`core/src/local-core.ts` 仍集中多个职责。
 

@@ -340,6 +340,17 @@ export class InMemoryMetadataStore implements MetadataStore {
 		this.enrichments.set(record.assetId, record);
 	}
 
+	async recoverInterruptedJobs(): Promise<void> {
+		for (const records of [this.textEmbedJobs, this.imageVlm, this.videoVlm, this.audioWriteup]) {
+			for (const record of records.values()) {
+				if (record.status !== "embedding" && record.status !== "describing") continue;
+				record.status = "failed";
+				record.error = "Library operation interrupted; retry to continue";
+				record.updatedAt = Date.now();
+			}
+		}
+	}
+
 	async getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined> {
 		return this.textEmbedJobs.get(assetId);
 	}

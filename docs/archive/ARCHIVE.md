@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Library-bound asset jobs
+
+Each library opening owns a cancellable task scope. Core serializes opening/closing, stops the watcher and drains jobs before releasing storage and sandbox resources. Extraction, embedding, descriptions, retrieval, and media processes use the scope; ignored provider cancellation cannot publish late results, while lazy video extraction still finishes cleanup. Opening recovers interrupted jobs as failed/retryable. Main binds settings reads to the same scope and drops buffered events preceding the new reset; detail results, errors, and busy-state updates expire on reopening or selection changes. Caller cancellation still publishes the terminal status in an active library.
+
+macOS validation: Core/App typechecks with unused-symbol checks, 162 Core tests (2 Windows cases skipped), 346 App tests, app build, and 9 Electron cases passed. New coverage includes active/queued cancellation, delayed settings/commits/providers, overlapping transitions, failed-open recovery, restart recovery, video cleanup, and detail request ordering. Offline retrieval Recall@3/nDCG@3 remain 100%. Windows was not run natively.
+
+---
+
 ## Settings persistence and concurrent updates
 
 UI and Agent settings mutations share a Main queue, including runtime application. Model/general changes merge fields; Chat/MCP edits address individual entries. Shared file locks serialize read-modify-write across instances, and atomic replacement protects readers and the previous file on pre-commit failure. Settings stores no longer publish unsaved ordinary changes; sandbox failures retain their in-memory fallback if persistence fails. MCP environment references stay literal on disk.

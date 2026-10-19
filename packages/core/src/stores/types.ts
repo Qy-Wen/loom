@@ -48,6 +48,8 @@ export interface MetadataStore {
 	removeAssetProperty(assetId: string, propertyId: string): Promise<void>;
 	getAssetEnrichment(assetId: string): Promise<AssetEnrichment | undefined>;
 	listAssetEnrichments(): Promise<AssetEnrichment[]>;
+	/** Recover jobs left running by a previous opening; call before admitting new jobs. */
+	recoverInterruptedJobs(): Promise<void>;
 	upsertAssetEnrichment(record: AssetEnrichment): Promise<void>;
 	getTextEmbedJob(assetId: string): Promise<TextEmbedJob | undefined>;
 	upsertTextEmbedJob(job: TextEmbedJob): Promise<void>;

@@ -1,3 +1,4 @@
+import { DetailRequestScope } from "./details/request-scope.ts";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
@@ -154,6 +155,8 @@ export function App(): React.JSX.Element {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [fullscreen, setFullscreen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
+	const detailRequests = useRef(new DetailRequestScope());
+	detailRequests.current.select(selectedAssetId);
 	const {
 		shellRef,
 		shellStyle,
@@ -247,20 +250,30 @@ export function App(): React.JSX.Element {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		});
+		const initialLibrary = detailRequests.current.libraryGuard();
 		void window.loom.getLibrarySnapshot().then(async (snapshot) => {
+			if (!initialLibrary()) return;
 			setLibrary(snapshot);
 			setCollapsedFolders(folderSet(snapshot));
 			if (snapshot.rootPath) {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
+				if (!initialLibrary()) return;
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
-				setGraphEdges(await window.loom.listGraphRelations());
+				const edges = await window.loom.listGraphRelations();
+				if (initialLibrary()) setGraphEdges(edges);
 			}
 		}).catch((cause) => {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (initialLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		});
 
 		return window.loom.onLibraryChanged((change) => {
+			if (change.type === "reset") {
+				detailRequests.current.resetLibrary();
+				setDescribing(false);
+				setEmbedding(false);
+				setError(null);
+			}
 			if (change.type === "error") {
 				setError(change.message);
 				return;
@@ -283,42 +296,53 @@ export function App(): React.JSX.Element {
 				});
 			}
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
-				void window.loom.getAssetEnrichment(change.assetId).then(setEnrichment).catch(() => undefined);
+				readDetail("enrichment", change.assetId, () => window.loom.getAssetEnrichment(change.assetId), setEnrichment);
 			}
 			if (change.type === "text_embed" && change.assetId === selectedAssetIdRef.current) {
-				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+				readDetail("text_embed", change.assetId, () => window.loom.getTextEmbedStatus(change.assetId), setTextEmbed);
 			}
 			if (change.type === "image_vlm" && change.assetId === selectedAssetIdRef.current) {
-				void window.loom.getImageVlmStatus(change.assetId).then(setImageVlm).catch(() => undefined);
-				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+				readDetail("image_vlm", change.assetId, () => window.loom.getImageVlmStatus(change.assetId), setImageVlm);
+				readDetail("text_embed", change.assetId, () => window.loom.getTextEmbedStatus(change.assetId), setTextEmbed);
 			}
 			if (change.type === "video_vlm" && change.assetId === selectedAssetIdRef.current) {
-				void window.loom.getVideoVlmStatus(change.assetId).then(setVideoVlm).catch(() => undefined);
-				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+				readDetail("video_vlm", change.assetId, () => window.loom.getVideoVlmStatus(change.assetId), setVideoVlm);
+				readDetail("text_embed", change.assetId, () => window.loom.getTextEmbedStatus(change.assetId), setTextEmbed);
 			}
 			if (change.type === "audio_writeup" && change.assetId === selectedAssetIdRef.current) {
-				void window.loom.getAudioWriteupStatus(change.assetId).then(setAudioWriteup).catch(() => undefined);
-				void window.loom.getTextEmbedStatus(change.assetId).then(setTextEmbed).catch(() => undefined);
+				readDetail("audio_writeup", change.assetId, () => window.loom.getAudioWriteupStatus(change.assetId), setAudioWriteup);
+				readDetail("text_embed", change.assetId, () => window.loom.getTextEmbedStatus(change.assetId), setTextEmbed);
 			}
 			if (change.type === "upsert" || change.type === "remove" || change.type === "reset") {
-				void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
+				const currentLibrary = detailRequests.current.libraryGuard();
+				void window.loom.listGraphRelations().then((edges) => { if (currentLibrary()) setGraphEdges(edges); })
+					.catch(() => { if (currentLibrary()) setGraphEdges([]); });
 				if (selectedAssetIdRef.current) {
-					void window.loom.getAssetRelations(selectedAssetIdRef.current)
-						.then(setRelations)
-						.catch(() => setRelations(EMPTY_RELATIONS));
+					const assetId = selectedAssetIdRef.current;
+					readDetail("relations", assetId, () => window.loom.getAssetRelations(assetId), setRelations, () => setRelations(EMPTY_RELATIONS));
 				}
 			}
 		});
 	}, []);
 
+	function readDetail<T>(lane: string, assetId: string, read: () => Promise<T>, apply: (value: T) => void, failed?: () => void): void {
+		const current = detailRequests.current.request(lane, assetId);
+		void read().then((value) => { if (current()) apply(value); })
+			.catch(() => { if (current()) failed?.(); });
+	}
+
 	selectedAssetIdRef.current = selectedAssetId;
 
 	useEffect(() => {
 		if (workbenchView !== "graph" || !library.rootPath) return;
-		void window.loom.listGraphRelations().then(setGraphEdges).catch(() => setGraphEdges([]));
+		const currentLibrary = detailRequests.current.libraryGuard();
+		void window.loom.listGraphRelations().then((edges) => { if (currentLibrary()) setGraphEdges(edges); })
+			.catch(() => { if (currentLibrary()) setGraphEdges([]); });
 	}, [workbenchView, library.rootPath, library.assets.length]);
 
 	useEffect(() => {
+		setDescribing(false);
+		setEmbedding(false);
 		if (!selectedAssetId) {
 			setEnrichment(undefined);
 			setTextEmbed(undefined);
@@ -328,25 +352,13 @@ export function App(): React.JSX.Element {
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
-		void window.loom.getAssetEnrichment(selectedAssetId).then(setEnrichment).catch(() => {
-			setEnrichment(undefined);
-		});
-		void window.loom.getTextEmbedStatus(selectedAssetId).then(setTextEmbed).catch(() => {
-			setTextEmbed(undefined);
-		});
-		void window.loom.getImageVlmStatus(selectedAssetId).then(setImageVlm).catch(() => {
-			setImageVlm(undefined);
-		});
-		void window.loom.getVideoVlmStatus(selectedAssetId).then(setVideoVlm).catch(() => {
-			setVideoVlm(undefined);
-		});
-		void window.loom.getAudioWriteupStatus(selectedAssetId).then(setAudioWriteup).catch(() => {
-			setAudioWriteup(undefined);
-		});
-		void window.loom.getAssetRelations(selectedAssetId).then(setRelations).catch(() => {
-			setRelations(EMPTY_RELATIONS);
-		});
-	}, [selectedAssetId]);
+		readDetail("enrichment", selectedAssetId, () => window.loom.getAssetEnrichment(selectedAssetId), setEnrichment, () => setEnrichment(undefined));
+		readDetail("text_embed", selectedAssetId, () => window.loom.getTextEmbedStatus(selectedAssetId), setTextEmbed, () => setTextEmbed(undefined));
+		readDetail("image_vlm", selectedAssetId, () => window.loom.getImageVlmStatus(selectedAssetId), setImageVlm, () => setImageVlm(undefined));
+		readDetail("video_vlm", selectedAssetId, () => window.loom.getVideoVlmStatus(selectedAssetId), setVideoVlm, () => setVideoVlm(undefined));
+		readDetail("audio_writeup", selectedAssetId, () => window.loom.getAudioWriteupStatus(selectedAssetId), setAudioWriteup, () => setAudioWriteup(undefined));
+		readDetail("relations", selectedAssetId, () => window.loom.getAssetRelations(selectedAssetId), setRelations, () => setRelations(EMPTY_RELATIONS));
+	}, [selectedAssetId, library.rootPath]);
 
 	useEffect(() => {
 		void window.loom.setUiSelection(
@@ -875,34 +887,42 @@ export function App(): React.JSX.Element {
 
 	async function describeSelected(): Promise<void> {
 		if (!selectedAssetId) return;
+		const assetId = selectedAssetId;
+		const current = detailRequests.current.request("describe-action", assetId);
 		setDescribing(true);
 		setError(null);
 		try {
 			if (selectedAsset?.type === "video") {
-				setVideoVlm(await window.loom.describeVideo(selectedAssetId));
+				const status = await window.loom.describeVideo(assetId);
+				if (current()) setVideoVlm(status);
 			} else if (selectedAsset?.type === "audio") {
-				setAudioWriteup(await window.loom.describeAudio(selectedAssetId));
+				const status = await window.loom.describeAudio(assetId);
+				if (current()) setAudioWriteup(status);
 			} else {
-				setImageVlm(await window.loom.describeImage(selectedAssetId));
+				const status = await window.loom.describeImage(assetId);
+				if (current()) setImageVlm(status);
 			}
-			setTextEmbed(await window.loom.getTextEmbedStatus(selectedAssetId));
+			if (current()) readDetail("text_embed", assetId, () => window.loom.getTextEmbedStatus(assetId), setTextEmbed);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (current()) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			setDescribing(false);
+			if (current()) setDescribing(false);
 		}
 	}
 
 	async function embedSelected(): Promise<void> {
 		if (!selectedAssetId) return;
+		const assetId = selectedAssetId;
+		const current = detailRequests.current.request("embed-action", assetId);
 		setEmbedding(true);
 		setError(null);
 		try {
-			setTextEmbed(await window.loom.embedAsset(selectedAssetId));
+			const status = await window.loom.embedAsset(assetId);
+			if (current()) setTextEmbed(status);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (current()) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			setEmbedding(false);
+			if (current()) setEmbedding(false);
 		}
 	}
 

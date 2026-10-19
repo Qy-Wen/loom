@@ -78,23 +78,25 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			},
 			execute: async (rawArgs, signal) => {
 				const args = validateSearchArgs(rawArgs);
-				let provider: EmbeddingProvider | undefined;
-				let rerank: RerankProvider | undefined;
-				try {
-					provider = await options.embeddingProvider?.();
-				} catch {
-					provider = undefined;
-				}
-				try {
-					rerank = await options.rerankProvider?.();
-				} catch {
-					rerank = undefined;
-				}
-				const result = await core.searchAssets(args, provider, rerank, signal);
-				return {
-					content: JSON.stringify({ total: result.total, assets: result.assets }),
-					details: result,
-				} satisfies LoomToolResult;
+				return core.runLibraryTask(async (jobSignal) => {
+					let provider: EmbeddingProvider | undefined;
+					let rerank: RerankProvider | undefined;
+					try {
+						provider = await options.embeddingProvider?.();
+					} catch {
+						provider = undefined;
+					}
+					try {
+						rerank = await options.rerankProvider?.();
+					} catch {
+						rerank = undefined;
+					}
+					const result = await core.searchAssets(args, provider, rerank, jobSignal);
+					return {
+						content: JSON.stringify({ total: result.total, assets: result.assets }),
+						details: result,
+					} satisfies LoomToolResult;
+				}, signal);
 			},
 		},
 		{

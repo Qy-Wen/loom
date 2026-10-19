@@ -665,25 +665,29 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
 		return localCore.analyzeAsset(assetId);
 	});
-	ipcMain.handle(IPC.getTextEmbedStatus, async (_event, assetId: string) => {
+	ipcMain.handle(IPC.getTextEmbedStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).embedding.model.trim() : "";
+		signal.throwIfAborted();
 		return localCore.getTextEmbedStatus(assetId, modelId || undefined);
-	});
+	}));
 	ipcMain.handle(IPC.embedAsset, (_event, assetId: string) => embedAssetWithSettings(assetId));
-	ipcMain.handle(IPC.getImageVlmStatus, async (_event, assetId: string) => {
+	ipcMain.handle(IPC.getImageVlmStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
+		signal.throwIfAborted();
 		return localCore.getImageVlmStatus(assetId, modelId || undefined);
-	});
+	}));
 	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeImageWithSettings(assetId));
-	ipcMain.handle(IPC.getVideoVlmStatus, async (_event, assetId: string) => {
+	ipcMain.handle(IPC.getVideoVlmStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
+		signal.throwIfAborted();
 		return localCore.getVideoVlmStatus(assetId, modelId || undefined);
-	});
+	}));
 	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeVideoWithSettings(assetId));
-	ipcMain.handle(IPC.getAudioWriteupStatus, async (_event, assetId: string) => {
+	ipcMain.handle(IPC.getAudioWriteupStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).audio.model.trim() : "";
+		signal.throwIfAborted();
 		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
-	});
+	}));
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.createSession, async () => {
@@ -1151,7 +1155,7 @@ app.on("will-quit", (event) => {
 	agentServer = null;
 	const host = mcpHost;
 	mcpHost = null;
-	void libraryTransition.then(() => Promise.allSettled([
+	void localCore.stopLibraryTasks().then(() => libraryTransition).then(() => Promise.allSettled([
 		server?.close() ?? Promise.resolve(),
 		requireChat().close(),
 	])).then(() => Promise.allSettled([
@@ -1170,9 +1174,13 @@ async function takeLiveComposerAssets(sessionId: string) {
 }
 
 async function embedAssetWithSettings(assetId: string, signal?: AbortSignal) {
-	const provider = await embeddingProviderFromSettings();
-	if (!provider) throw new Error("Enable the Embedding slot in Settings first.");
-	return localCore.embedTextAsset(assetId, provider, signal);
+	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
+	return localCore.runLibraryTask(async (jobSignal) => {
+		const provider = await embeddingProviderFromSettings();
+		if (!provider) throw new Error("Enable the Embedding slot in Settings first.");
+		jobSignal.throwIfAborted();
+		return localCore.embedTextAsset(assetId, provider, jobSignal);
+	}, signal);
 }
 
 async function embeddingProviderFromSettings(): Promise<EmbeddingProvider | undefined> {
@@ -1197,7 +1205,8 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 	await previous;
 	openingLibrary = true;
 	try {
-		// Old asset tools must settle while LocalCore still points at the old library.
+		// Cancel Core jobs before awaiting tool shutdown, while storage still belongs to the old root.
+		await localCore.stopLibraryTasks();
 		await requireChat().close();
 		const snapshot = await localCore.openLibrary(rootPath);
 		if (snapshot.rootPath) {
@@ -1219,7 +1228,8 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 		const vecNote = localCore.sqliteVecNote();
 		if (vecNote) appLog(vecNote);
 		openingLibrary = false;
-		const changes = pendingLibraryChanges;
+		const reset = pendingLibraryChanges.findLastIndex((change) => change.type === "reset");
+		const changes = reset < 0 ? [] : pendingLibraryChanges.slice(reset);
 		pendingLibraryChanges = [];
 		releaseTransition();
 		for (const change of changes) sendLibraryChange(change);
@@ -1238,30 +1248,42 @@ async function restoreLastLibrary(): Promise<void> {
 }
 
 async function describeImageWithSettings(assetId: string, signal?: AbortSignal) {
-	if (!modelSettings) throw new Error("Settings store not started");
-	const slot = (await modelSettings.load()).vlm;
-	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
-		throw new Error("Enable the VLM slot in Settings first.");
-	}
-	return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), signal);
+	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
+	return localCore.runLibraryTask(async (jobSignal) => {
+		if (!modelSettings) throw new Error("Settings store not started");
+		const slot = (await modelSettings.load()).vlm;
+		if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
+			throw new Error("Enable the VLM slot in Settings first.");
+		}
+		jobSignal.throwIfAborted();
+		return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), jobSignal);
+	}, signal);
 }
 
 async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) {
-	if (!modelSettings) throw new Error("Settings store not started");
-	const slot = (await modelSettings.load()).vlm;
-	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
-		throw new Error("Enable the VLM slot in Settings first.");
-	}
-	return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), signal);
+	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
+	return localCore.runLibraryTask(async (jobSignal) => {
+		if (!modelSettings) throw new Error("Settings store not started");
+		const slot = (await modelSettings.load()).vlm;
+		if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
+			throw new Error("Enable the VLM slot in Settings first.");
+		}
+		jobSignal.throwIfAborted();
+		return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), jobSignal);
+	}, signal);
 }
 
 async function describeAudioWithSettings(assetId: string, signal?: AbortSignal) {
-	if (!modelSettings) throw new Error("Settings store not started");
-	const slot = (await modelSettings.load()).audio;
-	if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
-		throw new Error("Enable the Audio slot in Settings first.");
-	}
-	return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), signal);
+	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
+	return localCore.runLibraryTask(async (jobSignal) => {
+		if (!modelSettings) throw new Error("Settings store not started");
+		const slot = (await modelSettings.load()).audio;
+		if (!slot.enabled || !slot.requestUrl.trim() || !slot.model.trim()) {
+			throw new Error("Enable the Audio slot in Settings first.");
+		}
+		jobSignal.throwIfAborted();
+		return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), jobSignal);
+	}, signal);
 }
 
 async function setMcpServerLive(draft: McpServerDraft) {

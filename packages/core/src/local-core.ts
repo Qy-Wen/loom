@@ -1,5 +1,6 @@
+import { LibraryTaskScope, abortableProviderCall } from "./library/task-scope.ts";
 import { randomUUID } from "node:crypto";
-import { access, copyFile, mkdir, readFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { readStoredGrade, writeStoredGrade } from "./grade/store.ts";
 import { isGradeableVideo, type ImageGradeRecord } from "./grade/types.ts";
@@ -83,6 +84,9 @@ export class LocalCore {
 	private readonly videoVlm: VideoVlmService;
 	private readonly audioWriteup: AudioWriteupService;
 	private readonly media: MediaService;
+	private tasks: LibraryTaskScope | undefined;
+	private transition: Promise<void> = Promise.resolve();
+	private transitions = 0;
 
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
@@ -109,15 +113,13 @@ export class LocalCore {
 		);
 		this.media = new MediaService(this.library);
 		this.library.subscribe((change) => {
-			if (change.type === "reset") {
-				void this.enrichment.refreshStale(change.snapshot.assets).then((records) => {
-					for (const record of records) this.library.notifyEnrichment(record.assetId);
-				}).catch(() => undefined);
-			} else if (change.type === "upsert") {
-				void this.enrichment.refreshStale([change.asset]).then((records) => {
-					for (const record of records) this.library.notifyEnrichment(record.assetId);
-				}).catch(() => undefined);
-			}
+			const tasks = this.tasks;
+			if (!tasks?.active) return;
+			const assets = change.type === "reset" ? change.snapshot.assets : change.type === "upsert" ? [change.asset] : undefined;
+			if (assets) void tasks.run(async (signal) => {
+				const records = await this.enrichment.refreshStale(assets, signal);
+				if (tasks.active) for (const record of records) this.library.notifyEnrichment(record.assetId);
+			}).catch(() => undefined);
 		});
 	}
 
@@ -125,11 +127,49 @@ export class LocalCore {
 		return this.metadataStore instanceof SqliteMetadataStore ? this.metadataStore.sqliteVecNote() : undefined;
 	}
 
-	async openLibrary(rootPath: string): Promise<LibrarySnapshot> {
+	openLibrary(rootPath: string): Promise<LibrarySnapshot> {
+		return this.changeLibrary(async () => {
+			await this.closeCurrentLibrary();
+			this.tasks = new LibraryTaskScope();
+			try {
+				if (!(await stat(rootPath)).isDirectory()) throw new Error("Library path is not a directory");
+				await this.graphStore.open(new LibraryPaths(rootPath));
+				return await this.library.open(rootPath);
+			} catch (error) {
+				await this.closeCurrentLibrary();
+				throw error;
+			}
+		});
+	}
+
+	/** Bind preparatory awaits (such as model settings reads) to this opening too. */
+	runLibraryTask<T>(work: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> {
+		if (!this.tasks?.active || this.transitions) return Promise.reject(new Error("Library is not accepting operations"));
+		return this.tasks.run(work, signal);
+	}
+
+	/** Stop admission immediately, before application-owned tools are closed. */
+	async stopLibraryTasks(): Promise<void> {
+		const tasks = this.tasks;
+		tasks?.cancel();
+		await tasks?.drain();
+	}
+
+	private changeLibrary<T>(work: () => Promise<T>): Promise<T> {
+		this.transitions++;
+		this.tasks?.cancel();
+		const result = this.transition.then(work);
+		this.transition = result.then(() => undefined, () => undefined);
+		return result.finally(() => { this.transitions--; });
+	}
+
+	private async closeCurrentLibrary(): Promise<void> {
+		this.tasks?.cancel();
+		await this.library.stopWatching();
+		await this.tasks?.drain();
+		await this.library.close();
 		await this.graphStore.close();
-		const paths = new LibraryPaths(rootPath);
-		await this.graphStore.open(paths);
-		return this.library.open(rootPath);
+		this.tasks = undefined;
 	}
 
 	getLibrarySnapshot(): Promise<LibrarySnapshot> {
@@ -261,7 +301,11 @@ export class LocalCore {
 		return this.metadataStore.removeAssetProperty(assetId, propertyId);
 	}
 
-	async searchAssets(
+	searchAssets(query: AssetSearchQuery = {}, provider?: EmbeddingProvider, rerank?: RerankProvider, signal?: AbortSignal): Promise<AssetSearchResult> {
+		return this.runLibraryTask((jobSignal) => this.searchLibrary(query, provider, rerank, jobSignal), signal);
+	}
+
+	private async searchLibrary(
 		query: AssetSearchQuery = {},
 		provider?: EmbeddingProvider,
 		rerank?: RerankProvider,
@@ -352,7 +396,7 @@ export class LocalCore {
 		if (!rerank || matches.length < 2) return matches;
 		const documents = matches.map((hit) => hit.passage ?? hit.parentPassage ?? hit.filename);
 		try {
-			const scores = await rerank.rerank(query, documents, signal);
+			const scores = await abortableProviderCall(() => rerank.rerank(query, documents, signal), signal);
 			if (scores.length !== matches.length) return matches;
 			return rerankHits(matches, scores);
 		} catch (error) {
@@ -368,7 +412,7 @@ export class LocalCore {
 	): Promise<NearestChildHit[]> {
 		if (!provider) return [];
 		try {
-			const [vector] = await provider.embed([text], signal);
+			const [vector] = await abortableProviderCall(() => provider.embed([text], signal), signal);
 			if (!vector?.length) return [];
 			return this.metadataStore.searchNearestChildren(vector, HYBRID_CANDIDATES);
 		} catch (error) {
@@ -378,36 +422,38 @@ export class LocalCore {
 	}
 
 	async inspectAsset(assetId: string): Promise<AssetDetailResult> {
-		const asset = await this.metadataStore.getAsset(assetId);
-		if (!asset) throw new Error("Asset not found");
-		const [definitions, values] = await Promise.all([
-			this.metadataStore.listProperties(),
-			this.metadataStore.listAssetProperties(assetId),
-		]);
-		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
-		const properties: AssetPropertyView[] = [];
-		for (const value of values) {
-			const definition = definitionsById.get(value.propertyId);
-			if (!definition) continue;
-			properties.push({
-				propertyId: definition.propertyId,
-				name: definition.name,
-				type: definition.type,
-				value: value.value,
-			});
-		}
-		return {
-			kind: "asset_detail",
-			...toSearchItem(asset, properties),
-			createdAt: asset.createdAt,
-			previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
-			enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
-			textEmbed: await this.textEmbed.getStatus(asset.assetId),
-			imageVlm: await this.imageVlm.getStatus(asset.assetId),
-			videoVlm: await this.videoVlm.getStatus(asset.assetId),
-			audioWriteup: await this.audioWriteup.getStatus(asset.assetId),
-			...await this.listAssetRelations(asset.assetId),
-		};
+		return this.runLibraryTask(async () => {
+			const asset = await this.metadataStore.getAsset(assetId);
+			if (!asset) throw new Error("Asset not found");
+			const [definitions, values] = await Promise.all([
+				this.metadataStore.listProperties(),
+				this.metadataStore.listAssetProperties(assetId),
+			]);
+			const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
+			const properties: AssetPropertyView[] = [];
+			for (const value of values) {
+				const definition = definitionsById.get(value.propertyId);
+				if (!definition) continue;
+				properties.push({
+					propertyId: definition.propertyId,
+					name: definition.name,
+					type: definition.type,
+					value: value.value,
+				});
+			}
+			return {
+				kind: "asset_detail",
+				...toSearchItem(asset, properties),
+				createdAt: asset.createdAt,
+				previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
+				enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
+				textEmbed: await this.textEmbed.getStatus(asset.assetId),
+				imageVlm: await this.imageVlm.getStatus(asset.assetId),
+				videoVlm: await this.videoVlm.getStatus(asset.assetId),
+				audioWriteup: await this.audioWriteup.getStatus(asset.assetId),
+				...await this.listAssetRelations(asset.assetId),
+			};
+		});
 	}
 
 	listGraphRelations(): Promise<AssetRelation[]> {
@@ -464,14 +510,16 @@ export class LocalCore {
 		return this.metadataStore.getAssetEnrichment(assetId);
 	}
 
-	async analyzeAsset(assetId: string): Promise<AssetEnrichment> {
-		const record = await this.enrichment.analyze(assetId);
-		this.library.notifyEnrichment(assetId);
-		return record;
+	analyzeAsset(assetId: string): Promise<AssetEnrichment> {
+		return this.runLibraryTask(async (signal) => {
+			const record = await this.enrichment.analyze(assetId, signal);
+			if (!signal.aborted) this.library.notifyEnrichment(assetId);
+			return record;
+		});
 	}
 
 	getTextEmbedStatus(assetId: string, currentModelId?: string): Promise<TextEmbedStatus> {
-		return this.textEmbed.getStatus(assetId, currentModelId);
+		return this.runLibraryTask(() => this.textEmbed.getStatus(assetId, currentModelId));
 	}
 
 	async embedTextAsset(
@@ -479,15 +527,17 @@ export class LocalCore {
 		provider: EmbeddingProvider,
 		signal?: AbortSignal,
 	): Promise<TextEmbedStatus> {
-		const status = await this.textEmbed.embed(assetId, provider, () => {
-			this.library.notifyTextEmbed(assetId);
+		const tasks = this.tasks;
+		return this.runLibraryTask(async (jobSignal) => {
+			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyTextEmbed(assetId); };
+			const status = await this.textEmbed.embed(assetId, provider, notify, jobSignal);
+			notify();
+			return status;
 		}, signal);
-		this.library.notifyTextEmbed(assetId);
-		return status;
 	}
 
 	getImageVlmStatus(assetId: string, currentModelId?: string): Promise<ImageVlmStatus> {
-		return this.imageVlm.getStatus(assetId, currentModelId);
+		return this.runLibraryTask(() => this.imageVlm.getStatus(assetId, currentModelId));
 	}
 
 	async describeImageAsset(
@@ -495,15 +545,17 @@ export class LocalCore {
 		provider: ImageVlmProvider,
 		signal?: AbortSignal,
 	): Promise<ImageVlmStatus> {
-		const status = await this.imageVlm.describe(assetId, provider, () => {
-			this.library.notifyImageVlm(assetId);
+		const tasks = this.tasks;
+		return this.runLibraryTask(async (jobSignal) => {
+			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyImageVlm(assetId); };
+			const status = await this.imageVlm.describe(assetId, provider, notify, jobSignal);
+			notify();
+			return status;
 		}, signal);
-		this.library.notifyImageVlm(assetId);
-		return status;
 	}
 
 	getVideoVlmStatus(assetId: string, currentModelId?: string): Promise<VideoVlmStatus> {
-		return this.videoVlm.getStatus(assetId, currentModelId);
+		return this.runLibraryTask(() => this.videoVlm.getStatus(assetId, currentModelId));
 	}
 
 	async describeVideoAsset(
@@ -511,15 +563,17 @@ export class LocalCore {
 		provider: VideoVlmProvider,
 		signal?: AbortSignal,
 	): Promise<VideoVlmStatus> {
-		const status = await this.videoVlm.describe(assetId, provider, () => {
-			this.library.notifyVideoVlm(assetId);
+		const tasks = this.tasks;
+		return this.runLibraryTask(async (jobSignal) => {
+			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyVideoVlm(assetId); };
+			const status = await this.videoVlm.describe(assetId, provider, notify, jobSignal);
+			notify();
+			return status;
 		}, signal);
-		this.library.notifyVideoVlm(assetId);
-		return status;
 	}
 
 	getAudioWriteupStatus(assetId: string, currentModelId?: string): Promise<AudioWriteupStatus> {
-		return this.audioWriteup.getStatus(assetId, currentModelId);
+		return this.runLibraryTask(() => this.audioWriteup.getStatus(assetId, currentModelId));
 	}
 
 	async describeAudioAsset(
@@ -527,58 +581,62 @@ export class LocalCore {
 		provider: AudioWriteupProvider,
 		signal?: AbortSignal,
 	): Promise<AudioWriteupStatus> {
-		const status = await this.audioWriteup.describe(assetId, provider, () => {
-			this.library.notifyAudioWriteup(assetId);
+		const tasks = this.tasks;
+		return this.runLibraryTask(async (jobSignal) => {
+			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyAudioWriteup(assetId); };
+			const status = await this.audioWriteup.describe(assetId, provider, notify, jobSignal);
+			notify();
+			return status;
 		}, signal);
-		this.library.notifyAudioWriteup(assetId);
-		return status;
 	}
 
 	refreshEnrichment(assets: Asset[]): Promise<AssetEnrichment[]> {
-		return this.enrichment.refreshStale(assets);
+		return this.runLibraryTask((signal) => this.enrichment.refreshStale(assets, signal));
 	}
 
 	getMediaInfo(path: string, signal?: AbortSignal): Promise<MediaInfoResult> {
-		return this.media.getMediaInfo(path, signal);
+		return this.runLibraryTask((jobSignal) => this.media.getMediaInfo(path, jobSignal), signal);
 	}
 
 	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.extractFrame(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.extractFrame(args, jobSignal), signal);
 	}
 
 	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.extractClip(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.extractClip(args, jobSignal), signal);
 	}
 
 	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.resizeVideo(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.resizeVideo(args, jobSignal), signal);
 	}
 
 	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.cropVideo(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.cropVideo(args, jobSignal), signal);
 	}
 
 	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.convertFormat(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.convertFormat(args, jobSignal), signal);
 	}
 
 	async gradeImage(args: GradeImageArgs, signal?: AbortSignal): Promise<GradeImageResult> {
-		const job = await this.media.gradeImage(args, signal);
-		const asset = await this.library.indexFile(job.output);
-		if (!asset) throw new Error("Could not index graded image");
-		const source = await this.metadataStore.getAssetByPath(job.input);
-		await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
-			version: 1,
-			grade: job.grade,
-			sourceAssetId: source?.assetId,
-			lut: job.lut,
-		});
-		return {
-			kind: "grade_image",
-			output: job.output,
-			assetId: asset.assetId,
-			sourceAssetId: source?.assetId,
-		};
+		return this.runLibraryTask(async (jobSignal) => {
+			const job = await this.media.gradeImage(args, jobSignal);
+			const asset = await this.library.indexFile(job.output);
+			if (!asset) throw new Error("Could not index graded image");
+			const source = await this.metadataStore.getAssetByPath(job.input);
+			await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+				version: 1,
+				grade: job.grade,
+				sourceAssetId: source?.assetId,
+				lut: job.lut,
+			});
+			return {
+				kind: "grade_image",
+				output: job.output,
+				assetId: asset.assetId,
+				sourceAssetId: source?.assetId,
+			};
+		}, signal);
 	}
 
 	getImageGrade(assetId: string): Promise<ImageGradeRecord | undefined> {
@@ -586,30 +644,34 @@ export class LocalCore {
 	}
 
 	async gradeVideo(args: GradeVideoArgs, signal?: AbortSignal): Promise<GradeVideoResult> {
-		const job = await this.media.gradeVideo(args, signal);
-		const asset = await this.library.indexFile(job.output);
-		if (!asset) throw new Error("Could not index graded video");
-		const source = await this.metadataStore.getAssetByPath(job.input);
-		await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
-			version: 1,
-			grade: job.grade,
-			sourceAssetId: source?.assetId,
-			lut: job.lut,
-		});
-		return {
-			kind: "grade_video",
-			output: job.output,
-			assetId: asset.assetId,
-			sourceAssetId: source?.assetId,
-		};
+		return this.runLibraryTask(async (jobSignal) => {
+			const job = await this.media.gradeVideo(args, jobSignal);
+			const asset = await this.library.indexFile(job.output);
+			if (!asset) throw new Error("Could not index graded video");
+			const source = await this.metadataStore.getAssetByPath(job.input);
+			await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+				version: 1,
+				grade: job.grade,
+				sourceAssetId: source?.assetId,
+				lut: job.lut,
+			});
+			return {
+				kind: "grade_video",
+				output: job.output,
+				assetId: asset.assetId,
+				sourceAssetId: source?.assetId,
+			};
+		}, signal);
 	}
 
 	async getVideoGradeInfo(assetId: string): Promise<{ duration: number }> {
-		const asset = await this.metadataStore.getAsset(assetId);
-		if (!asset) throw new Error("Asset not found");
-		if (!isGradeableVideo(asset.relativePath)) throw new TypeError("Grade supports MP4, MOV, MKV, WebM, M4V, and AVI");
-		const info = await this.media.getMediaInfo(asset.relativePath);
-		return { duration: info.duration ?? 0 };
+		return this.runLibraryTask(async (signal) => {
+			const asset = await this.metadataStore.getAsset(assetId);
+			if (!asset) throw new Error("Asset not found");
+			if (!isGradeableVideo(asset.relativePath)) throw new TypeError("Grade supports MP4, MOV, MKV, WebM, M4V, and AVI");
+			const info = await this.media.getMediaInfo(asset.relativePath, signal);
+			return { duration: info.duration ?? 0 };
+		});
 	}
 
 	async previewVideoGrade(
@@ -620,15 +682,17 @@ export class LocalCore {
 		force = false,
 		signal?: AbortSignal,
 	): Promise<string | null> {
-		const asset = await this.metadataStore.getAsset(assetId);
-		if (!asset) throw new Error("Asset not found");
-		const bytes = await this.media.previewVideoGrade({
-			path: asset.relativePath,
-			timeSeconds,
-			grade,
-			lut,
-		}, signal, force);
-		return bytes ? bytes.toString("base64") : null;
+		return this.runLibraryTask(async (jobSignal) => {
+			const asset = await this.metadataStore.getAsset(assetId);
+			if (!asset) throw new Error("Asset not found");
+			const bytes = await this.media.previewVideoGrade({
+				path: asset.relativePath,
+				timeSeconds,
+				grade,
+				lut,
+			}, jobSignal, force);
+			return bytes ? bytes.toString("base64") : null;
+		}, signal);
 	}
 
 	async previewImageGrade(
@@ -638,14 +702,16 @@ export class LocalCore {
 		force = false,
 		signal?: AbortSignal,
 	): Promise<string | null> {
-		const asset = await this.metadataStore.getAsset(assetId);
-		if (!asset) throw new Error("Asset not found");
-		const bytes = await this.media.previewImageGrade({
-			path: asset.relativePath,
-			grade,
-			lut,
-		}, signal, force);
-		return bytes ? bytes.toString("base64") : null;
+		return this.runLibraryTask(async (jobSignal) => {
+			const asset = await this.metadataStore.getAsset(assetId);
+			if (!asset) throw new Error("Asset not found");
+			const bytes = await this.media.previewImageGrade({
+				path: asset.relativePath,
+				grade,
+				lut,
+			}, jobSignal, force);
+			return bytes ? bytes.toString("base64") : null;
+		}, signal);
 	}
 
 	async importGradeLut(absolutePath: string): Promise<{ path: string; name: string }> {
@@ -668,15 +734,15 @@ export class LocalCore {
 	}
 
 	runFfmpeg(args: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.media.runFfmpeg(args, signal);
+		return this.runLibraryTask((jobSignal) => this.media.runFfmpeg(args, jobSignal), signal);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {
 		return this.library.subscribe(listener);
 	}
 
-	async close(): Promise<void> {
-		await Promise.all([this.library.close(), this.graphStore.close()]);
+	close(): Promise<void> {
+		return this.changeLibrary(() => this.closeCurrentLibrary());
 	}
 }
 

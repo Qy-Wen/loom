@@ -1,3 +1,4 @@
+import { abortableProviderCall } from "../library/task-scope.ts";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
 import {
@@ -41,7 +42,10 @@ export class AudioWriteupService {
 	): Promise<AudioWriteupStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.run(asset, provider, onUpdate, signal));
+		return this.enqueue(() => {
+			signal?.throwIfAborted();
+			return this.run(asset, provider, onUpdate, signal);
+		});
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -56,11 +60,17 @@ export class AudioWriteupService {
 		onUpdate?: (status: AudioWriteupStatus) => void,
 		signal?: AbortSignal,
 	): Promise<AudioWriteupStatus> {
+		signal?.throwIfAborted();
+		const latest = await this.metadata.getAsset(asset.assetId);
+		if (!latest) throw new Error("Asset not found");
+		asset = latest;
+		signal?.throwIfAborted();
 		if (!canDescribeAudio(asset)) return unsupportedStatus(asset);
 
 		const current = await this.currentIfFresh(asset, provider.modelId);
 		if (current) return current;
 
+		signal?.throwIfAborted();
 		await this.writeRecord(asset, {
 			status: "describing",
 			modelId: provider.modelId,
@@ -72,7 +82,8 @@ export class AudioWriteupService {
 			const absolutePath = await this.resolvePath(asset.assetId);
 			if (!absolutePath) throw new Error("Asset not found");
 			const prepared = await this.prepare(absolutePath, asset.size, signal);
-			const markdown = normalizeAudioWriteupMarkdown(await provider.describe(prepared, signal));
+			const markdown = normalizeAudioWriteupMarkdown(await abortableProviderCall(() => provider.describe(prepared, signal), signal));
+			signal?.throwIfAborted();
 			await this.writeRecord(asset, {
 				status: "ready",
 				modelId: provider.modelId,

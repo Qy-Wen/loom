@@ -12,7 +12,7 @@ export async function prepareAudioForModel(
 	signal?: AbortSignal,
 ): Promise<AudioWriteupInput> {
 	if (size > 0 && size <= AUDIO_WRITEUP_MAX_BYTES) {
-		return { filename: basename(absolutePath), bytes: await readFile(absolutePath) };
+		return { filename: basename(absolutePath), bytes: await readFile(absolutePath, { signal }) };
 	}
 	const dir = await mkdtemp(join(tmpdir(), "loom-audio-"));
 	const output = join(dir, "audio.mp3");
@@ -26,8 +26,8 @@ export async function prepareAudioForModel(
 		if (compact.size > AUDIO_WRITEUP_MAX_BYTES) {
 			throw new Error("Audio write-up accepts files up to 32 MB after converting");
 		}
-		return { filename: "audio.mp3", bytes: await readFile(output) };
+		return { filename: "audio.mp3", bytes: await readFile(output, { signal }) };
 	} finally {
-		await rm(dir, { recursive: true, force: true });
+		await rm(dir, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
 	}
 }

@@ -23,20 +23,21 @@ export class EnrichmentService {
 		this.extract = extract;
 	}
 
-	async refreshStale(assets: Asset[]): Promise<AssetEnrichment[]> {
+	async refreshStale(assets: Asset[], signal?: AbortSignal): Promise<AssetEnrichment[]> {
 		const records: AssetEnrichment[] = [];
 		for (const asset of assets) {
+			signal?.throwIfAborted();
 			const existing = await this.metadata.getAssetEnrichment(asset.assetId);
 			if (!isEnrichmentStale(existing, asset.modifiedAt)) continue;
-			records.push(await this.enqueue(() => this.enrich(asset, false)));
+			records.push(await this.enqueue(() => this.enrich(asset, false, signal)));
 		}
 		return records;
 	}
 
-	async analyze(assetId: string): Promise<AssetEnrichment> {
+	async analyze(assetId: string, signal?: AbortSignal): Promise<AssetEnrichment> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
-		return this.enqueue(() => this.enrich(asset, true));
+		return this.enqueue(() => this.enrich(asset, true, signal));
 	}
 
 	private enqueue<T>(work: () => Promise<T>): Promise<T> {
@@ -45,7 +46,8 @@ export class EnrichmentService {
 		return run;
 	}
 
-	private async enrich(asset: Asset, force: boolean): Promise<AssetEnrichment> {
+	private async enrich(asset: Asset, force: boolean, signal?: AbortSignal): Promise<AssetEnrichment> {
+		signal?.throwIfAborted();
 		if (!force) {
 			const existing = await this.metadata.getAssetEnrichment(asset.assetId);
 			if (existing && !isEnrichmentStale(existing, asset.modifiedAt)) return existing;
@@ -68,7 +70,8 @@ export class EnrichmentService {
 		if (!absolutePath) throw new Error("Asset not found");
 
 		try {
-			const data = await this.extract(absolutePath, asset.type, asset.filename);
+			const data = await this.extract(absolutePath, asset.type, asset.filename, signal);
+			signal?.throwIfAborted();
 			const record: AssetEnrichment = {
 				assetId: asset.assetId,
 				version: ENRICHMENT_VERSION,
