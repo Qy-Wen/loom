@@ -18,6 +18,7 @@ export type ChatSession = {
 	stored: Message[];
 	transcript: readonly LoomTranscriptMessage[];
 	branch: BranchActions;
+	runError: string | null;
 	pendingEdit: PendingEdit | null;
 	editSubmitted: (edit: PendingEdit) => void;
 	draft: string | null;

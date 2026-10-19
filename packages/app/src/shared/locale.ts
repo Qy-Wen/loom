@@ -244,6 +244,7 @@ export const messages = defineLocale(
 		chat: {
 			latest: "Latest",
 			requestFailed: "Request failed",
+			modelRequired: "Choose a conversation model. If none are available, configure and enable one in Settings. (no_model)",
 			editQuestion: "Edit question",
 			send: "Send",
 			fork: "Fork",
@@ -726,6 +727,7 @@ export const messages = defineLocale(
 		chat: {
 			latest: "最新",
 			requestFailed: "请求失败",
+			modelRequired: "请选择会话模型；如果没有可用模型，请先在设置中配置并启用。(no_model)",
 			editQuestion: "编辑问题",
 			send: "发送",
 			fork: "分叉",

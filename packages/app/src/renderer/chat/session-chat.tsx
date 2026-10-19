@@ -84,7 +84,7 @@ export function SessionChat({
 	const onFork = useRef(onForked);
 	onRecord.current = onSessionRecord;
 	onFork.current = onForked;
-	useChatStream(onHistoryChanged);
+	const runError = useChatStream(threadId, onHistoryChanged);
 
 	useEffect(() => {
 		editingRef.current = null;
@@ -141,7 +141,7 @@ export function SessionChat({
 	}), [busy, editingId, error, threadId]);
 
 	return (
-		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
+		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<div className="session-chat-shell">
 				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>

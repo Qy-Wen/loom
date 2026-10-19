@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { AbstractAgent } from "@ag-ui/client";
 import { useAgent } from "@copilotkit/react-core/v2";
 import { adoptMessageId } from "../../shared/ag-ui-messages.ts";
@@ -6,11 +6,14 @@ import { adoptMessageId } from "../../shared/ag-ui-messages.ts";
 const configured = new WeakSet<AbstractAgent>();
 
 /** The agent owns transient output only; durable owns model context and committed history. */
-export function useChatStream(onHistoryChanged: () => void): void {
+export function useChatStream(threadId: string, onHistoryChanged: () => void): string | null {
 	const { agent } = useAgent({ updates: [] });
+	const [failure, setFailure] = useState<{ threadId: string; message: string } | null>(null);
 	const onHistory = useRef(onHistoryChanged);
 	onHistory.current = onHistoryChanged;
 	useEffect(() => {
+		let active = true;
+		setFailure(null);
 		if (!configured.has(agent)) {
 			agent.use((input, next) => {
 				const user = input.messages.findLast((message) => message.role === "user");
@@ -19,6 +22,18 @@ export function useChatStream(onHistoryChanged: () => void): void {
 			configured.add(agent);
 		}
 		const subscription = agent.subscribe({
+			onRunInitialized({ input }) {
+				if (active && input.threadId === threadId) setFailure(null);
+			},
+			onRunErrorEvent({ event, input }) {
+				if (!active || input.threadId !== threadId) return;
+				setFailure({ threadId, message: event.message });
+				onHistory.current();
+			},
+			onRunFailed({ error, input }) {
+				if (!active || input.threadId !== threadId || error.name === "AbortError") return;
+				setFailure({ threadId, message: error.message });
+			},
 			onMessagesSnapshotEvent({ event }) {
 				// An attachment starts a new transient view. Do not retain another thread's reasoning/activity.
 				return { messages: event.messages, stopPropagation: true };
@@ -35,6 +50,7 @@ export function useChatStream(onHistoryChanged: () => void): void {
 				if (next) return { messages: next };
 			},
 		});
-		return () => subscription.unsubscribe();
-	}, [agent]);
+		return () => { active = false; subscription.unsubscribe(); };
+	}, [agent, threadId]);
+	return failure?.threadId === threadId ? failure.message : null;
 }
