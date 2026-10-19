@@ -108,6 +108,7 @@ export function SessionChat({
 			setError(null);
 		},
 		async fork(entryId, text) {
+			if (!window.confirm(t.chat.forkConfirm)) return;
 			setBusy(true);
 			setError(null);
 			try {
@@ -138,7 +139,7 @@ export function SessionChat({
 				setBusy(false);
 			}
 		},
-	}), [busy, editingId, error, threadId]);
+	}), [busy, editingId, error, threadId, t.chat.forkConfirm]);
 
 	return (
 		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
