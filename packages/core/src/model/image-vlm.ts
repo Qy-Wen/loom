@@ -1,3 +1,5 @@
+import type { DescriptionJobStatus, DescriptionRecord, DescriptionStatus, DescriptionStatusKind } from "./description.ts";
+
 export const IMAGE_VLM_MAX_BYTES = 10 * 1024 * 1024;
 
 export const IMAGE_VLM_SYSTEM_PROMPT =
@@ -10,8 +12,8 @@ export const IMAGE_VLM_SYSTEM_PROMPT =
 
 export const IMAGE_VLM_USER_PROMPT = "Describe this image.";
 
-export type ImageVlmJobStatus = "describing" | "ready" | "failed";
-export type ImageVlmStatusKind = "idle" | ImageVlmJobStatus;
+export type ImageVlmJobStatus = DescriptionJobStatus;
+export type ImageVlmStatusKind = DescriptionStatusKind;
 
 export interface ImageVlmInput {
 	filename: string;
@@ -23,26 +25,8 @@ export interface ImageVlmProvider {
 	describe(image: ImageVlmInput, signal?: AbortSignal): Promise<string>;
 }
 
-export interface ImageVlmRecord {
-	assetId: string;
-	status: ImageVlmJobStatus;
-	modelId?: string;
-	sourceModifiedAt: number;
-	error?: string;
-	markdown?: string;
-	updatedAt: number;
-}
-
-export interface ImageVlmStatus {
-	assetId: string;
-	status: ImageVlmStatusKind;
-	stale: boolean;
-	supported: boolean;
-	modelId?: string;
-	sourceModifiedAt?: number;
-	error?: string;
-	markdown?: string;
-}
+export type ImageVlmRecord = DescriptionRecord;
+export type ImageVlmStatus = DescriptionStatus;
 
 export function normalizeImageVlmMarkdown(raw: string): string {
 	const text = raw.trim();

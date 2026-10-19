@@ -1,3 +1,5 @@
+import type { DescriptionJobStatus, DescriptionRecord, DescriptionStatus, DescriptionStatusKind } from "./description.ts";
+
 export const VIDEO_VLM_NATIVE_MAX_BYTES = 32 * 1024 * 1024;
 
 export const VIDEO_VLM_SYSTEM_PROMPT =
@@ -13,8 +15,8 @@ export const VIDEO_VLM_USER_PROMPT = "Describe this video.";
 export const VIDEO_VLM_FRAMES_PROMPT =
 	"These stills are from the same video, in time order. Describe the video.";
 
-export type VideoVlmJobStatus = "describing" | "ready" | "failed";
-export type VideoVlmStatusKind = "idle" | VideoVlmJobStatus;
+export type VideoVlmJobStatus = DescriptionJobStatus;
+export type VideoVlmStatusKind = DescriptionStatusKind;
 
 export interface VideoVlmFrame {
 	filename: string;
@@ -36,25 +38,7 @@ export interface VideoVlmProvider {
 	describe(request: VideoVlmDescribeRequest, signal?: AbortSignal): Promise<string>;
 }
 
-export interface VideoVlmRecord {
-	assetId: string;
-	status: VideoVlmJobStatus;
-	modelId?: string;
-	sourceModifiedAt: number;
-	error?: string;
-	markdown?: string;
-	updatedAt: number;
-}
-
-export interface VideoVlmStatus {
-	assetId: string;
-	status: VideoVlmStatusKind;
-	stale: boolean;
-	supported: boolean;
-	modelId?: string;
-	sourceModifiedAt?: number;
-	error?: string;
-	markdown?: string;
-}
+export type VideoVlmRecord = DescriptionRecord;
+export type VideoVlmStatus = DescriptionStatus;
 
 export type VideoFrameExtractor = (absolutePath: string, signal?: AbortSignal) => Promise<VideoVlmFrame[]>;

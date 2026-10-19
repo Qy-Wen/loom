@@ -7,15 +7,7 @@
 
 ---
 
-## 1. Share the multimodal description workflow
-
-**Problem:** `core/src/rag/image-vlm.ts`, `video-vlm.ts`, and `audio-writeup.ts` repeat serial queues, cache freshness checks, status transitions, error handling, and record updates.
-
-**Direction:** Reuse the library task scope and extract the shared execution flow. Media implementations retain image reading, native video / frame extraction, audio preparation, and their provider contracts. Share status handling without introducing an inheritance hierarchy.
-
-**Acceptance:** All three media types follow consistent cache, failure, cancellation, and notification rules; media-specific input constraints and preparation retain their own coverage.
-
-## 2. Split entry files with mixed responsibilities
+## 1. Split entry files with mixed responsibilities
 
 **Problem:** Feature directories now exist, but `app/src/main/index.ts`, `app/src/renderer/App.tsx`, and `core/src/local-core.ts` still concentrate several responsibilities.
 

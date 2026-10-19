@@ -37,6 +37,19 @@ function recordingProvider(modelId = "test-vlm"): ImageVlmProvider & { calls: nu
 }
 
 describe("ImageVlmService", () => {
+	it("rejects oversized images before resolving the path or calling the provider", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = { ...imageAsset(), size: 10 * 1024 * 1024 + 1 };
+		await store.upsertAsset(asset);
+		const provider = recordingProvider();
+		const service = new ImageVlmService(store, async () => { throw new Error("should not read"); });
+		const status = await service.describe(asset.assetId, provider);
+		assert.equal(status.status, "failed");
+		assert.match(status.error!, /up to 10 MB/);
+		assert.equal(provider.calls, 0);
+	});
+
 	it("persists markdown, skips an unchanged rerun, and remakes on model or mtime change", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();

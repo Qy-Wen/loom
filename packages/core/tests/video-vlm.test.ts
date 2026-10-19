@@ -98,7 +98,9 @@ describe("VideoVlmService", () => {
 			modelId: "test-vlm",
 			async describe(request) {
 				assert.equal(request.native, undefined);
-				const frames = await request.frames();
+				const first = request.frames();
+				assert.equal(request.frames(), first);
+				const frames = await first;
 				assert.equal(frames.length, 1);
 				return "Wide shot of a street.";
 			},

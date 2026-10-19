@@ -548,9 +548,7 @@ export class LocalCore {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyImageVlm(assetId); };
-			const status = await this.imageVlm.describe(assetId, provider, notify, jobSignal);
-			notify();
-			return status;
+			return this.imageVlm.describe(assetId, provider, notify, jobSignal);
 		}, signal);
 	}
 
@@ -566,9 +564,7 @@ export class LocalCore {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyVideoVlm(assetId); };
-			const status = await this.videoVlm.describe(assetId, provider, notify, jobSignal);
-			notify();
-			return status;
+			return this.videoVlm.describe(assetId, provider, notify, jobSignal);
 		}, signal);
 	}
 
@@ -584,9 +580,7 @@ export class LocalCore {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyAudioWriteup(assetId); };
-			const status = await this.audioWriteup.describe(assetId, provider, notify, jobSignal);
-			notify();
-			return status;
+			return this.audioWriteup.describe(assetId, provider, notify, jobSignal);
 		}, signal);
 	}
 

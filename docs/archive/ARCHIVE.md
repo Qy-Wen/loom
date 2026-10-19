@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Shared multimodal description workflow
+
+Image, video, and audio services compose one `DescriptionService` for serial execution, cache freshness, records, failure cleanup, and progress/terminal notifications. Record and status types share one definition. Media implementations retain input limits, image reads, native video and lazy-frame cleanup, audio preparation, and provider contracts. LocalCore's library scope continues to own job lifetimes.
+
+macOS validation: workspace typechecks, Core unused-symbol checks, 182 Core tests (2 Windows cases skipped), 346 App tests, the app build, and the library-switch Electron regression passed. New contracts cover all three media types: cached notifications, incomplete cache regeneration, failure/retry, cancellation and late results, queued asset changes/removal, plus image size limits, prepared audio arguments, and frame extraction reuse. Windows was not run natively.
+
+---
+
 ## Library-bound asset jobs
 
 Each library opening owns a cancellable task scope. Core serializes opening/closing, stops the watcher and drains jobs before releasing storage and sandbox resources. Extraction, embedding, descriptions, retrieval, and media processes use the scope; ignored provider cancellation cannot publish late results, while lazy video extraction still finishes cleanup. Opening recovers interrupted jobs as failed/retryable. Main binds settings reads to the same scope and drops buffered events preceding the new reset; detail results, errors, and busy-state updates expire on reopening or selection changes. Caller cancellation still publishes the terminal status in an active library.

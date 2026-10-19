@@ -42,6 +42,30 @@ describe("normalizeAudioWriteupMarkdown", () => {
 });
 
 describe("AudioWriteupService", () => {
+	it("passes the prepared audio and cancellation signal to the provider", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = audioAsset();
+		await store.upsertAsset(asset);
+		const signal = new AbortController().signal;
+		const prepared = { filename: "prepared.wav", bytes: new Uint8Array([1, 2, 3]) };
+		const service = new AudioWriteupService(store, async () => "source.mp3", async (path, size, prepareSignal) => {
+			assert.equal(path, "source.mp3");
+			assert.equal(size, asset.size);
+			assert.equal(prepareSignal, signal);
+			return prepared;
+		});
+		const status = await service.describe(asset.assetId, {
+			modelId: "audio",
+			describe: async (input, providerSignal) => {
+				assert.equal(input, prepared);
+				assert.equal(providerSignal, signal);
+				return "speech";
+			},
+		}, undefined, signal);
+		assert.equal(status.status, "ready");
+	});
+
 	it("persists markdown, skips an unchanged rerun, and remakes on model or mtime change", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();

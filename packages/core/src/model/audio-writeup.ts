@@ -1,3 +1,5 @@
+import type { DescriptionJobStatus, DescriptionRecord, DescriptionStatus, DescriptionStatusKind } from "./description.ts";
+
 export const AUDIO_WRITEUP_MAX_BYTES = 32 * 1024 * 1024;
 
 export const AUDIO_WRITEUP_SYSTEM_PROMPT =
@@ -12,8 +14,8 @@ export const AUDIO_WRITEUP_SYSTEM_PROMPT =
 
 export const AUDIO_WRITEUP_USER_PROMPT = "Describe this audio.";
 
-export type AudioWriteupJobStatus = "describing" | "ready" | "failed";
-export type AudioWriteupStatusKind = "idle" | AudioWriteupJobStatus;
+export type AudioWriteupJobStatus = DescriptionJobStatus;
+export type AudioWriteupStatusKind = DescriptionStatusKind;
 
 export interface AudioWriteupInput {
 	filename: string;
@@ -25,26 +27,8 @@ export interface AudioWriteupProvider {
 	describe(audio: AudioWriteupInput, signal?: AbortSignal): Promise<string>;
 }
 
-export interface AudioWriteupRecord {
-	assetId: string;
-	status: AudioWriteupJobStatus;
-	modelId?: string;
-	sourceModifiedAt: number;
-	error?: string;
-	markdown?: string;
-	updatedAt: number;
-}
-
-export interface AudioWriteupStatus {
-	assetId: string;
-	status: AudioWriteupStatusKind;
-	stale: boolean;
-	supported: boolean;
-	modelId?: string;
-	sourceModifiedAt?: number;
-	error?: string;
-	markdown?: string;
-}
+export type AudioWriteupRecord = DescriptionRecord;
+export type AudioWriteupStatus = DescriptionStatus;
 
 export type AudioPrepareFn = (
 	absolutePath: string,

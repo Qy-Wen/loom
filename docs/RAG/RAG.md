@@ -30,6 +30,8 @@ First path is chunked Markdown. Rules: [TEXT.md](./TEXT.md). Image, video, and a
 
 Each library opening owns a task scope. Switching or closing stops admission and the watcher, cancels jobs, drains storage writes and media cleanup, then closes storage. Queued jobs do not start after cancellation; late provider output cannot publish into another opening. Opening recovers interrupted description/embedding records as retryable failures. Detail reads and action results are checked against the current opening, selection, and request.
 
+Image, video, and audio descriptions compose the shared `rag/description.ts` workflow and `model/description.ts` record/status types. Each media service retains its own serial queue and input preparation; the shared workflow handles cache freshness, transitions, failures, and notifications. LocalCore continues to bind jobs and notifications to the current library task scope.
+
 ---
 
 ## Enrichment levels
