@@ -1,71 +1,73 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { JsonFile } from "../storage/file.ts";
+import { SerialQueue } from "../storage/serial-queue.ts";
 import { DEFAULT_PROCESS_SANDBOX, parseProcessSandboxEnabled, type ProcessSandboxNotice } from "../../shared/agent-sandbox.ts";
 
+type SandboxSettings = { enabled: boolean; notice?: ProcessSandboxNotice };
+const defaults = (): SandboxSettings => ({ enabled: DEFAULT_PROCESS_SANDBOX });
+function parseSandbox(value: unknown): SandboxSettings {
+	const row = value && typeof value === "object" ? value as Partial<SandboxSettings> : undefined;
+	const notice = row?.notice;
+	return {
+		enabled: parseProcessSandboxEnabled(row ? row.enabled : value),
+		...(notice && typeof notice.id === "string" && typeof notice.reason === "string" ? { notice } : {}),
+	};
+}
+
 export class AgentSandboxStore {
-	private readonly filePath: string;
-	private enabled = DEFAULT_PROCESS_SANDBOX;
-	private loaded = false;
-	private notice: ProcessSandboxNotice | null = null;
-	private writes: Promise<void> = Promise.resolve();
+	private readonly file: JsonFile<SandboxSettings>;
+	private readonly operations = new SerialQueue();
+	private last = defaults();
+	// A sandbox failure must disable execution even when persistence itself fails.
+	private fallback: SandboxSettings | undefined;
 
-	constructor(filePath: string) {
-		this.filePath = filePath;
+	constructor(filePath: string) { this.file = new JsonFile(filePath, parseSandbox); }
+
+	private async read(): Promise<SandboxSettings> {
+		this.last = this.fallback ?? await this.file.read() ?? defaults();
+		return this.last;
 	}
 
-	async load(): Promise<boolean> {
-		if (this.loaded) return this.enabled;
-		try {
-			const parsed: unknown = JSON.parse(await readFile(this.filePath, "utf8"));
-			const raw = parsed && typeof parsed === "object" ? (parsed as { enabled?: unknown }).enabled : parsed;
-			this.enabled = parseProcessSandboxEnabled(raw);
-			const notice = parsed && typeof parsed === "object" ? (parsed as { notice?: unknown }).notice : undefined;
-			if (notice && typeof notice === "object" && "id" in notice && typeof notice.id === "string" && "reason" in notice && typeof notice.reason === "string") {
-				this.notice = { id: notice.id, reason: notice.reason };
-			}
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			this.enabled = DEFAULT_PROCESS_SANDBOX;
-		}
-		this.loaded = true;
-		return this.enabled;
-	}
-
-	async save(enabled: boolean): Promise<boolean> {
-		await this.load();
-		this.enabled = enabled;
-		await this.persist();
-		return this.enabled;
-	}
-
-	async recordFailure(reason: string): Promise<void> {
-		await this.load();
-		this.enabled = false;
-		this.notice = { id: randomUUID(), reason };
-		await this.persist();
-	}
-
-	async pendingNotice(): Promise<ProcessSandboxNotice | null> {
-		await this.load();
-		return this.notice;
-	}
-
-	async acknowledgeNotice(id: string): Promise<void> {
-		await this.load();
-		if (this.notice?.id !== id) return;
-		this.notice = null;
-		await this.persist();
-	}
-
-	private persist(): Promise<void> {
-		const data = JSON.stringify({ enabled: this.enabled, ...(this.notice ? { notice: this.notice } : {}) }, null, "\t");
-		// Settings saves, fallback and renderer acknowledgements can overlap.
-		const write = this.writes.then(async () => {
-			await mkdir(dirname(this.filePath), { recursive: true });
-			await writeFile(this.filePath, `${data}\n`, "utf8");
+	private async write(change: (current: SandboxSettings) => SandboxSettings): Promise<SandboxSettings> {
+		const saved = await this.file.update(async (current) => {
+			const value = change(this.fallback ?? current ?? defaults());
+			return { value, result: value };
 		});
-		this.writes = write.catch(() => undefined);
-		return write;
+		this.last = saved;
+		this.fallback = undefined;
+		return saved;
+	}
+
+	load(): Promise<boolean> {
+		return this.operations.run(async () => (await this.read()).enabled);
+	}
+
+	save(enabled: boolean): Promise<boolean> {
+		return this.operations.run(async () => (await this.write((current) => ({ ...current, enabled }))).enabled);
+	}
+
+	recordFailure(reason: string): Promise<void> {
+		const notice = { id: randomUUID(), reason };
+		return this.operations.run(async () => {
+			try { await this.write((current) => ({ ...current, enabled: false, notice })); }
+			catch (error) {
+				this.fallback = { ...this.last, enabled: false, notice };
+				throw error;
+			}
+		});
+	}
+
+	pendingNotice(): Promise<ProcessSandboxNotice | null> {
+		return this.operations.run(async () => (await this.read()).notice ?? null);
+	}
+
+	acknowledgeNotice(id: string): Promise<void> {
+		return this.operations.run(async () => {
+			await this.write((current) => {
+				if (current.notice?.id !== id) return current;
+				const { notice: _notice, ...next } = current;
+				return next;
+			});
+		});
 	}
 }

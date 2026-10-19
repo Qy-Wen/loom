@@ -35,13 +35,14 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 				id: "fixture", transport: "stdio" as const, command, argsText: `--experimental-strip-types\n${script}${toolName === "embedded_image" ? "\n--embedded" : ""}`,
 				envText: "", cwd: "", url: "", headersText: "", enabled: true,
 			};
-			await window.loom.saveMcpSettings([draft]);
+			await window.loom.saveMcpSettings({ upsert: [{ server: draft }] });
 			const status = await window.loom.setMcpServerLive(draft);
 			if (status.error || !status.tools.includes(toolName)) throw new Error(`MCP image fixture did not connect: ${JSON.stringify(status)}`);
 		}, { command: process.execPath, script: fileURLToPath(new URL("../tests/fixtures/mcp-image-server.ts", import.meta.url)), toolName });
 		await loomPage.reload();
 		await expect(loomPage.getByRole("button", { name: "Agent permission" })).toContainText("Full permission");
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		const composer = loomPage.getByRole("textbox");
 		await composer.fill(question);
 		await composer.press("Enter");
@@ -73,7 +74,7 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 		await loomPage.evaluate(async () => {
 			const draft = (await window.loom.getMcpSettings()).servers.find((server) => server.id === "fixture");
 			if (draft) await window.loom.setMcpServerLive({ ...draft, enabled: false });
-			await window.loom.saveMcpSettings([]);
+			await window.loom.saveMcpSettings({ remove: ["fixture"] });
 		}).catch(() => undefined);
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));

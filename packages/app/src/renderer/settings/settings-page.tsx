@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import type { AgentStatsView } from "../../shared/agent-stats.ts";
 import { emptyMcpServerDraft, type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
-import type { ModelSettingsDraft, ModelSlotId } from "../../shared/model-settings.ts";
+import type { ModelSettingsDraft, ModelSettingsPatch, ModelSlotId } from "../../shared/model-settings.ts";
+import { changedFields } from "../../shared/settings-changes.ts";
 import { modelRequestUrl } from "../../shared/model-request-url.ts";
 import { instructionCharacterCount, INSTRUCTIONS_CHAR_LIMIT } from "../../shared/agent-instructions.ts";
 import type { GeneralSettings } from "../../shared/general-settings.ts";
@@ -33,6 +34,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 	const savedModels = useRef<ModelSettingsDraft | null>(null);
 	const mcpDraft = useRef<McpServerDraft[]>([]);
 	const savedMcp = useRef<McpServerDraft[]>([]);
+	const mcpBaselines = useRef<McpServerDraft[]>([]);
 	const mcpIdentities = useRef<(string | undefined)[]>([]);
 	const generalDraft = useRef<GeneralSettings | null>(null);
 	const instructionTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -40,7 +42,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 	const closeOnBackdrop = useRef(false);
 	const closing = useRef(false);
 	// External tool updates must not overwrite text currently being edited.
-	const dirtyModels = useRef(new Set<ModelSlotId>());
+	const modelEdits = useRef<ModelSettingsPatch>({});
 	const dirtyMcp = useRef(false);
 	const dirtyInstructions = useRef(false);
 
@@ -103,11 +105,12 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 				if (cancelled) return;
 				savedModels.current = models;
 				const nextModels = { ...models };
-				for (const id of dirtyModels.current) if (modelDraft.current) nextModels[id] = { ...models[id], ...modelDraft.current[id] };
+				for (const id of Object.keys(modelEdits.current) as ModelSlotId[]) nextModels[id] = { ...models[id], ...modelEdits.current[id] };
 				modelDraft.current = nextModels; setDraft(nextModels);
 				savedMcp.current = mcpView.servers;
 				if (!dirtyMcp.current) {
 					mcpDraft.current = mcpView.servers;
+					mcpBaselines.current = mcpView.servers.map((row) => ({ ...row }));
 					mcpIdentities.current = mcpView.servers.map((row) => row.id);
 					setMcp(mcpView);
 				} else setMcp((current) => current ? { ...current, status: mcpView.status } : mcpView);
@@ -131,31 +134,36 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 
 	function patchModel(id: ModelSlotId, patch: Partial<ModelSettingsDraft[ModelSlotId]>): void {
 		if (!modelDraft.current) return;
-		dirtyModels.current.add(id);
+		const edits = { ...modelEdits.current[id], ...patch };
+		for (const key of Object.keys(edits) as Array<keyof typeof edits>) {
+			if (edits[key] === savedModels.current?.[id][key]) delete edits[key];
+		}
+		if (Object.keys(edits).length) modelEdits.current[id] = edits;
+		else delete modelEdits.current[id];
 		modelDraft.current = { ...modelDraft.current, [id]: { ...modelDraft.current[id], ...patch } };
 		setDraft(modelDraft.current);
 	}
 
 	async function commitModel(id: ModelSlotId, patch?: Partial<ModelSettingsDraft[ModelSlotId]>): Promise<boolean> {
-		if (!modelDraft.current || !savedModels.current || (!patch && !dirtyModels.current.has(id))) return false;
+		if (!modelDraft.current || !savedModels.current || (!patch && !modelEdits.current[id])) return false;
 		const slot = { ...modelDraft.current[id], ...patch };
 		const onlyDisable = patch?.enabled === false;
 		try {
 			if (!onlyDisable && slot.requestUrl.trim()) modelRequestUrl(slot.requestUrl);
 			if (slot.enabled && (!slot.requestUrl.trim() || !slot.model.trim())) throw new Error(t.settings.modelNeedsEndpoint);
 		} catch (cause) { setError(cause instanceof Error ? cause.message : String(cause)); return false; }
-		const saved = await persist(async () => {
-			const committedSlot = onlyDisable ? { ...savedModels.current![id], enabled: false } : slot;
-			const result = await window.loom.saveModelSettings({ ...savedModels.current!, [id]: committedSlot });
-			savedModels.current = result;
-			return result;
-		});
+		const changes = onlyDisable ? { enabled: false } : { ...modelEdits.current[id], ...patch };
+		const saved = await persist(() => window.loom.saveModelSettings({ [id]: changes }));
 		if (!saved) return false;
-		if (patch) {
-			modelDraft.current = { ...modelDraft.current, [id]: { ...modelDraft.current[id], ...patch } };
-			setDraft(modelDraft.current);
+		savedModels.current = saved;
+		const remaining = { ...modelEdits.current[id] };
+		for (const key of Object.keys(changes) as Array<keyof typeof remaining>) {
+			if (remaining[key] === changes[key]) delete remaining[key];
 		}
-		if (JSON.stringify(modelDraft.current[id]) === JSON.stringify(onlyDisable ? saved[id] : slot)) dirtyModels.current.delete(id);
+		if (Object.keys(remaining).length) modelEdits.current[id] = remaining;
+		else delete modelEdits.current[id];
+		modelDraft.current = { ...modelDraft.current, [id]: { ...saved[id], ...remaining } };
+		setDraft(modelDraft.current);
 		return true;
 	}
 
@@ -167,20 +175,17 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 	async function commitMcp(index: number): Promise<McpSettingsView | undefined> {
 		const server = { ...mcpDraft.current[index] };
 		const originalId = mcpIdentities.current[index];
+		const fields = originalId === undefined ? server : changedFields(mcpBaselines.current[index]!, server);
 		const saved = await persist(async () => {
-			const next = [...savedMcp.current];
-			if (next.some((row) => row.id !== originalId && row.id === server.id.trim())) throw new Error(t.settings.duplicateServer);
-			const position = next.findIndex((row) => row.id === originalId);
-			if (position < 0) next.push(server); else next[position] = server;
-			const result = await window.loom.saveMcpSettings(next);
+			const result = await window.loom.saveMcpSettings({ upsert: [{ previousId: originalId, server: { ...fields, id: server.id } }] });
 			savedMcp.current = result.servers;
 			return result;
 		});
 		if (saved) {
 			mcpIdentities.current[index] = server.id.trim();
-			if (JSON.stringify(mcpDraft.current[index]) === JSON.stringify(server)) {
-				mcpDraft.current = mcpDraft.current.map((row, i) => i === index ? saved.servers.find((item) => item.id === server.id.trim())! : row);
-			}
+			const committed = saved.servers.find((item) => item.id === server.id.trim())!;
+			mcpBaselines.current[index] = committed;
+			mcpDraft.current = mcpDraft.current.map((row, i) => i === index ? { ...committed, ...changedFields(server, row) } : row);
 			dirtyMcp.current = JSON.stringify(mcpDraft.current) !== JSON.stringify(saved.servers);
 			setMcp((current) => current ? { ...current, servers: mcpDraft.current, status: saved.status } : saved);
 		}
@@ -191,13 +196,14 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		const originalId = mcpIdentities.current[index];
 		if (originalId !== undefined) {
 			const saved = await persist(async () => {
-				const result = await window.loom.saveMcpSettings(savedMcp.current.filter((row) => row.id !== originalId));
+				const result = await window.loom.saveMcpSettings({ remove: [originalId] });
 				savedMcp.current = result.servers; return result;
 			});
 			if (!saved) return false;
 			setMcp((current) => current ? { ...current, status: saved.status } : saved);
 		}
 		mcpIdentities.current.splice(index, 1);
+		mcpBaselines.current.splice(index, 1);
 		patchMcp(mcpDraft.current.filter((_, i) => i !== index));
 		dirtyMcp.current = JSON.stringify(mcpDraft.current) !== JSON.stringify(savedMcp.current);
 		return true;
@@ -211,7 +217,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		if (!generalDraft.current) return;
 		const next = { ...generalDraft.current, ...patch };
 		generalDraft.current = next; setGeneral(next);
-		void persist(() => window.loom.saveGeneralSettings(next)).then((saved) => {
+		void persist(() => window.loom.saveGeneralSettings(patch)).then((saved) => {
 			if (saved && generalDraft.current === next) commitLanguage(saved.language);
 		});
 	}
@@ -265,7 +271,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 						{tab === "stats" && (stats ? <SettingsStats stats={stats} resetting={resetting} onReset={() => void resetStats()} /> : <div className="empty">{t.common.loading}</div>)}
 					</div>
 					{tab === "mcp" && <div className="settings-actions settings-dialog-actions">
-						<button type="button" onClick={() => { mcpIdentities.current.push(undefined); patchMcp([...mcpDraft.current, emptyMcpServerDraft()]); }}>{t.settings.addServer}</button>
+						<button type="button" onClick={() => { mcpIdentities.current.push(undefined); mcpBaselines.current.push(emptyMcpServerDraft()); patchMcp([...mcpDraft.current, emptyMcpServerDraft()]); }}>{t.settings.addServer}</button>
 					</div>}
 				</div>
 			</div>

@@ -116,6 +116,7 @@ const api: LoomApi = {
 	probeModelSlot: (draft) => ipcRenderer.invoke(IPC.probeModelSlot, draft),
 	getChatSettings: () => ipcRenderer.invoke(IPC.getChatSettings),
 	saveChatSettings: (config) => ipcRenderer.invoke(IPC.saveChatSettings, config),
+	patchChatSettings: (patch) => ipcRenderer.invoke(IPC.patchChatSettings, patch),
 	chatProviderCatalog: () => ipcRenderer.invoke(IPC.chatProviderCatalog),
 	chatLogin: (providerId, type) => ipcRenderer.invoke(IPC.chatLogin, providerId, type),
 	chatLoginResponse: (value) => ipcRenderer.invoke(IPC.chatLoginResponse, value),

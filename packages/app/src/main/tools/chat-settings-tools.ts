@@ -1,17 +1,10 @@
-import { ChatConfigSchema, emptyChatConfig, parseChatConfig, type ChatCustomProviderConfig, type ChatModelsConfig, type ChatProviderConfig } from "@loom/agent/chat-models";
+import { ChatConfigSchema, emptyChatConfig, parseChatConfig, type ChatModelsConfig } from "@loom/agent/chat-models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { chatEndpointUrl, parseChatEndpoint } from "../../shared/chat-endpoint.ts";
 import type { ChatModelService } from "../models/chat-model-service.ts";
 
-type ProviderFields = Omit<ChatCustomProviderConfig, "id" | "kind"> & Pick<Extract<ChatProviderConfig, { kind: "builtin" }>, "modelOverrides">;
-export type ChatProviderPatch = Partial<ProviderFields> & {
-	id: string;
-	kind?: "builtin" | "custom";
-	requestUrl?: string;
-	apiKey?: string;
-	clearApiKey?: true;
-};
-export type ChatSettingsPatch = { upsert?: ChatProviderPatch[]; remove?: string[]; refresh?: boolean };
+import type { ChatSettingsPatch, ChatProviderPatch } from "../../shared/chat-settings.ts";
+export type { ChatSettingsPatch } from "../../shared/chat-settings.ts";
 
 export function chatSettingsPatchSchema(): Record<string, unknown> {
 	const configSchema = ChatConfigSchema as unknown as { properties: { providers: { items: { anyOf: Array<{ properties: Record<string, unknown> }> } } } };
@@ -27,6 +20,7 @@ export function chatSettingsPatchSchema(): Record<string, unknown> {
 					requestUrl: { type: "string", description: "Custom providers only: complete standard Chat endpoint URL; infers api and baseUrl. Use this OR baseUrl + api. Built-in providers retain native protocols and accept baseUrl overrides." },
 					apiKey: { type: "string", description: "Write-only API key, stored encrypted. The argument remains in this conversation; prefer the Settings key dialog." },
 					clearApiKey: { type: "boolean", const: true, description: "Remove only the stored API-key credential, not OAuth or environmental keys." },
+					clearName: { type: "boolean", const: true, description: "Remove the optional display name." },
 				},
 			} },
 			remove: { type: "array", items: { type: "string" }, description: "Remove configured providers; credentials remain encrypted for re-adding." },
@@ -52,11 +46,13 @@ export function parseChatSettingsPatch(value: unknown): ChatSettingsPatch {
 		const seen = new Set<string>();
 		patch.upsert = record.upsert.map((raw) => {
 			const row = object(raw);
-			assertFields(row, ["id", "kind", "name", "enabled", "baseUrl", "api", "models", "modelEnabled", "modelOverrides", "generation", "headers", "allowUnauthenticated", "requestUrl", "apiKey", "clearApiKey"]);
+			assertFields(row, ["id", "kind", "name", "enabled", "baseUrl", "api", "models", "modelEnabled", "modelOverrides", "generation", "headers", "allowUnauthenticated", "requestUrl", "apiKey", "clearApiKey", "clearName"]);
 			if (typeof row.id !== "string" || !row.id.trim() || seen.has(row.id)) throw new Error("chat.upsert needs unique provider IDs");
 			seen.add(row.id);
 			if (row.apiKey !== undefined && (typeof row.apiKey !== "string" || !row.apiKey.trim())) throw new Error("Chat apiKey must be non-empty text");
 			if (row.clearApiKey !== undefined && row.clearApiKey !== true) throw new Error("Chat clearApiKey must be true");
+			if (row.clearName !== undefined && row.clearName !== true) throw new Error("Chat clearName must be true");
+			if (row.clearName && row.name !== undefined) throw new Error("Cannot set and clear a Chat name together");
 			if (row.apiKey !== undefined && row.clearApiKey) throw new Error("Cannot set and clear a Chat key together");
 			if (row.requestUrl !== undefined && (typeof row.requestUrl !== "string" || row.baseUrl !== undefined || row.api !== undefined)) throw new Error("Use requestUrl OR baseUrl + api");
 			return { ...row } as ChatProviderPatch;
@@ -71,7 +67,7 @@ export function chatConfigForPatch(current: ChatModelsConfig, patch: ChatSetting
 	const next = structuredClone(current);
 	next.providers = next.providers.filter((row) => !patch.remove?.includes(row.id));
 	for (const update of patch.upsert ?? []) {
-		const { apiKey: _key, clearApiKey: _clear, requestUrl, ...fields } = update;
+		const { apiKey: _key, clearApiKey: _clear, clearName, requestUrl, ...fields } = update;
 		const index = next.providers.findIndex((row) => row.id === update.id);
 		const existing = index < 0 ? undefined : next.providers[index];
 		if (existing && fields.kind && existing.kind !== fields.kind) throw new Error("Cannot change a Chat provider's kind");
@@ -82,6 +78,7 @@ export function chatConfigForPatch(current: ChatModelsConfig, patch: ChatSetting
 			...(endpoint ? { baseUrl: endpoint.baseUrl, api: endpoint.api } : {}),
 			...(fields.modelEnabled ? { modelEnabled: { ...existing?.modelEnabled, ...fields.modelEnabled } } : {}),
 		};
+		if (clearName) delete merged.name;
 		const provider = parseChatConfig({ ...emptyChatConfig(), providers: [merged] }).providers[0]!;
 		if (index < 0) next.providers.push(provider); else next.providers[index] = provider;
 	}

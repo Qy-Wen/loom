@@ -7,17 +7,7 @@
 
 ---
 
-## 1. 统一设置持久化，修复并发保存
-
-**问题：** `ModelSettingsStore.update()` 的读改写没有串行保护，`save()` 直接覆盖文件。设置 UI 与 Agent 的 `update_settings` 可并发进入；临时文件复现中出现更新丢失及无效 JSON。Renderer 的 `SettingsSaveQueue` 只覆盖当前设置页。
-
-**范围：** `app/src/main/models/model-settings-store.ts`、`main/settings/*-store.ts`、`main/mcp/store.ts`，以及 `main/index.ts` 的设置 IPC / `applySettingsPatch()`；现有原子写入和文件锁在 `main/models/chat-file.ts`。
-
-**方向：** 抽出共用文件持久化原语，在主进程串行执行读取、应用补丁和原子提交；调用方提交实际变化，避免用旧的全量草稿覆盖其他更新。各功能保留自己的校验与存储类型。
-
-**验收：** UI 与 Agent 并发修改不同设置时，两边更新均保留；读者始终得到完整文件；失败写入不破坏上次保存结果。覆盖 macOS 与 Windows 的替换行为。
-
-## 2. 素材任务绑定库生命周期
+## 1. 素材任务绑定库生命周期
 
 **问题：** `LocalCore.openLibrary()` / `close()` 切换或关闭存储，却没有收束 enrichment、embedding 与多模态任务。已复现图片描述：A 库开始请求，切到 B 库后返回 `Asset not found`；重新打开 A，记录仍是 `describing`，详情按钮被禁用。
 
@@ -27,15 +17,15 @@
 
 **验收：** 请求中切库、排队时切库、关闭和重开均不会串库，也不会留下无法重试的运行状态。
 
-## 3. 整合多模态描述服务的公共流程
+## 2. 整合多模态描述服务的公共流程
 
 **问题：** `core/src/rag/image-vlm.ts`、`video-vlm.ts`、`audio-writeup.ts` 重复维护串行队列、缓存新鲜度、状态转换、错误处理和记录更新。
 
-**方向：** 先完成第 2 项的任务生命周期，再提取共用执行流程；图片读取、视频原生输入 / 抽帧、音频准备和各自的 provider 契约保留在媒体实现中。合并重复的状态处理，避免引入多层继承。
+**方向：** 先完成第 1 项的任务生命周期，再提取共用执行流程；图片读取、视频原生输入 / 抽帧、音频准备和各自的 provider 契约保留在媒体实现中。合并重复的状态处理，避免引入多层继承。
 
 **验收：** 三类媒体的缓存命中、失败、取消和状态通知使用一致规则；媒体特有的输入限制与处理方式继续由各自测试覆盖。
 
-## 4. 拆分职责过多的入口文件
+## 3. 拆分职责过多的入口文件
 
 **问题：** 目录已经按功能分组，但 `app/src/main/index.ts`、`app/src/renderer/App.tsx`、`core/src/local-core.ts` 仍集中多个职责。
 

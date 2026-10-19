@@ -1,9 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { JsonFile } from "../storage/file.ts";
 import { modelRequestUrl } from "../../shared/model-request-url.ts";
 import {
 	MODEL_SLOTS,
-	type ModelSettingsDraft,
+	type ModelSettingsPatch,
 	type ModelSlotId,
 	type ModelSettingsFile,
 	type ModelSettingsView,
@@ -49,49 +48,41 @@ export function settingsView(file: ModelSettingsFile): ModelSettingsView {
 	return next;
 }
 
-export function applySlotDraft(current: ModelSlotRecord, draft: ModelSettingsDraft[ModelSlotId]): ModelSlotRecord {
+function applySlotPatch(current: ModelSlotRecord, draft: NonNullable<ModelSettingsPatch[ModelSlotId]>): ModelSlotRecord {
 	const next = {
-		requestUrl: draft.requestUrl.trim() ? modelRequestUrl(draft.requestUrl) : "",
-		model: draft.model.trim(),
+		requestUrl: draft.requestUrl === undefined ? current.requestUrl : (draft.requestUrl.trim() ? modelRequestUrl(draft.requestUrl) : ""),
+		model: draft.model?.trim() ?? current.model,
 		apiKey: current.apiKey,
-		enabled: draft.enabled,
+		enabled: draft.enabled ?? current.enabled,
 	};
+	if (draft.clearApiKey && draft.apiKey !== undefined) throw new Error("A slot cannot set and clear its API key in one change.");
 	if (draft.clearApiKey) next.apiKey = "";
 	else if (draft.apiKey !== undefined) next.apiKey = draft.apiKey;
 	return next;
 }
 
-export function applySettingsDraft(current: ModelSettingsFile, draft: ModelSettingsDraft): ModelSettingsFile {
+export function applyModelSettingsPatch(current: ModelSettingsFile, draft: ModelSettingsPatch): ModelSettingsFile {
 	const next = emptySettingsFile();
-	for (const id of MODEL_SLOTS) next[id] = applySlotDraft(current[id], draft[id]);
+	for (const id of MODEL_SLOTS) next[id] = draft[id] ? applySlotPatch(current[id], draft[id]) : { ...current[id] };
 	return next;
 }
 
 export class ModelSettingsStore {
-	private readonly filePath: string;
+	private readonly file: JsonFile<ModelSettingsFile>;
 
 	constructor(filePath: string) {
-		this.filePath = filePath;
+		this.file = new JsonFile(filePath, parseSettingsFile);
 	}
 
 	async load(): Promise<ModelSettingsFile> {
-		try {
-			return parseSettingsFile(JSON.parse(await readFile(this.filePath, "utf8")));
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code === "ENOENT") return emptySettingsFile();
-			throw error;
-		}
+		return await this.file.read() ?? emptySettingsFile();
 	}
 
-	async save(file: ModelSettingsFile): Promise<void> {
-		await mkdir(dirname(this.filePath), { recursive: true });
-		await writeFile(this.filePath, `${JSON.stringify(file, null, "\t")}\n`, "utf8");
-	}
-
-	async update(draft: ModelSettingsDraft): Promise<ModelSettingsFile> {
-		const next = applySettingsDraft(await this.load(), draft);
-		await this.save(next);
-		return next;
+	async update(patch: ModelSettingsPatch): Promise<ModelSettingsFile> {
+		return this.file.update(async (current) => {
+			const next = applyModelSettingsPatch(current ?? emptySettingsFile(), patch);
+			return { value: next, result: next };
+		});
 	}
 
 	async view(): Promise<ModelSettingsView> {

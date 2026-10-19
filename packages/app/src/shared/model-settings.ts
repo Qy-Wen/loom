@@ -39,6 +39,9 @@ export interface ModelSlotDraft {
 }
 
 export type ModelSettingsDraft = Record<ModelSlotId, ModelSlotDraft>;
+/** Omitted slots and fields retain their latest persisted values. */
+export type ModelSlotPatch = Partial<ModelSlotDraft>;
+export type ModelSettingsPatch = Partial<Record<ModelSlotId, ModelSlotPatch>>;
 
 export type ModelProbeDraft = {
 	slot: ModelSlotId;

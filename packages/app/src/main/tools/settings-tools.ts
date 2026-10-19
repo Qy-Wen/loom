@@ -4,9 +4,8 @@ import { chatSettingsPatchSchema, parseChatSettingsPatch, type ChatSettingsPatch
 import { emptyMcpServerDraft, envToText, linesOf, type McpServerDraft } from "../../shared/mcp-settings.ts";
 import {
 	MODEL_SLOTS,
-	type ModelSettingsDraft,
+	type ModelSettingsPatch,
 	type ModelSettingsFile,
-	type ModelSlotDraft,
 	type ModelSlotId,
 	type ModelSlotRecord,
 } from "../../shared/model-settings.ts";
@@ -42,18 +41,10 @@ export interface PublicSettings {
 export interface SettingsPatch {
 	language?: AppLanguageChoice;
 	chat?: ChatSettingsPatch;
-	models?: Partial<Record<ModelSlotId, SlotPatch>>;
+	models?: ModelSettingsPatch;
 	sandbox?: boolean;
 	instructions?: string;
 	mcp?: { upsert?: McpUpsert[]; remove?: string[] };
-}
-
-interface SlotPatch {
-	requestUrl?: string;
-	model?: string;
-	enabled?: boolean;
-	apiKey?: string;
-	clearApiKey?: boolean;
 }
 
 interface McpUpsert {
@@ -108,24 +99,6 @@ export function modelChangeNotes(before: ModelSettingsFile, after: ModelSettings
 		notes.push("Audio model changed. Existing audio write-ups for the previous model stay unused until those files are described again.");
 	}
 	return notes;
-}
-
-export function modelDraftForPatch(file: ModelSettingsFile, patch: SettingsPatch["models"]): ModelSettingsDraft {
-	const draft = {} as ModelSettingsDraft;
-	for (const id of MODEL_SLOTS) draft[id] = slotDraft(file[id], patch?.[id]);
-	return draft;
-}
-
-function slotDraft(current: ModelSlotRecord, patch: SlotPatch | undefined): ModelSlotDraft {
-	const next: ModelSlotDraft = {
-		requestUrl: patch?.requestUrl ?? current.requestUrl,
-		model: patch?.model ?? current.model,
-		enabled: patch?.enabled ?? current.enabled,
-	};
-	if (patch?.clearApiKey && patch.apiKey !== undefined) throw new Error("A slot cannot set and clear its API key in one change.");
-	if (patch?.clearApiKey) next.clearApiKey = true;
-	else if (patch?.apiKey !== undefined) next.apiKey = patch.apiKey;
-	return next;
 }
 
 export function mergeMcpServers(current: readonly McpServerDraft[], patch: NonNullable<SettingsPatch["mcp"]>): McpServerDraft[] {
@@ -203,10 +176,10 @@ function parseModels(value: unknown): NonNullable<SettingsPatch["models"]> {
 	return models;
 }
 
-function parseSlot(value: unknown, id: string): SlotPatch {
+function parseSlot(value: unknown, id: string): NonNullable<ModelSettingsPatch[ModelSlotId]> {
 	const record = asRecord(value, `Slot ${id} must be an object`);
 	if (Object.keys(record).some((key) => !Object.hasOwn(SLOT_FIELDS.properties, key))) throw new Error(`Unknown field in model slot ${id}.`);
-	const slot: SlotPatch = {};
+	const slot: NonNullable<ModelSettingsPatch[ModelSlotId]> = {};
 	if ("requestUrl" in record && record.requestUrl !== undefined) slot.requestUrl = needString(record.requestUrl, `${id}.requestUrl`);
 	if ("model" in record && record.model !== undefined) slot.model = needString(record.model, `${id}.model`);
 	if ("enabled" in record && record.enabled !== undefined) {

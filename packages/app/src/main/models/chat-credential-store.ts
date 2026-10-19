@@ -1,6 +1,7 @@
 import type { Credential, CredentialInfo, CredentialStore } from "@earendil-works/pi-ai";
 import { assertJson } from "@loom/agent/chat-models";
-import { ChatJsonFile, normalizeStorageJson, validateStorageId, type StorageOptions } from "./chat-file.ts";
+import { JsonFile, type StorageOptions } from "../storage/file.ts";
+import { normalizeStorageJson, validateStorageId } from "./chat-storage-validation.ts";
 
 /** Inject Electron safeStorage in Main; unit tests use a real authenticated test cipher. */
 export interface ChatSecretCipher {
@@ -35,9 +36,9 @@ function parseCredentialFile(value: unknown): CredentialFile {
 
 /** A single file lock serializes all mutations, including OAuth refresh and header-secret edits. */
 export class ChatCredentialStore implements CredentialStore {
-	readonly file: ChatJsonFile<CredentialFile>;
+	readonly file: JsonFile<CredentialFile>;
 	readonly cipher: ChatSecretCipher;
-	constructor(path: string, cipher: ChatSecretCipher) { this.file = new ChatJsonFile(path, parseCredentialFile); this.cipher = cipher; }
+	constructor(path: string, cipher: ChatSecretCipher) { this.file = new JsonFile(path, parseCredentialFile); this.cipher = cipher; }
 	assertEncryptionAvailable(): void { if (!this.cipher.available()) throw new Error("Chat credential encryption is unavailable; plaintext fallback is disabled"); }
 	private decode(entry: EncryptedEntry | undefined): SecretPayload {
 		if (!entry) return { secrets: {} };

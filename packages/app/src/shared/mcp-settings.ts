@@ -77,3 +77,9 @@ export function draftToRawServer(draft: McpServerDraft): Record<string, unknown>
 		...(draft.cwd.trim() ? { cwd: draft.cwd.trim() } : {}),
 	};
 }
+
+/** Change one server without replacing unrelated servers or fields. */
+export interface McpSettingsPatch {
+	upsert?: Array<{ previousId?: string; server: Partial<McpServerDraft> & { id: string } }>;
+	remove?: string[];
+}

@@ -1,4 +1,5 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { atomicWrite, encodeJson, readOptionalFile, withFileLock } from "../storage/file.ts";
+import { SerialQueue } from "../storage/serial-queue.ts";
 import { join } from "node:path";
 import {
 	commandAllowId,
@@ -9,24 +10,17 @@ import {
 
 /** Remembered commands for one library. The file lives in `<library>/.loom/`. */
 export class CommandAllowStore {
+	private readonly operations = new SerialQueue();
 	private root: string | null = null;
 	private allows: CommandAllow[] = [];
 
-	async bind(root: string | null): Promise<CommandAllowView> {
-		this.root = root;
-		if (!root) {
-			this.allows = [];
+	bind(root: string | null): Promise<CommandAllowView> {
+		return this.operations.run(async () => {
+			const allows = root ? await this.read(root) : [];
+			this.root = root;
+			this.allows = allows;
 			return this.view();
-		}
-		try {
-			const parsed: unknown = JSON.parse(await readFile(this.filePath(root), "utf8"));
-			this.allows = parseCommandAllows(parsed);
-		} catch (error) {
-			const code = (error as NodeJS.ErrnoException).code;
-			if (code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
-			this.allows = [];
-		}
-		return this.view();
+		});
 	}
 
 	view(): CommandAllowView {
@@ -37,27 +31,32 @@ export class CommandAllowStore {
 		};
 	}
 
-	async add(allow: CommandAllow): Promise<CommandAllowView> {
-		const root = this.requireRoot();
-		const id = commandAllowId(allow);
-		if (!this.allows.some((row) => commandAllowId(row) === id)) {
-			this.allows = [...this.allows, { ...allow }];
-			await this.write(root);
-		}
-		return this.view();
-	}
-
-	private requireRoot(): string {
-		if (!this.root) throw new Error("Open a library first.");
-		return this.root;
+	add(allow: CommandAllow): Promise<CommandAllowView> {
+		return this.operations.run(async () => {
+			if (!this.root) throw new Error("Open a library first.");
+			const root = this.root;
+			this.allows = await withFileLock(this.filePath(root), async (check) => {
+				const allows = await this.read(root);
+				if (allows.some((row) => commandAllowId(row) === commandAllowId(allow))) return allows;
+				const next = [...allows, { ...allow }];
+				await atomicWrite(this.filePath(root), encodeJson({ allows: next }), check);
+				return next;
+			});
+			return this.view();
+		});
 	}
 
 	private filePath(root: string): string {
 		return join(root, ".loom", "command-allows.json");
 	}
 
-	private async write(root: string): Promise<void> {
-		await mkdir(join(root, ".loom"), { recursive: true });
-		await writeFile(this.filePath(root), `${JSON.stringify({ allows: this.allows }, null, "\t")}\n`, "utf8");
+	private async read(root: string): Promise<CommandAllow[]> {
+		try {
+			const text = await readOptionalFile(this.filePath(root));
+			return text === undefined ? [] : parseCommandAllows(JSON.parse(text));
+		} catch (error) {
+			if (error instanceof SyntaxError) return [];
+			throw error;
+		}
 	}
 }

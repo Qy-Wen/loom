@@ -1,6 +1,6 @@
 import {
 	parseChatConfig, validateChatBaseUrl,
-	type ChatApi, type ChatCustomModelConfig, type ChatCustomProviderConfig, type ChatModelsConfig,
+	type ChatApi, type ChatCustomModelConfig, type ChatCustomProviderConfig,
 } from "@loom/agent/chat-models";
 import { chatEndpointUrl, ChatEndpointError, parseChatEndpoint } from "../../shared/chat-endpoint.ts";
 
@@ -75,13 +75,4 @@ export function buildCustomProvider(id: string, draft: CustomProviderDraft, orig
 		provider.modelEnabled = modelEnabled;
 	}
 	return parseChatConfig({ version: 1, providers: [provider] }).providers[0] as ChatCustomProviderConfig;
-}
-
-export function putCustomProvider(config: ChatModelsConfig, provider: ChatCustomProviderConfig): ChatModelsConfig {
-	const next = structuredClone(config);
-	const index = next.providers.findIndex((entry) => entry.id === provider.id);
-	if (index < 0) next.providers.push(provider); else next.providers[index] = provider;
-	// Missing/renamed model IDs do not rewrite saved conversations or select a replacement.
-	if (next.default?.provider === provider.id && !provider.models.some((model) => model.id === next.default!.modelId)) delete next.default;
-	return parseChatConfig(next);
 }

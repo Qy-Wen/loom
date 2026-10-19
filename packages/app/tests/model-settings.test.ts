@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
 	ModelSettingsStore,
-	applySettingsDraft,
+	applyModelSettingsPatch,
 	parseSettingsFile,
 	settingsView,
 } from "../src/main/models/model-settings-store.ts";
@@ -30,23 +30,23 @@ describe("parseSettingsFile", () => {
 	});
 });
 
-describe("applySettingsDraft", () => {
+describe("applyModelSettingsPatch", () => {
 	it("keeps the stored key unless replaced or cleared", () => {
 		const current = emptySettingsFile();
 		current.embedding.apiKey = "kept";
-		const kept = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", enabled: true }));
+		const kept = applyModelSettingsPatch(current, draft({ requestUrl: "https://a", model: "m", enabled: true }));
 		assert.equal(kept.embedding.apiKey, "kept");
 		assert.equal(kept.embedding.enabled, true);
-		const replaced = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", apiKey: "new", enabled: true }));
+		const replaced = applyModelSettingsPatch(current, draft({ requestUrl: "https://a", model: "m", apiKey: "new", enabled: true }));
 		assert.equal(replaced.embedding.apiKey, "new");
-		const cleared = applySettingsDraft(current, draft({ requestUrl: "https://a", model: "m", clearApiKey: true, enabled: true }));
+		const cleared = applyModelSettingsPatch(current, draft({ requestUrl: "https://a", model: "m", clearApiKey: true, enabled: true }));
 		assert.equal(cleared.embedding.apiKey, "");
 	});
 
 	it("keeps exact request URLs and rejects invalid nonempty URLs", () => {
 		const url = "https://proxy.example.com/inference/?region=cn";
-		assert.equal(applySettingsDraft(emptySettingsFile(), draft({ requestUrl: ` ${url} ` })).embedding.requestUrl, url);
-		assert.throws(() => applySettingsDraft(emptySettingsFile(), draft({ requestUrl: "not-a-url" })), /Request URL/);
+		assert.equal(applyModelSettingsPatch(emptySettingsFile(), draft({ requestUrl: ` ${url} ` })).embedding.requestUrl, url);
+		assert.throws(() => applyModelSettingsPatch(emptySettingsFile(), draft({ requestUrl: "not-a-url" })), /Request URL/);
 	});
 
 	it("includes the key in the Settings view for masked editing", () => {

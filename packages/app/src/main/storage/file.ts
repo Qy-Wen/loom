@@ -3,28 +3,10 @@ import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import lockfile from "proper-lockfile";
-import { assertJson } from "@loom/agent/chat-models";
+import { SerialQueue } from "./serial-queue.ts";
 
 export type StorageOptions = { signal?: AbortSignal };
-export function validateStorageId(id: string): void {
-	if (!/^[a-z0-9][a-z0-9._:-]*$/.test(id)) throw new Error("Invalid Chat storage identifier");
-}
 export const encodeJson = (value: unknown): string => `${JSON.stringify(value, null, "\t")}\n`;
-
-/** Native TS objects may omit optional fields by setting undefined; reject other non-JSON values. */
-export function normalizeStorageJson(value: unknown): unknown {
-	const active = new Set<object>();
-	const visit = (value: unknown, depth: number): unknown => {
-		if (!value || typeof value !== "object") return value;
-		if (depth > 64 || active.has(value)) throw new Error("Invalid JSON storage value");
-		if (!Array.isArray(value) && Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw new Error("Invalid JSON storage object");
-		active.add(value);
-		const result = Array.isArray(value) ? Array.from(value, (entry) => visit(entry, depth + 1))
-			: Object.fromEntries(Object.entries(value).filter(([, entry]) => entry !== undefined).map(([key, entry]) => [key, visit(entry, depth + 1)]));
-		active.delete(value); return result;
-	};
-	const normalized = visit(value, 0); assertJson(normalized); return normalized;
-}
 
 export async function readOptionalFile(path: string): Promise<string | undefined> {
 	try { return await readFile(path, "utf8"); }
@@ -57,8 +39,21 @@ export async function atomicWrite(path: string, contents: string | Uint8Array, b
 	} finally { await rm(temporary, { force: true, maxRetries: 3, retryDelay: 100 }); }
 }
 
+const queues = new Map<string, SerialQueue>();
+
+/** FIFO within Main, with a file lock for other instances/processes. */
+export function withFileLock<T>(path: string, operation: (check: () => void) => Promise<T>, options: StorageOptions = {}): Promise<T> {
+	const key = resolve(path);
+	let queue = queues.get(key);
+	if (!queue) { queue = new SerialQueue(); queues.set(key, queue); }
+	const current = queue;
+	return current.run(() => acquireFileLock(path, operation, options)).finally(() => {
+		if (current.idle && queues.get(key) === current) queues.delete(key);
+	});
+}
+
 /** Cross-instance/process read-modify-write lock, with heartbeat during OAuth refresh. */
-export async function withFileLock<T>(path: string, operation: (check: () => void) => Promise<T>, options: StorageOptions = {}): Promise<T> {
+async function acquireFileLock<T>(path: string, operation: (check: () => void) => Promise<T>, options: StorageOptions = {}): Promise<T> {
 	options.signal?.throwIfAborted();
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
 	// Canonicalize directory aliases so two clients cannot acquire different locks for the same file.
@@ -74,11 +69,11 @@ export async function withFileLock<T>(path: string, operation: (check: () => voi
 			});
 		} catch (error) {
 			const code = (error as NodeJS.ErrnoException).code;
-			if (Date.now() >= deadline || (code !== "ELOCKED" && !(process.platform === "win32" && code === "EPERM"))) throw new Error("Cannot acquire Chat storage lock");
+			if (Date.now() >= deadline || (code !== "ELOCKED" && !(process.platform === "win32" && code === "EPERM"))) throw new Error("Cannot acquire storage lock");
 			await sleep(50, undefined, { signal: options.signal });
 		}
 	}
-	const check = () => { if (compromised) throw new Error("Chat storage lock was lost"); };
+	const check = () => { if (compromised) throw new Error("Storage lock was lost"); };
 	try {
 		options.signal?.throwIfAborted();
 		check();
@@ -89,7 +84,7 @@ export async function withFileLock<T>(path: string, operation: (check: () => voi
 	} finally { if (!compromised) await release(); }
 }
 
-export class ChatJsonFile<T> {
+export class JsonFile<T> {
 	readonly path: string;
 	readonly parse: (value: unknown) => T;
 	constructor(path: string, parse: (value: unknown) => T) { this.path = resolve(path); this.parse = parse; }

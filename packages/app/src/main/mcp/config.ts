@@ -1,11 +1,12 @@
 import { readFile } from "node:fs/promises";
 import type { McpServerConfig } from "./types.ts";
 
-export function expandEnv(value: string, env: NodeJS.ProcessEnv = process.env): string {
+export function expandEnv(value: string, env: NodeJS.ProcessEnv | null = process.env): string {
+	if (env === null) return value;
 	return value.replace(/\$\{([A-Za-z_][A-Za-z0-9_]*)\}/g, (_match, name: string) => env[name] ?? "");
 }
 
-export function parseMcpConfig(raw: unknown, env: NodeJS.ProcessEnv = process.env): McpServerConfig[] {
+export function parseMcpConfig(raw: unknown, env: NodeJS.ProcessEnv | null = process.env): McpServerConfig[] {
 	if (raw === undefined || raw === null) return [];
 	if (typeof raw !== "object") throw new Error("MCP config must be an object");
 	const record = raw as Record<string, unknown>;
@@ -19,12 +20,12 @@ export function parseMcpConfig(raw: unknown, env: NodeJS.ProcessEnv = process.en
 	return [];
 }
 
-export async function loadMcpConfigFile(path: string, env: NodeJS.ProcessEnv = process.env): Promise<McpServerConfig[]> {
+export async function loadMcpConfigFile(path: string, env: NodeJS.ProcessEnv | null = process.env): Promise<McpServerConfig[]> {
 	const text = await readFile(path, "utf8");
 	return parseMcpConfig(JSON.parse(text) as unknown, env);
 }
 
-function parseServer(value: unknown, env: NodeJS.ProcessEnv): McpServerConfig {
+function parseServer(value: unknown, env: NodeJS.ProcessEnv | null): McpServerConfig {
 	if (typeof value !== "object" || value === null) throw new Error("MCP server entry must be an object");
 	const record = value as Record<string, unknown>;
 	const id = typeof record.id === "string" ? record.id.trim() : "";
@@ -50,7 +51,7 @@ function parseServer(value: unknown, env: NodeJS.ProcessEnv): McpServerConfig {
 	throw new Error(`MCP server ${id} needs command or url`);
 }
 
-function mapEnvStrings(value: unknown, env: NodeJS.ProcessEnv): Record<string, string> | undefined {
+function mapEnvStrings(value: unknown, env: NodeJS.ProcessEnv | null): Record<string, string> | undefined {
 	if (value === undefined) return undefined;
 	if (typeof value !== "object" || value === null || Array.isArray(value)) {
 		throw new Error("MCP env/headers must be an object of strings");

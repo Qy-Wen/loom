@@ -47,7 +47,6 @@ import {
 	createSettingsTools,
 	mergeMcpServers,
 	modelChangeNotes,
-	modelDraftForPatch,
 	publicMcpServer,
 	publicModelSlot,
 	type PublicSettings,
@@ -55,16 +54,17 @@ import {
 } from "./tools/settings-tools.ts";
 import { McpHost } from "./mcp/host.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
+import { SerialQueue } from "./storage/serial-queue.ts";
 import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
 import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
-import { parseGeneralSettings, resolveAppLanguage } from "../shared/general-settings.ts";
+import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
-import type { McpServerDraft } from "../shared/mcp-settings.ts";
-import type { ModelProbeDraft, ModelSettingsDraft } from "../shared/model-settings.ts";
+import type { McpServerDraft, McpSettingsPatch } from "../shared/mcp-settings.ts";
+import type { ModelProbeDraft, ModelSettingsPatch } from "../shared/model-settings.ts";
 import { createHttpEmbeddingProvider } from "./models/embedding-provider.ts";
 import { createHttpRerankProvider } from "./models/rerank-provider.ts";
 import { createHttpAudioProvider, createHttpVideoVlmProvider, createHttpVlmProvider } from "./models/vlm-provider.ts";
@@ -78,7 +78,7 @@ import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-libra
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
 import { createChatStorage } from "./models/chat-storage.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
-import { applyChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
+import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 
 const ASSET_SCHEME = "loom-asset";
@@ -197,6 +197,7 @@ const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
 	tools: [...BUILTIN_TOOLS],
 };
+const settingsWrites = new SerialQueue();
 let modelSettings: ModelSettingsStore | null = null;
 let chatModels: ChatModelService | null = null;
 let mcpSettings: McpSettingsStore | null = null;
@@ -383,12 +384,18 @@ function askLoginPrompt(window: Electron.BrowserWindow | undefined, providerId: 
 
 function registerChatIpc(): void {
 	ipcMain.handle(IPC.getChatSettings, async () => await requireChatModels().view());
-	ipcMain.handle(IPC.saveChatSettings, async (_event, raw: unknown) => {
+	ipcMain.handle(IPC.saveChatSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		const service = requireChatModels();
 		await service.save(raw as Parameters<ChatModelService["save"]>[0]);
 		notifyChatSettingsChanged();
 		return service.view();
-	});
+	}));
+	ipcMain.handle(IPC.patchChatSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
+		const service = requireChatModels();
+		await applyChatSettingsPatch(service, parseChatSettingsPatch(raw));
+		notifyChatSettingsChanged();
+		return service.view();
+	}));
 	ipcMain.handle(IPC.chatProviderCatalog, (): import("../shared/ipc.ts").ChatProviderCatalogEntry[] =>
 		builtinProviders().map((provider) => ({
 			id: provider.id,
@@ -746,15 +753,15 @@ function registerIpc(): void {
 		return modelSettings.view();
 	});
 	ipcMain.handle(IPC.getMcpSettings, async () => mcpSettingsView());
-	ipcMain.handle(IPC.saveMcpSettings, async (_event, drafts: McpServerDraft[]) => {
+	ipcMain.handle(IPC.saveMcpSettings, async (_event, patch: McpSettingsPatch) => settingsWrites.run(async () => {
 		if (!mcpSettings) throw new Error("Settings store not started");
-		const configs = await mcpSettings.save(drafts);
+		const configs = await mcpSettings.patch(patch);
 		await reconnectMcp(configs);
 		return mcpSettingsView();
-	});
-	ipcMain.handle(IPC.setMcpServerLive, async (_event, draft: McpServerDraft) => {
+	}));
+	ipcMain.handle(IPC.setMcpServerLive, async (_event, draft: McpServerDraft) => settingsWrites.run(async () => {
 		return setMcpServerLive(draft);
-	});
+	}));
 	ipcMain.handle(IPC.probeModelSlot, async (_event, draft: ModelProbeDraft) => {
 		return probeModelSlot(draft);
 	});
@@ -762,21 +769,21 @@ function registerIpc(): void {
 		if (!agentInstructions) throw new Error("Settings store not started");
 		return agentInstructions.load();
 	});
-	ipcMain.handle(IPC.saveAgentInstructions, async (_event, text: unknown) => {
+	ipcMain.handle(IPC.saveAgentInstructions, async (_event, text: unknown) => settingsWrites.run(async () => {
 		if (!agentInstructions) throw new Error("Settings store not started");
 		if (typeof text !== "string") throw new Error("Instructions must be text.");
 		const saved = await agentInstructions.save(text);
 		await requireChat().setInstructions(saved);
 		return saved;
-	});
+	}));
 	ipcMain.handle(IPC.getGeneralSettings, async () => {
 		if (!generalSettings) throw new Error("Settings store not started");
 		return generalSettings.load();
 	});
-	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => {
+	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		if (!generalSettings) throw new Error("Settings store not started");
-		return generalSettings.save(parseGeneralSettings(raw));
-	});
+		return generalSettings.save(parseGeneralSettingsPatch(raw));
+	}));
 	ipcMain.handle(IPC.getProcessSandboxNotice, async () => {
 		if (!agentSandbox) throw new Error("Settings store not started");
 		return agentSandbox.pendingNotice();
@@ -790,13 +797,13 @@ function registerIpc(): void {
 		if (!agentSandbox) throw new Error("Settings store not started");
 		return agentSandbox.load();
 	});
-	ipcMain.handle(IPC.saveAgentSandbox, async (_event, enabled: unknown) => {
+	ipcMain.handle(IPC.saveAgentSandbox, async (_event, enabled: unknown) => settingsWrites.run(async () => {
 		if (!agentSandbox) throw new Error("Settings store not started");
 		if (typeof enabled !== "boolean") throw new Error("Sandbox setting must be on or off.");
 		const saved = await agentSandbox.save(enabled);
 		await applyProcessSandbox();
 		return saved;
-	});
+	}));
 	ipcMain.handle(IPC.getAgentStats, async () => {
 		if (!agentStats) throw new Error("Settings store not started");
 		return agentStats.view();
@@ -810,13 +817,13 @@ function registerIpc(): void {
 		setUiSelection(parseUiSelectionDraft(raw));
 	});
 	ipcMain.handle(IPC.getAgentPermission, (): string => requireChat().getPermissionLevel());
-	ipcMain.handle(IPC.setAgentPermission, async (_event, raw: unknown) => {
+	ipcMain.handle(IPC.setAgentPermission, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		if (!agentPermission) throw new Error("Permission store not started");
 		const level = await agentPermission.save(parseAgentPermissionLevel(raw));
 		requireChat().setPermissionLevel(level);
 		await applyProcessSandbox();
 		return level;
-	});
+	}));
 	ipcMain.handle(IPC.getCommandAllows, () => {
 		if (!commandAllows) throw new Error("Permission store not started");
 		return commandAllows.view();
@@ -952,11 +959,11 @@ function registerIpc(): void {
 		return localCore.importGradeLut(result.filePaths[0]);
 	});
 
-	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsDraft) => {
+	ipcMain.handle(IPC.saveModelSettings, async (_event, draft: ModelSettingsPatch) => settingsWrites.run(async () => {
 		if (!modelSettings) throw new Error("Settings store not started");
 		const file = await modelSettings.update(draft);
 		return settingsView(file);
-	});
+	}));
 
 	ipcMain.handle(IPC.deleteSession, (_event, id: string) => requireChat().deleteSession(id));
 
@@ -1340,44 +1347,45 @@ async function readPublicSettings(chatProvider?: string): Promise<PublicSettings
 }
 
 async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string[]; settings: PublicSettings }> {
-	if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
-	const notes: string[] = [];
-	if (patch.language !== undefined) {
-		if (!generalSettings) throw new Error("Settings store not started");
-		await generalSettings.save({ ...await generalSettings.load(), language: patch.language });
-		notes.push("Interface language saved.");
-		notifySettingsChanged();
-	}
-	if (patch.chat) {
-		const service = requireChatModels();
-		try { notes.push(...await applyChatSettingsPatch(service, patch.chat)); }
-		finally {
-			notifyChatSettingsChanged();
+	return settingsWrites.run(async () => {
+		if (!modelSettings || !mcpSettings || !agentSandbox || !agentInstructions) throw new Error("Settings store not started");
+		const notes: string[] = [];
+		if (patch.language !== undefined) {
+			if (!generalSettings) throw new Error("Settings store not started");
+			await generalSettings.save({ language: patch.language });
+			notes.push("Interface language saved.");
+			notifySettingsChanged();
 		}
-	}
-	if (patch.models) {
-		const before = await modelSettings.load();
-		const file = await modelSettings.update(modelDraftForPatch(before, patch.models));
-		notes.push(...modelChangeNotes(before, file));
-	}
-	if (patch.sandbox !== undefined) {
-		await agentSandbox.save(patch.sandbox);
-		await applyProcessSandbox();
-		notes.push(patch.sandbox ? "Process sandbox is on. The next command uses it." : "Process sandbox is off. The next command runs directly.");
-	}
-	if (patch.instructions !== undefined) {
-		const saved = await agentInstructions.save(patch.instructions);
-		await requireChat().setInstructions(saved);
-		notes.push("Instructions saved. This reply keeps the text it started with. The next message appends the new text.");
-	}
-	if (patch.mcp) {
-		const next = mergeMcpServers(await mcpSettings.drafts(), patch.mcp);
-		await mcpSettings.save(next);
-		await reconnectMcp(await mcpSettings.load());
-		notes.push("MCP servers saved and reconnected.");
-	}
-	notifySettingsChanged();
-	return { notes, settings: await readPublicSettings() };
+		if (patch.chat) {
+			const service = requireChatModels();
+			try { notes.push(...await applyChatSettingsPatch(service, patch.chat)); }
+			finally {
+				notifyChatSettingsChanged();
+			}
+		}
+		if (patch.models) {
+			const before = await modelSettings.load();
+			const file = await modelSettings.update(patch.models);
+			notes.push(...modelChangeNotes(before, file));
+		}
+		if (patch.sandbox !== undefined) {
+			await agentSandbox.save(patch.sandbox);
+			await applyProcessSandbox();
+			notes.push(patch.sandbox ? "Process sandbox is on. The next command uses it." : "Process sandbox is off. The next command runs directly.");
+		}
+		if (patch.instructions !== undefined) {
+			const saved = await agentInstructions.save(patch.instructions);
+			await requireChat().setInstructions(saved);
+			notes.push("Instructions saved. This reply keeps the text it started with. The next message appends the new text.");
+		}
+		if (patch.mcp) {
+			const configs = await mcpSettings.update((current) => mergeMcpServers(current, patch.mcp!));
+			await reconnectMcp(configs);
+			notes.push("MCP servers saved and reconnected.");
+		}
+		notifySettingsChanged();
+		return { notes, settings: await readPublicSettings() };
+	});
 }
 
 async function gradeOutputPath(input: string, sourceRelativePath: string, video: boolean): Promise<string> {

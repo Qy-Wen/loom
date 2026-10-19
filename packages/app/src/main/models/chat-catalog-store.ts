@@ -1,6 +1,7 @@
 import type { AnyModel, ModelsStore, ModelsStoreEntry } from "@earendil-works/pi-ai";
 import { assertJson, assertPublicMetadata, validateChatBaseUrl } from "@loom/agent/chat-models";
-import { ChatJsonFile, normalizeStorageJson, validateStorageId, type StorageOptions } from "./chat-file.ts";
+import { JsonFile, type StorageOptions } from "../storage/file.ts";
+import { normalizeStorageJson, validateStorageId } from "./chat-storage-validation.ts";
 
 type CatalogFile = { version: 1; entries: Record<string, ModelsStoreEntry> };
 const record = (value: unknown): value is Record<string, unknown> => value !== null && typeof value === "object" && !Array.isArray(value);
@@ -45,8 +46,8 @@ function parseCatalog(value: unknown): CatalogFile {
 
 /** Persist native catalogs only; request headers are reapplied from encrypted secrets, never cached. */
 export class ChatCatalogStore implements ModelsStore {
-	readonly file: ChatJsonFile<CatalogFile>;
-	constructor(path: string) { this.file = new ChatJsonFile(path, parseCatalog); }
+	readonly file: JsonFile<CatalogFile>;
+	constructor(path: string) { this.file = new JsonFile(path, parseCatalog); }
 	async read(id: string, options?: StorageOptions): Promise<ModelsStoreEntry | undefined> {
 		validateStorageId(id);
 		const file = await this.file.read(options);

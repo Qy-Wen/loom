@@ -31,3 +31,12 @@ export function resolveAppLanguage(choice: AppLanguageChoice, systemLanguage: st
 function isLanguageChoice(value: unknown): value is AppLanguageChoice {
 	return value === "system" || value === "en" || value === "zh-CN";
 }
+
+export function parseGeneralSettingsPatch(value: unknown): Partial<GeneralSettings> {
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("General settings must be an object");
+	const parsed = parseGeneralSettings(value);
+	return {
+		...("language" in value ? { language: parsed.language } : {}),
+		...("reopenLastLibrary" in value ? { reopenLastLibrary: parsed.reopenLastLibrary } : {}),
+	};
+}

@@ -1,3 +1,4 @@
+import type { ChatSettingsPatch } from "./chat-settings.ts";
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type { ProcessSandboxNotice } from "./agent-sandbox.ts";
 import type { ImageGrade, ImageGradeRecord } from "@loom/core/grade";
@@ -28,9 +29,9 @@ import type {
 	ToolGateDecision,
 } from "@loom/agent";
 import type { AgentStatsView } from "./agent-stats.ts";
-import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
+import type { McpServerDraft, McpServerStatus, McpSettingsView, McpSettingsPatch } from "./mcp-settings.ts";
 import type { GeneralSettings } from "./general-settings.ts";
-import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
+import type { ModelProbeDraft, ModelSettingsPatch, ModelSettingsView, ProbeResult } from "./model-settings.ts";
 import type { ChatModelsConfig } from "@loom/agent/chat-models";
 import type { ChatAuthStatus, ChatModelView } from "./chat-models.ts";
 
@@ -171,6 +172,7 @@ export const IPC = {
 	probeModelSlot: "loom:probeModelSlot",
 	getChatSettings: "loom:getChatSettings",
 	saveChatSettings: "loom:saveChatSettings",
+	patchChatSettings: "loom:patchChatSettings",
 	chatProviderCatalog: "loom:chatProviderCatalog",
 	chatLogin: "loom:chatLogin",
 	chatLoginPrompt: "loom:chatLoginPrompt",
@@ -293,10 +295,11 @@ export interface LoomApi {
 	getProcessSandboxNotice: () => Promise<ProcessSandboxNotice | null>;
 	acknowledgeProcessSandboxNotice: (id: string) => Promise<void>;
 	getModelSettings: () => Promise<ModelSettingsView>;
-	saveModelSettings: (draft: ModelSettingsDraft) => Promise<ModelSettingsView>;
+	saveModelSettings: (draft: ModelSettingsPatch) => Promise<ModelSettingsView>;
 	probeModelSlot: (draft: ModelProbeDraft) => Promise<ProbeResult>;
 	getChatSettings: () => Promise<ChatSettingsView>;
 	saveChatSettings: (config: ChatModelsConfig) => Promise<ChatSettingsView>;
+	patchChatSettings: (patch: ChatSettingsPatch) => Promise<ChatSettingsView>;
 	chatProviderCatalog: () => Promise<ChatProviderCatalogEntry[]>;
 	/** Resolves when the whole flow settles; prompts arrive via onChatLoginPrompt. */
 	chatLogin: (providerId: string, type: "api_key" | "oauth") => Promise<void>;
@@ -307,12 +310,12 @@ export interface LoomApi {
 	onChatLoginPrompt: (listener: (prompt: ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" }) => void) => () => void;
 	onChatSettingsChanged: (listener: () => void) => () => void;
 	getMcpSettings: () => Promise<McpSettingsView>;
-	saveMcpSettings: (servers: McpServerDraft[]) => Promise<McpSettingsView>;
+	saveMcpSettings: (patch: McpSettingsPatch) => Promise<McpSettingsView>;
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
 	getAgentInstructions: () => Promise<string>;
 	saveAgentInstructions: (text: string) => Promise<string>;
 	getGeneralSettings: () => Promise<GeneralSettings>;
-	saveGeneralSettings: (settings: GeneralSettings) => Promise<GeneralSettings>;
+	saveGeneralSettings: (settings: Partial<GeneralSettings>) => Promise<GeneralSettings>;
 	getAgentSandbox: () => Promise<boolean>;
 	saveAgentSandbox: (enabled: boolean) => Promise<boolean>;
 	getAgentStats: () => Promise<AgentStatsView>;

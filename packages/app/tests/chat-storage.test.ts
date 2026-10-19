@@ -15,7 +15,7 @@ import type { AnyModel, Credential } from "@earendil-works/pi-ai";
 import { ChatCredentialStore } from "../src/main/models/chat-credential-store.ts";
 import { ChatCatalogStore } from "../src/main/models/chat-catalog-store.ts";
 import { ChatConfigStore } from "../src/main/models/chat-config-store.ts";
-import { atomicWrite } from "../src/main/models/chat-file.ts";
+import { atomicWrite } from "../src/main/storage/file.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 
 async function workspace(t: { after(fn: () => Promise<void>): void }) {

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatLoginPrompt, ChatProviderCatalogEntry, ChatSettingsView } from "../../shared/ipc.ts";
-import type { ChatCustomProviderConfig, ChatModelsConfig, ChatProviderConfig } from "@loom/agent/chat-models";
+import type { ChatCustomProviderConfig } from "@loom/agent/chat-models";
 import type { ChatModelView } from "../../shared/chat-models.ts";
 import { useLocale } from "../locale.tsx";
 import { SettingsStatus } from "./settings-switch.tsx";
 import { SettingsChatCustom } from "./settings-chat-custom.tsx";
-import { putCustomProvider } from "./chat-custom-draft.ts";
+import { changedFields } from "../../shared/settings-changes.ts";
+import type { ChatSettingsPatch, ChatProviderPatch } from "../../shared/chat-settings.ts";
 import { SettingsSecretInput } from "./settings-secret-input.tsx";
 
 type LoginPromptEvent = ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" };
@@ -79,8 +80,8 @@ export function SettingsChat(): React.JSX.Element {
 		}
 	}
 
-	async function save(next: ChatModelsConfig): Promise<boolean> {
-		const saved = await run(() => window.loom.saveChatSettings(next));
+	async function save(patch: ChatSettingsPatch): Promise<boolean> {
+		const saved = await run(() => window.loom.patchChatSettings(patch));
 		if (!saved) return false;
 		setView(saved);
 		return true;
@@ -132,30 +133,31 @@ export function SettingsChat(): React.JSX.Element {
 
 	async function addBuiltin(entry: ChatProviderCatalogEntry): Promise<void> {
 		if (!view) return;
-		const providers = [...view.config.providers, { kind: "builtin", id: entry.id, enabled: true } as ChatProviderConfig];
-		await save({ ...view.config, providers });
+		await save({ upsert: [{ kind: "builtin", id: entry.id, enabled: true }] });
 	}
 
 	async function saveCustom(provider: ChatCustomProviderConfig): Promise<boolean> {
 		if (!view) return false;
-		const saved = await save(putCustomProvider(view.config, provider));
+		const original = customEditor?.provider;
+		const fields = original ? changedFields(original, provider) : provider;
+		const patch: ChatProviderPatch = { ...fields, id: provider.id };
+		if (original && fields.modelEnabled) patch.modelEnabled = Object.fromEntries(
+			Object.entries(fields.modelEnabled).filter(([id, enabled]) => original.modelEnabled?.[id] !== enabled),
+		);
+		if (original?.name && !provider.name) patch.clearName = true;
+		const saved = await save({ upsert: [patch] });
 		if (saved) setCustomEditor(null);
 		return saved;
 	}
 
 	async function removeProvider(providerId: string): Promise<void> {
 		if (!view) return;
-		const next = { ...view.config, providers: view.config.providers.filter((provider) => provider.id !== providerId) };
-		if (next.default?.provider === providerId) delete next.default;
-		await save(next);
+		await save({ remove: [providerId] });
 	}
 
 	async function setModelEnabled(providerId: string, modelId: string, enabled: boolean): Promise<void> {
 		if (!view) return;
-		const providers = view.config.providers.map((provider) => provider.id === providerId
-			? { ...provider, modelEnabled: { ...provider.modelEnabled, [modelId]: enabled } }
-			: provider);
-		await save({ ...view.config, providers });
+		await save({ upsert: [{ id: providerId, modelEnabled: { [modelId]: enabled } }] });
 	}
 
 	const authByProvider = useMemo(() => new Map((view?.auth ?? []).map((row) => [row.providerId, row])), [view?.auth]);

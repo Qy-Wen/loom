@@ -1,3 +1,4 @@
+import { applyModelSettingsPatch } from "../src/main/models/model-settings-store.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import { emptySettingsFile } from "../src/shared/model-settings.ts";
@@ -6,7 +7,6 @@ import {
 	createSettingsTools,
 	mergeMcpServers,
 	modelChangeNotes,
-	modelDraftForPatch,
 	parseSettingsPatch,
 	publicMcpServer,
 	publicModelSlot,
@@ -20,8 +20,8 @@ describe("settings tools", () => {
 		file.embedding = { requestUrl: "http://localhost:11434/v1", apiKey: "secret", model: "bge", enabled: true };
 		assert.equal(publicModelSlot(file.embedding).hasApiKey, true);
 		assert.equal(JSON.stringify(publicModelSlot(file.embedding)).includes("secret"), false);
-		const draft = modelDraftForPatch(file, { embedding: { model: "bge-m3" } });
-		assert.equal(draft.embedding.apiKey, undefined);
+		const draft = applyModelSettingsPatch(file, { embedding: { model: "bge-m3" } });
+		assert.equal(draft.embedding.apiKey, "secret");
 		assert.equal(draft.embedding.model, "bge-m3");
 		assert.equal(draft.embedding.enabled, true);
 	});
@@ -45,7 +45,7 @@ describe("settings tools", () => {
 	it("patches non-Chat request URLs and rejects unknown slot fields", () => {
 		const requestUrl = "https://example.com/v1/embeddings";
 		const patch = parseSettingsPatch({ models: { embedding: { requestUrl } } });
-		assert.equal(modelDraftForPatch(emptySettingsFile(), patch.models).embedding.requestUrl, requestUrl);
+		assert.equal(applyModelSettingsPatch(emptySettingsFile(), patch.models!).embedding.requestUrl, requestUrl);
 		assert.throws(() => parseSettingsPatch({ models: { embedding: { baseUrl: requestUrl, enabled: true } } }), /Unknown field/);
 	});
 

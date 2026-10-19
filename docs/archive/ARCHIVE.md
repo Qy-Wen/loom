@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Settings persistence and concurrent updates
+
+UI and Agent settings mutations share a Main queue, including runtime application. Model/general changes merge fields; Chat/MCP edits address individual entries. Shared file locks serialize read-modify-write across instances, and atomic replacement protects readers and the previous file on pre-commit failure. Settings stores no longer publish unsaved ordinary changes; sandbox failures retain their in-memory fallback if persistence fails. MCP environment references stay literal on disk.
+
+macOS validation: App typecheck with unused-symbol checks, 343 unit tests, 16 Electron cases, and the app build passed. Coverage includes concurrent UI/Agent patches, stale editors, complete JSON during writes, failed-commit recovery, library-bound grants, cross-process credential locking, and simulated Windows sharing-violation retries. Native Windows execution remains unverified.
+
+---
+
 ## Shared Embedding HTTP adapter
 
 Production and retrieval evaluation share requests and vector parsing through `@loom/core/embedding`. The app validates complete request URLs without rewriting them; only the evaluation wrapper expands base URLs. Live output identifies the shared adapter.

@@ -7,17 +7,7 @@
 
 ---
 
-## 1. Unify settings persistence and fix concurrent saves
-
-**Problem:** `ModelSettingsStore.update()` does not serialize read-modify-write operations, and `save()` overwrites the file directly. Settings UI and the agent's `update_settings` can run concurrently; temporary-file reproductions lost updates and produced invalid JSON. Renderer `SettingsSaveQueue` protects only that settings page.
-
-**Scope:** `app/src/main/models/model-settings-store.ts`, `main/settings/*-store.ts`, `main/mcp/store.ts`, and settings IPC / `applySettingsPatch()` in `main/index.ts`. Atomic writes and file locking already exist in `main/models/chat-file.ts`.
-
-**Direction:** Extract shared file persistence primitives. Serialize reading, applying patches, and atomic commits in Main; callers submit actual changes so stale full drafts cannot overwrite other updates. Each feature retains its validation and storage types.
-
-**Acceptance:** Concurrent UI and agent changes preserve both updates; readers always see complete files; failed writes preserve the last saved result. Cover replacement behavior on macOS and Windows.
-
-## 2. Bind asset jobs to the library lifecycle
+## 1. Bind asset jobs to the library lifecycle
 
 **Problem:** `LocalCore.openLibrary()` / `close()` switch or close storage without settling enrichment, embedding, and multimodal jobs. Reproduced with image description: start in library A, switch to B, then receive `Asset not found`; reopening A leaves the record `describing` and the details button disabled.
 
@@ -27,15 +17,15 @@
 
 **Acceptance:** Switching while requests run or queue, closing, and reopening cannot cross library boundaries or leave an operation permanently unavailable for retry.
 
-## 3. Share the multimodal description workflow
+## 2. Share the multimodal description workflow
 
 **Problem:** `core/src/rag/image-vlm.ts`, `video-vlm.ts`, and `audio-writeup.ts` repeat serial queues, cache freshness checks, status transitions, error handling, and record updates.
 
-**Direction:** Complete job lifecycle work in item 2 first, then extract the shared execution flow. Media implementations retain image reading, native video / frame extraction, audio preparation, and their provider contracts. Share status handling without introducing an inheritance hierarchy.
+**Direction:** Complete job lifecycle work in item 1 first, then extract the shared execution flow. Media implementations retain image reading, native video / frame extraction, audio preparation, and their provider contracts. Share status handling without introducing an inheritance hierarchy.
 
 **Acceptance:** All three media types follow consistent cache, failure, cancellation, and notification rules; media-specific input constraints and preparation retain their own coverage.
 
-## 4. Split entry files with mixed responsibilities
+## 3. Split entry files with mixed responsibilities
 
 **Problem:** Feature directories now exist, but `app/src/main/index.ts`, `app/src/renderer/App.tsx`, and `core/src/local-core.ts` still concentrate several responsibilities.
 

@@ -1,33 +1,18 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { JsonFile } from "../storage/file.ts";
 import { defaultGeneralSettings, parseGeneralSettings, type GeneralSettings } from "../../shared/general-settings.ts";
 
 export class GeneralSettingsStore {
-	private readonly filePath: string;
-	private settings = defaultGeneralSettings();
-	private loaded = false;
-
-	constructor(filePath: string) {
-		this.filePath = filePath;
-	}
+	private readonly file: JsonFile<GeneralSettings>;
+	constructor(filePath: string) { this.file = new JsonFile(filePath, parseGeneralSettings); }
 
 	async load(): Promise<GeneralSettings> {
-		if (this.loaded) return this.settings;
-		try {
-			this.settings = parseGeneralSettings(JSON.parse(await readFile(this.filePath, "utf8")));
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			this.settings = defaultGeneralSettings();
-		}
-		this.loaded = true;
-		return this.settings;
+		return await this.file.read() ?? defaultGeneralSettings();
 	}
 
-	async save(settings: GeneralSettings): Promise<GeneralSettings> {
-		this.settings = parseGeneralSettings(settings);
-		this.loaded = true;
-		await mkdir(dirname(this.filePath), { recursive: true });
-		await writeFile(this.filePath, `${JSON.stringify(this.settings, null, "\t")}\n`, "utf8");
-		return this.settings;
+	async save(patch: Partial<GeneralSettings>): Promise<GeneralSettings> {
+		return this.file.update(async (current) => {
+			const next = parseGeneralSettings({ ...current ?? defaultGeneralSettings(), ...patch });
+			return { value: next, result: next };
+		});
 	}
 }

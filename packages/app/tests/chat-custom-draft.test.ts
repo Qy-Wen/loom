@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { ChatCustomProviderConfig, ChatModelsConfig } from "@loom/agent/chat-models";
-import { buildCustomProvider, customModelDraft, customProviderDraft, CustomDraftError, putCustomProvider } from "../src/renderer/settings/chat-custom-draft.ts";
+import type { ChatCustomProviderConfig } from "@loom/agent/chat-models";
+import { buildCustomProvider, customModelDraft, customProviderDraft, CustomDraftError } from "../src/renderer/settings/chat-custom-draft.ts";
 
 const provider = (): ChatCustomProviderConfig => ({
 	kind: "custom", id: "proxy", name: "Proxy", enabled: true, baseUrl: "http://localhost:1234/v1", api: "openai-completions",
@@ -63,14 +63,4 @@ for (const [name, mutate, code] of [
 ] as const) test(`custom editor rejects ${name} without echoing input`, () => {
 	const draft = customProviderDraft(provider()); mutate(draft);
 	assert.throws(() => buildCustomProvider("proxy", draft, provider()), (error) => error instanceof CustomDraftError && error.code === code && !error.message.includes("PRIVATE"));
-});
-
-test("publishing edited models clears a missing remembered choice without selecting a fallback or changing the source", () => {
-	const original = provider();
-	const config: ChatModelsConfig = { version: 1, providers: [original], default: { provider: "proxy", modelId: "demo", thinkingLevel: "high" } };
-	const draft = customProviderDraft(original); draft.models[0]!.id = "changed";
-	const next = putCustomProvider(config, buildCustomProvider(original.id, draft, original));
-	assert.equal(next.default, undefined); assert.equal(config.default!.modelId, "demo");
-	assert.equal(config.providers[0]!.name, "Proxy");
-	assert.equal(putCustomProvider(config, original).default!.modelId, "demo");
 });
