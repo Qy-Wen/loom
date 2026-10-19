@@ -1,44 +1,25 @@
 import assert from "node:assert/strict";
-import { afterEach, test } from "node:test";
-import {
-	createHttpEmbeddingProvider,
-	parseEmbeddingResponse,
-} from "../src/main/models/embedding-provider.ts";
+import { test } from "node:test";
+import { embeddingHttpContract } from "../../core/tests/fixtures/embedding-http-contract.ts";
+import { createHttpEmbeddingProvider } from "../src/main/models/embedding-provider.ts";
 
-const originalFetch = globalThis.fetch;
+const requestUrl = "https://api.example.com/custom-embed/?version=2";
+embeddingHttpContract("production Embedding HTTP contract", (slot) =>
+	createHttpEmbeddingProvider({ ...slot, requestUrl }), requestUrl);
 
-afterEach(() => {
-	globalThis.fetch = originalFetch;
+test("production preserves complete request URLs", async (t) => {
+	for (const url of [requestUrl, "https://api.example.com/v2/embeddings", "http://localhost:8080/custom/"]) {
+		t.mock.method(globalThis, "fetch", async (...[actual]: Parameters<typeof fetch>) => {
+			assert.equal(String(actual), url);
+			return Response.json({ data: [{ embedding: [1, 2] }] });
+		});
+		await createHttpEmbeddingProvider({ requestUrl: ` ${url} `, model: "embed", apiKey: "" }).embed(["a"]);
+		t.mock.restoreAll();
+	}
 });
 
-test("createHttpEmbeddingProvider posts OpenAI-compatible embeddings", async () => {
-	const calls: Array<{ url: string; init: RequestInit }> = [];
-	globalThis.fetch = (async (url, init) => {
-		calls.push({ url: String(url), init: init ?? {} });
-		return new Response(JSON.stringify({
-			data: [
-				{ index: 1, embedding: [0.2, 0.4] },
-				{ index: 0, embedding: [0.1, 0.3] },
-			],
-		}), { status: 200 });
-	}) as typeof fetch;
-
-	const provider = createHttpEmbeddingProvider({
-		requestUrl: "https://api.example.com/custom-embed/?version=2",
-		apiKey: "secret",
-		model: "text-embedding-3-small",
-	});
-	const vectors = await provider.embed(["a", "b"]);
-	assert.deepEqual(vectors, [[0.1, 0.3], [0.2, 0.4]]);
-	assert.equal(calls[0]?.url, "https://api.example.com/custom-embed/?version=2");
-	const headers = new Headers(calls[0]?.init.headers);
-	assert.equal(headers.get("authorization"), "Bearer secret");
-	assert.equal(JSON.parse(String(calls[0]?.init.body)).model, "text-embedding-3-small");
-});
-
-test("parseEmbeddingResponse accepts base64 vectors", () => {
-	const bytes = Buffer.from(new Float32Array([1, 2]).buffer).toString("base64");
-	const vectors = parseEmbeddingResponse(JSON.stringify({ data: [{ embedding: bytes }] }), 1);
-	assert.equal(vectors[0]?.length, 2);
-	assert.ok(Math.abs(vectors[0]![0]! - 1) < 1e-6);
+test("production validates request URLs before making requests", () => {
+	for (const url of ["", "example.com", "file:///tmp/embed", "https://user:pass@example.com/embed", "https://example.com/embed#x"]) {
+		assert.throws(() => createHttpEmbeddingProvider({ requestUrl: url, model: "embed", apiKey: "" }), /Request URL/);
+	}
 });

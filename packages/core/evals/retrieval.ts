@@ -149,6 +149,7 @@ async function main(): Promise<void> {
 			throw new Error("LOOM_EMBED_BASE_URL and LOOM_EMBED_MODEL are required for the live retrieval eval.");
 		}
 		const result = await runRetrievalEval(RETRIEVAL_K, createHttpEmbeddingProvider(slot));
+		console.log("Embedding HTTP: @loom/core/embedding");
 		print(result);
 		if (result.meanRecallByKind.semantic < LIVE_SEMANTIC_MIN_RECALL) {
 			throw new Error(

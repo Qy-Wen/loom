@@ -1,5 +1,5 @@
 // Public library API. Storage and service implementations stay internal.
-// Pure grading helpers and process sandboxing have their own package entry points.
+// HTTP embedding, grading helpers, and process sandboxing have separate package entry points.
 export { LocalCore } from "./local-core.ts";
 export { LibraryPaths } from "./library/paths.ts";
 export { resolveMediaBinary, tryResolveMediaBinaries } from "./media/binaries.ts";

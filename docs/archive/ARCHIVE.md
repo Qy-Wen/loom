@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Shared Embedding HTTP adapter
+
+Production and retrieval evaluation share requests and vector parsing through `@loom/core/embedding`. The app validates complete request URLs without rewriting them; only the evaluation wrapper expands base URLs. Live output identifies the shared adapter.
+
+macOS validation: the same 26 contract cases passed before and after consolidation; workspace typechecks, 150 Core tests (2 Windows cases skipped), 331 App tests, and the app build passed. Offline retrieval Recall@3 and nDCG@3 remain 100%. The live runner also passed against a local HTTP stub (41 requests), identifying the adapter and model. No external model evaluation was run.
+
+---
+
 ## Remembered-command UI interface cleanup
 
 Removed the main/preload/shared `removeCommandAllow` channel, `CommandAllowStore.remove()`, and `commandAllowLabel()`. Per-library grant reads, writes, binding, change notifications, and permission matching remain; tool cards still support always allowing a command.

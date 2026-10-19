@@ -71,7 +71,9 @@ Corpus in `library.ts`: two dozen short markdown files in tight clusters (bike /
 | CI | `eval:retrieval` | Keyword-axis fake `EmbeddingProvider`. Mean Recall@3 must be 1. |
 | Live | `eval:retrieval:live` | OpenAI-compatible `POST /v1/embeddings` from `.env`. |
 
-Live env: `LOOM_EMBED_BASE_URL`, `LOOM_EMBED_MODEL`, optional `LOOM_EMBED_API_KEY`. Same wire as the Embedding slot. Do not read Settings. Report mean Recall by FTS / semantic / property. Fail if **semantic** mean Recall@3 is below **0.5**. Do not require 100% on live. Do not run rerank in this runner. Embed requests batch at most 8 texts (hosted slots often cap at 10–16).
+Live env: `LOOM_EMBED_BASE_URL`, `LOOM_EMBED_MODEL`, optional `LOOM_EMBED_API_KEY`. Live evaluation and the production Embedding slot share `@loom/core/embedding` for HTTP requests and response parsing. Evaluation alone expands a root/version base URL to the embeddings path; the production slot preserves its complete request URL. Live output names the shared adapter.
+
+Do not read Settings. Report mean Recall by FTS / semantic / property. Fail if **semantic** mean Recall@3 is below **0.5**. Do not require 100% on live. Do not run rerank in this runner. Embed requests batch at most 8 texts (hosted slots often cap at 10–16).
 
 ---
 

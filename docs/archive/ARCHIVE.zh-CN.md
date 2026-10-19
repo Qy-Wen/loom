@@ -6,6 +6,14 @@
 
 ---
 
+## 共用 Embedding HTTP 适配器
+
+生产与检索评测通过 `@loom/core/embedding` 共用请求及向量解析。应用校验完整请求 URL 并原样使用，只有评测包装层补齐 base URL 路径。现场评测输出注明共享适配器。
+
+macOS 验证：同一套 26 项契约用例在合并前后均通过；工作区类型检查、Core 150 项测试（跳过 2 项 Windows 用例）、App 331 项测试及应用构建通过。离线检索 Recall@3、nDCG@3 均保持 100%。live runner 通过本地 HTTP 桩验证（41 次请求），输出正确的适配器及模型标识。未运行外部模型评测。
+
+---
+
 ## 命令列表 UI 残留接口清理
 
 删除 `removeCommandAllow` 的 main/preload/shared 通道、`CommandAllowStore.remove()` 和 `commandAllowLabel()`。按库批准记录的读取、写入、绑定、变更通知和权限匹配保留，工具卡片仍可选择始终批准。

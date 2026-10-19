@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { ndcgAtK, recallAtK } from "../evals/metrics.ts";
-import { embeddingFromEnv, embeddingsUrl, parseEmbeddingResponse } from "../evals/http-embed.ts";
+import { embeddingFromEnv, embeddingsUrl } from "../evals/http-embed.ts";
 import { EVAL_FILES } from "../evals/library.ts";
 import { RETRIEVAL_QRELS, retrievalKind } from "../evals/qrels.ts";
 import { RETRIEVAL_K, runRetrievalEval } from "../evals/retrieval.ts";
@@ -23,21 +23,6 @@ test("embeddingsUrl appends /v1/embeddings", () => {
 	assert.equal(embeddingsUrl("http://127.0.0.1:8080"), "http://127.0.0.1:8080/v1/embeddings");
 	assert.equal(embeddingsUrl("http://127.0.0.1:8080/v1"), "http://127.0.0.1:8080/v1/embeddings");
 	assert.equal(embeddingsUrl("http://127.0.0.1:8080/v1/embeddings"), "http://127.0.0.1:8080/v1/embeddings");
-});
-
-test("parseEmbeddingResponse sorts by index", () => {
-	assert.deepEqual(
-		parseEmbeddingResponse(
-			JSON.stringify({
-				data: [
-					{ index: 1, embedding: [0, 1] },
-					{ index: 0, embedding: [1, 0] },
-				],
-			}),
-			2,
-		),
-		[[1, 0], [0, 1]],
-	);
 });
 
 test("recallAtK and ndcgAtK score binary gold paths", () => {

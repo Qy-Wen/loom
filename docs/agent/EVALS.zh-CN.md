@@ -71,7 +71,9 @@ Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。�
 | CI | `eval:retrieval` | 关键词轴假 `EmbeddingProvider`。平均 Recall@3 必须是 1。 |
 | 现场 | `eval:retrieval:live` | `.env` 里的 OpenAI 兼容 `POST /v1/embeddings`。 |
 
-现场环境变量：`LOOM_EMBED_BASE_URL`、`LOOM_EMBED_MODEL`、可选 `LOOM_EMBED_API_KEY`。报文和 Embedding 槽位一样。不读设置页。报告按 FTS / semantic / property 分开算平均 Recall。**semantic** 平均 Recall@3 低于 **0.5** 则失败。现场不要求 100%。这条 runner 不跑 rerank。一次最多 embed 8 条（托管槽位常见上限 10–16）。
+现场环境变量：`LOOM_EMBED_BASE_URL`、`LOOM_EMBED_MODEL`、可选 `LOOM_EMBED_API_KEY`。现场评测与生产 Embedding 槽位共用 `@loom/core/embedding` 的 HTTP 请求和响应解析。只有评测会为根地址或版本 base URL 补齐 embeddings 路径；生产保留配置的完整请求 URL。现场输出注明共享适配器。
+
+不读设置页。报告按 FTS / semantic / property 分开算平均 Recall。**semantic** 平均 Recall@3 低于 **0.5** 则失败。现场不要求 100%。这条 runner 不跑 rerank。一次最多 embed 8 条（托管槽位常见上限 10–16）。
 
 ---
 

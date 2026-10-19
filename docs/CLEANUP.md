@@ -43,14 +43,6 @@
 
 **Acceptance:** UI and tools still share one domain entry; business rules are not duplicated; relevant IPC, desktop, and domain tests pass.
 
-## 5. Align evaluation and production Embedding HTTP implementations
-
-**Problem:** `core/evals/http-embed.ts` and `app/src/main/models/embedding-provider.ts` duplicate requests and response parsing. URL semantics have diverged: evaluation appends an operation path, while production accepts a complete request URL.
-
-**Direction:** Share HTTP request / response adaptation independently of Electron. Explicitly separate evaluation environment-variable URL assembly from production configuration semantics; core must not depend on app. Cover both entry points with the same protocol fixtures before deduplication.
-
-**Acceptance:** Production and evaluation share protocol contract tests; complete URLs are preserved; live evaluation results identify the implementation actually reused.
-
 ---
 
 ## Rules

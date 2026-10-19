@@ -5,6 +5,7 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
+    "./embedding": "./src/rag/http-embedding.ts",
     "./grade": "./src/grade/index.ts",
     "./sandbox": "./src/sandbox/process-sandbox.ts"
   },
