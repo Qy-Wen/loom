@@ -6,6 +6,14 @@
 
 ---
 
+## 废代码与公共函数清理
+
+删除 `NoopGraphHandlers`、app 从历史消息重算 usage 的旧函数与测试，以及未用导入和绑定。评测保留自己的 `usageFromMessage()`。图谱视图复用 `graphBounds()`；审批 span 的创建调用和 Markdown 回调参数位置保留。
+
+macOS 验证：Core、Agent、App 类型检查（含 `noUnusedLocals` / `noUnusedParameters`）通过；单测分别 139、153、316 项通过，Core 另有 2 项 Windows 用例跳过。首轮 Core 目录重命名监听用例超时，整包复跑通过。
+
+---
+
 ## MCP 结果与传输契约
 
 MCP 继续使用官方 SDK。工具发现合并全部分页后统一交给 SDK 缓存，保留各页工具的输出 schema 校验和任务要求；重复游标与超量分页报告失败，连接或工具发现失败时关闭会话。

@@ -3,32 +3,13 @@ import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
-import { cacheHitRate, statsView, usagesFromMessages } from "../src/shared/agent-stats.ts";
+import { cacheHitRate } from "../src/shared/agent-stats.ts";
 import { AgentStatsStore } from "../src/main/chat/agent-stats-store.ts";
 
 describe("cacheHitRate", () => {
 	it("is cacheRead over the prompt token sum", () => {
 		assert.equal(cacheHitRate({ input: 177, cacheRead: 768, cacheWrite: 0 }), 768 / 945);
 		assert.equal(cacheHitRate({ input: 0, cacheRead: 0, cacheWrite: 0 }), 0);
-	});
-});
-
-describe("usagesFromMessages", () => {
-	it("sums assistant usage and ignores other roles", () => {
-		const totals = usagesFromMessages([
-			{ role: "user", content: "hi" },
-			{ role: "assistant", usage: { input: 100, output: 10, cacheRead: 50, cacheWrite: 0 } },
-			{ role: "assistant", usage: { input: 20, output: 5, cacheRead: 80, cacheWrite: 4 } },
-		]);
-		assert.deepEqual(statsView(totals), {
-			turns: 2,
-			input: 120,
-			output: 15,
-			cacheRead: 130,
-			cacheWrite: 4,
-			promptTokens: 254,
-			cacheHit: 130 / 254,
-		});
 	});
 });
 

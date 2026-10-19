@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
-import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, InboxDoc } from "@loom/agent/durable";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent/durable";
 import type { LoomTool } from "@loom/agent";
 import { ChatService } from "../src/main/chat/chat-service.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";

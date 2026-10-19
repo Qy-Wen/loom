@@ -250,7 +250,7 @@ export class DurableTrace {
 				for (const row of pending) {
 					if (trace.record.spans.some((span) => span.name === "loom.approval" && span.endedAt === undefined && span.attributes["pi.tool.call_id"] === row.toolCallId)) continue;
 					const task = [...this.tasks.values()].find((task) => task.conversationId === change.conversationId && task.kind === "pi.tool" && `${task.conversationId}/${(task.input as ToolTaskInput).kind === "model" ? (task.input as { callId: string }).callId : (task.input as { call: { id: string } }).call.id}` === row.toolCallId);
-					const wait = this.span(trace, `approval:${row.toolCallId}:${task?.id ?? "unknown"}:${Date.now()}`, "loom.approval", task ? trace.spans.get(`task:${task.id}`)?.id ?? null : null, { "pi.tool.name": row.toolName, "pi.tool.call_id": row.toolCallId, "loom.conversation_id": change.conversationId });
+					this.span(trace, `approval:${row.toolCallId}:${task?.id ?? "unknown"}:${Date.now()}`, "loom.approval", task ? trace.spans.get(`task:${task.id}`)?.id ?? null : null, { "pi.tool.name": row.toolName, "pi.tool.call_id": row.toolCallId, "loom.conversation_id": change.conversationId });
 				}
 				for (const wait of trace.record.spans.filter((span) => span.name === "loom.approval" && span.attributes["loom.conversation_id"] === change.conversationId && span.endedAt === undefined)) if (!pending.some((row) => row.toolCallId === wait.attributes["pi.tool.call_id"])) this.end(wait as Span, "completed");
 				this.dirty(trace);

@@ -5,6 +5,7 @@ import {
 	GRAPH_PLUS_OFFSET,
 	GRAPH_SELECTED_RADIUS,
 	GRAPH_SNAP_PAD,
+	graphBounds,
 	nearestNode,
 	nodeHitZone,
 } from "./graph-layout.ts";
@@ -114,16 +115,7 @@ export function GraphView({
 	useLayoutEffect(() => {
 		const element = canvasRef.current;
 		if (!element || nodes.length === 0 || fitted.current) return;
-		const bounds = {
-			minX: Math.min(...nodes.map((node) => node.x)) - 72,
-			minY: Math.min(...nodes.map((node) => node.y)) - 72,
-			width: 0,
-			height: 0,
-		};
-		const maxX = Math.max(...nodes.map((node) => node.x)) + 72;
-		const maxY = Math.max(...nodes.map((node) => node.y)) + 72;
-		bounds.width = Math.max(144, maxX - bounds.minX);
-		bounds.height = Math.max(144, maxY - bounds.minY);
+		const bounds = graphBounds(nodes);
 		const scale = Math.min(
 			element.clientWidth / bounds.width,
 			element.clientHeight / bounds.height,

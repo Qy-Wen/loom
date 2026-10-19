@@ -32,7 +32,7 @@ import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView } from "./mcp-settings.ts";
 import type { GeneralSettings } from "./general-settings.ts";
 import type { ModelProbeDraft, ModelSettingsDraft, ModelSettingsView, ProbeResult } from "./model-settings.ts";
-import type { ChatModelsConfig, ChatThinkingLevel } from "@loom/agent/chat-models";
+import type { ChatModelsConfig } from "@loom/agent/chat-models";
 import type { ChatAuthStatus, ChatModelView } from "./chat-models.ts";
 
 export type ChatSettingsView = {

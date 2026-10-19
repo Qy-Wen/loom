@@ -12,7 +12,7 @@ import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
 import { AgUiAdapter } from "../src/main/chat/ag-ui-adapter.ts";
 import { DurableAgentRunner } from "../src/main/chat/durable-agent-runner.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
-import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook, contextUsage } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
 import type { ConversationId } from "@loom/agent";
 import type { AddressInfo } from "node:net";
 import { McpHost } from "../src/main/mcp/host.ts";

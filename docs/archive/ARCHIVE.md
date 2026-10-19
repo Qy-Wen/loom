@@ -6,6 +6,14 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Dead code and shared-function cleanup
+
+Removed `NoopGraphHandlers`, the app's obsolete message-derived usage functions and tests, and unused imports and bindings. Evaluations retain their own `usageFromMessage()`. The graph view reuses `graphBounds()`; approval span creation and Markdown callback argument positions are preserved.
+
+macOS validation: Core, Agent, and App typechecks passed with `noUnusedLocals` / `noUnusedParameters`; 139, 153, and 316 tests passed respectively, with two Windows cases skipped in Core. Core's directory-rename watcher test timed out on the first run; the full package passed on rerun.
+
+---
+
 ## MCP results and transport contracts
 
 MCP uses the official SDK. Tool discovery aggregates all pages before SDK caching, preserving output-schema validation and task requirements for every page. Repeated cursors and excessive pagination fail explicitly; connection or discovery failures close the session.

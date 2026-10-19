@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 import { useLocale } from "../locale.tsx";
-import type { PanelId, PanelRegistration, PanelRegion, PanelSlot } from "./panel-layout.ts";
+import type { PanelRegistration, PanelRegion, PanelSlot } from "./panel-layout.ts";
 import { PANEL_REGIONS } from "./panel-layout.ts";
 import type { usePanelLayout } from "./use-panel-layout.ts";
 

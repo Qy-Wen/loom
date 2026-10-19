@@ -37,19 +37,7 @@
 
 **验收：** 无残留删除通道或展示辅助函数；按库记忆的批准与工具审批仍正常工作。
 
-## 4. 清理废代码并接回已有公共函数
-
-| 位置 / 符号 | 处理 |
-| --- | --- |
-| `core/src/library/handlers.ts`：`NoopGraphHandlers` | 无引用，删除。 |
-| `app/src/shared/agent-stats.ts`：`usagesFromMessages()` | 仅测试调用，生产统计走事件累计；删除该函数及对应旧测试，保留评测仍使用的 `usageFromMessage()`。 |
-| `app/src/renderer/workbench/graph-layout.ts`：`graphBounds()` | 仅测试调用，`graph-view.tsx` 手写相同边界计算；让生产代码复用该函数。 |
-| `work-panel.tsx` 的 `PanelId`、`shared/ipc.ts` 的 `ChatThinkingLevel`、`local-core.ts` 的 `AssetPropertyFilter` | 删除未用导入。 |
-| `agent/src/trace/durable-trace.ts` 的 `const wait = this.span(...)` | 删除未用绑定，保留创建 span 的调用。 |
-
-**验收：** 检查 `noUnusedLocals` / `noUnusedParameters`，逐项处理自有代码和测试中的诊断；回调所需的参数位置与有副作用的调用必须保留。内存 store、测试注入接口不能仅因没有生产调用而删除。
-
-## 5. 整合多模态描述服务的公共流程
+## 4. 整合多模态描述服务的公共流程
 
 **问题：** `core/src/rag/image-vlm.ts`、`video-vlm.ts`、`audio-writeup.ts` 重复维护串行队列、缓存新鲜度、状态转换、错误处理和记录更新。
 
@@ -57,7 +45,7 @@
 
 **验收：** 三类媒体的缓存命中、失败、取消和状态通知使用一致规则；媒体特有的输入限制与处理方式继续由各自测试覆盖。
 
-## 6. 拆分职责过多的入口文件
+## 5. 拆分职责过多的入口文件
 
 **问题：** 目录已经按功能分组，但 `app/src/main/index.ts`、`app/src/renderer/App.tsx`、`core/src/local-core.ts` 仍集中多个职责。
 
@@ -65,7 +53,7 @@
 
 **验收：** UI 和工具继续通过同一领域入口工作；无重复业务规则，相关 IPC、桌面流程和领域测试通过。
 
-## 7. 对齐 Embedding 评测与生产 HTTP 实现
+## 6. 对齐 Embedding 评测与生产 HTTP 实现
 
 **问题：** `core/evals/http-embed.ts` 与 `app/src/main/models/embedding-provider.ts` 重复实现请求和响应解析，URL 语义已分叉：评测自动补路径，生产使用完整请求 URL。
 

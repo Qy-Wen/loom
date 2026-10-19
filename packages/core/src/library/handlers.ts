@@ -15,13 +15,6 @@ export interface GraphHandlers {
 	handleUpdated(asset: Asset, previous: Asset): Promise<void>;
 }
 
-export class NoopGraphHandlers implements GraphHandlers {
-	async handleAdded(): Promise<void> {}
-	async handleRemoved(): Promise<void> {}
-	async handleMoved(): Promise<void> {}
-	async handleUpdated(): Promise<void> {}
-}
-
 /** Keeps graph nodes in sync with library add/remove. Path changes stay on SQLite. */
 export class StoreGraphHandlers implements GraphHandlers {
 	private readonly graph: GraphStore;

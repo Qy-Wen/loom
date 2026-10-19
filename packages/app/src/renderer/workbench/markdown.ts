@@ -16,7 +16,7 @@ markdown.use(texmath, {
 	katexOptions: { throwOnError: false },
 });
 
-const defaultLinkOpen = markdown.renderer.rules.link_open ?? ((tokens, idx, options, env, self) => {
+const defaultLinkOpen = markdown.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
 });
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
@@ -30,7 +30,7 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 	return defaultLinkOpen(tokens, idx, options, env, self);
 };
 
-const defaultFence = markdown.renderer.rules.fence ?? ((tokens, idx, options, env, self) => {
+const defaultFence = markdown.renderer.rules.fence ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
 });
 markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
@@ -41,7 +41,7 @@ markdown.renderer.rules.fence = (tokens, idx, options, env, self) => {
 	return defaultFence(tokens, idx, options, env, self);
 };
 
-const defaultImage = markdown.renderer.rules.image ?? ((tokens, idx, options, env, self) => {
+const defaultImage = markdown.renderer.rules.image ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
 });
 markdown.renderer.rules.image = (tokens, idx, options, env, self) => {

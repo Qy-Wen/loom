@@ -32,7 +32,6 @@ import type {
 import {
 	toSearchItem,
 	type AssetDetailResult,
-	type AssetPropertyFilter,
 	type AssetPropertyView,
 	type AssetLinkView,
 	type AssetRelationView,

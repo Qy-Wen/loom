@@ -37,19 +37,7 @@
 
 **Acceptance:** No obsolete removal channel or display helper remains; per-library remembered grants and tool approvals still work.
 
-## 4. Remove dead code and reconnect existing shared functions
-
-| Location / symbol | Action |
-| --- | --- |
-| `core/src/library/handlers.ts`: `NoopGraphHandlers` | No references; delete. |
-| `app/src/shared/agent-stats.ts`: `usagesFromMessages()` | Tests only; production totals accumulate from events. Delete the function and its old tests; retain `usageFromMessage()`, which evaluations still use. |
-| `app/src/renderer/workbench/graph-layout.ts`: `graphBounds()` | Tests only, while `graph-view.tsx` repeats its bounds calculation. Use the helper in production. |
-| `PanelId` in `work-panel.tsx`, `ChatThinkingLevel` in `shared/ipc.ts`, `AssetPropertyFilter` in `local-core.ts` | Delete unused imports. |
-| `const wait = this.span(...)` in `agent/src/trace/durable-trace.ts` | Remove the unused binding; retain the span creation call. |
-
-**Acceptance:** Check `noUnusedLocals` / `noUnusedParameters` and resolve diagnostics in owned code and tests. Preserve required callback parameter positions and calls with side effects. Do not delete memory stores or test injection interfaces solely because production does not call them.
-
-## 5. Share the multimodal description workflow
+## 4. Share the multimodal description workflow
 
 **Problem:** `core/src/rag/image-vlm.ts`, `video-vlm.ts`, and `audio-writeup.ts` repeat serial queues, cache freshness checks, status transitions, error handling, and record updates.
 
@@ -57,7 +45,7 @@
 
 **Acceptance:** All three media types follow consistent cache, failure, cancellation, and notification rules; media-specific input constraints and preparation retain their own coverage.
 
-## 6. Split entry files with mixed responsibilities
+## 5. Split entry files with mixed responsibilities
 
 **Problem:** Feature directories now exist, but `app/src/main/index.ts`, `app/src/renderer/App.tsx`, and `core/src/local-core.ts` still concentrate several responsibilities.
 
@@ -65,7 +53,7 @@
 
 **Acceptance:** UI and tools still share one domain entry; business rules are not duplicated; relevant IPC, desktop, and domain tests pass.
 
-## 7. Align evaluation and production Embedding HTTP implementations
+## 6. Align evaluation and production Embedding HTTP implementations
 
 **Problem:** `core/evals/http-embed.ts` and `app/src/main/models/embedding-provider.ts` duplicate requests and response parsing. URL semantics have diverged: evaluation appends an operation path, while production accepts a complete request URL.
 

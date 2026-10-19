@@ -44,32 +44,3 @@ export function addUsage(left: AgentUsageTotals, right: Omit<AgentUsageTotals, "
 		cacheWrite: left.cacheWrite + right.cacheWrite,
 	};
 }
-
-export function usageFromMessage(message: Record<string, unknown> | undefined): Omit<AgentUsageTotals, "turns"> | undefined {
-	if (!message || message.role !== "assistant") return undefined;
-	const usage = message.usage;
-	if (typeof usage !== "object" || usage === null) return undefined;
-	const row = usage as Record<string, unknown>;
-	const input = asFinite(row.input);
-	if (input === undefined) return undefined;
-	return {
-		input,
-		output: asFinite(row.output) ?? 0,
-		cacheRead: asFinite(row.cacheRead) ?? 0,
-		cacheWrite: asFinite(row.cacheWrite) ?? 0,
-	};
-}
-
-export function usagesFromMessages(messages: readonly unknown[]): AgentUsageTotals {
-	let totals = emptyUsageTotals();
-	for (const message of messages) {
-		if (typeof message !== "object" || message === null) continue;
-		const usage = usageFromMessage(message as Record<string, unknown>);
-		if (usage) totals = addUsage(totals, usage);
-	}
-	return totals;
-}
-
-function asFinite(value: unknown): number | undefined {
-	return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
