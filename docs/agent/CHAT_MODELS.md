@@ -3,7 +3,7 @@
 # Full Chat Model Integration with pi-ai
 
 > Status: the native runtime owns production Chat; legacy endpoint compatibility is removed. Windows automated tests, OS encryption/mock OAuth callbacks, and live native DeepSeek chat are verified. Real OAuth, other native services, and installer acceptance remain.
-> Current behavior: [AGENT](./AGENT.md), [SETTINGS](../SETTINGS.md). Baseline: installed `@earendil-works/pi-ai@1.1.0`; reference sources: `agent/pi/packages/ai` and `agent/pi/packages/coding-agent/src/core`.
+> Current behavior: [AGENT](./AGENT.md), [SETTINGS](../SETTINGS.md). Baseline: installed `@earendil-works/pi-ai@1.4.0`; reference sources: `agent/pi/packages/ai` and `agent/pi/packages/coding-agent/src/core`.
 
 ## 1. Scope and decisions
 
@@ -79,7 +79,7 @@ Proposed storage in Electron `userData`, never the library:
 ### 4.3 Catalog reads and refresh
 
 - Bundled static catalogs allow offline browsing. Only refresh-capable Providers use `Models.refresh()` for dynamic listings; restore cached listings with `allowNetwork: false`.
-- **Not every built-in Provider in pi-ai 1.1.0 refreshes its catalog over the network.** Pi CLI's online catalog overlays are not a generic pi-ai API. Do not build another catalog service in this scope.
+- **Not every built-in Provider in pi-ai 1.4.0 refreshes its catalog over the network.** Pi CLI's online catalog overlays are not a generic pi-ai API. Do not build another catalog service in this scope.
 - Refresh availability after login, credential replacement, and explicit catalog refresh. Keep the previous catalog on network failure and show errors/sources without clearing selections. Queries/refresh support cancellation and timeouts.
 - Catalog presence, configured auth, and successful inference are separate states. Keep missing model references in conversation DTOs, marked unavailable.
 
@@ -132,7 +132,7 @@ Proposed storage in Electron `userData`, never the library:
 
 ### Verified
 
-- pi-ai 1.1.0 has 42 built-in Providers, 41 with Chat models; **only Radius has native dynamic catalog refresh**. Nine factories advertise OAuth: Anthropic, GitHub Copilot, Kimi Coding, Meta, OpenAI, OpenAI Codex, OpenRouter, Radius, xAI.
+- pi-ai 1.4.0 has 42 built-in Providers, 41 with Chat models; **only Radius has native dynamic catalog refresh**. Nine factories advertise OAuth: Anthropic, GitHub Copilot, Kimi Coding, Meta, OpenAI, OpenAI Codex, OpenRouter, Radius, xAI.
 - Thin model overlays preserve native auth, OAuth model filtering, dynamic publication/offline cache, mixed protocol dispatch, and untouched capability/pricing metadata. OAuth-derived endpoints such as Copilot's take priority over static model endpoints; proxy settings must not silently override them.
 - Offline payload construction passes for OpenAI Responses, Anthropic Messages, Google Generative AI, DeepSeek Chat Completions, and Copilot's three protocols. These are not hosted inference acceptance tests.
 - `Provider.headers` is metadata in the installed version; modifying it alone does not apply request headers. Use model headers/public request options and retain pi-ai merge precedence.
@@ -141,7 +141,7 @@ Proposed storage in Electron `userData`, never the library:
 
 ### Packaging
 
-Flattening pi-ai breaks OAuth's opaque relative imports. Isolated builds reproduce the old layout and verify the retained npm package. P1 now declares pi-ai 1.1.0 directly in app dependencies, enabling the existing externalization policy; the app build passes. Final installer/package-content validation remains P2/P5; OAuth imports must not resolve under app `out/main`. Windows on-device and real login remain untested.
+Flattening pi-ai breaks OAuth's opaque relative imports. Isolated builds reproduce the old layout and verify the retained npm package. The app declares pi-ai 1.4.0 directly in its dependencies, enabling the existing externalization policy; the app build passes. Final installer/package-content validation remains P2/P5; OAuth imports must not resolve under app `out/main`. Windows on-device and real login remain untested.
 
 ### Approved request semantics (A)
 

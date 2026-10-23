@@ -17,9 +17,9 @@ const native = (id: string): Provider => {
 const oauth: Credential = { type: "oauth", access: "p0-fake-access", refresh: "p0-fake-refresh", expires: Date.now() + 3_600_000 };
 
 // These are version-pinned probes, not promises about all future pi-ai versions.
-test("P0: installed pi-ai 1.1.0 catalog has native protocols, nine OAuth providers, and only Radius refresh", () => {
+test("P0: installed pi-ai 1.4.0 catalog has native protocols, nine OAuth providers, and only Radius refresh", () => {
 	const aiPackage = JSON.parse(readFileSync(new URL("../package.json", import.meta.resolve("@earendil-works/pi-ai")), "utf8")) as { version: string };
-	assert.equal(aiPackage.version, "1.1.0");
+	assert.equal(aiPackage.version, "1.4.0");
 	assert.equal(catalog.length, 42);
 	assert.equal(catalog.filter((provider) => provider.getModels().length > 0).length, 41);
 	assert.deepEqual(catalog.filter((provider) => provider.auth.oauth).map((provider) => provider.id).sort(), [

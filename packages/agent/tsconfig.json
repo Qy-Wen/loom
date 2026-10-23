@@ -14,5 +14,5 @@
       "#vendor/pi-durable/storage/jsonl/node": ["./vendor-pi-durable/src/storage/jsonl/node.ts"]
     }
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "evals/**/*.ts", "vendor-tests/**/*.ts", "vendor-pi-durable/src/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "tests/**/*.ts", "evals/**/*.ts", "vendor-tests/**/*.ts"]
 }

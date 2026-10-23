@@ -37,7 +37,7 @@ function TraceRow(): React.JSX.Element {
 }
 
 function payloadLabels(name: string): { input: string; output: string } {
-	if (name === "pi.ai.request") return { input: "Sent", output: "Reply" };
+	if (name === "pi.ai.request" || name === "pi.ai.poll") return { input: "Sent", output: "Reply" };
 	return { input: "Arguments", output: "Result" };
 }
 
@@ -72,26 +72,26 @@ function PayloadText({ text, blobs }: { text: string; blobs: Readonly<Record<str
 
 function SpanPayload({ span, blobs }: { span: LoomTraceSpan; blobs: Readonly<Record<string, string>> | undefined }): React.JSX.Element {
 	const payload = spanPayload(span);
-	if (!payload) return <p className="trace-empty">No payload.</p>;
 	const labels = payloadLabels(span.name);
 	return (
 		<div>
-			{span.name === "pi.ai.request" ? <p className="trace-empty">
-				Cache read: {String(span.attributes["pi.ai.usage.cache_read_tokens"] ?? 0)} · Cache write: {String(span.attributes["pi.ai.usage.cache_write_tokens"] ?? 0)}
+			{span.name === "pi.ai.request" || span.name === "pi.ai.poll" ? <p className="trace-empty">
+				Cache read: {String(span.attributes["usage.cache_read"] ?? 0)} · Cache write: {String(span.attributes["usage.cache_write"] ?? 0)}
 			</p> : null}
-			{typeof span.attributes["pi.tool.duration_ms"] === "number" ? <p className="trace-empty">Execution: {formatTraceDuration(span.attributes["pi.tool.duration_ms"])} (task time includes approval/waits)</p> : null}
-			{payload.input ? (
+			{payload?.input ? (
 				<section>
 					<h3>{labels.input}</h3>
 					<PayloadText text={payload.input} blobs={blobs} />
 				</section>
 			) : null}
-			{payload.output ? (
+			{payload?.output ? (
 				<section>
 					<h3>{labels.output}</h3>
 					<pre>{payload.output}</pre>
 				</section>
 			) : null}
+			{typeof span.attributes["loom.tool.duration_ms"] === "number" ? <p className="trace-empty">Execution: {formatTraceDuration(span.attributes["loom.tool.duration_ms"])}</p> : null}
+			<details><summary>Metadata and events</summary><pre>{JSON.stringify({ attributes: Object.fromEntries(Object.entries(span.attributes).filter(([key]) => !key.startsWith("loom.io."))), status: span.status, interrupted: span.interrupted, events: span.events, links: span.links }, null, 2)}</pre></details>
 		</div>
 	);
 }

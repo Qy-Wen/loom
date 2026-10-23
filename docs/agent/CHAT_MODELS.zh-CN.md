@@ -3,7 +3,7 @@
 # Chat 模型完整接入 pi-ai
 
 > 状态：原生运行时已接管生产 Chat，旧端点兼容路径已移除。Windows 自动测试、系统加密/模拟 OAuth 回调和原生 DeepSeek 真实对话已验收；真实 OAuth、其他原生服务及安装包验收仍待完成。
-> 当前实现见 [AGENT](./AGENT.zh-CN.md)、[SETTINGS](../SETTINGS.zh-CN.md)。依据项目安装的 `@earendil-works/pi-ai@1.1.0`；参考实现位于 `agent/pi/packages/ai` 和 `agent/pi/packages/coding-agent/src/core`。
+> 当前实现见 [AGENT](./AGENT.zh-CN.md)、[SETTINGS](../SETTINGS.zh-CN.md)。依据项目安装的 `@earendil-works/pi-ai@1.4.0`；参考实现位于 `agent/pi/packages/ai` 和 `agent/pi/packages/coding-agent/src/core`。
 
 ## 1. 范围与确定的原则
 
@@ -79,7 +79,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 ### 4.3 目录读取与刷新
 
 - 随包静态目录保证离线浏览。只有具有 refresh 能力的 Provider 才通过 `Models.refresh()` 获取动态目录，缓存恢复可用 `allowNetwork: false`。
-- **pi-ai 1.1.0 并非所有内置 Provider 都具有联网目录刷新能力。** 不将 pi CLI 的在线目录覆盖能力误当成 pi-ai 的通用 API；不在本次另建目录服务。
+- **pi-ai 1.4.0 并非所有内置 Provider 都具有联网目录刷新能力。** 不将 pi CLI 的在线目录覆盖能力误当成 pi-ai 的通用 API；不在本次另建目录服务。
 - 刷新、登录完成、凭据替换后更新可用模型；网络失败保留旧目录并显示错误/来源，不清空选择。查询与刷新支持取消和超时。
 - 目录存在、鉴权已配置、实际调用成功是三个不同状态。失效模型可保留在会话 DTO 中，但标记不可用。
 
@@ -132,7 +132,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 
 ### 已验证
 
-- pi-ai 1.1.0 共 42 个内置 Provider，其中 41 个具有 Chat 模型；**只有 Radius 有原生动态目录刷新**。OAuth 工厂有 9 个：Anthropic、GitHub Copilot、Kimi Coding、Meta、OpenAI、OpenAI Codex、OpenRouter、Radius、xAI。
+- pi-ai 1.4.0 共 42 个内置 Provider，其中 41 个具有 Chat 模型；**只有 Radius 有原生动态目录刷新**。OAuth 工厂有 9 个：Anthropic、GitHub Copilot、Kimi Coding、Meta、OpenAI、OpenAI Codex、OpenRouter、Radius、xAI。
 - 薄模型覆盖可保留原生 auth、OAuth 可用模型过滤、动态发布/离线缓存、混合协议分发与未覆盖的能力/价格字段。Copilot 等 OAuth 的鉴权派生地址优先于静态模型地址；代理配置不能偷偷覆盖它。
 - OpenAI Responses、Anthropic Messages、Google Generative AI、DeepSeek Chat Completions 和 Copilot 的三种协议完成离线 payload 构造测试；这些不是远端推理验收。
 - `Provider.headers` 在安装版本中只是元数据，不能仅修改这个字段就认为 headers 已发送；需要通过模型 headers 或公开请求选项应用，保留 pi-ai 的合并优先级。
@@ -141,7 +141,7 @@ pi-durable Harness：会话选择、生成、压缩与恢复
 
 ### 打包
 
-打平 pi-ai 会破坏 OAuth 的 opaque 相对 import；隔离构建已复现旧布局并验证完整 npm 包可解决。P1 已将 pi-ai 1.1.0 加入 app 直接依赖，启用现有 externalization 策略，app 构建通过。最终安装包及内容验证仍属 P2/P5，OAuth import 不能指向 app 的 `out/main`。Windows 实机与真实登录尚未验证。
+打平 pi-ai 会破坏 OAuth 的 opaque 相对 import；隔离构建已复现旧布局并验证完整 npm 包可解决。app 直接依赖 pi-ai 1.4.0，启用现有 externalization 策略，app 构建通过。最终安装包及内容验证仍属 P2/P5，OAuth import 不能指向 app 的 `out/main`。Windows 实机与真实登录尚未验证。
 
 ### 已确认的请求语义（A）
 

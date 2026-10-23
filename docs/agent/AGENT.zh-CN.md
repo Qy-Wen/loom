@@ -62,6 +62,7 @@ git merge vendor-clean
 - `ChatService` 先安装资源、清理过期审批、记录 usage 基线，再调用原生 `resume()`。
 - 新独立会话使用库 cwd 和当前 Chat/instructions 默认值。模型默认值也用于补齐未选模型的会话，已保存的选择不变；会话可在输入区切换模型与思考强度，忙碌时拒绝切换。fork 保留 as-of agent 配置。常驻指令更新现有会话及后续默认值；工具通过 registry extension 原地替换。
 - `LoomConversationDoc` 保存最新 title/archive/hidden/创建时间，不进入模型上下文。fork 标题追加 `（分支）`，清除 archive/hidden，不改变来源。
+- Loom 元数据、审批和冻结的 memory 使用 `history: "latest"`，每次普通变更保存完整快照；SQLite 会清理这些当前状态文档的旧存储版本。
 - 聊天 DTO 使用原生 `conversation.entries()` 分页读取 fork-aware 完整历史，不使用压缩后的 `context().entries`；压缩摘要不充当用户消息。列表和记录的更新时间取最后一条非 system/compaction 消息。
 - fork-before 从完整历史取目标之前的 entry，首个问题使用初始 anchor，被压缩的旧消息也可分叉。branch-before 创建 fork 并归档来源。关闭空会话（无聊天消息或待处理输入）直接隐藏，不进入历史；有消息的会话仍归档。内部起始/system 记录不算聊天，fork 继承的消息算。删除只隐藏，保留祖先历史和已写入的文件。
 - `.loom/` 下的旧目录一律忽略，不读取也不删除。

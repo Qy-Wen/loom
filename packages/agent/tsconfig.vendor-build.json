@@ -9,5 +9,13 @@
     "declaration": true,
     "declarationMap": true
   },
-  "include": ["vendor-pi-durable/src/**/*.ts"]
+  "include": [
+    "vendor-pi-durable/src/index.ts",
+    "vendor-pi-durable/src/tools/index.ts",
+    "vendor-pi-durable/src/codemode/index.ts",
+    "vendor-pi-durable/src/env/node.ts",
+    "vendor-pi-durable/src/images/node.ts",
+    "vendor-pi-durable/src/storage/sqlite/node.ts",
+    "vendor-pi-durable/src/storage/jsonl/node.ts"
+  ]
 }

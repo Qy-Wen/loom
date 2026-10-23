@@ -67,9 +67,11 @@ pnpm -r typecheck
 
 ## Vendor：pi durable 引擎
 
-Loom 从上游 `main` 同一 commit 源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/main/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。Loom 自有代码放在 vendor `src/` 之外，`src/durable-adapter.ts` 是 import 边界。`@loom/agent` 装配每库一个 SQLite Harness/Registry、document 元数据/审批/memory、skills section 和前台归属 specialist。App 使用原生 durable 事件与 fork-aware 完整聊天历史，独立于模型压缩；fork 标题追加 `（分支）`，默认未归档。
+Loom 从上游 `v1.4.0`（`4a080252`）源码级 vendor pi 的 [`packages/durable`](https://github.com/earendil-works/pi/tree/v1.4.0/packages/durable) 与 `packages/codemode`，分别放在 `packages/agent/vendor-pi-durable/` 和 `vendor-pi-codemode/`。Loom 自有代码放在 vendor `src/` 之外，`src/durable-adapter.ts` 是 import 边界。`@loom/agent` 装配每库一个 SQLite Harness/Registry、document 元数据/审批/memory、skills section 和前台归属 specialist。App 使用原生 durable 事件与 fork-aware 完整聊天历史，独立于模型压缩；fork 标题追加 `（分支）`，默认未归档。
 
-全仓库类型检查/测试通过。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.agents/traces/traces.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+pi-ai、Chord、telemetry 与 vendored codemode 版本统一为 `1.4.0`。打开已有库会自动将 durable SQLite schema v1 升到 v2，以支持休眠任务；升级后的数据库无法用旧版 durable 打开。如需保留回退能力，请在首次用此版本打开前关闭 Loom，并备份库内的 `.loom/` 目录。
+
+全仓库类型检查与 vendor 检查通过；Windows 设置持久化并发测试目前存在 `rename EPERM` 失败。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.agents/traces/telemetry.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 
@@ -97,4 +99,4 @@ pnpm --filter @loom/agent build:vendor       # 先构建 codemode，再构建 du
 pnpm --filter @loom/agent test:vendor:build  # 验证编译后 JS 与 worker
 ```
 
-源码测试无需预先构建。编译产物检查通过 `--conditions=loom-vendor-build` 选择 codemode 的 JS exports；开发默认使用源码 exports。旧 Loom 测试、eval 与 app 要等 harness import 迁移后才能运行。
+类型检查从 Loom 入口沿 import 检查依赖，vendor 构建从 Node 入口开始；未使用的 IndexedDB 等平台适配器不作为编译入口。源码测试无需预先构建。编译产物检查通过 `--conditions=loom-vendor-build` 选择 codemode 的 JS exports；开发默认使用源码 exports。旧 Loom 测试、eval 与 app 要等 harness import 迁移后才能运行。

@@ -20,6 +20,7 @@ export const LoomConversationDoc = defineDoc<LoomConversationMetadata>({
 	history: "latest",
 	fork: "current",
 	initial: () => ({ title: DEFAULT_SESSION_TITLE, archived: false, hidden: false, createdAt: 0 }),
+	checkpointWhen: () => true,
 });
 
 /** Called inside every creation commit, including raw Tx creation and native Conversation.fork(). */

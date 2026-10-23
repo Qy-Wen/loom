@@ -99,6 +99,7 @@ export class ChatService {
 		this.#agentDefaults.instructions = this.#instructions;
 		try { this.runtime = await LibraryRuntime.open(root, {
 			models: this.#trace?.models(this.#models) ?? this.#models, resume: false, extensions: [assembly.extension, permission, ...assembly.specialists, ...sharedExtensions],
+			telemetry: this.#trace?.telemetry,
 			settings: { extensions: [assembly.extension, permission, ...sharedExtensions] },
 			agent: this.#agentDefaults,
 			conversationCreated: async (tx, record) => {
@@ -110,7 +111,7 @@ export class ChatService {
 		catch (error) { this.#trace?.stop(); this.#trace = undefined; throw error; }
 		if (this.#trace) {
 			try {
-				await this.#trace.start(this.runtime.harness);
+				this.#trace.attach(this.runtime.harness);
 				for (const record of this.#trace.store.list().reverse()) this.#tracePublisher?.(record);
 			}
 			catch { this.#trace.stop(); this.#trace = undefined; }

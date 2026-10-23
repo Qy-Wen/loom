@@ -33,6 +33,7 @@ const Metadata = defineDoc<{ title: string }>({
 	history: "latest",
 	fork: "initial",
 	initial: () => ({ title: "Untitled" }),
+	checkpointWhen: () => false,
 });
 
 function chat() {

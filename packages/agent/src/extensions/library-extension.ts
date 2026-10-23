@@ -22,6 +22,7 @@ export const LoomMemoryDoc = defineDoc<{ snapshot: string }>({
 	history: "latest",
 	fork: "current",
 	initial: () => ({ snapshot: "" }),
+	checkpointWhen: () => true,
 });
 
 export type LibraryExtensionOptions = {

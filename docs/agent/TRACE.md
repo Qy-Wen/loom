@@ -2,28 +2,34 @@
 
 # Local Agent Traces
 
-Development mode records traces in `<library>/.agents/traces/traces.sqlite`. The Traces window shows the current library's latest 40 runs and can load older pages. Switching libraries resets the view. Records survive renderer reloads and app restarts; there is no automatic deletion or upload. Production builds do not enable recording or include the trace window.
+Development mode records traces in `<library>/.agents/traces/telemetry.sqlite`. Records and metrics expire 30 days after their last update; cleanup runs on open and every minute. The viewer shows the latest 40 traces and supports pagination. Switching libraries resets it. Production builds do not record or include the trace window. No data is uploaded.
 
-## Boundaries
+The old `traces.sqlite` is left untouched and is not read or migrated.
 
-- `DurableTrace` is a Loom-owned extension and commit observer. It follows submission/task/conversation ownership, including parallel specialists and nested calls; it never schedules, retries, or changes model context.
-- `traceModels()` observes public `Models` requests, compaction requests, and deferred polls. It forwards the original options, events, and results without consuming ahead of durable. A diagnostic failure must not fail Chat.
-- SQLite WAL stores atomic record revisions independently of `.loom/loom.sqlite`. Request starts are saved before provider dispatch; live updates coalesce at 100 ms and settled boundaries flush. This is diagnostic storage, not a recovery checkpoint or a distributed transaction with durable; a crash can lose the latest diagnostic update.
-- Task timing uses native `startedAt`/`endedAt`; tool `durationMs` measures execution separately from approval/task lifetime. First-content timing is Pi content observation, not HTTP TTFT. HTTP headers, status, and raw wire payloads are not captured.
+## Recording
+
+- Pass `DurableTrace.telemetry` through `LibraryRuntime` to `HarnessOptions.telemetry`. Pi supplies submission/phase/request/poll instrumentation, events, metric updates, and persisted context propagation.
+- `LiveTelemetry` implements the native adapter contract: span identities, timing, links, attributes, events, statuses, and metric aggregation. It persists unfinished spans for live display and crash diagnostics; native Chord SQLite stores only settled spans.
+- `DurableTrace.models()` adds redacted input/output to the existing native request span. It creates no request spans and does not infer task identity from signals or checkpoints.
+- Tool hooks add arguments and results. The commit content observer adds final bounded tool output, including blocked/interrupted diagnostics. `DurableTrace` derives submission summaries only from committed state and owns the viewer's status rules; the recorder does not interpret durable events. `ToolGate` records `loom.approval` around approval waits.
+- Native input submissions are separate root traces. Specialist inputs link to their calling tool; the viewer shows those links. Nested tools use native parentage within a trace.
+- SQLite WAL is independent of `.loom/loom.sqlite`. Starts are saved before request dispatch; content updates coalesce at 100 ms and native settlement flushes. A diagnostic write failure disables recording while Chat continues.
+
+After a crash, unfinished spans become `interrupted`. Native carriers reconnect recovered work to the same trace; interrupted attempts remain visible. Tracing never schedules or replays tools.
 
 ## Contents and privacy
 
-Each root run contains generation, model-request, tool, approval-wait, retry, and compaction spans. Background/manual compaction has its own record. Model spans include model/provider/API, stop reason, response identity when available, token/cache usage, and bounded input/output. A request keeps its latest 200 messages, each limited on its own, so the user's message stays visible. Long text in system sections and tool definitions shows a 600-character preview with an **Expand** button; the full text sits in the record's `blobs`, stored once per distinct text, and is still redacted. Tool results include committed diagnostics. The window updates existing records by revision.
+Native metadata includes model/provider/API, stop reason, response ID, usage/cost, first-chunk events, phase outcomes, and bounded errors. Counters and histograms aggregate into ten-second intervals.
 
-Known Chat keys and common credential fields/patterns are redacted before saving. Images, signatures, and headers are omitted. Each other input/output field is limited to approximately 8 KiB of UTF-8 text, and a cut says how many bytes it dropped; an expandable text is capped at 4 MiB. **This is best-effort redaction, not anonymization:** prompts, memory, source text, file paths, and tool output may still contain private information. The local database is not encrypted; protect the library and do not share its traces indiscriminately.
+Input/output uses the existing redaction policy: known Chat secrets and credential patterns are removed; images, signatures, and headers are omitted. Requests keep the latest 200 messages, each independently bounded. Long system/tool text shows a 600-character preview with an Expand button; deduplicated redacted full text is capped at 4 MiB. Ordinary payload fields are bounded to about 8 KiB.
 
-After a crash, unfinished spans become `interrupted`. Native recovery reconnects to the same persisted trace and adds a fresh model attempt, retaining the interrupted attempt. Unsafe tools retain their uncertain result rather than being rerun by tracing.
+This is best-effort redaction, not anonymization: prompts, memory, paths, and tool output can contain private information. The local database is not encrypted.
 
 ## Validation
 
-Tests use temporary libraries and cover consecutive runs, live updates before completion, ownership, approvals/reopen, retry, deferred polls, compaction, Stop, diagnostic failure isolation, privacy, pagination, and SIGKILL during streaming/unsafe tools.
+Coverage includes the native adapter conformance suite, propagation/links, live and SIGKILL recovery, approvals, retry, deferred polls, compaction, diagnostic failure isolation, redaction, pagination, and 30-day cleanup.
 
-Isolated Electron window acceptance (never use an asset library):
+Isolated Electron acceptance uses a temporary library and a local mock model:
 
 ```bash
 LOOM_E2E_TRACE=1 pnpm --filter @loom/app build
@@ -31,4 +37,4 @@ cd packages/app
 LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
 ```
 
-On Windows, set `LOOM_E2E_TRACE=1` using your shell's environment syntax. The acceptance flag only enables the test window when `LOOM_E2E=1`; normal production builds still omit it. Windows on-device validation remains outstanding.
+On Windows, set the variable with the shell's environment syntax. Normal production builds omit the trace window.

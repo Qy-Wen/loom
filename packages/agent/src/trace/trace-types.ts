@@ -1,12 +1,7 @@
-import type { SpanAttributes, SpanStatus } from "@earendil-works/pi-telemetry";
+import type { StoredSpan } from "@earendil-works/pi-telemetry";
 
-/** Shared span DTO for durable diagnostics, persistence, and the dev-trace UI. */
-export interface LoomTraceSpan {
-	readonly id: number;
-	readonly parentId: number | null;
-	readonly name: string;
-	readonly attributes: Readonly<SpanAttributes>;
-	readonly status: SpanStatus;
-	readonly startedAt: number;
-	readonly endedAt?: number;
-}
+/** Native span snapshot, also available before settlement for live and crash diagnostics. */
+export type LoomTraceSpan = Omit<StoredSpan, "endedMs"> & {
+	readonly endedMs?: number;
+	readonly interrupted?: boolean;
+};

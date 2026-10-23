@@ -2,28 +2,34 @@
 
 # 本地 Agent Trace
 
-开发模式将 trace 保存到 `<素材库>/.agents/traces/traces.sqlite`。Traces 窗口显示当前素材库最近 40 条运行，可继续加载更早记录；切库时重置视图。刷新和重启后保留，不自动删除、不上传。生产构建不启用记录，也不包含 trace 窗口。
+开发模式将 trace 保存到 `<素材库>/.agents/traces/telemetry.sqlite`。记录和指标在最后更新 30 天后过期，打开数据库时及运行期间每分钟清理。窗口展示最近 40 条 trace，支持继续加载；切库重置视图。生产构建不记录，也不包含 trace 窗口。不上传数据。
 
-## 边界
+旧 `traces.sqlite` 文件保留，不读取、不迁移。
 
-- `DurableTrace` 是 Loom 自有 extension 与 commit 观察器。按 submission/task/conversation ownership 归属，覆盖并行 specialist 和嵌套调用；不调度、不重试、不改变模型上下文。
-- `traceModels()` 观察公开 `Models` 请求、压缩请求和 deferred poll；原样转发 options、事件与结果，不抢先消费流。诊断故障不能让 Chat 失败。
-- 独立 SQLite WAL 原子保存记录 revision，与 `.loom/loom.sqlite` 分离。provider dispatch 前保存请求开始；实时更新按 100ms 合并，结束边界刷新。它不是恢复 checkpoint，也不与 durable 做分布式事务；崩溃可能丢失最后一段诊断更新。
-- 任务时间使用原生 `startedAt`/`endedAt`；工具 `durationMs` 单独表示执行时间，区别于审批等待/任务总时长。首内容时间是 Pi 内容观察时间，不是 HTTP TTFT。不采集 HTTP headers/status 或原始网络 payload。
+## 采集
+
+- 将 `DurableTrace.telemetry` 经 `LibraryRuntime` 传入 `HarnessOptions.telemetry`。Pi 提供提交、阶段、请求、轮询的原生埋点、事件、指标更新和上下文持久化传播。
+- `LiveTelemetry` 实现原生适配器契约，负责 span 标识、计时、links、attributes、events、status 和指标聚合。它持久化未结束 span，支持实时显示与崩溃诊断；Chord 原生 SQLite 只保存已结束 span。
+- `DurableTrace.models()` 仅向已有原生请求 span 补充脱敏输入输出，不创建请求 span，不通过 signal 或 checkpoint 推断任务归属。
+- 工具 hook 补充参数与结果；commit 内容观察器补充最终有界工具输出（含审批拒绝、中断诊断）。`DurableTrace` 仅从已提交状态更新 submission 摘要，并集中处理窗口状态规则；recorder 不解释 durable 事件。`ToolGate` 在审批等待期间记录 `loom.approval`。
+- 原生输入提交各自建立根 trace。specialist 输入通过 links 关联调用它的工具，窗口展示关联；嵌套工具沿用原生 parent 关系。
+- 独立 SQLite WAL 不参与 `.loom/loom.sqlite` 的事务。请求发出前保存开始记录，内容更新按 100ms 合并，原生 span 结束时刷新。诊断写入失败会停用采集，Chat 继续运行。
+
+崩溃后，未结束 span 标为 `interrupted`。原生 carrier 将恢复任务接回同一 trace，中断 attempt 仍保留。Trace 不调度、不重放工具。
 
 ## 内容与隐私
 
-根运行包含 generation、模型请求、工具、审批等待、重试、压缩 span。后台/手动压缩单独记录。模型 span 包含 model/provider/API、stop reason、可用的响应 ID、token/cache usage，以及限长输入输出。一次请求保留最近 200 条消息，每条单独限长，所以用户消息始终可见。system section 和工具定义里的长文本只显示 600 字符预览，旁边有 **Expand** 按钮；全文存在记录的 `blobs` 里，相同文本只存一份，同样经过脱敏。工具结果包含已提交 diagnostics。窗口按 revision 更新同一记录。
+原生元数据包括 model/provider/API、stop reason、响应 ID、usage/cost、首 chunk 事件、阶段结果及有界错误。counter 和 histogram 按十秒时间段聚合。
 
-落盘前移除已知 Chat key 和常见凭据字段/模式；省略图像、签名与 headers。其余输入/输出字段约限 8KiB UTF-8 文本，被截断时会写明丢弃的字节数；可展开的文本上限为 4 MiB。**这是尽力脱敏，不是匿名化：** prompt、memory、源文本、文件路径和工具输出仍可能含隐私。数据库未加密，请保护素材库，不要随意分享 trace。
+输入输出沿用现有脱敏策略：移除已知 Chat 凭据和常见秘密模式；省略图片、签名、headers。请求保留最近 200 条消息，逐条限长。system/tool 长文本展示 600 字符预览，可展开已脱敏且去重的全文，全文上限 4 MiB。普通 payload 字段约限 8 KiB。
 
-崩溃后未结束 span 标为 `interrupted`。原生恢复接回同一条持久化 trace，增加新的模型 attempt，保留中断 attempt。unsafe 工具保留不确定结果，trace 不会重放工具。
+这是尽力脱敏，不是匿名化：prompt、memory、路径和工具输出仍可能含隐私。数据库未加密。
 
 ## 验证
 
-测试使用临时素材库，覆盖连续运行、结束前实时更新、ownership、审批/重开、重试、deferred poll、压缩、Stop、诊断故障隔离、脱敏、分页，以及流式/unsafe 工具执行中 SIGKILL。
+覆盖原生适配器契约、传播与 links、实时与 SIGKILL 恢复、审批、重试、deferred poll、压缩、诊断故障隔离、脱敏、分页和 30 天清理。
 
-独立 Electron 窗口验收（不使用个人素材库）：
+独立 Electron 验收使用临时素材库和本地模型 mock：
 
 ```bash
 LOOM_E2E_TRACE=1 pnpm --filter @loom/app build
@@ -31,4 +37,4 @@ cd packages/app
 LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
 ```
 
-Windows 请用对应 shell 的方式设置 `LOOM_E2E_TRACE=1`。验收标记仅在 `LOOM_E2E=1` 时启用测试窗口；普通生产构建仍不包含它。Windows 实机验收尚未完成。
+Windows 请用对应 shell 的环境变量语法；普通生产构建不包含 trace 窗口。

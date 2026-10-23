@@ -24,11 +24,12 @@ async function fixture(root: string, extra: Parameters<typeof LibraryRuntime.ope
 	const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 	const trace = new DurableTrace(await TraceStore.open(root));
 	trace.setSecrets(["test-private-key"]);
-	const owner = await LibraryRuntime.open(root, { ...extra, models: trace.models(models), resume: false,
-		extensions: [...extra.extensions ?? [], trace.extension], settings: { ...extra.settings, extensions: [...extra.settings?.extensions ?? extra.extensions ?? [], trace.extension] },
+	const settings = typeof extra.settings === "function" ? extra.settings() : extra.settings;
+	const owner = await LibraryRuntime.open(root, { ...extra, models: trace.models(models), telemetry: trace.telemetry, resume: false,
+		extensions: [...extra.extensions ?? [], trace.extension], settings: { ...settings, extensions: [...settings?.extensions ?? extra.extensions ?? [], trace.extension] },
 		agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id }, ...extra.agent },
 	}, context);
-	await trace.start(owner.harness); owner.harness.resume();
+	trace.attach(owner.harness); owner.harness.resume();
 	return { owner, trace, faux, close: async () => { await owner.close(context); trace.stop(); } };
 }
 
@@ -93,13 +94,13 @@ for (const mode of ["stream", "unsafe"] as const) test(`SIGKILL ${mode} trace re
 			const reopened = await fixture(root, { models: createModels(), extensions: [defineExtension({ name: "test", tools: [defineTool({ name: "effect", description: "effect", parameters: Type.Object({}), replay: "unsafe", execute: async () => { throw new Error("Must not replay"); } })] })] });
 			reopened.faux.setResponses([answer("recovered")]);
 			try {
-				await reopened.owner.harness.waitForIdle(context); reopened.trace.flush();
+				await reopened.owner.harness.waitForIdle(context); await new Promise<void>(setImmediate); reopened.trace.flush();
 				const records = reopened.trace.store.list(); assert.equal(records.length, 1);
 				assert.equal(records[0]!.status, "completed", JSON.stringify({ records, inspection: await reopened.owner.harness.inspect(context) }));
-				assert.ok(records[0]!.spans.every((span) => span.endedAt !== undefined));
-				assert.ok(records[0]!.spans.some((span) => span.attributes["loom.recovered"]));
-				if (mode === "stream") assert.ok(records[0]!.spans.some((span) => span.name === "pi.ai.request" && span.attributes["loom.outcome"] === "interrupted"));
-				else assert.ok(records[0]!.spans.some((span) => span.name === "pi.harness.tool" && String(span.attributes["loom.io.output"]).includes("may have partially run")));
+				assert.ok(records[0]!.spans.every((span) => span.endedMs !== undefined));
+				assert.ok(records[0]!.spans.some((span) => span.attributes.resumed));
+				if (mode === "stream") assert.ok(records[0]!.spans.some((span) => span.name === "pi.ai.request" && span.interrupted));
+				else assert.ok(records[0]!.spans.some((span) => span.name === "pi.durable.phase" && String(span.attributes["loom.io.output"]).includes("may have partially run")));
 			} finally { await reopened.close(); }
 		} finally { if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL"); }
 	});
@@ -108,7 +109,7 @@ for (const mode of ["stream", "unsafe"] as const) test(`SIGKILL ${mode} trace re
 test("trace store persists atomic revisions, pages tied timestamps, and retains older records", async () => {
 	await temporary(async (root) => {
 		let store = await TraceStore.open(root);
-		assert.equal(store.path, join(root, ".agents", "traces", "traces.sqlite"));
+		assert.equal(store.path, join(root, ".agents", "traces", "telemetry.sqlite"));
 		for (let i = 0; i < 45; i++) store.save({ id: String(i).padStart(3, "0"), at: 10, threadId: "1", revision: 1, status: "completed", spans: [] });
 		const page = store.list(); assert.equal(page.length, 40);
 		assert.equal(store.list(40, { at: page.at(-1)!.at, id: page.at(-1)!.id }).length, 5);
@@ -128,19 +129,19 @@ test("two native runs persist model/tool spans with bounded payloads and reopen 
 			const conversation = await owner.createConversation({}, context);
 			faux.setResponses([answer(fauxToolCall("note", {}), { stopReason: "toolUse" }), answer("first"), answer("second")]);
 			for (const content of ["hello test-private-key", "again"]) assert.equal((await (await conversation.submit({ type: "input", content }, context)).wait(context)).status, "done");
-			trace.flush();
+			await new Promise<void>(setImmediate); trace.flush();
 			const records = trace.store.list(); assert.equal(records.length, 2);
-			assert.ok(records.every((record) => record.status === "completed" && record.spans.every((span) => span.endedAt !== undefined)));
-			const first = records.find((record) => record.spans.some((span) => span.name === "pi.harness.tool"))!;
+			assert.ok(records.every((record) => record.status === "completed" && record.spans.every((span) => span.endedMs !== undefined)));
+			const first = records.find((record) => record.spans.some((span) => span.attributes["task.name"] === "pi.tool"))!;
 			assert.equal(first.spans.filter((span) => span.name === "pi.ai.request").length, 2);
-			const toolSpan = first.spans.find((span) => span.name === "pi.harness.tool")!;
-			assert.equal(toolSpan.attributes["pi.tool.name"], "note");
+			const toolSpan = first.spans.find((span) => span.attributes["task.name"] === "pi.tool")!;
+			assert.equal(toolSpan.attributes["tool.name"], "note");
 			assert.match(String(toolSpan.attributes["loom.io.output"]), /\[redacted\] tool result/);
-			assert.ok(first.spans.find((span) => span.id === toolSpan.parentId)?.name === "pi.harness.turn");
+			assert.ok(first.spans.find((span) => span.id === toolSpan.parentId)?.name === "pi.durable.phase");
 			assert.ok(!JSON.stringify(records).includes("test-private-key"));
 		} finally { await close(); }
 		const store = await TraceStore.open(root); assert.equal(store.list().length, 2); store.close();
-		assert.ok(!(await readFile(join(root, ".agents", "traces", "traces.sqlite"))).includes(Buffer.from("test-private-key")));
+		assert.ok(!(await readFile(join(root, ".agents", "traces", "telemetry.sqlite"))).includes(Buffer.from("test-private-key")));
 	});
 });
 
@@ -152,7 +153,7 @@ test("requests in one run show the user message and store each long system text 
 			const conversation = await owner.createConversation({}, context);
 			faux.setResponses([answer(fauxToolCall("note", {}), { stopReason: "toolUse" }), answer("final")]);
 			assert.equal((await (await conversation.submit({ type: "input", content: "WHERE_IS_MY_QUESTION" }, context)).wait(context)).status, "done");
-			trace.flush();
+			await new Promise<void>(setImmediate); trace.flush();
 			const record = trace.store.list()[0]!;
 			const requests = record.spans.filter((span) => span.name === "pi.ai.request");
 			assert.equal(requests.length, 2);
@@ -165,7 +166,7 @@ test("requests in one run show the user message and store each long system text 
 	});
 });
 
-test("parallel specialist runs share the parent trace and keep correct ownership", { timeout: 10_000 }, async () => {
+test("parallel specialist runs use native root traces linked to the parent tool", { timeout: 10_000 }, async () => {
 	await temporary(async (root) => {
 		const entered = Promise.withResolvers<void>(); let count = 0;
 		const specialist = createSpecialistExtension("retrieve", [], { name: "permission" }, [{ name: "loom.trace" }]);
@@ -176,12 +177,15 @@ test("parallel specialist runs share the parent trace and keep correct ownership
 			faux.setResponses([answer([fauxToolCall("run_retrieve_agent", { goal: "alpha" }), fauxToolCall("run_retrieve_agent", { goal: "beta" })], { stopReason: "toolUse" }), child, child, answer("parent")]);
 			const conversation = await owner.createConversation({}, context);
 			assert.equal((await (await conversation.submit({ type: "input", content: "two tasks" }, context)).wait(context)).status, "done");
-			trace.flush();
-			const records = trace.store.list(); assert.equal(records.length, 1);
-			const record = records[0]!;
-			assert.equal(record.spans.filter((span) => span.name === "pi.ai.request").length, 4);
-			const tools = record.spans.filter((span) => span.name === "pi.harness.tool"); assert.equal(tools.length, 2);
-			for (const tool of tools) assert.equal(record.spans.filter((span) => span.name === "pi.harness.turn" && span.parentId === tool.id).length, 1);
+			await new Promise<void>(setImmediate); trace.flush();
+			const records = trace.store.list(); assert.equal(records.length, 3);
+			assert.equal(records.flatMap((record) => record.spans).filter((span) => span.name === "pi.ai.request").length, 4);
+			const parent = records.find((record) => record.threadId === String(conversation.id))!;
+			const tools = parent.spans.filter((span) => span.attributes["tool.name"] === "run_retrieve_agent"); assert.equal(tools.length, 2);
+			for (const child of records.filter((record) => record.id !== parent.id)) {
+				const submission = child.spans.find((span) => span.name === "pi.durable.submit")!;
+				assert.ok(submission.links.some((link) => link.traceId === parent.id && tools.some((tool) => tool.id === link.spanId)));
+			}
 		} finally { entered.resolve(); await close(); }
 	});
 });
@@ -197,13 +201,13 @@ test("nested tool calls keep a separate child span and bounded result", { timeou
 		try {
 			faux.setResponses([answer(fauxToolCall("outer", {}), { stopReason: "toolUse" }), answer("done")]);
 			const conversation = await owner.createConversation({}, context);
-			assert.equal((await (await conversation.submit({ type: "input", content: "nested" }, context)).wait(context)).status, "done"); trace.flush();
+			assert.equal((await (await conversation.submit({ type: "input", content: "nested" }, context)).wait(context)).status, "done"); await new Promise<void>(setImmediate); trace.flush();
 			const spans = trace.store.list()[0]!.spans;
-			const parent = spans.find((span) => span.attributes["pi.tool.name"] === "outer")!;
-			const child = spans.find((span) => span.attributes["pi.tool.name"] === "leaf")!;
+			const parent = spans.find((span) => span.attributes["tool.name"] === "outer")!;
+			const child = spans.find((span) => span.attributes["tool.name"] === "leaf")!;
 			assert.equal(child.parentId, parent.id);
 			assert.match(String(child.attributes["loom.io.output"]), /nested result/);
-			assert.ok(child.endedAt !== undefined);
+			assert.ok(child.endedMs !== undefined);
 		} finally { await close(); }
 	});
 });
@@ -213,18 +217,66 @@ test("deferred request and polls are separate closed spans", { timeout: 10_000 }
 		const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 1 } });
 		const models = createModels(); models.setProvider(faux.provider);
 		const trace = new DurableTrace(await TraceStore.open(root));
-		const owner = await LibraryRuntime.open(root, { models: trace.models(models), resume: false, extensions: [trace.extension], settings: { stream: { deferred: true } }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
-		await trace.start(owner.harness);
+		const owner = await LibraryRuntime.open(root, { models: trace.models(models), telemetry: trace.telemetry, resume: false, extensions: [trace.extension], settings: { stream: { deferred: true } }, agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
+		trace.attach(owner.harness);
 		try {
 			faux.setResponses([answer("deferred answer")]);
 			const conversation = await owner.createConversation({}, context);
-			assert.equal((await (await conversation.submit({ type: "input", content: "defer" }, context)).wait(context)).status, "done"); trace.flush();
+			assert.equal((await (await conversation.submit({ type: "input", content: "defer" }, context)).wait(context)).status, "done"); await new Promise<void>(setImmediate); trace.flush();
 			const record = trace.store.list()[0]!;
 			assert.equal(record.status, "completed");
-			const requests = record.spans.filter((span) => span.name === "pi.ai.request");
-			assert.equal(requests.length, 3); assert.ok(requests.every((span) => span.endedAt !== undefined));
-			assert.equal(requests.filter((span) => span.attributes["pi.ai.operation"] === "poll").length, 2);
+			const requests = record.spans.filter((span) => span.name === "pi.ai.request" || span.name === "pi.ai.poll");
+			assert.equal(requests.length, 3); assert.ok(requests.every((span) => span.endedMs !== undefined));
+			assert.equal(requests.filter((span) => span.name === "pi.ai.poll").length, 2);
 		} finally { await owner.close(context); trace.stop(); }
+	});
+});
+
+test("sleeping deferred polls keep their trace open and recover after library reopen", { timeout: 10_000 }, async () => {
+	await temporary(async (root) => {
+		const faux = fauxProvider({ deferred: { pendingFetches: 1, pollAfterMs: 100 } });
+		const models = createModels(); models.setProvider(faux.provider);
+		let trace: DurableTrace;
+		const open = async () => {
+			trace = new DurableTrace(await TraceStore.open(root));
+			const owner = await LibraryRuntime.open(root, {
+				models: trace.models(models), telemetry: trace.telemetry, resume: false, extensions: [trace.extension],
+				settings: { stream: { deferred: true } },
+				agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } },
+			}, context);
+			trace.attach(owner.harness);
+			return owner;
+		};
+		let owner = await open();
+		const sleeping = Promise.withResolvers<void>();
+		const stopWatching = owner.harness.subscribeCommits((publication) => {
+			if (publication.changes.some((change) => change.type === "task" && change.value.state.status === "sleeping")) sleeping.resolve();
+		});
+		try {
+			faux.setResponses([answer("recovered deferred answer")]);
+			const conversation = await owner.createConversation({}, context);
+			const submission = await conversation.submit({ type: "input", content: "defer across reopen" }, context);
+			await sleeping.promise;
+			await new Promise<void>(setImmediate); trace!.flush();
+			const before = trace!.store.forSubmission(submission.id)!;
+			assert.equal(before.status, "running");
+			assert.ok(before.spans.some((span) => span.name === "pi.durable.phase" && span.attributes.outcome === "sleeping"));
+			assert.equal(before.spans.filter((span) => span.name === "pi.ai.request").length, 1);
+			stopWatching();
+			await owner.close(context); trace!.stop();
+			owner = await open();
+			const inspection = await owner.harness.inspect(context);
+			assert.ok(inspection.tasks.some(({ record }) => record.kind === "pi.generation" && record.state.status === "sleeping"));
+			const restored = await owner.harness.submission(submission.id, context);
+			owner.harness.resume();
+			assert.equal((await restored!.wait(context)).status, "done");
+			await new Promise<void>(setImmediate); trace!.flush();
+			const record = trace!.store.forSubmission(submission.id)!;
+			assert.equal(record.status, "completed");
+			assert.equal(record.spans.filter((span) => span.name === "pi.ai.poll").length, 2);
+			assert.ok(record.spans.every((span) => span.endedMs !== undefined));
+			assert.ok(record.spans.some((span) => span.attributes.resumed));
+		} finally { stopWatching(); await owner.close(context); trace!.stop(); }
 	});
 });
 
@@ -235,17 +287,17 @@ test("retry attempts, manual compaction, and Stop settle persisted spans", { tim
 			const conversation = await owner.createConversation({}, context);
 			faux.setResponses([answer("", { stopReason: "error", errorMessage: "503 temporarily unavailable" }), answer("retried")]);
 			assert.equal((await (await conversation.submit({ type: "input", content: "retry" }, context)).wait(context)).status, "done");
-			trace.flush();
+			await new Promise<void>(setImmediate); trace.flush();
 			const retried = trace.store.list()[0]!;
 			assert.equal(retried.spans.filter((span) => span.name === "pi.ai.request").length, 2);
-			assert.ok(retried.spans.some((span) => span.attributes["pi.step.kind"] === "retry" && span.endedAt !== undefined));
+			assert.ok(retried.spans.some((span) => span.attributes.phase === "retry" && span.endedMs !== undefined));
 			for (let i = 0; i < 8; i++) await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test", model: [{ role: "user", content: "old context ".repeat(100), timestamp: Date.now() }] }), context);
 			faux.setResponses([answer("summary")]);
 			const task = await conversation.compact(undefined, context);
-			assert.equal((await owner.harness.waitForTask(task, context)).state.outcome.status, "completed"); trace.flush();
-			const compacted = trace.store.list().find((record) => record.id === `compaction:${task}`)!;
+			assert.equal((await owner.harness.waitForTask(task, context)).state.outcome.status, "completed"); await new Promise<void>(setImmediate); trace.flush();
+			const compacted = trace.store.list().find((record) => record.spans.some((span) => span.attributes["task.id"] === task && span.attributes["task.name"] === "pi.compaction"))!;
 			assert.ok(compacted);
-			assert.ok(compacted.spans.some((span) => span.name === "pi.ai.request" && span.endedAt !== undefined));
+			assert.ok(compacted.spans.some((span) => span.name === "pi.ai.request" && span.endedMs !== undefined));
 			const entered = Promise.withResolvers<void>();
 			faux.setResponses([async (_request, options) => {
 				entered.resolve();
@@ -254,10 +306,10 @@ test("retry attempts, manual compaction, and Stop settle persisted spans", { tim
 			}]);
 			const running = await conversation.submit({ type: "input", content: "stop" }, context);
 			await entered.promise; await conversation.abort(context);
-			assert.equal((await running.wait(context)).status, "unanswered"); trace.flush();
-			const aborted = trace.store.get(`run:${running.id}`)!;
+			assert.equal((await running.wait(context)).status, "unanswered"); await new Promise<void>(setImmediate); trace.flush();
+			const aborted = trace.store.forSubmission(running.id)!;
 			assert.equal(aborted.status, "aborted");
-			assert.ok(aborted.spans.every((span) => span.endedAt !== undefined));
+			assert.ok(aborted.spans.every((span) => span.endedMs !== undefined));
 		} finally { await close(); }
 	});
 });
@@ -271,8 +323,8 @@ test("approval wait survives owner reopen in the same persisted trace, then reje
 			const permission = gate.extension(root, () => owner.harness);
 			const tool = defineTool({ name: "write", description: "write", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: "saved" }] }) });
 			const extension = defineExtension({ name: "test", tools: [tool] });
-			owner = await LibraryRuntime.open(root, { models: trace.models(models), resume: false, extensions: [extension, permission, trace.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } }, conversationCreated: async (tx, record) => { await tx.doc(LoomApprovalsDoc, record.id); } }, context);
-			await trace.start(owner.harness);
+			owner = await LibraryRuntime.open(root, { models: trace.models(models), telemetry: trace.telemetry, resume: false, extensions: [extension, permission, trace.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } }, conversationCreated: async (tx, record) => { await tx.doc(LoomApprovalsDoc, record.id); } }, context);
+			trace.attach(owner.harness);
 		};
 		await open();
 		try {
@@ -283,17 +335,17 @@ test("approval wait survives owner reopen in the same persisted trace, then reje
 				for (let i = 0; i < 100; i++) { const row = (await owner!.harness.snapshot(LoomApprovalsDoc, conversation.id, context))?.pending[0]; if (row) return row.toolCallId; await new Promise((resolve) => setTimeout(resolve, 10)); }
 				throw new Error("No approval");
 			};
-			await pending(); trace!.flush();
+			await pending(); await new Promise<void>(setImmediate); trace!.flush();
 			assert.equal(trace!.store.list()[0]!.status, "running");
 			await owner!.close(context); trace!.stop();
 			gate = new ToolGate(); gate.level = "basic"; await open();
 			await clearPendingApprovals(owner!.harness); owner!.harness.resume();
 			gate.resolve(await pending(), "reject");
 			const handle = await owner!.harness.submission(submission.id, context);
-			assert.equal((await handle!.wait(context)).status, "done"); trace!.flush();
+			assert.equal((await handle!.wait(context)).status, "done"); await new Promise<void>(setImmediate); trace!.flush();
 			const records = trace!.store.list(); assert.equal(records.length, 1); assert.equal(records[0]!.status, "completed");
-			assert.ok(records[0]!.spans.some((span) => span.attributes["loom.recovered"]));
-			assert.ok(records[0]!.spans.filter((span) => span.name === "loom.approval").every((span) => span.endedAt !== undefined));
+			assert.ok(records[0]!.spans.some((span) => span.attributes.resumed));
+			assert.ok(records[0]!.spans.filter((span) => span.name === "loom.approval").every((span) => span.endedMs !== undefined));
 		} finally { await owner!.close(context); trace!.stop(); }
 	});
 });

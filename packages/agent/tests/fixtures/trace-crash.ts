@@ -14,8 +14,8 @@ const tool = defineTool({ name: "effect", description: "effect", parameters: Typ
 	await new Promise(() => {});
 	return { output: [] };
 } });
-const owner = await LibraryRuntime.open(root, { models: trace.models(models), resume: false, extensions: [trace.extension, defineExtension({ name: "test", tools: [tool] })], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
-await trace.start(owner.harness);
+const owner = await LibraryRuntime.open(root, { models: trace.models(models), telemetry: trace.telemetry, resume: false, extensions: [trace.extension, defineExtension({ name: "test", tools: [tool] })], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, context);
+trace.attach(owner.harness);
 faux.setResponses([mode === "stream" ? answer("crash partial " + "long response ".repeat(100)) : answer(fauxToolCall("effect", {}), { stopReason: "toolUse" })]);
 const conversation = await owner.createConversation({}, context);
 await conversation.submit({ type: "input", content: "crash question", requestId: "crash" }, context);

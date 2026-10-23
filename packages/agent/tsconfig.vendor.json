@@ -4,5 +4,5 @@
     "erasableSyntaxOnly": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["src/durable.ts", "scripts/try-durable.ts", "vendor-pi-durable/src/**/*.ts", "vendor-tests/**/*.ts"]
+  "include": ["src/durable.ts", "scripts/try-durable.ts", "vendor-tests/**/*.ts"]
 }

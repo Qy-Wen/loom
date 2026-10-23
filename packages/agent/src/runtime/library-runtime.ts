@@ -29,6 +29,7 @@ export type LibraryRuntimeOptions = {
 	/** Defaults for newly created independent conversations; persisted choices survive reopen. */
 	agent?: AgentChange;
 	settings?: HarnessOptions["settings"];
+	telemetry?: HarnessOptions["telemetry"];
 	env?: HarnessOptions["env"];
 	onReport?: HarnessOptions["onReport"];
 	/** Loom extension document initialization, composed with metadata and default agent setup. */
@@ -67,6 +68,7 @@ export class LibraryRuntime {
 				models: options.models,
 				registry,
 				settings: options.settings,
+				telemetry: options.telemetry,
 				env: options.env ?? (({ cwd }) => new NodeExecutionEnv({ cwd: cwd ?? root })),
 				onReport: options.onReport,
 				conversationCreated: async (tx, conversation) => {

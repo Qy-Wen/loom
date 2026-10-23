@@ -44,6 +44,7 @@ export function DevTraceApp(): React.JSX.Element {
 
 	const current = records.find((record) => record.id === selected) ?? null;
 	const latestId = records.at(-1)?.id;
+	const related = current ? [...new Set(current.spans.flatMap((span) => span.links.map((link) => link.traceId)))].filter((id) => id !== current.id) : [];
 
 	return (
 		<div className="trace-app">
@@ -73,6 +74,12 @@ export function DevTraceApp(): React.JSX.Element {
 				}}>Load older traces</button> : null}
 			</aside>
 			<main className="trace-detail">
+				{related.map((id) => {
+					const target = records.find((record) => record.id === id);
+					return <p key={id} className="trace-empty">{target
+						? <button type="button" onClick={() => { followLatest.current = false; setSelected(id); }}>Related trace · {formatTime(target.at)}</button>
+						: <span>Related trace not loaded: {id}</span>}</p>;
+				})}
 				{current && traceSummary(current.spans) ? <TraceTree key={current.id} spans={current.spans} blobs={current.blobs} /> : null}
 				{current && !traceSummary(current.spans) ? <p className="trace-empty">No spans.</p> : null}
 			</main>
