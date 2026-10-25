@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
 import type { RunAgentInput } from "@ag-ui/client";
-import { lastValueFrom, timeout, toArray } from "rxjs";
+import { lastValueFrom, timeout, toArray, type Subscription } from "rxjs";
 import { ChatService } from "../src/main/chat/chat-service.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
 import { AgUiAdapter } from "../src/main/chat/ag-ui-adapter.ts";
@@ -272,6 +272,10 @@ test("queued follow-ups stay one at a time and keep streaming after the first an
 			const events: import("@ag-ui/core").BaseEvent[] = [];
 			let finished = false;
 			const completed = Promise.withResolvers<void>();
+			const reconnectEvents: import("@ag-ui/core").BaseEvent[] = [];
+			const reconnected = Promise.withResolvers<void>();
+			let reconnectFinished = false;
+			let reconnect: Subscription | undefined;
 			const subscription = adapter.run(input(session.id)).subscribe({
 				next: (event) => { events.push(event); },
 				error: (error) => completed.reject(error instanceof Error ? error : new Error(String(error))),
@@ -288,12 +292,18 @@ test("queued follow-ups stay one at a time and keep streaming after the first an
 			};
 			try {
 				await waitFor("A-partial");
+				reconnect = adapter.clone().connectThread(session.id).subscribe({
+					next: (event) => { reconnectEvents.push(event); },
+					error: (error) => reconnected.reject(error),
+					complete: () => { reconnectFinished = true; reconnected.resolve(); },
+				});
 				const conversation = await host.conversation(session.id);
 				await conversation.submit({ type: "input", content: "second", whenBusy: "followUp" }, context);
 				await conversation.submit({ type: "input", content: "third", whenBusy: "followUp" }, context);
 				release[0]!.resolve();
 				await waitFor("B-partial");
 				assert.equal(finished, false);
+				assert.equal(reconnectFinished, false);
 				assert.equal(requests, 2);
 				const inspection = await host.requireRuntime().harness.inspect(context);
 				const queued = inspection.submissions.filter((row) => row.conversationId === conversation.id && row.type === "input" && row.status === "queued");
@@ -301,19 +311,26 @@ test("queued follow-ups stay one at a time and keep streaming after the first an
 				release[1]!.resolve();
 				await waitFor("C-partial");
 				assert.equal(finished, false);
+				assert.equal(reconnectFinished, false);
 				assert.equal(requests, 3);
 				release[2]!.resolve();
-				await completed.promise;
+				await Promise.all([completed.promise, reconnected.promise]);
 				assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
-				assert.match(text(), /A-partial/);
-				assert.match(text(), /B-partial/);
-				assert.match(text(), /C-partial/);
+				assert.equal(events.filter((event) => event.type === EventType.RUN_FINISHED).length, 1);
+				assert.match(text(), /A-partialA-done/);
+				assert.match(text(), /B-partialB-done/);
+				assert.match(text(), /C-partialC-done/);
+				assert.equal(reconnectEvents.at(-1)?.type, EventType.RUN_FINISHED);
+				const reconnectText = reconnectEvents.filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT).map((event) => (event as { delta?: string }).delta ?? "").join("");
+				assert.match(reconnectText, /B-partialB-done/);
+				assert.match(reconnectText, /C-partialC-done/);
 				const messages = (await host.getSession(session.id)).messages;
 				assert.equal(messages.filter((message) => message.role === "user").length, 3);
 				assert.equal(messages.filter((message) => message.role === "assistant").length, 3);
 			} finally {
 				for (const gate of release) gate.resolve();
 				subscription.unsubscribe();
+				reconnect?.unsubscribe();
 			}
 		}, (request, response) => {
 			request.resume();

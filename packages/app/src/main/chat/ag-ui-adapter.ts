@@ -3,6 +3,7 @@ import { EventType, type BaseEvent } from "@ag-ui/core";
 import type { AgentEventStream, DocumentWatch, PendingToolApproval } from "@loom/agent";
 import type { ChatService } from "./chat-service.ts";
 import { createAgUiEvents, temporaryMessageId } from "./ag-ui-events.ts";
+import { createConversationActivity } from "./conversation-activity.ts";
 import { transcriptText } from "../../shared/ag-ui-messages.ts";
 import { formatChatError } from "../../shared/chat-error.ts";
 import { Observable } from "rxjs";
@@ -47,6 +48,9 @@ export class AgUiAdapter extends AbstractAgent {
 					const turn = submit ? await connection.prepareTurn(transcriptText(optimisticUser?.content), { requestId: input.runId, clientMessageId: optimisticUser?.id }) : undefined;
 					if (cancelled) return;
 					stream = await connection.watch();
+					if (cancelled) return;
+					const submission = await turn?.submit();
+					if (cancelled) { if (submission) await abort(); return; }
 					if (!submit) input = { ...input, runId: await connection.requestIdForInput(stream.snapshot.run?.inputs[0]) ?? input.runId };
 					emit({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
 					const events = createAgUiEvents(emit, { threadId: input.threadId, submit, replay: Boolean(turn?.existingRequest), optimisticUser, watchChild: async (id) => {
@@ -63,68 +67,21 @@ export class AgUiAdapter extends AbstractAgent {
 							approval.start(async (value) => { if (!cancelled) show(value); });
 						}
 					} });
-					// A follow-up run starts in the same commit that ends the previous one.
-					// Signal only after that whole batch is applied, so the stream is not torn down between them.
-					const boundaries: Array<{ started: boolean }> = [];
-					let boundaryWait = Promise.withResolvers<void>();
-					const pushBoundary = (started: boolean) => {
-						boundaries.push({ started });
-						const current = boundaryWait;
-						boundaryWait = Promise.withResolvers<void>();
-						current.resolve();
-					};
+					const activity = createConversationActivity(stream.snapshot, submission ? { id: submission.id, existedAtSnapshot: Boolean(turn?.existingRequest) } : undefined);
 					await events.onEvent(stream.snapshot);
 					stream.start(async (batch) => {
-						let ended = false;
-						let started = false;
-						for (const event of batch) {
-							if (event.type === "run_end") ended = true;
-							if (event.type === "run_start") started = true;
-							if (!cancelled) await events.onEvent(event);
-						}
-						if (ended) pushBoundary(started);
+						for (const event of batch) if (!cancelled) await events.onEvent(event);
+						// Apply the whole commit before checking completion: it may end one run and start another.
+						activity.apply(batch);
 					});
 					approvals = await connection.approvals();
 					if (approvals) { const show = events.approvals(); show(approvals.value); approvals.start(async (value) => { show(value); }); }
-					const watched = stream;
-					const placedInput = connection.hasPlacedInput;
-					// Stay attached across queued follow-ups. The first answer's run_end is not the end of the
-					// turn the user is watching when the inbox still has work, and later replies must keep streaming.
-					const drainFollowUps = async (detach: boolean) => {
-						while (!cancelled && await placedInput()) {
-							const woke = boundaries.length > 0 ? "boundary" as const : await Promise.race([
-								boundaryWait.promise.then(() => "boundary" as const),
-								connection.waitForIdle().then(() => "idle" as const),
-								watched.closed.then(() => "closed" as const),
-								...(detach ? [detached.promise.then(() => "detach" as const)] : []),
-							]);
-							if (cancelled || woke === "closed" || woke === "detach") return;
-							if (woke === "idle" && boundaries.length === 0) {
-								if (!await placedInput()) return;
-								const again = await Promise.race([
-									boundaryWait.promise.then(() => "boundary" as const),
-									watched.closed.then(() => "closed" as const),
-									...(detach ? [detached.promise.then(() => "detach" as const)] : []),
-								]);
-								if (again !== "boundary") return;
-							}
-							const step = boundaries.shift();
-							if (step && !step.started && !await placedInput()) return;
-						}
-					};
-					if (turn) {
-						const submission = await turn.submit();
-						const settled = await this.service.waitForTurn(submission);
-						const answerSeen = settled.status === "done" && settled.type === "input" && stream.snapshot.entries.some((entry) => entry.id === settled.answer);
-						if (settled.status === "done" && settled.type === "input" && turn.existingRequest?.status !== "done" && !answerSeen) {
-							while (boundaries.length === 0 && !cancelled) {
-								const woke = await Promise.race([boundaryWait.promise.then(() => "boundary" as const), stream.closed.then(() => "closed" as const)]);
-								if (woke !== "boundary") break;
-							}
-							const step = boundaries.shift();
-							if (step?.started && !cancelled) await drainFollowUps(false);
-						} else if (!cancelled) await drainFollowUps(false);
-					} else if (stream.snapshot.run || await placedInput()) await drainFollowUps(true);
+					const idle = await Promise.race([
+						activity.idle.then(() => true),
+						stream.closed.then((end) => { if ("error" in end) throw end.error; return false; }),
+						detached.promise.then(() => false),
+					]);
+					if (idle && submission) await this.service.waitForTurn(submission);
 					events.close();
 					if (!cancelled) { emit({ type: EventType.CUSTOM, name: "loom.history_changed", value: { threadId: input.threadId } }); emit({ type: EventType.RUN_FINISHED, threadId: input.threadId, runId: input.runId }); }
 				} catch (error) {

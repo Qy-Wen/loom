@@ -191,8 +191,6 @@ export class ChatService {
 			approvals: (childId = id) => runtime.harness.watchDoc(LoomApprovalsDoc, idOf<ConversationId>(childId), context),
 			requestIdForInput: async (submissionId: SubmissionId | undefined) => submissionId === undefined ? undefined : (await (await runtime.harness.submission(submissionId, context))?.status(context))?.requestId,
 			abort: () => conversation.abort(context),
-			waitForIdle: () => conversation.waitForIdle(context),
-			hasPlacedInput: async () => (await runtime.harness.inspect(context)).submissions.some((row) => row.conversationId === conversation.id && row.type === "input" && row.status === "placed"),
 		};
 	}
 	async isRunning(id: string): Promise<boolean> { return (await this.activeInputs(id)).submissions.length > 0; }
