@@ -783,6 +783,9 @@
 }
 
 .session-follow-up li {
+	display: flex;
+	align-items: flex-start;
+	gap: 8px;
 	padding: 6px 10px;
 	border-top: 1px solid #e5e5e2;
 	font-size: 12px;
@@ -998,4 +1001,30 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.session-follow-up li > span {
+	flex: 1;
+	min-width: 0;
+}
+
+.session-follow-up-remove {
+	flex: none;
+	border: 0;
+	background: none;
+	padding: 0 4px;
+	font-size: 14px;
+	line-height: 1.2;
+	color: inherit;
+	opacity: 0.5;
+	cursor: pointer;
+}
+
+.session-follow-up-remove:hover:not(:disabled) {
+	opacity: 1;
+}
+
+.session-follow-up-remove:disabled {
+	cursor: default;
+	opacity: 0.25;
 }

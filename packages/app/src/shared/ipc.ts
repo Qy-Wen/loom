@@ -156,6 +156,7 @@ export const IPC = {
 	importComposerFiles: "loom:importComposerFiles",
 	pickComposerExternalFiles: "loom:pickComposerExternalFiles",
 	followUp: "loom:followUp",
+	cancelFollowUp: "loom:cancelFollowUp",
 	branchBefore: "loom:branchBefore",
 	setSessionModel: "loom:setSessionModel",
 	forkBefore: "loom:forkBefore",
@@ -280,6 +281,8 @@ export interface LoomApi {
 	pathForFile: (file: File) => string;
 	/** Queue text into the active run. Inserted when that run would otherwise finish. */
 	followUp: (id: string, text: string, clientMessageId?: string) => Promise<void>;
+	/** Withdraw a queued follow-up that has not been placed into the run yet; resolves false if it was too late. */
+	cancelFollowUp: (id: string, clientMessageId: string) => Promise<boolean>;
 	/** Create a branch before this question with an optional model override, then archive the source. */
 	branchBefore: (id: string, entryId: string, model?: SessionRecord["model"]) => Promise<SessionRecord>;
 	/** Persist this conversation's model/thinking; applies from the next request. Rejects while busy. */

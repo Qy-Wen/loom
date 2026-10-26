@@ -110,7 +110,7 @@ Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大
 
 历史与实时状态分开：`useSessions` 首次通过 IPC 加载完整历史，后续按最后一个 entry ID 读取新增条目；同一时刻只保留一次刷新请求，切换会话或素材库会拒绝过期结果。SSE 不发送已保存历史，完成时只发失效通知。发送请求只包含本次 user message，模型上下文由 durable 构建。
 
-Partial 按 block 维护，只发送尚未显示的 text/thinking 后缀。user admission 持久化客户端消息 ID；assistant 提交时同时替换正文和 reasoning ID。历史与实时消息只按 ID 合并，已保存内容为准，同时保留 live specialist 子工具调用；不按文字、数组长度或历史尾部猜测。follow-up 也使用客户端 ID 对齐排队与接纳状态。工具 call ID 始终带 conversation 命名空间。
+Partial 按 block 维护，只发送尚未显示的 text/thinking 后缀。user admission 持久化客户端消息 ID；assistant 提交时同时替换正文和 reasoning ID。历史与实时消息只按 ID 合并，已保存内容为准，同时保留 live specialist 子工具调用；不按文字、数组长度或历史尾部猜测。follow-up 也使用客户端 ID 对齐排队与接纳状态。排队中的 follow-up 可按客户端 ID 撤回（`cancelFollowUp` → `abortSubmission`），进入运行后即成为普通消息，不可再撤回。工具 call ID 始终带 conversation 命名空间。
 
 Renderer 中 `session-chat` 只组装会话与分支操作；`use-sessions` 管理选择和已保存历史，`use-chat-stream` 管理实时消息 ID 和提交边界，`chat-composer` / `chat-composer-input` 管理输入和附件，`chat-messages` / `chat-scroll` 分别管理展示和跟随滚动。
 

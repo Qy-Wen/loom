@@ -356,3 +356,27 @@ test("setSessionModel rejects while a request is streaming", { timeout: 10_000 }
 		await rm(path, { recursive: true, force: true });
 	}
 });
+
+test("a queued follow-up can be withdrawn by client ID until it is placed", async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-cancel-follow-up-"));
+	const faux = fauxProvider();
+	const models = createModels(); models.setProvider(faux.provider);
+	const service = new ChatService({ models, chatDefault: { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" } });
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	try {
+		await service.openLibrary(path);
+		const session = await service.createSession();
+		faux.setResponses([async () => { await gate; return fauxAssistantMessage("first"); }, fauxAssistantMessage("never")]);
+		const first = await (await service.prepareTurn(session.id, "start")).submit();
+		await service.followUp(session.id, "withdrawn", "client-withdrawn");
+		assert.equal(await service.cancelFollowUp(session.id, "unknown"), false);
+		assert.equal(await service.cancelFollowUp(session.id, "client-withdrawn"), true);
+		assert.equal(await service.cancelFollowUp(session.id, "client-withdrawn"), false);
+		release();
+		assert.equal((await service.waitForTurn(first)).status, "done");
+		await (await service.conversation(session.id)).waitForIdle(context);
+		const users = (await service.getSession(session.id)).messages.filter((message) => message.role === "user");
+		assert.equal(users.length, 1);
+	} finally { release(); await service.close(); await rm(path, { recursive: true, force: true }); }
+});

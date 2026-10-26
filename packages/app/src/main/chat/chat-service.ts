@@ -172,6 +172,15 @@ export class ChatService {
 		await (await this.prepareTurn(id, text, { clientMessageId, whenBusy: "followUp" })).submit();
 	}
 
+	/** Withdraw a still-queued follow-up by its client ID. False once it has been placed into the run (or never existed). */
+	async cancelFollowUp(id: string, clientMessageId: string): Promise<boolean> {
+		const runtime = this.requireRuntime();
+		const conversation = await this.conversation(id);
+		const item = (await runtime.harness.snapshot(InboxDoc, conversation.id, context))?.items
+			.find((row) => row.mode === "followUp" && (row.entry?.data as { clientMessageId?: string } | undefined)?.clientMessageId === clientMessageId);
+		return item !== undefined && await runtime.harness.abortSubmission(item.id, context, conversation.id) === "aborted";
+	}
+
 	async waitForTurn(submission: Submission) {
 		const settled = await submission.wait(context);
 		if (settled.status === "unanswered" && settled.reason !== "aborted") throw new Error(typeof settled.detail === "string" ? settled.detail : settled.reason);

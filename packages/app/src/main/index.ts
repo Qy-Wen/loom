@@ -736,6 +736,7 @@ function registerIpc(): void {
 		return draftsFromAssets(await localCore.importExternalFiles(result.filePaths));
 	});
 	ipcMain.handle(IPC.followUp, (_event, id: string, text: string, clientMessageId?: string) => requireChat().followUp(id, text, clientMessageId));
+	ipcMain.handle(IPC.cancelFollowUp, (_event, id: string, clientMessageId: string) => requireChat().cancelFollowUp(id, clientMessageId));
 	ipcMain.handle(IPC.branchBefore, async (_event, id: string, entryId: string, raw: unknown) => {
 		const model = raw === undefined ? undefined : requireChatModels().validateSelection(raw);
 		return chatRecord(await requireChat().branchBefore(id, entryId, model));

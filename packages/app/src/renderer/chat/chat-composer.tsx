@@ -18,7 +18,8 @@ import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
 import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
-type QueuedFollowUp = { id: string; label: string };
+/** `ready` once the main process has admitted it, i.e. it can be withdrawn. */
+type QueuedFollowUp = { id: string; label: string; ready: boolean };
 
 function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]): QueuedFollowUp[] {
 	const admitted = new Set(messages.map((message) => message.metadata?.["loom.clientMessageId"]));
@@ -151,6 +152,13 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		}
 	}, [transcript]);
 
+	const removeQueued = (clientMessageId: string) => {
+		void window.loom.cancelFollowUp(threadId, clientMessageId).then((removed) => {
+			// Too late means it was already placed; transcript reconciliation drops the row.
+			if (removed && activeThread.current === threadId) setQueued((items) => items.filter((item) => item.id !== clientMessageId));
+		}).catch(() => {});
+	};
+
 	const submitting = useRef(false);
 	const activeThread = useRef(threadId);
 	activeThread.current = threadId;
@@ -183,9 +191,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				queuedId = crypto.randomUUID();
 				const visibleText = stripInlineAssetRefs(body).trim();
 				const label = visibleText || assetPayload.map((asset) => asset.path.split("/").pop() || asset.path).join(", ");
-				const queued = { id: queuedId, label };
+				const queued = { id: queuedId, label, ready: false };
 				setQueued((items) => [...items, queued]);
 				await window.loom.followUp(threadId, body, queuedId);
+				setQueued((items) => items.map((item) => item.id === queued.id ? { ...item, ready: true } : item));
 				if (activeThread.current === threadId) onChange?.("");
 			} catch (cause) {
 				if (activeThread.current !== threadId) return;
@@ -376,7 +385,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 					<div className="session-follow-up-label">{t.chat.queued}</div>
 					<ol>
 						{queued.map((item) => (
-							<li key={item.id}>{item.label}</li>
+							<li key={item.id}>
+								<span>{item.label}</span>
+								<button type="button" className="session-follow-up-remove" aria-label={t.chat.removeQueued} title={t.chat.removeQueued} disabled={!item.ready} onClick={() => removeQueued(item.id)}>×</button>
+							</li>
 						))}
 					</ol>
 				</section>

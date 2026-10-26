@@ -72,6 +72,7 @@ const api: LoomApi = {
 	pickComposerExternalFiles: () => ipcRenderer.invoke(IPC.pickComposerExternalFiles),
 	pathForFile: (file) => webUtils.getPathForFile(file),
 	followUp: (id, text, clientMessageId) => ipcRenderer.invoke(IPC.followUp, id, text, clientMessageId),
+	cancelFollowUp: (id, clientMessageId) => ipcRenderer.invoke(IPC.cancelFollowUp, id, clientMessageId),
 	branchBefore: (id, entryId, model) => ipcRenderer.invoke(IPC.branchBefore, id, entryId, model),
 	setSessionModel: (id, selection) => ipcRenderer.invoke(IPC.setSessionModel, id, selection),
 	forkBefore: (id, entryId) => ipcRenderer.invoke(IPC.forkBefore, id, entryId),
