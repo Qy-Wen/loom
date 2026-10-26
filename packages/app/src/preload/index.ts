@@ -154,7 +154,6 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.commandAllowsChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.commandAllowsChanged, handler);
 	},
-	getImageGrade: (assetId) => ipcRenderer.invoke(IPC.getImageGrade, assetId),
 	previewImageGrade: (assetId, grade, lut, force) => ipcRenderer.invoke(IPC.previewImageGrade, assetId, grade, lut, force),
 	saveImageGrade: (assetId, grade, lut, output) => ipcRenderer.invoke(IPC.saveImageGrade, assetId, grade, lut, output),
 	getVideoGradeInfo: (assetId) => ipcRenderer.invoke(IPC.getVideoGradeInfo, assetId),

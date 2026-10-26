@@ -15,6 +15,6 @@ export {
 	normalizeImageGrade,
 	rotateCrop,
 } from "./types.ts";
-export type { CropHandle, CurvePoint, ImageCrop, ImageGrade, ImageGradeCurves, ImageGradeRecord, ImageRotation } from "./types.ts";
+export type { CropHandle, CurvePoint, ImageCrop, ImageGrade, ImageGradeCurves, ImageRotation } from "./types.ts";
 export { buildGradeImageArgs, buildGradeVideoArgs, buildGradeVideoFrameArgs, buildImageGradeFilter, escapeFfmpegFilterPath, gradeVideoAudioArgs } from "./filters.ts";
 export { gradeExportExtension, gradeSiblingRelative, gradeVideoSiblingRelative, isGradeExportPath, isGradeVideoExportPath } from "./output.ts";

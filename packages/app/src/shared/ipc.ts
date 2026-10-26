@@ -1,7 +1,7 @@
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type { ProcessSandboxNotice } from "./agent-sandbox.ts";
-import type { ImageGrade, ImageGradeRecord } from "@loom/core/grade";
+import type { ImageGrade } from "@loom/core/grade";
 import type {
 	Asset,
 	AssetType,
@@ -198,7 +198,6 @@ export const IPC = {
 	resolveToolGate: "loom:resolveToolGate",
 	getCommandAllows: "loom:getCommandAllows",
 	commandAllowsChanged: "loom:commandAllowsChanged",
-	getImageGrade: "loom:getImageGrade",
 	previewImageGrade: "loom:previewImageGrade",
 	saveImageGrade: "loom:saveImageGrade",
 	getVideoGradeInfo: "loom:getVideoGradeInfo",
@@ -329,7 +328,6 @@ export interface LoomApi {
 	resolveToolGate: (toolCallId: string, decision: ToolGateDecision) => Promise<boolean>;
 	getCommandAllows: () => Promise<CommandAllowView>;
 	onCommandAllowsChanged: (listener: (view: CommandAllowView) => void) => () => void;
-	getImageGrade: (assetId: string) => Promise<ImageGradeRecord | null>;
 	/** JPEG bytes, base64. Null when the grade leaves the image unchanged. */
 	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
 	saveImageGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;

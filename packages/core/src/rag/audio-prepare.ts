@@ -1,8 +1,8 @@
-import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { buildAudioCompactArgs } from "../media/operations.ts";
 import { runMediaProcess } from "../media/run.ts";
+import { makeTempDir } from "../temp.ts";
 import { AUDIO_WRITEUP_MAX_BYTES, type AudioWriteupInput } from "../model/audio-writeup.ts";
 
 /** Send the file as-is when it fits; otherwise FFmpeg to 16 kHz mono MP3. */
@@ -14,7 +14,7 @@ export async function prepareAudioForModel(
 	if (size > 0 && size <= AUDIO_WRITEUP_MAX_BYTES) {
 		return { filename: basename(absolutePath), bytes: await readFile(absolutePath, { signal }) };
 	}
-	const dir = await mkdtemp(join(tmpdir(), "loom-audio-"));
+	const dir = await makeTempDir("audio");
 	const output = join(dir, "audio.mp3");
 	try {
 		await runMediaProcess({

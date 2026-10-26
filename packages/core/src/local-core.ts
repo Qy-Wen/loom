@@ -2,8 +2,7 @@ import { LibraryTaskScope, abortableProviderCall } from "./library/task-scope.ts
 import { randomUUID } from "node:crypto";
 import { access, copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { readStoredGrade, writeStoredGrade } from "./grade/store.ts";
-import { isGradeableVideo, type ImageGradeRecord } from "./grade/types.ts";
+import { isGradeableVideo } from "./grade/types.ts";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
@@ -619,12 +618,6 @@ export class LocalCore {
 			const asset = await this.library.indexFile(job.output);
 			if (!asset) throw new Error("Could not index graded image");
 			const source = await this.metadataStore.getAssetByPath(job.input);
-			await writeStoredGrade(this.library.getPaths().gradeRecords, asset.assetId, {
-				version: 1,
-				grade: job.grade,
-				sourceAssetId: source?.assetId,
-				lut: job.lut,
-			});
 			return {
 				kind: "grade_image",
 				output: job.output,
@@ -634,22 +627,12 @@ export class LocalCore {
 		}, signal);
 	}
 
-	getImageGrade(assetId: string): Promise<ImageGradeRecord | undefined> {
-		return readStoredGrade(this.library.getPaths().gradeRecords, assetId);
-	}
-
 	async gradeVideo(args: GradeVideoArgs, signal?: AbortSignal): Promise<GradeVideoResult> {
 		return this.runLibraryTask(async (jobSignal) => {
 			const job = await this.media.gradeVideo(args, jobSignal);
 			const asset = await this.library.indexFile(job.output);
 			if (!asset) throw new Error("Could not index graded video");
 			const source = await this.metadataStore.getAssetByPath(job.input);
-			await writeStoredGrade(this.library.getPaths().gradeRecords, asset.assetId, {
-				version: 1,
-				grade: job.grade,
-				sourceAssetId: source?.assetId,
-				lut: job.lut,
-			});
 			return {
 				kind: "grade_video",
 				output: job.output,

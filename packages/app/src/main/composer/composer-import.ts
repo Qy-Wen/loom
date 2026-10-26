@@ -1,7 +1,7 @@
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { rm, writeFile } from "node:fs/promises";
 import { basename, extname, join } from "node:path";
 import { parseComposerImageInputs } from "@loom/agent";
+import { makeTempDir } from "@loom/core/temp";
 
 /** Clipboard images have no file path. Import their validated bytes through the normal Inbox path. */
 export async function importComposerFiles<T>(
@@ -14,7 +14,7 @@ export async function importComposerFiles<T>(
 	}
 	const parsed = parseComposerImageInputs(images ?? []);
 	if (parsed.length === 0) return importFiles(filePaths);
-	const temp = await mkdtemp(join(tmpdir(), "loom-composer-"));
+	const temp = await makeTempDir("composer");
 	try {
 		const paths = [...filePaths];
 		for (const [index, image] of parsed.entries()) {

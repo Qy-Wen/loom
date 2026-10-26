@@ -66,7 +66,7 @@ CreativeAssets/          -- 用户选择的库根目录
 └── .loom/               -- 隐藏元数据目录（用户无需关心），不被索引
      ├── metadata-db/metadata.db   -- SQLite（元数据 + 向量 + FTS）
      ├── graph-db/graph.db/        -- LadybugDB
-     ├── grades/{records,luts}/    -- 调色配方与导入的 LUT
+     ├── grades/luts/              -- 导入的 LUT
      └── agents/                   -- sessions/、command-allows/、skills/、memory/、traces/、tool-results/
 ```
 

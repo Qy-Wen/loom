@@ -14,7 +14,6 @@ export class LibraryPaths {
 	readonly loom: string;
 	readonly metadataDb: string;
 	readonly graphDb: string;
-	readonly gradeRecords: string;
 	readonly gradeLuts: string;
 	readonly agents: string;
 	readonly sessionsDb: string;
@@ -30,7 +29,6 @@ export class LibraryPaths {
 		this.loom = resolve(this.root, ".loom");
 		this.metadataDb = resolve(this.loom, "metadata-db", "metadata.db");
 		this.graphDb = resolve(this.loom, "graph-db", "graph.db");
-		this.gradeRecords = resolve(this.loom, "grades", "records");
 		this.gradeLuts = resolve(this.loom, "grades", "luts");
 		this.agents = resolve(this.loom, "agents");
 		this.sessionsDb = resolve(this.agents, "sessions", "loom.sqlite");

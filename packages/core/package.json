@@ -8,11 +8,12 @@
     "./embedding": "./src/rag/http-embedding.ts",
     "./grade": "./src/grade/index.ts",
     "./paths": "./src/library/paths.ts",
+    "./temp": "./src/temp.ts",
     "./sandbox": "./src/sandbox/process-sandbox.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test --test-force-exit tests/*.test.ts",
+    "test": "node ../../scripts/with-test-tmp.mjs node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test --test-force-exit tests/*.test.ts",
     "eval:retrieval": "node --experimental-strip-types evals/retrieval.ts",
     "eval:retrieval:live": "node --experimental-strip-types --env-file=../../.env evals/retrieval.ts --live"
   },

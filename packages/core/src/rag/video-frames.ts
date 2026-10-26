@@ -1,9 +1,9 @@
-import { mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { buildProbeArgs, buildVlmStillArgs } from "../media/operations.ts";
 import { parseFfprobeJson } from "../media/probe.ts";
 import { runMediaProcess } from "../media/run.ts";
+import { makeTempDir } from "../temp.ts";
 import type { VideoVlmFrame } from "../model/video-vlm.ts";
 
 /** 10% / 50% / 90% when the clip is long enough; fewer stills for short files. */
@@ -26,7 +26,7 @@ export async function extractVideoFramesForVlm(
 	});
 	const duration = parseFfprobeJson(probe.stdout).duration ?? 0;
 	const times = vlmFrameTimes(duration);
-	const dir = await mkdtemp(join(tmpdir(), "loom-vlm-frames-"));
+	const dir = await makeTempDir("vlm-frames");
 	try {
 		const frames: VideoVlmFrame[] = [];
 		for (const [index, time] of times.entries()) {

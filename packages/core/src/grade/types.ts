@@ -61,14 +61,6 @@ export interface ImageGrade {
 	curves: ImageGradeCurves;
 }
 
-export interface ImageGradeRecord {
-	version: 1;
-	grade: ImageGrade;
-	sourceAssetId?: string;
-	/** Library-relative `.cube`, applied after the other controls. */
-	lut?: string;
-}
-
 export const GRADEABLE_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([
 	".bmp",
 	".gif",

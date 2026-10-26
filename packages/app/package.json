@@ -11,8 +11,8 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:node-sqlite": "node scripts/check-node-sqlite.cjs",
     "check:chat-platform": "node scripts/check-chat-platform.cjs",
-    "test": "node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test --test-force-exit tests/*.test.ts",
-    "test:e2e": "playwright test",
+    "test": "node ../../scripts/with-test-tmp.mjs node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test --test-force-exit tests/*.test.ts",
+    "test:e2e": "node ../../scripts/with-test-tmp.mjs playwright test",
     "test:e2e:attach": "playwright test"
   },
   "dependencies": {

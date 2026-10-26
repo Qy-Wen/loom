@@ -66,7 +66,7 @@ CreativeAssets/          -- selected library root
 └── .loom/               -- hidden Loom metadata; never indexed
      ├── metadata-db/metadata.db   -- SQLite: metadata, vector, FTS
      ├── graph-db/graph.db/        -- LadybugDB
-     ├── grades/{records,luts}/    -- grade recipes and imported LUTs
+     ├── grades/luts/              -- imported LUTs
      └── agents/                   -- sessions/, command-allows/, skills/, memory/, traces/, tool-results/
 ```
 

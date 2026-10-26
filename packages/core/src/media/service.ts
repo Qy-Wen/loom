@@ -1,6 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { access, mkdir, readFile, rm } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
 	buildGradeImageArgs,
@@ -43,6 +42,7 @@ import {
 import { parseFfprobeJson } from "./probe.ts";
 import { prepareFfmpegArgs, resolveMediaPath } from "./policy.ts";
 import { runMediaProcess } from "./run.ts";
+import { makeTempDir } from "../temp.ts";
 
 export class MediaService {
 	private readonly library: Library;
@@ -114,7 +114,7 @@ export class MediaService {
 	async gradeImage(
 		args: GradeImageArgs,
 		signal?: AbortSignal,
-	): Promise<{ input: string; output: string; grade: ImageGrade; lut?: string }> {
+	): Promise<{ input: string; output: string }> {
 		const prepared = this.prepareGrade(args);
 		if (!prepared.filter) throw new TypeError("Grade does not change the image");
 		const cwd = this.cwd();
@@ -130,13 +130,13 @@ export class MediaService {
 			cwd,
 			signal,
 		});
-		return { input: prepared.input.path, output: destination.path, grade: prepared.grade, lut: prepared.lut };
+		return { input: prepared.input.path, output: destination.path };
 	}
 
 	async gradeVideo(
 		args: GradeVideoArgs,
 		signal?: AbortSignal,
-	): Promise<{ input: string; output: string; grade: ImageGrade; lut?: string }> {
+	): Promise<{ input: string; output: string }> {
 		const prepared = this.prepareVideoGrade(args);
 		if (!prepared.filter) throw new TypeError("Grade does not change the video");
 		const cwd = this.cwd();
@@ -154,7 +154,7 @@ export class MediaService {
 			signal,
 			timeoutMs: 2 * 60 * 60_000,
 		});
-		return { input: prepared.input.path, output: destination.path, grade: prepared.grade, lut: prepared.lut };
+		return { input: prepared.input.path, output: destination.path };
 	}
 
 	async previewVideoGrade(args: PreviewVideoGradeArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
@@ -269,7 +269,7 @@ export class MediaService {
 	}
 
 	private async scratchDir(name: "preview" | "frames"): Promise<string> {
-		this.scratch ??= mkdtemp(join(tmpdir(), "loom-grade-"));
+		this.scratch ??= makeTempDir("grade");
 		const root = await this.scratch.catch((error) => { this.scratch = undefined; throw error; });
 		const dir = join(root, name);
 		await mkdir(dir, { recursive: true });

@@ -26,7 +26,7 @@
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test tests/*.test.ts",
+    "test": "node ../../scripts/with-test-tmp.mjs node --experimental-strip-types --require ../../scripts/test-rm-retry.cjs --test tests/*.test.ts",
     "try:agent": "node --experimental-strip-types --env-file=../../.env scripts/try-agent.ts",
     "try:durable": "node --experimental-strip-types --env-file=../../.env scripts/try-durable.ts",
     "eval:compaction-rate": "node --experimental-strip-types --env-file=../../.env evals/compaction-rate.ts",
@@ -37,7 +37,7 @@
     "vendor:sync": "node vendor-pi-durable/sync.mjs",
     "typecheck:vendor": "tsc --noEmit -p tsconfig.vendor.json",
     "build:vendor": "pnpm --filter @earendil-works/pi-codemode build && tsc -p tsconfig.vendor-build.json",
-    "test:vendor": "node --experimental-strip-types --test vendor-tests/*.test.ts",
+    "test:vendor": "node ../../scripts/with-test-tmp.mjs node --experimental-strip-types --test vendor-tests/*.test.ts",
     "test:vendor:build": "pnpm build:vendor && node --conditions=loom-vendor-build --test vendor-tests/build.test.mjs"
   },
   "dependencies": {

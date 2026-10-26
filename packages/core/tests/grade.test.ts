@@ -168,10 +168,6 @@ test("gradeImage writes a new still, indexes it, and stores the recipe", async (
 
 		const snapshot = await core.getLibrarySnapshot();
 		assert.ok(snapshot.assets.some((asset) => asset.assetId === graded.assetId));
-		const stored = await core.getImageGrade(graded.assetId);
-		assert.equal(stored?.grade.exposure, 1);
-		assert.equal(stored?.grade.temperature, 4500);
-		assert.equal(stored?.sourceAssetId, graded.sourceAssetId);
 
 		const preview = await core.previewImageGrade(graded.sourceAssetId!, { exposure: 1 });
 		assert.ok(preview && preview.length > 100);
@@ -204,9 +200,6 @@ test("gradeImage rotates before it crops", async (t) => {
 		const output = pngSize(await readFile(join(root, graded.output)));
 		assert.equal(output.w, Math.trunc(source.h * 0.5));
 		assert.equal(output.h, source.w);
-		const stored = await core.getImageGrade(graded.assetId);
-		assert.equal(stored?.grade.rotation, 1);
-		assert.deepEqual(stored?.grade.crop, { x: 0, y: 0, w: 0.5, h: 1 });
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
@@ -272,9 +265,7 @@ test("gradeVideo writes a new movie from the current recipe", async (t) => {
 		assert.equal(graded.output, "clip_grade.mp4");
 		const output = await readFile(join(root, "clip_grade.mp4"));
 		assert.ok(output.byteLength > 32);
-		const stored = await core.getImageGrade(graded.assetId);
-		assert.equal(stored?.grade.exposure, 0.5);
-		assert.equal(stored?.sourceAssetId, graded.sourceAssetId);
+		assert.ok(graded.sourceAssetId);
 		const info = await core.getVideoGradeInfo(source.assetId);
 		assert.ok((info.duration ?? 0) > 0);
 	} finally {
@@ -299,7 +290,8 @@ test("grade scratch files live outside the library and are removed when the libr
 	const root = await mkdtemp(join(tmpdir(), "loom-grade-scratch-"));
 	const outside = await mkdtemp(join(tmpdir(), "loom-lut-source-"));
 	const core = new LocalCore();
-	const scratchDirs = async () => (await readdir(tmpdir())).filter((name) => name.startsWith("loom-grade-") && !name.startsWith("loom-grade-scratch-"));
+	const gradeTemp = join(tmpdir(), "loom", "grade");
+	const scratchDirs = async () => (await readdir(gradeTemp).catch(() => [] as string[]));
 	try {
 		const before = new Set(await scratchDirs());
 		await copyFile(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media", "still.png"), join(root, "still.png"));
@@ -316,8 +308,8 @@ test("grade scratch files live outside the library and are removed when the libr
 		const lut = await core.importGradeLut(join(outside, "look.cube"));
 		assert.equal(lut.path, ".loom/grades/luts/look.cube");
 		const graded = await core.gradeImage({ path: "still.png", grade: { exposure: 1 }, lut: lut.path });
-		assert.equal((await stat(join(root, ".loom", "grades", "records", `${graded.assetId}.json`))).isFile(), true);
-		assert.equal((await core.getImageGrade(graded.assetId))?.lut, lut.path);
+		assert.ok((await stat(join(root, graded.output))).size > 32);
+		assert.deepEqual(await readdir(join(root, ".loom", "grades")), ["luts"]);
 
 		await core.close();
 		assert.deepEqual((await scratchDirs()).filter((name) => !before.has(name)), []);

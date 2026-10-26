@@ -23,6 +23,7 @@ import {
 	isGradeExportPath,
 	isGradeVideoExportPath,
 } from "@loom/core/grade";
+import { sweepStaleTemp, TEMP_ROOT_NAME } from "@loom/core/temp";
 import {
 	parseAgentPermissionLevel,
 	type LoomAgentOptions,
@@ -107,7 +108,7 @@ function logMediaBinaries(): void {
 
 function configureAutomation(): void {
 	if (process.env.LOOM_E2E === "1") {
-		app.setPath("userData", process.env.LOOM_E2E_USER_DATA?.trim() || join(tmpdir(), `loom-e2e-${process.pid}`));
+		app.setPath("userData", process.env.LOOM_E2E_USER_DATA?.trim() || join(tmpdir(), TEMP_ROOT_NAME, "e2e", String(process.pid)));
 		return;
 	}
 	if (app.isPackaged || process.env.LOOM_CDP_PORT === "0") return;
@@ -848,10 +849,6 @@ function registerIpc(): void {
 		}
 		return requireChat().resolveToolGate(toolCallId, decision);
 	});
-	ipcMain.handle(IPC.getImageGrade, async (_event, assetId: unknown) => {
-		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		return (await localCore.getImageGrade(assetId)) ?? null;
-	});
 	ipcMain.handle(IPC.previewImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, force: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
 		gradePreview?.abort();
@@ -1071,6 +1068,7 @@ app
 		process.on("uncaughtException", (error) => appLog(`uncaught exception: ${logErrorText(error)}`));
 		process.on("unhandledRejection", (reason) => appLog(`unhandled rejection: ${logErrorText(reason)}`));
 		logMediaBinaries();
+		void sweepStaleTemp();
 		applyAppIcon();
 		// Development convenience: keep provider secrets in the workspace root.
 		// Production will source credentials from settings/keychain instead.

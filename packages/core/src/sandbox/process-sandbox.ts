@@ -1,8 +1,9 @@
 import { randomBytes } from "node:crypto";
 import { existsSync, realpathSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
+import { ensureTempDir, ensureTempRootSync } from "../temp.ts";
 import {
 	SandboxManager,
 	VENDORED_SRT_WIN_EXE,
@@ -146,7 +147,7 @@ export async function prepareSandboxedBash(execution: {
 	const wrapped = await sandboxedArgv(execution.command, execution.cwd, bashShell());
 	if (wrapped === undefined) return;
 	const helper = await spawnHelperPath();
-	const specPath = join(tmpdir(), `loom-sandbox-${randomBytes(16).toString("hex")}.json`);
+	const specPath = join(await ensureTempDir("sandbox"), `${randomBytes(16).toString("hex")}.json`);
 	const env = stringEnv(wrapped.env);
 	delete env.LOOM_SANDBOX_SPEC;
 	await writeFile(specPath, JSON.stringify({ argv: wrapped.argv, env, cwd: wrapped.cwd }), { mode: 0o600 });
@@ -314,6 +315,8 @@ async function disableWindowsSandbox(error: Error): Promise<void> {
 
 function runtimeConfig(libraryRoot: string, shell: string): SandboxRuntimeConfig {
 	const library = canonical(libraryRoot);
+	// Scope is unchanged: the whole OS temp dir stays writable. Only make sure Loom's own subdirectory exists.
+	ensureTempRootSync();
 	const temp = canonical(tmpdir());
 	const readable = sandboxReadPaths([library, temp, ...shellReadPaths(shell), ...binaryDirs()]);
 	const config: SandboxRuntimeConfig = {
@@ -434,14 +437,14 @@ function windowsBash(): string | undefined {
 
 function spawnHelperPath(): Promise<string> {
 	if (!helperReady) {
-		const path = join(tmpdir(), "loom-sandbox-spawn.cjs");
-		helperReady = writeFile(path, HELPER_SOURCE, { mode: 0o700 }).then(
-			() => path,
-			(error: unknown) => {
-				helperReady = undefined;
-				throw error;
-			},
-		);
+		helperReady = (async () => {
+			const path = join(await ensureTempDir("sandbox"), "spawn.cjs");
+			await writeFile(path, HELPER_SOURCE, { mode: 0o700 });
+			return path;
+		})().catch((error: unknown) => {
+			helperReady = undefined;
+			throw error;
+		});
 	}
 	return helperReady;
 }

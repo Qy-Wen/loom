@@ -24,10 +24,10 @@ Remaining acceptance checklist: [CHAT_MODELS](./agent/CHAT_MODELS.md) P4/P5.
 
 Design: [LIBRARY_LAYOUT](./LIBRARY_LAYOUT.md). After the code lands, verify by hand on macOS and Windows:
 
-- With the process sandbox on, grade previews work: ffmpeg can write a jpg into the `loom-grade-*` directory under `os.tmpdir()`, for both images and videos.
-- Closing the library or app removes that directory; a crash leaves nothing in the library.
-- A fresh library creates `.loom/metadata-db/`, `.loom/graph-db/`, `.loom/grades/`, and `.loom/agents/`, and nothing else at the root besides user files.
-- Chat history, skills, memory, remembered commands, and grade records all work from the new paths; `.loom/` content is not indexed as assets.
+- With the process sandbox on, grade previews work: ffmpeg can write a jpg into `<os.tmpdir()>/loom/grade/run-*`, for both images and videos. macOS is covered by `core/tests/temp.test.ts`; Windows still needs a manual check.
+- Closing the library removes that `run-*` directory; a crash leaves nothing in the library, and the next app start sweeps `<os.tmpdir()>/loom/` entries older than 24 hours.
+- A fresh library creates `.loom/metadata-db/`, `.loom/graph-db/`, and `.loom/agents/` (`.loom/grades/luts/` appears when a LUT is first imported), and nothing else at the root besides user files.
+- Chat history, skills, memory, and remembered commands all work from the new paths; `.loom/` content is not indexed as assets.
 
 ---
 

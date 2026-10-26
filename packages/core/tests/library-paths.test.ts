@@ -30,7 +30,7 @@ describe("LibraryPaths", () => {
 	});
 
 	it("places every Loom-owned file under .loom", () => {
-		for (const path of [paths.metadataDb, paths.graphDb, paths.gradeRecords, paths.gradeLuts, paths.sessionsDb, paths.commandAllows, paths.skills, paths.memoryFile, paths.traces, paths.toolResults]) {
+		for (const path of [paths.metadataDb, paths.graphDb, paths.gradeLuts, paths.sessionsDb, paths.commandAllows, paths.skills, paths.memoryFile, paths.traces, paths.toolResults]) {
 			assert.equal(paths.isLoomPath(path), true, path);
 		}
 		assert.equal(paths.toRelativePath(paths.metadataDb), ".loom/metadata-db/metadata.db");
