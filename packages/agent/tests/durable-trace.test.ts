@@ -109,7 +109,7 @@ for (const mode of ["stream", "unsafe"] as const) test(`SIGKILL ${mode} trace re
 test("trace store persists atomic revisions, pages tied timestamps, and retains older records", async () => {
 	await temporary(async (root) => {
 		let store = await TraceStore.open(root);
-		assert.equal(store.path, join(root, ".agents", "traces", "telemetry.sqlite"));
+		assert.equal(store.path, join(root, ".loom", "agents", "traces", "telemetry.sqlite"));
 		for (let i = 0; i < 45; i++) store.save({ id: String(i).padStart(3, "0"), at: 10, threadId: "1", revision: 1, status: "completed", spans: [] });
 		const page = store.list(); assert.equal(page.length, 40);
 		assert.equal(store.list(40, { at: page.at(-1)!.at, id: page.at(-1)!.id }).length, 5);
@@ -141,7 +141,7 @@ test("two native runs persist model/tool spans with bounded payloads and reopen 
 			assert.ok(!JSON.stringify(records).includes("test-private-key"));
 		} finally { await close(); }
 		const store = await TraceStore.open(root); assert.equal(store.list().length, 2); store.close();
-		assert.ok(!(await readFile(join(root, ".agents", "traces", "telemetry.sqlite"))).includes(Buffer.from("test-private-key")));
+		assert.ok(!(await readFile(join(root, ".loom", "agents", "traces", "telemetry.sqlite"))).includes(Buffer.from("test-private-key")));
 	});
 });
 

@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, realpath, rename, rm, writeFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
+import { LibraryPaths } from "@loom/core/paths";
 import {
 	defineExtension, hook, ToolTask,
 	type ToolExecutionResult,
@@ -11,7 +12,7 @@ const MAX_LINES = 2_000;
 const PREVIEW_BYTES = 2 * 1024;
 
 export function createToolResultStorage(root: string) {
-	const storageRoot = resolve(root, ".agents", "tool-results");
+	const storageRoot = new LibraryPaths(root).toolResults;
 	return defineExtension({
 		name: "loom.tool-result-storage",
 		hooks: [hook(ToolTask, {

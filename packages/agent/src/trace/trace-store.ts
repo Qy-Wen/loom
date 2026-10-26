@@ -1,5 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
+import { LibraryPaths } from "@loom/core/paths";
 import { DatabaseSync } from "node:sqlite";
 import type { StoredMetric } from "@earendil-works/pi-telemetry";
 import type { LoomTraceSpan } from "./trace-types.ts";
@@ -24,7 +25,7 @@ export class TraceStore {
 	private readonly db: DatabaseSync;
 	private constructor(path: string, db: DatabaseSync) { this.path = path; this.db = db; }
 	static async open(root: string): Promise<TraceStore> {
-		const dir = join(root, ".agents", "traces");
+		const dir = new LibraryPaths(root).traces;
 		await mkdir(dir, { recursive: true, mode: 0o700 });
 		const path = join(dir, "telemetry.sqlite");
 		const db = new DatabaseSync(path);

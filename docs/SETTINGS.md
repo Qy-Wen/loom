@@ -72,7 +72,6 @@ Green on the switch means a tiny text POST to the exact endpoint succeeded. It d
 
 - Persist in the app user data directory, not `<library>/.loom/`. Copying a library must not copy API keys.
 - Last opened library path is `last-library.json` in app user data. Startup reopens it when General says so and that folder still exists; a missing folder leaves the empty state and keeps the remembered path (a disconnected drive can come back). E2E uses its own userData, so it does not restore a host library.
-- `<library>/.loom/config.json` stays library preferences only.
 - Keys stay in app user data, not the library. Each non-Chat slot has an API key button opening a prefilled, masked input dialog with an eye toggle. Confirm saves immediately; there is no page-level Save. Cancel/Escape discard dialog edits, and an empty confirmed value clears the key. Storage is unchanged; OS-keychain storage for these four slots remains future work.
 
 ---

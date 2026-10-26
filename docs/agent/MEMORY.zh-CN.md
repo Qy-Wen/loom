@@ -8,9 +8,9 @@
 
 ## 1. 放在哪
 
-当前库的笔记在 `<library>/.agents/memory/MEMORY.md`。一份文件，大约 2000 字。首次写入时创建记忆目录。`.agents` 不收成素材。`.agents/skills/` 的目录在准备请求时读取。
+当前库的笔记在 `<library>/.loom/agents/memory/MEMORY.md`。一份文件，大约 2000 字。首次写入时创建记忆目录。`.loom` 不收成素材。`.loom/agents/skills/` 的目录在准备请求时读取。
 
-只记事实：用户偏好和这个库的约定。换一个库就是另一份文件。做法放在 `.agents/skills/`。
+只记事实：用户偏好和这个库的约定。换一个库就是另一份文件。做法放在 `.loom/agents/skills/`。
 
 ---
 

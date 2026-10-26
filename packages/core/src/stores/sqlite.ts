@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
+import { dirname } from "node:path";
 import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 import type { Asset, AssetType } from "../model/asset.ts";
@@ -68,7 +69,7 @@ export class SqliteMetadataStore implements MetadataStore {
 
 	async open(paths: LibraryPaths): Promise<void> {
 		await this.close();
-		await mkdir(paths.loom, { recursive: true });
+		await mkdir(dirname(paths.metadataDb), { recursive: true });
 
 		const database = new Database(paths.metadataDb);
 		try {

@@ -31,8 +31,8 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 - **多 Agent。** 主 Agent 负责对话、规划、直接检索素材（`search_assets`、`inspect_asset`）、文件变换（`read` / `edit` / `write` / `bash`、FFmpeg），也能直接调用 MCP。单项检索由主 Agent 直接完成，包括需要多步的任务；只有多项独立、可并行的检索任务才考虑使用 `run_retrieve_agent`。`run_create_agent` 共享 MCP 工具，在独立上下文中完成委托的创作流程。每次专职调用是一份持久化、归属工具任务的 conversation 和一条自包含任务。同一轮里互不依赖的调用一起执行。专职不能再派生子 Agent。父 Agent 只收到摘要，子工具卡片留在同一轮里。停止和权限确认同样作用在子 Agent 上。
 - **RAG。** `search_assets` 用 RRF（`k = 60`）融合全文排名和子切片向量，可选 Rerank 再排一次。属性条件是硬 AND。命中是段落加上稳定的 `asset_id`，改名和移动保持同一身份。子切片可以扩到父切片（约 2048 token）。Markdown 先按结构切，再按 512 token 窗口、64 token 重叠切。图片、视频、音频先转成文本，再进同一套索引。向量和视觉理解由用户或 Agent 显式触发。
 - **素材关系图。** LadybugDB 把有向边挂在 `asset_id` 上，例如「派生自」。Agent 用 `create_relation` 记下出处，`inspect_asset` 返回邻边。沿这些边做检索（Graph RAG）是下一步。
-- **上下文工程。** 放进输入框的文件写成已存储消息里的 `<asset_ref>`。库选区在 submit 前折成 `<system-reminder>` 里的 `<ui_selection>` 并原样持久化，另外保存展示文字。选区变化不改写旧消息；memory 按会话冻结，技能目录在准备请求时重载。技能是 `.agents/skills/` 下的名称、说明和路径目录，需要步骤时再 `read` `SKILL.md`。
-- **Memory。** 每个库一份 `.agents/memory/MEMORY.md`（大约 2000 字符），记偏好和约定。`auto_memory` 立即增加、替换或删除一条并写回文件。当前会话继续使用开场时读入的快照。操作步骤留在技能里。检索专职和创作专职没有这个工具。
+- **上下文工程。** 放进输入框的文件写成已存储消息里的 `<asset_ref>`。库选区在 submit 前折成 `<system-reminder>` 里的 `<ui_selection>` 并原样持久化，另外保存展示文字。选区变化不改写旧消息；memory 按会话冻结，技能目录在准备请求时重载。技能是 `.loom/agents/skills/` 下的名称、说明和路径目录，需要步骤时再 `read` `SKILL.md`。
+- **Memory。** 每个库一份 `.loom/agents/memory/MEMORY.md`（大约 2000 字符），记偏好和约定。`auto_memory` 立即增加、替换或删除一条并写回文件。当前会话继续使用开场时读入的快照。操作步骤留在技能里。检索专职和创作专职没有这个工具。
 - **沙箱。** 对话权限分为 Basic、Standard（默认）和 Full。进程沙箱默认开启：`bash`、`ffmpeg`、`ffprobe` 只能写当前库和临时目录，读不到用户主目录，也不能联网。Full 下这些进程直接运行。MCP 服务不进入这层沙箱。
 - **MCP。** 支持本地 stdio 和 Streamable HTTP，设置里管理连接的服务。工具注册成 `server__tool`，由主 Agent 和创作专职共享；主 Agent 按任务选择直接调用或委托，检索专职不接入 MCP。Basic 和 Standard 下，无论谁调用 MCP，默认都等待确认，可按工具始终允许；Full 下直接执行。服务把文件写到库外时，由 `write` 或 `bash` 拷回库，再由监视器索引。
 
@@ -71,7 +71,7 @@ Loom 从上游 `v1.4.0`（`4a080252`）源码级 vendor pi 的 [`packages/durabl
 
 pi-ai、Chord、telemetry 与 vendored codemode 版本统一为 `1.4.0`。打开已有库会自动将 durable SQLite schema v1 升到 v2，以支持休眠任务；升级后的数据库无法用旧版 durable 打开。如需保留回退能力，请在首次用此版本打开前关闭 Loom，并备份库内的 `.loom/` 目录。
 
-全仓库类型检查与 vendor 检查通过；Windows 设置持久化并发测试目前存在 `rename EPERM` 失败。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.agents/traces/telemetry.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+全仓库类型检查与 vendor 检查通过；Windows 设置持久化并发测试目前存在 `rename EPERM` 失败。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.loom/agents/traces/telemetry.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
 
 ### 同步上游
 

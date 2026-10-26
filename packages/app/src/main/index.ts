@@ -1454,7 +1454,7 @@ function containedLibraryPath(root: string, absolutePath: string): string | null
 	const value = relative(root, resolve(absolutePath));
 	if (value === "" || value === ".." || value.startsWith(`..${sep}`) || isAbsolute(value)) return null;
 	const posix = value.split(sep).join("/");
-	if (posix === ".loom" || posix.startsWith(".loom/") || posix === ".agents" || posix.startsWith(".agents/") || basename(posix) === ".DS_Store") {
+	if (posix === ".loom" || posix.startsWith(".loom/") || basename(posix) === ".DS_Store") {
 		return null;
 	}
 	return posix;

@@ -51,7 +51,7 @@ for (const text of ["small", "x".repeat(50 * 1024), "line\n".repeat(2_000)]) {
 		await fixture([resultTool("inline", { output: [{ type: "text", text }] })], async (root, conversation, faux) => {
 			const [result] = await run(conversation, faux, [{ name: "inline" }]);
 			assert.equal(textOf(result!.content), text);
-			await assert.rejects(stat(join(root, ".agents", "tool-results")), { code: "ENOENT" });
+			await assert.rejects(stat(join(root, ".loom", "agents", "tool-results")), { code: "ENOENT" });
 		});
 	});
 }
@@ -73,7 +73,7 @@ for (const text of ["x".repeat(50 * 1024 + 1), "line\n".repeat(2_001), "汉🙂"
 				assert.deepEqual(result.content.find((part) => part.type === "image"), image);
 				const path = outputPath(result.content);
 				paths.push(path);
-				assert.equal(dirname(path), join(root, ".agents", "tool-results", String(conversation.id)));
+				assert.equal(dirname(path), join(root, ".loom", "agents", "tool-results", String(conversation.id)));
 				assert.equal(await readFile(path, "utf8"), text);
 				const preview = result.content[0];
 				assert.ok(preview?.type === "text");
@@ -116,8 +116,8 @@ test("stored previews preserve error status and schema-validated structured outp
 test("failed persistence warns and still bounds output without turning tool success into failure", async () => {
 	const text = "x".repeat(60 * 1024);
 	await fixture([resultTool("large", { output: [{ type: "text", text }] })], async (root, conversation, faux) => {
-		await mkdir(join(root, ".agents"));
-		await writeFile(join(root, ".agents", "tool-results"), "blocked");
+		await mkdir(join(root, ".loom", "agents"), { recursive: true });
+		await writeFile(join(root, ".loom", "agents", "tool-results"), "blocked");
 		const [result] = await run(conversation, faux, [{ name: "large" }]);
 		assert.equal(result!.isError, false);
 		assert.equal(result!.content[0]?.type === "text" && result!.content[0].text, "x".repeat(50 * 1024));
@@ -137,7 +137,7 @@ test("existing full-output files and bounded read results are not persisted agai
 		const results = await run(conversation, faux, [{ name: "shell" }, { name: "read", args: { path: "source.txt" } }]);
 		assert.equal(outputPath(results[0]!.content), "existing.txt");
 		assert.match(textOf(results[1]!.content), /offset=2001/);
-		await assert.rejects(stat(join(root, ".agents", "tool-results")), { code: "ENOENT" });
+		await assert.rejects(stat(join(root, ".loom", "agents", "tool-results")), { code: "ENOENT" });
 	});
 });
 
@@ -150,6 +150,6 @@ test("read can retrieve stored output in bounded portions without creating anoth
 		assert.equal(read!.isError, false);
 		assert.match(textOf(read!.content), /line 2001\n/);
 		assert.doesNotMatch(textOf(read!.content), /line 2011\n/);
-		assert.equal((await readdir(join(root, ".agents", "tool-results", String(conversation.id)))).length, 1);
+		assert.equal((await readdir(join(root, ".loom", "agents", "tool-results", String(conversation.id)))).length, 1);
 	});
 });

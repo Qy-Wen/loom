@@ -57,7 +57,7 @@ git merge vendor-clean
 
 ## 3. 库级 owner 与持久化
 
-- `LibraryRuntime.open(root, options, context)` 用 `node:sqlite` 打开 `<library>/.loom/loom.sqlite`，创建一个 Harness 和 Registry。关闭委派 durable，未完成任务保留为可恢复状态。
+- `LibraryRuntime.open(root, options, context)` 用 `node:sqlite` 打开 `<library>/.loom/agents/sessions/loom.sqlite`，创建一个 Harness 和 Registry。关闭委派 durable，未完成任务保留为可恢复状态。
 - Canonical path 预留防止同进程重复 owner；Electron 使用应用单实例锁。其他程序不得同时作为第二个活跃 owner 打开同一存储。WAL 不等于 owner 协调；Windows 运行时仍待实机验证。
 - `ChatService` 先安装资源、清理过期审批、记录 usage 基线，再调用原生 `resume()`。
 - 新独立会话使用库 cwd 和当前 Chat/instructions 默认值。模型默认值也用于补齐未选模型的会话，已保存的选择不变；会话可在输入区切换模型与思考强度，忙碌时拒绝切换。fork 保留 as-of agent 配置。常驻指令更新现有会话及后续默认值；工具通过 registry extension 原地替换。
@@ -74,8 +74,8 @@ git merge vendor-clean
 - 主对话保留工作区、FFmpeg、describe/embed 等应用工具，以及所有已连接的 MCP 工具。主对话和检索专职共享 `search_assets`、`inspect_asset`，检索专职还有 `read`；任务给出 ID 时先 inspect，不再 search 同一素材；需要源文本时 read 返回的 `relativePath`。主 Agent 直接完成单项检索，包括多步任务；只有多项独立、可并行的检索任务才考虑委托检索专职，并传递各自的问题和所需素材 ID。创作专职使用 `read`、`edit`、`write`、`bash`、`inspect_asset`、FFmpeg 媒体工具和与主对话相同的 MCP 工具；没有 `search_assets`、describe/embed、属性、关系和设置工具。主 Agent 按任务选择直接调用 MCP 或委托创作专职。所有 Agent 经过同一道审批门；检索专职不接入 MCP。
 - 每次 specialist 调用创建一个归属工具任务的前台 conversation。独立调用并行；子代理只见任务和专职 prompt，不能再派生 specialist。父代理只收到摘要，不收到子 transcript。Stop 沿 ownership 取消；request ID 让安全重放复用子会话和 submission。
 - `createLibraryExtension()` 装配工具及 preamble/skills/memory sections。用户指令使用原生 `agent.instructions`。
-- Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。
-- Memory 使用创建时的 `LoomMemoryDoc` 快照，fork/重开保留。`auto_memory` 立即写 `.agents/memory/MEMORY.md`，只影响以后新会话的 prompt。specialist 不选这个 extension。见 [MEMORY](./MEMORY.zh-CN.md)。
+- Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.loom/agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。
+- Memory 使用创建时的 `LoomMemoryDoc` 快照，fork/重开保留。`auto_memory` 立即写 `.loom/agents/memory/MEMORY.md`，只影响以后新会话的 prompt。specialist 不选这个 extension。见 [MEMORY](./MEMORY.zh-CN.md)。
 - 权限使用可取消的 `ToolTask.beforeTool` hook 和 `LoomApprovalsDoc`，app 观察 pending rows。记住命令与沙箱策略见 [PERMISSION](./PERMISSION.zh-CN.md)。
 
 ## 5. 发送时上下文
@@ -90,7 +90,7 @@ MCP 使用官方 SDK，读完全部工具分页后统一缓存输出 schema 和�
 
 Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大小上限。不增加 MCP 专用的媒体处理、截断或文件缓存。原始图片保留在 durable 历史中供模型使用。UI 的历史记录和实时工具结果只携带 `loom-asset://chat-image/<conversation>/<entry>/<contentIndex>` 引用，工具卡片按需加载字节；不把 base64 搬进 IPC/SSE。纯文字工具结果沿用原有表示。
 
-主 Agent 和专职 Agent 共用 `createToolResultStorage()`，在 durable 最终截断前通过 `afterTool` 保存超过 50 KiB 或 2,000 行的完整文字，路径为 `.agents/tool-results/<conversationId>/<taskId>.txt`。模型收到最多 2 KiB、UTF-8 安全的预览、完整路径和分段读取提示；图片、错误状态、UI details 和结构化结果不变。`read` 和已有 `full_output` 提示的结果不重复落盘。写入失败会警告并沿用 durable 截断。文件在重开和分支后仍保留，不自动过期；`.agents` 不作为素材索引。进入钩子前已被流式缓冲丢弃的文字无法恢复；shell 工具沿用现有落盘机制。
+主 Agent 和专职 Agent 共用 `createToolResultStorage()`，在 durable 最终截断前通过 `afterTool` 保存超过 50 KiB 或 2,000 行的完整文字，路径为 `.loom/agents/tool-results/<conversationId>/<taskId>.txt`。模型收到最多 2 KiB、UTF-8 安全的预览、完整路径和分段读取提示；图片、错误状态、UI details 和结构化结果不变。`read` 和已有 `full_output` 提示的结果不重复落盘。写入失败会警告并沿用 durable 截断。文件在重开和分支后仍保留，不自动过期；`.agents` 不作为素材索引。进入钩子前已被流式缓冲丢弃的文字无法恢复；shell 工具沿用现有落盘机制。
 
 ## 6. AG-UI 与实时显示
 
@@ -120,7 +120,7 @@ CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随
 
 SIGKILL 后流式请求按已提交 checkpoint 重发；中断 partial 保留为 `aborted` 历史，不进入重发的模型上下文。执行中的 unsafe 工具不重放，返回“可能已部分执行”；操作系统子进程可能独立存活，不承诺外部副作用 exactly-once。
 
-Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。开发 trace 使用 Loom extension/commit 观察器和公开模型调用观察，保存到 `.agents/traces/traces.sqlite`；Traces 窗口读取历史和实时 revision。时间、隐私、恢复与验收边界见 [TRACE](./TRACE.zh-CN.md)。
+Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。开发 trace 使用 Loom extension/commit 观察器和公开模型调用观察，保存到 `.loom/agents/traces/telemetry.sqlite`；Traces 窗口读取历史和实时 revision。时间、隐私、恢复与验收边界见 [TRACE](./TRACE.zh-CN.md)。
 
 上下文圆环显示当前模型窗口的估算占用，点击查看 `~百分比 / 窗口`。`contextUsage()` 使用原生活动 `ContextView`，取当前 provider/model、最新 head 之后的有效 assistant usage（含 cache 与输出），再加后续消息估算。新会话、压缩或模型变化后没有适用 usage 时估算活动消息，含 system/tool schema/图像；不使用完整聊天历史或累计消耗。消息提交、压缩和模型设置变化触发刷新；未配置 Chat 时隐藏。模型窗口取设置值，未填默认 128k，数值并非 tokenizer 精确测量。
 

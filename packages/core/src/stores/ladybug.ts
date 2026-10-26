@@ -37,7 +37,7 @@ async function isExportedGraph(dir: string): Promise<boolean> {
 /**
  * Persistent GraphStore. Nodes are asset UUIDs; edges live in Ladybug WASM, not SQLite.
  * File-backed WASM databases fail on Windows (`getcwd`), so the engine stays in memory
- * and `.loom/graph.db` is a Ladybug EXPORT/IMPORT directory.
+ * and `.loom/graph-db/graph.db` is a Ladybug EXPORT/IMPORT directory.
  */
 export class LadybugGraphStore implements GraphStore {
 	private database: Database | null = null;

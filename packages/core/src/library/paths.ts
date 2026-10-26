@@ -6,22 +6,40 @@ import { basename, isAbsolute, relative, resolve, sep } from "node:path";
  * at the filesystem boundary.
  */
 export class LibraryPaths {
+	/** Library-relative POSIX path of the skills catalog, for model-facing paths and `ExecutionEnv` joins. */
+	static readonly SKILLS_RELATIVE = ".loom/agents/skills";
+
 	readonly root: string;
+	/** Everything Loom owns. Never indexed as assets. */
 	readonly loom: string;
 	readonly metadataDb: string;
 	readonly graphDb: string;
-	readonly thumbnails: string;
-	readonly cache: string;
-	readonly grades: string;
+	readonly gradeRecords: string;
+	readonly gradeLuts: string;
+	readonly agents: string;
+	readonly sessionsDb: string;
+	readonly commandAllows: string;
+	readonly skills: string;
+	readonly memoryDir: string;
+	readonly memoryFile: string;
+	readonly traces: string;
+	readonly toolResults: string;
 
 	constructor(rootPath: string) {
 		this.root = resolve(rootPath);
 		this.loom = resolve(this.root, ".loom");
-		this.metadataDb = resolve(this.loom, "metadata.db");
-		this.graphDb = resolve(this.loom, "graph.db");
-		this.thumbnails = resolve(this.loom, "thumbnails");
-		this.cache = resolve(this.loom, "cache");
-		this.grades = resolve(this.loom, "grades");
+		this.metadataDb = resolve(this.loom, "metadata-db", "metadata.db");
+		this.graphDb = resolve(this.loom, "graph-db", "graph.db");
+		this.gradeRecords = resolve(this.loom, "grades", "records");
+		this.gradeLuts = resolve(this.loom, "grades", "luts");
+		this.agents = resolve(this.loom, "agents");
+		this.sessionsDb = resolve(this.agents, "sessions", "loom.sqlite");
+		this.commandAllows = resolve(this.agents, "command-allows", "command-allows.json");
+		this.skills = resolve(this.root, ...LibraryPaths.SKILLS_RELATIVE.split("/"));
+		this.memoryDir = resolve(this.agents, "memory");
+		this.memoryFile = resolve(this.memoryDir, "MEMORY.md");
+		this.traces = resolve(this.agents, "traces");
+		this.toolResults = resolve(this.agents, "tool-results");
 	}
 
 	toRelativePath(absolutePath: string): string {
@@ -44,14 +62,8 @@ export class LibraryPaths {
 		return value === ".loom" || value.startsWith(`.loom${sep}`);
 	}
 
-	/** Agent skills and auto memory. Loaded from disk, not indexed as assets. */
-	isAgentsPath(absolutePath: string): boolean {
-		const value = relative(this.root, resolve(absolutePath));
-		return value === ".agents" || value.startsWith(`.agents${sep}`);
-	}
-
 	/** Files that are implementation/OS metadata rather than user assets. */
 	isIgnoredPath(absolutePath: string): boolean {
-		return this.isLoomPath(absolutePath) || this.isAgentsPath(absolutePath) || basename(absolutePath) === ".DS_Store";
+		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store";
 	}
 }

@@ -35,7 +35,7 @@ test("library owner creates, lists, renames, archives, and reopens committed met
 		await writeFile(join(legacy, "ignored.jsonl"), "invalid legacy session\n");
 		let owner = await LibraryRuntime.open(path, options(), context);
 		try {
-			assert.equal(owner.storagePath, join(owner.libraryPath, ".loom", "loom.sqlite"));
+			assert.equal(owner.storagePath, join(owner.libraryPath, ".loom", "agents", "sessions", "loom.sqlite"));
 			assert.deepEqual(await listLoomConversations(owner.harness, {}, context), []);
 			const first = await owner.createConversation({}, context);
 			const second = await owner.createConversation({ title: " Second " }, context);

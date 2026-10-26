@@ -53,7 +53,7 @@ FFmpeg / ComfyUI / Publisher / ...
 
 ### 3.1 Filesystem — asset source of truth
 
-Loom imposes **no directory structure**. Assets may stay flat or follow any hierarchy the user chooses, as in Finder or Obsidian. Loom adds only a hidden `.loom/` directory at the library root for databases, caches, and configuration; it does not otherwise interfere with file organization.
+Loom imposes **no directory structure**. Assets may stay flat or follow any hierarchy the user chooses, as in Finder or Obsidian. Loom adds only a hidden `.loom/` directory at the library root for everything it owns (indexes, grading data, and Agent state); it does not otherwise interfere with file organization.
 
 ```
 CreativeAssets/          -- selected library root
@@ -63,21 +63,21 @@ CreativeAssets/          -- selected library root
 │   └── ...
 ├── notes.md
 │
-└── .loom/               -- hidden Loom metadata
-     ├── metadata.db      -- SQLite: metadata, vector, FTS
-     ├── graph.db         -- LadybugDB
-     ├── thumbnails/
-     ├── cache/
-     ├── sessions/        -- local Agent transcripts (JSONL)
-     └── config.json
+└── .loom/               -- hidden Loom metadata; never indexed
+     ├── metadata-db/metadata.db   -- SQLite: metadata, vector, FTS
+     ├── graph-db/graph.db/        -- LadybugDB
+     ├── grades/{records,luts}/    -- grade recipes and imported LUTs
+     └── agents/                   -- sessions/, command-allows/, skills/, memory/, traces/, tool-results/
 ```
+
+Full layout and rationale: [LIBRARY_LAYOUT.md](./LIBRARY_LAYOUT.md).
 
 - The user owns asset names, locations, and nesting.
 - **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 
-SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [SCHEMA.md](./RAG/data/SCHEMA.md).
+SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata-db/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [SCHEMA.md](./RAG/data/SCHEMA.md).
 
 Users may define fields such as:
 
@@ -344,7 +344,7 @@ Future publishing extension:
 
 Introduce these progressively when real scenarios require them:
 
-- **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
+- **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.loom/agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
 - **Multi-Agent:** done — chat Agent plus retrieve and create specialists. Independent calls in one turn run together. See [AGENT](./AGENT.md).
 - **Sandboxing:** bash and FFmpeg are in. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./AGENT/PERMISSION.md).
 - **LangGraph:** orchestrate complex and recoverable creative workflows.

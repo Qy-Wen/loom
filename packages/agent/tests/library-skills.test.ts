@@ -15,7 +15,7 @@ async function writeSkill(libraryRoot: string, name: string, description: string
 	await writeFile(join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\n${body}\n`);
 }
 
-test("loadLibrarySkills skips a missing .agents/skills directory", async () => {
+test("loadLibrarySkills skips a missing .loom/agents/skills directory", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-missing-"));
 	try {
 		const { skills, diagnostics } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT);
@@ -26,7 +26,7 @@ test("loadLibrarySkills skips a missing .agents/skills directory", async () => {
 	}
 });
 
-test("loadLibrarySkills reads SKILL.md under .agents/skills and leaves other trees alone", async () => {
+test("loadLibrarySkills reads SKILL.md under .loom/agents/skills and leaves other trees alone", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-load-"));
 	try {
 		await writeSkill(
@@ -52,7 +52,7 @@ test("loadLibrarySkills reads SKILL.md under .agents/skills and leaves other tre
 		assert.equal(skills[0]?.name, "brand-voice");
 		assert.match(skills[0]?.description ?? "", /house brand voice/);
 		assert.equal(skills[0]?.content.includes(BODY), true);
-		assert.match(skills[0]?.filePath.replaceAll("\\", "/") ?? "", /\.agents\/skills\/brand-voice\/SKILL\.md$/);
+		assert.match(skills[0]?.filePath.replaceAll("\\", "/") ?? "", /\.loom\/agents\/skills\/brand-voice\/SKILL\.md$/);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
@@ -72,7 +72,7 @@ test("formatSkillsForSystemPrompt lists the catalog without skill bodies", async
 		assert.match(prompt, /^The following skills provide specialized instructions/);
 		assert.match(prompt, /<name>brand-voice<\/name>/);
 		assert.match(prompt, /<description>Apply the house brand voice when writing titles or copy.<\/description>/);
-		assert.match(prompt.replaceAll("\\", "/"), /\.agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
+		assert.match(prompt.replaceAll("\\", "/"), /\.loom\/agents\/skills\/brand-voice\/SKILL\.md<\/location>/);
 		assert.doesNotMatch(prompt, new RegExp(BODY));
 		assert.equal(formatSkillsForSystemPrompt([]), "");
 		assert.equal(formatSkillsForSystemPrompt(skills.map((skill) => ({ ...skill, disableModelInvocation: true }))), "");

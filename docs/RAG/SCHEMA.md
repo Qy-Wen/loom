@@ -4,7 +4,7 @@
 
 > SQLite schema for one asset library. Product context is in [PRODUCT.md](../../PRODUCT.md) sections 3 and 4.
 >
-> The database is created at `<library>/.loom/metadata.db` when the library opens. Asset files stay on the filesystem. This database is a derived index.
+> The database is created at `<library>/.loom/metadata-db/metadata.db` when the library opens. Asset files stay on the filesystem. This database is a derived index.
 
 ---
 
@@ -177,7 +177,7 @@ The store rebuilds the table on open when its row count differs from `assets`, a
 
 Level 2 text RAG chunks live in `text_chunks` and `text_embed_jobs`, not in `asset_metadata`. See [TEXT](../TEXT.md).
 
-Relations are not in this database. They live in Ladybug at `<library>/.loom/graph.db`. See [Graph](#graph-ladybugdb).
+Relations are not in this database. They live in Ladybug at `<library>/.loom/graph-db/graph.db`. See [Graph](#graph-ladybugdb).
 
 ---
 
@@ -401,7 +401,7 @@ CREATE TABLE IF NOT EXISTS audio_writeup (
 
 ## Graph (LadybugDB)
 
-`LadybugGraphStore` uses `@ladybugdb/wasm-core` in-process (no server, no native addon). Queries run in memory. `<library>/.loom/graph.db` is a Ladybug `EXPORT DATABASE` folder, loaded with `IMPORT DATABASE` on open. Nodes are asset UUIDs only. Path, properties, and enrichment stay in SQLite.
+`LadybugGraphStore` uses `@ladybugdb/wasm-core` in-process (no server, no native addon). Queries run in memory. `<library>/.loom/graph-db/graph.db` is a Ladybug `EXPORT DATABASE` folder, loaded with `IMPORT DATABASE` on open. Nodes are asset UUIDs only. Path, properties, and enrichment stay in SQLite.
 
 ```
 CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id));

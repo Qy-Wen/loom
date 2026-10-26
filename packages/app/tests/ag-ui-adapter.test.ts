@@ -52,7 +52,7 @@ for (const caller of ["main", "retrieve", "create"] as const) {
 			assert.equal(await readFile(path, "utf8"), full);
 			const owner = host.requireRuntime();
 			const conversationId = Number(String(result.toolCallId).split("/")[0]) as ConversationId;
-			assert.equal(path.startsWith(join(owner.libraryPath, ".agents", "tool-results", String(conversationId))), true);
+			assert.equal(path.startsWith(join(owner.libraryPath, ".loom", "agents", "tool-results", String(conversationId))), true);
 			const conversation = await owner.harness.conversation(conversationId, context);
 			assert.ok(conversation);
 			const at = (await conversation.entries({}, 1, undefined, context)).items[0]!.id;

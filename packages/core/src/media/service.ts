@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import { basename, dirname, join } from "node:path";
 import {
 	buildGradeImageArgs,
@@ -48,6 +49,8 @@ export class MediaService {
 	private readonly run: typeof runMediaProcess;
 	/** One decoded preview frame per source, so a slider move does not seek again. */
 	private readonly gradeFrames = new Map<string, { timeMs: number; file: string }>();
+	/** Private scratch directory under the OS temp dir, so a crash never leaves files in the library. Created on first use. */
+	private scratch: Promise<string> | undefined;
 
 	constructor(library: Library, run: typeof runMediaProcess = runMediaProcess) {
 		this.library = library;
@@ -170,8 +173,7 @@ export class MediaService {
 	async previewImageGrade(args: GradeImageArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
 		const prepared = this.prepareGrade(args);
 		if (!prepared.filter && !force) return null;
-		const file = join(this.library.getPaths().cache, "grade-preview", `${randomUUID()}.jpg`);
-		await mkdir(dirname(file), { recursive: true });
+		const file = join(await this.scratchDir("preview"), `${randomUUID()}.jpg`);
 		try {
 			await this.run({
 				program: "ffmpeg",
@@ -246,9 +248,7 @@ export class MediaService {
 		const timeMs = Math.round(timeSeconds * 1000);
 		const hit = this.gradeFrames.get(absolutePath);
 		if (hit?.timeMs === timeMs) return hit.file;
-		const dir = join(this.library.getPaths().cache, "grade-frames");
-		await mkdir(dir, { recursive: true });
-		const file = join(dir, `${randomUUID()}.jpg`);
+		const file = join(await this.scratchDir("frames"), `${randomUUID()}.jpg`);
 		try {
 			await this.run({
 				program: "ffmpeg",
@@ -266,6 +266,24 @@ export class MediaService {
 		if (previous) await rm(previous.file, { force: true }).catch(() => undefined);
 		this.forgetOldGradeFrames(absolutePath);
 		return file;
+	}
+
+	private async scratchDir(name: "preview" | "frames"): Promise<string> {
+		this.scratch ??= mkdtemp(join(tmpdir(), "loom-grade-"));
+		const root = await this.scratch.catch((error) => { this.scratch = undefined; throw error; });
+		const dir = join(root, name);
+		await mkdir(dir, { recursive: true });
+		return dir;
+	}
+
+	/** Remove the scratch directory and forget cached frames. A later preview creates a new one. */
+	async releaseScratch(): Promise<void> {
+		const scratch = this.scratch;
+		this.scratch = undefined;
+		this.gradeFrames.clear();
+		if (!scratch) return;
+		const root = await scratch.catch(() => undefined);
+		if (root) await rm(root, { recursive: true, force: true }).catch(() => undefined);
 	}
 
 	private forgetOldGradeFrames(keep: string): void {

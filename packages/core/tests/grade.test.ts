@@ -287,3 +287,43 @@ function pngSize(bytes: Buffer): { w: number; h: number } {
 	assert.equal(bytes.toString("ascii", 1, 4), "PNG");
 	return { w: bytes.readUInt32BE(16), h: bytes.readUInt32BE(20) };
 }
+
+test("grade scratch files live outside the library and are removed when the library closes", async (t) => {
+	if (!tryResolveMediaBinaries()) {
+		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
+		return;
+	}
+	const { copyFile, readdir, stat, writeFile } = await import("node:fs/promises");
+	const { dirname } = await import("node:path");
+	const { fileURLToPath } = await import("node:url");
+	const root = await mkdtemp(join(tmpdir(), "loom-grade-scratch-"));
+	const outside = await mkdtemp(join(tmpdir(), "loom-lut-source-"));
+	const core = new LocalCore();
+	const scratchDirs = async () => (await readdir(tmpdir())).filter((name) => name.startsWith("loom-grade-") && !name.startsWith("loom-grade-scratch-"));
+	try {
+		const before = new Set(await scratchDirs());
+		await copyFile(join(dirname(fileURLToPath(import.meta.url)), "fixtures", "media", "still.png"), join(root, "still.png"));
+		const snapshot = await core.openLibrary(root);
+		const source = snapshot.assets.find((asset) => asset.relativePath === "still.png")!;
+
+		const preview = await core.previewImageGrade(source.assetId, { exposure: 1 });
+		assert.ok(preview && preview.length > 100);
+		const created = (await scratchDirs()).filter((name) => !before.has(name));
+		assert.equal(created.length, 1);
+		await assert.rejects(stat(join(root, ".loom", "cache")), { code: "ENOENT" });
+
+		await writeFile(join(outside, "look.cube"), "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");
+		const lut = await core.importGradeLut(join(outside, "look.cube"));
+		assert.equal(lut.path, ".loom/grades/luts/look.cube");
+		const graded = await core.gradeImage({ path: "still.png", grade: { exposure: 1 }, lut: lut.path });
+		assert.equal((await stat(join(root, ".loom", "grades", "records", `${graded.assetId}.json`))).isFile(), true);
+		assert.equal((await core.getImageGrade(graded.assetId))?.lut, lut.path);
+
+		await core.close();
+		assert.deepEqual((await scratchDirs()).filter((name) => !before.has(name)), []);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+		await rm(outside, { recursive: true, force: true });
+	}
+});

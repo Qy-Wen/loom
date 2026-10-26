@@ -2,7 +2,7 @@
 
 # 本地 Agent Trace
 
-开发模式将 trace 保存到 `<素材库>/.agents/traces/telemetry.sqlite`。记录和指标在最后更新 30 天后过期，打开数据库时及运行期间每分钟清理。窗口展示最近 40 条 trace，支持继续加载；切库重置视图。生产构建不记录，也不包含 trace 窗口。不上传数据。
+开发模式将 trace 保存到 `<素材库>/.loom/agents/traces/telemetry.sqlite`。记录和指标在最后更新 30 天后过期，打开数据库时及运行期间每分钟清理。窗口展示最近 40 条 trace，支持继续加载；切库重置视图。生产构建不记录，也不包含 trace 窗口。不上传数据。
 
 旧 `traces.sqlite` 文件保留，不读取、不迁移。
 
@@ -13,7 +13,7 @@
 - `DurableTrace.models()` 仅向已有原生请求 span 补充脱敏输入输出，不创建请求 span，不通过 signal 或 checkpoint 推断任务归属。
 - 工具 hook 补充参数与结果；commit 内容观察器补充最终有界工具输出（含审批拒绝、中断诊断）。`DurableTrace` 仅从已提交状态更新 submission 摘要，并集中处理窗口状态规则；recorder 不解释 durable 事件。`ToolGate` 在审批等待期间记录 `loom.approval`。
 - 原生输入提交各自建立根 trace。specialist 输入通过 links 关联调用它的工具，窗口展示关联；嵌套工具沿用原生 parent 关系。
-- 独立 SQLite WAL 不参与 `.loom/loom.sqlite` 的事务。请求发出前保存开始记录，内容更新按 100ms 合并，原生 span 结束时刷新。诊断写入失败会停用采集，Chat 继续运行。
+- 独立 SQLite WAL 不参与 `.loom/agents/sessions/loom.sqlite` 的事务。请求发出前保存开始记录，内容更新按 100ms 合并，原生 span 结束时刷新。诊断写入失败会停用采集，Chat 继续运行。
 
 崩溃后，未结束 span 标为 `interrupted`。原生 carrier 将恢复任务接回同一 trace，中断 attempt 仍保留。Trace 不调度、不重放工具。
 

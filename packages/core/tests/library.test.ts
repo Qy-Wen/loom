@@ -61,7 +61,7 @@ test("Library scans, ignores metadata, watches changes, and preserves identity o
 		await added;
 
 		assert.equal((await core.getLibrarySnapshot()).assets.length, 4);
-		await access(join(root, ".loom", "metadata.db"));
+		await access(join(root, ".loom", "metadata-db", "metadata.db"));
 
 		await core.close();
 		await rm(join(root, "notes", "brief.md"));
@@ -354,20 +354,24 @@ test("Library places outside files and folders into a chosen folder", async () =
 	}
 });
 
-test("Library creates .agents/memory and does not index .agents", async () => {
+test("Library creates .loom/agents/memory, does not index .loom, and indexes a user's .agents folder", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-memory-dir-"));
 	const core = new LocalCore();
 	try {
-		await mkdir(join(root, ".agents", "skills", "voice"), { recursive: true });
-		await writeFile(join(root, ".agents", "skills", "voice", "SKILL.md"), "skill");
-		await mkdir(join(root, ".agents", "memory"), { recursive: true });
-		await writeFile(join(root, ".agents", "memory", "MEMORY.md"), "user prefers concise titles");
+		const agents = join(root, ".loom", "agents");
+		await mkdir(join(agents, "skills", "voice"), { recursive: true });
+		await writeFile(join(agents, "skills", "voice", "SKILL.md"), "skill");
+		await mkdir(join(agents, "memory"), { recursive: true });
+		await writeFile(join(agents, "memory", "MEMORY.md"), "user prefers concise titles");
+		await mkdir(join(root, ".agents"), { recursive: true });
+		await writeFile(join(root, ".agents", "notes.md"), "user notes");
 		const opened = await core.openLibrary(root);
-		await access(join(root, ".agents", "memory"));
-		assert.equal(opened.folders.includes(".agents"), false);
-		assert.equal(opened.folders.includes(".agents/memory"), false);
+		await access(join(agents, "memory"));
+		assert.equal(opened.folders.some((folder) => folder.startsWith(".loom")), false);
 		assert.equal(opened.assets.some((asset) => asset.relativePath.includes("MEMORY.md")), false);
 		assert.equal(opened.assets.some((asset) => asset.relativePath.includes("SKILL.md")), false);
+		assert.equal(opened.folders.includes(".agents"), true);
+		assert.equal(opened.assets.some((asset) => asset.relativePath === ".agents/notes.md"), true);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

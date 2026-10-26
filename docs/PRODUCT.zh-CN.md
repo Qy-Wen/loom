@@ -63,21 +63,21 @@ CreativeAssets/          -- 用户选择的库根目录
 │   └── ...
 ├── notes.md
 │
-└── .loom/               -- 隐藏元数据目录（用户无需关心）
-     ├── metadata.db      -- SQLite (metadata + vector + FTS)
-     ├── graph.db         -- LadybugDB
-     ├── thumbnails/
-     ├── cache/
-     ├── sessions/        -- 本地 Agent 会话（JSONL）
-     └── config.json
+└── .loom/               -- 隐藏元数据目录（用户无需关心），不被索引
+     ├── metadata-db/metadata.db   -- SQLite（元数据 + 向量 + FTS）
+     ├── graph-db/graph.db/        -- LadybugDB
+     ├── grades/{records,luts}/    -- 调色配方与导入的 LUT
+     └── agents/                   -- sessions/、command-allows/、skills/、memory/、traces/、tool-results/
 ```
+
+完整结构与理由见 [LIBRARY_LAYOUT.md](./LIBRARY_LAYOUT.zh-CN.md)。
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
 - **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。若 `.loom/` 丢失或损坏，也只需重新索引，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 
-SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。数据库在 `<library>/.loom/metadata.db`：资产索引（`assets`）、库级键值（`library_meta`）、Obsidian 风格的自定义属性（`properties`、`asset_properties`），以及 Level 1 技术元数据（`asset_metadata`）。列定义见 [SCHEMA.zh-CN.md](./RAG/data/SCHEMA.zh-CN.md)。
+SQLite 不只承担「向量检索」，而是承担整个资产库的元数据存储。数据库在 `<library>/.loom/metadata-db/metadata.db`：资产索引（`assets`）、库级键值（`library_meta`）、Obsidian 风格的自定义属性（`properties`、`asset_properties`），以及 Level 1 技术元数据（`asset_metadata`）。列定义见 [SCHEMA.zh-CN.md](./RAG/data/SCHEMA.zh-CN.md)。
 
 用户可以自由创建属性字段，例如：
 
@@ -344,7 +344,7 @@ POST /graph/query
 
 后续根据实际场景逐步引入：
 
-- **Skills：** 已做 — 从 `<library>/.agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./AGENT.zh-CN.md)。
+- **Skills：** 已做 — 从 `<library>/.loom/agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./AGENT.zh-CN.md)。
 - **多 Agent**：已做 — 主对话加上检索和生成专职。同一轮里互不依赖的调用一起跑。见 [AGENT](./AGENT.zh-CN.md)。
 - **沙箱**：bash 和 FFmpeg 已进。生成任务走 MCP，不套这层。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
 - **LangGraph**：用于复杂、可恢复的创作工作流编排。

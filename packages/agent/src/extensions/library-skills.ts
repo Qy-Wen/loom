@@ -1,9 +1,11 @@
 import type { Context } from "@earendil-works/chord";
 import ignore from "ignore";
 import { parse } from "yaml";
+import { LibraryPaths } from "@loom/core/paths";
 import type { ExecutionEnv } from "../durable-adapter.ts";
 
-export const LIBRARY_SKILLS_DIR = ".agents/skills";
+/** Library-relative POSIX path of the skills catalog. */
+export const LIBRARY_SKILLS_DIR = LibraryPaths.SKILLS_RELATIVE;
 export interface Skill {
 	name: string;
 	description: string;

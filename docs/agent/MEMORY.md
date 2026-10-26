@@ -8,9 +8,9 @@
 
 ## 1. Where it lives
 
-Notes for the open library live in `<library>/.agents/memory/MEMORY.md`. One file. About 2,000 characters. The memory directory is created on the first write. `.agents` is not indexed as assets. The skill catalog in `.agents/skills/` is read during request preparation.
+Notes for the open library live in `<library>/.loom/agents/memory/MEMORY.md`. One file. About 2,000 characters. The memory directory is created on the first write. `.loom` is not indexed as assets. The skill catalog in `.loom/agents/skills/` is read during request preparation.
 
-Facts only: preferences and conventions for this library. A different library has a different file. Procedures stay in `.agents/skills/`.
+Facts only: preferences and conventions for this library. A different library has a different file. Procedures stay in `.loom/agents/skills/`.
 
 ---
 

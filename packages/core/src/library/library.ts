@@ -71,7 +71,7 @@ export class Library {
 		const opened = this.paths.root;
 		setProcessSandboxRoot(opened);
 		try {
-			await mkdir(join(opened, ".agents", "memory"), { recursive: true });
+			await mkdir(this.paths.memoryDir, { recursive: true });
 			await this.metadata.open(this.paths);
 			await this.metadata.recoverInterruptedJobs();
 			await this.syncFromDisk(false);
@@ -629,7 +629,7 @@ export class Library {
 	private async placeOnePath(absolutePath: string, destFolder: string, move: boolean): Promise<PlacedEntry | null> {
 		const paths = this.requirePaths();
 		const name = basename(absolutePath);
-		if (name === ".loom" || name === ".agents" || name === ".DS_Store") {
+		if (name === ".loom" || name === ".DS_Store") {
 			throw new Error(`${name} cannot be imported.`);
 		}
 

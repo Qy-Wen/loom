@@ -36,7 +36,7 @@ for (const probe of createTelemetryAdapterConformance(async () => {
 test("retention deletes trace payloads and metrics after 30 days and ignores legacy history", async (t) => {
 	const root = await mkdtemp(join(tmpdir(), "loom-telemetry-retention-"));
 	const store = await TraceStore.open(root);
-	const legacy = join(root, ".agents", "traces", "traces.sqlite");
+	const legacy = join(root, ".loom", "agents", "traces", "traces.sqlite");
 	await writeFile(legacy, "legacy-file-kept");
 	const now = Date.now(); let clock = now;
 	t.mock.method(Date, "now", () => clock);

@@ -2,7 +2,7 @@
 
 # Library layout
 
-> Status: proposal. Moves everything Loom owns into one hidden `.loom/` directory, so the library root holds only user assets. Replaces the layout in [PRODUCT.md](./PRODUCT.md) §3.1 once accepted.
+> Status: implemented. Everything Loom owns lives in one hidden `.loom/` directory, so the library root holds only user assets. `LibraryPaths` is the single owner of these paths.
 
 ## Target layout
 

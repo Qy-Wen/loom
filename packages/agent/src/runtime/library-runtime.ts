@@ -1,8 +1,9 @@
 import type { Context } from "@earendil-works/chord";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
 import type { Models } from "@earendil-works/pi-ai/models";
-import { realpath } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, realpath } from "node:fs/promises";
+import { dirname } from "node:path";
+import { LibraryPaths } from "@loom/core/paths";
 import {
 	configure,
 	createRegistry,
@@ -45,7 +46,7 @@ export class LibraryRuntime {
 
 	private constructor(libraryPath: string, harness: Harness, registry: Registry) {
 		this.libraryPath = libraryPath;
-		this.storagePath = join(libraryPath, ".loom", "loom.sqlite");
+		this.storagePath = new LibraryPaths(libraryPath).sessionsDb;
 		this.harness = harness;
 		this.registry = registry;
 	}
@@ -62,7 +63,9 @@ export class LibraryRuntime {
 		try {
 			const registry = createRegistry();
 			for (const extension of options.extensions ?? []) registry.install(extension);
-			storage = await openNodeSqliteStorage(join(root, ".loom", "loom.sqlite"));
+			const sessionsDb = new LibraryPaths(root).sessionsDb;
+			await mkdir(dirname(sessionsDb), { recursive: true });
+			storage = await openNodeSqliteStorage(sessionsDb);
 			context.abortSignal?.throwIfAborted();
 			harness = await Harness.open(storage, {
 				models: options.models,

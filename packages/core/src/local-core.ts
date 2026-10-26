@@ -169,6 +169,7 @@ export class LocalCore {
 		await this.tasks?.drain();
 		await this.library.close();
 		await this.graphStore.close();
+		await this.media.releaseScratch();
 		this.tasks = undefined;
 	}
 
@@ -618,7 +619,7 @@ export class LocalCore {
 			const asset = await this.library.indexFile(job.output);
 			if (!asset) throw new Error("Could not index graded image");
 			const source = await this.metadataStore.getAssetByPath(job.input);
-			await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+			await writeStoredGrade(this.library.getPaths().gradeRecords, asset.assetId, {
 				version: 1,
 				grade: job.grade,
 				sourceAssetId: source?.assetId,
@@ -634,7 +635,7 @@ export class LocalCore {
 	}
 
 	getImageGrade(assetId: string): Promise<ImageGradeRecord | undefined> {
-		return readStoredGrade(this.library.getPaths().grades, assetId);
+		return readStoredGrade(this.library.getPaths().gradeRecords, assetId);
 	}
 
 	async gradeVideo(args: GradeVideoArgs, signal?: AbortSignal): Promise<GradeVideoResult> {
@@ -643,7 +644,7 @@ export class LocalCore {
 			const asset = await this.library.indexFile(job.output);
 			if (!asset) throw new Error("Could not index graded video");
 			const source = await this.metadataStore.getAssetByPath(job.input);
-			await writeStoredGrade(this.library.getPaths().grades, asset.assetId, {
+			await writeStoredGrade(this.library.getPaths().gradeRecords, asset.assetId, {
 				version: 1,
 				grade: job.grade,
 				sourceAssetId: source?.assetId,
@@ -718,7 +719,7 @@ export class LocalCore {
 		} catch (error) {
 			if (!(error instanceof Error) || !error.message.startsWith("Path is outside the library")) throw error;
 		}
-		const dir = join(paths.cache, "luts");
+		const dir = paths.gradeLuts;
 		await mkdir(dir, { recursive: true });
 		const filename = await unusedLutFilename(dir, basename(absolutePath));
 		const dest = join(dir, filename);

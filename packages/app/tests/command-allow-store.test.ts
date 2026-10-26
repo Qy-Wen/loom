@@ -27,7 +27,7 @@ describe("CommandAllowStore", () => {
 			libraryOpen: true,
 			root,
 		});
-		assert.match(await readFile(join(root, ".loom", "command-allows.json"), "utf8"), /git status/);
+		assert.match(await readFile(join(root, ".loom", "agents", "command-allows", "command-allows.json"), "utf8"), /git status/);
 
 		const other = await mkdtemp(join(tmpdir(), "loom-command-allows-other-"));
 		assert.deepEqual(await again.bind(other), { allows: [], libraryOpen: true, root: other });
@@ -37,8 +37,8 @@ describe("CommandAllowStore", () => {
 
 	it("ignores a broken file until the next write", async () => {
 		const root = await mkdtemp(join(tmpdir(), "loom-command-allows-bad-"));
-		await mkdir(join(root, ".loom"));
-		await writeFile(join(root, ".loom", "command-allows.json"), "{", "utf8");
+		await mkdir(join(root, ".loom", "agents", "command-allows"), { recursive: true });
+		await writeFile(join(root, ".loom", "agents", "command-allows", "command-allows.json"), "{", "utf8");
 		const store = new CommandAllowStore();
 		assert.deepEqual(await store.bind(root), { allows: [], libraryOpen: true, root });
 		await store.add({ tool: "extract_frame" });

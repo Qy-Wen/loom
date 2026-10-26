@@ -2,7 +2,7 @@
 
 # Local Agent Traces
 
-Development mode records traces in `<library>/.agents/traces/telemetry.sqlite`. Records and metrics expire 30 days after their last update; cleanup runs on open and every minute. The viewer shows the latest 40 traces and supports pagination. Switching libraries resets it. Production builds do not record or include the trace window. No data is uploaded.
+Development mode records traces in `<library>/.loom/agents/traces/telemetry.sqlite`. Records and metrics expire 30 days after their last update; cleanup runs on open and every minute. The viewer shows the latest 40 traces and supports pagination. Switching libraries resets it. Production builds do not record or include the trace window. No data is uploaded.
 
 The old `traces.sqlite` is left untouched and is not read or migrated.
 
@@ -13,7 +13,7 @@ The old `traces.sqlite` is left untouched and is not read or migrated.
 - `DurableTrace.models()` adds redacted input/output to the existing native request span. It creates no request spans and does not infer task identity from signals or checkpoints.
 - Tool hooks add arguments and results. The commit content observer adds final bounded tool output, including blocked/interrupted diagnostics. `DurableTrace` derives submission summaries only from committed state and owns the viewer's status rules; the recorder does not interpret durable events. `ToolGate` records `loom.approval` around approval waits.
 - Native input submissions are separate root traces. Specialist inputs link to their calling tool; the viewer shows those links. Nested tools use native parentage within a trace.
-- SQLite WAL is independent of `.loom/loom.sqlite`. Starts are saved before request dispatch; content updates coalesce at 100 ms and native settlement flushes. A diagnostic write failure disables recording while Chat continues.
+- SQLite WAL is independent of `.loom/agents/sessions/loom.sqlite`. Starts are saved before request dispatch; content updates coalesce at 100 ms and native settlement flushes. A diagnostic write failure disables recording while Chat continues.
 
 After a crash, unfinished spans become `interrupted`. Native carriers reconnect recovered work to the same trace; interrupted attempts remain visible. Tracing never schedules or replays tools.
 

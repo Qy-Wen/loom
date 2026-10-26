@@ -1,6 +1,6 @@
 import { atomicWrite, encodeJson, readOptionalFile, withFileLock } from "../storage/file.ts";
 import { SerialQueue } from "../storage/serial-queue.ts";
-import { join } from "node:path";
+import { LibraryPaths } from "@loom/core/paths";
 import {
 	commandAllowId,
 	parseCommandAllows,
@@ -8,7 +8,7 @@ import {
 	type CommandAllowView,
 } from "@loom/agent/tool-permission";
 
-/** Remembered commands for one library. The file lives in `<library>/.loom/`. */
+/** Remembered commands for one library. The file lives under `<library>/.loom/agents/command-allows/`. */
 export class CommandAllowStore {
 	private readonly operations = new SerialQueue();
 	private root: string | null = null;
@@ -47,7 +47,7 @@ export class CommandAllowStore {
 	}
 
 	private filePath(root: string): string {
-		return join(root, ".loom", "command-allows.json");
+		return new LibraryPaths(root).commandAllows;
 	}
 
 	private async read(root: string): Promise<CommandAllow[]> {

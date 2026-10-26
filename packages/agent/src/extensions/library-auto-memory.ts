@@ -1,5 +1,5 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { LibraryPaths } from "@loom/core/paths";
 import { Type } from "@earendil-works/pi-ai";
 import { defineTool } from "../durable-adapter.ts";
 
@@ -8,7 +8,7 @@ const ENTRY_SEPARATOR = "\n§\n";
 const writes = new Map<string, Promise<unknown>>();
 
 export function libraryAutoMemoryFile(root: string): string {
-	return join(root, ".agents", "memory", "MEMORY.md");
+	return new LibraryPaths(root).memoryFile;
 }
 
 export function characterCount(text: string): number {
@@ -46,7 +46,7 @@ export async function readLibraryAutoMemory(root: string): Promise<string> {
 }
 
 export async function ensureLibraryAutoMemoryDir(root: string): Promise<void> {
-	await mkdir(join(root, ".agents", "memory"), { recursive: true });
+	await mkdir(new LibraryPaths(root).memoryDir, { recursive: true });
 }
 
 export function createAutoMemoryTool(root: string) {

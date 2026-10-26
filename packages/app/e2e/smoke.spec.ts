@@ -24,7 +24,7 @@ test("creates a durable conversation and discards the unused tab on close",  asy
 	expect(record.messages).toEqual([]);
 	await expect(loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab")).toHaveCount(sessions.filter(({ status }) => status === "open").length);
 
-	const database = await readFile(join(root!, ".loom", "loom.sqlite"));
+	const database = await readFile(join(root!, ".loom", "agents", "sessions", "loom.sqlite"));
 	expect(database.subarray(0, 16).toString()).toBe("SQLite format 3\u0000");
 	expect(created!.id).toMatch(/^[1-9]\d*$/);
 
