@@ -20,6 +20,17 @@ Remaining acceptance checklist: [CHAT_MODELS](./agent/CHAT_MODELS.md) P4/P5.
 
 ---
 
+## Library layout change
+
+Design: [LIBRARY_LAYOUT](./LIBRARY_LAYOUT.md). After the code lands, verify by hand on macOS and Windows:
+
+- With the process sandbox on, grade previews work: ffmpeg can write a jpg into the `loom-grade-*` directory under `os.tmpdir()`, for both images and videos.
+- Closing the library or app removes that directory; a crash leaves nothing in the library.
+- A fresh library creates `.loom/metadata-db/`, `.loom/graph-db/`, `.loom/grades/`, and `.loom/agents/`, and nothing else at the root besides user files.
+- Chat history, skills, memory, remembered commands, and grade records all work from the new paths; `.loom/` content is not indexed as assets.
+
+---
+
 ## Eval set improvement
 
 - Improve the eval set and add real-task evaluation: replace and extend the simple goldens in `tasks.ts` with real creative tasks, covering multi-step tools, media output, and failure paths. See [EVALS](./agent/EVALS.md).

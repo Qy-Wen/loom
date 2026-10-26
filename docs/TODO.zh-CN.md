@@ -20,6 +20,17 @@
 
 ---
 
+## 素材库目录调整
+
+设计见 [LIBRARY_LAYOUT](./LIBRARY_LAYOUT.zh-CN.md)。代码落地后，在 macOS 和 Windows 上手动验证：
+
+- 开启进程沙盒时，调色预览正常：图片和视频都能让 ffmpeg 往 `os.tmpdir()` 下的 `loom-grade-*` 目录写 jpg。
+- 关闭素材库或退出应用会删除这个目录；崩溃也不会在素材库里留下文件。
+- 新建素材库会创建 `.loom/metadata-db/`、`.loom/graph-db/`、`.loom/grades/`、`.loom/agents/`，根目录除用户文件外没有别的东西。
+- 聊天历史、技能、记忆、记住的命令和调色记录都能从新路径正常工作；`.loom/` 里的内容不被索引成素材。
+
+---
+
 ## 评测集优化
 
 - 优化评测集，引入真实任务评测：用真实创作任务替换、扩充 `tasks.ts` 的简单金标，覆盖多步工具、媒体产出与失败路径。见 [EVALS](./agent/EVALS.zh-CN.md)。
