@@ -94,3 +94,11 @@ export function canDropLibraryItem(destFolder: string, item: LibraryDrag | null)
 	}
 	return parentRelative(item.path) !== destFolder;
 }
+
+/** The files a library drag carries, in order. Folders are skipped: a folder has no view to show. */
+export function draggedAssetIds(item: LibraryDrag | null): string[] {
+	if (!item) return [];
+	if (item.kind === "asset") return [item.assetId];
+	if (item.kind === "batch") return item.assets.map((asset) => asset.assetId);
+	return [];
+}

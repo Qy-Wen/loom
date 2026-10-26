@@ -1,5 +1,5 @@
 import { DetailRequestScope } from "./details/request-scope.ts";
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
@@ -23,7 +23,7 @@ import { useLocale } from "./locale.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { sortAssets } from "./assets/asset-utils.ts";
-import { canDropLibraryItem, type LibraryDrag } from "./assets/asset-drag.ts";
+import { canDropLibraryItem, draggedAssetIds, endLibraryDrag, hasLibraryDrag, readLibraryDrag, type LibraryDrag } from "./assets/asset-drag.ts";
 import { usePanelLayout } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { PanelWorkspace, PanelsToggle, type PanelView } from "./layout/work-panel.tsx";
@@ -60,6 +60,8 @@ import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
+import { TabStrip } from "./workbench/tab-strip.tsx";
+import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, showInTab, type AssetTabs } from "./workbench/asset-tabs.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
@@ -130,6 +132,10 @@ export function App(): React.JSX.Element {
 	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
+	// The workbench shows the active tab, not the tree focus. Only actions that mean "look at this file"
+	// change tabs (selectAsset, clicking a file). Right-click, select all, and drops move the focus and leave tabs alone.
+	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
+	const viewedAssetId = tabs.active;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
@@ -156,7 +162,7 @@ export function App(): React.JSX.Element {
 	const [fullscreen, setFullscreen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const detailRequests = useRef(new DetailRequestScope());
-	detailRequests.current.select(selectedAssetId);
+	detailRequests.current.select(viewedAssetId);
 	const {
 		shellRef,
 		shellStyle,
@@ -206,6 +212,15 @@ export function App(): React.JSX.Element {
 		() => library.assets.find((asset) => asset.assetId === selectedAssetId) ?? null,
 		[library.assets, selectedAssetId],
 	);
+	const viewedAsset = useMemo(
+		() => library.assets.find((asset) => asset.assetId === viewedAssetId) ?? null,
+		[library.assets, viewedAssetId],
+	);
+	// A file that left the library (deleted, trashed, folder removed, library replaced) closes its tab.
+	useLayoutEffect(() => {
+		const ids = new Set(library.assets.map((asset) => asset.assetId));
+		setTabs((current) => pruneTabs(current, (assetId) => ids.has(assetId)));
+	}, [library.assets]);
 	const selectedKeys = useMemo(() => new Set(picked.keys), [picked.keys]);
 	const selectionDrag = useMemo((): LibraryDrag | null => {
 		const items = rootLibraryItems(cursorsForKeys(picked.keys, library.assets));
@@ -220,18 +235,19 @@ export function App(): React.JSX.Element {
 		};
 	}, [picked.keys, library.assets]);
 	const [gradingAssetId, setGradingAssetId] = useState<string | null>(null);
-	const gradeable = !!selectedAsset && (
-		(selectedAsset.type === "image" && isGradeableImage(selectedAsset.filename))
-		|| (selectedAsset.type === "video" && isGradeableVideo(selectedAsset.filename))
+	const [welcomeDrop, setWelcomeDrop] = useState(false);
+	const gradeable = !!viewedAsset && (
+		(viewedAsset.type === "image" && isGradeableImage(viewedAsset.filename))
+		|| (viewedAsset.type === "video" && isGradeableVideo(viewedAsset.filename))
 	);
-	const grading = gradeable && gradingAssetId === selectedAsset.assetId;
+	const grading = gradeable && gradingAssetId === viewedAsset.assetId;
 	const gradeVisible = workbenchView === "library" && grading;
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
 	// One product registry supplies identity, content, visibility and first-use policy.
 	const panelViews: PanelView[] = [
 		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} onOpenAsset={selectAsset} composerAttach={composerAttach} onComposerAttachApplied={() => setComposerAttach(null)} /> },
 		{ id: "details", visible: true, title: t.app.details, initialJoin: ["agent"], render: () => <DetailsPanel
-			asset={selectedAsset} properties={properties} propertyValues={propertyValues}
+			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}
 			enrichment={enrichment} textEmbed={textEmbed} embedding={embedding} onEmbed={() => void embedSelected()}
 			imageVlm={imageVlm} videoVlm={videoVlm} audioWriteup={audioWriteup} describing={describing} onDescribe={() => void describeSelected()}
@@ -243,8 +259,8 @@ export function App(): React.JSX.Element {
 	];
 	const panels = usePanelLayout(shellRef, panelViews);
 	useEffect(() => {
-		setGradingAssetId((current) => current === selectedAsset?.assetId ? current : null);
-	}, [selectedAsset?.assetId]);
+		setGradingAssetId((current) => current === viewedAsset?.assetId ? current : null);
+	}, [viewedAsset?.assetId]);
 
 	useEffect(() => {
 		void window.loom.getAgentEndpoint().then(setEndpoint).catch((cause) => {
@@ -331,7 +347,7 @@ export function App(): React.JSX.Element {
 			.catch(() => { if (current()) failed?.(); });
 	}
 
-	selectedAssetIdRef.current = selectedAssetId;
+	selectedAssetIdRef.current = viewedAssetId;
 
 	useEffect(() => {
 		if (workbenchView !== "graph" || !library.rootPath) return;
@@ -343,7 +359,7 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		setDescribing(false);
 		setEmbedding(false);
-		if (!selectedAssetId) {
+		if (!viewedAssetId) {
 			setEnrichment(undefined);
 			setTextEmbed(undefined);
 			setImageVlm(undefined);
@@ -352,25 +368,25 @@ export function App(): React.JSX.Element {
 			setRelations(EMPTY_RELATIONS);
 			return;
 		}
-		readDetail("enrichment", selectedAssetId, () => window.loom.getAssetEnrichment(selectedAssetId), setEnrichment, () => setEnrichment(undefined));
-		readDetail("text_embed", selectedAssetId, () => window.loom.getTextEmbedStatus(selectedAssetId), setTextEmbed, () => setTextEmbed(undefined));
-		readDetail("image_vlm", selectedAssetId, () => window.loom.getImageVlmStatus(selectedAssetId), setImageVlm, () => setImageVlm(undefined));
-		readDetail("video_vlm", selectedAssetId, () => window.loom.getVideoVlmStatus(selectedAssetId), setVideoVlm, () => setVideoVlm(undefined));
-		readDetail("audio_writeup", selectedAssetId, () => window.loom.getAudioWriteupStatus(selectedAssetId), setAudioWriteup, () => setAudioWriteup(undefined));
-		readDetail("relations", selectedAssetId, () => window.loom.getAssetRelations(selectedAssetId), setRelations, () => setRelations(EMPTY_RELATIONS));
-	}, [selectedAssetId, library.rootPath]);
+		readDetail("enrichment", viewedAssetId, () => window.loom.getAssetEnrichment(viewedAssetId), setEnrichment, () => setEnrichment(undefined));
+		readDetail("text_embed", viewedAssetId, () => window.loom.getTextEmbedStatus(viewedAssetId), setTextEmbed, () => setTextEmbed(undefined));
+		readDetail("image_vlm", viewedAssetId, () => window.loom.getImageVlmStatus(viewedAssetId), setImageVlm, () => setImageVlm(undefined));
+		readDetail("video_vlm", viewedAssetId, () => window.loom.getVideoVlmStatus(viewedAssetId), setVideoVlm, () => setVideoVlm(undefined));
+		readDetail("audio_writeup", viewedAssetId, () => window.loom.getAudioWriteupStatus(viewedAssetId), setAudioWriteup, () => setAudioWriteup(undefined));
+		readDetail("relations", viewedAssetId, () => window.loom.getAssetRelations(viewedAssetId), setRelations, () => setRelations(EMPTY_RELATIONS));
+	}, [viewedAssetId, library.rootPath]);
 
 	useEffect(() => {
 		void window.loom.setUiSelection(
-			selectedAsset
+			viewedAsset
 				? {
-					assetId: selectedAsset.assetId,
-					path: selectedAsset.relativePath,
-					assetType: selectedAsset.type,
+					assetId: viewedAsset.assetId,
+					path: viewedAsset.relativePath,
+					assetType: viewedAsset.type,
 				}
 				: null,
 		);
-	}, [selectedAsset]);
+	}, [viewedAsset]);
 
 	useEffect(() => {
 		if (!selectedAsset) return;
@@ -443,8 +459,38 @@ export function App(): React.JSX.Element {
 		});
 	}
 
+	/** Select a file and show it in the active tab. */
 	function selectAsset(assetId: string): void {
+		setTabs((current) => showInTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	/** Open in a new tab next to the active one. The tree and Details follow the new tab. */
+	function openAssetInNewTab(assetId: string): void {
+		setTabs((current) => openInNewTab(current, assetId));
+		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	/** Library files dropped on the tab strip become tabs; the first one is shown and selected. */
+	function openDroppedFiles(assetIds: string[], beforeId: string | null): void {
+		const known = new Set(library.assets.map((asset) => asset.assetId));
+		const ids = assetIds.filter((id) => known.has(id));
+		if (ids.length === 0) return;
+		setTabs((current) => insertTabs(current, ids, beforeId));
+		setPicked(singleSelection(assetKey(ids[0])));
+	}
+
+	function activateAssetTab(assetId: string): void {
+		setTabs((current) => activateTab(current, assetId));
+		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	/** Closing a tab shows its neighbour, and the tree selection follows it. */
+	function closeAssetTab(assetId: string): void {
+		const next = closeTab(tabs, assetId);
+		setTabs(next);
+		if (next.active === tabs.active) return;
+		setPicked(next.active ? singleSelection(assetKey(next.active)) : emptyTreeSelection);
 	}
 
 	function selectFolder(relativePath: string): void {
@@ -456,7 +502,10 @@ export function App(): React.JSX.Element {
 	}
 
 	function chooseTreeKey(key: string, mode: PointerMode, rows: readonly TreeRow[]): void {
-		setPicked((current) => pointerSelect(current, rows, key, mode));
+		const next = pointerSelect(picked, rows, key, mode);
+		setPicked(next);
+		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
+		if (next.focus?.startsWith("asset:")) setTabs((current) => showInTab(current, next.focus!.slice("asset:".length)));
 	}
 
 	function cancelRename(): void {
@@ -640,7 +689,9 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1);
-			if (action === "favorite" || action === "unfavorite") {
+			if (action === "open_in_new_tab") {
+				openAssetInNewTab(asset.assetId);
+			} else if (action === "favorite" || action === "unfavorite") {
 				await window.loom.setFavorite(asset.assetId, action === "favorite");
 			} else if (action === "add_to_chat") {
 				if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -886,16 +937,16 @@ export function App(): React.JSX.Element {
 	}
 
 	async function describeSelected(): Promise<void> {
-		if (!selectedAssetId) return;
-		const assetId = selectedAssetId;
+		if (!viewedAssetId) return;
+		const assetId = viewedAssetId;
 		const current = detailRequests.current.request("describe-action", assetId);
 		setDescribing(true);
 		setError(null);
 		try {
-			if (selectedAsset?.type === "video") {
+			if (viewedAsset?.type === "video") {
 				const status = await window.loom.describeVideo(assetId);
 				if (current()) setVideoVlm(status);
-			} else if (selectedAsset?.type === "audio") {
+			} else if (viewedAsset?.type === "audio") {
 				const status = await window.loom.describeAudio(assetId);
 				if (current()) setAudioWriteup(status);
 			} else {
@@ -911,8 +962,8 @@ export function App(): React.JSX.Element {
 	}
 
 	async function embedSelected(): Promise<void> {
-		if (!selectedAssetId) return;
-		const assetId = selectedAssetId;
+		if (!viewedAssetId) return;
+		const assetId = viewedAssetId;
 		const current = detailRequests.current.request("embed-action", assetId);
 		setEmbedding(true);
 		setError(null);
@@ -1022,6 +1073,7 @@ export function App(): React.JSX.Element {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setLibrary(snapshot);
 				clearLibrarySelection();
+				setTabs(emptyAssetTabs);
 				setRenamingAssetId(null);
 				setRenamingFolder(null);
 				setLibraryClipboard(null);
@@ -1116,6 +1168,7 @@ export function App(): React.JSX.Element {
 						selectionDrag={selectionDrag}
 						onToggleFolder={toggleFolder}
 						onSelectAsset={(assetId, mode, rows) => chooseTreeKey(assetKey(assetId), mode, rows)}
+						onOpenAssetInTab={openAssetInNewTab}
 						onSelectFolder={(relativePath, mode, rows) => chooseTreeKey(folderKey(relativePath), mode, rows)}
 						onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
 						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
@@ -1139,6 +1192,16 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
+						{workbenchView === "library" && (
+							<TabStrip
+								tabs={tabs}
+								assets={library.assets}
+								onActivate={activateAssetTab}
+								onClose={closeAssetTab}
+								onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
+								onDropFiles={openDroppedFiles}
+							/>
+						)}
 						{workbenchView === "table" ? (
 							<TableView
 								assets={library.assets}
@@ -1169,10 +1232,10 @@ export function App(): React.JSX.Element {
 								onCreateRelation={createRelation}
 								onRemoveRelation={removeRelation}
 							/>
-						) : selectedAsset ? (
+						) : viewedAsset ? (
 							<AssetPreview
-								key={selectedAsset.assetId}
-								asset={selectedAsset}
+								key={viewedAsset.assetId}
+								asset={viewedAsset}
 								assets={library.assets}
 								onGraded={selectAsset}
 								gradeHost={gradeHost}
@@ -1181,20 +1244,39 @@ export function App(): React.JSX.Element {
 									<PreviewActions
 										canGrade={gradeable}
 										grading={grading}
-										leaveVideo={selectedAsset.type === "video"}
-										favorite={library.favoriteAssetIds.includes(selectedAsset.assetId)}
+										leaveVideo={viewedAsset.type === "video"}
+										favorite={library.favoriteAssetIds.includes(viewedAsset.assetId)}
 										onGrade={() => {
-											setGradingAssetId(selectedAsset.assetId);
+											setGradingAssetId(viewedAsset.assetId);
 											panels.focus("grade");
 										}}
 										onLeaveGrade={() => setGradingAssetId(null)}
-										onToggleFavorite={() => void togglePreviewFavorite(selectedAsset)}
-										onDelete={() => void trashPreviewed(selectedAsset.assetId)}
+										onToggleFavorite={() => void togglePreviewFavorite(viewedAsset)}
+										onDelete={() => void trashPreviewed(viewedAsset.assetId)}
 									/>
 								)}
 							/>
 						) : (
-							<div className="welcome">
+							<div
+								className={`welcome${welcomeDrop ? " drop-ready" : ""}`}
+								onDragOver={(event) => {
+									if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
+									event.preventDefault();
+									event.dataTransfer.dropEffect = "copy";
+									if (!welcomeDrop) setWelcomeDrop(true);
+								}}
+								onDragLeave={(event) => {
+									if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setWelcomeDrop(false);
+								}}
+								onDrop={(event) => {
+									if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
+									event.preventDefault();
+									setWelcomeDrop(false);
+									const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
+									endLibraryDrag();
+									openDroppedFiles(ids, null);
+								}}
+							>
 								<div className="welcome-mark">L</div>
 								<h1>{library.rootPath ? t.app.chooseAsset : t.app.openWorkspace}</h1>
 								<p>

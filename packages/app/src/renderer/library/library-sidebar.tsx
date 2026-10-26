@@ -12,7 +12,7 @@ import {
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
 import { uiPlatform } from "../../shared/locale.ts";
-import { FileTree, FolderChevronIcon, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
+import { FileTree, FolderChevronIcon, openInTabHandlers, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
 import { assetKey, pointerMode, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
@@ -199,6 +199,7 @@ interface LibrarySidebarProps {
 	selectionDrag: LibraryDrag | null;
 	onToggleFolder: (relativePath: string) => void;
 	onSelectAsset: (assetId: string, mode: PointerMode, rows: readonly TreeRow[]) => void;
+	onOpenAssetInTab: (assetId: string) => void;
 	onSelectFolder: (relativePath: string, mode: PointerMode, rows: readonly TreeRow[]) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onFolderContextMenu: (relativePath: string) => void;
@@ -226,6 +227,7 @@ export function LibrarySidebar({
 	selectionDrag,
 	onToggleFolder,
 	onSelectAsset,
+	onOpenAssetInTab,
 	onSelectFolder,
 	onAssetContextMenu,
 	onFolderContextMenu,
@@ -505,6 +507,7 @@ export function LibrarySidebar({
 										key={asset.assetId}
 										type="button"
 										className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
+										{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
 										onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
 										onContextMenu={(event) => {
 											event.preventDefault();
@@ -568,6 +571,7 @@ export function LibrarySidebar({
 													type="button"
 													className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
 													style={{ paddingLeft: 35 }}
+													{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
 													onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
 													onContextMenu={(event) => {
 														event.preventDefault();
@@ -611,6 +615,7 @@ export function LibrarySidebar({
 							onFolderContextMenu={onFolderContextMenu}
 							onRenameFolder={onRenameFolder}
 							onSelectAsset={(assetId, mode) => onSelectAsset(assetId, mode, treeRows)}
+							onOpenAssetInTab={onOpenAssetInTab}
 							onAssetContextMenu={onAssetContextMenu}
 							onRenameAsset={onRenameAsset}
 							onCancelRename={onCancelRename}

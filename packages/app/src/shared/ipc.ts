@@ -62,6 +62,7 @@ export type ChatLoginPrompt =
 	| { type: "progress"; message: string };
 
 export type AssetContextAction =
+	| "open_in_new_tab"
 	| "add_to_chat"
 	| "favorite"
 	| "unfavorite"

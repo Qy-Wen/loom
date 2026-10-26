@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canDropLibraryItem } from "../src/renderer/assets/asset-drag.ts";
+import { canDropLibraryItem, draggedAssetIds } from "../src/renderer/assets/asset-drag.ts";
 
 describe("canDropLibraryItem", () => {
 	it("moves a file into another folder", () => {
@@ -32,5 +32,18 @@ describe("canDropLibraryItem", () => {
 		assert.equal(canDropLibraryItem("notes", { kind: "folder", relativePath: "notes" }), false);
 		assert.equal(canDropLibraryItem("notes/sub", { kind: "folder", relativePath: "notes" }), false);
 		assert.equal(canDropLibraryItem("archive", { kind: "folder", relativePath: "notes" }), true);
+	});
+});
+
+describe("draggedAssetIds", () => {
+	it("lists the files a drag carries and skips folders", () => {
+		assert.deepEqual(draggedAssetIds({ kind: "asset", assetId: "a", path: "a.png" }), ["a"]);
+		assert.deepEqual(draggedAssetIds({
+			kind: "batch",
+			assets: [{ assetId: "a", path: "a.png" }, { assetId: "b", path: "b.png" }],
+			folders: ["notes"],
+		}), ["a", "b"]);
+		assert.deepEqual(draggedAssetIds({ kind: "folder", relativePath: "notes" }), []);
+		assert.deepEqual(draggedAssetIds(null), []);
 	});
 });

@@ -203,3 +203,121 @@
 	border-radius: 3px;
 	background: #fff;
 }
+
+.asset-tabs {
+	display: flex;
+	align-items: stretch;
+	flex: 0 0 34px;
+	min-width: 0;
+	overflow-x: auto;
+	overflow-y: hidden;
+	scrollbar-width: thin;
+	border-bottom: 1px solid #e5e5e2;
+}
+
+.asset-tab {
+	position: relative;
+	display: flex;
+	align-items: stretch;
+	flex: 0 1 auto;
+	min-width: 72px;
+	max-width: 200px;
+	border-radius: 6px 6px 0 0;
+}
+
+.asset-tab button {
+	border: 0;
+	color: #7a7d82;
+	background: transparent;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.asset-tab > button[role="tab"] {
+	min-width: 0;
+	flex: 1;
+	padding: 0 4px 0 12px;
+	overflow: hidden;
+	text-align: left;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.asset-tab > button[role="tab"] > span {
+	pointer-events: none;
+}
+
+.asset-tab.active > button[role="tab"] {
+	color: #202124;
+	font-weight: 620;
+}
+
+.asset-tab.active::after {
+	position: absolute;
+	right: 6px;
+	bottom: -1px;
+	left: 8px;
+	height: 2px;
+	border-radius: 2px;
+	background: #202124;
+	content: "";
+	pointer-events: none;
+}
+
+.asset-tab:hover {
+	background: #f0f0ed;
+}
+
+.asset-tab-close {
+	align-self: center;
+	flex: 0 0 18px;
+	width: 18px;
+	height: 18px;
+	margin-right: 4px;
+	padding: 0;
+	border-radius: 4px;
+	font-size: 14px;
+	line-height: 1;
+}
+
+.asset-tab:hover .asset-tab-close,
+.asset-tab.active .asset-tab-close {
+	color: #202124;
+}
+
+.asset-tab-close:hover {
+	background: #e2e2de;
+}
+
+.asset-tab.dragging {
+	opacity: 0.45;
+}
+
+/* The insertion mark sits on the tab boundary, on the side the dragged tab would land. */
+.asset-tab.drop-before::before,
+.asset-tab.drop-after::before {
+	position: absolute;
+	top: 6px;
+	bottom: 6px;
+	z-index: 1;
+	width: 2px;
+	border-radius: 2px;
+	background: #3b82f6;
+	content: "";
+	pointer-events: none;
+}
+
+.asset-tab.drop-before::before {
+	left: -1px;
+}
+
+.asset-tab.drop-after::before {
+	right: -1px;
+}
+
+/* With no tab open, the welcome page takes library files dragged from the tree. */
+.welcome.drop-ready {
+	outline: 2px dashed #9aa0a6;
+	outline-offset: -12px;
+	background: #f7f7f5;
+}

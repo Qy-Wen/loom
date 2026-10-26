@@ -102,6 +102,7 @@ export const messages = defineLocale(
 			expandSidebar: "Expand sidebar",
 		},
 		menu: {
+			openInNewTab: "Open in new tab",
 			addToChat: "Add to chat",
 			addToFavorites: "Add to Favorites",
 			removeFromFavorites: "Remove from Favorites",
@@ -271,6 +272,10 @@ export const messages = defineLocale(
 			thinkingLevels: { off: "Off", minimal: "Minimal", low: "Low", medium: "Medium", high: "High", xhigh: "Extra high", max: "Max" },
 			modelChangeFailed: "Could not change the model. It may be busy.",
 			removeNamed: (label: string) => `Remove ${label}`,
+		},
+		tabs: {
+			label: "Open files",
+			close: (name: string) => `Close ${name}`,
 		},
 		sessions: {
 			label: "Sessions",
@@ -599,6 +604,7 @@ export const messages = defineLocale(
 			expandSidebar: "展开侧边栏",
 		},
 		menu: {
+			openInNewTab: "在新标签页中打开",
 			addToChat: "添加到对话",
 			addToFavorites: "加入收藏",
 			removeFromFavorites: "移出收藏",
@@ -756,6 +762,10 @@ export const messages = defineLocale(
 			thinkingLevels: { off: "关闭", minimal: "最低", low: "低", medium: "中", high: "高", xhigh: "超高", max: "最高" },
 			modelChangeFailed: "无法切换模型，会话可能正忙。",
 			removeNamed: (label) => `移除 ${label}`,
+		},
+		tabs: {
+			label: "已打开的文件",
+			close: (name) => `关闭 ${name}`,
 		},
 		sessions: {
 			label: "会话",

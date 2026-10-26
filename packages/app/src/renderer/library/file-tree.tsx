@@ -94,10 +94,27 @@ interface AssetTreeRowProps {
 	favorite: boolean;
 	selectionDrag: LibraryDrag | null;
 	onSelect: (mode: PointerMode) => void;
+	onOpenInTab: () => void;
 	onContextMenu: () => void;
 	onRename: (stem: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropFolder: (destFolder: string | null) => void;
+}
+
+/**
+ * Middle-click opens the file in a new tab, like a browser link. Double-click cannot: its first click already
+ * replaced the active tab with this file, so the second has nothing left to open.
+ */
+export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttributes<HTMLButtonElement>, "onMouseDown" | "onAuxClick"> {
+	return {
+		// Windows starts autoscroll on a middle press; keep it from stealing the click.
+		onMouseDown: (event) => {
+			if (event.button === 1) event.preventDefault();
+		},
+		onAuxClick: (event) => {
+			if (event.button === 1) open();
+		},
+	};
 }
 
 function clickMode(event: React.MouseEvent): PointerMode {
@@ -114,6 +131,7 @@ function AssetTreeRow({
 	favorite,
 	selectionDrag,
 	onSelect,
+	onOpenInTab,
 	onContextMenu,
 	onRename,
 	onCancelRename,
@@ -181,6 +199,7 @@ function AssetTreeRow({
 				endLibraryDrag();
 				onDropFolder(null);
 			}}
+			{...openInTabHandlers(onOpenInTab)}
 			onClick={(event) => onSelect(clickMode(event))}
 			onContextMenu={(event) => {
 				event.preventDefault();
@@ -203,6 +222,7 @@ function AssetIconTile({
 	favorite,
 	selectionDrag,
 	onSelect,
+	onOpenInTab,
 	onContextMenu,
 	onRename,
 	onCancelRename,
@@ -238,6 +258,7 @@ function AssetIconTile({
 					endLibraryDrag();
 					onDropFolder(null);
 				}}
+				{...openInTabHandlers(onOpenInTab)}
 				onClick={(event) => onSelect(clickMode(event))}
 				onContextMenu={(event) => {
 					event.preventDefault();
@@ -298,6 +319,7 @@ interface FolderTreeRowProps {
 	onFolderContextMenu: (relativePath: string) => void;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onSelectAsset: (assetId: string, mode: PointerMode) => void;
+	onOpenAssetInTab: (assetId: string) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
@@ -468,6 +490,7 @@ function FolderTreeRow({
 					onFolderContextMenu={rowProps.onFolderContextMenu}
 					onRenameFolder={rowProps.onRenameFolder}
 					onSelectAsset={rowProps.onSelectAsset}
+					onOpenAssetInTab={rowProps.onOpenAssetInTab}
 					onAssetContextMenu={rowProps.onAssetContextMenu}
 					onRenameAsset={rowProps.onRenameAsset}
 					onCancelRename={rowProps.onCancelRename}
@@ -502,6 +525,7 @@ interface FileTreeRowsProps {
 	onFolderContextMenu: (relativePath: string) => void;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onSelectAsset: (assetId: string, mode: PointerMode) => void;
+	onOpenAssetInTab: (assetId: string) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
 	onCancelRename: () => void;
@@ -532,6 +556,7 @@ function FileTreeRows({
 	onFolderContextMenu,
 	onRenameFolder,
 	onSelectAsset,
+	onOpenAssetInTab,
 	onAssetContextMenu,
 	onRenameAsset,
 	onCancelRename,
@@ -578,6 +603,7 @@ function FileTreeRows({
 					onFolderContextMenu={onFolderContextMenu}
 					onRenameFolder={onRenameFolder}
 					onSelectAsset={onSelectAsset}
+					onOpenAssetInTab={onOpenAssetInTab}
 					onAssetContextMenu={onAssetContextMenu}
 					onRenameAsset={onRenameAsset}
 					onCancelRename={onCancelRename}
@@ -600,6 +626,7 @@ function FileTreeRows({
 								favorite={favoriteAssetIds.has(asset.assetId)}
 								selectionDrag={selectionDrag}
 								onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
+								onOpenInTab={() => onOpenAssetInTab(asset.assetId)}
 								onContextMenu={() => onAssetContextMenu(asset)}
 								onRename={(stem) => onRenameAsset(asset, stem)}
 								onCancelRename={onCancelRename}
@@ -620,6 +647,7 @@ function FileTreeRows({
 					favorite={favoriteAssetIds.has(asset.assetId)}
 					selectionDrag={selectionDrag}
 					onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
+					onOpenInTab={() => onOpenAssetInTab(asset.assetId)}
 					onContextMenu={() => onAssetContextMenu(asset)}
 					onRename={(stem) => onRenameAsset(asset, stem)}
 					onCancelRename={onCancelRename}
