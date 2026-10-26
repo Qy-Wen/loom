@@ -61,6 +61,7 @@ pnpm --filter @loom/app check:node-sqlite  # 验证真实 Electron 主进程的 
 pnpm --filter @loom/agent try:durable  # 真实模型/工具 + 临时 SQLite/重开冒烟测试
 pnpm test                            # 全部单元 / 集成测试
 pnpm test:e2e                        # Playwright 冷启动（需先 build）
+pnpm test:e2e e2e/x.spec.ts -g "名称" --repeat-each=20   # 只跑某个文件或用例并重复；--last-failed 重跑上次失败的
 pnpm test:e2e:attach                 # Playwright 连上正在跑的 pnpm dev（:9344）
 pnpm -r typecheck
 ```

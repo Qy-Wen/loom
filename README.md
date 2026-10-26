@@ -61,6 +61,7 @@ pnpm --filter @loom/app check:node-sqlite  # Verify SQLite in the real Electron 
 pnpm --filter @loom/agent try:durable  # Live model/tool + temporary SQLite/reopen smoke test
 pnpm test                             # All unit and integration tests
 pnpm test:e2e                         # Playwright launch (needs app build)
+pnpm test:e2e e2e/x.spec.ts -g "name" --repeat-each=20   # one spec or case, repeated; --last-failed reruns failures
 pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9344)
 pnpm -r typecheck
 ```

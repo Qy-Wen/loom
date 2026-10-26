@@ -30,13 +30,24 @@ const appRoot = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9344";
 const attach = Boolean(process.env.LOOM_CDP_URL?.trim());
 
-export function launchTestElectron(userData: string): Promise<ElectronApplication> {
+/**
+ * Start an isolated Electron. A native context menu cannot be driven from a test and, left open while the app
+ * is torn down, was seen to crash Electron on exit (macOS then shows a "quit unexpectedly" dialog that
+ * stalls the run). So popup() answers at once as if the menu was dismissed.
+ */
+export async function launchTestElectron(userData: string): Promise<ElectronApplication> {
 	if (!existsSync(join(appRoot, "out/main/index.js"))) throw new Error("Build the app first: pnpm --filter @loom/app build");
-	return electron.launch({
+	const app = await electron.launch({
 		executablePath: require("electron") as string,
 		args: [appRoot],
 		env: { ...process.env, LOOM_E2E: "1", LOOM_E2E_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
 	});
+	await app.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (options?: { callback?: () => void }) {
+			options?.callback?.();
+		} as typeof Menu.prototype.popup;
+	});
+	return app;
 }
 
 export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronApplication | null }>({
