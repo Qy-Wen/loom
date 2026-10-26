@@ -30,6 +30,12 @@ export function SessionBar({
 	const archived = sessions.filter((session) => session.status === "archived");
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
+	const tabsRef = useRef<HTMLDivElement>(null);
+
+	// With many tabs the strip scrolls, so keep the current one in view.
+	useEffect(() => {
+		tabsRef.current?.querySelector(".session-tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [currentId, open.length]);
 
 	useEffect(() => {
 		if (!menuOpen) return;
@@ -42,7 +48,7 @@ export function SessionBar({
 
 	return (
 		<div className="session-bar" onPointerEnter={onRefresh}>
-			<div className="session-tabs" role="tablist" aria-label={t.sessions.label}>
+			<div className="session-tabs" ref={tabsRef} role="tablist" aria-label={t.sessions.label}>
 				{open.map((session) => {
 					const selected = session.id === currentId;
 					return (

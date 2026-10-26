@@ -69,6 +69,8 @@ test("switching libraries aborts detail jobs, drops old UI results, and reopenin
 		released = true;
 		for (const response of pending) response.destroy();
 		await open(previousRoot);
+		// The selected panel tab is remembered, and later specs expect Chat, so put it back.
+		await loomPage.getByRole("button", { name: "Chat", exact: true }).click();
 		await loomPage.evaluate((settings) => window.loom.saveModelSettings(settings), original);
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
