@@ -5,6 +5,7 @@ import { CopilotChatInput, type CopilotChatInputProps } from "@copilotkit/react-
 import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
 import { formatChatError } from "../../shared/chat-error.ts";
+import type { ChatModelView } from "../../shared/chat-models.ts";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
@@ -16,6 +17,7 @@ import { AddFilesButton, ComposerTextArea, AssetSendButton } from "./chat-compos
 import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
+import { hasImageAsset, modelLacksImageInput } from "./image-support.ts";
 import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
 /** `ready` once the main process has admitted it, i.e. it can be withdrawn. */
@@ -37,6 +39,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
 	const [attachmentError, setAttachmentError] = useState<string | null>(null);
+	const [catalog, setCatalog] = useState<ChatModelView[] | null>(null);
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
 	const valueRef = useRef(value);
@@ -48,6 +51,16 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	useLayoutEffect(() => {
 		setToolbar(slotRef.current?.querySelector<HTMLElement>('[data-testid="copilot-chat-input"] > [data-layout]') ?? null);
 	}, []);
+	useEffect(() => {
+		let cancelled = false;
+		const load = () => {
+			void window.loom.getChatSettings().then((view) => { if (!cancelled) setCatalog(view.models); }).catch(() => {});
+		};
+		load();
+		const stop = window.loom.onChatSettingsChanged(load);
+		return () => { cancelled = true; stop(); };
+	}, []);
+	const textOnlyModel = modelLacksImageInput(model, catalog);
 	const hasDraft = editableText(value ?? "") || assets.length > 0;
 	const draftRef = useRef(draft);
 	draftRef.current = draft;
@@ -380,6 +393,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			)}
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
 			{attachmentError && <div className="session-branch-note session-branch-error">{attachmentError}</div>}
+			{textOnlyModel && hasImageAsset(assets) && <div className="session-branch-note" role="status">{t.chat.modelNoImages}</div>}
 			{queued.length > 0 && (
 				<section className="session-follow-up" aria-label={t.chat.queued}>
 					<div className="session-follow-up-label">{t.chat.queued}</div>

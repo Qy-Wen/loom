@@ -1,12 +1,10 @@
 import { open } from "node:fs/promises";
-import { basename, extname } from "node:path";
-import { COMPOSER_IMAGE_MAX_BYTES, COMPOSER_IMAGE_MAX_COUNT, parseComposerImageInputs, sniffComposerImage, type ComposerImageInput } from "@loom/agent";
+import { basename } from "node:path";
+import { COMPOSER_IMAGE_MAX_BYTES, COMPOSER_IMAGE_MAX_COUNT, isComposerImagePath, parseComposerImageInputs, sniffComposerImage, type ComposerImageInput } from "@loom/agent";
 import { parseComposerAssetInputs } from "@loom/agent/composer-asset";
 import { stageComposerAssets } from "./composer-assets.ts";
 
 const staged = new Map<string, ComposerImageInput[]>();
-
-const IMAGE_EXTENSIONS = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
 
 /** Resolve explicit chips by library ID, then stage references and image bytes together. */
 export async function stageComposerInput(
@@ -21,7 +19,7 @@ export async function stageComposerInput(
 		const path = await resolveAsset(asset.assetId);
 		if (!path) throw new Error(`${asset.path} is no longer in the library.`);
 		// Other image formats remain usable as library references.
-		if (!IMAGE_EXTENSIONS.has(extname(path).toLowerCase())) continue;
+		if (!isComposerImagePath(path)) continue;
 		if (images.length >= COMPOSER_IMAGE_MAX_COUNT) throw new Error("Attach up to 4 images.");
 		const file = await open(path, "r");
 		try {

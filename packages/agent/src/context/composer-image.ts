@@ -7,6 +7,15 @@ export const COMPOSER_IMAGE_MIMES = ["image/jpeg", "image/png", "image/gif", "im
 
 export type ComposerImageMime = (typeof COMPOSER_IMAGE_MIMES)[number];
 
+/** Extensions Loom sends to the model as image blocks. Other image files stay library references. */
+export const COMPOSER_IMAGE_EXTENSIONS: ReadonlySet<string> = new Set([".jpg", ".jpeg", ".png", ".gif", ".webp"]);
+
+/** True when a file with this name or path is sent as an image block. */
+export function isComposerImagePath(path: string): boolean {
+	const dot = path.lastIndexOf(".");
+	return dot >= 0 && COMPOSER_IMAGE_EXTENSIONS.has(path.slice(dot).toLowerCase());
+}
+
 export type ComposerImageInput = {
 	filename: string;
 	mimeType: ComposerImageMime;

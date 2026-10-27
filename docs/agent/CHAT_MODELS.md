@@ -185,7 +185,7 @@ Completed acceptance results are in the [archive](../archive/ARCHIVE.md#windows-
 
 ### P4: Conversation selection
 
-- [ ] Image-capability notices after model changes; unavailable providers never switch automatically.
+- [x] Image-capability notice: the composer shows a note when the conversation's model takes text only and an image is attached. pi-ai already replaces such images with a placeholder before the request, so nothing fails; the note only tells the user. Unavailable providers never switch an existing conversation's model automatically.
 
 ### P5: Regression and delivery
 

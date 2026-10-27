@@ -68,6 +68,7 @@ for (const source of ["paste", "drop", "library", "external"] as const) {
 				await expect(loomPage.getByTestId("copilot-chat-textarea").locator("[data-asset-id]")).toHaveCount(1);
 			}
 			const assetId = await loomPage.getByTestId("copilot-chat-textarea").locator("[data-asset-id]").getAttribute("data-asset-id");
+			await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
 			await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
 			await expect(loomPage.getByText(`COMPOSER_${source}_1`, { exact: true }).first()).toBeVisible();
 			expect(requests).toHaveLength(1);
@@ -128,9 +129,12 @@ test("a text-only model keeps the library reference and receives an omitted-imag
 		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
 		await pasteImage(loomPage, data);
+		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toBeVisible();
 		await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
 		await expect(loomPage.getByText("COMPOSER_TEXT_ONLY", { exact: true })).toBeVisible();
+		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
 		const content = JSON.stringify(lastUser(requests[0]!).content);
 		expect(content).toContain("asset_id:");
 		expect(content).toContain("image omitted: model does not support images");

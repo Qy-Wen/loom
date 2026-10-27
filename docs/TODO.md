@@ -13,7 +13,6 @@
 
 Remaining acceptance checklist: [CHAT_MODELS](./agent/CHAT_MODELS.md) P4/P5.
 
-- Show image-capability hints after model changes.
 - Validate native OpenAI/Anthropic/Google services and real OAuth login/refresh/logout; test interactive login/logout races.
 - Complete the four-protocol tool-call/usage/cancellation and cross-protocol/provider history conversion matrix.
 

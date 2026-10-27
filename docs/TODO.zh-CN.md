@@ -13,7 +13,6 @@
 
 剩余验收清单见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md) P4/P5：
 
-- 切模型后的图片能力提示。
 - OpenAI/Anthropic/Google 原生服务与真实 OAuth 登录/刷新/注销验收，交互登录与注销竞态测试。
 - 补齐四种协议的工具调用、usage、取消，以及跨协议/Provider 历史转换的完整回归矩阵。
 
