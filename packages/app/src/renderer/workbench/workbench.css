@@ -207,8 +207,12 @@
 .asset-tabs {
 	display: flex;
 	align-items: stretch;
-	flex: 0 0 34px;
+	/* Same height as the side panel's tab bar so the two bottom borders line up. */
+	flex: 0 0 36px;
 	min-width: 0;
+	/* .workbench pads 5px inside the resize handles. Reach back out so the border meets their lines. */
+	margin: 0 -5px;
+	padding: 0 5px;
 	overflow-x: auto;
 	overflow-y: hidden;
 	scrollbar-width: thin;
