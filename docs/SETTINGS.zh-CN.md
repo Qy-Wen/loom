@@ -16,9 +16,21 @@
 
 自定义 Chat 根据完整 URL 的路径识别协议：`/chat/completions`、`/responses`、`/v1/messages` 或 `/models/{model-id}:streamGenerateContent`。标准路径只显示识别结果，不显示协议下拉框。Loom 提取基础地址，路径拼接、鉴权与流式解析仍由 pi-ai/SDK 负责。Gemini 地址会预填空白的首个模型 ID，调用使用各模型配置的 ID。未知路径可明确切换到 Base URL + 手选协议模式，仍由 SDK 追加路径。不支持的查询参数会报错而非被丢弃；接受原生 `beta=true` / `alt=sse` 标志。
 
-会话输入区的模型菜单选择模型。悬停支持思考的模型或点击右侧箭头，在二级菜单中选择思考强度；键盘右方向键展开，左方向键返回。新会话及尚未选模型的已有会话优先沿用上次启用且可用的选择，否则按配置顺序选第一个启用且可用的文字模型；没有可用模型时留空。已有会话/fork 保存的选择不变。配置与记忆选择存于 `chat-models.json`。首次 `DEEPSEEK_API_KEY` 引导启用原生 DeepSeek，其模型可参与自动选择。见 [CHAT_MODELS](./agent/CHAT_MODELS.zh-CN.md)。
+会话输入区的模型菜单选择模型。悬停支持思考的模型或点击右侧箭头，在二级菜单中选择思考强度；键盘右方向键展开，左方向键返回。新会话及尚未选模型的已有会话优先沿用上次启用且可用的选择，否则按配置顺序选第一个启用且可用的文字模型；没有可用模型时留空。已有会话/fork 保存的选择不变。配置与记忆选择存于 `chat-models.json`。首次 `DEEPSEEK_API_KEY` 引导启用原生 DeepSeek，其模型可参与自动选择。
 
 历史编辑框与输入框共用样式和模型/思考强度菜单，默认沿用当前会话模型；修改先保留为草稿，发送时写入新分支，取消不改变原会话模型。权限仍使用当前应用级设置。
+
+### Chat 运行时设计结论
+
+- **分工**：pi-ai 负责服务商、模型目录、协议转换、鉴权解析、OAuth 刷新、流式事件和 usage；Loom 负责配置、凭据持久化、界面与选择策略；pi-durable 负责调度、重试、压缩、取消和恢复。不修改 vendor，不自行实现 OAuth 或 LLM 协议。
+- **存储**（都在用户数据目录，不进素材库）：`chat-models.json` 存非敏感配置；`chat-credentials.json` 用 safeStorage 加密，每个服务商一份 API Key 或 OAuth 凭据，敏感 headers 通过秘密引用保存；`chat-model-catalog.json` 缓存动态目录，不含凭据。会话的模型和思考强度存在素材库内的 durable 会话里，不含密钥。改凭据（包括 OAuth 刷新期间）持有带心跳的跨进程锁；加密不可用或解密失败直接报错，不退回明文，也不静默重置。
+- **鉴权**：环境变量等外部鉴权由 pi-ai 解析，界面显示来源。已存凭据解析失败不会静默回退到环境变量。退出登录只删 Loom 存的凭据，环境变量里的密钥仍在，禁用服务商才会阻止新调用。渲染进程拿不到已存的 Key 或 token。登录和退出登录立即生效，与设置草稿无关。
+- **目录**：pi-ai 1.4.0 中只有 Radius 支持联网刷新目录，其余使用随包静态目录；刷新失败保留旧目录。“目录里有”“鉴权已配置”“调用成功”是三个不同状态。
+- **会话**：默认模型只影响新会话；重开会话保留已选模型；fork 保留分叉点的选择；specialist 继承父会话。服务商不可用或凭据失效时提示原因，不自动换模型。会话前台工作、子任务或压缩进行时不能切换该会话的模型，也不能编辑、禁用、删除正在使用的服务商。
+- **恢复**：checkpoint 只存模型引用、思考强度和有限的 stream options。重发时用当前的服务商元数据和默认参数，不承诺跨重启固定。
+- **价格与能力**：未知价格显示“未知”，不写成 0。自定义模型的能力需显式声明，不假设支持图片或思考。
+- **打包**：pi-ai 作为外置 npm 包，不能打平进 app 的 `out/main`（OAuth 模块用相对 import）。`Provider.headers` 在 pi-ai 里只是元数据，要通过模型 headers 或请求选项才会发出。
+- **平台自检**：`pnpm --filter @loom/app check:chat-platform`（独立临时用户数据、假凭据、模拟回调；需要本机 Electron 与系统加密）。
 
 ## 模型槽位
 
@@ -84,8 +96,8 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - Models：Chat 与四个槽位在同一页。非 Chat 的 URL/模型 ID 在失焦或 Enter 时保存，开关即时保存；已启用槽位的有效提交会检查连通性，不在每次输入时发请求。无效草稿不覆盖其他槽位。API 密钥弹窗确认即保存，自定义 Chat 保留自己的保存服务商/取消操作。
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [MEDIA.md](./RAG/MEDIA.zh-CN.md)。改 Audio 的 `model` 会使已有音频说明作废。
 - MCP：增删服务器，配置命令/参数或 URL，Advanced 放 env/headers/cwd。保存服务器只提交该条目，其他未完成草稿保持本地。开关和移除即时保存并应用连接。启动时只连接启用的服务器。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。
-- Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。沙箱开关即时保存。常驻说明停顿 500 ms 后保存，切换 tab 或关闭时立即保存待提交文本；超过 40000 字保留输入但不持久化。检索专职和生成专职拿不到这段。
+- Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。沙箱开关即时保存。常驻说明停顿 500 ms 后保存，切换 tab 或关闭时立即保存待提交文本；超过 40000 字保留输入但不持久化。检索专职和生成专职拿不到这段。
 - Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。
-- `get_settings` 和 `update_settings` 可读取并修改界面语言、Chat 服务商/模型、其他四个模型槽位、MCP、沙箱与常驻说明。读取不返回密钥、秘密 headers/env。Basic 和 Standard 写入前需确认，界面自动同步；常驻说明从下一条消息生效。启动偏好、权限、统计、OAuth 登录及会话模型/Thinking 选择不纳入这些工具。见 [PERMISSION](./AGENT/PERMISSION.zh-CN.md)。
+- `get_settings` 和 `update_settings` 可读取并修改界面语言、Chat 服务商/模型、其他四个模型槽位、MCP、沙箱与常驻说明。读取不返回密钥、秘密 headers/env。Basic 和 Standard 写入前需确认，界面自动同步；常驻说明从下一条消息生效。启动偏好、权限、统计、OAuth 登录及会话模型/Thinking 选择不纳入这些工具。见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。
 - 语言使用 `language: "system" | "en" | "zh-CN"`。Chat 使用 `chat.upsert` / `chat.remove` 和服务商 ID，可选 `chat.refresh`。`get_settings({chatProvider: "openai"})` 返回该服务商的模型目录。自定义服务商提供 `kind: "custom"`、`models`（ID、reasoning、input、contextWindow、maxTokens），以及完整 `requestUrl` 或原生 `baseUrl` + `api`。模型列表整体替换，`modelEnabled` 开关按 ID 合并。已有会话保持原选择，不自动替换模型。
 - Chat 条目可设置 `apiKey` 或 `clearApiKey: true`。Chat 密钥加密保存；清除不删除 OAuth/header 秘密，也无法移除环境变量密钥。非 Chat 密钥写入保持原存储方式。工具参数中的密钥会留在对话历史中，建议优先使用设置里的密钥弹窗。
