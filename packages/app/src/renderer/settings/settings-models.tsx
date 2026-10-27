@@ -120,12 +120,6 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 							}}
 						/>
 					</div>
-					{probes[id].state === "ok" && (
-						<p className="settings-status-ok">{t.settings.connected}</p>
-					)}
-					{probes[id].state === "checking" && (
-						<p className="settings-path">{t.settings.checking}</p>
-					)}
 				</fieldset>
 			))}
 		</div>

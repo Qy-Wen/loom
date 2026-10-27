@@ -229,7 +229,7 @@ test("Chat provider status uses green/red dots and shares the MCP error tooltip"
 	const chat = settings.getByRole("group", { name: "Chat models", exact: true });
 	const ready = chat.locator(".settings-chat-provider").filter({ has: loomPage.getByText("e2e-chat", { exact: true }) });
 	const missing = chat.locator(".settings-chat-provider").filter({ has: loomPage.getByText("Missing credentials", { exact: true }) });
-	await expect(chat.locator(".settings-chat-provider-head button:not(.settings-probe-error)")).toHaveCount(0);
+	await expect(chat.locator(".settings-chat-provider-head button:not(.settings-probe-error):not(.settings-chat-provider-toggle)")).toHaveCount(0);
 	await expect(missing.locator(".settings-chat-provider-actions").getByRole("button", { name: "Remove", exact: true })).toBeVisible();
 	await expect(ready.locator(".settings-probe.is-ok")).toBeVisible();
 	await expect(chat.getByText("Signed in", { exact: true })).toHaveCount(0);

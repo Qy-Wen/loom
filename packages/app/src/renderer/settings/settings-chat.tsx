@@ -26,6 +26,7 @@ export function SettingsChat(): React.JSX.Element {
 	const [loginInput, setLoginInput] = useState("");
 	const [loginBusy, setLoginBusy] = useState(false);
 	const [loginAnswerBusy, setLoginAnswerBusy] = useState(false);
+	const [collapsedModels, setCollapsedModels] = useState<ReadonlySet<string>>(() => new Set());
 	const [customEditor, setCustomEditor] = useState<{ id: string; provider?: ChatCustomProviderConfig } | null>(null);
 	const loginWindow = useRef<Window | null>(null);
 	const loginAttempt = useRef<{ cancelled: boolean } | null>(null);
@@ -199,10 +200,32 @@ export function SettingsChat(): React.JSX.Element {
 					const authError = auth?.error === "auth_not_configured" ? t.settings.chat.authMissing : t.settings.chat.authCheckFailed;
 					const statusError = view.refreshErrors[provider.id] ? t.settings.chat.catalogRefreshFailed : !auth?.configured ? authError : undefined;
 					const status = !provider.enabled ? "idle" : statusError ? "error" : "ok";
+					const providerName = provider.name ?? catalogEntry?.name ?? provider.id;
+					const modelsCollapsed = collapsedModels.has(provider.id);
 					return (
 						<div key={provider.id} className="settings-chat-provider">
 							<div className="settings-chat-provider-head">
-								<span className="settings-chat-provider-name">{provider.name ?? catalogEntry?.name ?? provider.id}</span>
+								{models.length > 0 ? (
+									<button
+										type="button"
+										className="settings-chat-provider-toggle"
+										aria-expanded={!modelsCollapsed}
+										aria-label={`${modelsCollapsed ? t.settings.chat.expandModels : t.settings.chat.collapseModels}: ${providerName}`}
+										onClick={() => setCollapsedModels((current) => {
+											const next = new Set(current);
+											if (!next.delete(provider.id)) next.add(provider.id);
+											return next;
+										})}
+									>
+										<svg className="settings-chat-provider-chevron" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true">
+											<path d="M6 4.5 9.5 8 6 11.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+										</svg>
+										<span className="settings-chat-provider-name">{providerName}</span>
+										<span className="settings-chat-provider-count">{models.length}</span>
+									</button>
+								) : (
+									<span className="settings-chat-provider-name">{providerName}</span>
+								)}
 								<SettingsStatus
 									status={status}
 									error={statusError}
@@ -211,7 +234,7 @@ export function SettingsChat(): React.JSX.Element {
 									dotOnly
 								/>
 							</div>
-							{models.length > 0 ? (
+							{models.length > 0 ? (modelsCollapsed ? null : (
 								<table className="settings-chat-models">
 									<thead>
 										<tr>
@@ -244,7 +267,7 @@ export function SettingsChat(): React.JSX.Element {
 										})}
 									</tbody>
 								</table>
-							) : (
+							)) : (
 								<p>{t.settings.chat.noModels}</p>
 							)}
 							{customEditor?.id === provider.id && (

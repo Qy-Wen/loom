@@ -36,7 +36,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 			await input.fill(origin + row.path);
 			await slot.getByRole("textbox", { name: "Model", exact: true }).fill(`test-${row.id}`);
 			await toggle.locator("..").click();
-			await expect(slot.getByText("Connected", { exact: true })).toBeVisible();
+			await expect(slot.locator(".settings-probe.is-ok")).toBeVisible();
 		}
 		await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 		await expect(settings).toHaveCount(0);
