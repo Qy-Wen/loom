@@ -7,7 +7,8 @@ import { useLocale } from "../locale.tsx";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
 import { InlineMessageBody } from "./inline-asset-text.tsx";
 import { HistoryMessageEditor } from "./history-message-editor.tsx";
-import { useChatSession } from "./chat-context.ts";
+import { useContext } from "react";
+import { ChatViewContext, useChatSession } from "./chat-context.ts";
 import { editableText, messageText, placedChips } from "./chat-content.ts";
 
 const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
@@ -79,6 +80,10 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 	);
 }) as typeof CopilotChatUserMessage;
 
-export const SessionMessageView = ((props: CopilotChatMessageViewProps) => (
-	<CopilotChatMessageView {...props} assistantMessage={SessionAssistantMessage} userMessage={SessionUserMessage} />
-)) as typeof CopilotChatMessageView;
+export const SessionMessageView = ((props: CopilotChatMessageViewProps) => {
+	// CopilotKit reports isRunning while it reconnects to a thread, which would flash the pulsing
+	// "running" dot every time a session is created, closed, or switched. Nothing is running yet.
+	const { connecting, threadReady } = useContext(ChatViewContext);
+	const isRunning = props.isRunning && !connecting && threadReady;
+	return <CopilotChatMessageView {...props} isRunning={isRunning} assistantMessage={SessionAssistantMessage} userMessage={SessionUserMessage} />;
+}) as typeof CopilotChatMessageView;
