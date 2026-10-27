@@ -76,6 +76,34 @@ test("API-key editor can prefill ambient keys without persisting them on cancel"
 	assert.ok(!JSON.stringify(await service.view()).includes("ENV_PRIVATE"));
 });
 
+test("login hands the installation device ID to flows that need it, and a flow without one fails with a readable error", async (t) => {
+	const { stores } = await workspace(t);
+	const faux = fauxProvider({ provider: "needs-id" });
+	const seen: (string | undefined)[] = [];
+	const oauth = { type: "oauth", access: "A", refresh: "R", expires: Date.now() + 60_000 } as const;
+	const provider = createProvider({ id: "needs-id", models: faux.models, api: faux.provider, auth: { oauth: {
+		name: "OAuth",
+		login: async (_interaction, options) => {
+			const id = options?.getDeviceId?.();
+			seen.push(id);
+			if (!id) throw new Error("Sign in requires a device ID");
+			return oauth;
+		},
+		refresh: async () => oauth, toAuth: async () => ({ apiKey: "A" }),
+	} } });
+	await stores.config.save({ version: 1, providers: [{ kind: "builtin", id: "needs-id", enabled: true }] });
+	const interaction = { prompt: async () => "", notify: () => {} };
+
+	const without = new ChatModelService(stores, { builtins: [provider], authContext: noEnv }); await without.initialize();
+	await assert.rejects(() => without.login("needs-id", "oauth", interaction), /device ID/);
+
+	const id = "11111111-2222-4333-8444-555555555555";
+	const service = new ChatModelService(stores, { builtins: [provider], authContext: noEnv, deviceId: async () => id }); await service.initialize();
+	await service.login("needs-id", "oauth", interaction);
+	assert.deepEqual(seen, [undefined, id]);
+	assert.deepEqual(await stores.credentials.read("needs-id"), oauth);
+});
+
 test("OAuth edit flows never prefill access/refresh tokens or resolve OAuth for API-key editing", async (t) => {
 	const { stores } = await workspace(t); let refreshes = 0;
 	const faux = fauxProvider({ provider: "dual" });

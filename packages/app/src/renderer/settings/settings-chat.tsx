@@ -30,7 +30,8 @@ export function SettingsChat(): React.JSX.Element {
 	const loginWindow = useRef<Window | null>(null);
 	const loginAttempt = useRef<{ cancelled: boolean } | null>(null);
 
-	async function reload(): Promise<void> {
+	/** `keepError`: a refresh after a failed action must not wipe the error that action just reported. */
+	async function reload(keepError = false): Promise<void> {
 		try {
 			const [next, entries] = await Promise.all([
 				window.loom.getChatSettings(),
@@ -38,7 +39,7 @@ export function SettingsChat(): React.JSX.Element {
 			]);
 			setView(next);
 			setCatalog(entries);
-			setError(null);
+			if (!keepError) setError(null);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -96,10 +97,14 @@ export function SettingsChat(): React.JSX.Element {
 		setLoginInput("");
 		setError(null);
 		setLogin(null);
+		let failed = false;
 		try {
 			await window.loom.chatLogin(providerId, type);
 		} catch (cause) {
-			if (!attempt.cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+			if (!attempt.cancelled) {
+				failed = true;
+				setError(cause instanceof Error ? cause.message : String(cause));
+			}
 		} finally {
 			setLoginBusy(false);
 			setLoginAnswerBusy(false);
@@ -109,7 +114,7 @@ export function SettingsChat(): React.JSX.Element {
 			loginWindow.current = null;
 			loginAttempt.current = null;
 			// Cancel changes no settings: avoid a transient error row and needless reloading.
-			if (!attempt.cancelled) void reload();
+			if (!attempt.cancelled) void reload(failed);
 		}
 	}
 

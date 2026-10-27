@@ -78,6 +78,7 @@ import { GeneralSettingsStore } from "./settings/general-settings-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-library-store.ts";
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
 import { createChatStorage } from "./models/chat-storage.ts";
+import { DeviceIdStore } from "./models/device-id-store.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -1085,7 +1086,8 @@ app
 
 		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
 		const chatStores = createChatStorage(app.getPath("userData"));
-		chatModels = new ChatModelService(chatStores, { withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });
+		const deviceId = new DeviceIdStore(join(app.getPath("userData"), "device-id.json"));
+		chatModels = new ChatModelService(chatStores, { deviceId: () => deviceId.get(), withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });
 		chat = new ChatService({ ...AGENT_OPTIONS, models: chatModels.models, chatDefault: () => requireChatModels().selectionForNewSession(), composer: {
 			getSelection: getUiSelection,
 			takeImages: takeComposerImages,

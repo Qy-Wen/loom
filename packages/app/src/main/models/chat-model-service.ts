@@ -17,6 +17,8 @@ type ApiKeyEditInteraction = Omit<AuthInteraction, "prompt"> & {
 type ChatStores = { config: ChatConfigStore; credentials: ChatCredentialStore; catalog: ChatCatalogStore };
 export type ChatModelServiceOptions = Pick<ChatProviderAssemblyOptions, "builtins" | "apis"> & {
 	authContext?: AuthContext;
+	/** Stable installation ID that some OAuth logins (OpenAI) require. Omitted in tests that do not use them. */
+	deviceId?: () => Promise<string>;
 	/** Host reserves the public Session line while checking owned work and publishing changes. */
 	withIdleProviders?: <T>(ids: readonly string[], operation: () => Promise<T>) => Promise<T>;
 };
@@ -243,6 +245,8 @@ export class ChatModelService {
 		const provider = this.#providers.get(providerId) ?? this.#builtins.find((row) => row.id === providerId);
 		if (!provider) throw new Error("Unknown Chat provider");
 		let firstSecret = true;
+		// Login flows read the ID synchronously, so resolve it first.
+		const deviceId = await this.options.deviceId?.();
 		await this.mutation([providerId], () => this.#native.login(providerId, type, {
 			...interaction,
 			prompt: async (prompt) => {
@@ -254,7 +258,7 @@ export class ChatModelService {
 				signal.throwIfAborted();
 				return interaction.prompt({ ...prompt, ...(initialValue !== undefined ? { initialValue } : {}) });
 			},
-		}, { agentName: "Loom" }));
+		}, { agentName: "Loom", ...(deviceId ? { getDeviceId: () => deviceId } : {}) }));
 		await this.refreshNative({ providers: [providerId], allowNetwork: false, signal: options?.signal ?? AbortSignal.timeout(10_000) });
 	}
 	/** Read only stored/ambient API-key auth, never resolve or refresh OAuth tokens. */
