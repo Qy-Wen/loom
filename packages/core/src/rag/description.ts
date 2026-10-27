@@ -1,6 +1,11 @@
 import type { Asset } from "../model/asset.ts";
 import type { DescriptionRecord, DescriptionStatus } from "../model/description.ts";
 
+export interface DescribeOptions {
+	/** Skip the "already described" shortcut and ask the model again. */
+	force?: boolean;
+}
+
 interface DescriptionWorkflow<Provider extends { modelId: string }> {
 	getAsset(assetId: string): Promise<Asset | undefined>;
 	getRecord(assetId: string): Promise<DescriptionRecord | undefined>;
@@ -28,10 +33,11 @@ export class DescriptionService<Provider extends { modelId: string }> {
 		provider: Provider,
 		onUpdate?: (status: DescriptionStatus) => void,
 		signal?: AbortSignal,
+		options: DescribeOptions = {},
 	): Promise<DescriptionStatus> {
 		signal?.throwIfAborted();
 		await this.requireAsset(assetId);
-		const work = () => this.run(assetId, provider, onUpdate, signal);
+		const work = () => this.run(assetId, provider, onUpdate, signal, options.force === true);
 		const run = this.chain.then(work, work);
 		this.chain = run.then(() => undefined, () => undefined);
 		const status = await run;
@@ -44,6 +50,7 @@ export class DescriptionService<Provider extends { modelId: string }> {
 		provider: Provider,
 		onUpdate?: (status: DescriptionStatus) => void,
 		signal?: AbortSignal,
+		force = false,
 	): Promise<DescriptionStatus> {
 		signal?.throwIfAborted();
 		// A queued asset may have changed or disappeared since admission.
@@ -52,7 +59,7 @@ export class DescriptionService<Provider extends { modelId: string }> {
 		if (!this.workflow.supports(asset)) return idleStatus(asset, false);
 
 		const previous = await this.workflow.getRecord(assetId);
-		if (previous?.status === "ready" && previous.modelId === provider.modelId
+		if (!force && previous?.status === "ready" && previous.modelId === provider.modelId
 			&& previous.markdown?.trim() && !isStale(asset, previous, provider.modelId)) {
 			return toStatus(asset, previous, provider.modelId);
 		}

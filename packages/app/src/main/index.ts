@@ -9,6 +9,7 @@ import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
 	resolveMediaBinary,
+	type DescribeOptions,
 	type EmbeddingProvider,
 	type RerankProvider,
 	type LibraryChange,
@@ -689,19 +690,19 @@ function registerIpc(): void {
 		signal.throwIfAborted();
 		return localCore.getImageVlmStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeImageWithSettings(assetId));
+	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeThenIndex(assetId, () => describeImageWithSettings(assetId, undefined, { force: true })));
 	ipcMain.handle(IPC.getVideoVlmStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
 		signal.throwIfAborted();
 		return localCore.getVideoVlmStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeVideoWithSettings(assetId));
+	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeThenIndex(assetId, () => describeVideoWithSettings(assetId, undefined, { force: true })));
 	ipcMain.handle(IPC.getAudioWriteupStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).audio.model.trim() : "";
 		signal.throwIfAborted();
 		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId));
+	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeThenIndex(assetId, () => describeAudioWithSettings(assetId, undefined, { force: true })));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.createSession, async () => {
 		return chatRecord(await requireChat().createSession());
@@ -1259,7 +1260,23 @@ async function restoreLastLibrary(): Promise<void> {
 	}
 }
 
-async function describeImageWithSettings(assetId: string, signal?: AbortSignal) {
+/**
+ * The Details button always asks the model again (the renderer confirms first when a fresh
+ * description exists) and then indexes, in one step. Agent tools keep calling the
+ * single-step functions. An unusable Embedding slot only skips indexing; it never fails the description.
+ */
+async function describeThenIndex<T extends { status: string }>(assetId: string, describe: () => Promise<T>): Promise<T> {
+	const status = await describe();
+	if (status.status !== "ready" || openingLibrary || shutdownStarted) return status;
+	try {
+		if (await embeddingProviderFromSettings()) await embedAssetWithSettings(assetId);
+	} catch (error) {
+		appLog(`Indexing after describe failed: ${error instanceof Error ? error.message : String(error)}`);
+	}
+	return status;
+}
+
+async function describeImageWithSettings(assetId: string, signal?: AbortSignal, options?: DescribeOptions) {
 	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
 	return localCore.runLibraryTask(async (jobSignal) => {
 		if (!modelSettings) throw new Error("Settings store not started");
@@ -1268,11 +1285,11 @@ async function describeImageWithSettings(assetId: string, signal?: AbortSignal) 
 			throw new Error("Enable the VLM slot in Settings first.");
 		}
 		jobSignal.throwIfAborted();
-		return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), jobSignal);
+		return localCore.describeImageAsset(assetId, createHttpVlmProvider(slot), jobSignal, options);
 	}, signal);
 }
 
-async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) {
+async function describeVideoWithSettings(assetId: string, signal?: AbortSignal, options?: DescribeOptions) {
 	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
 	return localCore.runLibraryTask(async (jobSignal) => {
 		if (!modelSettings) throw new Error("Settings store not started");
@@ -1281,11 +1298,11 @@ async function describeVideoWithSettings(assetId: string, signal?: AbortSignal) 
 			throw new Error("Enable the VLM slot in Settings first.");
 		}
 		jobSignal.throwIfAborted();
-		return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), jobSignal);
+		return localCore.describeVideoAsset(assetId, createHttpVideoVlmProvider(slot), jobSignal, options);
 	}, signal);
 }
 
-async function describeAudioWithSettings(assetId: string, signal?: AbortSignal) {
+async function describeAudioWithSettings(assetId: string, signal?: AbortSignal, options?: DescribeOptions) {
 	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
 	return localCore.runLibraryTask(async (jobSignal) => {
 		if (!modelSettings) throw new Error("Settings store not started");
@@ -1294,7 +1311,7 @@ async function describeAudioWithSettings(assetId: string, signal?: AbortSignal) 
 			throw new Error("Enable the Audio slot in Settings first.");
 		}
 		jobSignal.throwIfAborted();
-		return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), jobSignal);
+		return localCore.describeAudioAsset(assetId, createHttpAudioProvider(slot), jobSignal, options);
 	}, signal);
 }
 

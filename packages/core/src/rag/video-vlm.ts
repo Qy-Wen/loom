@@ -12,7 +12,7 @@ import {
 	type VideoVlmStatus,
 } from "../model/video-vlm.ts";
 import type { MetadataStore } from "../stores/types.ts";
-import { DescriptionService } from "./description.ts";
+import { DescriptionService, type DescribeOptions } from "./description.ts";
 
 const VIDEO_MEDIA_TYPES = new Set([".avi", ".m4v", ".mkv", ".mov", ".mp4", ".webm"]);
 
@@ -59,8 +59,9 @@ export class VideoVlmService {
 		provider: VideoVlmProvider,
 		onUpdate?: (status: VideoVlmStatus) => void,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<VideoVlmStatus> {
-		return this.descriptions.describe(assetId, provider, onUpdate, signal);
+		return this.descriptions.describe(assetId, provider, onUpdate, signal, options);
 	}
 }
 

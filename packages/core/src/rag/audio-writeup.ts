@@ -8,7 +8,7 @@ import {
 	type AudioWriteupStatus,
 } from "../model/audio-writeup.ts";
 import type { MetadataStore } from "../stores/types.ts";
-import { DescriptionService } from "./description.ts";
+import { DescriptionService, type DescribeOptions } from "./description.ts";
 
 const AUDIO_MEDIA_TYPES = new Set([".aac", ".flac", ".m4a", ".mp3", ".ogg", ".wav"]);
 
@@ -43,8 +43,9 @@ export class AudioWriteupService {
 		provider: AudioWriteupProvider,
 		onUpdate?: (status: AudioWriteupStatus) => void,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<AudioWriteupStatus> {
-		return this.descriptions.describe(assetId, provider, onUpdate, signal);
+		return this.descriptions.describe(assetId, provider, onUpdate, signal, options);
 	}
 }
 

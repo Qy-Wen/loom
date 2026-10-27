@@ -16,6 +16,7 @@ import type { RerankProvider } from "./model/rerank.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
 import type { VideoVlmProvider, VideoVlmStatus } from "./model/video-vlm.ts";
 import type { AudioWriteupProvider, AudioWriteupStatus } from "./model/audio-writeup.ts";
+import type { DescribeOptions } from "./rag/description.ts";
 import { ImageVlmService } from "./rag/image-vlm.ts";
 import { extractVideoFramesForVlm } from "./rag/video-frames.ts";
 import { VideoVlmService } from "./rag/video-vlm.ts";
@@ -540,11 +541,12 @@ export class LocalCore {
 		assetId: string,
 		provider: ImageVlmProvider,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<ImageVlmStatus> {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyImageVlm(assetId); };
-			return this.imageVlm.describe(assetId, provider, notify, jobSignal);
+			return this.imageVlm.describe(assetId, provider, notify, jobSignal, options);
 		}, signal);
 	}
 
@@ -556,11 +558,12 @@ export class LocalCore {
 		assetId: string,
 		provider: VideoVlmProvider,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<VideoVlmStatus> {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyVideoVlm(assetId); };
-			return this.videoVlm.describe(assetId, provider, notify, jobSignal);
+			return this.videoVlm.describe(assetId, provider, notify, jobSignal, options);
 		}, signal);
 	}
 
@@ -572,11 +575,12 @@ export class LocalCore {
 		assetId: string,
 		provider: AudioWriteupProvider,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<AudioWriteupStatus> {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyAudioWriteup(assetId); };
-			return this.audioWriteup.describe(assetId, provider, notify, jobSignal);
+			return this.audioWriteup.describe(assetId, provider, notify, jobSignal, options);
 		}, signal);
 	}
 

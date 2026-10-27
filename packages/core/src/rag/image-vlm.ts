@@ -9,7 +9,7 @@ import {
 	type ImageVlmStatus,
 } from "../model/image-vlm.ts";
 import type { MetadataStore } from "../stores/types.ts";
-import { DescriptionService } from "./description.ts";
+import { DescriptionService, type DescribeOptions } from "./description.ts";
 
 const IMAGE_MEDIA_TYPES = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp"]);
 
@@ -46,8 +46,9 @@ export class ImageVlmService {
 		provider: ImageVlmProvider,
 		onUpdate?: (status: ImageVlmStatus) => void,
 		signal?: AbortSignal,
+		options?: DescribeOptions,
 	): Promise<ImageVlmStatus> {
-		return this.descriptions.describe(assetId, provider, onUpdate, signal);
+		return this.descriptions.describe(assetId, provider, onUpdate, signal, options);
 	}
 }
 

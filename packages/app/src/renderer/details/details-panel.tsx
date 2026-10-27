@@ -18,7 +18,7 @@ import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { displayPropertyValue } from "../workbench/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
-import { ImageVlmDetails } from "./image-vlm-details.tsx";
+import { MediaDescriptionDetails } from "./media-description-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { SuggestInput } from "../components/suggest-input.tsx";
 import { TagEditor } from "./tag-editor.tsx";
@@ -73,6 +73,7 @@ export function DetailsPanel({
 	onRemoveRelation,
 }: DetailsPanelProps): React.JSX.Element {
 	const { t } = useLocale();
+	const describer = imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup;
 	return (
 		<div className="side-panel">
 			<div className="panel-content details-content thin-scroll active">
@@ -106,20 +107,22 @@ export function DetailsPanel({
 						/>
 					</section>
 				)}
-				{asset && (
-					<ImageVlmDetails
-						status={imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup}
-						describing={describing}
+				{asset && (describer?.supported ? (
+					<MediaDescriptionDetails
+						status={describer}
+						textEmbed={textEmbed}
+						busy={describing}
+						embedding={embedding}
 						onDescribe={onDescribe}
+						onEmbed={onEmbed}
 					/>
-				)}
-				{asset && (
+				) : (
 					<TextEmbedDetails
 						status={textEmbed}
 						embedding={embedding}
 						onEmbed={onEmbed}
 					/>
-				)}
+				))}
 				<section className="relations-section">
 					<RelationsEditor
 						asset={asset}
