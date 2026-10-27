@@ -6,6 +6,22 @@ Completed milestones are recorded here. See the current [TODO](../TODO.md).
 
 ---
 
+## Multiple tabs for viewing assets
+
+The workbench opens library files in browser-style tabs. A plain click shows the file in the active tab; middle-click or "Open in new tab" adds a tab to its right; a file is open in at most one tab. Close with × or middle-click; a file that is deleted, trashed, or leaves the library closes its tab. Tabs can be dragged to reorder, and files can be dragged from the tree onto the strip or the empty workbench (folders are not accepted). Details, the Agent's UI selection, and Grade follow the active tab. Tabs are not saved and keep no view state.
+
+Tests: `app/tests/asset-tabs.test.ts` covers the tab rules and `app/e2e/asset-tabs.spec.ts` covers the interaction.
+
+---
+
+## Library layout change
+
+All Loom-owned data lives under the library's `.loom/`: `metadata-db/`, `graph-db/`, and `agents/` (sessions, skills, memory, remembered commands, traces). `grades/luts/` appears when a LUT is first imported. Temp files gather under `<os.tmpdir()>/loom/`; grade previews write to `grade/run-*`, which is removed when the library closes, and app start sweeps entries older than 24 hours. `.loom/` is not indexed as assets. Design: [LIBRARY_LAYOUT](../LIBRARY_LAYOUT.md).
+
+Tests: `core/tests/library-paths.test.ts` and `core/tests/temp.test.ts` cover the path layout and temp directory creation and cleanup.
+
+---
+
 ## Shared multimodal description workflow
 
 Image, video, and audio services compose one `DescriptionService` for serial execution, cache freshness, records, failure cleanup, and progress/terminal notifications. Record and status types share one definition. Media implementations retain input limits, image reads, native video and lazy-frame cleanup, audio preparation, and provider contracts. LocalCore's library scope continues to own job lifetimes.

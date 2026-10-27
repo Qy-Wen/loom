@@ -16,18 +16,6 @@
 - 切模型后的图片能力提示。
 - OpenAI/Anthropic/Google 原生服务与真实 OAuth 登录/刷新/注销验收，交互登录与注销竞态测试。
 - 补齐四种协议的工具调用、usage、取消，以及跨协议/Provider 历史转换的完整回归矩阵。
-- macOS 实机复测，以及 macOS/Windows 安装包运行验收。
-
----
-
-## 素材库目录调整
-
-设计见 [LIBRARY_LAYOUT](./LIBRARY_LAYOUT.zh-CN.md)。代码落地后，在 macOS 和 Windows 上手动验证：
-
-- 开启进程沙盒时，调色预览正常：图片和视频都能让 ffmpeg 往 `<os.tmpdir()>/loom/grade/run-*` 写 jpg。macOS 已有 `core/tests/temp.test.ts` 覆盖，Windows 仍需手动验证。
-- 关闭素材库会删除这个 `run-*` 目录；崩溃不会在素材库里留下文件，下次启动应用时会清掉 `<os.tmpdir()>/loom/` 下超过 24 小时的内容。
-- 新建素材库会创建 `.loom/metadata-db/`、`.loom/graph-db/`、`.loom/agents/`（第一次导入 LUT 时才出现 `.loom/grades/luts/`），根目录除用户文件外没有别的东西。
-- 聊天历史、技能、记忆、和记住的命令都能从新路径正常工作；`.loom/` 里的内容不被索引成素材。
 
 ---
 
@@ -46,9 +34,3 @@
 ## 第二步：深化记忆
 
 `MEMORY.md` 只做索引。条目正文另存。可考虑做梦机制，在空闲时整理、合并和遗忘。
-
----
-
-## 第三步：多 Tab 查看素材
-
-考虑支持通过多个 Tab 查看素材。

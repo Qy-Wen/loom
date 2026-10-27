@@ -192,6 +192,5 @@ Completed acceptance results are in the [archive](../archive/ARCHIVE.md#windows-
 - [ ] Complete interactive login/logout race acceptance.
 - [ ] Complete the four-protocol tools/usage/cancellation and cross-protocol/provider history conversion matrix.
 - [ ] Native OpenAI/Anthropic/Google services and real OAuth login/refresh/logout.
-- [ ] Mac revalidation and macOS/Windows packaged-runtime acceptance.
 
 Done means users configure Chat from built-in catalogs or custom connections with API keys/OAuth and create/recover independently selected conversations. Tools, thinking, usage, compaction, cancellation, and recovery remain on native pi-ai/durable paths. Secrets never enter libraries or ordinary queries. Unchecked items are not complete.
