@@ -71,7 +71,7 @@ git merge vendor-clean
 
 - `createWorkspaceTools()` 返回 durable `read`、`bash`、`edit`、`write`。env/cwd 按会话构建，bash preparation 接 core 进程沙箱；图像使用上游 Photon worker。
 - `toDurableTool()` 把 Loom `content` 转成 durable `output`，传递取消信号、验证 JSON `details`，外部副作用采用 `replay: "unsafe"`。
-- 主对话保留工作区、FFmpeg、describe/embed 等应用工具，以及所有已连接的 MCP 工具。主对话和检索专职共享 `search_assets`、`inspect_asset`，检索专职还有 `read`；任务给出 ID 时先 inspect，不再 search 同一素材；需要源文本时 read 返回的 `relativePath`。主 Agent 直接完成单项检索，包括多步任务；只有多项独立、可并行的检索任务才考虑委托检索专职，并传递各自的问题和所需素材 ID。创作专职使用 `read`、`edit`、`write`、`bash`、`inspect_asset`、FFmpeg 媒体工具和与主对话相同的 MCP 工具；没有 `search_assets`、describe/embed、属性、关系和设置工具。主 Agent 按任务选择直接调用 MCP 或委托创作专职。所有 Agent 经过同一道审批门；检索专职不接入 MCP。
+- 主对话保留工作区、FFmpeg、describe/embed 等应用工具，以及所有已连接的 MCP 工具。主对话和检索专职共享 `search_assets`、`inspect_asset`，检索专职还有 `read`；任务给出 ID 时先 inspect，不再 search 同一素材；需要源文本时 read 返回的 `relativePath`。主 Agent 直接完成单项检索，包括多步任务；只有多项独立、可并行的检索任务才考虑委托检索专职，并传递各自的问题和所需素材 ID。创作专职使用 `read`、`edit`、`write`、`bash`、`inspect_asset`、FFmpeg 媒体工具（含 `run_ffmpeg`、`run_ffprobe`）和与主对话相同的 MCP 工具；没有 `search_assets`、describe/embed、属性、关系和设置工具。主 Agent 按任务选择直接调用 MCP 或委托创作专职。所有 Agent 经过同一道审批门；检索专职不接入 MCP。
 - 每次 specialist 调用创建一个归属工具任务的前台 conversation。独立调用并行；子代理只见任务和专职 prompt，不能再派生 specialist。父代理只收到摘要，不收到子 transcript。Stop 沿 ownership 取消；request ID 让安全重放复用子会话和 submission。
 - `createLibraryExtension()` 装配工具及 preamble/skills/memory sections。用户指令使用原生 `agent.instructions`。
 - Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.loom/agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。

@@ -29,7 +29,7 @@ export type CommandAllowView = {
 /** App settings. Basic and Standard both wait. `get_settings` is not here. */
 const SETTINGS_TOOLS = ["update_settings"] as const;
 const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS] as const;
-/** Child processes that can write. `get_media_info` only reads, so it is not here. */
+/** Child processes that can write. `get_media_info` and `run_ffprobe` only read, so it is not here. */
 const PROCESS_TOOLS = ["bash", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg"] as const;
 const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...PROCESS_TOOLS] as const;
 
@@ -224,8 +224,7 @@ function commandAllowPath(root: string | null | undefined, target: string): stri
 function ffmpegAllowMatch(args: unknown): string | undefined {
 	const record = recordOf(args);
 	if (!record || !Array.isArray(record.args) || record.args.some((arg) => typeof arg !== "string")) return undefined;
-	const program = record.program === "ffprobe" ? "ffprobe" : "ffmpeg";
-	return JSON.stringify([program, ...(record.args as string[])]);
+	return JSON.stringify(["ffmpeg", ...(record.args as string[])]);
 }
 
 function stringField(args: unknown, key: string): string | undefined {

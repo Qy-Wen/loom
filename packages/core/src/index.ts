@@ -51,6 +51,7 @@ export type {
 	PreviewVideoGradeArgs,
 	ResizeVideoArgs,
 	RunFfmpegArgs,
+	RunFfprobeArgs,
 } from "./model/media.ts";
 
 export type { EmbeddingProvider, TextEmbedStatus, TextEmbedStatusKind } from "./model/text-embed.ts";

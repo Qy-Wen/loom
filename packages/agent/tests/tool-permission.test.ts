@@ -110,9 +110,9 @@ test("remembered commands skip the next matching call", () => {
 
 	const ffmpeg = commandAllowKey("run_ffmpeg", { args: ["-i", "a.mp4"] });
 	assert.equal(ffmpeg?.match, JSON.stringify(["ffmpeg", "-i", "a.mp4"]));
-	assert.equal(commandAllowKey("run_ffmpeg", { program: "ffprobe", args: ["-i", "a.mp4"] })?.match, JSON.stringify(["ffprobe", "-i", "a.mp4"]));
+	assert.equal(toolNeedsApproval("basic", "run_ffprobe"), false);
 	assert.equal(commandAllowKey("run_ffmpeg", { args: "nope" }), undefined);
-	assert.equal(toolCallNeedsApproval("basic", "run_ffmpeg", "/lib", { program: "ffmpeg", args: ["-i", "a.mp4"] }, ffmpeg ? [ffmpeg] : []), false);
+	assert.equal(toolCallNeedsApproval("basic", "run_ffmpeg", "/lib", { args: ["-i", "a.mp4"] }, ffmpeg ? [ffmpeg] : []), false);
 
 	assert.deepEqual(parseCommandAllows({
 		allows: [bash, bash, { tool: "" }, { tool: "write", match: "" }, { nope: true }],

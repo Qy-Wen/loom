@@ -18,11 +18,11 @@
 
 Standard 下，写在当前库里的 `write` 和 `edit` 直接执行。路径离开这个库仍要确认，包括 `..` 和指向库外的符号链接。路径不是字符串，或者解析失败，也要确认。Basic 仍对每次 `write`、`edit` 都要确认。
 
-`bash` 和会写文件的 FFmpeg 工具（`extract_frame`、`extract_clip`、`resize_video`、`crop_video`、`convert_format`、`grade_image`、`run_ffmpeg`）只在 Basic 下等待。`update_settings` 和所有 MCP 工具（`server__tool`）在 Basic 和 Standard 下默认等待确认，已按工具授权的调用除外。MCP 的「始终允许」覆盖同一服务的同一工具，不区分参数。Full 下直接执行。`get_settings`、`get_media_info` 和 `auto_memory` 不拦截。主对话和专职走同一道门。评测设成 Full，避免挂死。
+`bash` 和会写文件的 FFmpeg 工具（`extract_frame`、`extract_clip`、`resize_video`、`crop_video`、`convert_format`、`grade_image`、`run_ffmpeg`）只在 Basic 下等待。`update_settings` 和所有 MCP 工具（`server__tool`）在 Basic 和 Standard 下默认等待确认，已按工具授权的调用除外。MCP 的「始终允许」覆盖同一服务的同一工具，不区分参数。Full 下直接执行。`get_settings`、`get_media_info`、`run_ffprobe` 和 `auto_memory` 不拦截。主对话和专职走同一道门。评测设成 Full，避免挂死。
 
 Stop 取消这次等待。切到 Full 时再确认一次：进程沙箱这次不再生效，Agent 可以执行所有操作。沙箱开关保持原样。确认之后，已经弹出的等待也会放行。
 
-工具卡片可以把这条命令记在当前库的 `<library>/.loom/agents/command-allows/command-allows.json`。同一个库里以后的会话不再询问。换一个库则无效。`bash` 记下去掉首尾空白的命令文本。`run_ffmpeg` 记下程序名和参数。`write` 和 `edit` 记下工具名和路径，不看文件内容。其余要确认的工具记下工具名。
+工具卡片可以把这条命令记在当前库的 `<library>/.loom/agents/command-allows/command-allows.json`。同一个库里以后的会话不再询问。换一个库则无效。`bash` 记下去掉首尾空白的命令文本。`run_ffmpeg` 记下参数。`write` 和 `edit` 记下工具名和路径，不看文件内容。其余要确认的工具记下工具名。
 
 `loom.permission` extension 安装可取消的 `ToolTask.beforeTool` hook。待审批调用存入 `LoomApprovalsDoc`，AG-UI 观察后发布 `loom.tool_gate`。ID 带 conversation 命名空间，包含 specialist。Stop 清除等待；重开时先清理过期 document rows，durable 恢复后重新询问。
 

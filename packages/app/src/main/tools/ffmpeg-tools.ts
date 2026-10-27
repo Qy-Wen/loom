@@ -12,7 +12,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			description:
 				"Read duration, resolution, codecs, and format for one media file. " +
 				"Pass a path relative to the workspace cwd, such as clips/hero.mp4, or an absolute path. " +
-				"Prefer this over run_ffmpeg for inspection.",
+				"Prefer this for a quick look; use run_ffprobe for anything else ffprobe can report.",
 			parameters: {
 				type: "object",
 				properties: {
@@ -221,32 +221,39 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 		{
 			name: "run_ffmpeg",
 			description:
-				"Run bundled ffmpeg or ffprobe with an argv array when the other media tools are not enough. " +
-				"Pass args as a string array. File operands may be workspace-relative or absolute.",
-			parameters: {
-				type: "object",
-				properties: {
-					program: { type: "string", enum: ["ffmpeg", "ffprobe"] },
-					args: { type: "array", items: { type: "string" } },
-				},
-				required: ["args"],
-				additionalProperties: false,
-			},
-			execute: async (rawArgs, signal) => {
-				const record = asRecord(rawArgs);
-				if (record.program !== undefined && record.program !== "ffmpeg" && record.program !== "ffprobe") {
-					throw new TypeError("program must be ffmpeg or ffprobe");
-				}
-				if (!Array.isArray(record.args) || record.args.some((arg) => typeof arg !== "string")) {
-					throw new TypeError("args must be an array of strings");
-				}
-				return jobResult(await core.runFfmpeg({
-					program: record.program,
-					args: record.args,
-				}, signal));
-			},
+				"Run ffmpeg with an argv array. This is the only way to run ffmpeg: it may not be on the shell PATH, so do not look for it or call it from bash. " +
+				"Use it for any ffmpeg operation the other media tools do not cover. " +
+				"Pass args as a string array without the program name. File operands may be workspace-relative or absolute.",
+			parameters: argvSchema,
+			execute: async (rawArgs, signal) => jobResult(await core.runFfmpeg({ args: argvArg(rawArgs) }, signal)),
+		},
+		{
+			name: "run_ffprobe",
+			description:
+				"Run ffprobe with an argv array and return its stdout. This is the only way to run ffprobe: it may not be on the shell PATH, so do not look for it or call it from bash. " +
+				"Use it when get_media_info is not enough, for example -show_entries, -show_streams, -show_chapters, or -count_frames. " +
+				"Pass args as a string array without the program name, for example [\"-v\", \"error\", \"-of\", \"json\", \"-show_format\", \"clips/hero.mp4\"]. File operands may be workspace-relative or absolute.",
+			parameters: argvSchema,
+			execute: async (rawArgs, signal) => jobResult(await core.runFfprobe({ args: argvArg(rawArgs) }, signal)),
 		},
 	];
+}
+
+const argvSchema = {
+	type: "object",
+	properties: {
+		args: { type: "array", items: { type: "string" } },
+	},
+	required: ["args"],
+	additionalProperties: false,
+} as const;
+
+function argvArg(rawArgs: unknown): string[] {
+	const record = asRecord(rawArgs);
+	if (!Array.isArray(record.args) || record.args.some((arg) => typeof arg !== "string")) {
+		throw new TypeError("args must be an array of strings");
+	}
+	return record.args;
 }
 
 const curvePoints = {

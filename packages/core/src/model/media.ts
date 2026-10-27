@@ -55,7 +55,10 @@ export interface ConvertFormatArgs {
 }
 
 export interface RunFfmpegArgs {
-	program?: "ffmpeg" | "ffprobe";
+	args: string[];
+}
+
+export interface RunFfprobeArgs {
 	args: string[];
 }
 

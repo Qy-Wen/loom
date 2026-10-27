@@ -58,6 +58,7 @@ import type {
 	MediaJobResult,
 	ResizeVideoArgs,
 	RunFfmpegArgs,
+	RunFfprobeArgs,
 } from "./model/media.ts";
 import { LadybugGraphStore } from "./stores/ladybug.ts";
 import { SqliteMetadataStore } from "./stores/sqlite.ts";
@@ -713,6 +714,10 @@ export class LocalCore {
 
 	runFfmpeg(args: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
 		return this.runLibraryTask((jobSignal) => this.media.runFfmpeg(args, jobSignal), signal);
+	}
+
+	runFfprobe(args: RunFfprobeArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		return this.runLibraryTask((jobSignal) => this.media.runFfprobe(args, jobSignal), signal);
 	}
 
 	subscribeLibrary(listener: (change: LibraryChange) => void): () => void {

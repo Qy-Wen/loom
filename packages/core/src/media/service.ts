@@ -27,8 +27,8 @@ import type {
 	MediaJobResult,
 	ResizeVideoArgs,
 	RunFfmpegArgs,
+	RunFfprobeArgs,
 } from "../model/media.ts";
-import type { MediaProgram } from "./binaries.ts";
 import {
 	assertFiniteNumber,
 	buildConvertArgs,
@@ -196,26 +196,33 @@ export class MediaService {
 	}
 
 	async runFfmpeg(input: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		const program: MediaProgram = input.program ?? "ffmpeg";
-		if (program !== "ffmpeg" && program !== "ffprobe") {
-			throw new TypeError("program must be ffmpeg or ffprobe");
-		}
 		const cwd = this.cwd();
 		const prepared = prepareFfmpegArgs(input.args, cwd);
 		await ensureOutputParents(prepared.outputPaths, cwd);
-		const { stdout } = await this.run({
-			program,
+		await this.run({
+			program: "ffmpeg",
 			args: prepared.args,
 			cwd,
 			signal,
 		});
 		return {
 			kind: "media_job",
-			program,
+			program: "ffmpeg",
 			output: prepared.outputPaths[0],
 			outputs: prepared.outputPaths,
-			stdout: program === "ffprobe" ? stdout : undefined,
 		};
+	}
+
+	/** Read-only: path operands resolve against the library, and nothing is created. */
+	async runFfprobe(input: RunFfprobeArgs, signal?: AbortSignal): Promise<MediaJobResult> {
+		const { args } = prepareFfmpegArgs(input.args, this.cwd());
+		const { stdout } = await this.run({
+			program: "ffprobe",
+			args,
+			cwd: this.cwd(),
+			signal,
+		});
+		return { kind: "media_job", program: "ffprobe", stdout };
 	}
 
 	private cwd(): string {

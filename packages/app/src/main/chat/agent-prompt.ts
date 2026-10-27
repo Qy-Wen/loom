@@ -17,7 +17,7 @@ const BASE_SYSTEM_PROMPT =
 	"Use embed_asset to index Markdown or a described image/video/audio (chunk + embeddings); it does not run automatically. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"For common media edits prefer get_media_info, extract_frame, extract_clip, resize_video, crop_video, convert_format, and grade_image. " +
-	"Use run_ffmpeg only when those tools cannot express the operation; pass argv as a string array. " +
+	"For anything else, use run_ffmpeg for ffmpeg and run_ffprobe for ffprobe; pass argv as a string array without the program name. ffmpeg and ffprobe may not be on the shell PATH, so do not search for them or run them from bash. " +
 	"Media tools do not create relations. Call create_relation yourself when a derived file should point at its source: fromAssetId is the new file, toAssetId is the source, and type is a short label such as \"derived from\". " +
 	"Copy both asset ids from tool results. If you only have a path, retrieve it first. remove_relation takes the relationId that create_relation returned. " +
 	"Table columns are library properties. list_properties returns each column's propertyId, name, and type. " +

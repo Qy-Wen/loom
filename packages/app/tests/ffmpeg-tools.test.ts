@@ -20,6 +20,9 @@ test("ffmpeg tools require a path and an argv array", async () => {
 
 		await assert.rejects(Promise.resolve().then(() => info.execute({ path: "" })), /non-empty/);
 		await assert.rejects(Promise.resolve().then(() => run.execute({ args: "-i hero.mp4" })), /array of strings/);
+		const probe = tools.find((tool) => tool.name === "run_ffprobe");
+		assert.ok(probe);
+		await assert.rejects(Promise.resolve().then(() => probe.execute({ args: "-i hero.mp4" })), /array of strings/);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
@@ -71,6 +74,29 @@ test("ffmpeg tools can extract a frame when binaries are present", async (t) => 
 
 		const result = await frame.execute({ path: "clip.mp4", timeSeconds: 0 }) as LoomToolResult;
 		assert.equal((result.details as { output?: string }).output, "outputs/clip_extract_frame.jpg");
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("run_ffprobe returns stdout for a workspace-relative file", async (t) => {
+	if (!tryResolveMediaBinaries()) {
+		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
+		return;
+	}
+	const root = await mkdtemp(join(tmpdir(), "loom-ffprobe-run-"));
+	const core = new LocalCore();
+	try {
+		await core.openLibrary(root);
+		const tools = createFfmpegTools(core);
+		const run = tools.find((tool) => tool.name === "run_ffmpeg")!;
+		const probe = tools.find((tool) => tool.name === "run_ffprobe")!;
+		await run.execute({ args: ["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", "clip.mp4"] });
+		const result = await probe.execute({ args: ["-v", "error", "-of", "json", "-show_entries", "stream=width", "clip.mp4"] }) as LoomToolResult;
+		const details = result.details as { program: string; stdout?: string };
+		assert.equal(details.program, "ffprobe");
+		assert.equal(JSON.parse(details.stdout ?? "{}").streams[0].width, 64);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
