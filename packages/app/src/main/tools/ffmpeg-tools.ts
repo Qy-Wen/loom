@@ -8,112 +8,6 @@ import type { LoomTool, LoomToolResult } from "@loom/agent";
 export function createFfmpegTools(core: LocalCore): LoomTool[] {
 	return [
 		{
-			name: "extract_frame",
-			description:
-				"Extract one still frame from a video at timeSeconds. " +
-				"Optional output path; defaults to outputs/.",
-			parameters: objectSchema({
-				path: { type: "string" },
-				timeSeconds: { type: "number" },
-				output: { type: "string" },
-			}, ["path", "timeSeconds"]),
-			execute: async (rawArgs, signal) => {
-				const args = requiredPath(rawArgs, "path");
-				return jobResult(await core.extractFrame({
-					path: args,
-					timeSeconds: requiredNumber(rawArgs, "timeSeconds"),
-					output: optionalPath(rawArgs, "output"),
-				}, signal));
-			},
-		},
-		{
-			name: "extract_clip",
-			description:
-				"Cut a clip from startSeconds for durationSeconds. " +
-				"Optional output path; defaults to outputs/.",
-			parameters: objectSchema({
-				path: { type: "string" },
-				startSeconds: { type: "number" },
-				durationSeconds: { type: "number" },
-				output: { type: "string" },
-			}, ["path", "startSeconds", "durationSeconds"]),
-			execute: async (rawArgs, signal) => {
-				return jobResult(await core.extractClip({
-					path: requiredPath(rawArgs, "path"),
-					startSeconds: requiredNumber(rawArgs, "startSeconds"),
-					durationSeconds: requiredNumber(rawArgs, "durationSeconds"),
-					output: optionalPath(rawArgs, "output"),
-				}, signal));
-			},
-		},
-		{
-			name: "resize_video",
-			description:
-				"Resize a video by width, height, and/or maxEdge. " +
-				"Optional output path; defaults to outputs/.",
-			parameters: objectSchema({
-				path: { type: "string" },
-				width: { type: "number" },
-				height: { type: "number" },
-				maxEdge: { type: "number" },
-				output: { type: "string" },
-			}, ["path"]),
-			execute: async (rawArgs, signal) => {
-				return jobResult(await core.resizeVideo({
-					path: requiredPath(rawArgs, "path"),
-					width: optionalNumber(rawArgs, "width"),
-					height: optionalNumber(rawArgs, "height"),
-					maxEdge: optionalNumber(rawArgs, "maxEdge"),
-					output: optionalPath(rawArgs, "output"),
-				}, signal));
-			},
-		},
-		{
-			name: "crop_video",
-			description:
-				"Crop a video to x,y,width,height. Optional output path; defaults to outputs/.",
-			parameters: objectSchema({
-				path: { type: "string" },
-				x: { type: "number" },
-				y: { type: "number" },
-				width: { type: "number" },
-				height: { type: "number" },
-				output: { type: "string" },
-			}, ["path", "x", "y", "width", "height"]),
-			execute: async (rawArgs, signal) => {
-				return jobResult(await core.cropVideo({
-					path: requiredPath(rawArgs, "path"),
-					x: requiredNumber(rawArgs, "x"),
-					y: requiredNumber(rawArgs, "y"),
-					width: requiredNumber(rawArgs, "width"),
-					height: requiredNumber(rawArgs, "height"),
-					output: optionalPath(rawArgs, "output"),
-				}, signal));
-			},
-		},
-		{
-			name: "convert_format",
-			description:
-				"Convert a file to another container/format (mp4, webm, gif, mp3, wav, png, jpg, ...). " +
-				"Optional output path; defaults to outputs/.",
-			parameters: objectSchema({
-				path: { type: "string" },
-				format: { type: "string" },
-				output: { type: "string" },
-			}, ["path", "format"]),
-			execute: async (rawArgs, signal) => {
-				const record = asRecord(rawArgs);
-				if (typeof record.format !== "string" || !record.format.trim()) {
-					throw new TypeError("format must be a non-empty string");
-				}
-				return jobResult(await core.convertFormat({
-					path: requiredPath(rawArgs, "path"),
-					format: record.format,
-					output: optionalPath(rawArgs, "output"),
-				}, signal));
-			},
-		},
-		{
 			name: "grade_image",
 			description:
 				"Grade one still image with the preview panel's controls and write a new file. " +
@@ -202,8 +96,15 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "run_ffmpeg",
 			description:
 				"Run ffmpeg with an argv array. This is the only way to run ffmpeg: it may not be on the shell PATH, so do not look for it or call it from bash. " +
-				"Use it for any ffmpeg operation the other media tools do not cover. " +
-				"Pass args as a string array without the program name. File operands may be workspace-relative or absolute.",
+				"Use it for every media edit except still-image color grading (grade_image). " +
+				"Pass args as a string array without the program name. File operands may be workspace-relative or absolute. " +
+				"Write results under outputs/ unless the user names a path, and never overwrite the source file; leave out -y so an existing output is not replaced. " +
+				"Examples: " +
+				"extract one frame [\"-ss\", \"5\", \"-i\", \"in.mp4\", \"-frames:v\", \"1\", \"outputs/frame.jpg\"]; " +
+				"cut a clip [\"-ss\", \"10\", \"-i\", \"in.mp4\", \"-t\", \"5\", \"outputs/clip.mp4\"] (add \"-c\", \"copy\" before the output to skip re-encoding); " +
+				"resize with the long edge at most 720 [\"-i\", \"in.mp4\", \"-vf\", \"scale='min(720,iw)':'min(720,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2\", \"outputs/small.mp4\"]; " +
+				"crop to width:height:x:y [\"-i\", \"in.mp4\", \"-vf\", \"crop=320:240:16:16\", \"outputs/crop.mp4\"]; " +
+				"convert format [\"-i\", \"in.mp4\", \"outputs/in.webm\"] or extract audio [\"-i\", \"in.mp4\", \"-vn\", \"outputs/in.mp3\"].",
 			parameters: argvSchema,
 			execute: async (rawArgs, signal) => jobResult(await core.runFfmpeg({ args: argvArg(rawArgs) }, signal)),
 		},

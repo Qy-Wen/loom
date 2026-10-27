@@ -19,7 +19,7 @@ import { workspaceWriteNeedsApproval } from "../src/tools/workspace-path.ts";
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
 	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "convert_format", "crop_video", "edit", "extract_clip", "extract_frame", "grade_image", "resize_video", "run_ffmpeg", "update_settings", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "edit", "grade_image", "run_ffmpeg", "update_settings", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
@@ -27,9 +27,9 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolNeedsApproval("standard", "auto_memory"), false);
 	assert.equal(toolNeedsApproval("basic", "auto_memory"), false);
 	assert.equal(toolNeedsApproval("basic", "bash"), true);
-	assert.equal(toolNeedsApproval("basic", "extract_frame"), true);
+	assert.equal(toolNeedsApproval("basic", "grade_image"), true);
 	assert.equal(toolNeedsApproval("basic", "run_ffprobe"), false);
-	assert.equal(toolNeedsApproval("standard", "extract_frame"), false);
+	assert.equal(toolNeedsApproval("standard", "grade_image"), false);
 	assert.equal(toolNeedsApproval("standard", "run_ffmpeg"), false);
 	assert.equal(toolNeedsApproval("full", "write"), false);
 	assert.equal(pathInsideWorkspace("/lib", "notes/a.md"), true);
@@ -104,9 +104,9 @@ test("remembered commands skip the next matching call", () => {
 	assert.equal(toolCallNeedsApproval("basic", "write", "/lib", { path: "notes/a.md" }, write ? [write] : []), false);
 	assert.equal(toolCallNeedsApproval("basic", "edit", "/lib", { path: "notes/a.md" }, write ? [write] : []), true);
 
-	assert.deepEqual(commandAllowKey("extract_frame", { path: "a.mp4", time: 1 }), { tool: "extract_frame" });
-	assert.equal(toolCallNeedsApproval("basic", "extract_frame", "/lib", { path: "b.mp4" }, [{ tool: "extract_frame" }]), false);
-	assert.equal(toolCallNeedsApproval("basic", "extract_clip", "/lib", {}, [{ tool: "extract_frame" }]), true);
+	assert.deepEqual(commandAllowKey("grade_image", { path: "a.png" }), { tool: "grade_image" });
+	assert.equal(toolCallNeedsApproval("basic", "grade_image", "/lib", { path: "b.png" }, [{ tool: "grade_image" }]), false);
+	assert.equal(toolCallNeedsApproval("basic", "run_ffmpeg", "/lib", {}, [{ tool: "grade_image" }]), true);
 
 	const ffmpeg = commandAllowKey("run_ffmpeg", { args: ["-i", "a.mp4"] });
 	assert.equal(ffmpeg?.match, JSON.stringify(["ffmpeg", "-i", "a.mp4"]));

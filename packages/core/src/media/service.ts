@@ -16,29 +16,15 @@ import {
 } from "../grade/index.ts";
 import type { Library } from "../library/library.ts";
 import type {
-	ConvertFormatArgs,
-	CropVideoArgs,
-	ExtractClipArgs,
-	ExtractFrameArgs,
 	GradeImageArgs,
 	GradeVideoArgs,
 	MediaInfoResult,
 	PreviewVideoGradeArgs,
 	MediaJobResult,
-	ResizeVideoArgs,
 	RunFfmpegArgs,
 	RunFfprobeArgs,
 } from "../model/media.ts";
-import {
-	assertFiniteNumber,
-	buildConvertArgs,
-	buildCropArgs,
-	buildExtractClipArgs,
-	buildExtractFrameArgs,
-	buildProbeArgs,
-	buildResizeArgs,
-	normalizeConvertFormat,
-} from "./operations.ts";
+import { buildProbeArgs } from "./operations.ts";
 import { parseFfprobeJson } from "./probe.ts";
 import { prepareFfmpegArgs, resolveMediaPath } from "./policy.ts";
 import { runMediaProcess } from "./run.ts";
@@ -71,44 +57,6 @@ export class MediaService {
 			path: input.path,
 			...parseFfprobeJson(stdout),
 		};
-	}
-
-	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		const timeSeconds = assertFiniteNumber(args.timeSeconds, "timeSeconds");
-		return this.runConvenience(args.path, args.output, "extract_frame", "jpg", (input, output) => {
-			return buildExtractFrameArgs(input, output, timeSeconds);
-		}, signal);
-	}
-
-	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		const startSeconds = assertFiniteNumber(args.startSeconds, "startSeconds");
-		const durationSeconds = assertFiniteNumber(args.durationSeconds, "durationSeconds");
-		if (durationSeconds <= 0) throw new TypeError("durationSeconds must be greater than 0");
-		return this.runConvenience(args.path, args.output, "extract_clip", undefined, (input, output) => {
-			return buildExtractClipArgs(input, output, startSeconds, durationSeconds);
-		}, signal);
-	}
-
-	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		if (args.width !== undefined) assertFiniteNumber(args.width, "width");
-		if (args.height !== undefined) assertFiniteNumber(args.height, "height");
-		if (args.maxEdge !== undefined) assertFiniteNumber(args.maxEdge, "maxEdge");
-		return this.runConvenience(args.path, args.output, "resize", undefined, (input, output) => {
-			return buildResizeArgs(input, output, args);
-		}, signal);
-	}
-
-	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		const crop = {
-			x: assertFiniteNumber(args.x, "x"),
-			y: assertFiniteNumber(args.y, "y"),
-			width: assertFiniteNumber(args.width, "width"),
-			height: assertFiniteNumber(args.height, "height"),
-		};
-		if (crop.width < 2 || crop.height < 2) throw new TypeError("crop width and height must be at least 2");
-		return this.runConvenience(args.path, args.output, "crop", undefined, (input, output) => {
-			return buildCropArgs(input, output, crop);
-		}, signal);
 	}
 
 	async gradeImage(
@@ -186,13 +134,6 @@ export class MediaService {
 		} finally {
 			await rm(file, { force: true }).catch(() => undefined);
 		}
-	}
-
-	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		const format = normalizeConvertFormat(args.format);
-		return this.runConvenience(args.path, args.output, "convert", format, (input, output) => {
-			return buildConvertArgs(input, output);
-		}, signal);
 	}
 
 	async runFfmpeg(input: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
@@ -309,35 +250,6 @@ export class MediaService {
 		if (!resolved.path.toLowerCase().endsWith(".cube")) throw new TypeError("lut must be a .cube file");
 		const path = this.library.getPaths().toRelativePath(resolved.absolutePath);
 		return { path, absolutePath: resolved.absolutePath };
-	}
-
-	private async runConvenience(
-		inputPath: string,
-		outputPath: string | undefined,
-		suffix: string,
-		extension: string | undefined,
-		buildArgs: (inputPath: string, outputPath: string) => string[],
-		signal?: AbortSignal,
-	): Promise<MediaJobResult> {
-		const cwd = this.cwd();
-		const input = resolveMediaPath(inputPath, cwd);
-		const ext = extension ?? extensionOf(input.path);
-		const destination = outputPath
-			? resolveMediaPath(outputPath, cwd)
-			: await unusedDefaultOutput(input.path, suffix, ext, cwd);
-		await mkdir(dirname(destination.absolutePath), { recursive: true });
-		await this.run({
-			program: "ffmpeg",
-			args: buildArgs(input.absolutePath, destination.absolutePath),
-			cwd,
-			signal,
-		});
-		return {
-			kind: "media_job",
-			program: "ffmpeg",
-			output: destination.path,
-			outputs: [destination.path],
-		};
 	}
 }
 

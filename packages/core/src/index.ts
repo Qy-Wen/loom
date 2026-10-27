@@ -38,10 +38,6 @@ export type {
 	SearchLink,
 } from "./model/retrieval.ts";
 export type {
-	ConvertFormatArgs,
-	CropVideoArgs,
-	ExtractClipArgs,
-	ExtractFrameArgs,
 	GradeImageArgs,
 	GradeImageResult,
 	GradeVideoArgs,
@@ -49,7 +45,6 @@ export type {
 	MediaInfoResult,
 	MediaJobResult,
 	PreviewVideoGradeArgs,
-	ResizeVideoArgs,
 	RunFfmpegArgs,
 	RunFfprobeArgs,
 } from "./model/media.ts";

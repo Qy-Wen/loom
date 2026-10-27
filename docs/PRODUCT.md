@@ -205,17 +205,15 @@ The Agent calls tools to access external capabilities. Loom owns the library: se
 
 FFmpeg alone supports many useful Agent workflows without requiring a generation model.
 
-The open library is the working directory. Relative paths resolve against it; absolute paths are allowed. If omitted, convenience tools default to `outputs/`. `asset_id` remains the internal identity (see Section 4).
+The open library is the working directory. Relative paths resolve against it; absolute paths are allowed. The Agent writes results to `outputs/` unless the user names a path. `asset_id` remains the internal identity (see Section 4).
 
 **Toolset:**
 
 ```
-extract_frame       extract_clip        resize_video
-crop_video          convert_format      grade_image
-run_ffmpeg          run_ffprobe
+grade_image         run_ffmpeg          run_ffprobe
 ```
 
-`run_ffmpeg` is the escape hatch for argv the convenience tools cannot express. `run_ffprobe` returns ffprobe stdout, which is how the Agent reads duration, resolution, and codecs. Both take an argv array without the program name; the binaries are bundled and may not be on the shell PATH, so the Agent must not run them from `bash`. `concat_video`, `change_speed`, `extract_audio`, and `add_subtitle` can wait; use `run_ffmpeg` until they exist.
+`run_ffmpeg` covers every media edit except still-image color grading, which `grade_image` handles; its description carries example argv for frame extraction, clips, resize, crop, and conversion. `run_ffprobe` returns ffprobe stdout, which is how the Agent reads duration, resolution, and codecs. Both take an argv array without the program name; the binaries are bundled and may not be on the shell PATH, so the Agent must not run them from `bash`.
 
 Example:
 

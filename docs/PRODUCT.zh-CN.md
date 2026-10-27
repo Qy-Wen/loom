@@ -205,17 +205,15 @@ Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工
 
 第一版无需接入任何生成模型，仅凭 FFmpeg 就能支撑大量 Agent Workflow。
 
-打开的素材库是工作目录。相对路径相对它解析，也允许绝对路径。未指定输出时封装工具默认写到 `outputs/`。`asset_id` 仍是内部身份（见第 4 节）。
+打开的素材库是工作目录。相对路径相对它解析，也允许绝对路径。用户没指定路径时，Agent 把结果写到 `outputs/`。`asset_id` 仍是内部身份（见第 4 节）。
 
 **工具集：**
 
 ```
-extract_frame       extract_clip        resize_video
-crop_video          convert_format      grade_image
-run_ffmpeg          run_ffprobe
+grade_image         run_ffmpeg          run_ffprobe
 ```
 
-`run_ffmpeg` 是封装工具盖不住时的逃生口。`run_ffprobe` 返回 ffprobe 的 stdout，Agent 用它读取时长、分辨率和编码。两者都只传不含程序名的 argv 数组；二进制随应用打包，不一定在 shell PATH 里，Agent 不得在 `bash` 里运行。`concat_video`、`change_speed`、`extract_audio`、`add_subtitle` 可以后做，先走 `run_ffmpeg`。
+`run_ffmpeg` 负责除静态图调色（`grade_image`）以外的所有媒体编辑，描述里带有抽帧、截取、缩放、裁切和转格式的 argv 示例。`run_ffprobe` 返回 ffprobe 的 stdout，Agent 用它读取时长、分辨率和编码。两者都只传不含程序名的 argv 数组；二进制随应用打包，不一定在 shell PATH 里，Agent 不得在 `bash` 里运行。
 
 **示例：**
 

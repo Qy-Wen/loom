@@ -26,7 +26,7 @@ test("ffmpeg tools require an argv array", async () => {
 	}
 });
 
-test("ffmpeg tools can extract a frame when binaries are present", async (t) => {
+test("run_ffmpeg writes a file when binaries are present", async (t) => {
 	if (!tryResolveMediaBinaries()) {
 		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
 		return;
@@ -38,16 +38,16 @@ test("ffmpeg tools can extract a frame when binaries are present", async (t) => 
 		await core.openLibrary(root);
 		const tools = createFfmpegTools(core);
 		const run = tools.find((tool) => tool.name === "run_ffmpeg");
-		const frame = tools.find((tool) => tool.name === "extract_frame");
-		assert.ok(run && frame);
+		assert.ok(run);
 
 		const generated = await run.execute({
 			args: ["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", "clip.mp4"],
 		}) as LoomToolResult;
 		assert.equal((generated.details as { output?: string }).output, "clip.mp4");
 
-		const result = await frame.execute({ path: "clip.mp4", timeSeconds: 0 }) as LoomToolResult;
-		assert.equal((result.details as { output?: string }).output, "outputs/clip_extract_frame.jpg");
+		const frame = await run.execute({ args: ["-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }) as LoomToolResult;
+		assert.equal((frame.details as { output?: string }).output, "outputs/frame.jpg");
+		await assert.rejects(async () => run.execute({ args: ["-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }));
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

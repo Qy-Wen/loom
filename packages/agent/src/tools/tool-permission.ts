@@ -30,7 +30,7 @@ export type CommandAllowView = {
 const SETTINGS_TOOLS = ["update_settings"] as const;
 const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS] as const;
 /** Child processes that can write. `run_ffprobe` only reads, so it is not here. */
-const PROCESS_TOOLS = ["bash", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg"] as const;
+const PROCESS_TOOLS = ["bash", "grade_image", "run_ffmpeg"] as const;
 const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...PROCESS_TOOLS] as const;
 
 export function parseAgentPermissionLevel(value: unknown): AgentPermissionLevel {

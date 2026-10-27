@@ -10,7 +10,7 @@ export const CREATE_AGENT_TOOL = "run_create_agent";
 const RETRIEVE_LIBRARY_TOOLS = new Set(["search_assets", "inspect_asset"]);
 /** Resolve source asset ids and transform media. The create specialist does not search the library. */
 const CREATE_LIBRARY_TOOLS = new Set([
-	"inspect_asset", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "run_ffprobe",
+	"inspect_asset", "grade_image", "run_ffmpeg", "run_ffprobe",
 ]);
 
 export type SpecialistRole = "retrieve" | "create";

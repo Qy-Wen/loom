@@ -44,10 +44,8 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		assert.equal(imageInfo.height, 249);
 		assertNoAbsoluteLeak(imageInfo, root, FIXTURES);
 
-		const frame = await core.extractFrame({
-			path: VIDEO,
-			timeSeconds: 1,
-			output: "outputs/frame.jpg",
+		const frame = await core.runFfmpeg({
+			args: ["-ss", "1", "-i", VIDEO, "-frames:v", "1", "outputs/frame.jpg"],
 		});
 		assert.equal(frame.output, "outputs/frame.jpg");
 		await assertOutputFile(root, "outputs/frame.jpg");
@@ -58,13 +56,7 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		assert.equal(frameInfo.height, videoInfo.height);
 		assertNoAbsoluteLeak(frame, root, FIXTURES);
 
-		const clip = await core.extractClip({
-			path: VIDEO,
-			startSeconds: 0.5,
-			durationSeconds: 1,
-			output: "outputs/clip.mp4",
-		});
-		assert.equal(clip.output, "outputs/clip.mp4");
+		await core.runFfmpeg({ args: ["-ss", "0.5", "-i", VIDEO, "-t", "1", "outputs/clip.mp4"] });
 		await assertOutputFile(root, "outputs/clip.mp4");
 		const clipInfo = await core.getMediaInfo("outputs/clip.mp4");
 		assert.ok((clipInfo.duration ?? 0) >= 0.8);
@@ -72,46 +64,24 @@ test("MediaService processes committed video and image fixtures", async (t) => {
 		assert.equal(clipInfo.width, videoInfo.width);
 		assert.equal(clipInfo.height, videoInfo.height);
 
-		const resized = await core.resizeVideo({
-			path: VIDEO,
-			maxEdge: 320,
-			output: "outputs/small.mp4",
-		});
-		assert.equal(resized.output, "outputs/small.mp4");
+		const scale = "scale='min(320,iw)':'min(320,ih)':force_original_aspect_ratio=decrease:force_divisible_by=2";
+		await core.runFfmpeg({ args: ["-i", VIDEO, "-vf", scale, "outputs/small.mp4"] });
 		const resizedInfo = await core.getMediaInfo("outputs/small.mp4");
 		assert.ok((resizedInfo.width ?? Infinity) <= 320);
 		assert.ok((resizedInfo.height ?? Infinity) <= 320);
 		assert.ok((resizedInfo.width ?? 0) >= 2);
 
-		const cropped = await core.cropVideo({
-			path: VIDEO,
-			x: 16,
-			y: 16,
-			width: 320,
-			height: 240,
-			output: "outputs/crop.mp4",
-		});
-		assert.equal(cropped.output, "outputs/crop.mp4");
+		await core.runFfmpeg({ args: ["-i", VIDEO, "-vf", "crop=320:240:16:16", "outputs/crop.mp4"] });
 		const croppedInfo = await core.getMediaInfo("outputs/crop.mp4");
 		assert.equal(croppedInfo.width, 320);
 		assert.equal(croppedInfo.height, 240);
 
-		const jpg = await core.convertFormat({
-			path: IMAGE,
-			format: "jpg",
-			output: "outputs/still.jpg",
-		});
-		assert.equal(jpg.output, "outputs/still.jpg");
+		await core.runFfmpeg({ args: ["-i", IMAGE, "outputs/still.jpg"] });
 		const jpgInfo = await core.getMediaInfo("outputs/still.jpg");
 		assert.equal(jpgInfo.width, imageInfo.width);
 		assert.equal(jpgInfo.height, imageInfo.height);
 
-		const audio = await core.convertFormat({
-			path: "outputs/clip.mp4",
-			format: "mp3",
-			output: "outputs/clip.mp3",
-		});
-		assert.equal(audio.output, "outputs/clip.mp3");
+		await core.runFfmpeg({ args: ["-i", "outputs/clip.mp4", "outputs/clip.mp3"] });
 		const audioInfo = await core.getMediaInfo("outputs/clip.mp3");
 		assert.equal(audioInfo.audioCodec, "mp3");
 		assert.equal(audioInfo.videoCodec, undefined);

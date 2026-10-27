@@ -46,17 +46,12 @@ import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
 import type {
-	ConvertFormatArgs,
-	CropVideoArgs,
-	ExtractClipArgs,
-	ExtractFrameArgs,
 	GradeImageArgs,
 	GradeImageResult,
 	GradeVideoArgs,
 	GradeVideoResult,
 	MediaInfoResult,
 	MediaJobResult,
-	ResizeVideoArgs,
 	RunFfmpegArgs,
 	RunFfprobeArgs,
 } from "./model/media.ts";
@@ -591,26 +586,6 @@ export class LocalCore {
 
 	getMediaInfo(path: string, signal?: AbortSignal): Promise<MediaInfoResult> {
 		return this.runLibraryTask((jobSignal) => this.media.getMediaInfo(path, jobSignal), signal);
-	}
-
-	async extractFrame(args: ExtractFrameArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runLibraryTask((jobSignal) => this.media.extractFrame(args, jobSignal), signal);
-	}
-
-	async extractClip(args: ExtractClipArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runLibraryTask((jobSignal) => this.media.extractClip(args, jobSignal), signal);
-	}
-
-	async resizeVideo(args: ResizeVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runLibraryTask((jobSignal) => this.media.resizeVideo(args, jobSignal), signal);
-	}
-
-	async cropVideo(args: CropVideoArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runLibraryTask((jobSignal) => this.media.cropVideo(args, jobSignal), signal);
-	}
-
-	async convertFormat(args: ConvertFormatArgs, signal?: AbortSignal): Promise<MediaJobResult> {
-		return this.runLibraryTask((jobSignal) => this.media.convertFormat(args, jobSignal), signal);
 	}
 
 	async gradeImage(args: GradeImageArgs, signal?: AbortSignal): Promise<GradeImageResult> {

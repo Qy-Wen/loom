@@ -16,8 +16,8 @@ const BASE_SYSTEM_PROMPT =
 	"Use describe_audio for standalone audio via the Audio slot (music, ambient sound, speech if any); it does not run automatically. " +
 	"Use embed_asset to index Markdown or a described image/video/audio (chunk + embeddings); it does not run automatically. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
-	"For common media edits prefer extract_frame, extract_clip, resize_video, crop_video, convert_format, and grade_image. " +
-	"For anything else, use run_ffmpeg for ffmpeg and run_ffprobe for ffprobe, including to read duration, resolution, and codecs; pass argv as a string array without the program name. ffmpeg and ffprobe may not be on the shell PATH, so do not search for them or run them from bash. " +
+	"Use grade_image for color grading a still image. For every other media edit, use run_ffmpeg. " +
+	"Use run_ffprobe to read duration, resolution, and codecs. Both take argv as a string array without the program name. ffmpeg and ffprobe may not be on the shell PATH, so do not search for them or run them from bash. " +
 	"Media tools do not create relations. Call create_relation yourself when a derived file should point at its source: fromAssetId is the new file, toAssetId is the source, and type is a short label such as \"derived from\". " +
 	"Copy both asset ids from tool results. If you only have a path, retrieve it first. remove_relation takes the relationId that create_relation returned. " +
 	"Table columns are library properties. list_properties returns each column's propertyId, name, and type. " +
