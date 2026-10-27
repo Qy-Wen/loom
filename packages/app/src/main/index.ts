@@ -109,6 +109,9 @@ function logMediaBinaries(): void {
 function configureAutomation(): void {
 	if (process.env.LOOM_E2E === "1") {
 		app.setPath("userData", process.env.LOOM_E2E_USER_DATA?.trim() || join(tmpdir(), TEMP_ROOT_NAME, "e2e", String(process.pid)));
+		// A test run opens and closes many windows. On macOS a "prohibited" app never becomes the frontmost
+		// one, so it cannot pull the user away from what they are doing. LOOM_E2E_VISIBLE=1 turns this off.
+		if (process.platform === "darwin" && process.env.LOOM_E2E_VISIBLE !== "1") app.setActivationPolicy("prohibited");
 		return;
 	}
 	if (app.isPackaged || process.env.LOOM_CDP_PORT === "0") return;
@@ -319,6 +322,8 @@ function createWindow(): void {
 		minWidth: 860,
 		minHeight: 600,
 		icon: loadAppIcon(),
+		// Test runs open and close many windows. Keep them off the user's desktop (see LOOM_E2E_VISIBLE).
+		show: !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1"),
 		titleBarStyle: mac ? "hiddenInset" : "hidden",
 		...(mac
 			? { trafficLightPosition: { x: 14, y: 13 } }
