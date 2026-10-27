@@ -23,7 +23,7 @@ import { VideoVlmService } from "./rag/video-vlm.ts";
 import { prepareAudioForModel } from "./rag/audio-prepare.ts";
 import { prepareImageForModel } from "./rag/image-prepare.ts";
 import { AudioWriteupService } from "./rag/audio-writeup.ts";
-import { TextEmbedService } from "./rag/service.ts";
+import { TextEmbedService, type EmbedOptions } from "./rag/service.ts";
 import type {
 	AssetPropertyValue,
 	PropertyDefinition,
@@ -525,11 +525,12 @@ export class LocalCore {
 		assetId: string,
 		provider: EmbeddingProvider,
 		signal?: AbortSignal,
+		options?: EmbedOptions,
 	): Promise<TextEmbedStatus> {
 		const tasks = this.tasks;
 		return this.runLibraryTask(async (jobSignal) => {
 			const notify = () => { if (tasks?.active && this.tasks === tasks) this.library.notifyTextEmbed(assetId); };
-			const status = await this.textEmbed.embed(assetId, provider, notify, jobSignal);
+			const status = await this.textEmbed.embed(assetId, provider, notify, jobSignal, options);
 			notify();
 			return status;
 		}, signal);

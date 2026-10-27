@@ -2,7 +2,7 @@
 
 # 文本 RAG
 
-> 第一条 RAG 路径：只做 Markdown。总览见 [RAG.md](./RAG.zh-CN.md)。图 / 视频 / 音频见 [MEDIA.md](./MEDIA.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
+> 第一条 RAG 路径：Markdown 和纯文本文件。总览见 [RAG.md](./RAG.zh-CN.md)。图 / 视频 / 音频见 [MEDIA.md](./MEDIA.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
 >
 > 这里只记结论。
 
@@ -11,8 +11,9 @@
 ## 回路
 
 ```
-磁盘上的 .md
+磁盘上的 .md / .txt / .csv / .json
     → Level 1 文本摘录
+    → 转成 Markdown（csv、json）
     → markdown-it（Markdown AST）
     → 父子切片 + embedding              （建索引）
     → Hybrid Search                     （检索）
@@ -27,15 +28,16 @@
 
 ## 建索引
 
-- **语料：** 只做 `.md`。预览和 Level 1 FTS 仍可覆盖 txt / json / csv。Word、PDF 不做。
-- **归一：** Level 1 摘录先过 **markdown-it**，切分看的是 Markdown AST（标题、段落、列表），不先按字符硬切。
+- **语料：** `.md`、`.txt`、`.csv`、`.json`。HTML、PDF、Office 文件不做。
+- **转换：** `.md` 和 `.txt` 原样进入。CSV 每行一段，每个字段写成 `列名: 值`，所以每个切片都带着自己的列名。JSON 展开成 `路径: 值` 的行（`users[3].name: Ann`），超过约 1,200 字符的容器再拆成每个子元素一段。损坏或被截断的 JSON 按纯文本处理。切片偏移量指转换后的文本，不是原文件。
+- **归一：** 转换后的文本先过 **markdown-it**，切分看的是 Markdown AST（标题、段落、列表），不先按字符硬切。
 - **切分顺序：**
   1. 尽量按标题章节，再按段落（这是 markdown-it 的结构 token，不是大模型 token）。
   2. 长度用真 BPE 数。第一把尺是 **tiktoken `cl100k_base`**（本地 `js-tiktoken`，不跑模型）。512 / 64 指这套 token id，不是字符数。
   3. 还是超过 **512** token，再滑窗 **512**、重叠 **64**（步长 448）。
   4. 短文一篇一段。
 - **父子：** 先切子切片，再聚合父切片。子切片用来找得准，父切片用来补上下文。先按结构 + 512 / 64 切出全部子切片，再把连续的子切片收成父切片，源文跨度不超过 **2048** token（大约四个子切片）。父切片正文是这段源文，不要把互相重叠的子切片字符串拼起来。父边界不按标题级别。根父节点的 `parent_id` 为空。只有子切片做 embedding。
-- **输入：** Level 1 摘录。没有、失败或过期就先摘录。embed 是单独的用户或 Agent 动作。
+- **输入：** Level 1 摘录，上限 256 KB；CSV 在这里被截断时，最后一行不完整，会被丢掉。没有、失败或过期就先摘录。embed 是单独的用户或 Agent 动作。
 - **Provider：** `EmbeddingProvider`。Loom 不加载、不运行模型。报文是 OpenAI 兼容的 `POST /v1/embeddings`。`requestUrl`、API key、`model` 来自设置页的 Embedding 槽位，见 [设置](../SETTINGS.zh-CN.md)。
 - **存储：** `text_chunks` 按 `asset_id`（切片 id、`parent_id`、角色、偏移、原文、mtime；子切片另存向量 + 模型名）。不塞进 `asset_metadata`。打开库时加载 sqlite-vec，用 `vec_distance_cosine` 打这些 blob。不上 `vec0` 表：维度跟着 Embedding 槽位。扩展没有就用 JavaScript 算同一套余弦。
 - **失效：** 和 Level 1 一样看 mtime。rename/move 不重跑。换 embedding 模型则这些行作废。

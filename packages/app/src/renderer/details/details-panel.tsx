@@ -34,7 +34,7 @@ interface DetailsPanelProps {
 	enrichment: AssetEnrichment | undefined;
 	textEmbed: TextEmbedStatus | undefined;
 	embedding: boolean;
-	onEmbed: () => void;
+	onEmbed: (force?: boolean) => void;
 	imageVlm: ImageVlmStatus | undefined;
 	videoVlm: VideoVlmStatus | undefined;
 	audioWriteup: AudioWriteupStatus | undefined;

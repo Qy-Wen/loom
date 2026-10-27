@@ -1,9 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 import type { AudioWriteupStatus, ImageVlmStatus, TextEmbedStatus, VideoVlmStatus } from "@loom/core";
 import { rawStatusLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { CopyableError } from "../components/copyable-error.tsx";
+import { ChoiceDialog } from "../components/confirm-dialog.tsx";
 
 type DescriptionStatus = ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus;
 
@@ -13,7 +13,7 @@ interface MediaDescriptionDetailsProps {
 	busy: boolean;
 	embedding: boolean;
 	onDescribe: () => void;
-	onEmbed: () => void;
+	onEmbed: (force?: boolean) => void;
 }
 
 /** Describe and index an image, video, or audio file as one step with one status. */
@@ -68,60 +68,17 @@ export function MediaDescriptionDetails({
 				)}
 			</dl>
 			{choosing && (
-				<DescribeChoice
+				<ChoiceDialog
+					title={t.details.describeChoiceTitle}
+					body={t.details.describeChoiceBody}
 					onCancel={() => setChoosing(false)}
-					onIndex={() => { setChoosing(false); onEmbed(); }}
-					onRedescribe={() => { setChoosing(false); onDescribe(); }}
+					choices={[
+						{ label: t.details.indexOnly, onSelect: () => { setChoosing(false); onEmbed(true); } },
+						{ label: t.details.redescribeAndIndex, onSelect: () => { setChoosing(false); onDescribe(); }, primary: true },
+					]}
 				/>
 			)}
 		</section>
-	);
-}
-
-/** Already described: index the existing text, or describe again first. */
-function DescribeChoice({ onCancel, onIndex, onRedescribe }: {
-	onCancel: () => void;
-	onIndex: () => void;
-	onRedescribe: () => void;
-}): React.JSX.Element {
-	const { t } = useLocale();
-	const dialogRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		const previous = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-		dialogRef.current?.querySelector<HTMLElement>("button")?.focus();
-		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape") {
-				event.preventDefault(); event.stopPropagation();
-				onCancel();
-				return;
-			}
-			if (event.key !== "Tab") return;
-			const controls = dialogRef.current?.querySelectorAll<HTMLElement>("button");
-			if (!controls?.length) return;
-			const first = controls[0]!, last = controls[controls.length - 1]!;
-			if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
-			else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
-		};
-		window.addEventListener("keydown", onKey, true);
-		return () => {
-			window.removeEventListener("keydown", onKey, true);
-			previous?.focus({ preventScroll: true });
-		};
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
-	return createPortal(
-		<div className="settings-login-overlay" onClick={(event) => { if (event.target === event.currentTarget) onCancel(); }}>
-			<div ref={dialogRef} className="settings-login-card" role="dialog" aria-modal="true" aria-label={t.details.describeChoiceTitle}>
-				<h3>{t.details.describeChoiceTitle}</h3>
-				<p>{t.details.describeChoiceBody}</p>
-				<div className="settings-actions settings-login-actions">
-					<button type="button" onClick={onCancel}>{t.common.cancel}</button>
-					<button type="button" onClick={onIndex}>{t.details.indexOnly}</button>
-					<button className="primary-button" type="button" onClick={onRedescribe}>{t.details.redescribeAndIndex}</button>
-				</div>
-			</div>
-		</div>,
-		document.body,
 	);
 }
 

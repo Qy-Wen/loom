@@ -115,10 +115,10 @@ describe("TextEmbedService", () => {
 		assert.equal(sameModel.calls, 1);
 	});
 
-	it("does not embed non-markdown text", async () => {
+	it("does not embed text formats it cannot convert", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
-		const asset: Asset = { ...mdAsset(), relativePath: "note.txt", filename: "note.txt" };
+		const asset: Asset = { ...mdAsset(), relativePath: "note.html", filename: "note.html" };
 		await store.upsertAsset(asset);
 		const provider = recordingProvider();
 		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
@@ -195,5 +195,31 @@ describe("LocalCore embedTextAsset", () => {
 			await core.close();
 			await rm(root, { recursive: true, force: true });
 		}
+	});
+});
+
+describe("TextEmbedService force", () => {
+	it("skips a current index unless forced, then rebuilds every vector", async () => {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = mdAsset();
+		await store.upsertAsset(asset);
+		await store.upsertAssetEnrichment({
+			assetId: asset.assetId,
+			version: ENRICHMENT_VERSION,
+			sourceModifiedAt: asset.modifiedAt,
+			status: "ready",
+			data: { kind: "text", text: "# Title\n\nHello world.\n", truncated: false, charCount: 22 },
+		});
+		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
+		const provider = recordingProvider();
+		await service.embed(asset.assetId, provider);
+		await service.embed(asset.assetId, provider);
+		assert.equal(provider.calls, 1);
+		const forced = await service.embed(asset.assetId, provider, undefined, undefined, { force: true });
+		assert.equal(provider.calls, 2);
+		assert.equal(forced.status, "ready");
+		const chunks = await store.listTextChunks(asset.assetId);
+		assert.equal(chunks.filter((chunk) => chunk.role === "child").length, forced.childCount);
 	});
 });

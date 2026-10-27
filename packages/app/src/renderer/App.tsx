@@ -249,7 +249,7 @@ export function App(): React.JSX.Element {
 		{ id: "details", visible: true, title: t.app.details, initialJoin: ["agent"], render: () => <DetailsPanel
 			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}
-			enrichment={enrichment} textEmbed={textEmbed} embedding={embedding} onEmbed={() => void embedSelected()}
+			enrichment={enrichment} textEmbed={textEmbed} embedding={embedding} onEmbed={(force) => void embedSelected(force)}
 			imageVlm={imageVlm} videoVlm={videoVlm} audioWriteup={audioWriteup} describing={describing} onDescribe={() => void describeSelected()}
 			relations={relations} assets={library.assets} relationTypes={relationTypes}
 			onSelectAsset={(assetId) => { selectAsset(assetId); panels.focus("details"); }}
@@ -961,14 +961,14 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function embedSelected(): Promise<void> {
+	async function embedSelected(force = false): Promise<void> {
 		if (!viewedAssetId) return;
 		const assetId = viewedAssetId;
 		const current = detailRequests.current.request("embed-action", assetId);
 		setEmbedding(true);
 		setError(null);
 		try {
-			const status = await window.loom.embedAsset(assetId);
+			const status = await window.loom.embedAsset(assetId, force);
 			if (current()) setTextEmbed(status);
 		} catch (cause) {
 			if (current()) setError(cause instanceof Error ? cause.message : String(cause));

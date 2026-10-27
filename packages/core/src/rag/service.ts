@@ -17,9 +17,14 @@ import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type { MetadataStore } from "../stores/types.ts";
 import { canDescribeImage } from "./image-vlm.ts";
 import { chunkMarkdown } from "./chunk.ts";
-import { canEmbedMarkdown } from "./markdown.ts";
+import { canIndexText, textToMarkdown } from "./text-source.ts";
 import { canDescribeVideo } from "./video-vlm.ts";
 import { canDescribeAudio } from "./audio-writeup.ts";
+
+export interface EmbedOptions {
+	/** Rebuild chunks and vectors even when the existing index looks current. */
+	force?: boolean;
+}
 
 export class TextEmbedService {
 	private chain: Promise<void> = Promise.resolve();
@@ -42,12 +47,13 @@ export class TextEmbedService {
 		provider: EmbeddingProvider,
 		onUpdate?: (status: TextEmbedStatus) => void,
 		signal?: AbortSignal,
+		options: EmbedOptions = {},
 	): Promise<TextEmbedStatus> {
 		const asset = await this.metadata.getAsset(assetId);
 		if (!asset) throw new Error("Asset not found");
 		return this.enqueue(() => {
 			signal?.throwIfAborted();
-			return this.run(asset, provider, onUpdate, signal);
+			return this.run(asset, provider, onUpdate, signal, options.force === true);
 		});
 	}
 
@@ -62,6 +68,7 @@ export class TextEmbedService {
 		provider: EmbeddingProvider,
 		onUpdate?: (status: TextEmbedStatus) => void,
 		signal?: AbortSignal,
+		force = false,
 	): Promise<TextEmbedStatus> {
 		signal?.throwIfAborted();
 		const latest = await this.metadata.getAsset(asset.assetId);
@@ -70,8 +77,10 @@ export class TextEmbedService {
 		signal?.throwIfAborted();
 		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
 
-		const current = await this.currentIfFresh(asset, provider.modelId);
-		if (current) return current;
+		if (!force) {
+			const current = await this.currentIfFresh(asset, provider.modelId);
+			if (current) return current;
+		}
 
 		signal?.throwIfAborted();
 		await this.writeJob(asset, {
@@ -148,12 +157,12 @@ export class TextEmbedService {
 	}
 
 	private async sourceMarkdown(asset: Asset, signal?: AbortSignal): Promise<{ text: string } | { error: string } | { unsupported: true }> {
-		if (canEmbedMarkdown(asset.filename)) {
+		if (canIndexText(asset.filename)) {
 			const extract = await this.ensureExtract(asset, signal);
 			if (extract.status !== "ready" || extract.data?.kind !== "text") {
 				return { error: extract.error ?? "Level 1 extract is not ready" };
 			}
-			return { text: extract.data.text };
+			return { text: textToMarkdown(asset.filename, extract.data.text, extract.data.truncated) };
 		}
 		const writeup = await this.readyWriteup(asset);
 		if (writeup === "missing") {
@@ -252,7 +261,7 @@ function needsVlmWriteup(asset: Asset): boolean {
 }
 
 function canIndexAsset(asset: Asset): boolean {
-	return canEmbedMarkdown(asset.filename) || needsVlmWriteup(asset);
+	return canIndexText(asset.filename) || needsVlmWriteup(asset);
 }
 
 function toStoredChunks(assetId: string, plan: ReturnType<typeof chunkMarkdown>): StoredTextChunk[] {

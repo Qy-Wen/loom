@@ -259,7 +259,8 @@ export interface LoomApi {
 	removeRelation: (relationId: string) => Promise<void>;
 	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 	getTextEmbedStatus: (assetId: string) => Promise<TextEmbedStatus>;
-	embedAsset: (assetId: string) => Promise<TextEmbedStatus>;
+	/** `force` rebuilds the index even when it looks current. */
+	embedAsset: (assetId: string, force?: boolean) => Promise<TextEmbedStatus>;
 	getImageVlmStatus: (assetId: string) => Promise<ImageVlmStatus>;
 	describeImage: (assetId: string) => Promise<ImageVlmStatus>;
 	getVideoVlmStatus: (assetId: string) => Promise<VideoVlmStatus>;

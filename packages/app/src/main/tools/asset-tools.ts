@@ -125,8 +125,8 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "embed_asset",
 			description:
-				"Index one asset for later retrieval: chunk the source Markdown and request embeddings. " +
-				"Supported: .md files, or images/videos/audio that already have a write-up. " +
+				"Index one asset for later retrieval: chunk its text and request embeddings. " +
+				"Supported: .md, .txt, .csv, and .json files, or images/videos/audio that already have a write-up. " +
 				"Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
 			parameters: {
 				type: "object",

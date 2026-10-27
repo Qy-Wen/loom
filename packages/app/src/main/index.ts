@@ -10,6 +10,7 @@ import {
 	LocalCore,
 	resolveMediaBinary,
 	type DescribeOptions,
+	type EmbedOptions,
 	type EmbeddingProvider,
 	type RerankProvider,
 	type LibraryChange,
@@ -684,7 +685,7 @@ function registerIpc(): void {
 		signal.throwIfAborted();
 		return localCore.getTextEmbedStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.embedAsset, (_event, assetId: string) => embedAssetWithSettings(assetId));
+	ipcMain.handle(IPC.embedAsset, (_event, assetId: string, force?: boolean) => embedAssetWithSettings(assetId, undefined, { force: force === true }));
 	ipcMain.handle(IPC.getImageVlmStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
 		signal.throwIfAborted();
@@ -1186,13 +1187,13 @@ async function takeLiveComposerAssets(sessionId: string) {
 	return composerAssetsAtSend(chips, snapshot.assets);
 }
 
-async function embedAssetWithSettings(assetId: string, signal?: AbortSignal) {
+async function embedAssetWithSettings(assetId: string, signal?: AbortSignal, options?: EmbedOptions) {
 	if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
 	return localCore.runLibraryTask(async (jobSignal) => {
 		const provider = await embeddingProviderFromSettings();
 		if (!provider) throw new Error("Enable the Embedding slot in Settings first.");
 		jobSignal.throwIfAborted();
-		return localCore.embedTextAsset(assetId, provider, jobSignal);
+		return localCore.embedTextAsset(assetId, provider, jobSignal, options);
 	}, signal);
 }
 
