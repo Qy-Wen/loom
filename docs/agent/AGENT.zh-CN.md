@@ -2,9 +2,9 @@
 
 # Agent 技术方案
 
-Loom 的创作素材 Agent 使用源码级 vendor 的 `pi-durable`。模型接入使用 npm `pi-ai`，前端协议是 AG-UI。参见 [MIGRATION](./MIGRATION.zh-CN.md)、[EVALS](./EVALS.zh-CN.md)、[MEMORY](./MEMORY.zh-CN.md)、[PERMISSION](./PERMISSION.zh-CN.md)。
+Loom 的创作素材 Agent 使用源码级 vendor 的 `pi-durable`。模型接入使用 npm `pi-ai`，前端协议是 AG-UI。参见 [EVALS](./EVALS.zh-CN.md)、[MEMORY](./MEMORY.zh-CN.md)、[PERMISSION](./PERMISSION.zh-CN.md)。
 
-Chat 的 Provider/目录/鉴权、服务商登录和每条对话独立选择模型均已接入生产运行时，见 [CHAT_MODELS](./CHAT_MODELS.zh-CN.md)。
+Chat 的 Provider/目录/鉴权、服务商登录和每条对话独立选择模型均已接入生产运行时，见 [SETTINGS](../SETTINGS.zh-CN.md)。
 
 ## 1. 边界
 

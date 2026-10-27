@@ -2,7 +2,7 @@
 
 # Electron UI 设计（UI Design）
 
-> 本文档是 [PRODUCT.md](./PRODUCT.zh-CN.md) UI 部分的展开，记录 Electron 客户端的界面布局与视图设计。
+> 本文档是 [PRODUCT.md](../PRODUCT.zh-CN.md) UI 部分的展开，记录 Electron 客户端的界面布局与视图设计。
 >
 > PRODUCT.md 只保留大框架，界面细节在此维护。
 

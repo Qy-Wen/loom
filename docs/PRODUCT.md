@@ -56,28 +56,53 @@ FFmpeg / ComfyUI / Publisher / ...
 Loom imposes **no directory structure**. Assets may stay flat or follow any hierarchy the user chooses, as in Finder or Obsidian. Loom adds only a hidden `.loom/` directory at the library root for everything it owns (indexes, grading data, and Agent state); it does not otherwise interfere with file organization.
 
 ```
-CreativeAssets/          -- selected library root
-├── product.jpg          -- flat or arbitrarily nested assets
+CreativeAssets/                   -- selected library root; Loom imposes no structure
+├── product.jpg                   -- flat or arbitrarily nested assets
 ├── video.mp4
-├── Campaign-A/          -- user-owned hierarchy
+├── Campaign-A/                   -- user-owned hierarchy
 │   └── ...
 ├── notes.md
+├── Inbox/                        -- composer imports; an ordinary, indexed folder
+├── outputs/                      -- default tool output; an ordinary, indexed folder
 │
-└── .loom/               -- hidden Loom metadata; never indexed
-     ├── metadata-db/metadata.db   -- SQLite: metadata, vector, FTS
-     ├── graph-db/graph.db/        -- LadybugDB
-     ├── grades/luts/              -- imported LUTs
-     └── agents/                   -- sessions/, command-allows/, skills/, memory/, traces/, tool-results/
+└── .loom/                        -- everything Loom owns; hidden, never indexed
+    ├── metadata-db/
+    │   └── metadata.db           -- SQLite: assets, properties, metadata, vectors, FTS (with -wal, -shm)
+    ├── graph-db/
+    │   └── graph.db/             -- LadybugDB EXPORT directory
+    ├── grades/
+    │   └── luts/*.cube           -- LUTs imported from outside the library (created on first import)
+    └── agents/
+        ├── sessions/loom.sqlite  -- durable session store (with -wal, -shm)
+        ├── command-allows/command-allows.json   -- remembered commands
+        ├── skills/               -- SKILL.md directories
+        ├── memory/MEMORY.md
+        ├── traces/telemetry.sqlite   -- development mode only
+        └── tool-results/<conversationId>/<taskId>.txt
 ```
 
-Full layout and rationale: [LIBRARY_LAYOUT.md](./LIBRARY_LAYOUT.md).
+The library root has no second reserved folder: names like `.agents` belong to the user. These paths are decided in one place, `LibraryPaths` in `core`.
+
+Everything Loom writes to the system temp directory lives under one root, never in the library, so a crash leaves nothing in the user's assets:
+
+```
+<os.tmpdir()>/loom/
+├── grade/run-*/{preview,frames}/   -- ffmpeg stills for the grade panel; one run-* per media service
+├── vlm-frames/run-*/               -- video frames sent to the VLM; removed after each asset
+├── audio/run-*/                    -- compressed audio for transcription; removed after each asset
+├── composer/run-*/                 -- staging for clipboard images bound for Inbox/; removed after import
+├── sandbox/                        -- process-sandbox spec files and spawn helpers
+└── e2e/<pid>/                      -- Electron userData while Playwright runs
+```
+
+Only `core/src/temp.ts` builds these paths, and none is hard-coded to `/tmp` (the process sandbox may write only the library and `os.tmpdir()`). At startup the app deletes anything older than 24 hours.
 
 - The user owns asset names, locations, and nesting.
 - **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 
-SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata-db/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [SCHEMA.md](./RAG/data/SCHEMA.md).
+SQLite stores all asset metadata, not only vectors. The database is `<library>/.loom/metadata-db/metadata.db`: the asset index (`assets`), library key-value state (`library_meta`), Obsidian-style custom properties (`properties`, `asset_properties`), and Level 1 technical metadata (`asset_metadata`). Column definitions are in [SCHEMA.md](./RAG/SCHEMA.md).
 
 Users may define fields such as:
 
@@ -110,26 +135,13 @@ these form **Hybrid Search**. That retrieve step, plus the Agent answering or ac
 
 The graph database stores relationships with real product meaning rather than existing merely to include a graph database.
 
-```
-(:Asset)-[:RELATED {type}]->(:Asset)
-(:Asset)-[:REFERENCE_OF]->(:Asset)
-(:Asset)-[:BELONGS_TO]->(:Project)
-(:Asset)-[:USES_CHARACTER]->(:Character)
-(:Asset)-[:SAME_SERIES]->(:Asset)
-(:Asset)-[:PUBLISHED_TO]->(:Post)
-```
-
-Users can create relationships manually:
+Today there is one node kind and one edge kind:
 
 ```
-image_A
-   │
-   └── reference_of
-            ↓
-        video_B
+(:Asset {asset_id})-[:RELATED {relation_id, type}]->(:Asset)
 ```
 
-Users create relationships themselves, including ones that record where a derived file came from:
+`type` is free text (such as `reference_of` or `derived from`), set by the user or the Agent: the user can drag a line in the UI, and the Agent uses `create_relation` / `remove_relation`. The most common use is recording where a derived file came from:
 
 ```
 product.png
@@ -141,7 +153,7 @@ image_gen_01.png
 video_01.mp4
 ```
 
-Over time this becomes a **Creative Asset Graph**.
+During search, each candidate follows its relations one hop and adds the neighbouring assets as separate rows tagged `linkedFrom` (see [RAG](./RAG/RAG.md)). Over time this becomes a **Creative Asset Graph**.
 
 ---
 
@@ -199,7 +211,7 @@ Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md).
 
 ## 6. Agent tools and creation layer
 
-The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full. Creation runtimes (ComfyUI and later) attach as MCP servers; do not add a first-party client per provider. Permission and the process sandbox: [PERMISSION](./AGENT/PERMISSION.md).
+The Agent calls tools to access external capabilities. Loom owns the library: search, FFmpeg, and pi workspace tools (`read` / `edit` / `write` / `bash`). Chat permission is Basic, Standard (default), or Full. Creation runtimes (such as ComfyUI) attach as MCP servers; do not add a first-party client per provider. Permission and the process sandbox: [PERMISSION](./agent/PERMISSION.md).
 
 ### 6.1 FFmpeg — first Agent tools
 
@@ -220,19 +232,16 @@ Example:
 > Convert all landscape videos to 9:16 and keep the first 10 seconds.
 
 ```
-search_assets(type=video, aspect_ratio=16:9)
+search_assets(type=video)          -- find the videos
         ↓
-parallel [
-    ffmpeg.crop(...)
-    ffmpeg.trim(...)
-]
+run_ffprobe(...)                   -- read the resolution, pick the landscape ones
+        ↓
+run_ffmpeg(...) × N                -- one call per video: crop to 9:16 and keep 10 s; independent calls in a turn run together
 ```
-
-This provides a strong tool-calling demonstration.
 
 ### 6.2 Creation via MCP
 
-ComfyUI, and later GPT Image / Kling / Seedance, attach as MCP servers. The Agent calls `server__tool` names; Loom does not embed each provider's HTTP API.
+ComfyUI, GPT Image, Kling, Seedance, and other creation services attach as MCP servers. The Agent calls `server__tool` names; Loom does not embed each provider's HTTP API.
 
 ```
 Agent
@@ -244,7 +253,7 @@ ComfyUI / other creation servers
 
 If a server writes outside the library, the Agent copies the file in with `bash` or `write`. The existing watcher indexes it.
 
-> Deferred: do not add `generate_image` / `generate_video` wrappers that hide providers. MCP tool names stay visible.
+> Loom does not provide `generate_image` / `generate_video` wrappers that hide providers; MCP tool names stay visible.
 
 ---
 
@@ -252,20 +261,18 @@ If a server writes outside the library, the Agent copies the file in with `bash`
 
 > Use the best-performing images from last year's AirPods project to create a 15-second vertical video.
 
+An illustrative flow: the steps show the order of work, and tool names follow what is actually registered.
+
 ```
-1.  understand_intent
-2.  query_graph        Project = AirPods
-3.  hybrid_search      rating / semantic / metadata
-4.  inspect_assets
-5.  plan_workflow
-6.  MCP creation tool  → ComfyUI (or other server)
-6b. bash / write       → copy into the library if needed
-7.  ffmpeg             → 9:16 → 15 sec
-8.  save_file          outputs/airpods_short_v2.mp4
-9.  index_asset
-10. create_relationship
+1.  search_assets        property project=AirPods, rating >= 4, plus a semantic query
+2.  inspect_asset        read the candidates' metadata, captions, and relations
+3.  MCP creation tool    → ComfyUI (or other server)
+3b. bash / write         → copy into the library if needed
+4.  run_ffmpeg           → 9:16 → 15 sec
+5.  file lands in outputs/   airpods_short_v2.mp4, indexed by the watcher
+6.  create_relation
         new_video --"derived from"--> source_images
-11. update_metadata
+7.  set_asset_property   status = draft
 ```
 
 The Agent closes the loop from retrieval through creation, indexing, and provenance.
@@ -276,9 +283,33 @@ The Agent closes the loop from retrieval through creation, indexing, and provena
 
 Visual direction: **Obsidian + Finder + Lightroom + Cursor**.
 
-The layout uses a left asset library, a central workbench, and separate Chat and Details windows, with Files, Table, and Graph work views. Chat and Details start as two tabs in the right column, with Chat selected. Drag its title to move it. Near the lower middle it snaps into a band that meets the left and right sidebars. Drag it back to the right edge to dock it. Double-click the title to dock it as well. Drop onto the center of another window to merge tabs. In docked regions, drop onto a slot's top or bottom edge to stack above or below it; the blue preview shows the landing area. Each slot can have its own independent tab group. Drag the divider to resize stacked panels; vertical order and sizes survive reload. On first use, image Edit opens Grade as a tab in the right sidebar; subsequent opens restore its saved placement. Drag a tab sideways to swap the two tabs. Drag a tab out to separate them again. In the Files view the workbench shows open files as browser-style tabs. A plain click on a file shows it in the active tab; middle-click it, or choose "Open in new tab" in its menu, to open it in a new tab next to the active one. A file is open in at most one tab. Drag a tab sideways to reorder it. Closing a tab (the × or middle-click) shows its neighbour, and a file that is deleted or leaves the library closes its tab. Tabs are not saved across restarts, and a tab keeps no view state: zoom, playback position, and unsaved Grade edits reset when you switch away. Details and the Agent follow the active tab. The file tree can show a list or icons. Favorites are a per-library list of files, stored by `asset_id` in `.loom/metadata.db`, shown above the tree. The section starts collapsed. Right-click a file to add or remove it. Rename and move keep the star. Tags are shared labels on those same ids. Add or remove them in Details. Above the tree, each tag opens like a folder to list the files that have it. Custom properties are columns in the table. The user and the Agent can add a field, set or clear a cell, and rename or delete a column. Details shows those filled values read-only in the File block. A field with no value on the selected file stays hidden.
+The layout is a left asset library, a central workbench, and separate Chat and Details windows, with Files, Table, and Graph work views.
 
-See [Panel layout](./PANELS.md) for registration, shared drag rules, and persistence.
+**Panels**
+- Chat and Details start as two tabs in the right column, with Chat selected.
+- Drag a title to move a panel. Near the lower middle it snaps into a band that meets the left and right sidebars. Drag it back to the right edge, or double-click the title, to dock it again.
+- Drop onto the center of another window to merge tabs. In docked regions, drop onto a slot's top or bottom edge to stack above or below it; the blue preview shows the landing area, and each slot can have its own tab group.
+- Drag a tab sideways in the tab bar to swap two tabs; drag a tab out to separate it. Drag a divider to resize stacked panels. Vertical order and sizes survive reload.
+- On first use, image Edit opens Grade as a tab in the right sidebar; later opens restore its saved placement.
+
+**File tabs (Files view)**
+- The workbench shows open files as browser-style tabs. A plain click on a file shows it in the active tab; middle-click it, or choose "Open in new tab" in its menu, to open it in a new tab next to the active one.
+- A file is open in at most one tab. Drag a tab sideways to reorder it, or drag a file from the tree onto the tab strip to open it.
+- Closing a tab (the × or middle-click) shows its neighbour, and a file that is deleted or leaves the library closes its tab.
+- Tabs are not saved across restarts and keep no view state: zoom, playback position, and unsaved Grade edits reset when you switch away. Details and the Agent follow the active tab.
+
+**File tree, favorites, tags, and properties**
+- The file tree can show a list or icons.
+- Favorites are a per-library list of files, stored by `asset_id` in `.loom/metadata-db/metadata.db` and shown above the tree; the section starts collapsed. Right-click a file to add or remove it. Rename and move keep the star.
+- Tags are shared labels on the same ids, added or removed in Details. Above the tree, each tag opens like a folder to list the files that have it.
+- Custom properties are columns in the table. The user and the Agent can add a field, set or clear a cell, and rename or delete a column. Details shows those filled values read-only in the File block; a field with no value on the selected file stays hidden.
+
+Panel layout conventions:
+
+- A new panel is registered only in `App.tsx` (`PanelRegistration`: stable `id`, title, visibility, renderer, optional initial position and first-open policy). Never branch on a panel ID in the layout hook, drag geometry, tabs, or CSS. A saved position beats the default; a hidden panel that was never opened takes no slot; unregistering removes stale IDs.
+- Each slot stores ordered tabs, the active tab, position, and a size weight. Weights are normalized over the visible slots, so the region still fills after other slots are dragged out or hidden. A floating slot stores a rectangle relative to the shell.
+- The layout is stored in `localStorage` under `loom.layout.panels` (versioned). Column widths and the central region's height are separate settings.
+- The panel registration and floating e2e specs (`registered-panels`, `registered-float`) run only in a build made with `LOOM_E2E_PANELS=1`; a normal production build has no fixture entry.
 
 ## 9. Architecture
 
@@ -293,18 +324,8 @@ Local Core
 ```
 
 - Renderer **never** accesses the database directly.
-- Local Core may later become a standalone local service:
 
-```
-localhost:xxxx
-POST /assets/search
-POST /agent/run
-POST /graph/query
-```
-
-The UI then remains unchanged if Local Core moves from Node to Python, Go, Rust, or the cloud. It also makes Loom legible as a backend and Agent-systems project.
-
-> **The Agent channel already runs as a localhost service:** Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see AGENT.md Section 6. CopilotKit is temporary UI infrastructure and can later be replaced by a custom workbench without changing the AG-UI backend boundary.
+- The Agent channel is a localhost service: Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see [AGENT](./agent/AGENT.md) §6. The chat UI uses CopilotKit's chat components.
 
 ### Capability layers
 
@@ -324,32 +345,16 @@ The UI then remains unchanged if Local Core moves from Node to Python, Go, Rust,
       Filesystem
 ```
 
-Future publishing extension:
-
-```
-             Local Creative Agent
-                      │
-       ┌──────────────┼──────────────┐
-       ↓              ↓              ↓
-    ComfyUI       Xiaohongshu      Douyin
-       ↓              ↓              ↓
-     Create         Publish        Publish
-```
-
 ---
 
-## 10. Technical areas to cover
+## 10. Technical areas in place
 
-Introduce these progressively when real scenarios require them:
-
-- **Skills:** done — load Agent Skills (`SKILL.md`) from `<library>/.loom/agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./AGENT.md).
-- **Multi-Agent:** done — chat Agent plus retrieve and create specialists. Independent calls in one turn run together. See [AGENT](./AGENT.md).
-- **Sandboxing:** bash and FFmpeg are in. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./AGENT/PERMISSION.md).
-- **LangGraph:** orchestrate complex and recoverable creative workflows.
-- **Fine-tuning / LoRA:** introduce only when real results and evaluations justify it.
-- **MCP settings UI:** done — Settings → MCP tab.
-- **Evals:** done — Agent behavior, tool calls, and retrieval quality. See [EVALS](./AGENT/EVALS.md).
-- **Chat asset refs:** done — attach library assets in the composer; an `<asset_ref>` block in a reply selects that file by `asset_id`, then by path. See [AGENT](./AGENT.md) §5.
-- **Branch from a message:** done — continue or fork a session from any turn. See [AGENT](./AGENT.md) §6.3d.
-- **Human in the loop:** done — Standard confirms `write` / `edit` outside the open library; Basic also confirms `bash` and the FFmpeg tools that write. See [PERMISSION](./AGENT/PERMISSION.md).
-- **Observability:** record run traces, tool calls, latency, and token usage.
+- **Skills:** load Agent Skills (`SKILL.md`) from `<library>/.loom/agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./agent/AGENT.md).
+- **Multi-Agent:** chat Agent plus retrieve and create specialists. Independent calls in one turn run together. See [AGENT](./agent/AGENT.md).
+- **Sandboxing:** bash and FFmpeg run inside it. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./agent/PERMISSION.md).
+- **MCP settings UI:** Settings → MCP tab.
+- **Evals:** Agent behavior, tool calls, and retrieval quality. See [EVALS](./agent/EVALS.md).
+- **Chat asset refs:** attach library assets in the composer; an `<asset_ref>` block in a reply selects that file by `asset_id`, then by path. See [AGENT](./agent/AGENT.md) §5.
+- **Branch from a message:** continue or fork a session from any turn. See [AGENT](./agent/AGENT.md) §3.
+- **Human in the loop:** Standard confirms `write` / `edit` outside the open library; Basic also confirms `bash` and the FFmpeg tools that write. See [PERMISSION](./agent/PERMISSION.md).
+- **Observability:** in development mode, record run traces, tool calls, latency, and token usage in `.loom/agents/traces/telemetry.sqlite`. See [TRACE](./agent/TRACE.md).

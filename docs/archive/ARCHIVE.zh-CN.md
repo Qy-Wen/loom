@@ -16,7 +16,7 @@
 
 ## 素材库目录调整
 
-所有 Loom 自有数据收进素材库的 `.loom/`：`metadata-db/`、`graph-db/`、`agents/`（会话、技能、记忆、记住的命令、trace），LUT 在首次导入时才创建 `grades/luts/`。临时文件统一放在 `<os.tmpdir()>/loom/`，调色预览写入 `grade/run-*`，关闭素材库时删除；应用启动时清掉超过 24 小时的残留。`.loom/` 不被索引成素材。设计见 [LIBRARY_LAYOUT](../LIBRARY_LAYOUT.zh-CN.md)。
+所有 Loom 自有数据收进素材库的 `.loom/`：`metadata-db/`、`graph-db/`、`agents/`（会话、技能、记忆、记住的命令、trace），LUT 在首次导入时才创建 `grades/luts/`。临时文件统一放在 `<os.tmpdir()>/loom/`，调色预览写入 `grade/run-*`，关闭素材库时删除；应用启动时清掉超过 24 小时的残留。`.loom/` 不被索引成素材。目录结构见 [PRODUCT §3.1](../PRODUCT.zh-CN.md)。
 
 测试：`core/tests/library-paths.test.ts` 和 `core/tests/temp.test.ts` 覆盖路径布局与临时目录的创建、清理。
 
@@ -143,7 +143,7 @@ Agent 可通过 `get_settings` / `update_settings` 查询和配置 Chat 服务�
 
 ## Chat 接入 pi-ai 与会话模型选择
 
-生产 Chat 使用 pi-ai 原生 Provider、模型目录、协议与 API Key/OAuth 登录，凭据通过系统加密保存。设置支持内置与自定义服务商、完整请求 URL 的协议推断、模型启停和密钥编辑；`get_settings` / `update_settings` 可查询和修改 Chat 配置。旧 Chat 端点与兼容路径已移除。见 [CHAT_MODELS](../agent/CHAT_MODELS.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)。
+生产 Chat 使用 pi-ai 原生 Provider、模型目录、协议与 API Key/OAuth 登录，凭据通过系统加密保存。设置支持内置与自定义服务商、完整请求 URL 的协议推断、模型启停和密钥编辑；`get_settings` / `update_settings` 可查询和修改 Chat 配置。旧 Chat 端点与兼容路径已移除。见 [SETTINGS](../SETTINGS.zh-CN.md)。
 
 每个会话独立保存模型与思考强度，重开和 fork 保留选择。输入区模型菜单只显示启用且可用的模型，思考强度在模型的二级菜单中选择；忙碌时不能切换，从下一次请求生效。新会话及未选模型的会话优先沿用上次启用且可用的选择，否则按配置顺序选第一个启用且可用的文字模型；已保存的选择不变。
 
@@ -187,7 +187,7 @@ macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` �
 
 ## 多 Agent
 
-主对话负责说话、计划和变换。`run_retrieve_agent` 搜库、看素材。`run_create_agent` 用一段 brief 走 MCP 生成，不搜库。需要 `asset_id` 时写进 brief。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。见 [AGENT](../AGENT.zh-CN.md)。
+主对话负责说话、计划和变换。`run_retrieve_agent` 搜库、看素材。`run_create_agent` 用一段 brief 走 MCP 生成，不搜库。需要 `asset_id` 时写进 brief。同一轮里互不依赖的调用一起跑。专职不能再派生子 Agent。见 [AGENT](../agent/AGENT.zh-CN.md)。
 
 ---
 
@@ -199,19 +199,19 @@ macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` �
 
 ## Agent 与检索评测
 
-金标放在本仓库，不另开仓库。检索和 Agent/工具金标，CI 假槽位、现场真实槽位。见 [EVALS](../AGENT/EVALS.zh-CN.md)。
+金标放在本仓库，不另开仓库。检索和 Agent/工具金标，CI 假槽位、现场真实槽位。见 [EVALS](../agent/EVALS.zh-CN.md)。
 
 ---
 
 ## 素材库 Skills
 
-打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。见 [AGENT](../AGENT.zh-CN.md) 和 [agentskills.io](https://agentskills.io/specification)。
+打开库时扫描 `<library>/.agents/skills/` 里的 Agent Skills（`SKILL.md`）。系统提示只放 name / description / location 目录。正文和相对路径文件由模型用 `read` 按需读取。Loom 不自动创建该目录，不扫库里其它位置，也不做技能斜杠命令。不 vendor `packages/coding-agent`。见 [AGENT](../agent/AGENT.zh-CN.md) 和 [agentskills.io](https://agentskills.io/specification)。
 
 ---
 
 ## 对话资产引用
 
-输入框以行内芯片贴库内文件。每张芯片是一条 `asset_ref`（`assetId`、库内相对 `path`、`assetType`）。发送时的库高亮是另一条字段相同的 `ui_selection`。点击芯片或 `search_assets` / `inspect_asset` 的 `asset_id` 会选中该文件，并留在 Agent 页。见 [AGENT](../AGENT.zh-CN.md) §5 和 §6.3b。
+输入框以行内芯片贴库内文件。每张芯片是一条 `asset_ref`（`assetId`、库内相对 `path`、`assetType`）。发送时的库高亮是另一条字段相同的 `ui_selection`。点击芯片或 `search_assets` / `inspect_asset` 的 `asset_id` 会选中该文件，并留在 Agent 页。见 [AGENT](../agent/AGENT.zh-CN.md) §5 和 §6.3b。
 
 - 从素材库拖入、右键「添加到对话」，或 + →「素材库文件」。外部文件和从访达拖入会先拷进 `Inbox/`（已在库内则复用）。输入框贴的都是芯片，不发 `image_url`。
 - 折的时候在芯片位置写 `<asset_ref>`。剩下的高亮接在后面，包在 `<system-reminder>` 里，写成 `<ui_selection>`。气泡不显示这段提醒。发送时按 `assetId` 查当前路径。旧行不改。下一轮是否省略高亮，只看最近一条 `ui_selection`。
@@ -232,7 +232,7 @@ macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` �
 
 ## 从之前的提问分支
 
-选中一条历史提问后在那条消息上直接改，发送时当前路径切到这条提问之前，旧路径留在树里。也可以把该提问之前的前缀复制成一个新会话，标题前加上 `Fork: `，原会话不动。已经写进素材库的文件保持原样。见 [AGENT](../AGENT.zh-CN.md) §6.3d。
+选中一条历史提问后在那条消息上直接改，发送时当前路径切到这条提问之前，旧路径留在树里。也可以把该提问之前的前缀复制成一个新会话，标题前加上 `Fork: `，原会话不动。已经写进素材库的文件保持原样。见 [AGENT](../agent/AGENT.zh-CN.md) §6.3d。
 
 ---
 
@@ -517,4 +517,4 @@ CopilotChat 的 Stop 会中止 pi 这一轮和正在跑的工具。这一轮留�
 
 - pi 的 `thinking_start` / `thinking_delta` / `thinking_end` 变成同名 `LoomAgentEvent`，再映射成 AG-UI `REASONING_*`。已废弃的 `THINKING_*` 不会生成聊天消息
 - 丢弃 redacted。`thinkingSignature` / `thoughtSignature` 不进前端
-- 重新打开会话时，未打码的思考过程仍会显示。见 [AGENT](../AGENT.zh-CN.md) §6.3a
+- 重新打开会话时，未打码的思考过程仍会显示。见 [AGENT](../agent/AGENT.zh-CN.md) §6.3a

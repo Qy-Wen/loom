@@ -2,7 +2,7 @@
 
 # 元数据表
 
-> 单个资产库的 SQLite 表结构。产品背景见 [PRODUCT.zh-CN.md](../../PRODUCT.zh-CN.md) 第 3、4 节。
+> 单个资产库的 SQLite 表结构。产品背景见 [PRODUCT.zh-CN.md](../PRODUCT.zh-CN.md) 第 3、4 节。
 >
 > 打开库时在 `<library>/.loom/metadata-db/metadata.db` 创建。资产文件留在文件系统上，这个库是派生索引。
 
@@ -175,7 +175,7 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性、富化或 VLM 说明变更时刷新对应行。
 
-Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](../TEXT.zh-CN.md)。
+Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](./TEXT.zh-CN.md)。
 
 关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph-db/graph.db`。见 [图](#graph-ladybugdb)。
 

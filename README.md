@@ -72,7 +72,7 @@ Loom vendors pi's [`packages/durable`](https://github.com/earendil-works/pi/tree
 
 The pi-ai, Chord, telemetry, and vendored codemode versions are aligned at `1.4.0`. Opening an existing library automatically migrates durable SQLite schema v1 to v2 for sleeping tasks; older durable versions cannot reopen the migrated database. If rollback is needed, close Loom and back up the library's `.loom/` directory before first opening it with this version.
 
-Workspace typechecks and vendor checks pass; the Windows settings-persistence concurrency test currently fails with `rename EPERM`. Electron accepts post-compaction reload/fork, pre-completion streaming (including real DeepSeek), and SIGKILL recovery during approval, streaming, and unsafe bash execution. Strict live tool gold passed 4/4 twice without relaxing expectations. Development traces persist locally in `.loom/agents/traces/telemetry.sqlite` ([TRACE](./docs/agent/TRACE.md)). Windows on-device validation and controlled old/new eval comparisons remain. See [MIGRATION](./docs/agent/MIGRATION.md).
+Workspace typechecks and vendor checks pass; the Windows settings-persistence concurrency test currently fails with `rename EPERM`. Electron accepts post-compaction reload/fork, pre-completion streaming (including real DeepSeek), and SIGKILL recovery during approval, streaming, and unsafe bash execution. Strict live tool gold passed 4/4 twice without relaxing expectations. Development traces persist locally in `.loom/agents/traces/telemetry.sqlite` ([TRACE](./docs/agent/TRACE.md)). Windows on-device validation and controlled old/new eval comparisons remain.
 
 ### Syncing upstream
 

@@ -2,7 +2,7 @@
 
 # Electron UI Design
 
-> This document expands the UI section of [PRODUCT.md](./PRODUCT.md) and records the Electron client's layout and views.
+> This document expands the UI section of [PRODUCT.md](../PRODUCT.md) and records the Electron client's layout and views.
 >
 > PRODUCT.md keeps only the high-level framework; UI details live here.
 

@@ -51,7 +51,7 @@
 - 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。重排前从这些候选沿资产关系走一跳（双向）。每个新文件单独成行，每个候选最多 8 个，带 `linkedFrom`（候选 id、关系类型、从该候选看出的方向）。已经在列表里的 id 跳过。类型和属性过滤只约束原来的候选。重排正文仍是段落、父段落或文件名。Rerank 槽位开着时，这些正文作为 `documents` 再发。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。失败或槽位空着就保持扩展后的 RRF 顺序。重排或 limit 丢掉的行不再补回。没有查询文本时不走图。TEI 原生 `texts` 以后再说。
 - 命中可返回子段落，并可带上父切片正文
 - 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
-- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）和 `packages/core/tests/graph-retrieval.test.ts`（重排前的关系扩展）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../AGENT/EVALS.zh-CN.md)。
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）和 `packages/core/tests/graph-retrieval.test.ts`（重排前的关系扩展）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../agent/EVALS.zh-CN.md)。
 
 ---
 

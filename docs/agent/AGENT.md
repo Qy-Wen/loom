@@ -2,9 +2,9 @@
 
 # Agent Architecture
 
-Loom's creative-asset agent runs on vendored `pi-durable`. Model/provider integration uses npm `pi-ai`; AG-UI is the frontend protocol. See [MIGRATION](./MIGRATION.md), [EVALS](./EVALS.md), [MEMORY](./MEMORY.md), and [PERMISSION](./PERMISSION.md).
+Loom's creative-asset agent runs on vendored `pi-durable`. Model/provider integration uses npm `pi-ai`; AG-UI is the frontend protocol. See [EVALS](./EVALS.md), [MEMORY](./MEMORY.md), and [PERMISSION](./PERMISSION.md).
 
-Chat provider/catalog/auth, provider login, and per-conversation model selection are live; see [CHAT_MODELS](./CHAT_MODELS.md).
+Chat provider/catalog/auth, provider login, and per-conversation model selection are live; see [SETTINGS](../SETTINGS.md).
 
 ## 1. Boundaries
 

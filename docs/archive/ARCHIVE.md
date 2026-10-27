@@ -16,7 +16,7 @@ Tests: `app/tests/asset-tabs.test.ts` covers the tab rules and `app/e2e/asset-ta
 
 ## Library layout change
 
-All Loom-owned data lives under the library's `.loom/`: `metadata-db/`, `graph-db/`, and `agents/` (sessions, skills, memory, remembered commands, traces). `grades/luts/` appears when a LUT is first imported. Temp files gather under `<os.tmpdir()>/loom/`; grade previews write to `grade/run-*`, which is removed when the library closes, and app start sweeps entries older than 24 hours. `.loom/` is not indexed as assets. Design: [LIBRARY_LAYOUT](../LIBRARY_LAYOUT.md).
+All Loom-owned data lives under the library's `.loom/`: `metadata-db/`, `graph-db/`, and `agents/` (sessions, skills, memory, remembered commands, traces). `grades/luts/` appears when a LUT is first imported. Temp files gather under `<os.tmpdir()>/loom/`; grade previews write to `grade/run-*`, which is removed when the library closes, and app start sweeps entries older than 24 hours. `.loom/` is not indexed as assets. Layout: [PRODUCT §3.1](../PRODUCT.md).
 
 Tests: `core/tests/library-paths.test.ts` and `core/tests/temp.test.ts` cover the path layout and temp directory creation and cleanup.
 
@@ -143,7 +143,7 @@ Publishing to Xiaohongshu, Douyin, and other platforms connects through MCP serv
 
 ## Chat integration with pi-ai and per-conversation model selection
 
-Production Chat uses native pi-ai Providers, model catalogs, protocols, and API-key/OAuth login, with OS-encrypted credentials. Settings supports built-in and custom providers, protocol inference from complete request URLs, model enablement, and key editing; `get_settings` / `update_settings` can inspect and change Chat configuration. Legacy Chat endpoints and compatibility paths are removed. See [CHAT_MODELS](../agent/CHAT_MODELS.md) and [SETTINGS](../SETTINGS.md).
+Production Chat uses native pi-ai Providers, model catalogs, protocols, and API-key/OAuth login, with OS-encrypted credentials. Settings supports built-in and custom providers, protocol inference from complete request URLs, model enablement, and key editing; `get_settings` / `update_settings` can inspect and change Chat configuration. Legacy Chat endpoints and compatibility paths are removed. See [SETTINGS](../SETTINGS.md).
 
 Each conversation persists its own model and thinking level, retained across reopening and forks. The composer model menu lists only enabled, available models, with thinking levels in a model submenu. Busy conversations reject changes; selections apply from the next request. New or unselected conversations prefer the last enabled, available choice, then the first enabled, available text model in configuration order; saved selections remain unchanged.
 
@@ -187,7 +187,7 @@ Facts for the open library live in `<library>/.agents/memory/MEMORY.md`. The fol
 
 ## Multi-agent
 
-The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and inspects the library. `run_create_agent` generates from a brief via MCP and does not search. Asset ids go in the brief when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. See [AGENT](../AGENT.md).
+The chat Agent talks, plans, and transforms. `run_retrieve_agent` searches and inspects the library. `run_create_agent` generates from a brief via MCP and does not search. Asset ids go in the brief when the task needs them. Independent calls in one turn run together. A specialist cannot start another specialist. See [AGENT](../agent/AGENT.md).
 
 ---
 
@@ -199,19 +199,19 @@ Chat footer: Basic, Standard (default), Full. Stored in app userData, not the li
 
 ## Agent and retrieval evals
 
-In-repo gold sets, no second repository. Retrieval and Agent/tool gold, CI stub vs live slots. See [EVALS](../AGENT/EVALS.md).
+In-repo gold sets, no second repository. Retrieval and Agent/tool gold, CI stub vs live slots. See [EVALS](../agent/EVALS.md).
 
 ---
 
 ## Library skills
 
-On library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`. See [AGENT](../AGENT.md) and [agentskills.io](https://agentskills.io/specification).
+On library open, scan `<library>/.agents/skills/` for Agent Skills (`SKILL.md`). The system prompt gets the name / description / location catalog. The model uses `read` for the body and relative files. Loom does not create that folder, scan the rest of the library, or add skill slash-commands. Do not vendor `packages/coding-agent`. See [AGENT](../agent/AGENT.md) and [agentskills.io](https://agentskills.io/specification).
 
 ---
 
 ## Chat asset refs
 
-The composer attaches library files as inline chips. Each chip is an `asset_ref` (`assetId`, library-relative `path`, `assetType`). The library highlight when the user sends is a separate `ui_selection` with the same fields. Click a chip or a `search_assets` / `inspect_asset` `asset_id` to select that file without leaving the Agent tab. See [AGENT](../AGENT.md) §5 and §6.3b.
+The composer attaches library files as inline chips. Each chip is an `asset_ref` (`assetId`, library-relative `path`, `assetType`). The library highlight when the user sends is a separate `ui_selection` with the same fields. Click a chip or a `search_assets` / `inspect_asset` `asset_id` to select that file without leaving the Agent tab. See [AGENT](../agent/AGENT.md) §5 and §6.3b.
 
 - Drag from the library, right-click Add to chat, or + → Library file. External file and Finder drops copy into `Inbox/` first (reuse if already in the library). Composer attaches are chips, not `image_url`.
 - Fold writes `<asset_ref>` where the chip sat. A leftover highlight is appended inside `<system-reminder>` as `<ui_selection>`. The bubble does not show that reminder. At send, look up the live path by `assetId`. Older rows stay frozen. Next-turn highlight skip looks only at the latest `ui_selection`.
@@ -232,7 +232,7 @@ The composer attaches JPEG, PNG, GIF, and WebP (up to 4, 8 MB each). A picture i
 
 ## Branch from a previous question
 
-Selecting a past question edits that message in place; sending switches the active path to just before it. The old path stays in the tree. Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files the agent already wrote stay as they are. See [AGENT](../AGENT.md) §6.3d.
+Selecting a past question edits that message in place; sending switches the active path to just before it. The old path stays in the tree. Fork copies the prefix before that question into a new session, prefixes the title with `Fork: `, and leaves the original session unchanged. Files the agent already wrote stay as they are. See [AGENT](../agent/AGENT.md) §6.3d.
 
 ---
 
@@ -517,4 +517,4 @@ Model reasoning shows in the chat. Signatures stay on the transcript.
 
 - Pi `thinking_start` / `thinking_delta` / `thinking_end` become the same `LoomAgentEvent`s, then AG-UI `REASONING_*`. Deprecated `THINKING_*` events do not create a chat message
 - Redacted thinking is dropped. `thinkingSignature` / `thoughtSignature` are not sent to the frontend
-- Reloading a session shows the same non-redacted thinking. See [AGENT](../AGENT.md) §6.3a
+- Reloading a session shows the same non-redacted thinking. See [AGENT](../agent/AGENT.md) §6.3a

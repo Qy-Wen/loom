@@ -72,7 +72,7 @@ Loom 从上游 `v1.4.0`（`4a080252`）源码级 vendor pi 的 [`packages/durabl
 
 pi-ai、Chord、telemetry 与 vendored codemode 版本统一为 `1.4.0`。打开已有库会自动将 durable SQLite schema v1 升到 v2，以支持休眠任务；升级后的数据库无法用旧版 durable 打开。如需保留回退能力，请在首次用此版本打开前关闭 Loom，并备份库内的 `.loom/` 目录。
 
-全仓库类型检查与 vendor 检查通过；Windows 设置持久化并发测试目前存在 `rename EPERM` 失败。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.loom/agents/traces/telemetry.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。见 [MIGRATION](./docs/agent/MIGRATION.zh-CN.md)。
+全仓库类型检查与 vendor 检查通过；Windows 设置持久化并发测试目前存在 `rename EPERM` 失败。Electron 验收覆盖压缩后 reload/fork、结束前流式显示（含真实 DeepSeek），以及审批/流式/unsafe bash 执行中 SIGKILL 恢复。严格 live 工具金标连续两次 4/4，未放宽要求。开发 trace 本地保存到 `.loom/agents/traces/telemetry.sqlite`（[TRACE](./docs/agent/TRACE.zh-CN.md)）。Windows 实机和受控新旧评测对比待完成。
 
 ### 同步上游
 
