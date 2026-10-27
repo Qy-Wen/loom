@@ -117,12 +117,13 @@ export function toggleMediaZoom(
 	return zoomMediaAt(view, cursor, 2, viewport, media, maxScale);
 }
 
-/** Wheel up (negative deltaY) zooms in. Line and page deltas are converted to pixels. */
-export function wheelZoomFactor(deltaY: number, deltaMode = 0): number {
+/** Wheel up (negative deltaY) zooms in. Line and page deltas are converted to pixels; pinch is amplified. */
+export function wheelZoomFactor(deltaY: number, deltaMode = 0, pinch = false): number {
 	if (!Number.isFinite(deltaY) || deltaY === 0) return 1;
 	const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 800 : deltaY;
 	const delta = Math.max(-400, Math.min(400, pixels));
-	return Math.exp(-delta / 650);
+	// Trackpad pinch arrives as ctrl+wheel with much smaller deltas than a mouse tick.
+	return Math.exp((-delta * (pinch ? 4 : 1)) / 150);
 }
 
 /** Pan in screen pixels, then scale around the center of the fitted frame. */

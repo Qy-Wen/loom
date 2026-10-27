@@ -151,7 +151,7 @@ export function MediaViewport({
 			const next = zoomMediaAt(
 				viewRef.current,
 				cursor,
-				wheelZoomFactor(event.deltaY, event.deltaMode),
+				wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey),
 				{ width: rect.width, height: rect.height },
 				fitRef.current,
 				maxRef.current,
