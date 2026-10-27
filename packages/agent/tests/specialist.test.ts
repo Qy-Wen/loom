@@ -26,9 +26,9 @@ test("parent shares retrieval and MCP tools with the corresponding specialists",
 });
 
 test("create receives inspect and FFmpeg tools without search or settings", () => {
-	const names = ["search_assets", "inspect_asset", "get_media_info", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "run_ffprobe", "describe_image", "update_settings", "comfy__generate"];
+	const names = ["search_assets", "inspect_asset", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "run_ffprobe", "describe_image", "update_settings", "comfy__generate"];
 	const split = partitionLibraryTools(names.map((name) => ({ name, description: name, parameters: Type.Object({}), execute: () => name })));
-	assert.deepEqual(split.create.map((tool) => tool.name), ["inspect_asset", "get_media_info", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "run_ffprobe", "comfy__generate"]);
+	assert.deepEqual(split.create.map((tool) => tool.name), ["inspect_asset", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg", "run_ffprobe", "comfy__generate"]);
 	assert.deepEqual(split.retrieve.map((tool) => tool.name), ["search_assets", "inspect_asset"]);
 	assert.deepEqual(split.parent.map((tool) => tool.name), names);
 });

@@ -28,7 +28,7 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolNeedsApproval("basic", "auto_memory"), false);
 	assert.equal(toolNeedsApproval("basic", "bash"), true);
 	assert.equal(toolNeedsApproval("basic", "extract_frame"), true);
-	assert.equal(toolNeedsApproval("basic", "get_media_info"), false);
+	assert.equal(toolNeedsApproval("basic", "run_ffprobe"), false);
 	assert.equal(toolNeedsApproval("standard", "extract_frame"), false);
 	assert.equal(toolNeedsApproval("standard", "run_ffmpeg"), false);
 	assert.equal(toolNeedsApproval("full", "write"), false);

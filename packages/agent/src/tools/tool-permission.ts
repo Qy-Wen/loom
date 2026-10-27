@@ -29,7 +29,7 @@ export type CommandAllowView = {
 /** App settings. Basic and Standard both wait. `get_settings` is not here. */
 const SETTINGS_TOOLS = ["update_settings"] as const;
 const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS] as const;
-/** Child processes that can write. `get_media_info` and `run_ffprobe` only read, so it is not here. */
+/** Child processes that can write. `run_ffprobe` only reads, so it is not here. */
 const PROCESS_TOOLS = ["bash", "extract_frame", "extract_clip", "resize_video", "crop_video", "convert_format", "grade_image", "run_ffmpeg"] as const;
 const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...PROCESS_TOOLS] as const;
 

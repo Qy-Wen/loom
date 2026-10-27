@@ -210,12 +210,12 @@ The open library is the working directory. Relative paths resolve against it; ab
 **Toolset:**
 
 ```
-get_media_info      extract_frame       extract_clip
-resize_video        crop_video          convert_format
+extract_frame       extract_clip        resize_video
+crop_video          convert_format      grade_image
 run_ffmpeg          run_ffprobe
 ```
 
-`run_ffmpeg` is the escape hatch for argv the convenience tools cannot express. `run_ffprobe` returns ffprobe stdout for queries `get_media_info` does not cover. Both take an argv array without the program name; the binaries are bundled and may not be on the shell PATH, so the Agent must not run them from `bash`. `concat_video`, `change_speed`, `extract_audio`, and `add_subtitle` can wait; use `run_ffmpeg` until they exist.
+`run_ffmpeg` is the escape hatch for argv the convenience tools cannot express. `run_ffprobe` returns ffprobe stdout, which is how the Agent reads duration, resolution, and codecs. Both take an argv array without the program name; the binaries are bundled and may not be on the shell PATH, so the Agent must not run them from `bash`. `concat_video`, `change_speed`, `extract_audio`, and `add_subtitle` can wait; use `run_ffmpeg` until they exist.
 
 Example:
 

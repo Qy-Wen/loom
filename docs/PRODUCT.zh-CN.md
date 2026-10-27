@@ -210,12 +210,12 @@ Agent 通过工具调用外部能力。Loom 自管库：检索、FFmpeg、pi 工
 **工具集：**
 
 ```
-get_media_info      extract_frame       extract_clip
-resize_video        crop_video          convert_format
+extract_frame       extract_clip        resize_video
+crop_video          convert_format      grade_image
 run_ffmpeg          run_ffprobe
 ```
 
-`run_ffmpeg` 是封装工具盖不住时的逃生口。`run_ffprobe` 返回 ffprobe 的 stdout，用于 `get_media_info` 覆盖不到的查询。两者都只传不含程序名的 argv 数组；二进制随应用打包，不一定在 shell PATH 里，Agent 不得在 `bash` 里运行。`concat_video`、`change_speed`、`extract_audio`、`add_subtitle` 可以后做，先走 `run_ffmpeg`。
+`run_ffmpeg` 是封装工具盖不住时的逃生口。`run_ffprobe` 返回 ffprobe 的 stdout，Agent 用它读取时长、分辨率和编码。两者都只传不含程序名的 argv 数组；二进制随应用打包，不一定在 shell PATH 里，Agent 不得在 `bash` 里运行。`concat_video`、`change_speed`、`extract_audio`、`add_subtitle` 可以后做，先走 `run_ffmpeg`。
 
 **示例：**
 

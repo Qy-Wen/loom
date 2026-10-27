@@ -8,26 +8,6 @@ import type { LoomTool, LoomToolResult } from "@loom/agent";
 export function createFfmpegTools(core: LocalCore): LoomTool[] {
 	return [
 		{
-			name: "get_media_info",
-			description:
-				"Read duration, resolution, codecs, and format for one media file. " +
-				"Pass a path relative to the workspace cwd, such as clips/hero.mp4, or an absolute path. " +
-				"Prefer this for a quick look; use run_ffprobe for anything else ffprobe can report.",
-			parameters: {
-				type: "object",
-				properties: {
-					path: { type: "string", description: "Workspace-relative or absolute path." },
-				},
-				required: ["path"],
-				additionalProperties: false,
-			},
-			execute: async (rawArgs, signal) => {
-				const path = requiredPath(rawArgs, "path");
-				const result = await core.getMediaInfo(path, signal);
-				return jsonResult(result);
-			},
-		},
-		{
 			name: "extract_frame",
 			description:
 				"Extract one still frame from a video at timeSeconds. " +
@@ -231,7 +211,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 			name: "run_ffprobe",
 			description:
 				"Run ffprobe with an argv array and return its stdout. This is the only way to run ffprobe: it may not be on the shell PATH, so do not look for it or call it from bash. " +
-				"Use it when get_media_info is not enough, for example -show_entries, -show_streams, -show_chapters, or -count_frames. " +
+				"Use it to read duration, resolution, codecs, streams, chapters, or frame counts, for example -show_format, -show_streams, -show_entries, or -count_frames. " +
 				"Pass args as a string array without the program name, for example [\"-v\", \"error\", \"-of\", \"json\", \"-show_format\", \"clips/hero.mp4\"]. File operands may be workspace-relative or absolute.",
 			parameters: argvSchema,
 			execute: async (rawArgs, signal) => jobResult(await core.runFfprobe({ args: argvArg(rawArgs) }, signal)),
