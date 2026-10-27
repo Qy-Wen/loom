@@ -5,6 +5,8 @@ import { useLocale } from "../locale.tsx";
 interface SessionBarProps {
 	sessions: SessionSummary[];
 	currentId: string | null;
+	/** Whether the current session has no messages yet. */
+	currentEmpty: boolean;
 	busy: boolean;
 	onCreate: () => void;
 	onSelect: (id: string) => void;
@@ -17,6 +19,7 @@ interface SessionBarProps {
 export function SessionBar({
 	sessions,
 	currentId,
+	currentEmpty,
 	busy,
 	onCreate,
 	onSelect,
@@ -28,6 +31,8 @@ export function SessionBar({
 	const { t } = useLocale();
 	const open = sessions.filter((session) => session.status === "open");
 	const archived = sessions.filter((session) => session.status === "archived");
+	// Closing the only session, while it is still empty, would just swap it for another empty one.
+	const closable = !(open.length === 1 && open[0]!.id === currentId && currentEmpty);
 	const [menuOpen, setMenuOpen] = useState(false);
 	const menuRef = useRef<HTMLDivElement>(null);
 	const tabsRef = useRef<HTMLDivElement>(null);
@@ -66,18 +71,20 @@ export function SessionBar({
 							>
 								{session.title}
 							</button>
-							<button
-								type="button"
-								className="session-tab-close"
-								disabled={busy}
-								aria-label={t.sessions.close(session.title)}
-								onClick={(event) => {
-									event.stopPropagation();
-									onArchive(session.id);
-								}}
-							>
-								×
-							</button>
+							{closable && (
+								<button
+									type="button"
+									className="session-tab-close"
+									disabled={busy}
+									aria-label={t.sessions.close(session.title)}
+									onClick={(event) => {
+										event.stopPropagation();
+										onArchive(session.id);
+									}}
+								>
+									×
+								</button>
+							)}
 						</div>
 					);
 				})}

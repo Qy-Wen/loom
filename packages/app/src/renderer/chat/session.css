@@ -66,6 +66,10 @@
 	white-space: nowrap;
 }
 
+.session-tab > button[role="tab"]:last-child {
+	padding-right: 10px;
+}
+
 .session-tab.active > button[role="tab"] {
 	color: #202124;
 	font-weight: 620;

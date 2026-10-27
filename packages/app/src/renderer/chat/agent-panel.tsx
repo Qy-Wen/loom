@@ -59,6 +59,7 @@ export function AgentPanel({
 						<SessionBar
 							sessions={sessions}
 							currentId={sessionId}
+							currentEmpty={record?.messages.length === 0}
 							busy={sessionBusy}
 							onCreate={() => void createSession()}
 							onSelect={(id) => void selectSession(id)}
