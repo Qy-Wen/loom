@@ -9,7 +9,6 @@ import type { VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type { NearestChildHit } from "../model/hybrid.ts";
 import type {
-	ChildEmbeddingUpdate,
 	StoredTextChunk,
 	TextEmbedJob,
 } from "../model/text-embed.ts";
@@ -55,7 +54,6 @@ export interface MetadataStore {
 	upsertTextEmbedJob(job: TextEmbedJob): Promise<void>;
 	replaceTextChunks(assetId: string, chunks: StoredTextChunk[]): Promise<void>;
 	listTextChunks(assetId: string): Promise<StoredTextChunk[]>;
-	updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void>;
 	getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined>;
 	upsertImageVlm(record: ImageVlmRecord): Promise<void>;
 	getVideoVlm(assetId: string): Promise<VideoVlmRecord | undefined>;

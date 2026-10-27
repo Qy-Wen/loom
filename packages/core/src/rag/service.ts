@@ -4,7 +4,6 @@ import { isEnrichmentStale } from "../model/enrichment.ts";
 import type { Asset } from "../model/asset.ts";
 import {
 	EMBED_BATCH_SIZE,
-	type ChildEmbeddingUpdate,
 	type EmbeddingProvider,
 	type StoredTextChunk,
 	type TextEmbedJob,
@@ -108,21 +107,19 @@ export class TextEmbedService {
 
 			const plan = chunkMarkdown(source.text);
 			const chunks = toStoredChunks(asset.assetId, plan);
-			signal?.throwIfAborted();
-			await this.metadata.replaceTextChunks(asset.assetId, chunks);
-
 			const children = chunks.filter((chunk) => chunk.role === "child");
 			const pending = children.filter((chunk) => chunk.text.trim().length > 0);
+			// Embed first, then swap the whole set in one transaction. A failure or cancel
+			// before the swap leaves the previous chunks and vectors exactly as they were.
 			if (pending.length > 0) {
 				const vectors = await embedBatched(provider, pending.map((chunk) => chunk.text), signal);
-				const updates: ChildEmbeddingUpdate[] = pending.map((chunk, index) => ({
-					chunkId: chunk.chunkId,
-					embedding: vectors[index]!,
-					modelId: provider.modelId,
-				}));
-				signal?.throwIfAborted();
-				await this.metadata.updateChildEmbeddings(asset.assetId, updates);
+				pending.forEach((chunk, index) => {
+					chunk.embedding = vectors[index]!;
+					chunk.modelId = provider.modelId;
+				});
 			}
+			signal?.throwIfAborted();
+			await this.metadata.replaceTextChunks(asset.assetId, chunks);
 
 			signal?.throwIfAborted();
 			await this.writeJob(asset, {

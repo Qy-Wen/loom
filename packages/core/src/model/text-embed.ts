@@ -48,9 +48,3 @@ export interface TextEmbedStatus {
 	childCount: number;
 	parentCount: number;
 }
-
-export interface ChildEmbeddingUpdate {
-	chunkId: string;
-	embedding: number[];
-	modelId: string;
-}

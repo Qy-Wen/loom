@@ -13,7 +13,6 @@ import type { NearestChildHit } from "../model/hybrid.ts";
 import { unpackAsarPath } from "../packaged-path.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
 import type {
-	ChildEmbeddingUpdate,
 	StoredTextChunk,
 	TextChunkRole,
 	TextEmbedJob,
@@ -489,21 +488,6 @@ export class SqliteMetadataStore implements MetadataStore {
 			.prepare("SELECT * FROM text_chunks WHERE asset_id = ? ORDER BY start_offset, role DESC, chunk_id")
 			.all(assetId) as TextChunkRow[];
 		return rows.map(toStoredChunk);
-	}
-
-	async updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void> {
-		const database = this.requireDatabase();
-		const update = database.prepare(`
-			UPDATE text_chunks
-			SET embedding = ?, model_id = ?
-			WHERE asset_id = ? AND chunk_id = ? AND role = 'child'
-		`);
-		const write = database.transaction((values: ChildEmbeddingUpdate[]) => {
-			for (const value of values) {
-				update.run(embeddingToBlob(value.embedding), value.modelId, assetId, value.chunkId);
-			}
-		});
-		write(updates);
 	}
 
 	async getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined> {

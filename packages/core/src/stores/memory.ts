@@ -12,7 +12,6 @@ import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
 import type {
-	ChildEmbeddingUpdate,
 	StoredTextChunk,
 	TextEmbedJob,
 } from "../model/text-embed.ts";
@@ -367,18 +366,6 @@ export class InMemoryMetadataStore implements MetadataStore {
 
 	async listTextChunks(assetId: string): Promise<StoredTextChunk[]> {
 		return (this.textChunks.get(assetId) ?? []).map(cloneChunk);
-	}
-
-	async updateChildEmbeddings(assetId: string, updates: ChildEmbeddingUpdate[]): Promise<void> {
-		const chunks = this.textChunks.get(assetId);
-		if (!chunks) return;
-		const byId = new Map(updates.map((update) => [update.chunkId, update]));
-		for (const chunk of chunks) {
-			const update = byId.get(chunk.chunkId);
-			if (!update || chunk.role !== "child") continue;
-			chunk.embedding = [...update.embedding];
-			chunk.modelId = update.modelId;
-		}
 	}
 
 	async getImageVlm(assetId: string): Promise<ImageVlmRecord | undefined> {

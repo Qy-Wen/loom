@@ -157,10 +157,9 @@ describe("text chunk store", () => {
 					endOffset: 5,
 					text: "hello",
 					tokenCount: 1,
+					embedding: [0.25, 0.5, 0.75],
+					modelId: "m",
 				},
-			]);
-			await store.updateChildEmbeddings(asset.assetId, [
-				{ chunkId: "c1", embedding: [0.25, 0.5, 0.75], modelId: "m" },
 			]);
 			const chunks = await store.listTextChunks(asset.assetId);
 			const child = chunks.find((chunk) => chunk.chunkId === "c1");
@@ -221,5 +220,43 @@ describe("TextEmbedService force", () => {
 		assert.equal(forced.status, "ready");
 		const chunks = await store.listTextChunks(asset.assetId);
 		assert.equal(chunks.filter((chunk) => chunk.role === "child").length, forced.childCount);
+	});
+});
+
+describe("TextEmbedService failure", () => {
+	async function indexed() {
+		const store = new InMemoryMetadataStore();
+		await store.open();
+		const asset = mdAsset();
+		await store.upsertAsset(asset);
+		await store.upsertAssetEnrichment({
+			assetId: asset.assetId,
+			version: ENRICHMENT_VERSION,
+			sourceModifiedAt: asset.modifiedAt,
+			status: "ready",
+			data: { kind: "text", text: "# Title\n\nHello world.\n", truncated: false, charCount: 22 },
+		});
+		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
+		await service.embed(asset.assetId, recordingProvider("old-model"));
+		return { store, asset, service, before: await store.listTextChunks(asset.assetId) };
+	}
+
+	it("keeps the previous chunks and vectors when re-embedding fails", async () => {
+		const { store, asset, service, before } = await indexed();
+		const broken = { modelId: "new-model", embed: async () => { throw new Error("provider down"); } };
+		const status = await service.embed(asset.assetId, broken);
+		assert.equal(status.status, "failed");
+		assert.match(status.error!, /provider down/);
+		assert.deepEqual(await store.listTextChunks(asset.assetId), before);
+		assert.ok(before.some((chunk) => chunk.role === "child" && chunk.embedding && chunk.modelId === "old-model"));
+	});
+
+	it("keeps the previous chunks and vectors when re-embedding is cancelled", async () => {
+		const { store, asset, service, before } = await indexed();
+		const controller = new AbortController();
+		const slow = { modelId: "new-model", embed: async (texts: string[]) => { controller.abort(); return texts.map(() => [1, 1]); } };
+		const status = await service.embed(asset.assetId, slow, undefined, controller.signal, { force: true });
+		assert.equal(status.status, "failed");
+		assert.deepEqual(await store.listTextChunks(asset.assetId), before);
 	});
 });
