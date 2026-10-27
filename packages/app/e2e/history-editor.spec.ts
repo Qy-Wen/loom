@@ -78,7 +78,11 @@ test("history editing shares composer styling and applies its model only to the 
 		await expect(loomPage.getByText("HISTORY_MODEL_REPLY_2", { exact: true })).toBeVisible();
 		expect(requests).toHaveLength(2);
 		expect(requests[1]).toMatchObject({ model: "edited", reasoning_effort: "high" });
-		const branch = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => row.id !== source.id && row.title.includes("HISTORY_MODEL_QUESTION"))!;
+		// The edit replaces the conversation: the branch is the only listed session, under the same title.
+		const listed = (await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.title === "HISTORY_MODEL_QUESTION");
+		expect(listed).toHaveLength(1);
+		const branch = listed[0]!;
+		expect(branch.id).not.toBe(source.id);
 		expect((await loomPage.evaluate((id) => window.loom.getSession(id), branch.id)).model).toEqual({ provider: "e2e-chat", modelId: "edited", thinkingLevel: "high" });
 		const retained = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
 		expect(retained.model).toEqual(sourceRecord.model);

@@ -315,10 +315,19 @@ export class ChatService {
 		}, context);
 		return this.getSession(String(fork.id));
 	}
+	/**
+	 * Edit-and-send. To the user this replaces the conversation: the branch takes the source's title and the
+	 * source leaves both lists. The source stays in the store, so the branch keeps its ancestry and the old
+	 * messages can still be read by id. (forkBefore is the other action: it leaves both sessions visible.)
+	 */
 	async branchBefore(id: string, entryId: string, model?: ChatSelection) {
 		const fork = await this.forkBefore(id, entryId, model);
-		await this.archiveSession(id);
-		return fork;
+		await this.requireRuntime().harness.commit(async (tx) => {
+			const source = await tx.doc(LoomConversationDoc, idOf(id));
+			(await tx.doc(LoomConversationDoc, idOf(fork.id))).title = source.title;
+			source.hidden = true;
+		}, context);
+		return this.getSession(fork.id);
 	}
 	#models: Models | undefined;
 	/** Guard Provider edits/publication atomically against public Session admission; no scheduler queue. */

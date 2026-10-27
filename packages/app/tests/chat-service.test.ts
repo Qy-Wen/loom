@@ -161,7 +161,7 @@ test("retrieval tools are available to the parent and retrieve specialist across
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 
-test("app fork-before switches context, archives source, and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
+test("app fork-before switches context and hides deletion without breaking ancestry", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-"));
 	const host = new ChatService({ models: createModels() });
 	try {
@@ -173,12 +173,15 @@ test("app fork-before switches context, archives source, and hides deletion with
 		const first = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "first", timestamp: 1 }] }), context);
 		const second = await conversation.commit((tx) => tx.appendEntry(conversation.id, { kind: "test.user", model: [{ role: "user", content: "second", timestamp: 2 }] }), context);
 		const fork = await host.branchBefore(record.id, String(second.id));
-		assert.equal(fork.title, "Project（分支）");
+		assert.equal(fork.title, "Project", "an edit replaces the conversation, so the branch keeps its title");
 		assert.equal(fork.messages.length, 1);
 		assert.equal(fork.messages[0]?.content, "first");
-		assert.equal((await host.getSession(record.id)).status, "archived");
-		const empty = await host.forkBefore(record.id, String(first.id));
+		assert.deepEqual((await host.listSessions()).map((row) => row.id), [fork.id], "the source leaves the list");
+		assert.equal((await host.getSession(record.id)).messages.length, 2, "its messages stay readable by id");
+		const empty = await host.forkBefore(fork.id, String(first.id));
 		assert.equal(empty.messages.length, 0);
+		assert.equal(empty.title, "Project（分支）", "a plain fork keeps the suffix and leaves its source listed");
+		assert.equal((await host.listSessions()).some((row) => row.id === fork.id), true);
 		await host.deleteSession(record.id);
 		assert.equal((await host.listSessions()).some((row) => row.id === record.id), false);
 		assert.equal((await host.getSession(fork.id)).messages[0]?.content, "first");
@@ -318,7 +321,7 @@ test("editing history creates the branch with its chosen model and preserves the
 		assert.deepEqual(branch.model, selection);
 		assert.deepEqual((await host.getSession(source.id)).model, source.model);
 		assert.equal((await host.getSession(source.id)).messages.length, 1);
-		assert.equal((await host.getSession(source.id)).status, "archived");
+		assert.equal((await host.listSessions()).some((row) => row.id === source.id), false);
 		await host.close(); await host.openLibrary(path);
 		assert.deepEqual((await host.getSession(branch.id)).model, selection);
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }

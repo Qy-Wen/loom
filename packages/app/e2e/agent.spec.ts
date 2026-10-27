@@ -53,9 +53,9 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 		await expect(loomPage.getByText("Generated and saved the result.", { exact: true }).first()).toBeVisible();
 		const first = record.messages.find((message) => message.role === "user")!;
 		const fork = await loomPage.evaluate(({ id, entry }) => window.loom.branchBefore(id, entry), { id: record.id, entry: String(first.id) });
-		expect(fork.title).toBe(`${record.title}（分支）`);
+		expect(fork.title).toBe(record.title);
 		expect(fork.messages).toEqual([]);
-		expect((await loomPage.evaluate((id) => window.loom.getSession(id), record.id)).status).toBe("archived");
+		expect((await loomPage.evaluate(() => window.loom.listSessions())).some((row) => row.id === record.id)).toBe(false);
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
@@ -107,7 +107,7 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 		const fork = await loomPage.evaluate(({ id, entry }) => window.loom.branchBefore(id, entry), { id: session.id, entry: String(oldQuestion.id) });
 		expect(fork.messages.map((message) => message.id)).toEqual(record.messages.slice(0, 2).map((message) => message.id));
 		expect(JSON.stringify(fork.messages)).toContain("OLD_HISTORY_REPLY");
-		expect((await loomPage.evaluate((id) => window.loom.getSession(id), session.id)).status).toBe("archived");
+		expect((await loomPage.evaluate(() => window.loom.listSessions())).some((row) => row.id === session.id)).toBe(false);
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
@@ -140,7 +140,7 @@ test(`editing ${editedQuestion} sends once on the new branch and streams before 
 			await loomPage.getByRole("textbox").fill(question); await loomPage.getByRole("textbox").press("Enter");
 			await expect(loomPage.getByText(`ANSWER_${index + 1}`, { exact: true })).toBeVisible();
 		}
-		const source = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => row.title === "KEEP_QUESTION")!;
+		const source = (await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.title === "KEEP_QUESTION").sort((a, b) => b.createdAt - a.createdAt)[0]!;
 		const original = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
 		const bubble = loomPage.getByTestId("copilot-user-message").filter({ hasText: editedQuestion });
 		await bubble.getByText(editedQuestion, { exact: true }).hover(); await bubble.getByRole("button", { name: "Edit", exact: true }).click();
@@ -149,7 +149,11 @@ test(`editing ${editedQuestion} sends once on the new branch and streams before 
 		await expect.poll(() => requests.length).toBe(4);
 		expect(JSON.stringify(requests[3])).not.toMatch(/OLD_QUESTION|LATER_QUESTION/);
 		await expect(loomPage.getByText("EDITED_REPLY_PARTIAL", { exact: true })).toBeVisible();
-		const branch = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => row.title === "KEEP_QUESTION（分支）")!;
+		// Editing replaces the conversation: one listed session with the same title, and the source is gone from the lists.
+		// Sessions from an earlier case in this run are also titled KEEP_QUESTION, so look only at this one's.
+		const listed = (await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.title === "KEEP_QUESTION" && row.createdAt >= source.createdAt);
+		expect(listed).toHaveLength(1);
+		const branch = listed[0]!;
 		expect(branch.id).not.toBe(source.id);
 		const expectedUsers = editedQuestion === "OLD_QUESTION" ? ["KEEP_QUESTION", "EDITED_QUESTION"] : ["EDITED_QUESTION"];
 		expect(requests[3]).toEqual(expectedUsers);
@@ -157,7 +161,7 @@ test(`editing ${editedQuestion} sends once on the new branch and streams before 
 		const record = await loomPage.evaluate((id) => window.loom.getSession(id), branch.id);
 		expect(record.messages.filter((message) => message.role === "user").map((message) => message.displayContent)).toEqual(expectedUsers);
 		expect((await loomPage.evaluate((id) => window.loom.getSession(id), source.id)).messages).toEqual(original.messages);
-		expect((await loomPage.evaluate((id) => window.loom.getSession(id), source.id)).status).toBe("archived");
+		expect((await loomPage.evaluate(() => window.loom.listSessions())).some((row) => row.id === source.id)).toBe(false);
 		await loomPage.reload(); await expect(loomPage.getByText("EDITED_REPLY_PARTIAL finished", { exact: true })).toBeVisible();
 		expect(requests).toHaveLength(4);
 	} finally { finish.resolve(); server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
