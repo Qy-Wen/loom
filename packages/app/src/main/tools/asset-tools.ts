@@ -1,6 +1,7 @@
 import type {
 	AssetSearchQuery,
 	AudioWriteupStatus,
+	EmbedOptions,
 	EmbeddingProvider,
 	RerankProvider,
 	ImageVlmStatus,
@@ -29,10 +30,11 @@ interface InspectAssetArgs {
 
 interface EmbedAssetArgs {
 	assetId: string;
+	force?: boolean;
 }
 
 export interface AssetToolOptions {
-	embedAsset: (assetId: string, signal?: AbortSignal) => Promise<TextEmbedStatus>;
+	embedAsset: (assetId: string, signal?: AbortSignal, options?: EmbedOptions) => Promise<TextEmbedStatus>;
 	embeddingProvider?: () => Promise<EmbeddingProvider | undefined>;
 	rerankProvider?: () => Promise<RerankProvider | undefined>;
 	describeImage: (assetId: string, signal?: AbortSignal) => Promise<ImageVlmStatus>;
@@ -127,18 +129,21 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 			description:
 				"Index one asset for later retrieval: chunk its text and request embeddings. " +
 				"Supported: .md, .txt, .csv, and .json files, or images/videos/audio that already have a write-up. " +
+				"An index that is already current (same file, same model) is left alone and its ready status returned; " +
+				"set force only when the user asks to rebuild it, since that sends the text to the embedding model again. " +
 				"Uses the Embedding slot from Settings. Returns idle/embedding/ready/failed status.",
 			parameters: {
 				type: "object",
 				properties: {
 					assetId: { type: "string", minLength: 1 },
+					force: { type: "boolean", description: "Rebuild even if the index is current. Default false." },
 				},
 				required: ["assetId"],
 				additionalProperties: false,
 			},
 			execute: async (rawArgs, signal) => {
-				const args = validateInspectArgs(rawArgs) satisfies EmbedAssetArgs;
-				const result = await options.embedAsset(args.assetId, signal);
+				const args = validateEmbedArgs(rawArgs);
+				const result = await options.embedAsset(args.assetId, signal, { force: args.force === true });
 				return {
 					content: JSON.stringify(result),
 					details: result,
@@ -261,6 +266,13 @@ function validateInspectArgs(value: unknown): InspectAssetArgs {
 		throw new TypeError("assetId must be a non-empty string");
 	}
 	return { assetId: value.assetId };
+}
+
+function validateEmbedArgs(value: unknown): EmbedAssetArgs {
+	const { assetId } = validateInspectArgs(value);
+	const force = (value as Record<string, unknown>).force;
+	if (force !== undefined && typeof force !== "boolean") throw new TypeError("force must be a boolean");
+	return { assetId, force };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

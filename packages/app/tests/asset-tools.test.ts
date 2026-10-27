@@ -82,3 +82,36 @@ test("asset tools return structured safe results", async () => {
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("embed_asset skips a current index unless force is set", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-embed-force-"));
+	const core = new LocalCore();
+	try {
+		await writeFile(join(root, "note.md"), "# Note\n\nHello world.\n");
+		const snapshot = await core.openLibrary(root);
+		const note = snapshot.assets[0]!;
+		let requests = 0;
+		const tools = createAssetTools(core, {
+			embedAsset: (assetId, signal, options) => core.embedTextAsset(assetId, {
+				modelId: "test-embed",
+				embed: async (texts) => { requests += 1; return texts.map(() => [0.1, 0.2]); },
+			}, signal, options),
+			describeImage: async () => { throw new Error("unused"); },
+			describeVideo: async () => { throw new Error("unused"); },
+			describeAudio: async () => { throw new Error("unused"); },
+		});
+		const embed = tools.find((tool) => tool.name === "embed_asset")!;
+		await embed.execute({ assetId: note.assetId });
+		await embed.execute({ assetId: note.assetId });
+		assert.equal(requests, 1);
+		await embed.execute({ assetId: note.assetId, force: false });
+		assert.equal(requests, 1);
+		const forced = await embed.execute({ assetId: note.assetId, force: true }) as LoomToolResult;
+		assert.equal(requests, 2);
+		assert.equal((forced.details as { status: string }).status, "ready");
+		await assert.rejects(Promise.resolve().then(() => embed.execute({ assetId: note.assetId, force: "yes" })), /boolean/);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

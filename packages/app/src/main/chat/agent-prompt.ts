@@ -14,7 +14,7 @@ const BASE_SYSTEM_PROMPT =
 	"Use describe_image to write a caption for a JPEG/PNG/WebP/BMP/GIF image via the VLM slot; it does not run automatically. " +
 	"Use describe_video for a video (native video when the endpoint allows it, otherwise stills); it does not run automatically. " +
 	"Use describe_audio for standalone audio via the Audio slot (music, ambient sound, speech if any); it does not run automatically. " +
-	"Use embed_asset to index a .md/.txt/.csv/.json file or a described image/video/audio (chunk + embeddings); it does not run automatically. " +
+	"Use embed_asset to index a .md/.txt/.csv/.json file or a described image/video/audio (chunk + embeddings); it does not run automatically, and it skips an index that is already current unless force is set, which only the user's request to rebuild justifies. " +
 	"Refer to assets by workspace-relative path (clips/hero.mp4) when they are in the library. " +
 	"Use grade_image for color grading a still image. For every other media edit, use run_ffmpeg. " +
 	"Use run_ffprobe to read duration, resolution, and codecs. Both take argv as a string array without the program name. ffmpeg and ffprobe may not be on the shell PATH, so do not search for them or run them from bash. " +
