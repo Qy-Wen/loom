@@ -443,6 +443,11 @@ function registerChatIpc(): void {
 		loginPromptState.reject = undefined;
 		resolve(value);
 	});
+	ipcMain.handle(IPC.chatLogout, async (_event, providerId: unknown) => {
+		if (typeof providerId !== "string") throw new Error("Invalid logout request");
+		await requireChatModels().logout(providerId);
+		notifyChatSettingsChanged();
+	});
 	ipcMain.handle(IPC.chatCancelLogin, async () => {
 		const reject = loginPromptState.reject;
 		loginPromptState.pending = undefined;

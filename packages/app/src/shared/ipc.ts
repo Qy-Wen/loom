@@ -180,6 +180,7 @@ export const IPC = {
 	chatLoginPrompt: "loom:chatLoginPrompt",
 	chatLoginResponse: "loom:chatLoginResponse",
 	chatCancelLogin: "loom:chatCancelLogin",
+	chatLogout: "loom:chatLogout",
 	chatRefresh: "loom:chatRefresh",
 	chatSettingsChanged: "loom:chatSettingsChanged",
 	getMcpSettings: "loom:getMcpSettings",
@@ -309,6 +310,8 @@ export interface LoomApi {
 	/** Answer the pending prompt; rejects when no prompt is pending. */
 	chatLoginResponse: (value: string) => Promise<void>;
 	chatCancelLogin: () => Promise<void>;
+	/** Remove the credential Loom stored for a provider. Keys from environment variables are not affected. */
+	chatLogout: (providerId: string) => Promise<void>;
 	chatRefresh: () => Promise<ChatSettingsView>;
 	onChatLoginPrompt: (listener: (prompt: ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" }) => void) => () => void;
 	onChatSettingsChanged: (listener: () => void) => () => void;

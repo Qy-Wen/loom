@@ -122,6 +122,7 @@ const api: LoomApi = {
 	chatLogin: (providerId, type) => ipcRenderer.invoke(IPC.chatLogin, providerId, type),
 	chatLoginResponse: (value) => ipcRenderer.invoke(IPC.chatLoginResponse, value),
 	chatCancelLogin: () => ipcRenderer.invoke(IPC.chatCancelLogin),
+	chatLogout: (providerId) => ipcRenderer.invoke(IPC.chatLogout, providerId),
 	chatRefresh: () => ipcRenderer.invoke(IPC.chatRefresh),
 	onChatLoginPrompt: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, prompt: unknown) => listener(prompt as Parameters<typeof listener>[0]);

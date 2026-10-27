@@ -344,3 +344,20 @@ test("real durable compaction preserves its explicit cap through the production 
 	const task = await conversation.compact(undefined, context);
 	assert.equal((await owner.harness.waitForTask(task, context)).state.outcome.status, "completed");
 });
+
+test("a stored OAuth credential shows as signed in, and signing out removes only Loom's credential", async (t) => {
+	const { stores } = await workspace(t);
+	const faux = fauxProvider({ provider: "dual" });
+	const provider = createProvider({ id: "dual", models: faux.models, api: faux.provider, auth: {
+		apiKey: { name: "API key", resolve: async () => undefined, login: async (interaction) => ({ type: "api_key", key: await interaction.prompt({ type: "secret", message: "Key" }) }) },
+		oauth: { name: "OAuth", login: async () => { throw new Error("unused"); }, refresh: async (current) => current, toAuth: async () => ({ apiKey: "ACCESS_PRIVATE" }) },
+	} });
+	await stores.config.save({ version: 1, providers: [{ kind: "builtin", id: "dual", enabled: true }] });
+	await stores.credentials.modify("dual", async () => ({ type: "oauth", access: "ACCESS_PRIVATE", refresh: "REFRESH_PRIVATE", expires: Date.now() + 60_000 }));
+	const service = new ChatModelService(stores, { builtins: [provider], authContext: noEnv }); await service.initialize();
+	// This is the state the settings page keys its Sign in / Sign out button on.
+	assert.deepEqual((await service.view()).auth.find((row) => row.providerId === "dual"), { providerId: "dual", configured: true, type: "oauth", source: "OAuth" });
+	await service.logout("dual");
+	assert.deepEqual((await service.view()).auth.find((row) => row.providerId === "dual"), { providerId: "dual", configured: false, error: "auth_not_configured" });
+	assert.equal(await stores.credentials.read("dual"), undefined);
+});

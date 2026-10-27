@@ -88,6 +88,12 @@ export function SettingsChat(): React.JSX.Element {
 		return true;
 	}
 
+	/** Main announces the change, so the list refreshes through onChatSettingsChanged. */
+	async function signOut(providerId: string, name: string): Promise<void> {
+		if (!window.confirm(t.settings.chat.signOutConfirm(name))) return;
+		await run(() => window.loom.chatLogout(providerId));
+	}
+
 	async function startLogin(providerId: string, type: "api_key" | "oauth"): Promise<void> {
 		if (loginAttempt.current) return;
 		const attempt = { cancelled: false };
@@ -250,11 +256,15 @@ export function SettingsChat(): React.JSX.Element {
 										{t.settings.chat.signInApiKey}
 									</button>
 								)}
-								{catalogEntry?.oauthAuth && (
+								{catalogEntry?.oauthAuth && (auth?.configured && auth.type === "oauth" ? (
+									<button type="button" disabled={busy || loginBusy || !!customEditor} onClick={() => void signOut(provider.id, provider.name ?? catalogEntry?.name ?? provider.id)}>
+										{t.settings.chat.signOut}
+									</button>
+								) : (
 									<button type="button" disabled={busy || loginBusy || !!customEditor || !provider.enabled} onClick={() => void startLogin(provider.id, "oauth")}>
 										{t.settings.chat.signInOauth}
 									</button>
-								)}
+								))}
 								{provider.kind === "custom" && (
 									<button type="button" disabled={busy || loginBusy || !!customEditor} onClick={() => setCustomEditor({ id: provider.id, provider: structuredClone(provider) })}>
 										{t.common.edit}
