@@ -135,6 +135,26 @@ function FileSortControl({
 			>
 				{sort === "name" ? <NameSortIcon /> : <ModifiedSortIcon />}
 			</button>
+			<button
+				type="button"
+				aria-label={directionLabel}
+				title={directionLabel}
+				onClick={() => {
+					setOpen(false);
+					onDirection(direction === "asc" ? "desc" : "asc");
+				}}
+			>
+				<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+					<path
+						d={direction === "asc" ? "M8 3.2v9.6M5.2 6 8 3.2 10.8 6" : "M8 12.8V3.2M5.2 10 8 12.8 10.8 10"}
+						fill="none"
+						stroke="currentColor"
+						strokeWidth="1.3"
+						strokeLinecap="round"
+						strokeLinejoin="round"
+					/>
+				</svg>
+			</button>
 			{open ? (
 				<span className="file-sort-menu" role="menu" aria-label={t.library.sortFiles}>
 					<button
@@ -161,26 +181,6 @@ function FileSortControl({
 					</button>
 				</span>
 			) : null}
-			<button
-				type="button"
-				aria-label={directionLabel}
-				title={directionLabel}
-				onClick={() => {
-					setOpen(false);
-					onDirection(direction === "asc" ? "desc" : "asc");
-				}}
-			>
-				<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-					<path
-						d={direction === "asc" ? "M8 3.2v9.6M5.2 6 8 3.2 10.8 6" : "M8 12.8V3.2M5.2 10 8 12.8 10.8 10"}
-						fill="none"
-						stroke="currentColor"
-						strokeWidth="1.3"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
-				</svg>
-			</button>
 		</span>
 	);
 }
