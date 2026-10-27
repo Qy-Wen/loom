@@ -1,17 +1,17 @@
 import { abortableProviderCall } from "../library/task-scope.ts";
-import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
 import {
 	IMAGE_VLM_MAX_BYTES,
 	normalizeImageVlmMarkdown,
+	type ImagePrepareFn,
 	type ImageVlmProvider,
 	type ImageVlmStatus,
 } from "../model/image-vlm.ts";
 import type { MetadataStore } from "../stores/types.ts";
 import { DescriptionService, type DescribeOptions } from "./description.ts";
 
-const IMAGE_MEDIA_TYPES = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp"]);
+const IMAGE_MEDIA_TYPES = new Set([".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif"]);
 
 export class ImageVlmService {
 	private readonly descriptions: DescriptionService<ImageVlmProvider>;
@@ -19,6 +19,7 @@ export class ImageVlmService {
 	constructor(
 		metadata: MetadataStore,
 		resolvePath: (assetId: string) => Promise<string | undefined>,
+		prepare: ImagePrepareFn,
 	) {
 		this.descriptions = new DescriptionService<ImageVlmProvider>({
 			getAsset: (assetId) => metadata.getAsset(assetId),
@@ -31,8 +32,11 @@ export class ImageVlmService {
 				}
 				const absolutePath = await resolvePath(asset.assetId);
 				if (!absolutePath) throw new Error("Asset not found");
-				const bytes = await readFile(absolutePath, { signal });
-				return normalizeImageVlmMarkdown(await abortableProviderCall(() => provider.describe({ filename: asset.filename, bytes }, signal), signal));
+				const image = await prepare(absolutePath, signal);
+				if (image.bytes.byteLength > IMAGE_VLM_MAX_BYTES) {
+					throw new Error("Image VLM accepts files up to 10 MB");
+				}
+				return normalizeImageVlmMarkdown(await abortableProviderCall(() => provider.describe(image, signal), signal));
 			},
 		});
 	}

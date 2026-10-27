@@ -148,8 +148,8 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "describe_image",
 			description:
-				"Describe one JPEG, PNG, WebP, or BMP image with the VLM slot: caption and tags as Markdown. " +
-				"Does not run on import. JPEG/PNG/WebP/BMP only. After a ready write-up, use embed_asset to index it. " +
+				"Describe one JPEG, PNG, WebP, BMP, or GIF image with the VLM slot: caption and tags as Markdown. " +
+				"Does not run on import. GIF uses its first frame. Other image formats are not supported. After a ready write-up, use embed_asset to index it. " +
 				"Uses the VLM slot from Settings. Returns idle/describing/ready/failed status.",
 			parameters: {
 				type: "object",

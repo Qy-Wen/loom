@@ -24,6 +24,11 @@ export function buildVlmStillArgs(inputPath: string, outputPath: string, timeSec
 	];
 }
 
+/** First frame as PNG, for formats a vision model will not take directly (animated GIF). */
+export function buildImageStillArgs(inputPath: string, outputPath: string): string[] {
+	return ["-y", "-i", inputPath, "-frames:v", "1", outputPath];
+}
+
 export function buildAudioCompactArgs(inputPath: string, outputPath: string): string[] {
 	return [
 		"-y",

@@ -5,7 +5,11 @@ import { tmpdir } from "node:os";
 import { describe, it } from "node:test";
 import type { Asset } from "../src/model/asset.ts";
 import type { ImageVlmProvider } from "../src/model/image-vlm.ts";
-import { ImageVlmService } from "../src/rag/image-vlm.ts";
+import { canDescribeImage, ImageVlmService } from "../src/rag/image-vlm.ts";
+import { prepareImageForModel } from "../src/rag/image-prepare.ts";
+import { tryResolveMediaBinaries } from "../src/media/binaries.ts";
+import { runMediaProcess } from "../src/media/run.ts";
+import { releaseProcessSandbox, setProcessSandboxRoot } from "../src/sandbox/process-sandbox.ts";
 import { TextEmbedService } from "../src/rag/service.ts";
 import { EnrichmentService } from "../src/enrichment/service.ts";
 import { LocalCore } from "../src/local-core.ts";
@@ -43,7 +47,7 @@ describe("ImageVlmService", () => {
 		const asset = { ...imageAsset(), size: 10 * 1024 * 1024 + 1 };
 		await store.upsertAsset(asset);
 		const provider = recordingProvider();
-		const service = new ImageVlmService(store, async () => { throw new Error("should not read"); });
+		const service = new ImageVlmService(store, async () => { throw new Error("should not read"); }, async () => { throw new Error("should not read"); });
 		const status = await service.describe(asset.assetId, provider);
 		assert.equal(status.status, "failed");
 		assert.match(status.error!, /up to 10 MB/);
@@ -70,7 +74,7 @@ describe("ImageVlmService", () => {
 		try {
 			const path = join(root, "shot.png");
 			await writeFile(path, Buffer.from("fakepng"));
-			const service = new ImageVlmService(store, async () => path);
+			const service = new ImageVlmService(store, async () => path, prepareImageForModel);
 			const first = await service.describe(asset.assetId, bytesProvider);
 			assert.equal(first.status, "ready");
 			assert.match(first.markdown ?? "", /## Caption/);
@@ -110,7 +114,7 @@ describe("ImageVlmService", () => {
 		const provider = recordingProvider();
 		const service = new ImageVlmService(store, async () => {
 			throw new Error("should not read");
-		});
+		}, prepareImageForModel);
 		const status = await service.describe(asset.assetId, provider);
 		assert.equal(status.supported, false);
 		assert.equal(provider.calls, 0);
@@ -189,5 +193,70 @@ describe("TextEmbedService image write-up", () => {
 			},
 		});
 		assert.equal(embed.supported, false);
+	});
+});
+
+describe("LocalCore describeImageAsset force", () => {
+	it("reuses a fresh description unless forced", async () => {
+		const root = await mkdtemp(join(tmpdir(), "loom-vlm-force-"));
+		const core = new LocalCore();
+		try {
+			await writeFile(join(root, "poster.png"), "png-bytes");
+			const asset = (await core.openLibrary(root)).assets[0]!;
+			let calls = 0;
+			const provider = { modelId: "m", describe: async () => `## Caption\ncall ${++calls}` };
+			await core.describeImageAsset(asset.assetId, provider);
+			await core.describeImageAsset(asset.assetId, provider);
+			assert.equal(calls, 1);
+			const forced = await core.describeImageAsset(asset.assetId, provider, undefined, { force: true });
+			assert.equal(calls, 2);
+			assert.match(forced.markdown!, /call 2/);
+		} finally {
+			await core.close();
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+});
+
+describe("prepareImageForModel", () => {
+	it("sends non-GIF files unchanged", async () => {
+		const root = await mkdtemp(join(tmpdir(), "loom-image-prepare-"));
+		try {
+			const path = join(root, "a.png");
+			await writeFile(path, "png-bytes");
+			const image = await prepareImageForModel(path);
+			assert.equal(image.filename, "a.png");
+			assert.equal(Buffer.from(image.bytes).toString(), "png-bytes");
+		} finally {
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("turns a GIF into the PNG of its first frame", async (t) => {
+		if (!tryResolveMediaBinaries()) {
+			t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
+			return;
+		}
+		const root = await mkdtemp(join(tmpdir(), "loom-image-gif-"));
+		setProcessSandboxRoot(root);
+		try {
+			const path = join(root, "a.gif");
+			const made = await runMediaProcess({
+				program: "ffmpeg",
+				args: ["-y", "-f", "lavfi", "-i", "testsrc=size=64x48:rate=5:duration=1", path],
+			});
+			assert.ok(made);
+			const image = await prepareImageForModel(path);
+			assert.equal(image.filename, "frame.png");
+			assert.deepEqual([...image.bytes.slice(0, 4)], [0x89, 0x50, 0x4e, 0x47]);
+		} finally {
+			await releaseProcessSandbox(root);
+			await rm(root, { recursive: true, force: true });
+		}
+	});
+
+	it("describes a GIF as an image", () => {
+		assert.equal(canDescribeImage({ ...imageAsset(), relativePath: "a.gif", filename: "a.gif" }), true);
+		assert.equal(canDescribeImage({ ...imageAsset(), relativePath: "a.heic", filename: "a.heic" }), false);
 	});
 });

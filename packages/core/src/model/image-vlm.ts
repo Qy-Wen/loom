@@ -20,6 +20,12 @@ export interface ImageVlmInput {
 	bytes: Uint8Array;
 }
 
+/** Reads the file for the model. Formats it cannot accept are converted first. */
+export type ImagePrepareFn = (
+	absolutePath: string,
+	signal?: AbortSignal,
+) => Promise<ImageVlmInput>;
+
 export interface ImageVlmProvider {
 	modelId: string;
 	describe(image: ImageVlmInput, signal?: AbortSignal): Promise<string>;

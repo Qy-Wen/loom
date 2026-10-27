@@ -11,7 +11,7 @@ const BASE_SYSTEM_PROMPT =
 	"Before publishing, prepare the final media, title, and text for review. Use paths accessible to the MCP server; a remote server cannot read local library files unless they are shared or uploaded. " +
 	"If a publish call times out, disconnects, or is interrupted, report that its outcome is unknown and check the platform before retrying. Do not automatically publish again. " +
 	"Independent run_retrieve_agent and run_create_agent calls in one turn run together. Wait for a retrieve result before a create call that needs those asset ids. " +
-	"Use describe_image to write a caption for a JPEG/PNG/WebP/BMP image via the VLM slot; it does not run automatically. " +
+	"Use describe_image to write a caption for a JPEG/PNG/WebP/BMP/GIF image via the VLM slot; it does not run automatically. " +
 	"Use describe_video for a video (native video when the endpoint allows it, otherwise stills); it does not run automatically. " +
 	"Use describe_audio for standalone audio via the Audio slot (music, ambient sound, speech if any); it does not run automatically. " +
 	"Use embed_asset to index Markdown or a described image/video/audio (chunk + embeddings); it does not run automatically. " +

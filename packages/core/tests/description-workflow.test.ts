@@ -7,6 +7,7 @@ import type { Asset } from "../src/model/asset.ts";
 import type { DescriptionRecord, DescriptionStatus } from "../src/model/description.ts";
 import { AudioWriteupService } from "../src/rag/audio-writeup.ts";
 import { ImageVlmService } from "../src/rag/image-vlm.ts";
+import { prepareImageForModel } from "../src/rag/image-prepare.ts";
 import { VideoVlmService } from "../src/rag/video-vlm.ts";
 import { InMemoryMetadataStore } from "../src/stores/memory.ts";
 
@@ -31,7 +32,7 @@ interface MediaCase {
 const mediaCases: MediaCase[] = [
 	{
 		type: "image", filename: "image.png",
-		create: (store, path) => new ImageVlmService(store, async () => path),
+		create: (store, path) => new ImageVlmService(store, async () => path, prepareImageForModel),
 		read: (store, id) => store.getImageVlm(id),
 		write: (store, record) => store.upsertImageVlm(record),
 	},

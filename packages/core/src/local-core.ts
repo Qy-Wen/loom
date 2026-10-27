@@ -21,6 +21,7 @@ import { ImageVlmService } from "./rag/image-vlm.ts";
 import { extractVideoFramesForVlm } from "./rag/video-frames.ts";
 import { VideoVlmService } from "./rag/video-vlm.ts";
 import { prepareAudioForModel } from "./rag/audio-prepare.ts";
+import { prepareImageForModel } from "./rag/image-prepare.ts";
 import { AudioWriteupService } from "./rag/audio-writeup.ts";
 import { TextEmbedService } from "./rag/service.ts";
 import type {
@@ -96,6 +97,7 @@ export class LocalCore {
 		this.imageVlm = new ImageVlmService(
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
+			prepareImageForModel,
 		);
 		this.videoVlm = new VideoVlmService(
 			this.metadataStore,
