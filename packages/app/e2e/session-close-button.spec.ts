@@ -7,7 +7,6 @@ test("a lone empty session has no close button; it appears with a second session
 	const list = () => loomPage.evaluate(() => window.loom.listSessions());
 	const tabs = loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab");
 	const closeButtons = loomPage.locator(".session-tab-close");
-	// The Electron instance is shared with later specs, so remove whatever this one adds.
 	const server = createServer((request, response) => {
 		request.resume();
 		request.on("end", () => {

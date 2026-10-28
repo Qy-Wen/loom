@@ -1,4 +1,4 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
@@ -6,8 +6,6 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
 	const userData = await electronApp!.evaluate(() => process.env.LOOM_E2E_USER_DATA as string);
 	const root = (JSON.parse(await readFile(join(userData, "last-library.json"), "utf8")) as { rootPath: string }).rootPath;
-	// Specs in one worker share a library, so remove files an earlier spec left behind.
-	await rm(join(root, "c.md"), { force: true });
 	await writeFile(join(root, "a.md"), "a");
 	await writeFile(join(root, "b.md"), "b");
 	await loomPage.locator(".library-views").getByRole("button", { name: "Graph", exact: true }).click();

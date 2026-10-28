@@ -274,7 +274,10 @@ test("identical queued follow-ups are admitted once each and stop showing as que
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
 		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
-		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		const create = loomPage.getByRole("button", { name: "New session", exact: true });
+		await create.click();
+		// The old empty session has the same title; wait for the new session to finish activating.
+		await expect(create).toBeEnabled();
 		await expect(loomPage.getByRole("tab", { name: "New session", exact: true, selected: true })).toBeVisible();
 		const composer = loomPage.getByRole("textbox");
 		await composer.fill("Start queued follow-up test"); await composer.press("Enter");

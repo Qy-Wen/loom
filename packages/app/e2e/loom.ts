@@ -50,7 +50,9 @@ export async function launchTestElectron(userData: string): Promise<ElectronAppl
 	return app;
 }
 
-export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronApplication | null }>({
+// Each test owns its process, library, settings and renderer storage.
+// Attach mode deliberately keeps using the existing application.
+export const test = base.extend<{ loomPage: Page; electronApp: ElectronApplication | null }>({
 	electronApp: [
 		async ({}, use) => {
 			if (attach) {
@@ -75,10 +77,10 @@ export const test = base.extend<{ loomPage: Page }, { electronApp: ElectronAppli
 					await app.close().catch(() => undefined);
 				}
 			} finally {
-				await rm(e2eRoot, { recursive: true, force: true });
+				await rm(e2eRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 			}
 		},
-		{ scope: "worker" },
+		{ scope: "test" },
 	],
 	loomPage: async ({ electronApp }, use) => {
 		if (attach) {

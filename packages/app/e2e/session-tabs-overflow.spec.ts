@@ -3,7 +3,6 @@ import { expect, test } from "./loom.ts";
 test("many open sessions scroll instead of overlapping, and the current one stays in view", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
 	const list = () => loomPage.evaluate(() => window.loom.listSessions());
-	// The Electron instance is shared with later specs, so remove whatever this one adds.
 	const before = new Set((await list()).map((session) => session.id));
 	try {
 		for (let count = (await list()).filter((session) => session.status === "open").length; count < 24; count++) {
