@@ -28,19 +28,55 @@ export type AgentEvalResult = {
 const AGENT_EVAL_SYSTEM_PROMPT =
 	"You are Loom, an assistant for a local creative asset workspace. " +
 	"The working directory is the asset library the user has open. " +
-	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids from <asset_ref> or <ui_selection> when the task needs them. It returns <asset_ref> blocks and passages. You do not have search_assets or inspect_asset. " +
+	"Use run_retrieve_agent to search or inspect the library. Pass the full question in goal, including asset ids from <asset_ref> or <ui_selection> when the task needs them. It returns <asset_ref> blocks and passages. You do not have search_assets, deep_search_assets, or inspect_asset. " +
 	"A user message may include <asset_ref> blocks for library files the user placed in the text. " +
 	"A <system-reminder> after those words is context the app attached, not text they typed. It may contain a <ui_selection> for the file selected in the library. That selection may or may not be related to the task. " +
 	"Use those blocks when they say this/the file without naming one. If they name a different path, prefer that. " +
 	"When your reply names a library file, write an <asset_ref> block with path, asset_id, and type on their own lines, in that order. Copy path and asset_id from the tool result or from a user <asset_ref>. Omit asset_id when you do not have one. Do not invent paths or ids. " +
 	"Do not use bash, write, or edit for looking up or inspecting a library file that is already identified.";
 
-const MOCK_TOOLS: LoomTool[] = [
+/** Word match over the eval library, like the product's full text: every query word must appear in the file's name, path, or text. */
+function mockSearch(query: string | undefined, withPassage: boolean): { total: number; assets: unknown[] } {
+	const words = (query ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
+	const hits = EVAL_FILES.filter((file) => {
+		const haystack = `${file.relativePath} ${file.text}`.toLowerCase();
+		return words.every((word) => haystack.includes(word));
+	}).slice(0, 10);
+	const assets = hits.map((file) => ({
+		assetId: file.relativePath === "notes/river.md" ? "eval-river" : file.relativePath === "recipes/soup.md" ? "eval-soup" : `eval-${file.relativePath}`,
+		relativePath: file.relativePath, filename: file.relativePath.split("/").at(-1), type: "text", properties: [],
+		...(withPassage ? { passage: file.text } : {}),
+	}));
+	return { total: assets.length, assets };
+}
+
+export const MOCK_TOOLS: LoomTool[] = [
 	{
 		name: "search_assets",
-		description: "Search the open local asset library.",
-		parameters: Type.Object({ query: Type.Optional(Type.String()) }),
-		execute: () => JSON.stringify({ kind: "asset_list", total: 1, assets: [{ assetId: "eval-river", relativePath: "notes/river.md", filename: "river.md", type: "text", properties: [], passage: EVAL_FILES.find((file) => file.relativePath === "notes/river.md")!.text }] }),
+		// Copied verbatim from packages/app/src/main/tools/asset-tools.ts (this package cannot import app); tests/agent-eval.test.ts checks they match.
+		description:
+			"Simple search of the open local asset library: text over filename, relative path, property values, " +
+			"text-file extracts, and image/video/audio captions, plus media type and custom property filters. " +
+			"Uses no model and needs no index, so it sees every file, but it only matches the words you type: " +
+			"it does not understand meaning and returns whole files, not passages. " +
+			"Chinese, Japanese, and Korean are matched by word. A query with no text lists files by type and property. " +
+			"Use it to find a file by name or exact wording. To find what a document says, or a passage by meaning, use deep_search_assets. " +
+			"Returns asset IDs; use inspect_asset for one result.",
+		parameters: Type.Object({ query: Type.Optional(Type.String()), type: Type.Optional(Type.String()) }),
+		execute: (args) => JSON.stringify(mockSearch((args as { query?: string }).query, false)),
+	},
+	{
+		name: "deep_search_assets",
+		description:
+			"Deep search of what is inside indexed files: finds the best matching passage by exact words and, when an Embedding model is set, by meaning. " +
+			"It only sees files that have been indexed (embed_asset): .md/.txt/.csv/.json files and described images, videos, and audio. " +
+			"A file that is not indexed cannot appear; use search_assets for it. " +
+			"Full-text and vector matches are fused, then an optional Rerank model reorders the passages. Each file appears once with its best passage. " +
+			"Returns asset IDs with the matching passage (and its parent passage for context), plus indexedCount, the number of searchable files. " +
+			"If indexedCount is 0 or small, tell the user that few files are indexed, fall back to search_assets, or index files first. " +
+			"Type and property filters apply. A query is required.",
+		parameters: Type.Object({ query: Type.String({ minLength: 1 }), type: Type.Optional(Type.String()) }),
+		execute: (args) => JSON.stringify({ ...mockSearch((args as { query?: string }).query, true), indexedCount: EVAL_FILES.length }),
 	},
 	{
 		name: "inspect_asset",
@@ -180,7 +216,7 @@ function stubReply(messages: unknown[], names: readonly string[], response: impo
 			finishTool(response, "run_retrieve_agent", { goal: user });
 			return;
 		}
-		if (/find|search|bicycle|dock|river|bike/i.test(user)) {
+		if (/find|search|bicycle|dock|river|bike|describes|quote the line/i.test(user)) {
 			finishTool(response, "run_retrieve_agent", { goal: user });
 			return;
 		}
@@ -190,6 +226,10 @@ function stubReply(messages: unknown[], names: readonly string[], response: impo
 	const selected = user.match(/asset_id:\s*(\S+)/i);
 	if (names.includes("inspect_asset") && selected) {
 		finishTool(response, "inspect_asset", { assetId: selected[1]!.replace(/[>"']+$/, "") });
+		return;
+	}
+	if (names.includes("deep_search_assets") && /what does|say about|mention|describes|quote the line/i.test(user)) {
+		finishTool(response, "deep_search_assets", { query: user });
 		return;
 	}
 	if (names.includes("search_assets") && /find|search|bicycle|dock|river|bike/i.test(user)) {
@@ -220,9 +260,37 @@ export function startStubChat(): Promise<{ baseUrl: string; close: () => Promise
 	}));
 }
 
+/** A real model call that never answers must fail the task with a reason instead of hanging the whole eval. */
+const DEFAULT_TASK_TIMEOUT_MS = Number(process.env.LOOM_EVAL_TASK_TIMEOUT_MS) || 120_000;
+
+/** What was in flight when a task stalled: the tools that started but did not end, and the last event seen. */
+export function stalledMessage(taskId: string, step: string, events: readonly AgentEvent[]): string {
+	const open = new Map<string, string>();
+	for (const event of events) {
+		if (event.type === "tool_execution_start") open.set(event.toolCallId, event.toolName);
+		else if (event.type === "tool_execution_end") open.delete(event.toolCallId);
+	}
+	const running = [...open.values()];
+	const last = events.at(-1)?.type ?? "none";
+	return `Eval task "${taskId}" stalled while ${step}: ` +
+		(running.length ? `tools still running: ${running.join(", ")}` : "no tool was running, so the model request itself did not finish") +
+		`; ${events.length} events seen, last "${last}".`;
+}
+
+async function withTimeout<T>(work: Promise<T>, ms: number, message: () => string): Promise<T> {
+	let timer: NodeJS.Timeout | undefined;
+	try {
+		return await Promise.race([
+			work,
+			new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error(message())), ms); }),
+		]);
+	} finally { if (timer) clearTimeout(timer); }
+}
+
 async function runTask(
 	owner: LibraryRuntime,
 	task: AgentEvalTask,
+	timeoutMs: number,
 ): Promise<AgentScore> {
 	const conversation = await owner.createConversation({}, context);
 	const events: AgentEvent[] = [];
@@ -242,9 +310,19 @@ async function runTask(
 		}
 	});
 	try {
-		const submission = await conversation.submit({ type: "input", content: foldUserText(contentWithPlacedAssets(task.user, chips), attachments) }, context);
-		const result = await submission.wait(context);
-		if (result.status !== "done") throw new Error(`Eval input ${result.status}`);
+		const step = { value: "submitting the input" };
+		const run = async () => {
+			const submission = await conversation.submit({ type: "input", content: foldUserText(contentWithPlacedAssets(task.user, chips), attachments) }, context);
+			step.value = "waiting for the answer";
+			const result = await submission.wait(context);
+			if (result.status !== "done") throw new Error(`Eval input ${result.status}`);
+		};
+		try {
+			await withTimeout(run(), timeoutMs, () => stalledMessage(task.id, step.value, events));
+		} catch (error) {
+			const score = scoreAgentTask(task, callsFromEvents(events), answerFromEvents(events));
+			return { ...score, ok: false, error: error instanceof Error ? error.message : String(error) };
+		}
 	} finally { await stream.stop(); for (const child of children.values()) await child.stop(); }
 	return scoreAgentTask(task, callsFromEvents(events), answerFromEvents(events));
 }
@@ -257,12 +335,12 @@ async function writeEvalLibrary(root: string): Promise<void> {
 	}
 }
 
-export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string; model: string }): Promise<AgentEvalResult> {
+export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string; model: string }, options: { taskTimeoutMs?: number; only?: readonly string[] } = {}): Promise<AgentEvalResult> {
 	const runtime = await openEvalAgent({ ...chat, model: chat.model || "eval" }, { systemPrompt: AGENT_EVAL_SYSTEM_PROMPT, tools: MOCK_TOOLS });
 	try {
 		await writeEvalLibrary(runtime.library);
 		const scores: AgentScore[] = [];
-		for (const task of AGENT_EVAL_TASKS) scores.push(await runTask(runtime.owner, task));
+		for (const task of AGENT_EVAL_TASKS.filter((candidate) => !options.only || options.only.includes(candidate.id))) scores.push(await runTask(runtime.owner, task, options.taskTimeoutMs ?? DEFAULT_TASK_TIMEOUT_MS));
 		return {
 			scores,
 			passed: scores.filter((score) => score.ok).length,
@@ -290,8 +368,10 @@ function print(result: AgentEvalResult): void {
 			score.forbiddenHits.length ? `forbid ${score.forbiddenHits.join(",")}` : "",
 			score.argMisses.length ? `args ${score.argMisses.join(",")}` : "",
 			score.answerMisses.length ? `answer ${score.answerMisses.join(",")}` : "",
+			score.wrongFirstSearch ? `first search: ${score.wrongFirstSearch}` : "",
 		].filter(Boolean).join("; ");
 		console.log(`  ${score.id.padEnd(22)} ${score.ok ? "pass" : "fail"}${detail ? `  ${detail}` : ""}`);
+		if (score.error) console.log(`    ${score.error}`);
 		if (!score.ok) {
 			for (const call of score.calls) {
 				console.log(`    ${call.name} ${JSON.stringify(call.args)}`);

@@ -24,11 +24,9 @@ Remaining acceptance:
 
 ---
 
-## Search and index refactor
+## Background chunking
 
-Three steps in [SEARCH](./RAG/SEARCH.md): the index reads the original file, chunk full-text with Chinese tokenizing, and a split into simple and deep search.
-
-- Later option: split chunking from vectors so chunking and chunk full-text finish in the background after the extract. It needs a background task that can be cancelled and yields to the event loop first.
+Split chunking from vectors so chunking and chunk full-text finish in the background after the extract, and only the vectors wait for the user. It needs a background task that can be cancelled and yields to the event loop first. Why it is not done now: [SEARCH](./RAG/SEARCH.md).
 
 ---
 

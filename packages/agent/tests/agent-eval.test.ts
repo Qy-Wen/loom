@@ -41,3 +41,60 @@ test("stub Chat meets the agent gold tasks", async () => {
 	assert.equal(result.failed, 0, result.scores.filter((score) => !score.ok).map((score) => score.id).join(", "));
 	assert.equal(result.passed, result.scores.length);
 });
+
+test("the eval's search tool descriptions match the product's", async () => {
+	const { readFile } = await import("node:fs/promises");
+	const { MOCK_TOOLS } = await import("../evals/agent-tools.ts");
+	const source = await readFile(new URL("../../app/src/main/tools/asset-tools.ts", import.meta.url), "utf8");
+	for (const name of ["search_assets", "deep_search_assets"]) {
+		const at = source.indexOf(`name: "${name}"`);
+		const from = source.indexOf("description:", at);
+		const to = source.indexOf("parameters:", from);
+		const product = [...source.slice(from, to).matchAll(/"((?:[^"\\]|\\.)*)"/g)].map((match) => match[1]).join("");
+		const mock = MOCK_TOOLS.find((tool) => tool.name === name);
+		assert.equal(mock?.description, product, `${name} description drifted from the product tool`);
+	}
+});
+
+test("a model request that never answers fails the task with what was in flight instead of hanging", async () => {
+	const { createServer } = await import("node:http");
+	const server = createServer(() => { /* accept the request and never reply */ });
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const port = (server.address() as { port: number }).port;
+	try {
+		const started = Date.now();
+		const { runAgentToolsEval } = await import("../evals/agent-tools.ts");
+		const result = await runAgentToolsEval({ baseUrl: `http://127.0.0.1:${port}/v1`, apiKey: "x", model: "eval" }, { taskTimeoutMs: 300 });
+		assert.equal(result.passed, 0);
+		assert.equal(result.failed, result.scores.length);
+		assert.match(result.scores[0]!.error ?? "", /stalled while waiting for the answer: no tool was running, so the model request itself did not finish/);
+		assert.match(result.scores[0]!.error ?? "", new RegExp(`"${result.scores[0]!.id}"`));
+		assert.ok(Date.now() - started < 20_000, "every task is cut off by its own timeout");
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+test("stalledMessage names the tools that started and did not end", async () => {
+	const { stalledMessage } = await import("../evals/agent-tools.ts");
+	const events = [
+		{ type: "tool_execution_start", toolCallId: "a", toolName: "run_retrieve_agent", args: {} },
+		{ type: "tool_execution_start", toolCallId: "b", toolName: "inspect_asset", args: {} },
+		{ type: "tool_execution_end", toolCallId: "b", toolName: "inspect_asset" },
+	] as never;
+	const text = stalledMessage("t", "waiting for the answer", events);
+	assert.match(text, /tools still running: run_retrieve_agent$|tools still running: run_retrieve_agent;/);
+	assert.doesNotMatch(text, /inspect_asset/);
+	assert.match(text, /3 events seen, last "tool_execution_end"/);
+});
+
+test("firstSearch fails a task whose first search was the other tool, even if the right one came later", () => {
+	const task = { id: "m", user: "x", expectTools: ["deep_search_assets"], forbidTools: [], firstSearch: "deep_search_assets" as const };
+	const late = scoreAgentTask(task, [{ name: "search_assets", args: {} }, { name: "deep_search_assets", args: {} }], "");
+	assert.equal(late.ok, false);
+	assert.match(late.wrongFirstSearch ?? "", /search_assets first, wanted deep_search_assets/);
+	const first = scoreAgentTask(task, [{ name: "deep_search_assets", args: {} }, { name: "search_assets", args: {} }], "");
+	assert.equal(first.ok, true);
+	assert.equal(first.wrongFirstSearch, undefined);
+});

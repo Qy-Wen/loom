@@ -10,7 +10,11 @@ export type AgentScore = {
 	forbiddenHits: string[];
 	argMisses: string[];
 	answerMisses: string[];
+	/** Set when the first search was not the one the task requires. */
+	wrongFirstSearch?: string;
 	calls: AgentCall[];
+	/** Set when the task did not finish (timeout, rejected input); the task counts as failed. */
+	error?: string;
 };
 
 export function callsFromEvents(events: AgentEvent[]): AgentCall[] {
@@ -42,13 +46,16 @@ export function scoreAgentTask(task: AgentEvalTask, calls: AgentCall[], answer: 
 		}
 	}
 	const answerMisses = (task.answerIncludes ?? []).filter((needle) => !answer.includes(needle));
+	const firstSearch = names.find((name) => name === "search_assets" || name === "deep_search_assets");
+	const wrongFirstSearch = task.firstSearch && firstSearch && firstSearch !== task.firstSearch ? `${firstSearch} first, wanted ${task.firstSearch}` : undefined;
 	return {
 		id: task.id,
-		ok: missingTools.length === 0 && forbiddenHits.length === 0 && argMisses.length === 0 && answerMisses.length === 0,
+		ok: missingTools.length === 0 && forbiddenHits.length === 0 && argMisses.length === 0 && answerMisses.length === 0 && !wrongFirstSearch,
 		missingTools,
 		forbiddenHits,
 		argMisses,
 		answerMisses,
+		...(wrongFirstSearch ? { wrongFirstSearch } : {}),
 		calls,
 	};
 }
