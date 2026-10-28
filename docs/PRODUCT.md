@@ -285,6 +285,8 @@ Visual direction: **Obsidian + Finder + Lightroom + Cursor**.
 
 The layout is a left asset library, a central workbench, and separate Chat and Details windows, with Files, Table, and Graph work views.
 
+**Links.** The window stays on the app's own page. A web or mail link, whether it comes from a chat reply, a Markdown preview, or a script, opens in the system browser; a new window is never created. Any other link (`file:`, `javascript:`, a custom scheme) is refused, and so is a redirect off the app. This matters because the window exposes the `loom` bridge to its page, and a link that replaced the page would hand that bridge to a foreign site. If the page's process crashes, the window reloads it, up to three times a minute; past that it is left as it is and the log says so.
+
 **Panels**
 - Chat and Details start as two tabs in the right column, with Chat selected.
 - Drag a title to move a panel. Near the lower middle it snaps into a band that meets the left and right sidebars. Drag it back to the right edge, or double-click the title, to dock it again.

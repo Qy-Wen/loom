@@ -3,6 +3,7 @@ import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
 import { ensureWindowsSandboxInstalled, setProcessSandboxEnabled, setProcessSandboxFailureHandler } from "@loom/core/sandbox";
 import { processSandboxActive } from "../shared/agent-sandbox.ts";
@@ -83,6 +84,7 @@ import { ModelSettingsStore, settingsView } from "./models/model-settings-store.
 import { createChatStorage, electronSecretCipher } from "./models/chat-storage.ts";
 import { DeviceIdStore } from "./models/device-id-store.ts";
 import { setStorageRecoveryLogger } from "./storage/file.ts";
+import { guardWindow, watchRenderer } from "./desktop/window-guard.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -338,6 +340,15 @@ function createWindow(): void {
 			sandbox: false,
 		},
 	});
+
+	guardWindow(win, {
+		trusted: process.env.ELECTRON_RENDERER_URL
+			? { devOrigin: process.env.ELECTRON_RENDERER_URL }
+			: { rendererDir: pathToFileURL(join(import.meta.dirname, "../renderer") + sep).href },
+		openExternal: (url) => shell.openExternal(url),
+		onBlocked: (reason, url) => appLog(`${reason}: ${url.slice(0, 200)}`),
+	});
+	watchRenderer(win, appLog);
 
 	if (process.env.ELECTRON_RENDERER_URL) {
 		void win.loadURL(process.env.ELECTRON_RENDERER_URL);
