@@ -21,6 +21,8 @@ interface SearchAssetsArgs {
 		operator: PropertyFilterOperator;
 		value: PropertyValue;
 	}>;
+	tags?: string[];
+	favorite?: boolean;
 	limit?: number;
 }
 
@@ -247,6 +249,12 @@ function searchParameters(queryDescription: string) {
 					additionalProperties: false,
 				},
 			},
+			tags: {
+				type: "array",
+				items: { type: "string" },
+				description: "Keep files that have every one of these tags. Names ignore case. A name that is not a tag matches nothing.",
+			},
+			favorite: { type: "boolean", description: "true keeps favorites only; false keeps files that are not favorites." },
 			limit: { type: "number", minimum: 1, maximum: 100 },
 		},
 		additionalProperties: false,
@@ -269,6 +277,16 @@ function validateSearchArgs(value: unknown, tool: string): SearchAssetsArgs {
 	if (value.limit !== undefined) {
 		if (typeof value.limit !== "number" || !Number.isFinite(value.limit)) throw new TypeError("limit must be a number");
 		result.limit = value.limit;
+	}
+	if (value.tags !== undefined) {
+		if (!Array.isArray(value.tags) || value.tags.some((tag) => typeof tag !== "string")) {
+			throw new TypeError("tags must be an array of strings");
+		}
+		result.tags = value.tags as string[];
+	}
+	if (value.favorite !== undefined) {
+		if (typeof value.favorite !== "boolean") throw new TypeError("favorite must be true or false");
+		result.favorite = value.favorite;
 	}
 	if (value.properties !== undefined) {
 		if (!Array.isArray(value.properties)) throw new TypeError("properties must be an array");

@@ -375,13 +375,53 @@ export const messages = defineLocale(
 		help: {
 			title: "Help",
 			close: "Close help",
-			sections: [
-				{ title: "Getting started", paragraphs: ["Open a folder as your library, then ask the Agent about its files in the chat panel."] },
-				{ title: "Keep the .loom folder", paragraphs: [
-					"Loom stores everything it knows about your library in a hidden .loom folder at the library root. It is your data, not a cache.",
-					"Tags, favorites, properties, relations between files, chat sessions, the Agent's memory, and skills live only there. There is no backup and no export. If you delete .loom, they are gone.",
-					"Search indexes and AI write-ups can be rebuilt, but that takes time and model calls. Your own files are never touched.",
-					"Each file's identity is stored in .loom as well, so copy the whole library folder, including .loom, when you move it or back it up.",
+			topics: "Help topics",
+			groups: [
+				{ title: "Basics", sections: [
+					{ id: "getting-started", title: "Getting started", paragraphs: ["Open a folder as your library, then ask the Agent about its files in the chat panel."] },
+					{ id: "agent", title: "What the Agent can do", paragraphs: [
+						"Ask in the chat panel. The Agent can search your library and read your files, and it does the work with tools:",
+						"Images, video, and audio: crop, cut clips, resize, convert formats, extract frames or audio, and color-grade images (exposure, contrast, saturation, curves, LUTs and more). Video and audio tools use the FFmpeg bundled with Loom.",
+						"Files: read, write, and edit files in the library, run commands, and write descriptions of images, video, and audio.",
+						"Table: add, rename, change, and remove columns (text, number, true/false, or date), and fill in or clear the cells for any file. For example, \"add a Status column and mark every file in this folder as Draft\".",
+						"Tags and favorites: put tags on files, take them off, and star or unstar files. It looks at the library's existing tags first so it reuses them, and it can find files by tag or by favorite.",
+						"Graph: link one file to another with a named relation, such as \"derived from\", and remove a relation. These appear as edges in the Graph view. When the Agent makes a new file from another, it can record where it came from.",
+						"Settings: it can read and change Loom's settings for you, such as models, MCP servers, and your standing instructions. It asks first.",
+						"Web search: when a DeepSeek API key is set in Settings → Models, it can search the web and read pages. Without the key these tools are not offered.",
+						"Skills: put a skill folder with a SKILL.md in the library's .loom/agents/skills/ and the Agent can use it when a task matches.",
+						"MCP: connect MCP servers in Settings → MCP to give the Agent more tools.",
+						"Chat: attach up to 4 images at a time, each 8 MB or smaller.",
+					] },
+				] },
+				{ title: "Search and indexing", sections: [
+					{ id: "search-index", title: "Search needs an index", paragraphs: [
+						"Opening a library or adding files does not index them. A file is indexed only when you press Embed on it or the Agent does it. Without an Embedding model in Settings → Models, nothing is indexed.",
+						"Search by meaning only finds indexed files. Keyword search finds every file by its name and words, indexed or not.",
+						"Images, video, and audio are indexed through a text description that a vision or audio model writes first, so they need that model in Settings → Models too. Editing a file makes its index out of date; index it again to refresh it.",
+					] },
+					{ id: "embedding-model", title: "Keep the embedding model steady", paragraphs: [
+						"Each file is indexed with the embedding model you had set at the time. Search by meaning compares your question with those saved results, so the question and the files must use the same model.",
+						"If you change the Embedding model in Settings → Models, the earlier results stop matching. Loom does not rebuild them, and search shows no warning: search by meaning may return little or poor results for those files, with no error. Only a file's Details panel marks it out of date. Keyword search is not affected.",
+						"Pick one model and keep it. If you do change it, press Re-embed on each file, or ask the Agent to, to index them again with the new model. This sends their text to the model again, which may cost money.",
+					] },
+					{ id: "size-limits", title: "Size limits", paragraphs: [
+						"Text files: only the first 1 MB is indexed, so search by meaning does not see the rest of a long file.",
+						"Images: a file over 10 MB cannot be described by the vision model. Shrink it first, or ask the Agent to resize it.",
+						"Video: a file over 32 MB is described from a few still frames instead of the whole clip.",
+						"Audio: a file that is still over 32 MB after Loom compresses it cannot be described.",
+					] },
+				] },
+				{ title: "Your data", sections: [
+					{ id: "loom-folder", title: "Keep the .loom folder", paragraphs: [
+						"Loom keeps what it knows about your library in a hidden .loom folder at its root. It is your data, not a cache.",
+						"Tags, favorites, properties, relations, chat sessions, memory, and skills live only there. Deleting .loom loses that metadata.",
+						"When you move or back up a library, copy or move the whole folder. It includes .loom by default, so there is nothing extra to do.",
+					] },
+					{ id: "move-library", title: "Moving the library to another computer", paragraphs: [
+						"Copy the whole folder, then open the copy in Loom.",
+						"Before you work on the files in the copied folder, open it in Loom once, so Loom can recognize the library in its new location. Otherwise Loom's internal metadata may be lost.",
+						"API keys are not in the library. Set up your models again on the new computer in Settings → Models.",
+					] },
 				] },
 			],
 		},
@@ -890,13 +930,53 @@ export const messages = defineLocale(
 		help: {
 			title: "帮助",
 			close: "关闭帮助",
-			sections: [
-				{ title: "快速开始", paragraphs: ["打开一个文件夹作为素材库，然后在聊天面板里向 Agent 提问。"] },
-				{ title: "请保留 .loom 文件夹", paragraphs: [
-					"Loom 把它对素材库的全部了解都放在库根目录下隐藏的 .loom 文件夹里。它是你的数据，不是缓存。",
-					"标签、收藏、属性、文件之间的关系、聊天会话、Agent 的记忆和技能只存在那里，没有备份，也不能导出。删掉 .loom，这些内容就没了。",
-					"搜索索引和 AI 生成的描述可以重建，但要花时间，也要调用模型。你自己的文件不会受影响。",
-					"每个文件的身份也记录在 .loom 里，所以移动或备份素材库时，请连同 .loom 一起复制整个文件夹。",
+			topics: "帮助主题",
+			groups: [
+				{ title: "入门", sections: [
+					{ id: "getting-started", title: "快速开始", paragraphs: ["打开一个文件夹作为素材库，然后在聊天面板里向 Agent 提问。"] },
+					{ id: "agent", title: "Agent 能做什么", paragraphs: [
+						"在聊天面板里直接提需求。Agent 能检索素材库、读取你的文件，并用工具把事情做完：",
+						"图片、视频和音频：裁切、剪辑片段、改尺寸、转码、抽帧和提取音频，以及给图片调色（曝光、对比度、饱和度、曲线、LUT 等）。视频和音频的处理使用 Loom 内置的 FFmpeg。",
+						"文件：读取、写入和编辑素材库里的文件，运行命令，为图片、视频和音频写文字描述。",
+						"表格：添加、重命名、修改和删除列（文本、数字、是/否或日期），并为任意文件填写或清除单元格。例如「新增一列状态，把这个文件夹里所有文件标为草稿」。",
+						"标签和收藏：给文件打标签、去掉标签，收藏或取消收藏。它会先看素材库里已有的标签再复用，也能按标签或收藏找文件。",
+						"图谱：用带名称的关系把一个文件连到另一个文件，比如「衍生自」，也能删除关系。这些关系会在图谱视图里显示为连线。Agent 用一个文件生成新文件时，可以记下它的来源。",
+						"设置：可以帮你查看和修改 Loom 的设置，比如模型、MCP 服务和常驻指令。修改前会先问你。",
+						"联网搜索：在设置 → 模型里配置了 DeepSeek API Key 后，可以搜索网页、读取页面。没有 Key 时不提供这两个工具。",
+						"技能：在素材库的 .loom/agents/skills/ 里放一个带 SKILL.md 的技能文件夹，任务匹配时 Agent 就会使用它。",
+						"MCP：在设置 → MCP 里接入 MCP 服务，给 Agent 增加更多工具。",
+						"聊天：一次最多附 4 张图片，每张不超过 8 MB。",
+					] },
+				] },
+				{ title: "搜索与索引", sections: [
+					{ id: "search-index", title: "搜索需要先建立索引", paragraphs: [
+						"打开素材库或添加文件不会自动建立索引。只有你在文件上点「索引」，或由 Agent 来做，文件才会被索引。设置 → 模型里没有配置嵌入模型时，什么都不会被索引。",
+						"按含义搜索只能找到已索引的文件。关键词搜索不论有没有索引，都能按文件名和文字找到所有文件。",
+						"图片、视频和音频是先由视觉或音频模型写出文字描述，再对描述建立索引的，所以设置 → 模型里也要配置对应的模型。文件被修改后，它的索引就过期了，需要重新索引来更新。",
+					] },
+					{ id: "embedding-model", title: "请保持嵌入模型稳定", paragraphs: [
+						"每个文件都是用建立索引时设置的嵌入模型处理的。按含义搜索会拿你的问题和这些已保存的结果比对，所以问题和文件必须使用同一个模型。",
+						"如果你在设置 → 模型里更换了嵌入模型，之前的结果就对不上了。Loom 不会自动重建，搜索时也不会提示：这些文件在按含义搜索时可能结果很少或很差，而且不报错。只有文件的详情面板会标出「过期」。关键词搜索不受影响。",
+						"请选定一个模型并一直使用。如果确实要更换，请在每个文件上点「重新索引」，或让 Agent 来做，用新模型重新建立索引。这会把文件文字再次发给模型，可能产生费用。",
+					] },
+					{ id: "size-limits", title: "大小限制", paragraphs: [
+						"文本文件：只索引前 1 MB，所以按含义搜索看不到长文件后面的部分。",
+						"图片：超过 10 MB 的文件无法交给视觉模型描述。请先缩小，或让 Agent 帮你改尺寸。",
+						"视频：超过 32 MB 时，改为根据几张截图来描述，而不是整段视频。",
+						"音频：Loom 压缩后仍超过 32 MB 的文件无法描述。",
+					] },
+				] },
+				{ title: "你的数据", sections: [
+					{ id: "loom-folder", title: "请保留 .loom 文件夹", paragraphs: [
+						"Loom 把对素材库的了解都放在库根目录下隐藏的 .loom 文件夹里。它是你的数据，不是缓存。",
+						"标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，删掉 .loom 会导致相关的元数据丢失",
+						"移动或备份素材库时，请复制或移动整个文件夹（默认包括里面的 .loom 文件夹，无需额外操作）。",
+					] },
+					{ id: "move-library", title: "把素材库搬到另一台电脑", paragraphs: [
+						"把整个文件夹一起复制即可，再用 Loom 打开。",
+						"在对迁移后的文件夹内的文件进行操作之前，请先用 Loom 打开该文件夹一次，以便 Loom 在新环境识别该素材库。否则可能造成内部元数据丢失。",
+						"API Key 不在素材库里。到了新电脑上，请在设置 → 模型里重新配置。",
+					] },
 				] },
 			],
 		},

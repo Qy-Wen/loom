@@ -138,10 +138,10 @@ video.mp4
 
 - **向量：** 用 Embedding 槽位把查询 embed 一次（`POST /v1/embeddings`），再用 sqlite-vec（或 JS 余弦）只打已有向量的**子切片**。
 - **全文：** `chunks_fts` 用 `bm25` 给子切片排序。中文、日文、韩文先切成词，见[下文](#中日韩文字)。
-- **过滤：** 类型和属性过滤对两路都是硬 AND，融合前先滤。
+- **过滤：** 类型、属性、标签和收藏过滤对两路都是硬 AND，融合前先滤。简单检索用同样的过滤。文件必须同时带有所列的每个标签，不是标签的名字不匹配任何文件。
 - **融合：** 两路**切片**排名用 **RRF**（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只被一路找到的切片仍用那一路计分。每个文件只留最佳切片。
 - **重排：** Rerank 槽位开着时，切片正文在截断前送去重排；正文始终是切片的文字，不会是文件名。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。槽位空、只有一行、或失败，都保持融合后的顺序。重排或 limit 丢掉的行不再补回。TEI 原生 `texts` 以后再说。
-- **结果：** 每个文件一个最佳 **段落 + `asset_id`**，附带父段落作上下文，以及 `indexedCount`。没有查询文本时只按类型和属性列出。Embedding 槽位未开或查询向量失败时只有全文一路。
+- **结果：** 每个文件一个最佳 **段落 + `asset_id`**，附带父段落作上下文，以及 `indexedCount`。没有查询文本时只按过滤条件列出。Embedding 槽位未开或查询向量失败时只有全文一路。
 - 没有索引的文件深度检索看不到，Agent 对它用 `search_assets`。`indexedCount` 告诉 Agent 深度检索能看到多少文件。
 
 最小评测：`packages/core/tests/deep-search.test.ts`（仅全文、仅向量、RRF + 属性 AND、可选 rerank、`indexedCount`、中文）和 `packages/core/tests/fts-store.test.ts`（块级全文、触发器、重建）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../agent/EVALS.zh-CN.md)。

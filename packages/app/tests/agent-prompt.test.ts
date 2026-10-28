@@ -19,6 +19,13 @@ describe("systemPromptForLibrary", () => {
 		assert.match(prompt, /Media tools do not create relations/);
 	});
 
+	it("names the tag and favorite tools and the search filters", () => {
+		const prompt = systemPromptForLibrary("D:\\library");
+		for (const name of ["list_tags", "add_tag", "remove_tag", "set_favorite"]) assert.match(prompt, new RegExp(name), name);
+		assert.match(prompt, /reuse an existing tag/);
+		assert.match(prompt, /accept tags and favorite/);
+	});
+
 	it("prefers direct retrieval and considers delegation only for parallel independent tasks", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
 		assert.match(prompt, /Use search_assets, deep_search_assets, and inspect_asset directly for normal library retrieval/);

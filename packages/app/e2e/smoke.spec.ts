@@ -20,6 +20,73 @@ test("the help button opens the tips dialog and Escape closes it", async ({ loom
 	await expect(help).toHaveCount(0);
 });
 
+test("help lists topics on the left and shows one on the right", async ({ loomPage }) => {
+	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
+	const help = loomPage.getByRole("dialog", { name: "Help", exact: true });
+	const topics = help.getByRole("tab");
+	await expect(topics).toHaveCount(7);
+	await expect(topics.first()).toHaveAttribute("aria-selected", "true");
+	await expect(help.getByRole("heading", { name: "Getting started" })).toBeVisible();
+	await expect(help.getByRole("heading", { name: "Keep the embedding model steady" })).toHaveCount(0);
+
+	await help.getByRole("tab", { name: "Keep the embedding model steady" }).click();
+	await expect(help.getByRole("heading", { name: "Keep the embedding model steady" })).toBeVisible();
+	await expect(help.getByRole("heading", { name: "Getting started" })).toHaveCount(0);
+	await expect(help.getByRole("tab", { name: "Keep the embedding model steady" })).toHaveAttribute("aria-selected", "true");
+
+	// Arrow keys move through every topic, across group boundaries, and wrap.
+	await help.getByRole("tab", { name: "Keep the embedding model steady" }).focus();
+	await loomPage.keyboard.press("ArrowDown");
+	await expect(help.getByRole("heading", { name: "Size limits" })).toBeVisible();
+	await loomPage.keyboard.press("ArrowDown");
+	await expect(help.getByRole("heading", { name: "Keep the .loom folder" })).toBeVisible();
+	await loomPage.keyboard.press("ArrowUp");
+	await expect(help.getByRole("heading", { name: "Size limits" })).toBeVisible();
+
+	// The dialog keeps its size whichever topic is open.
+	const before = (await help.boundingBox())!;
+	await help.getByRole("tab", { name: "Getting started" }).click();
+	const after = (await help.boundingBox())!;
+	expect(after.height).toBe(before.height);
+	expect(after.width).toBe(before.width);
+	await loomPage.keyboard.press("Escape");
+	await expect(help).toHaveCount(0);
+});
+
+test("a help dialog stays inside the window and its text scrolls inside it", async ({ loomPage }) => {
+	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
+	const help = loomPage.getByRole("dialog", { name: "Help", exact: true });
+	await help.getByRole("tab", { name: "What the Agent can do" }).click();
+	await expect(help.getByText("Chat: attach up to 4 images")).toBeAttached();
+	const box = (await help.boundingBox())!;
+	const innerHeight = await loomPage.evaluate(() => window.innerHeight);
+	expect(box.y).toBeGreaterThanOrEqual(0);
+	expect(box.y + box.height).toBeLessThanOrEqual(innerHeight);
+	// The text column owns the scrolling; the dialog itself does not grow.
+	const overflow = await help.locator(".help-body").evaluate((element) => getComputedStyle(element).overflowY);
+	expect(overflow).toBe("auto");
+	await loomPage.keyboard.press("Escape");
+	await expect(help).toHaveCount(0);
+});
+
+test("dragging a text selection out of the help dialog does not close it", async ({ loomPage }) => {
+	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
+	const help = loomPage.getByRole("dialog", { name: "Help", exact: true });
+	await expect(help).toBeVisible();
+	const box = (await help.boundingBox())!;
+	const heading = (await help.getByRole("heading", { name: "Getting started" }).boundingBox())!;
+	// Press inside the dialog, drag past its edge onto the backdrop, release there.
+	await loomPage.mouse.move(heading.x + 4, heading.y + heading.height / 2);
+	await loomPage.mouse.down();
+	await loomPage.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 5 });
+	await loomPage.mouse.move(box.x + box.width + 40, box.y + box.height / 2, { steps: 5 });
+	await loomPage.mouse.up();
+	await expect(help).toBeVisible();
+	// A plain click on the backdrop still closes it.
+	await loomPage.mouse.click(box.x + box.width + 40, box.y + box.height / 2);
+	await expect(help).toHaveCount(0);
+});
+
 test("creates a durable conversation and discards the unused tab on close",  async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
 	const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

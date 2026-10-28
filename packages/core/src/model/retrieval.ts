@@ -19,6 +19,10 @@ export interface AssetSearchQuery {
 	query?: string;
 	type?: AssetType;
 	properties?: AssetPropertyFilter[];
+	/** Tag names, case-insensitive. A file must have every one. An unknown tag matches nothing. */
+	tags?: string[];
+	/** true keeps favorites only; false keeps files that are not favorites. */
+	favorite?: boolean;
 	limit?: number;
 }
 
@@ -80,6 +84,9 @@ export interface AssetRelationsResult {
 export interface AssetDetailResult extends AssetSearchItem, AssetRelationsResult {
 	kind: "asset_detail";
 	createdAt: number;
+	/** Tag names on this file, in the order they were added. */
+	tags: string[];
+	favorite: boolean;
 	/** Renderer-safe reference resolved by Electron Main through asset UUID. */
 	previewRef: string;
 	enrichment?: AssetEnrichment;

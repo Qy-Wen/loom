@@ -138,10 +138,10 @@ Standalone audio files. A separate Audio slot, not the VLM slot (which is vision
 
 - **Vectors:** embed the query once through the Embedding slot (`POST /v1/embeddings`), then sqlite-vec (or JS cosine) over **child** chunks that have embeddings.
 - **Full text:** `chunks_fts` ranks child chunks by `bm25`. Chinese, Japanese, and Korean are cut into words first; see [below](#chinese-japanese-and-korean).
-- **Filters:** property and type filters are a hard AND on both lists before fusion.
+- **Filters:** type, property, tag, and favorite filters are a hard AND on both lists before fusion. Simple search takes the same filters. A file must have every tag named, and a name that is not a tag matches nothing.
 - **Fuse:** the two ranked **chunk** lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A chunk found by only one list still scores from that list. Keep each file's best chunk.
 - **Rerank:** if the Rerank slot is on, the chunk texts go to the reranker before the limit; the document is always chunk text, never a filename. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. An empty slot, one row, or a failure keeps the fused order. Rows that rerank or the limit drop are not added back. TEI-native `texts` waits.
-- **Result:** one best **passage + `asset_id`** per file, with the parent passage for context, and `indexedCount`. No query text lists the library by type and property only. No Embedding slot, or a failed query embed, is full text only.
+- **Result:** one best **passage + `asset_id`** per file, with the parent passage for context, and `indexedCount`. No query text lists the library by the filters only. No Embedding slot, or a failed query embed, is full text only.
 - A file with no index is invisible to deep search; the Agent uses `search_assets` for it. `indexedCount` tells it how many files deep search can see.
 
 Minimal eval: `packages/core/tests/deep-search.test.ts` (full text only, vectors only, RRF + property AND, optional rerank, `indexedCount`, Chinese) and `packages/core/tests/fts-store.test.ts` (chunk full text, triggers, rebuild). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../agent/EVALS.md).

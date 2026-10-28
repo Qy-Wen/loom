@@ -47,6 +47,7 @@ import { createAssetTools } from "./tools/asset-tools.ts";
 import { createFfmpegTools } from "./tools/ffmpeg-tools.ts";
 import { createPropertyTools } from "./tools/property-tools.ts";
 import { createRelationTools } from "./tools/relation-tools.ts";
+import { createTagTools } from "./tools/tag-tools.ts";
 import { WebToolsService } from "./web/web-service.ts";
 import {
 	createSettingsTools,
@@ -199,6 +200,7 @@ const BUILTIN_TOOLS = [
 	...createFfmpegTools(localCore),
 	...createRelationTools(localCore),
 	...createPropertyTools(localCore),
+	...createTagTools(localCore),
 	...createSettingsTools({
 		read: (chatProvider) => readPublicSettings(chatProvider),
 		apply: (patch) => applySettingsPatch(patch),

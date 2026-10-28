@@ -1,22 +1,76 @@
-.help-body {
+.help-dialog {
+	width: min(880px, 100%);
+	/* A fixed height, so switching topics does not resize the dialog. */
+	height: min(600px, calc(100vh - 72px));
+}
+
+.help-layout {
 	flex: 1;
 	min-height: 0;
+	display: flex;
+	gap: 16px;
 	margin-top: 12px;
+}
+
+.help-nav {
+	flex: 0 0 200px;
+	overflow: auto;
+	padding-right: 12px;
+	border-right: 1px solid #e1e1de;
+}
+
+.help-group + .help-group {
+	margin-top: 14px;
+}
+
+.help-group-title {
+	margin: 0 0 4px 10px;
+	color: #8a8d92;
+	font-size: 11px;
+	font-weight: 650;
+	letter-spacing: 0.02em;
+	text-transform: uppercase;
+}
+
+.help-nav [role="tab"] {
+	display: block;
+	width: 100%;
+	padding: 6px 10px;
+	border: 0;
+	border-radius: 6px;
+	color: #5f6368;
+	background: transparent;
+	font: inherit;
+	font-size: 13px;
+	text-align: left;
+	cursor: pointer;
+}
+
+.help-nav [role="tab"]:hover {
+	background: #f0f0ee;
+}
+
+.help-nav [role="tab"].is-active {
+	color: #202124;
+	background: #fff;
+	box-shadow: 0 1px 2px rgb(32 33 36 / 8%);
+}
+
+.help-body {
+	flex: 1;
+	min-width: 0;
+	min-height: 0;
 	overflow: auto;
 }
 
-.help-section + .help-section {
-	margin-top: 16px;
-}
-
 .help-section h3 {
-	margin: 0 0 6px;
-	font-size: 13px;
+	margin: 0 0 8px;
+	font-size: 15px;
 	font-weight: 650;
 }
 
 .help-section p {
-	margin: 0 0 6px;
+	margin: 0 0 8px;
 	color: #4a4d52;
 	font-size: 13px;
 	line-height: 1.6;

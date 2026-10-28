@@ -191,6 +191,28 @@ export class LocalCore {
 		return this.library.removeAssetTag(assetId, tagId);
 	}
 
+	/** Every tag in the library with the number of files that carry it, most used first. */
+	async listTagUsage(): Promise<Array<{ name: string; count: number }>> {
+		const [tags, links] = await Promise.all([this.metadataStore.listTags(), this.metadataStore.listAssetTags()]);
+		const counts = new Map<string, number>();
+		for (const link of links) counts.set(link.tagId, (counts.get(link.tagId) ?? 0) + 1);
+		return tags
+			.map((tag) => ({ name: tag.name, count: counts.get(tag.tagId) ?? 0 }))
+			.sort((left, right) => right.count - left.count || left.name.localeCompare(right.name));
+	}
+
+	/** Take a tag off one file by its name, ignoring case. Returns false when the file did not have it. */
+	async removeAssetTagByName(assetId: string, name: string): Promise<boolean> {
+		if (!await this.metadataStore.getAsset(assetId)) throw new Error("Asset not found");
+		const key = name.trim().toLowerCase();
+		const tag = (await this.metadataStore.listTags()).find((candidate) => candidate.name.toLowerCase() === key);
+		if (!tag) return false;
+		const has = (await this.metadataStore.listAssetTags()).some((link) => link.assetId === assetId && link.tagId === tag.tagId);
+		if (!has) return false;
+		await this.library.removeAssetTag(assetId, tag.tagId);
+		return true;
+	}
+
 	getAsset(assetId: string): Promise<Asset | undefined> {
 		return this.metadataStore.getAsset(assetId);
 	}
@@ -363,10 +385,13 @@ export class LocalCore {
 
 	/** Library listing, property lookup, and the type/property filter shared by both searches. */
 	private async searchView(query: AssetSearchQuery) {
-		const [assets, definitions, values] = await Promise.all([
+		const [assets, definitions, values, tags, assetTags, favoriteIds] = await Promise.all([
 			this.metadataStore.listAssets(),
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
+			this.metadataStore.listTags(),
+			this.metadataStore.listAssetTags(),
+			this.metadataStore.listFavoriteIds(),
 		]);
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
@@ -388,10 +413,25 @@ export class LocalCore {
 		const assetsById = new Map(assets.map((asset) => [asset.assetId, asset]));
 		const filters = query.properties ?? [];
 		const propertiesOf = (assetId: string) => propertiesByAsset.get(assetId) ?? [];
+		const tagIdByName = new Map(tags.map((tag) => [tag.name.toLowerCase(), tag.tagId]));
+		const tagIdsOf = new Map<string, Set<string>>();
+		for (const link of assetTags) {
+			const ids = tagIdsOf.get(link.assetId) ?? new Set<string>();
+			ids.add(link.tagId);
+			tagIdsOf.set(link.assetId, ids);
+		}
+		// Resolved once. A name that is not a tag yields undefined, which no file can have.
+		const wantedTagIds = (query.tags ?? []).map((name) => tagIdByName.get(name.trim().toLowerCase()));
+		const favorites = new Set(favoriteIds);
 		const passes = (assetId: string): boolean => {
 			const asset = assetsById.get(assetId);
 			if (!asset) return false;
 			if (query.type && asset.type !== query.type) return false;
+			if (query.favorite !== undefined && favorites.has(assetId) !== query.favorite) return false;
+			if (wantedTagIds.length > 0) {
+				const have = tagIdsOf.get(assetId);
+				if (!have || wantedTagIds.some((tagId) => tagId === undefined || !have.has(tagId))) return false;
+			}
 			return matchesPropertyFilters(propertiesOf(assetId), filters, definitionByName);
 		};
 		const limit = Math.min(100, Math.max(1, Math.trunc(query.limit ?? 20)));
@@ -443,10 +483,17 @@ export class LocalCore {
 		return this.runLibraryTask(async () => {
 			const asset = await this.metadataStore.getAsset(assetId);
 			if (!asset) throw new Error("Asset not found");
-			const [definitions, values] = await Promise.all([
+			const [definitions, values, tags, assetTags, favoriteIds] = await Promise.all([
 				this.metadataStore.listProperties(),
 				this.metadataStore.listAssetProperties(assetId),
+				this.metadataStore.listTags(),
+				this.metadataStore.listAssetTags(),
+				this.metadataStore.listFavoriteIds(),
 			]);
+			const tagNames = new Map(tags.map((tag) => [tag.tagId, tag.name]));
+			const tagsOnAsset = assetTags
+				.filter((link) => link.assetId === assetId)
+				.flatMap((link) => tagNames.get(link.tagId) ?? []);
 			const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 			const properties: AssetPropertyView[] = [];
 			for (const value of values) {
@@ -463,6 +510,8 @@ export class LocalCore {
 				kind: "asset_detail",
 				...toSearchItem(asset, properties),
 				createdAt: asset.createdAt,
+				tags: tagsOnAsset,
+				favorite: favoriteIds.includes(assetId),
 				previewRef: `loom-asset://asset/${encodeURIComponent(asset.assetId)}?v=${asset.modifiedAt}`,
 				enrichment: await this.metadataStore.getAssetEnrichment(asset.assetId),
 				textEmbed: await this.textEmbed.getStatus(asset.assetId),
