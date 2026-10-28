@@ -645,6 +645,19 @@ export function SettingsButton({ onOpen }: { onOpen: () => void }): React.JSX.El
 	);
 }
 
+export function HelpButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
+	const { t } = useLocale();
+	return (
+		<button className="library-collapse" type="button" aria-label={t.help.title} onClick={onOpen}>
+			<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+				<circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" strokeWidth="1.4" />
+				<path d="M6.2 6.3a1.9 1.9 0 1 1 2.7 1.7c-.6.3-.9.7-.9 1.3" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+				<circle cx="8" cy="11.5" r=".85" fill="currentColor" />
+			</svg>
+		</button>
+	);
+}
+
 export function TracesButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
 	const { t } = useLocale();
 	return (

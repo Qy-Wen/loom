@@ -51,11 +51,12 @@ import {
 	type TreeSelection,
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
-import { LibraryOpenButton, LibrarySidebar, SettingsButton, SidebarToggle, TracesButton } from "./library/library-sidebar.tsx";
+import { HelpButton, LibraryOpenButton, LibrarySidebar, SettingsButton, SidebarToggle, TracesButton } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./components/error-toast.tsx";
 import { runActivityRenderers } from "./chat/run-activity.tsx";
 import { AgentPanel } from "./chat/agent-panel.tsx";
 import { DetailsPanel } from "./details/details-panel.tsx";
+import { HelpDialog } from "./help/help-dialog.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/asset-preview.tsx";
 import { GraphView } from "./workbench/graph-view.tsx";
@@ -159,6 +160,7 @@ export function App(): React.JSX.Element {
 	const [embedding, setEmbedding] = useState(false);
 	const [describing, setDescribing] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
+	const [helpOpen, setHelpOpen] = useState(false);
 	const [fullscreen, setFullscreen] = useState(false);
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const detailRequests = useRef(new DetailRequestScope());
@@ -1115,6 +1117,7 @@ export function App(): React.JSX.Element {
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
 					{import.meta.env.DEV ? <TracesButton onOpen={() => void window.loom.openDevTrace?.()} /> : null}
+					<HelpButton onOpen={() => setHelpOpen(true)} />
 					<SettingsButton onOpen={() => setSettingsOpen(true)} />
 					<LibraryOpenButton opening={opening} onOpen={() => void openLibrary()} />
 					<SidebarToggle collapsed={libraryCollapsed} onToggle={toggleLibraryCollapsed} />
@@ -1339,6 +1342,7 @@ export function App(): React.JSX.Element {
 
 					<PanelWorkspace layout={panels} panels={panelViews} />
 				</div>
+				{helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
 				{settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
 			</div>
 		</CopilotKitProvider>

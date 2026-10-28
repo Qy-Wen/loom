@@ -8,6 +8,18 @@ test("workbench shell is visible", async ({ loomPage }) => {
 	await expect(loomPage.getByRole("button", { name: "Agent permission", exact: true })).toBeVisible();
 });
 
+test("the help button opens the tips dialog and Escape closes it", async ({ loomPage }) => {
+	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
+	const help = loomPage.getByRole("dialog", { name: "Help", exact: true });
+	await expect(help).toBeVisible();
+	await expect(help.getByRole("heading", { name: "Getting started" })).toBeVisible();
+	await loomPage.keyboard.press("Escape");
+	await expect(help).toHaveCount(0);
+	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
+	await help.getByRole("button", { name: "Close help", exact: true }).click();
+	await expect(help).toHaveCount(0);
+});
+
 test("creates a durable conversation and discards the unused tab on close",  async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");
 	const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

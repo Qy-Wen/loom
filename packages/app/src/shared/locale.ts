@@ -2,17 +2,19 @@ import type { AppLanguage } from "./general-settings.ts";
 
 export type UiPlatform = "mac" | "windows" | "other";
 
-type MessageValue = string | ((...args: never[]) => string) | { [key: string]: MessageValue };
+type MessageValue = string | ((...args: never[]) => string) | readonly MessageValue[] | { [key: string]: MessageValue };
 
-type Mirror<T> = {
-	[K in keyof T]: T[K] extends (...args: infer A) => string
-		? (...args: A) => string
-		: T[K] extends string
-			? string
-			: T[K] extends MessageValue
-				? Mirror<T[K]>
+type MirrorValue<V> = V extends (...args: infer A) => string
+	? (...args: A) => string
+	: V extends string
+		? string
+		: V extends readonly (infer E)[]
+			? readonly MirrorValue<E>[]
+			: V extends MessageValue
+				? Mirror<V>
 				: never;
-};
+
+type Mirror<T> = { [K in keyof T]: MirrorValue<T[K]> };
 
 function defineLocale<const T extends MessageValue>(en: T, zh: Mirror<T>): Record<AppLanguage, Mirror<T>> {
 	return { en, "zh-CN": zh } as Record<AppLanguage, Mirror<T>>;
@@ -369,6 +371,19 @@ export const messages = defineLocale(
 			coverage: "Coverage",
 			partialIndex: "Only the start of the file is indexed",
 			text: "Text",
+		},
+		help: {
+			title: "Help",
+			close: "Close help",
+			sections: [
+				{ title: "Getting started", paragraphs: ["Open a folder as your library, then ask the Agent about its files in the chat panel."] },
+				{ title: "Keep the .loom folder", paragraphs: [
+					"Loom stores everything it knows about your library in a hidden .loom folder at the library root. It is your data, not a cache.",
+					"Tags, favorites, properties, relations between files, chat sessions, the Agent's memory, and skills live only there. There is no backup and no export. If you delete .loom, they are gone.",
+					"Search indexes and AI write-ups can be rebuilt, but that takes time and model calls. Your own files are never touched.",
+					"Each file's identity is stored in .loom as well, so copy the whole library folder, including .loom, when you move it or back it up.",
+				] },
+			],
 		},
 		settings: {
 			title: "Settings",
@@ -871,6 +886,19 @@ export const messages = defineLocale(
 			coverage: "覆盖范围",
 			partialIndex: "只索引了文件开头部分",
 			text: "文本",
+		},
+		help: {
+			title: "帮助",
+			close: "关闭帮助",
+			sections: [
+				{ title: "快速开始", paragraphs: ["打开一个文件夹作为素材库，然后在聊天面板里向 Agent 提问。"] },
+				{ title: "请保留 .loom 文件夹", paragraphs: [
+					"Loom 把它对素材库的全部了解都放在库根目录下隐藏的 .loom 文件夹里。它是你的数据，不是缓存。",
+					"标签、收藏、属性、文件之间的关系、聊天会话、Agent 的记忆和技能只存在那里，没有备份，也不能导出。删掉 .loom，这些内容就没了。",
+					"搜索索引和 AI 生成的描述可以重建，但要花时间，也要调用模型。你自己的文件不会受影响。",
+					"每个文件的身份也记录在 .loom 里，所以移动或备份素材库时，请连同 .loom 一起复制整个文件夹。",
+				] },
+			],
 		},
 		settings: {
 			title: "设置",

@@ -1,0 +1,23 @@
+.help-body {
+	flex: 1;
+	min-height: 0;
+	margin-top: 12px;
+	overflow: auto;
+}
+
+.help-section + .help-section {
+	margin-top: 16px;
+}
+
+.help-section h3 {
+	margin: 0 0 6px;
+	font-size: 13px;
+	font-weight: 650;
+}
+
+.help-section p {
+	margin: 0 0 6px;
+	color: #4a4d52;
+	font-size: 13px;
+	line-height: 1.6;
+}
