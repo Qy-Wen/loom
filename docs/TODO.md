@@ -30,6 +30,15 @@ Split chunking from vectors so chunking and chunk full-text finish in the backgr
 
 ---
 
+## Index HTML and PDF
+
+Both are recognised as text but have no extract and cannot be indexed. Convert to Markdown, then reuse the existing chunking.
+
+- HTML: parse with `linkedom`, drop script/style/nav/footer, convert with `turndown` plus its GFM plugin (without it tables break apart). Decode by BOM or `<meta charset>` first, because GBK pages come out garbled as UTF-8. Do not cut at 1 MiB before converting: a cut inside a tag leaves a broken tail, so use a lower all-or-nothing size limit. A 1 MiB page took about 1.5 s and 430 MiB, synchronously. Open: whether `.html` also gets a Level 1 extract, and a real-page check (only synthetic pages were tried).
+- PDF: extract text with `pdfjs-dist` (`legacy/build`, worker off). Only `pdf.mjs` and `pdf.worker.mjs` are needed, about 3.3 MB; the full package is 35 MB, and its optional `@napi-rs/canvas` adds 29 MB per platform, so leave it out. Some PDFs emit Kangxi radicals that look like common characters but do not match a search, and NFKC misses some (`⻋` for `车`), so add a mapping table. Scanned PDFs have no text layer; say so instead of indexing nothing. Open: packaged size, and a run inside Electron (only Node was tried).
+
+---
+
 ## Split the entry files
 
 `app/src/main/index.ts` (about 1,500 lines), `app/src/renderer/App.tsx` (about 1,350), and `core/src/local-core.ts` (about 730) each carry several responsibilities. Split by responsibility in steps; do not just move a whole file under a new name:

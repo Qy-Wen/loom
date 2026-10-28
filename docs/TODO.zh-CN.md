@@ -30,6 +30,15 @@
 
 ---
 
+## 索引 HTML 和 PDF
+
+两者被识别为文本，但没有摘录，也不能索引。转成 Markdown 后复用现有切块。
+
+- HTML：用 `linkedom` 解析，去掉 script/style/nav/footer，用 `turndown` 加 GFM 插件转换（不加插件，表格会被拆散）。先按 BOM 或 `<meta charset>` 解码，否则 GBK 页面按 UTF-8 读会乱码。不要先按 1 MiB 截断再转：截在标签中间会留下残缺的尾巴，改用更低的、全有或全无的大小上限。1 MiB 的页面转换约 1.5 秒、占 430 MiB，且是同步的。待定：`.html` 是否也做 Level 1 摘录；还要用真实网页验证（只试过合成页面）。
+- PDF：用 `pdfjs-dist` 提取文本（`legacy/build`，关 worker）。只需要 `pdf.mjs` 和 `pdf.worker.mjs`，约 3.3 MB；整个包 35 MB，其可选依赖 `@napi-rs/canvas` 每个平台再加 29 MB，要排除。部分 PDF 会输出外观像常用字的康熙部首，搜不到，NFKC 也有漏的（`车` 变成 `⻋`），要加映射表。扫描件没有文字层，要明确提示而不是索引出空内容。待定：打包后的实际体积，以及在 Electron 里跑一遍（只在 Node 里试过）。
+
+---
+
 ## 拆分入口文件
 
 `app/src/main/index.ts`（约 1500 行）、`app/src/renderer/App.tsx`（约 1350 行）、`core/src/local-core.ts`（约 730 行）集中了多个职责。按职责逐步拆，不要把原文件整体换个名字搬走：
