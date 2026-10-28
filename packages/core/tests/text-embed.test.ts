@@ -1,15 +1,13 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { tmpdir } from "node:os";
-import { describe, it } from "node:test";
-import { EnrichmentService } from "../src/enrichment/service.ts";
-import { ENRICHMENT_VERSION } from "../src/model/enrichment.ts";
+import { after, describe, it } from "node:test";
 import type { Asset } from "../src/model/asset.ts";
-import type { EmbeddingProvider } from "../src/model/text-embed.ts";
+import { TEXT_INDEX_LIMIT, type EmbeddingProvider } from "../src/model/text-embed.ts";
 import { LocalCore } from "../src/local-core.ts";
 import { LibraryPaths } from "../src/library/paths.ts";
-import { TextEmbedService } from "../src/rag/service.ts";
+import { readTextHead, TextEmbedService } from "../src/rag/service.ts";
 import { InMemoryMetadataStore } from "../src/stores/memory.ts";
 import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 
@@ -23,6 +21,30 @@ function mdAsset(assetId = "note", modifiedAt = 10): Asset {
 		createdAt: 1,
 		modifiedAt,
 	};
+}
+
+const roots: string[] = [];
+after(async () => {
+	await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+});
+
+/** A store plus a service that reads real files from a temp directory. */
+async function workspace(files: Record<string, string> = { "note.md": "# Title\n\nHello world.\n" }) {
+	const root = await mkdtemp(join(tmpdir(), "loom-text-embed-"));
+	roots.push(root);
+	const store = new InMemoryMetadataStore();
+	await store.open();
+	const write = async (relativePath: string, text: string) => {
+		const path = join(root, relativePath);
+		await mkdir(dirname(path), { recursive: true });
+		await writeFile(path, text);
+	};
+	for (const [relativePath, text] of Object.entries(files)) await write(relativePath, text);
+	const service = new TextEmbedService(store, async (assetId) => {
+		const asset = await store.getAsset(assetId);
+		return asset ? join(root, asset.relativePath) : undefined;
+	});
+	return { root, store, service, write };
 }
 
 function recordingProvider(modelId = "test-embed"): EmbeddingProvider & { calls: number; texts: string[][] } {
@@ -40,20 +62,10 @@ function recordingProvider(modelId = "test-embed"): EmbeddingProvider & { calls:
 }
 
 describe("TextEmbedService", () => {
-	it("chunks a markdown extract, embeds children, and skips an unchanged rembed", async () => {
-		const store = new InMemoryMetadataStore();
-		await store.open();
+	it("reads a markdown file, embeds children, and skips an unchanged rembed", async () => {
+		const { store, service } = await workspace();
 		const asset = mdAsset();
 		await store.upsertAsset(asset);
-		await store.upsertAssetEnrichment({
-			assetId: asset.assetId,
-			version: ENRICHMENT_VERSION,
-			sourceModifiedAt: asset.modifiedAt,
-			status: "ready",
-			data: { kind: "text", text: "# Title\n\nHello world.\n", truncated: false, charCount: 22 },
-		});
-		const enrichment = new EnrichmentService(store, async () => undefined);
-		const service = new TextEmbedService(store, enrichment);
 		const provider = recordingProvider();
 
 		const first = await service.embed(asset.assetId, provider);
@@ -78,18 +90,9 @@ describe("TextEmbedService", () => {
 	});
 
 	it("re-embeds when the model or source mtime changes", async () => {
-		const store = new InMemoryMetadataStore();
-		await store.open();
+		const { store, service, write } = await workspace({ "note.md": "hello" });
 		const asset = mdAsset();
 		await store.upsertAsset(asset);
-		await store.upsertAssetEnrichment({
-			assetId: asset.assetId,
-			version: ENRICHMENT_VERSION,
-			sourceModifiedAt: asset.modifiedAt,
-			status: "ready",
-			data: { kind: "text", text: "hello", truncated: false, charCount: 5 },
-		});
-		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
 		const first = recordingProvider("alpha");
 		await service.embed(asset.assetId, first);
 		const otherModel = recordingProvider("beta");
@@ -104,24 +107,18 @@ describe("TextEmbedService", () => {
 
 		const edited = { ...moved, modifiedAt: 99 };
 		await store.upsertAsset(edited);
-		await store.upsertAssetEnrichment({
-			assetId: edited.assetId,
-			version: ENRICHMENT_VERSION,
-			sourceModifiedAt: edited.modifiedAt,
-			status: "ready",
-			data: { kind: "text", text: "hello again", truncated: false, charCount: 11 },
-		});
+		await write("docs/note.md", "hello again");
 		await service.embed(edited.assetId, sameModel);
 		assert.equal(sameModel.calls, 1);
+		const texts = (await store.listTextChunks(edited.assetId)).map((chunk) => chunk.text);
+		assert.ok(texts.some((text) => text.includes("hello again")));
 	});
 
 	it("does not embed text formats it cannot convert", async () => {
-		const store = new InMemoryMetadataStore();
-		await store.open();
+		const { store, service } = await workspace({ "note.html": "<p>hi</p>" });
 		const asset: Asset = { ...mdAsset(), relativePath: "note.html", filename: "note.html" };
 		await store.upsertAsset(asset);
 		const provider = recordingProvider();
-		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
 		const status = await service.embed(asset.assetId, provider);
 		assert.equal(status.supported, false);
 		assert.equal(status.status, "idle");
@@ -199,18 +196,9 @@ describe("LocalCore embedTextAsset", () => {
 
 describe("TextEmbedService force", () => {
 	it("skips a current index unless forced, then rebuilds every vector", async () => {
-		const store = new InMemoryMetadataStore();
-		await store.open();
+		const { store, service } = await workspace();
 		const asset = mdAsset();
 		await store.upsertAsset(asset);
-		await store.upsertAssetEnrichment({
-			assetId: asset.assetId,
-			version: ENRICHMENT_VERSION,
-			sourceModifiedAt: asset.modifiedAt,
-			status: "ready",
-			data: { kind: "text", text: "# Title\n\nHello world.\n", truncated: false, charCount: 22 },
-		});
-		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
 		const provider = recordingProvider();
 		await service.embed(asset.assetId, provider);
 		await service.embed(asset.assetId, provider);
@@ -225,18 +213,9 @@ describe("TextEmbedService force", () => {
 
 describe("TextEmbedService failure", () => {
 	async function indexed() {
-		const store = new InMemoryMetadataStore();
-		await store.open();
+		const { store, service } = await workspace();
 		const asset = mdAsset();
 		await store.upsertAsset(asset);
-		await store.upsertAssetEnrichment({
-			assetId: asset.assetId,
-			version: ENRICHMENT_VERSION,
-			sourceModifiedAt: asset.modifiedAt,
-			status: "ready",
-			data: { kind: "text", text: "# Title\n\nHello world.\n", truncated: false, charCount: 22 },
-		});
-		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
 		await service.embed(asset.assetId, recordingProvider("old-model"));
 		return { store, asset, service, before: await store.listTextChunks(asset.assetId) };
 	}
@@ -258,5 +237,130 @@ describe("TextEmbedService failure", () => {
 		const status = await service.embed(asset.assetId, slow, undefined, controller.signal, { force: true });
 		assert.equal(status.status, "failed");
 		assert.deepEqual(await store.listTextChunks(asset.assetId), before);
+	});
+});
+
+describe("TextEmbedService truncated source", () => {
+	for (const [label, size, expected] of [
+		["is over the index limit", TEXT_INDEX_LIMIT + 1, true],
+		["is exactly the index limit", TEXT_INDEX_LIMIT, undefined],
+		["is small", 20, undefined],
+	] as const) {
+		it(`reports truncated=${expected} when the file ${label}`, async () => {
+			const { store, service } = await workspace();
+			// The flag comes from the recorded size, so the real file can stay small.
+			const asset = { ...mdAsset(), size };
+			await store.upsertAsset(asset);
+			assert.equal((await service.getStatus(asset.assetId)).truncated, undefined);
+			const status = await service.embed(asset.assetId, recordingProvider());
+			assert.equal(status.status, "ready");
+			assert.equal(status.truncated, expected);
+		});
+	}
+
+	it("never reports truncated for a write-up", async () => {
+		const { store, service } = await workspace();
+		const asset: Asset = { ...mdAsset(), relativePath: "p.png", filename: "p.png", type: "image", size: TEXT_INDEX_LIMIT * 2 };
+		await store.upsertAsset(asset);
+		await store.upsertImageVlm({
+			assetId: asset.assetId,
+			status: "ready",
+			sourceModifiedAt: asset.modifiedAt,
+			modelId: "vlm",
+			markdown: "## Caption\nA red bicycle.",
+			updatedAt: 1,
+		});
+		const status = await service.embed(asset.assetId, recordingProvider());
+		assert.equal(status.status, "ready");
+		assert.equal(status.truncated, undefined);
+	});
+
+	it("fails clearly when the file is gone", async () => {
+		const { store, service } = await workspace({});
+		const asset = mdAsset();
+		await store.upsertAsset(asset);
+		const status = await service.embed(asset.assetId, recordingProvider());
+		assert.equal(status.status, "failed");
+		assert.ok(status.error);
+	});
+});
+
+describe("TextEmbedService reads the original file", () => {
+	it("indexes text past the 256 KiB extract limit", async () => {
+		// The extract keeps 256 KiB; the index must not depend on it.
+		const line = "alpha beta gamma delta epsilon zeta eta theta iota kappa.\n\n";
+		const head = line.repeat(Math.ceil((300 * 1024) / line.length));
+		const text = `${head}FINAL-MARKER-PAST-EXTRACT\n`;
+		const { store, service } = await workspace({ "note.md": text });
+		const asset = { ...mdAsset(), size: Buffer.byteLength(text) };
+		await store.upsertAsset(asset);
+		const status = await service.embed(asset.assetId, recordingProvider());
+		assert.equal(status.status, "ready");
+		assert.equal(status.truncated, undefined);
+		const chunks = await store.listTextChunks(asset.assetId);
+		assert.ok(chunks.some((chunk) => chunk.text.includes("FINAL-MARKER-PAST-EXTRACT")));
+	});
+
+	it("indexes only the first MiB of a larger file and says so", async () => {
+		const line = "alpha beta gamma delta epsilon zeta eta theta iota kappa.\n\n";
+		const body = line.repeat(Math.ceil((TEXT_INDEX_LIMIT + 4096) / line.length));
+		const text = `START-MARKER\n\n${body}END-MARKER\n`;
+		assert.ok(Buffer.byteLength(text) > TEXT_INDEX_LIMIT);
+		const { store, service } = await workspace({ "note.md": text });
+		const asset = { ...mdAsset(), size: Buffer.byteLength(text) };
+		await store.upsertAsset(asset);
+		const status = await service.embed(asset.assetId, recordingProvider());
+		assert.equal(status.status, "ready");
+		assert.equal(status.truncated, true);
+		const chunks = await store.listTextChunks(asset.assetId);
+		assert.ok(chunks.some((chunk) => chunk.text.includes("START-MARKER")));
+		assert.ok(!chunks.some((chunk) => chunk.text.includes("END-MARKER")));
+	});
+
+	it("indexes a file even when no extract exists for it", async () => {
+		const { store, service } = await workspace({ "notes.txt": "plain text note\n" });
+		const asset: Asset = { ...mdAsset(), relativePath: "notes.txt", filename: "notes.txt" };
+		await store.upsertAsset(asset);
+		assert.equal(await store.getAssetEnrichment(asset.assetId), undefined);
+		const status = await service.embed(asset.assetId, recordingProvider());
+		assert.equal(status.status, "ready");
+		assert.equal(status.childCount, 1);
+	});
+});
+
+describe("readTextHead", () => {
+	async function file(bytes: Buffer): Promise<string> {
+		const root = await mkdtemp(join(tmpdir(), "loom-head-"));
+		roots.push(root);
+		const path = join(root, "a.txt");
+		await writeFile(path, bytes);
+		return path;
+	}
+
+	it("returns a short file whole", async () => {
+		const result = await readTextHead(await file(Buffer.from("hello")), 100);
+		assert.deepEqual(result, { text: "hello", truncated: false });
+	});
+
+	it("does not mark a file exactly at the limit as truncated", async () => {
+		const result = await readTextHead(await file(Buffer.from("12345")), 5);
+		assert.deepEqual(result, { text: "12345", truncated: false });
+	});
+
+	it("cuts a longer file at the limit", async () => {
+		const result = await readTextHead(await file(Buffer.from("1234567890")), 5);
+		assert.deepEqual(result, { text: "12345", truncated: true });
+	});
+
+	it("cuts before a multi-byte character instead of splitting it", async () => {
+		// "天气" is 3 bytes per character; a limit of 4 falls inside the second one.
+		const result = await readTextHead(await file(Buffer.from("天气很好")), 4);
+		assert.deepEqual(result, { text: "天", truncated: true });
+		const exact = await readTextHead(await file(Buffer.from("天气很好")), 6);
+		assert.deepEqual(exact, { text: "天气", truncated: true });
+	});
+
+	it("handles an empty file", async () => {
+		assert.deepEqual(await readTextHead(await file(Buffer.alloc(0)), 10), { text: "", truncated: false });
 	});
 });

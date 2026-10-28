@@ -93,7 +93,10 @@ export class LocalCore {
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
 		);
-		this.textEmbed = new TextEmbedService(this.metadataStore, this.enrichment);
+		this.textEmbed = new TextEmbedService(
+			this.metadataStore,
+			(assetId) => this.library.getAssetFilePath(assetId),
+		);
 		this.imageVlm = new ImageVlmService(
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),

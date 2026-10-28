@@ -1,6 +1,12 @@
 export const CHILD_TOKEN_LIMIT = 512;
 export const CHILD_TOKEN_OVERLAP = 64;
 export const PARENT_TOKEN_LIMIT = 2048;
+/**
+ * Bytes of a text file the index reads. Chunking is synchronous, about 2 s per MiB.
+ * The index reads the original file itself, so this is independent of the smaller
+ * extract kept for previews and simple search.
+ */
+export const TEXT_INDEX_LIMIT = 1024 * 1024;
 /** Hosted embeddings (DashScope v4, Qianfan) cap a request at 10–16 inputs. */
 export const EMBED_BATCH_SIZE = 8;
 
@@ -47,4 +53,6 @@ export interface TextEmbedStatus {
 	error?: string;
 	childCount: number;
 	parentCount: number;
+	/** The file is longer than `TEXT_INDEX_LIMIT`, so the tail is not indexed. */
+	truncated?: boolean;
 }

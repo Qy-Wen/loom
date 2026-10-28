@@ -11,7 +11,6 @@ import { tryResolveMediaBinaries } from "../src/media/binaries.ts";
 import { runMediaProcess } from "../src/media/run.ts";
 import { releaseProcessSandbox, setProcessSandboxRoot } from "../src/sandbox/process-sandbox.ts";
 import { TextEmbedService } from "../src/rag/service.ts";
-import { EnrichmentService } from "../src/enrichment/service.ts";
 import { LocalCore } from "../src/local-core.ts";
 import { LibraryPaths } from "../src/library/paths.ts";
 import { InMemoryMetadataStore } from "../src/stores/memory.ts";
@@ -183,7 +182,7 @@ describe("TextEmbedService image write-up", () => {
 		await store.open();
 		const asset = imageAsset();
 		await store.upsertAsset(asset);
-		const service = new TextEmbedService(store, new EnrichmentService(store, async () => undefined));
+		const service = new TextEmbedService(store, async () => undefined);
 		const status = await service.getStatus(asset.assetId);
 		assert.equal(status.supported, false);
 		const embed = await service.embed(asset.assetId, {

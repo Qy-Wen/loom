@@ -46,6 +46,12 @@ export function TextEmbedDetails({
 						<dd>{t.details.chunks(status.childCount, status.parentCount)}</dd>
 					</>
 				)}
+				{status.truncated && (
+					<>
+						<dt>{t.details.coverage}</dt>
+						<dd>{t.details.partialIndex}</dd>
+					</>
+				)}
 				{status.error && (
 					<>
 						<dt>{t.details.error}</dt>

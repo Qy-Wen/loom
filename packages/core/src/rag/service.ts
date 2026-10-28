@@ -1,15 +1,15 @@
 import { abortableProviderCall } from "../library/task-scope.ts";
 import { randomUUID } from "node:crypto";
-import { isEnrichmentStale } from "../model/enrichment.ts";
+import { open } from "node:fs/promises";
 import type { Asset } from "../model/asset.ts";
 import {
 	EMBED_BATCH_SIZE,
+	TEXT_INDEX_LIMIT,
 	type EmbeddingProvider,
 	type StoredTextChunk,
 	type TextEmbedJob,
 	type TextEmbedStatus,
 } from "../model/text-embed.ts";
-import type { EnrichmentService } from "../enrichment/service.ts";
 import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
@@ -20,6 +20,9 @@ import { canIndexText, textToMarkdown } from "./text-source.ts";
 import { canDescribeVideo } from "./video-vlm.ts";
 import { canDescribeAudio } from "./audio-writeup.ts";
 
+/** Absolute path of an asset's file, or undefined when the library is closed or the asset is gone. */
+export type ResolveAssetPath = (assetId: string) => Promise<string | undefined>;
+
 export interface EmbedOptions {
 	/** Rebuild chunks and vectors even when the existing index looks current. */
 	force?: boolean;
@@ -28,11 +31,11 @@ export interface EmbedOptions {
 export class TextEmbedService {
 	private chain: Promise<void> = Promise.resolve();
 	private readonly metadata: MetadataStore;
-	private readonly enrichment: EnrichmentService;
+	private readonly resolvePath: ResolveAssetPath;
 
-	constructor(metadata: MetadataStore, enrichment: EnrichmentService) {
+	constructor(metadata: MetadataStore, resolvePath: ResolveAssetPath) {
 		this.metadata = metadata;
-		this.enrichment = enrichment;
+		this.resolvePath = resolvePath;
 	}
 
 	async getStatus(assetId: string, currentModelId?: string): Promise<TextEmbedStatus> {
@@ -140,26 +143,17 @@ export class TextEmbedService {
 		}
 	}
 
-	private async ensureExtract(asset: Asset, signal?: AbortSignal) {
-		const existing = await this.metadata.getAssetEnrichment(asset.assetId);
-		if (
-			existing
-			&& !isEnrichmentStale(existing, asset.modifiedAt)
-			&& existing.status === "ready"
-			&& existing.data?.kind === "text"
-		) {
-			return existing;
-		}
-		return this.enrichment.analyze(asset.assetId, signal);
-	}
-
 	private async sourceMarkdown(asset: Asset, signal?: AbortSignal): Promise<{ text: string } | { error: string } | { unsupported: true }> {
 		if (canIndexText(asset.filename)) {
-			const extract = await this.ensureExtract(asset, signal);
-			if (extract.status !== "ready" || extract.data?.kind !== "text") {
-				return { error: extract.error ?? "Level 1 extract is not ready" };
+			const path = await this.resolvePath(asset.assetId);
+			if (!path) return { error: "Asset file not found" };
+			try {
+				const { text, truncated } = await readTextHead(path, TEXT_INDEX_LIMIT, signal);
+				return { text: textToMarkdown(asset.filename, text, truncated) };
+			} catch (error) {
+				if (signal?.aborted) throw error;
+				return { error: error instanceof Error ? error.message : String(error) };
 			}
-			return { text: textToMarkdown(asset.filename, extract.data.text, extract.data.truncated) };
 		}
 		const writeup = await this.readyWriteup(asset);
 		if (writeup === "missing") {
@@ -222,7 +216,12 @@ export class TextEmbedService {
 		}
 		const job = await this.metadata.getTextEmbedJob(asset.assetId);
 		if (!job) return idleStatus(asset);
-		return toStatus(asset, job, currentModelId, await this.extraStale(asset, job));
+		const status = toStatus(asset, job, currentModelId, await this.extraStale(asset, job));
+		// Only text files are cut; a write-up is the whole source.
+		if (job.status === "ready" && canIndexText(asset.filename) && asset.size > TEXT_INDEX_LIMIT) {
+			status.truncated = true;
+		}
+		return status;
 	}
 
 	private async extraStale(asset: Asset, job: TextEmbedJob): Promise<boolean> {
@@ -250,6 +249,36 @@ export class TextEmbedService {
 			: undefined;
 		if (!markdown) return "missing";
 		return { markdown };
+	}
+}
+
+/**
+ * Read at most `limit` bytes from the start of a file, cut on a UTF-8 character
+ * boundary so the last character is never split into a replacement mark.
+ */
+export async function readTextHead(
+	path: string,
+	limit: number,
+	signal?: AbortSignal,
+): Promise<{ text: string; truncated: boolean }> {
+	const handle = await open(path, "r");
+	try {
+		// One byte more than the limit tells us whether the file continues.
+		const buffer = Buffer.alloc(limit + 1);
+		let read = 0;
+		while (read < buffer.length) {
+			signal?.throwIfAborted();
+			const { bytesRead } = await handle.read(buffer, read, buffer.length - read, read);
+			if (bytesRead === 0) break;
+			read += bytesRead;
+		}
+		if (read <= limit) return { text: buffer.subarray(0, read).toString("utf8"), truncated: false };
+		let end = limit;
+		// buffer[end] is a continuation byte when the cut falls inside a character.
+		while (end > 0 && (buffer[end]! & 0xc0) === 0x80) end -= 1;
+		return { text: buffer.subarray(0, end).toString("utf8"), truncated: true };
+	} finally {
+		await handle.close();
 	}
 }
 

@@ -366,6 +366,8 @@ export const messages = defineLocale(
 			fps: "FPS",
 			characters: "Characters",
 			truncated: " (truncated)",
+			coverage: "Coverage",
+			partialIndex: "Only the start of the file is indexed",
 			text: "Text",
 		},
 		settings: {
@@ -864,6 +866,8 @@ export const messages = defineLocale(
 			fps: "帧率",
 			characters: "字符数",
 			truncated: "（已截断）",
+			coverage: "覆盖范围",
+			partialIndex: "只索引了文件开头部分",
 			text: "文本",
 		},
 		settings: {

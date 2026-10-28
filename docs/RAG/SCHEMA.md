@@ -264,7 +264,7 @@ Parent and child passages for one asset. Only child rows store a vector.
 | `asset_id` | TEXT | NOT NULL, FK → `assets(asset_id)` ON DELETE CASCADE | Asset. |
 | `parent_id` | TEXT | nullable, FK → `text_chunks(chunk_id)` ON DELETE CASCADE | Null on a parent; child points at its parent. |
 | `role` | TEXT | NOT NULL, `parent` or `child` | Row kind. |
-| `start_offset` | INTEGER | NOT NULL | Inclusive UTF-16 offset into the Level 1 extract. |
+| `start_offset` | INTEGER | NOT NULL | Inclusive UTF-16 offset into the text that was chunked (the converted Markdown, or a write-up). Stored, not read back. |
 | `end_offset` | INTEGER | NOT NULL | Exclusive UTF-16 offset. |
 | `text` | TEXT | NOT NULL | Source span. Parent text is that span, not a concat of overlapping children. |
 | `token_count` | INTEGER | NOT NULL | `cl100k_base` token count of `text`. |

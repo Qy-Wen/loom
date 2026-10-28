@@ -37,7 +37,7 @@
   3. 还是超过 **512** token，再滑窗 **512**、重叠 **64**（步长 448）。
   4. 短文一篇一段。
 - **父子：** 先切子切片，再聚合父切片。子切片用来找得准，父切片用来补上下文。先按结构 + 512 / 64 切出全部子切片，再把连续的子切片收成父切片，源文跨度不超过 **2048** token（大约四个子切片）。父切片正文是这段源文，不要把互相重叠的子切片字符串拼起来。父边界不按标题级别。根父节点的 `parent_id` 为空。只有子切片做 embedding。
-- **输入：** Level 1 摘录，上限 256 KB；CSV 在这里被截断时，最后一行不完整，会被丢掉。没有、失败或过期就先摘录。embed 是单独的用户或 Agent 动作。
+- **输入：** 文本文件由索引自己从磁盘读取，不经过 Level 1 摘录，所以摘录 256 KiB 的上限不适用。读前 **1 MiB**（`TEXT_INDEX_LIMIT`，按字节，在 UTF-8 字符边界截断）；CSV 在这里被截断时，最后一行不完整，会被丢掉。更大的文件在 Index 区块里标为只索引了开头。图片、视频、音频索引的是描述 Markdown。embed 是单独的用户或 Agent 动作。
 - **Provider：** `EmbeddingProvider`。Loom 不加载、不运行模型。报文是 OpenAI 兼容的 `POST /v1/embeddings`。`requestUrl`、API key、`model` 来自设置页的 Embedding 槽位，见 [设置](../SETTINGS.zh-CN.md)。
 - **存储：** `text_chunks` 按 `asset_id`（切片 id、`parent_id`、角色、偏移、原文、mtime；子切片另存向量 + 模型名）。不塞进 `asset_metadata`。打开库时加载 sqlite-vec，用 `vec_distance_cosine` 打这些 blob。不上 `vec0` 表：维度跟着 Embedding 槽位。扩展没有就用 JavaScript 算同一套余弦。
 - **失效：** 和 Level 1 一样看 mtime。rename/move 不重跑。换 embedding 模型则这些行作废。

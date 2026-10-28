@@ -264,7 +264,7 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `asset_id` | TEXT | NOT NULL，FK → `assets(asset_id)` ON DELETE CASCADE | 资产。 |
 | `parent_id` | TEXT | 可空，FK → `text_chunks(chunk_id)` ON DELETE CASCADE | 父行为空；子行指向父。 |
 | `role` | TEXT | NOT NULL，`parent` 或 `child` | 角色。 |
-| `start_offset` | INTEGER | NOT NULL | Level 1 摘录上的闭区间 UTF-16 起点。 |
+| `start_offset` | INTEGER | NOT NULL | 被切块文本（转换后的 Markdown 或描述）上的闭区间 UTF-16 起点。只存储，不读回。 |
 | `end_offset` | INTEGER | NOT NULL | 开区间终点。 |
 | `text` | TEXT | NOT NULL | 源文跨度。父切片是这段源文，不是重叠子串拼接。 |
 | `token_count` | INTEGER | NOT NULL | `text` 的 `cl100k_base` token 数。 |

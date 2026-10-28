@@ -24,6 +24,14 @@ Remaining acceptance:
 
 ---
 
+## Search and index refactor
+
+Three steps in [SEARCH](./RAG/SEARCH.md): the index reads the original file, chunk full-text with Chinese tokenizing, and a split into simple and deep search.
+
+- Later option: split chunking from vectors so chunking and chunk full-text finish in the background after the extract. It needs a background task that can be cancelled and yields to the event loop first.
+
+---
+
 ## Split the entry files
 
 `app/src/main/index.ts` (about 1,500 lines), `app/src/renderer/App.tsx` (about 1,350), and `core/src/local-core.ts` (about 730) each carry several responsibilities. Split by responsibility in steps; do not just move a whole file under a new name:
