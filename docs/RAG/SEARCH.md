@@ -46,6 +46,17 @@ Chunking and vectors go together. They happen only when the user clicks Embed, t
 - Result: a file that was never embedded has no chunks and deep search cannot see it; use simple search. Without an Embedding model no chunks are built, so deep search is unavailable.
 - Later option: split "chunks + chunk full-text" from "vectors". The first runs in the background after the extract and needs no model; the second stays manual. It needs a background task that can be cancelled and yields to the event loop first; see [TODO](../TODO.md).
 
+## Media files: the chunks are the write-up
+
+An image, video, or audio file has no text of its own, so the index reads its write-up instead (the caption or description produced by the VLM or Audio slot). That Markdown goes through the same `chunkMarkdown` as a text file, so chunks, vectors, and chunk full-text work the same way and deep search treats them alike.
+
+- A short caption is usually one parent with one child chunk. Checked: a two-line caption with tags gives 1 parent, 1 child; a 17,000-character write-up gives 2 parents, 8 children. So for a typical image, "the best passage" is the whole caption.
+- A hit on a media file returns the write-up text, not anything from the pixels or the audio. Deep search can only find what the model wrote down, so a detail the description left out cannot be found.
+- Simple search also covers the write-up: it is part of the file-level text, so a word in a caption finds the file without an index. Deep search needs the file to be indexed; the write-up alone is not enough.
+- Index freshness follows the write-up. If the write-up was saved after the index was built, or no longer matches the file's modified time, the index counts as stale and the next index rebuilds the chunks from the current write-up.
+- Chunk offsets point into the write-up Markdown, not into the media file. Video and audio hits carry no time range yet; cutting by time is a later option.
+- Describing and indexing stay two steps in the core. Only the app joins them: the Describe button, and the Agent's `describe_*` followed by `embed_asset`.
+
 ## Step 1: the index reads the original file
 
 - `TextEmbedService` stops depending on `EnrichmentService`. It takes an injected `resolvePath`; `LocalCore` passes `library.getAssetFilePath`.
