@@ -149,7 +149,8 @@ describe("LocalCore enrichment", () => {
 			const automatic = await waitForEnrichment(core, asset.assetId);
 			assert.equal(automatic.status, "ready");
 			assert.deepEqual(automatic.data, { kind: "image", width: 1, height: 1 });
-			const first = await core.analyzeAsset(asset.assetId);
+			const first = await core.getAssetEnrichment(asset.assetId);
+			assert.ok(first);
 			assert.equal(first.status, "ready");
 			assert.deepEqual(first.data, { kind: "image", width: 1, height: 1 });
 			assert.equal(first.version, ENRICHMENT_VERSION);

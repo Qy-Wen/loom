@@ -509,14 +509,6 @@ export class LocalCore {
 		return this.metadataStore.getAssetEnrichment(assetId);
 	}
 
-	analyzeAsset(assetId: string): Promise<AssetEnrichment> {
-		return this.runLibraryTask(async (signal) => {
-			const record = await this.enrichment.analyze(assetId, signal);
-			if (!signal.aborted) this.library.notifyEnrichment(assetId);
-			return record;
-		});
-	}
-
 	getTextEmbedStatus(assetId: string, currentModelId?: string): Promise<TextEmbedStatus> {
 		return this.runLibraryTask(() => this.textEmbed.getStatus(assetId, currentModelId));
 	}

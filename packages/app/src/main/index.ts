@@ -677,9 +677,6 @@ function registerIpc(): void {
 		return localCore.createRelation(fromAssetId, toAssetId, type);
 	});
 	ipcMain.handle(IPC.removeRelation, (_event, relationId: string) => localCore.removeRelation(relationId));
-	ipcMain.handle(IPC.analyzeAsset, (_event, assetId: string) => {
-		return localCore.analyzeAsset(assetId);
-	});
 	ipcMain.handle(IPC.getTextEmbedStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).embedding.model.trim() : "";
 		signal.throwIfAborted();

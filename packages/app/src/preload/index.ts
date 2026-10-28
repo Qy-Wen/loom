@@ -53,7 +53,6 @@ const api: LoomApi = {
 	createRelation: (fromAssetId, toAssetId, type) =>
 		ipcRenderer.invoke(IPC.createRelation, fromAssetId, toAssetId, type),
 	removeRelation: (relationId) => ipcRenderer.invoke(IPC.removeRelation, relationId),
-	analyzeAsset: (assetId) => ipcRenderer.invoke(IPC.analyzeAsset, assetId),
 	getTextEmbedStatus: (assetId) => ipcRenderer.invoke(IPC.getTextEmbedStatus, assetId),
 	embedAsset: (assetId, force) => ipcRenderer.invoke(IPC.embedAsset, assetId, force),
 	getImageVlmStatus: (assetId) => ipcRenderer.invoke(IPC.getImageVlmStatus, assetId),

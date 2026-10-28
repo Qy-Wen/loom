@@ -139,7 +139,6 @@ export const IPC = {
 	listGraphRelations: "loom:listGraphRelations",
 	createRelation: "loom:createRelation",
 	removeRelation: "loom:removeRelation",
-	analyzeAsset: "loom:analyzeAsset",
 	getTextEmbedStatus: "loom:getTextEmbedStatus",
 	embedAsset: "loom:embedAsset",
 	getImageVlmStatus: "loom:getImageVlmStatus",
@@ -257,7 +256,6 @@ export interface LoomApi {
 	listGraphRelations: () => Promise<AssetRelation[]>;
 	createRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<AssetRelation>;
 	removeRelation: (relationId: string) => Promise<void>;
-	analyzeAsset: (assetId: string) => Promise<AssetEnrichment>;
 	getTextEmbedStatus: (assetId: string) => Promise<TextEmbedStatus>;
 	/** `force` rebuilds the index even when it looks current. */
 	embedAsset: (assetId: string, force?: boolean) => Promise<TextEmbedStatus>;

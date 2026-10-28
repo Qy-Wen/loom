@@ -69,7 +69,7 @@ test("search_assets matches Level 1 text and camera extracts", async () => {
 		const brief = snapshot.assets.find((asset) => asset.relativePath === "brief.md");
 		const shot = snapshot.assets.find((asset) => asset.relativePath === "shot.jpg");
 		assert.ok(brief && shot);
-		await core.analyzeAsset(brief.assetId);
+		await core.refreshEnrichment(snapshot.assets);
 		await metadataStore.upsertAssetEnrichment({
 			assetId: shot.assetId,
 			version: ENRICHMENT_VERSION,
