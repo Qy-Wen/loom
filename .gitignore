@@ -14,6 +14,9 @@ build/
 release/
 *.tsbuildinfo
 
+# Personal notes for the agent package (local only)
+packages/agent/AGENTS.md
+
 # Loom library metadata (should never be committed)
 .loom/
 

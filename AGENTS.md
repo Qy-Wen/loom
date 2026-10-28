@@ -4,16 +4,3 @@
 2. When a decision is uncertain, ask me instead of making the decision privately and continuing.
 3. Keep documentation concise and clear. Omit discussion history unless it is necessary; record final conclusions instead.
 4. When writing code, account for both macOS and Windows.
-
-Use `../agent/`(mac) 'D:\Projects\agent-study'(win) as a reference. It contains source code for many agent projects:
-
-- `Claude-Code-Source-Study`
-- `claude-code-source-leak`
-- `codex`
-- `deepseek-harness`
-- `deer-flow`
-- `hermes-agent`
-- `langchain`
-- `openclaw`
-- `pi`
-- `study`
