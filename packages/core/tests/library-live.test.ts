@@ -5,18 +5,10 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LocalCore, type LibrarySnapshot } from "../src/index.ts";
 import { InMemoryGraphStore } from "../src/stores/memory.ts";
+import { retryWindowsFileOperation } from "../src/fs-retry.ts";
 
 async function renameRetry(from: string, to: string): Promise<void> {
-	for (let attempt = 0; ; attempt++) {
-		try {
-			await rename(from, to);
-			return;
-		} catch (error) {
-			const code = (error as NodeJS.ErrnoException).code;
-			if (attempt >= 8 || (code !== "EPERM" && code !== "EACCES")) throw error;
-			await new Promise((resolve) => setTimeout(resolve, 25 * (attempt + 1)));
-		}
-	}
+	await retryWindowsFileOperation(() => rename(from, to));
 }
 
 async function waitUntil(
@@ -117,7 +109,7 @@ test("Library keeps the id and tags when an editor saves over a file by rename w
 		await core.addAssetTag(note.assetId, "keep");
 
 		await writeFile(join(root, "note.tmp"), "second draft, longer");
-		await rename(join(root, "note.tmp"), join(root, "note.txt"));
+		await renameRetry(join(root, "note.tmp"), join(root, "note.txt"));
 
 		const snap = await waitUntil(
 			core,

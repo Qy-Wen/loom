@@ -1,8 +1,10 @@
 import { randomUUID } from "node:crypto";
+import fs from "node:fs";
 import { mkdir, open, readFile, realpath, rename, rm } from "node:fs/promises";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as sleep } from "node:timers/promises";
 import lockfile from "proper-lockfile";
+import { retryWindowsFileOperation } from "@loom/core/fs";
 import { SerialQueue } from "./serial-queue.ts";
 
 export type StorageOptions = { signal?: AbortSignal };
@@ -24,13 +26,7 @@ export async function atomicWrite(path: string, contents: string | Uint8Array, b
 	try {
 		const file = await open(temporary, "wx", 0o600);
 		try { await file.writeFile(contents); await file.sync(); } finally { await file.close(); }
-		for (let attempt = 0; ; attempt++) {
-			try { beforeCommit(); await rename(temporary, path); break; }
-			catch (error) {
-				if (process.platform !== "win32" || attempt >= 5 || !["EPERM", "EACCES", "EBUSY"].includes((error as NodeJS.ErrnoException).code ?? "")) throw error;
-				await sleep(20 * (attempt + 1));
-			}
-		}
+		await retryWindowsFileOperation(() => rename(temporary, path), { beforeAttempt: beforeCommit });
 		// Persist the rename on POSIX. Windows does not support opening directories for fsync.
 		if (process.platform !== "win32") {
 			const directory = await open(dirname(path), "r");
@@ -40,6 +36,17 @@ export async function atomicWrite(path: string, contents: string | Uint8Array, b
 }
 
 const queues = new Map<string, SerialQueue>();
+
+// proper-lockfile clears its ownership before rmdir completes. Retry the rmdir
+// itself, while preserving its nonrecursive, empty-directory-only semantics.
+const lockFs = {
+	...fs,
+	rmdir(path: fs.PathLike, callback: fs.NoParamCallback): void {
+		void retryWindowsFileOperation(() => new Promise<void>((resolve, reject) => {
+			fs.rmdir(path, (error) => { if (error) reject(error); else resolve(); });
+		})).then(() => callback(null), callback);
+	},
+};
 
 /** FIFO within Main, with a file lock for other instances/processes. */
 export function withFileLock<T>(path: string, operation: (check: () => void) => Promise<T>, options: StorageOptions = {}): Promise<T> {
@@ -64,7 +71,7 @@ async function acquireFileLock<T>(path: string, operation: (check: () => void) =
 	while (!release) {
 		options.signal?.throwIfAborted();
 		try {
-			release = await lockfile.lock(canonical, { realpath: false, stale: 30_000, update: 5000, retries: 0,
+			release = await lockfile.lock(canonical, { fs: lockFs, realpath: false, stale: 30_000, update: 5000, retries: 0,
 				onCompromised: (error) => { compromised = error; },
 			});
 		} catch (error) {
@@ -143,7 +150,7 @@ export class JsonFile<T> {
 	async #moveAside(error: unknown): Promise<void> {
 		const backup = `${this.path}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
 		try {
-			await rename(this.path, backup);
+			await retryWindowsFileOperation(() => rename(this.path, backup));
 		} catch (renameError) {
 			// Another process may have moved or replaced it already; only a file we cannot move is a real failure.
 			if ((renameError as NodeJS.ErrnoException).code === "ENOENT") return;

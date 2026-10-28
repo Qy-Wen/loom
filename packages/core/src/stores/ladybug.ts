@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import type { Connection, Database, QueryResult } from "@ladybugdb/wasm-core";
 import type { LibraryPaths } from "../library/paths.ts";
 import type { AssetRelation } from "../model/relation.ts";
+import { retryWindowsFileOperation } from "../fs-retry.ts";
 import { RELATED, type GraphStore } from "./types.ts";
 const require = createRequire(import.meta.url);
 
@@ -126,10 +127,10 @@ export class LadybugGraphStore implements GraphStore {
 		const dest = this.exportDir;
 		if (!dest) throw new Error("Graph store is not open");
 		const staging = `${dest}.tmp`;
-		await rm(staging, { recursive: true, force: true });
+		await rm(staging, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
 		await this.run(`EXPORT DATABASE '${toCypherPath(staging)}'`);
-		await rm(dest, { recursive: true, force: true });
-		await rename(staging, dest);
+		await rm(dest, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+		await retryWindowsFileOperation(() => rename(staging, dest));
 	}
 
 	private async run(

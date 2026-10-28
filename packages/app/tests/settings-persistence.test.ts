@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
+import fs from "node:fs";
+import fsPromises from "node:fs/promises";
+import { syncBuiltinESMExports } from "node:module";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
@@ -161,19 +164,46 @@ test("atomic replacement preserves old contents on pre-commit failure and cleans
 	assert.equal(await readFile(path, "utf8"), '{"new":true}');
 });
 
-test("Windows sharing-violation retries retain the destination until replacement", async (t) => {
+test("Windows sharing-violation retries retain the destination beyond the old 300ms limit", async (t) => {
 	const dir = await workspace(t), path = join(dir, "settings.json");
 	await writeFile(path, "old");
 	const descriptor = Object.getOwnPropertyDescriptor(process, "platform")!;
 	Object.defineProperty(process, "platform", { ...descriptor, value: "win32" });
 	t.after(() => Object.defineProperty(process, "platform", descriptor));
+	const originalRename = fsPromises.rename;
 	let attempts = 0;
-	await atomicWrite(path, "new", () => {
+	const started = performance.now();
+	const mocked = t.mock.method(fsPromises, "rename", async (from: fs.PathLike, to: fs.PathLike) => {
+		attempts++;
 		assert.equal(readFileSync(path, "utf8"), "old");
-		if (++attempts <= 2) throw Object.assign(new Error("sharing violation"), { code: "EPERM" });
+		if (performance.now() - started < 400) throw Object.assign(new Error("sharing violation"), { code: "EPERM" });
+		await originalRename(from, to);
 	});
-	assert.equal(attempts, 3);
+	syncBuiltinESMExports();
+	t.after(() => { mocked.mock.restore(); syncBuiltinESMExports(); });
+	await atomicWrite(path, "new");
+	assert.ok(attempts > 5);
 	assert.equal(await readFile(path, "utf8"), "new");
+	assert.deepEqual(await readdir(dir), ["settings.json"]);
+});
+
+test("a busy lock directory is removed before the next storage update starts", async (t) => {
+	const dir = await workspace(t), path = join(dir, "settings.json");
+	const descriptor = Object.getOwnPropertyDescriptor(process, "platform")!;
+	Object.defineProperty(process, "platform", { ...descriptor, value: "win32" });
+	t.after(() => Object.defineProperty(process, "platform", descriptor));
+	const originalRmdir = fs.rmdir;
+	let removals = 0;
+	t.mock.method(fs, "rmdir", (target: fs.PathLike, callback: fs.NoParamCallback) => {
+		if (String(target) === `${path}.lock` && ++removals <= 2) {
+			queueMicrotask(() => callback(Object.assign(new Error("directory busy"), { code: "EBUSY" })));
+		} else originalRmdir(target, callback);
+	});
+	const a = new JsonFile(path, (value) => value as { count: number });
+	const b = new JsonFile(path, a.parse);
+	await Promise.all([a, b].map((file) => file.update(async (current) => ({ value: { count: (current?.count ?? 0) + 1 }, result: undefined }))));
+	assert.equal(removals, 4);
+	assert.deepEqual(await a.read(), { count: 2 });
 	assert.deepEqual(await readdir(dir), ["settings.json"]);
 });
 

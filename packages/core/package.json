@@ -8,6 +8,7 @@
     "./embedding": "./src/rag/http-embedding.ts",
     "./grade": "./src/grade/index.ts",
     "./paths": "./src/library/paths.ts",
+    "./fs": "./src/fs-retry.ts",
     "./temp": "./src/temp.ts",
     "./sandbox": "./src/sandbox/process-sandbox.ts"
   },
