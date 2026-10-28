@@ -4,7 +4,7 @@
 
 > SQLite schema for one asset library. Product context is in [PRODUCT.md](../PRODUCT.md) sections 3 and 4.
 >
-> The database is created at `<library>/.loom/metadata-db/metadata.db` when the library opens. Asset files stay on the filesystem. This database is a derived index.
+> The database is created at `<library>/.loom/metadata-db/metadata.db` when the library opens. Asset files stay on the filesystem. Most of this database can be rebuilt from them, but not all of it: see [What can be rebuilt](#what-can-be-rebuilt).
 
 ---
 
@@ -16,11 +16,20 @@
 - `foreign_keys = ON`
 - `busy_timeout = 5000`
 
-`open` runs `CREATE TABLE IF NOT EXISTS`. There is no schema version or migration yet.
+`open` runs `migrate` (`stores/schema.ts`). `PRAGMA user_version` is the number of migrations that have run, and version 1 is the schema below. To change a table, append a migration; never edit one that has shipped. All pending migrations run in one transaction, so a failure leaves the file untouched. A library written by a newer Loom (a higher `user_version`) is refused with a message to update, rather than opened and corrupted. A library from before versions existed (`user_version` 0) is adopted as version 1 without changing its rows.
 
 On open, try to load the sqlite-vec extension. Child KNN uses `vec_distance_cosine` on `text_chunks.embedding` blobs. There is no `vec0` virtual table: dimension follows the Embedding slot. If the extension is missing, the same cosine runs in JavaScript.
 
 Directories are not rows. The file tree comes from scanning the library. `.loom/` and `.DS_Store` are ignored.
+
+### What can be rebuilt
+
+| Rebuilt from the files | Made by the user or by paid calls, so keep through a migration |
+|---|---|
+| `assets`, `asset_metadata`, `assets_fts`, `chunks_fts` | `favorites`, `tags`, `asset_tags`, `properties`, `asset_properties` |
+| `text_chunks` and `text_embed_jobs` (the text is free, the vectors cost an Embedding call) | `image_vlm`, `video_vlm`, `audio_writeup` (the write-ups cost a model call), and the relations in the graph store |
+
+Deleting `.loom/` loses the right-hand column, so treat it as user data, not a cache. `assets` is rebuilt, but every `asset_id` is new, which is why tags and relations cannot be re-attached.
 
 ---
 
