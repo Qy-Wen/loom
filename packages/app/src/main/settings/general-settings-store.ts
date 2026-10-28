@@ -3,7 +3,7 @@ import { defaultGeneralSettings, parseGeneralSettings, type GeneralSettings } fr
 
 export class GeneralSettingsStore {
 	private readonly file: JsonFile<GeneralSettings>;
-	constructor(filePath: string) { this.file = new JsonFile(filePath, parseGeneralSettings); }
+	constructor(filePath: string) { this.file = new JsonFile(filePath, parseGeneralSettings, { recoverCorrupt: true }); }
 
 	async load(): Promise<GeneralSettings> {
 		return await this.file.read() ?? defaultGeneralSettings();

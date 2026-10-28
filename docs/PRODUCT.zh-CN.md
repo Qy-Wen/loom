@@ -97,7 +97,7 @@ Loom 写到系统临时目录的内容都放在同一个根下，不进素材库
 路径只由 `core/src/temp.ts` 构造，不写死 `/tmp`（进程沙盒只能写素材库和 `os.tmpdir()`）。应用启动时清掉超过 24 小时的残留。
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
-- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。若 `.loom/` 丢失或损坏，也只需重新索引，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
+- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存：标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 

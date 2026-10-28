@@ -1,5 +1,5 @@
-import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { stat } from "node:fs/promises";
+import { JsonFile } from "../storage/file.ts";
 
 export function parseLastLibrary(value: unknown): string | null {
 	if (!value || typeof value !== "object") return null;
@@ -17,23 +17,20 @@ export async function lastLibraryStillOpenable(rootPath: string): Promise<boolea
 	}
 }
 
+type LastLibraryFile = { rootPath: string | null };
+
 export class LastLibraryStore {
-	private readonly filePath: string;
+	private readonly file: JsonFile<LastLibraryFile>;
 	private rootPath: string | null = null;
 	private loaded = false;
 
 	constructor(filePath: string) {
-		this.filePath = filePath;
+		this.file = new JsonFile(filePath, (value) => ({ rootPath: parseLastLibrary(value) }), { recoverCorrupt: true });
 	}
 
 	async load(): Promise<string | null> {
 		if (this.loaded) return this.rootPath;
-		try {
-			this.rootPath = parseLastLibrary(JSON.parse(await readFile(this.filePath, "utf8")));
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			this.rootPath = null;
-		}
+		this.rootPath = (await this.file.read())?.rootPath ?? null;
 		this.loaded = true;
 		return this.rootPath;
 	}
@@ -42,7 +39,7 @@ export class LastLibraryStore {
 		const next = rootPath.trim();
 		this.rootPath = next.length > 0 ? next : null;
 		this.loaded = true;
-		await mkdir(dirname(this.filePath), { recursive: true });
-		await writeFile(this.filePath, `${JSON.stringify({ rootPath: this.rootPath }, null, "\t")}\n`, "utf8");
+		const value = { rootPath: this.rootPath };
+		await this.file.update(async () => ({ value, result: undefined }));
 	}
 }

@@ -1,5 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname } from "node:path";
+import { JsonFile } from "../storage/file.ts";
 import {
 	addUsage,
 	emptyUsageTotals,
@@ -25,22 +24,17 @@ export function parseUsageTotals(value: unknown): AgentUsageTotals {
 }
 
 export class AgentStatsStore {
-	private readonly filePath: string;
+	private readonly file: JsonFile<AgentUsageTotals>;
 	private totals = emptyUsageTotals();
 	private loaded = false;
 
 	constructor(filePath: string) {
-		this.filePath = filePath;
+		this.file = new JsonFile(filePath, parseUsageTotals, { recoverCorrupt: true });
 	}
 
 	async load(): Promise<AgentUsageTotals> {
 		if (this.loaded) return this.totals;
-		try {
-			this.totals = parseUsageTotals(JSON.parse(await readFile(this.filePath, "utf8")));
-		} catch (error) {
-			if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
-			this.totals = emptyUsageTotals();
-		}
+		this.totals = (await this.file.read()) ?? emptyUsageTotals();
 		this.loaded = true;
 		return this.totals;
 	}
@@ -64,7 +58,7 @@ export class AgentStatsStore {
 	}
 
 	private async flush(): Promise<void> {
-		await mkdir(dirname(this.filePath), { recursive: true });
-		await writeFile(this.filePath, `${JSON.stringify(this.totals, null, "\t")}\n`, "utf8");
+		const value = this.totals;
+		await this.file.update(async () => ({ value, result: undefined }));
 	}
 }

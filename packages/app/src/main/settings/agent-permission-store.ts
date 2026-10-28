@@ -6,7 +6,7 @@ export class AgentPermissionStore {
 	constructor(filePath: string) {
 		this.file = new JsonFile(filePath, (value) => ({
 			level: parseAgentPermissionLevel(value && typeof value === "object" ? (value as { level?: unknown }).level : value),
-		}));
+		}), { recoverCorrupt: true });
 	}
 
 	async load(): Promise<AgentPermissionLevel> {

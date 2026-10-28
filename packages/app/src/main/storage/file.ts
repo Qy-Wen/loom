@@ -84,15 +84,44 @@ async function acquireFileLock<T>(path: string, operation: (check: () => void) =
 	} finally { if (!compromised) await release(); }
 }
 
+/** Set once by Main so every recovered file is written to the app log. */
+let recoveryLogger: ((message: string) => void) | undefined;
+export function setStorageRecoveryLogger(logger: ((message: string) => void) | undefined): void { recoveryLogger = logger; }
+
+export interface JsonFileOptions {
+	/**
+	 * When the file exists but is not valid JSON or fails `parse`, rename it to `<name>.corrupt-<time>` (the
+	 * content is kept, not deleted) and act as if it were missing, so the app starts with defaults instead of
+	 * failing. Use it where defaults let the app run. Do not use it for an installation's identity or for
+	 * encrypted credentials, where a fresh start is wrong, or for files a user edits by hand, where the right
+	 * response is to say what is wrong.
+	 */
+	recoverCorrupt?: boolean;
+	/** Called with the backup path after a corrupt file has been moved aside. */
+	onRecovered?: (backupPath: string, error: unknown) => void;
+}
+
 export class JsonFile<T> {
 	readonly path: string;
 	readonly parse: (value: unknown) => T;
-	constructor(path: string, parse: (value: unknown) => T) { this.path = resolve(path); this.parse = parse; }
+	readonly #options: JsonFileOptions;
+	constructor(path: string, parse: (value: unknown) => T, options: JsonFileOptions = {}) {
+		this.path = resolve(path);
+		this.parse = parse;
+		this.#options = options;
+	}
 	async read(options: StorageOptions = {}): Promise<T | undefined> {
 		options.signal?.throwIfAborted();
 		const text = await readOptionalFile(this.path);
 		options.signal?.throwIfAborted();
-		return text === undefined ? undefined : this.parse(decodeJson(text));
+		if (text === undefined) return undefined;
+		try {
+			return this.parse(decodeJson(text));
+		} catch (error) {
+			if (!this.#options.recoverCorrupt) throw error;
+			await this.#moveAside(error);
+			return undefined;
+		}
 	}
 	async update<R>(change: (current: T | undefined) => Promise<{ value?: T; result: R }>, options: StorageOptions = {}): Promise<R> {
 		return withFileLock(this.path, async (check) => {
@@ -101,5 +130,17 @@ export class JsonFile<T> {
 			if (mutation.value !== undefined) await atomicWrite(this.path, encodeJson(this.parse(mutation.value)), check);
 			return mutation.result;
 		}, options);
+	}
+	async #moveAside(error: unknown): Promise<void> {
+		const backup = `${this.path}.corrupt-${new Date().toISOString().replace(/[:.]/g, "-")}`;
+		try {
+			await rename(this.path, backup);
+		} catch (renameError) {
+			// Another process may have moved or replaced it already; only a file we cannot move is a real failure.
+			if ((renameError as NodeJS.ErrnoException).code === "ENOENT") return;
+			throw error;
+		}
+		recoveryLogger?.(`Moved unreadable ${basename(this.path)} to ${basename(backup)}: ${error instanceof Error ? error.message : String(error)}`);
+		this.#options.onRecovered?.(backup, error);
 	}
 }

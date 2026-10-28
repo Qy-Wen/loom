@@ -21,7 +21,7 @@ export class AgentSandboxStore {
 	// A sandbox failure must disable execution even when persistence itself fails.
 	private fallback: SandboxSettings | undefined;
 
-	constructor(filePath: string) { this.file = new JsonFile(filePath, parseSandbox); }
+	constructor(filePath: string) { this.file = new JsonFile(filePath, parseSandbox, { recoverCorrupt: true }); }
 
 	private async read(): Promise<SandboxSettings> {
 		this.last = this.fallback ?? await this.file.read() ?? defaults();

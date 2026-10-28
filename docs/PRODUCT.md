@@ -98,7 +98,7 @@ Everything Loom writes to the system temp directory lives under one root, never 
 Only `core/src/temp.ts` builds these paths, and none is hard-coded to `/tmp` (the process sandbox may write only the library and `os.tmpdir()`). At startup the app deletes anything older than 24 hours.
 
 - The user owns asset names, locations, and nesting.
-- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. If `.loom/` is lost or damaged, derived indexes can be rebuilt without affecting asset files. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
+- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. `.loom/` is user data, not a cache. Tags, favorites, properties, relations, chat sessions, memory, and skills exist only there, with no backup or export, and each asset's id is stored there too. If `.loom/` is lost or damaged, search indexes and write-ups can be rebuilt, but the rest is gone; asset files are unaffected. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 

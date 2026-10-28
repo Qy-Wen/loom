@@ -82,6 +82,7 @@ import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-libra
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
 import { createChatStorage } from "./models/chat-storage.ts";
 import { DeviceIdStore } from "./models/device-id-store.ts";
+import { setStorageRecoveryLogger } from "./storage/file.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -1081,6 +1082,7 @@ app
 	.then(async () => {
 		const logDirectory = appLogDirectory();
 		writeAppLog = (message) => appendAppLog(logDirectory, message);
+		setStorageRecoveryLogger((message) => appLog(message));
 		process.on("uncaughtException", (error) => appLog(`uncaught exception: ${logErrorText(error)}`));
 		process.on("unhandledRejection", (reason) => appLog(`unhandled rejection: ${logErrorText(reason)}`));
 		logMediaBinaries();

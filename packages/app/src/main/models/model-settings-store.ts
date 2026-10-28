@@ -71,7 +71,7 @@ export class ModelSettingsStore {
 	private readonly file: JsonFile<ModelSettingsFile>;
 
 	constructor(filePath: string) {
-		this.file = new JsonFile(filePath, parseSettingsFile);
+		this.file = new JsonFile(filePath, parseSettingsFile, { recoverCorrupt: true });
 	}
 
 	async load(): Promise<ModelSettingsFile> {
