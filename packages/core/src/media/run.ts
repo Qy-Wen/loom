@@ -25,7 +25,21 @@ export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMed
 	const signal = options.signal;
 	if (signal?.aborted) return Promise.reject(abortError(options.program));
 	// sandboxedArgv also gates direct execution while fallback is settling.
-	return runSandboxed(options);
+	return runSandboxed(options.program === "ffmpeg" ? { ...options, args: keepFatalLogs(options.args) } : options);
+}
+
+/** Fatal diagnostics are required because some FFmpeg failures still exit 0. */
+function keepFatalLogs(args: string[]): string[] {
+	const prepared = [...args];
+	for (let i = 0; i < prepared.length - 1; i++) {
+		if (prepared[i] !== "-v" && prepared[i] !== "-loglevel") continue;
+		const level = prepared[++i];
+		const match = level.match(/(?:^|[+-])(quiet|panic|-?\d+)$/);
+		if (match && (match[1] === "quiet" || match[1] === "panic" || Number(match[1]) < 8)) {
+			prepared[i] = `${level.slice(0, -match[1].length)}fatal`;
+		}
+	}
+	return prepared;
 }
 
 function runDirect(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
@@ -113,8 +127,17 @@ function watchChild(
 		});
 		child.on("error", (error) => finish(error));
 		child.on("close", (code) => {
-			if (code === 0) finish();
-			else finish(new Error(formatProcessError(options.program, code, stderr)));
+			if (code !== 0) {
+				finish(new Error(formatProcessError(options.program, code, stderr)));
+				return;
+			}
+			// FFmpeg 9.0.2 maps a declined overwrite (AVERROR_EXIT) to exit code 0.
+			// Check its specific diagnostic, including a prompt with logging disabled.
+			const refused = options.program === "ffmpeg"
+				? stderr.match(/(?:^|\n)(?:\[[^\]\r\n]*\]\s*)*File '([^\r\n]*)' already exists\. (?:Overwrite\? \[y\/N\]|Exiting\.)/)
+				: null;
+			if (refused) finish(new Error(`ffmpeg refused to overwrite existing file: ${refused[1]}. Choose a new filename or pass -y to overwrite.`));
+			else finish();
 		});
 	});
 }

@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -47,7 +47,18 @@ test("run_ffmpeg writes a file when binaries are present", async (t) => {
 
 		const frame = await run.execute({ args: ["-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }) as LoomToolResult;
 		assert.equal((frame.details as { output?: string }).output, "outputs/frame.jpg");
-		await assert.rejects(async () => run.execute({ args: ["-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }));
+		const path = join(root, "outputs/frame.jpg");
+		const original = await readFile(path);
+		for (const flags of [[], ["-n"], ["-n", "-v", "quiet"], ["-nostdin", "-v", "quiet"]]) {
+			await assert.rejects(
+				async () => run.execute({ args: [...flags, "-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }),
+				/ffmpeg refused to overwrite existing file: .*frame\.jpg/,
+			);
+			assert.deepEqual(await readFile(path), original);
+		}
+		await writeFile(path, "previous output");
+		await run.execute({ args: ["-y", "-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] });
+		assert.deepEqual(await readFile(path), original);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });
