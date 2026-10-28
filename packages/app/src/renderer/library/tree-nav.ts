@@ -294,6 +294,29 @@ export function pointerSelect(
 	return singleSelection(targetKey);
 }
 
+/**
+ * Files picked by a box drag in the graph. Without a modifier the box replaces the selection; with one it adds to it.
+ * A box over nothing keeps the selection when adding and clears it when replacing. Folders already picked are kept when adding.
+ */
+export function boxSelect(selection: TreeSelection, assetIds: readonly string[], add: boolean): TreeSelection {
+	const boxed = assetIds.map(assetKey);
+	if (!add) {
+		const focus = boxed.at(-1) ?? null;
+		return { keys: boxed, anchor: boxed[0] ?? null, focus };
+	}
+	const keys = [...selection.keys, ...boxed.filter((key) => !selection.keys.includes(key))];
+	if (boxed.length === 0) return selection;
+	return { keys, anchor: selection.anchor ?? boxed[0]!, focus: boxed.at(-1)! };
+}
+
+/** Clicking empty canvas in the graph drops the picked files and keeps nothing focused. */
+export function clearAssetSelection(selection: TreeSelection): TreeSelection {
+	const keys = selection.keys.filter((key) => !key.startsWith("asset:"));
+	if (keys.length === selection.keys.length) return selection;
+	const focus = selection.focus && keys.includes(selection.focus) ? selection.focus : (keys.at(-1) ?? null);
+	return { keys, anchor: keys.includes(selection.anchor ?? "") ? selection.anchor : focus, focus };
+}
+
 const EXTEND_KEYS = new Set<string>(["ArrowUp", "ArrowDown", "Home", "End"]);
 
 export function isExtendKey(key: string): key is "ArrowUp" | "ArrowDown" | "Home" | "End" {

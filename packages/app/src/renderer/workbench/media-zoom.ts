@@ -123,7 +123,7 @@ export function wheelZoomFactor(deltaY: number, deltaMode = 0, pinch = false): n
 	const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 800 : deltaY;
 	const delta = Math.max(-400, Math.min(400, pixels));
 	// Trackpad pinch arrives as ctrl+wheel with much smaller deltas than a mouse tick.
-	return Math.exp((-delta * (pinch ? 4 : 1)) / 150);
+	return Math.exp((-delta * (pinch ? 4 : 1)) / 225);
 }
 
 /** Pan in screen pixels, then scale around the center of the fitted frame. */

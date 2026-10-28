@@ -24,7 +24,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
-	cursor: grab;
+	cursor: default;
 	user-select: none;
 	-webkit-user-select: none;
 }
@@ -61,7 +61,7 @@
 }
 
 .graph-canvas:active {
-	cursor: grabbing;
+	cursor: crosshair;
 }
 
 .graph-canvas.linking,
@@ -184,17 +184,9 @@
 	stroke-width: 3;
 }
 
-.graph-node.drop-target > circle:last-of-type {
+.graph-node.drop-target circle {
 	stroke: #202124;
 	stroke-width: 3;
-}
-
-.graph-drop-ring {
-	fill: none;
-	stroke: #202124;
-	stroke-width: 1.5;
-	opacity: 0.35;
-	pointer-events: none;
 }
 
 .graph-plus {
@@ -207,15 +199,24 @@
 	stroke-width: 1.5;
 }
 
-.graph-plus text {
-	fill: #202124;
-	font-size: 14px;
-	font-weight: 600;
+.graph-plus-mark {
+	fill: none;
+	stroke: #202124;
+	stroke-width: 1.6;
+	stroke-linecap: round;
 	pointer-events: none;
 }
 
 .graph-node-name {
 	fill: #202124;
 	font-size: 11px;
+	pointer-events: none;
+}
+
+.graph-box {
+	fill: rgb(66 133 244 / 10%);
+	stroke: #4285f4;
+	stroke-width: 1;
+	vector-effect: non-scaling-stroke;
 	pointer-events: none;
 }

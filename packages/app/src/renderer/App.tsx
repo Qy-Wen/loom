@@ -30,6 +30,8 @@ import { PanelWorkspace, PanelsToggle, type PanelView } from "./layout/work-pane
 import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import {
 	assetKey,
+	boxSelect,
+	clearAssetSelection,
 	contextSelection,
 	cursorsForKeys,
 	emptyTreeSelection,
@@ -224,6 +226,10 @@ export function App(): React.JSX.Element {
 		setTabs((current) => pruneTabs(current, (assetId) => ids.has(assetId)));
 	}, [library.assets]);
 	const selectedKeys = useMemo(() => new Set(picked.keys), [picked.keys]);
+	const selectedAssetIds = useMemo(
+		() => new Set(picked.keys.filter((key) => key.startsWith("asset:")).map((key) => key.slice("asset:".length))),
+		[picked.keys],
+	);
 	const selectionDrag = useMemo((): LibraryDrag | null => {
 		const items = rootLibraryItems(cursorsForKeys(picked.keys, library.assets));
 		if (items.assetIds.length + items.folders.length < 2) return null;
@@ -465,6 +471,14 @@ export function App(): React.JSX.Element {
 	function selectAsset(assetId: string): void {
 		setTabs((current) => showInTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	/**
+	 * A box drag in the graph picks files in the same selection the file tree uses. It leaves the open tab and Details alone,
+	 * so boxing several files does not jump to one of them. A click on empty canvas passes no files and, without a modifier, clears.
+	 */
+	function boxSelectAssets(assetIds: string[], add: boolean): void {
+		setPicked((current) => assetIds.length === 0 && !add ? clearAssetSelection(current) : boxSelect(current, assetIds, add));
 	}
 
 	/** Open in a new tab next to the active one. The tree and Details follow the new tab. */
@@ -1226,12 +1240,13 @@ export function App(): React.JSX.Element {
 							<GraphView
 								assets={library.assets}
 								edges={graphEdges}
-								selectedAssetId={selectedAssetId}
+								selectedAssetIds={selectedAssetIds}
 								relationTypes={relationTypes}
 								onSelectAsset={(assetId) => {
 									selectAsset(assetId);
 									panels.focus("details");
 								}}
+								onBoxSelect={boxSelectAssets}
 								onCreateRelation={createRelation}
 								onRemoveRelation={removeRelation}
 							/>

@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
 	assetKey,
+	boxSelect,
+	clearAssetSelection,
 	contextSelection,
 	emptyTreeSelection,
 	extendSelection,
@@ -222,5 +224,33 @@ describe("isLibraryTrashKey", () => {
 		assert.equal(isLibraryTrashKey({ ...base, key: "Delete", metaKey: false }, false), true);
 		assert.equal(isLibraryTrashKey({ ...base, key: "Delete", metaKey: false }, true), false);
 		assert.equal(isLibraryTrashKey({ ...base, shiftKey: true }, true), false);
+	});
+});
+
+describe("box selection from the graph", () => {
+	const picked = { keys: [assetKey("a"), folderKey("docs")], anchor: assetKey("a"), focus: assetKey("a") };
+
+	it("replaces the selection without a modifier, folders included", () => {
+		assert.deepEqual(boxSelect(picked, ["b", "c"], false), { keys: [assetKey("b"), assetKey("c")], anchor: assetKey("b"), focus: assetKey("c") });
+	});
+
+	it("adds to the selection with a modifier and keeps what was picked", () => {
+		const next = boxSelect(picked, ["a", "b"], true);
+		assert.deepEqual(next.keys, [assetKey("a"), folderKey("docs"), assetKey("b")], "a is not listed twice");
+		assert.equal(next.focus, assetKey("b"));
+		assert.equal(next.anchor, assetKey("a"), "the anchor stays");
+	});
+
+	it("a box over nothing clears when replacing and changes nothing when adding", () => {
+		assert.deepEqual(boxSelect(picked, [], false), { keys: [], anchor: null, focus: null });
+		assert.equal(boxSelect(picked, [], true), picked);
+	});
+
+	it("clearing drops the picked files and keeps folders", () => {
+		assert.deepEqual(clearAssetSelection(picked), { keys: [folderKey("docs")], anchor: folderKey("docs"), focus: folderKey("docs") });
+		assert.deepEqual(clearAssetSelection(singleSelection(assetKey("a"))), { keys: [], anchor: null, focus: null });
+		const onlyFolder = singleSelection(folderKey("docs"));
+		assert.equal(clearAssetSelection(onlyFolder), onlyFolder, "nothing to drop returns the same object");
+		assert.equal(clearAssetSelection(emptyTreeSelection), emptyTreeSelection);
 	});
 });

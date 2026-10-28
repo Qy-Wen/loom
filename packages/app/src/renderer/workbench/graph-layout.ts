@@ -12,6 +12,25 @@ export function nodeHitZone(distance: number, radius: number): NodeHitZone {
 	return "none";
 }
 
+export interface WorldRect {
+	minX: number;
+	minY: number;
+	maxX: number;
+	maxY: number;
+}
+
+/** The rectangle between two corners, whichever way the drag went. */
+export function rectBetween(a: { x: number; y: number }, b: { x: number; y: number }): WorldRect {
+	return { minX: Math.min(a.x, b.x), minY: Math.min(a.y, b.y), maxX: Math.max(a.x, b.x), maxY: Math.max(a.y, b.y) };
+}
+
+/** Ids of the nodes whose centre lies inside the rectangle, edges included. */
+export function nodesInRect<T extends { id: string; x: number; y: number }>(nodes: readonly T[], rect: WorldRect): string[] {
+	return nodes
+		.filter((node) => node.x >= rect.minX && node.x <= rect.maxX && node.y >= rect.minY && node.y <= rect.maxY)
+		.map((node) => node.id);
+}
+
 export function nearestNode<T extends { id: string; x: number; y: number }>(
 	nodes: T[],
 	x: number,

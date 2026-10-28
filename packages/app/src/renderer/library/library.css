@@ -480,6 +480,7 @@
 	border-radius: 5px;
 	background: #fff;
 	box-shadow: 0 6px 16px rgb(0 0 0 / 8%);
+	font-size: 12px;
 }
 
 .suggest .suggest-list button {

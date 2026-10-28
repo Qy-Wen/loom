@@ -8,18 +8,24 @@ import {
 	graphBounds,
 	nearestNode,
 	nodeHitZone,
+	nodesInRect,
+	rectBetween,
 } from "./graph-layout.ts";
-import { assetTypeLabel } from "../../shared/locale.ts";
+import { assetTypeLabel, uiPlatform } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { SuggestInput } from "../components/suggest-input.tsx";
+import { pointerMode } from "../library/tree-nav.ts";
+import { wheelZoomFactor } from "./media-zoom.ts";
 import { useGraphSimulation } from "./graph-simulation.ts";
 
 interface GraphViewProps {
 	assets: Asset[];
 	edges: AssetRelation[];
-	selectedAssetId: string | null;
+	selectedAssetIds: ReadonlySet<string>;
 	relationTypes: string[];
 	onSelectAsset: (assetId: string) => void;
+	/** Files inside a box drag, or none for a click on empty canvas. `add` keeps the current selection. */
+	onBoxSelect: (assetIds: string[], add: boolean) => void;
 	onCreateRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
 	onRemoveRelation: (relationId: string) => Promise<void>;
 }
@@ -42,7 +48,7 @@ interface HoverState {
 }
 
 type PointerDrag =
-	| { kind: "pan"; x: number; y: number; view: Viewport }
+	| { kind: "box"; x: number; y: number; add: boolean; started: boolean }
 	| { kind: "move"; id: string; x: number; y: number; started: boolean }
 	| { kind: "link"; fromId: string };
 
@@ -59,13 +65,15 @@ const TYPE_ORDER: AssetType[] = ["image", "video", "audio", "text", "other"];
 const MOVE_THRESHOLD = 6;
 const PARALLEL_GAP = 12;
 const PLUS_RADIUS = 8;
+const PLUS_ARM = 3.5;
 
 export function GraphView({
 	assets,
 	edges,
-	selectedAssetId,
+	selectedAssetIds,
 	relationTypes,
 	onSelectAsset,
+	onBoxSelect,
 	onCreateRelation,
 	onRemoveRelation,
 }: GraphViewProps): React.JSX.Element {
@@ -80,12 +88,15 @@ export function GraphView({
 	const [linkTargetId, setLinkTargetId] = useState<string | null>(null);
 	const [hover, setHover] = useState<HoverState | null>(null);
 	const [pendingLink, setPendingLink] = useState<PendingLink | null>(null);
+	const linkDialogRef = useRef<HTMLDivElement>(null);
 	const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 	const [typeDraft, setTypeDraft] = useState("");
 	const [typeOpen, setTypeOpen] = useState(false);
 	const [typeError, setTypeError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
 	const [activeDrag, setActiveDrag] = useState<"move" | "link" | null>(null);
+	// The box being dragged, in world coordinates so scrolling the canvas mid-drag does not move its corners.
+	const [box, setBox] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
 
 	const visibleEdges = useMemo(() => {
 		const ids = new Set(assets.map((asset) => asset.assetId));
@@ -99,11 +110,10 @@ export function GraphView({
 		nodes,
 		pin,
 		unpin,
-		selectedAssetId,
 		onSelectAsset,
-		relationTypes,
+		onBoxSelect,
 	});
-	live.current = { nodes, pin, unpin, selectedAssetId, onSelectAsset, relationTypes };
+	live.current = { nodes, pin, unpin, onSelectAsset, onBoxSelect };
 	const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
 	const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.assetId, asset])), [assets]);
 	const parallelIndex = useMemo(() => indexParallelEdges(visibleEdges), [visibleEdges]);
@@ -138,13 +148,18 @@ export function GraphView({
 		if (!element) return;
 		const onWheel = (event: WheelEvent) => {
 			event.preventDefault();
+			// Two-finger drag / scroll pans. Pinch (reported as ctrl+wheel) and Ctrl/Cmd+wheel zoom.
+			if (!event.ctrlKey && !event.metaKey) {
+				setViewport((current) => ({ ...current, x: current.x - event.deltaX, y: current.y - event.deltaY }));
+				return;
+			}
 			const rect = element.getBoundingClientRect();
 			const mx = event.clientX - rect.left;
 			const my = event.clientY - rect.top;
 			setViewport((current) => {
 				const worldX = (mx - current.x) / current.scale;
 				const worldY = (my - current.y) / current.scale;
-				const scale = Math.min(4, Math.max(0.15, current.scale * (event.deltaY > 0 ? 0.9 : 1.1)));
+				const scale = Math.min(4, Math.max(0.15, current.scale * wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey)));
 				return { scale, x: mx - worldX * scale, y: my - worldY * scale };
 			});
 		};
@@ -185,8 +200,16 @@ export function GraphView({
 		);
 		const onMove = (event: PointerEvent) => {
 			const start = drag.current;
-			if (!start || start.kind === "pan") return;
+			if (!start) return;
 			const world = toWorld(event.clientX, event.clientY);
+			if (start.kind === "box") {
+				if (!start.started && Math.hypot(event.clientX - start.x, event.clientY - start.y) < MOVE_THRESHOLD) return;
+				const origin = toWorld(start.x, start.y);
+				start.started = true;
+				setHover(null);
+				setBox({ from: origin, to: world });
+				return;
+			}
 			if (start.kind === "move") {
 				if (!start.started && Math.hypot(event.clientX - start.x, event.clientY - start.y) < MOVE_THRESHOLD) {
 					return;
@@ -203,9 +226,18 @@ export function GraphView({
 		};
 		const onUp = (event: PointerEvent) => {
 			const start = drag.current;
-			if (!start || start.kind === "pan") return;
+			if (!start) return;
 			drag.current = null;
 			setActiveDrag(null);
+			if (start.kind === "box") {
+				setBox(null);
+				setSelectedEdgeId(null);
+				const ids = start.started
+					? nodesInRect(live.current.nodes, rectBetween(toWorld(start.x, start.y), toWorld(event.clientX, event.clientY)))
+					: [];
+				live.current.onBoxSelect(ids, start.add);
+				return;
+			}
 			if (start.kind === "move") {
 				if (start.started) live.current.unpin(start.id);
 				else {
@@ -220,7 +252,7 @@ export function GraphView({
 			setHover(null);
 			if (!targetId) return;
 			setPendingLink({ fromId: start.fromId, toId: targetId });
-			setTypeDraft(live.current.relationTypes[0] ?? "");
+			setTypeDraft("");
 			setTypeOpen(false);
 			setTypeError(null);
 		};
@@ -231,6 +263,18 @@ export function GraphView({
 			window.removeEventListener("pointerup", onUp);
 		};
 	}, []);
+
+	// A press anywhere outside the dialog dismisses it. Not while the relation is being saved, so an error is not lost.
+	useEffect(() => {
+		if (!pendingLink || saving) return;
+		const onPointerDown = (event: PointerEvent) => {
+			if (linkDialogRef.current?.contains(event.target as Node)) return;
+			setPendingLink(null);
+			setTypeError(null);
+		};
+		window.addEventListener("pointerdown", onPointerDown);
+		return () => window.removeEventListener("pointerdown", onPointerDown);
+	}, [pendingLink, saving]);
 
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
@@ -260,7 +304,7 @@ export function GraphView({
 	}
 
 	function radiusOf(id: string): number {
-		return id === selectedAssetId ? GRAPH_SELECTED_RADIUS : GRAPH_NODE_RADIUS;
+		return selectedAssetIds.has(id) ? GRAPH_SELECTED_RADIUS : GRAPH_NODE_RADIUS;
 	}
 
 	function hoverAt(world: { x: number; y: number }): HoverState | null {
@@ -321,7 +365,7 @@ export function GraphView({
 			<div className="graph-caption">
 				<span>
 					{assets.length} assets · {visibleEdges.length} relations
-					{" · drag a node to move · hover the rim for + to link · scroll to zoom · drag empty space to pan"}
+					{" · drag a node to move · hover the rim for + to link"}
 				</span>
 				{selectedEdge && (
 					<button
@@ -339,29 +383,13 @@ export function GraphView({
 				onPointerDown={(event) => {
 					if (event.button !== 0 || pendingLink) return;
 					window.getSelection()?.removeAllRanges();
-					drag.current = { kind: "pan", x: event.clientX, y: event.clientY, view: viewport };
+					// Empty canvas: a drag draws a selection box; a plain click only clears. Panning is the scroll wheel and trackpad.
+					const add = pointerMode(event, uiPlatform(navigator.userAgent) === "mac") !== "replace";
+					drag.current = { kind: "box", x: event.clientX, y: event.clientY, add, started: false };
 					event.currentTarget.setPointerCapture(event.pointerId);
 				}}
 				onPointerMove={(event) => {
-					const start = drag.current;
-					if (!start) {
-						setHover(hoverAt(screenToWorld(event.clientX, event.clientY)));
-						return;
-					}
-					if (start.kind !== "pan") return;
-					setViewport({
-						...start.view,
-						x: start.view.x + event.clientX - start.x,
-						y: start.view.y + event.clientY - start.y,
-					});
-				}}
-				onPointerUp={(event) => {
-					const start = drag.current;
-					if (start?.kind !== "pan") return;
-					drag.current = null;
-					if (Math.hypot(event.clientX - start.x, event.clientY - start.y) < MOVE_THRESHOLD) {
-						setSelectedEdgeId(null);
-					}
+					if (!drag.current) setHover(hoverAt(screenToWorld(event.clientX, event.clientY)));
 				}}
 			>
 				<svg className="graph-world" role="img" aria-label={t.graph.canvas}>
@@ -409,6 +437,15 @@ export function GraphView({
 								</g>
 							);
 						})}
+						{box && (
+							<rect
+								className="graph-box"
+								x={Math.min(box.from.x, box.to.x)}
+								y={Math.min(box.from.y, box.to.y)}
+								width={Math.abs(box.to.x - box.from.x)}
+								height={Math.abs(box.to.y - box.from.y)}
+							/>
+						)}
 						{previewFrom && previewEnd && (
 							<line
 								className={`graph-link-preview${previewTo ? " snapping" : ""}`}
@@ -421,7 +458,7 @@ export function GraphView({
 						{nodes.map((node) => {
 							const asset = assetsById.get(node.id);
 							if (!asset) return null;
-							const selected = node.id === selectedAssetId;
+							const selected = selectedAssetIds.has(node.id);
 							const radius = selected ? GRAPH_SELECTED_RADIUS : GRAPH_NODE_RADIUS;
 							const dropTarget = node.id === linkTargetId;
 							return (
@@ -458,7 +495,6 @@ export function GraphView({
 									}}
 								>
 									<title>{asset.filename}</title>
-									{dropTarget && <circle className="graph-drop-ring" r={radius + 10} />}
 									<circle r={radius} fill={TYPE_COLOR[asset.type]} />
 									<text className="graph-node-name" y={radius + 14} textAnchor="middle">
 										{truncate(asset.filename)}
@@ -483,7 +519,8 @@ export function GraphView({
 								}}
 							>
 								<circle r={PLUS_RADIUS} />
-								<text textAnchor="middle" dy="5">+</text>
+								{/* Two strokes, not a "+" glyph: a glyph sits at a different height in each font, a stroke is centred by geometry. */}
+								<path className="graph-plus-mark" d={`M${-PLUS_ARM} 0H${PLUS_ARM}M0 ${-PLUS_ARM}V${PLUS_ARM}`} />
 							</g>
 						)}
 					</g>
@@ -501,6 +538,7 @@ export function GraphView({
 			</div>
 			{pendingLink && (
 				<div
+					ref={linkDialogRef}
 					className="graph-type-dialog"
 					role="dialog"
 					aria-label={t.graph.createRelation}
