@@ -62,6 +62,7 @@
 | 键 | 值 |
 |---|---|
 | `volume_id` | 库根 `stat.dev` 的十进制字符串。打开库时用来判断是不是整库复制到了另一块盘。 |
+| `fts_format` | 写入 `assets_fts` 和 `chunks_fts` 时用的分词方式：分词版本加运行环境的 ICU 版本（例如 `1:icu74.2`）。打开库时不一致就重建这两张表。 |
 
 ---
 
@@ -166,14 +167,14 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 ## `assets_fts`
 
-`search_assets` 文本查询用的 FTS5 虚表。每个资产一行。不是事实来源。
+`search_assets` 文本查询用的 FTS5 虚表。每个资产一行。不是事实来源。`body` 写入前先分词（见 [SEARCH](./SEARCH.zh-CN.md)）：每段中文、日文、韩文用 `Intl.Segmenter` 切成词再用空格连起来，查询才能命中句子中间的词。英文和数字不变。
 
 | 列 | 含义 |
 |---|---|
 | `asset_id` | 资产 UUID。不建索引，用来把命中映回 `assets`。 |
 | `body` | 文件名、相对路径、属性值、已就绪的 Level 1 摘录，以及已就绪的 VLM 图/视频说明。 |
 
-分词是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上就整表重建；资产、属性、富化或 VLM 说明变更时刷新对应行。
+分词器是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上，或 `library_meta.fts_format` 与当前分词方式不一致，就整表重建；资产、属性、富化或 VLM 说明变更时刷新对应行。
 
 Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](./TEXT.zh-CN.md)。
 
@@ -275,6 +276,12 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 
 先插父再插子。重建时先删子、再删父、再写入。
 
+## `chunks_fts`
+
+深度检索全文路径用的 FTS5 虚表。每个文本非空的**子切片**一行，`rowid` 等于该切片在 `text_chunks` 里的 `rowid`。`body` 是按 `assets_fts` 同样方式分词后的切片正文。不是事实来源。
+
+触发器 `text_chunks_fts_delete` 在子切片被删除时删掉它的行，包括 `ON DELETE CASCADE`（资产被删）和重建索引，所以全文行不会比切片活得久。写入在 `replaceTextChunks` 里，与切片同一事务。打开时若行数和非空子切片数对不上，或 `fts_format` 不一致，就从 `text_chunks` 重建。
+
 ---
 
 ## DDL
@@ -365,6 +372,15 @@ CREATE TABLE IF NOT EXISTS text_chunks (
   )
 );
 CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+  body,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS text_chunks_fts_delete AFTER DELETE ON text_chunks
+WHEN old.role = 'child'
+BEGIN
+  DELETE FROM chunks_fts WHERE rowid = old.rowid;
+END;
 
 CREATE TABLE IF NOT EXISTS image_vlm (
   asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,

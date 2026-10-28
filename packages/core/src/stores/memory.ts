@@ -15,9 +15,10 @@ import type {
 	StoredTextChunk,
 	TextEmbedJob,
 } from "../model/text-embed.ts";
-import type { NearestChildHit } from "../model/hybrid.ts";
+import type { ChunkHit } from "../model/hybrid.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
-import { documentMatchesTokens, searchDocument, searchTokens } from "../retrieval/text.ts";
+import { searchDocument } from "../retrieval/text.ts";
+import { documentMatchesQuery } from "../retrieval/tokenize.ts";
 import type { AssetRelation } from "../model/relation.ts";
 import type { GraphStore, MetadataStore } from "./types.ts";
 
@@ -396,9 +397,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 	}
 
 	async searchAssetIds(query: string): Promise<string[]> {
-		const tokens = searchTokens(query);
-		if (tokens.length === 0) return [];
-		const matches: Array<{ assetId: string; hits: number; path: string }> = [];
+		const matches: Array<{ assetId: string; path: string }> = [];
 		for (const asset of this.assets.values()) {
 			const values = [...(this.assetProperties.get(asset.assetId)?.values() ?? [])].map((item) => item.value);
 			const document = searchDocument(
@@ -412,22 +411,17 @@ export class InMemoryMetadataStore implements MetadataStore {
 					this.audioWriteup.get(asset.assetId),
 				),
 			);
-			if (!documentMatchesTokens(document, tokens)) continue;
-			const haystack = document.toLowerCase();
-			matches.push({
-				assetId: asset.assetId,
-				hits: tokens.filter((token) => haystack.includes(token)).length,
-				path: asset.relativePath,
-			});
+			if (!documentMatchesQuery(document, query)) continue;
+			matches.push({ assetId: asset.assetId, path: asset.relativePath });
 		}
-		matches.sort((left, right) => right.hits - left.hits || left.path.localeCompare(right.path));
+		matches.sort((left, right) => left.path.localeCompare(right.path));
 		return matches.map((item) => item.assetId);
 	}
 
-	async searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]> {
+	async searchNearestChildren(vector: number[], limit: number): Promise<ChunkHit[]> {
 		const cap = Math.max(0, Math.trunc(limit));
 		if (cap === 0 || vector.length === 0) return [];
-		const hits: Array<NearestChildHit & { distance: number }> = [];
+		const hits: Array<ChunkHit & { distance: number }> = [];
 		for (const chunks of this.textChunks.values()) {
 			const byId = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
 			for (const chunk of chunks) {
@@ -445,6 +439,29 @@ export class InMemoryMetadataStore implements MetadataStore {
 		}
 		hits.sort((left, right) => left.distance - right.distance || left.chunkId.localeCompare(right.chunkId));
 		return hits.slice(0, cap).map(({ distance: _distance, ...hit }) => hit);
+	}
+
+	/** Same match as the SQLite index; there is no bm25 here, so hits come in a stable order. */
+	async searchChunksFts(query: string, limit: number): Promise<ChunkHit[]> {
+		const cap = Math.max(0, Math.trunc(limit));
+		if (cap === 0) return [];
+		const hits: ChunkHit[] = [];
+		for (const chunks of this.textChunks.values()) {
+			const byId = new Map(chunks.map((chunk) => [chunk.chunkId, chunk]));
+			for (const chunk of chunks) {
+				if (chunk.role !== "child" || !documentMatchesQuery(chunk.text, query)) continue;
+				const parent = chunk.parentId ? byId.get(chunk.parentId) : undefined;
+				hits.push({
+					chunkId: chunk.chunkId,
+					assetId: chunk.assetId,
+					parentId: chunk.parentId,
+					text: chunk.text,
+					parentText: parent?.text,
+				});
+			}
+		}
+		hits.sort((left, right) => left.chunkId.localeCompare(right.chunkId));
+		return hits.slice(0, cap);
 	}
 
 	private hasValuesForProperty(propertyId: string): boolean {

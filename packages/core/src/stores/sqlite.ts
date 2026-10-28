@@ -9,7 +9,7 @@ import type { AssetEnrichment, EnrichmentData, EnrichmentStatus } from "../model
 import type { ImageVlmJobStatus, ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmJobStatus, VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupJobStatus, AudioWriteupRecord } from "../model/audio-writeup.ts";
-import type { NearestChildHit } from "../model/hybrid.ts";
+import type { ChunkHit } from "../model/hybrid.ts";
 import { unpackAsarPath } from "../packaged-path.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
 import type {
@@ -26,7 +26,8 @@ import {
 	type PropertyType,
 } from "../model/property.ts";
 import type { LibraryPaths } from "../library/paths.ts";
-import { compileFtsQuery, searchDocument } from "../retrieval/text.ts";
+import { searchDocument } from "../retrieval/text.ts";
+import { compileFtsQuery, ftsFormat, segmentForIndex } from "../retrieval/tokenize.ts";
 import type { MetadataStore } from "./types.ts";
 
 interface AssetRow {
@@ -59,6 +60,8 @@ interface AssetPropertyRow {
 }
 
 const VOLUME_ID_KEY = "volume_id";
+/** `library_meta` key holding the tokenizing the FTS tables were built with. */
+const FTS_FORMAT_KEY = "fts_format";
 const requireSqlite = createRequire(import.meta.url);
 
 export class SqliteMetadataStore implements MetadataStore {
@@ -477,8 +480,14 @@ export class SqliteMetadataStore implements MetadataStore {
 					@chunkId, @assetId, @parentId, @role, @startOffset, @endOffset, @text, @tokenCount, @embedding, @modelId
 				)
 			`);
+			// Deleting a child fires a trigger that drops its full-text row; writing one is done here
+			// because the text is segmented in JavaScript. The row id ties the two tables together.
+			const indexChild = database.prepare("INSERT INTO chunks_fts (rowid, body) VALUES (?, ?)");
 			for (const chunk of values.filter((value) => value.role === "parent")) insert.run(toChunkParams(chunk));
-			for (const chunk of values.filter((value) => value.role === "child")) insert.run(toChunkParams(chunk));
+			for (const chunk of values.filter((value) => value.role === "child")) {
+				const { lastInsertRowid } = insert.run(toChunkParams(chunk));
+				if (chunk.text.trim().length > 0) indexChild.run(lastInsertRowid, segmentForIndex(chunk.text));
+			}
 		});
 		replace(chunks);
 	}
@@ -601,7 +610,40 @@ export class SqliteMetadataStore implements MetadataStore {
 		return rows.map((row) => row.asset_id);
 	}
 
-	async searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]> {
+	async searchChunksFts(query: string, limit: number): Promise<ChunkHit[]> {
+		const match = compileFtsQuery(query);
+		const cap = Math.max(0, Math.trunc(limit));
+		if (!match || cap === 0) return [];
+		const rows = this.requireDatabase().prepare(`
+			SELECT
+				c.chunk_id AS chunkId,
+				c.asset_id AS assetId,
+				c.parent_id AS parentId,
+				c.text AS text,
+				p.text AS parentText
+			FROM chunks_fts
+			JOIN text_chunks c ON c.rowid = chunks_fts.rowid
+			LEFT JOIN text_chunks p ON p.chunk_id = c.parent_id
+			WHERE chunks_fts MATCH ?
+			ORDER BY chunks_fts.rank
+			LIMIT ?
+		`).all(match, cap) as Array<{
+			chunkId: string;
+			assetId: string;
+			parentId: string | null;
+			text: string;
+			parentText: string | null;
+		}>;
+		return rows.map((row) => ({
+			chunkId: row.chunkId,
+			assetId: row.assetId,
+			parentId: row.parentId,
+			text: row.text,
+			parentText: row.parentText ?? undefined,
+		}));
+	}
+
+	async searchNearestChildren(vector: number[], limit: number): Promise<ChunkHit[]> {
 		const cap = Math.max(0, Math.trunc(limit));
 		if (cap === 0 || vector.length === 0) return [];
 		if (this.vecLoaded) {
@@ -614,7 +656,7 @@ export class SqliteMetadataStore implements MetadataStore {
 		return this.searchNearestInJs(vector, cap);
 	}
 
-	private searchNearestWithVec(vector: number[], limit: number): NearestChildHit[] {
+	private searchNearestWithVec(vector: number[], limit: number): ChunkHit[] {
 		const query = Buffer.from(new Float32Array(vector).buffer);
 		const byteLength = vector.length * 4;
 		const rows = this.requireDatabase().prepare(`
@@ -649,7 +691,7 @@ export class SqliteMetadataStore implements MetadataStore {
 		}));
 	}
 
-	private searchNearestInJs(vector: number[], limit: number): NearestChildHit[] {
+	private searchNearestInJs(vector: number[], limit: number): ChunkHit[] {
 		const rows = this.requireDatabase().prepare(`
 			SELECT
 				c.chunk_id AS chunkId,
@@ -782,6 +824,17 @@ export class SqliteMetadataStore implements MetadataStore {
 				)
 			);
 			CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
+			-- One row per child chunk; its rowid is the chunk's rowid in text_chunks.
+			CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+				body,
+				tokenize = 'unicode61 remove_diacritics 2'
+			);
+			-- A cascading delete (asset removed, chunks replaced) fires this, so no full-text row is left behind.
+			CREATE TRIGGER IF NOT EXISTS text_chunks_fts_delete AFTER DELETE ON text_chunks
+			WHEN old.role = 'child'
+			BEGIN
+				DELETE FROM chunks_fts WHERE rowid = old.rowid;
+			END;
 			CREATE TABLE IF NOT EXISTS image_vlm (
 				asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,
 				status TEXT NOT NULL CHECK(status IN ('describing', 'ready', 'failed')),
@@ -812,18 +865,47 @@ export class SqliteMetadataStore implements MetadataStore {
 		`);
 	}
 
+	/**
+	 * Rebuild a full-text table that is missing rows, or all of them when they were written under
+	 * a different tokenizing (see `ftsFormat`). Counts alone cannot tell a re-tokenized index apart.
+	 */
 	private rebuildFtsIfStale(): void {
 		const database = this.requireDatabase();
-		const assets = database.prepare("SELECT COUNT(*) AS count FROM assets").get() as { count: number };
-		const indexed = database.prepare("SELECT COUNT(*) AS count FROM assets_fts").get() as { count: number };
-		if (assets.count !== indexed.count) this.rebuildFts();
+		const count = (sql: string) => (database.prepare(sql).get() as { count: number }).count;
+		const stored = (database.prepare("SELECT value FROM library_meta WHERE key = ?").get(FTS_FORMAT_KEY) as { value: string } | undefined)?.value;
+		const outdated = stored !== ftsFormat();
+		if (outdated || count("SELECT COUNT(*) AS count FROM assets") !== count("SELECT COUNT(*) AS count FROM assets_fts")) {
+			this.rebuildFts();
+		}
+		const children = count("SELECT COUNT(*) AS count FROM text_chunks WHERE role = 'child' AND trim(text) != ''");
+		if (outdated || children !== count("SELECT COUNT(*) AS count FROM chunks_fts")) this.rebuildChunksFts();
+		if (outdated) {
+			database
+				.prepare("INSERT INTO library_meta (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value")
+				.run(FTS_FORMAT_KEY, ftsFormat());
+		}
 	}
 
 	private rebuildFts(): void {
 		const database = this.requireDatabase();
-		database.exec("DELETE FROM assets_fts");
-		const ids = database.prepare("SELECT asset_id FROM assets").all() as Array<{ asset_id: string }>;
-		for (const { asset_id: assetId } of ids) this.refreshFts(database, assetId);
+		database.transaction(() => {
+			database.exec("DELETE FROM assets_fts");
+			const ids = database.prepare("SELECT asset_id FROM assets").all() as Array<{ asset_id: string }>;
+			for (const { asset_id: assetId } of ids) this.refreshFts(database, assetId);
+		})();
+	}
+
+	private rebuildChunksFts(): void {
+		const database = this.requireDatabase();
+		database.transaction(() => {
+			database.exec("DELETE FROM chunks_fts");
+			const insert = database.prepare("INSERT INTO chunks_fts (rowid, body) VALUES (?, ?)");
+			// Read everything first: a connection cannot write while a query is still iterating.
+			const rows = database
+				.prepare("SELECT rowid AS id, text FROM text_chunks WHERE role = 'child' AND trim(text) != ''")
+				.all() as Array<{ id: number; text: string }>;
+			for (const row of rows) insert.run(row.id, segmentForIndex(row.text));
+		})();
 	}
 
 	private refreshFts(database: Database.Database, assetId: string): void {
@@ -850,13 +932,13 @@ export class SqliteMetadataStore implements MetadataStore {
 			.get(assetId) as { status: AudioWriteupJobStatus; markdown: string | null } | undefined;
 		database.prepare("INSERT INTO assets_fts (asset_id, body) VALUES (?, ?)").run(
 			assetId,
-			searchDocument(
+			segmentForIndex(searchDocument(
 				asset.filename,
 				asset.relative_path,
 				values,
 				enrichmentRow ? toEnrichment(enrichmentRow) : undefined,
 				readyMarkdown(vlmRow) ?? readyMarkdown(videoRow) ?? readyMarkdown(audioRow),
-			),
+			)),
 		);
 	}
 

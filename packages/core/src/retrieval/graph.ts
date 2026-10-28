@@ -1,5 +1,5 @@
 import type { Asset } from "../model/asset.ts";
-import type { NearestChildHit } from "../model/hybrid.ts";
+import type { ChunkHit } from "../model/hybrid.ts";
 import { toSearchItem, type AssetPropertyView, type AssetSearchItem, type SearchLink } from "../model/retrieval.ts";
 import type { AssetRelation } from "../model/relation.ts";
 
@@ -21,7 +21,7 @@ export function expandSearchCandidates(
 	relations: readonly AssetRelation[],
 	assetsById: ReadonlyMap<string, Asset>,
 	propertiesByAsset: ReadonlyMap<string, readonly AssetPropertyView[]>,
-	passages: ReadonlyMap<string, NearestChildHit>,
+	passages: ReadonlyMap<string, ChunkHit>,
 ): AssetSearchItem[] {
 	if (seeds.length === 0 || relations.length === 0) return [...seeds];
 	const touches = indexTouches(relations);

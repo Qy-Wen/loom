@@ -62,6 +62,7 @@ Current key:
 | Key | Value |
 |---|---|
 | `volume_id` | Decimal string of the library root `stat.dev`. Compared on open to detect a copied library. |
+| `fts_format` | How text was tokenized when `assets_fts` and `chunks_fts` were written: tokenizer version plus the runtime's ICU version (for example `1:icu74.2`). A mismatch on open rebuilds both tables. |
 
 ---
 
@@ -166,14 +167,14 @@ Deleting an asset deletes its enrichment row.
 
 ## `assets_fts`
 
-FTS5 virtual table for `search_assets` text queries. One row per asset. Not a source of truth.
+FTS5 virtual table for `search_assets` text queries. One row per asset. Not a source of truth. `body` is segmented before it is written (see [SEARCH](./SEARCH.md)): each run of Chinese, Japanese, or Korean text is cut into words with `Intl.Segmenter` and joined with spaces, so a query can match a word in the middle of a sentence. English and digits are unchanged.
 
 | Column | Meaning |
 |---|---|
 | `asset_id` | Asset UUID. Unindexed; used to map hits back to `assets`. |
 | `body` | Filename, relative path, property values, ready Level 1 extracts, and a ready VLM image or video write-up. |
 
-The store rebuilds the table on open when its row count differs from `assets`, and refreshes one row when that asset, its properties, its enrichment, or its VLM write-up change.
+The store rebuilds the table on open when its row count differs from `assets` or `library_meta.fts_format` differs from the current tokenizing, and refreshes one row when that asset, its properties, its enrichment, or its VLM write-up change.
 
 Level 2 text RAG chunks live in `text_chunks` and `text_embed_jobs`, not in `asset_metadata`. See [TEXT](./TEXT.md).
 
@@ -275,6 +276,12 @@ Index: `text_chunks_asset_idx` on `asset_id`. Hybrid Search reads child embeddin
 
 Parents are inserted first, then children. Replacing an index deletes children, then parents, then writes the new rows.
 
+## `chunks_fts`
+
+FTS5 virtual table for deep search's full-text path. One row per **child** chunk with non-empty text; its `rowid` equals that chunk's `rowid` in `text_chunks`. `body` is the chunk text segmented the same way as `assets_fts`. Not a source of truth.
+
+The `text_chunks_fts_delete` trigger removes a child's row whenever the child is deleted, including by `ON DELETE CASCADE` (asset removed) and by replacing an index, so no full-text row outlives its chunk. Rows are written in `replaceTextChunks`, in the same transaction as the chunks. On open the table is rebuilt from `text_chunks` when its row count differs from the number of non-empty child chunks or `fts_format` differs.
+
 ---
 
 ## DDL
@@ -365,6 +372,15 @@ CREATE TABLE IF NOT EXISTS text_chunks (
   )
 );
 CREATE INDEX IF NOT EXISTS text_chunks_asset_idx ON text_chunks(asset_id);
+CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
+  body,
+  tokenize = 'unicode61 remove_diacritics 2'
+);
+CREATE TRIGGER IF NOT EXISTS text_chunks_fts_delete AFTER DELETE ON text_chunks
+WHEN old.role = 'child'
+BEGIN
+  DELETE FROM chunks_fts WHERE rowid = old.rowid;
+END;
 
 CREATE TABLE IF NOT EXISTS image_vlm (
   asset_id TEXT PRIMARY KEY REFERENCES assets(asset_id) ON DELETE CASCADE,

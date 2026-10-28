@@ -10,7 +10,7 @@ import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 import type { AssetRelation } from "./model/relation.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
-import type { NearestChildHit } from "./model/hybrid.ts";
+import type { ChunkHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
 import type { RerankProvider } from "./model/rerank.ts";
 import type { ImageVlmProvider, ImageVlmStatus } from "./model/image-vlm.ts";
@@ -319,7 +319,7 @@ export class LocalCore {
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
 			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve([] as string[]),
-			textQuery ? this.nearestChildrenForQuery(textQuery, provider, signal) : Promise.resolve([] as NearestChildHit[]),
+			textQuery ? this.nearestChildrenForQuery(textQuery, provider, signal) : Promise.resolve([] as ChunkHit[]),
 		]);
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
@@ -357,7 +357,7 @@ export class LocalCore {
 
 		const ftsRanked = uniqueInOrder(ftsIds.filter(passes)).slice(0, HYBRID_CANDIDATES);
 		const vecRanked: string[] = [];
-		const bestChild = new Map<string, NearestChildHit>();
+		const bestChild = new Map<string, ChunkHit>();
 		for (const hit of nearest) {
 			if (!passes(hit.assetId) || bestChild.has(hit.assetId)) continue;
 			bestChild.set(hit.assetId, hit);
@@ -411,7 +411,7 @@ export class LocalCore {
 		text: string,
 		provider?: EmbeddingProvider,
 		signal?: AbortSignal,
-	): Promise<NearestChildHit[]> {
+	): Promise<ChunkHit[]> {
 		if (!provider) return [];
 		try {
 			const [vector] = await abortableProviderCall(() => provider.embed([text], signal), signal);

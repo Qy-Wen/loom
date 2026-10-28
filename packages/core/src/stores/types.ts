@@ -7,7 +7,7 @@ import type { LibraryPaths } from "../library/paths.ts";
 import type { ImageVlmRecord } from "../model/image-vlm.ts";
 import type { VideoVlmRecord } from "../model/video-vlm.ts";
 import type { AudioWriteupRecord } from "../model/audio-writeup.ts";
-import type { NearestChildHit } from "../model/hybrid.ts";
+import type { ChunkHit } from "../model/hybrid.ts";
 import type {
 	StoredTextChunk,
 	TextEmbedJob,
@@ -61,7 +61,9 @@ export interface MetadataStore {
 	getAudioWriteup(assetId: string): Promise<AudioWriteupRecord | undefined>;
 	upsertAudioWriteup(record: AudioWriteupRecord): Promise<void>;
 	searchAssetIds(query: string): Promise<string[]>;
-	searchNearestChildren(vector: number[], limit: number): Promise<NearestChildHit[]>;
+	searchNearestChildren(vector: number[], limit: number): Promise<ChunkHit[]>;
+	/** Full-text search over child chunks, best match first. */
+	searchChunksFts(query: string, limit: number): Promise<ChunkHit[]>;
 }
 
 /** Ladybug table for every edge. Not a user-facing type. */

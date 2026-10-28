@@ -6,7 +6,8 @@ import { test } from "node:test";
 import { LocalCore } from "../src/index.ts";
 import { ENRICHMENT_VERSION } from "../src/model/enrichment.ts";
 import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
-import { compileFtsQuery, searchableEnrichmentTexts } from "../src/retrieval/text.ts";
+import { searchableEnrichmentTexts } from "../src/retrieval/text.ts";
+import { compileFtsQuery } from "../src/retrieval/tokenize.ts";
 
 test("LocalCore searches and inspects assets without exposing absolute paths", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-retrieval-"));

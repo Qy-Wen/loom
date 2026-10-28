@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LocalCore } from "../src/index.ts";
 import type { Asset, AssetType } from "../src/model/asset.ts";
-import type { NearestChildHit } from "../src/model/hybrid.ts";
+import type { ChunkHit } from "../src/model/hybrid.ts";
 import { toSearchItem, type AssetSearchItem } from "../src/model/retrieval.ts";
 import { expandSearchCandidates, SEARCH_NEIGHBORS_PER_SEED } from "../src/retrieval/graph.ts";
 import type { AssetRelation } from "../src/index.ts";
@@ -28,7 +28,7 @@ test("expandSearchCandidates walks one hop and keeps the list unique", () => {
 	const frame = asset("frame", "frame.jpg");
 	const still = asset("still", "still.jpg");
 	const assetsById = new Map([clip, frame, still].map((item) => [item.assetId, item]));
-	const passages = new Map<string, NearestChildHit>([
+	const passages = new Map<string, ChunkHit>([
 		["frame", { chunkId: "c1", assetId: "frame", parentId: "p1", text: "a dock", parentText: "parent dock" }],
 	]);
 	const expanded = expandSearchCandidates(

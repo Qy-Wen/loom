@@ -140,7 +140,7 @@ None.
 - A JSON file over 1 MiB fails to parse after the cut, falls back to plain text, and is not flattened to `path: value`.
 - Verified: the SQLite bundled in better-sqlite3 is 3.53.4 and has FTS5 `bm25` and `snippet`; a cascading delete fires an `AFTER DELETE` trigger.
 - Measured: size and recall of the Chinese tokenizing, in "Consequences of the Chinese tokenizing"; `Intl.Segmenter` in Electron 38 and Node 26 cuts six sample sentences identically.
-- Not measured: how long rebuilding `assets_fts` and backfilling chunk full-text take on a large library. The rebuild runs on open, so a slow one slows opening; if needed, run it in the background and keep the old table until it finishes.
+- Measured (this machine, synthetic data): a library of 2,062 files and 22,682 child chunks takes about 1.4 s to rebuild both full-text tables on the first open after the upgrade, then about 50 ms to open normally; chunk full-text is 19 MB and file-level 3 MB. The rebuild runs on open, so a library ten times larger may take over ten seconds; if needed, run it in the background and keep the old table until it finishes.
 - Not verified: how segmenting Chinese filenames and paths changes the ranking of existing searches; how well Japanese and Korean segment; the corpus was one technical, mixed Chinese and English set, so literature, news, and chat logs may differ.
 
 ## Commit order
