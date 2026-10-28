@@ -104,4 +104,42 @@ test("dragging on empty graph canvas box-selects files and the file tree follows
 	await loomPage.mouse.move(area.x + area.width / 2, area.y + area.height / 2);
 	await loomPage.mouse.wheel(40, 30);
 	await expect.poll(() => canvas.locator(".graph-world > g").first().getAttribute("transform")).not.toBe(before);
+
+	// Middle-drag pans in screen pixels from both empty canvas and a node, preserving selection.
+	const world = canvas.locator(".graph-world > g").first();
+	const viewport = () => world.evaluate((element) => {
+		const matrix = (element as SVGGraphicsElement).transform.baseVal.consolidate()!.matrix;
+		return { x: matrix.e, y: matrix.f, scale: matrix.a };
+	});
+	for (const onNode of [false, true]) {
+		const origin = onNode ? (await centres())[0] : left;
+		const initial = await viewport();
+		await loomPage.mouse.move(origin.x, origin.y);
+		await loomPage.mouse.down({ button: "middle" });
+		await expect(canvas).toHaveClass(/panning/);
+		await loomPage.mouse.move(origin.x + 40, origin.y + 30, { steps: 4 });
+		await expect.poll(async () => (await viewport()).x).toBeCloseTo(initial.x + 40, 3);
+		await expect.poll(async () => (await viewport()).y).toBeCloseTo(initial.y + 30, 3);
+		expect((await viewport()).scale).toBe(initial.scale);
+		await expect(loomPage.locator(".graph-box")).toHaveCount(0);
+		await loomPage.mouse.up({ button: "middle" });
+		await expect(canvas).not.toHaveClass(/panning/);
+		await expect(selectedRows).toHaveCount(2);
+		const released = await viewport();
+		await loomPage.mouse.move(origin.x, origin.y);
+		expect(await viewport()).toEqual(released);
+	}
+
+	// Pointer capture keeps a middle-drag working beyond the canvas boundary.
+	const initial = await viewport();
+	await loomPage.mouse.move(left.x, left.y);
+	await loomPage.mouse.down({ button: "middle" });
+	await loomPage.mouse.move(left.x, area.y - 5, { steps: 4 });
+	await loomPage.mouse.up({ button: "middle" });
+	await expect(canvas).not.toHaveClass(/panning/);
+	await expect.poll(async () => (await viewport()).y).toBeCloseTo(initial.y - 13, 3);
+	const after = await viewport();
+	expect(after.x).toBe(initial.x);
+	expect(after.scale).toBe(initial.scale);
+	await expect(selectedRows).toHaveCount(2);
 });

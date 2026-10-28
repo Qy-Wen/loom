@@ -74,6 +74,11 @@
 	cursor: grabbing;
 }
 
+.graph-canvas.panning,
+.graph-canvas.panning * {
+	cursor: grabbing;
+}
+
 .graph-world {
 	display: block;
 	width: 100%;

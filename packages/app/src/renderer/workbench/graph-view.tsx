@@ -48,6 +48,7 @@ interface HoverState {
 }
 
 type PointerDrag =
+	| { kind: "pan"; x: number; y: number; pointerId: number }
 	| { kind: "box"; x: number; y: number; add: boolean; started: boolean }
 	| { kind: "move"; id: string; x: number; y: number; started: boolean }
 	| { kind: "link"; fromId: string };
@@ -94,7 +95,7 @@ export function GraphView({
 	const [typeOpen, setTypeOpen] = useState(false);
 	const [typeError, setTypeError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
-	const [activeDrag, setActiveDrag] = useState<"move" | "link" | null>(null);
+	const [activeDrag, setActiveDrag] = useState<"pan" | "move" | "link" | null>(null);
 	// The box being dragged, in world coordinates so scrolling the canvas mid-drag does not move its corners.
 	const [box, setBox] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
 
@@ -146,6 +147,7 @@ export function GraphView({
 	useEffect(() => {
 		const element = canvasRef.current;
 		if (!element) return;
+		const platform = uiPlatform(navigator.userAgent);
 		const onWheel = (event: WheelEvent) => {
 			event.preventDefault();
 			// Two-finger drag / scroll pans. Pinch (reported as ctrl+wheel) and Ctrl/Cmd+wheel zoom.
@@ -159,7 +161,7 @@ export function GraphView({
 			setViewport((current) => {
 				const worldX = (mx - current.x) / current.scale;
 				const worldY = (my - current.y) / current.scale;
-				const scale = Math.min(4, Math.max(0.15, current.scale * wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey)));
+				const scale = Math.min(4, Math.max(0.15, current.scale * wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey, platform)));
 				return { scale, x: mx - worldX * scale, y: my - worldY * scale };
 			});
 		};
@@ -201,6 +203,15 @@ export function GraphView({
 		const onMove = (event: PointerEvent) => {
 			const start = drag.current;
 			if (!start) return;
+			if (start.kind === "pan") {
+				if (event.pointerId !== start.pointerId) return;
+				const dx = event.clientX - start.x;
+				const dy = event.clientY - start.y;
+				start.x = event.clientX;
+				start.y = event.clientY;
+				setViewport((current) => ({ ...current, x: current.x + dx, y: current.y + dy }));
+				return;
+			}
 			const world = toWorld(event.clientX, event.clientY);
 			if (start.kind === "box") {
 				if (!start.started && Math.hypot(event.clientX - start.x, event.clientY - start.y) < MOVE_THRESHOLD) return;
@@ -227,8 +238,10 @@ export function GraphView({
 		const onUp = (event: PointerEvent) => {
 			const start = drag.current;
 			if (!start) return;
+			if (start.kind === "pan" && (event.pointerId !== start.pointerId || event.button !== 1)) return;
 			drag.current = null;
 			setActiveDrag(null);
+			if (start.kind === "pan") return;
 			if (start.kind === "box") {
 				setBox(null);
 				setSelectedEdgeId(null);
@@ -256,11 +269,24 @@ export function GraphView({
 			setTypeOpen(false);
 			setTypeError(null);
 		};
+		const onCancel = () => {
+			const start = drag.current;
+			drag.current = null;
+			setActiveDrag(null);
+			setBox(null);
+			setLinkPreview(null);
+			setLinkTargetId(null);
+			if (start?.kind === "move" && start.started) live.current.unpin(start.id);
+		};
 		window.addEventListener("pointermove", onMove);
 		window.addEventListener("pointerup", onUp);
+		window.addEventListener("pointercancel", onCancel);
+		window.addEventListener("blur", onCancel);
 		return () => {
 			window.removeEventListener("pointermove", onMove);
 			window.removeEventListener("pointerup", onUp);
+			window.removeEventListener("pointercancel", onCancel);
+			window.removeEventListener("blur", onCancel);
 		};
 	}, []);
 
@@ -347,6 +373,7 @@ export function GraphView({
 	const selectedEdge = visibleEdges.find((edge) => edge.relationId === selectedEdgeId);
 	const linking = activeDrag === "link";
 	const moving = activeDrag === "move";
+	const panning = activeDrag === "pan";
 	const plusNode = !linking && !moving && hover?.zone === "rim" ? byId.get(hover.id) : undefined;
 	const plusPos = plusNode && hover
 		? {
@@ -379,11 +406,21 @@ export function GraphView({
 			</div>
 			<div
 				ref={canvasRef}
-				className={`graph-canvas${linking ? " linking" : ""}${moving ? " moving" : ""}`}
+				className={`graph-canvas${linking ? " linking" : ""}${moving ? " moving" : ""}${panning ? " panning" : ""}`}
+				onPointerDownCapture={(event) => {
+					if (event.button !== 1 || pendingLink || drag.current) return;
+					event.preventDefault();
+					event.stopPropagation();
+					drag.current = { kind: "pan", x: event.clientX, y: event.clientY, pointerId: event.pointerId };
+					setActiveDrag("pan");
+					setHover(null);
+					event.currentTarget.setPointerCapture(event.pointerId);
+				}}
+				onAuxClick={(event) => { if (event.button === 1) event.preventDefault(); }}
 				onPointerDown={(event) => {
 					if (event.button !== 0 || pendingLink) return;
 					window.getSelection()?.removeAllRanges();
-					// Empty canvas: a drag draws a selection box; a plain click only clears. Panning is the scroll wheel and trackpad.
+					// Left-drag on empty canvas selects; middle-drag and scrolling pan.
 					const add = pointerMode(event, uiPlatform(navigator.userAgent) === "mac") !== "replace";
 					drag.current = { kind: "box", x: event.clientX, y: event.clientY, add, started: false };
 					event.currentTarget.setPointerCapture(event.pointerId);

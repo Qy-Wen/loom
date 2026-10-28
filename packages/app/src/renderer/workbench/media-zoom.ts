@@ -1,3 +1,5 @@
+import type { UiPlatform } from "../../shared/locale.ts";
+
 export type MediaSize = {
 	width: number;
 	height: number;
@@ -117,13 +119,15 @@ export function toggleMediaZoom(
 	return zoomMediaAt(view, cursor, 2, viewport, media, maxScale);
 }
 
-/** Wheel up (negative deltaY) zooms in. Line and page deltas are converted to pixels; pinch is amplified. */
-export function wheelZoomFactor(deltaY: number, deltaMode = 0, pinch = false): number {
+/** Wheel up zooms in. Bound Windows wheel steps without changing the macOS response. */
+export function wheelZoomFactor(deltaY: number, deltaMode = 0, ctrlKey = false, platform: UiPlatform = "other"): number {
 	if (!Number.isFinite(deltaY) || deltaY === 0) return 1;
 	const pixels = deltaMode === 1 ? deltaY * 16 : deltaMode === 2 ? deltaY * 800 : deltaY;
 	const delta = Math.max(-400, Math.min(400, pixels));
-	// Trackpad pinch arrives as ctrl+wheel with much smaller deltas than a mouse tick.
-	return Math.exp((-delta * (pinch ? 4 : 1)) / 225);
+	// Pinch uses Ctrl+wheel with small deltas, but a physical Ctrl+wheel also takes this path.
+	const exponent = (-delta * (ctrlKey ? 4 : 1)) / 225;
+	const limit = Math.log(1.1);
+	return Math.exp(platform === "windows" ? Math.max(-limit, Math.min(limit, exponent)) : exponent);
 }
 
 /** Pan in screen pixels, then scale around the center of the fitted frame. */

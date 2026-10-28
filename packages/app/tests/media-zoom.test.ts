@@ -79,6 +79,42 @@ describe("media zoom", () => {
 		assert.ok(wheelZoomFactor(-3, 1) > wheelZoomFactor(-3, 0));
 	});
 
+	it("bounds Windows mouse and Ctrl+wheel zoom steps in every delta mode", () => {
+		for (const [delta, mode] of [[100, 0], [120, 0], [3, 1], [1, 2], [10000, 0]]) {
+			for (const ctrlKey of [false, true]) {
+				const zoomIn = wheelZoomFactor(-delta, mode, ctrlKey, "windows");
+				const zoomOut = wheelZoomFactor(delta, mode, ctrlKey, "windows");
+				assert.ok(zoomIn > 1 && zoomIn <= 1.1);
+				assert.ok(zoomOut < 1 && zoomOut >= 1 / 1.1);
+				close(zoomIn * zoomOut, 1);
+			}
+		}
+	});
+
+	it("preserves small Windows scroll and pinch deltas", () => {
+		for (const delta of [-1, -0.1, 0.1, 1]) {
+			for (const ctrlKey of [false, true]) {
+				close(wheelZoomFactor(delta, 0, ctrlKey, "windows"), wheelZoomFactor(delta, 0, ctrlKey, "mac"));
+			}
+		}
+	});
+
+	it("preserves the macOS scroll and pinch response", () => {
+		for (const ctrlKey of [false, true]) {
+			for (const [delta, mode, pixels] of [[3, 0, 3], [-100, 0, -100], [-3, 1, -48], [1, 2, 400]]) {
+				close(wheelZoomFactor(delta, mode, ctrlKey, "mac"), Math.exp((-pixels * (ctrlKey ? 4 : 1)) / 225));
+			}
+		}
+	});
+
+	it("ignores zero and invalid wheel deltas on either platform", () => {
+		for (const platform of ["windows", "mac"] as const) {
+			for (const delta of [0, NaN, Infinity, -Infinity]) {
+				assert.equal(wheelZoomFactor(delta, 0, true, platform), 1);
+			}
+		}
+	});
+
 	it("toggles between the fitted view and a 2× zoom", () => {
 		const zoomed = toggleMediaZoom(FIT_MEDIA_VIEW, { x: 0, y: 0 }, { width: 400, height: 300 }, { width: 200, height: 150 });
 		close(zoomed.scale, 2);

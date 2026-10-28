@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useLocale } from "../locale.tsx";
+import { uiPlatform } from "../../shared/locale.ts";
 import {
 	FIT_MEDIA_VIEW,
 	MAX_MEDIA_SCALE,
@@ -141,6 +142,7 @@ export function MediaViewport({
 		const frame = frameRef.current;
 		const viewport = viewportRef.current;
 		if (!frame || !viewport) return;
+		const platform = uiPlatform(navigator.userAgent);
 		const onWheel = (event: WheelEvent) => {
 			if (event.deltaY === 0) return;
 			if (event.target instanceof Element && event.target.closest("[data-zoom-ui]")) return;
@@ -151,7 +153,7 @@ export function MediaViewport({
 			const next = zoomMediaAt(
 				viewRef.current,
 				cursor,
-				wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey),
+				wheelZoomFactor(event.deltaY, event.deltaMode, event.ctrlKey, platform),
 				{ width: rect.width, height: rect.height },
 				fitRef.current,
 				maxRef.current,
