@@ -84,7 +84,7 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 
 - 落在应用用户数据目录，不进 `<library>/.loom/`。拷贝素材库时不能把 API key 一起拷走。
 - 上次打开的素材库路径记在应用用户数据 `last-library.json`。通用设置允许时，启动会在目录还在的情况下自动打开；目录没了就保持空库，路径仍留下（移动硬盘拔掉再插回来还能认）。E2E 用独立 userData，不会打开本机上次的库。
-- 密钥留在应用用户数据，不进素材库。每个非 Chat 槽位提供 API 密钥按钮，点击弹出预填已有密钥的掩码输入框，小眼睛切换明文；确认即可保存，不再需要设置页统一保存。取消/Escape 丢弃弹窗改动，确认空值可清除密钥。存储方式不变，这四个槽位的系统钥匙串存储仍待后续处理。
+- 密钥留在应用用户数据，不进素材库。每个非 Chat 槽位提供 API 密钥按钮，点击弹出预填已有密钥的掩码输入框，小眼睛切换明文；确认即可保存，不再需要设置页统一保存。取消/Escape 丢弃弹窗改动，确认空值可清除密钥。密钥用系统加密（`safeStorage`：macOS 钥匙串、Windows DPAPI），以 `apiKeyEncrypted` 存在 `model-settings.json`，不会写出明文 `apiKey`。此前写成明文的文件照常读取，并在启动时重写为密文。加密不可用时拒绝保存密钥（其他设置照常保存），已有的明文密钥原样保留、不会丢。无法解密的密钥（例如文件拷自另一台电脑或另一个账户）会被丢弃并记一行日志，该槽位显示为未设置，需要重新输入。
 
 ---
 
@@ -100,4 +100,4 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。
 - `get_settings` 和 `update_settings` 可读取并修改界面语言、Chat 服务商/模型、其他四个模型槽位、MCP、沙箱与常驻说明。读取不返回密钥、秘密 headers/env。Basic 和 Standard 写入前需确认，界面自动同步；常驻说明从下一条消息生效。启动偏好、权限、统计、OAuth 登录及会话模型/Thinking 选择不纳入这些工具。见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。
 - 语言使用 `language: "system" | "en" | "zh-CN"`。Chat 使用 `chat.upsert` / `chat.remove` 和服务商 ID，可选 `chat.refresh`。`get_settings({chatProvider: "openai"})` 返回该服务商的模型目录。自定义服务商提供 `kind: "custom"`、`models`（ID、reasoning、input、contextWindow、maxTokens），以及完整 `requestUrl` 或原生 `baseUrl` + `api`。模型列表整体替换，`modelEnabled` 开关按 ID 合并。已有会话保持原选择，不自动替换模型。
-- Chat 条目可设置 `apiKey` 或 `clearApiKey: true`。Chat 密钥加密保存；清除不删除 OAuth/header 秘密，也无法移除环境变量密钥。非 Chat 密钥写入保持原存储方式。工具参数中的密钥会留在对话历史中，建议优先使用设置里的密钥弹窗。
+- Chat 条目可设置 `apiKey` 或 `clearApiKey: true`。Chat 密钥加密保存；清除不删除 OAuth/header 秘密，也无法移除环境变量密钥。另外四个槽位的密钥同样加密保存（见上）。工具参数中的密钥会留在对话历史中，建议优先使用设置里的密钥弹窗。

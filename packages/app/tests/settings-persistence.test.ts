@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -16,6 +17,8 @@ import { mergeMcpServers } from "../src/main/tools/settings-tools.ts";
 import { changedFields } from "../src/shared/settings-changes.ts";
 import { emptyMcpServerDraft } from "../src/shared/mcp-settings.ts";
 
+const KEY = Buffer.alloc(32, 7);
+
 async function workspace(t: TestContext): Promise<string> {
 	const root = await mkdtemp(join(tmpdir(), "loom-settings-race-"));
 	t.after(() => rm(root, { recursive: true, force: true }));
@@ -24,7 +27,7 @@ async function workspace(t: TestContext): Promise<string> {
 
 test("UI model edits and Agent patches preserve independent fields and slots across store instances", async (t) => {
 	const file = join(await workspace(t), "models.json");
-	const ui = new ModelSettingsStore(file), agent = new ModelSettingsStore(file);
+	const ui = new ModelSettingsStore(file, testChatCipher(KEY)), agent = new ModelSettingsStore(file, testChatCipher(KEY));
 	await ui.update({ embedding: { model: "old", requestUrl: "https://example.com/embed", apiKey: "old-key" } });
 	const baseline = (await ui.view()).embedding;
 	const draft = { ...baseline, model: "from-ui" };
@@ -42,9 +45,9 @@ test("UI model edits and Agent patches preserve independent fields and slots acr
 
 test("concurrent model writes stay FIFO and readers only see complete JSON", async (t) => {
 	const file = join(await workspace(t), "models.json");
-	const store = new ModelSettingsStore(file);
+	const store = new ModelSettingsStore(file, testChatCipher(KEY));
 	await store.update({});
-	const operations = Array.from({ length: 25 }, (_, index) => new ModelSettingsStore(file).update({
+	const operations = Array.from({ length: 25 }, (_, index) => new ModelSettingsStore(file, testChatCipher(KEY)).update({
 		embedding: { model: "m".repeat(index * 100) + index },
 	}));
 	let reading = true;
@@ -57,7 +60,7 @@ test("concurrent model writes stay FIFO and readers only see complete JSON", asy
 
 test("failed model validation preserves the saved file and does not poison the next update", async (t) => {
 	const file = join(await workspace(t), "models.json");
-	const store = new ModelSettingsStore(file);
+	const store = new ModelSettingsStore(file, testChatCipher(KEY));
 	await store.update({ embedding: { model: "saved" } });
 	const before = await readFile(file, "utf8");
 	await assert.rejects(store.update({ embedding: { requestUrl: "bad URL" } }), /Request URL/);

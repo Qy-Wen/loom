@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 import { mkdtemp, readFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +11,8 @@ import {
 	settingsView,
 } from "../src/main/models/model-settings-store.ts";
 import { emptySettingsFile, type ModelSettingsDraft } from "../src/shared/model-settings.ts";
+
+const KEY = Buffer.alloc(32, 7);
 
 function draft(overrides: Partial<ModelSettingsDraft["embedding"]> = {}): ModelSettingsDraft {
 	const empty = { requestUrl: "", model: "", enabled: false };
@@ -58,7 +61,7 @@ describe("applyModelSettingsPatch", () => {
 describe("ModelSettingsStore", () => {
 	it("persists slots", async () => {
 		const filePath = join(await mkdtemp(join(tmpdir(), "loom-settings-")), "model-settings.json");
-		const store = new ModelSettingsStore(filePath);
+		const store = new ModelSettingsStore(filePath, testChatCipher(KEY));
 		assert.deepEqual(await store.view(), emptySettingsFile());
 		const saved = await store.update(draft({
 			requestUrl: "https://api.example.com",

@@ -87,6 +87,7 @@ async function acquireFileLock<T>(path: string, operation: (check: () => void) =
 /** Set once by Main so every recovered file is written to the app log. */
 let recoveryLogger: ((message: string) => void) | undefined;
 export function setStorageRecoveryLogger(logger: ((message: string) => void) | undefined): void { recoveryLogger = logger; }
+export function logStorage(message: string): void { recoveryLogger?.(message); }
 
 export interface JsonFileOptions {
 	/**
@@ -101,11 +102,16 @@ export interface JsonFileOptions {
 	onRecovered?: (backupPath: string, error: unknown) => void;
 }
 
+export interface JsonFileCodec<T> {
+	/** Turn the parsed value into what is written to disk (for example, encrypt a field). `parse` must read both shapes. */
+	serialize?: (value: T) => unknown;
+}
+
 export class JsonFile<T> {
 	readonly path: string;
 	readonly parse: (value: unknown) => T;
-	readonly #options: JsonFileOptions;
-	constructor(path: string, parse: (value: unknown) => T, options: JsonFileOptions = {}) {
+	readonly #options: JsonFileOptions & JsonFileCodec<T>;
+	constructor(path: string, parse: (value: unknown) => T, options: JsonFileOptions & JsonFileCodec<T> = {}) {
 		this.path = resolve(path);
 		this.parse = parse;
 		this.#options = options;
@@ -127,7 +133,10 @@ export class JsonFile<T> {
 		return withFileLock(this.path, async (check) => {
 			const mutation = await change(await this.read());
 			check();
-			if (mutation.value !== undefined) await atomicWrite(this.path, encodeJson(this.parse(mutation.value)), check);
+			if (mutation.value !== undefined) {
+				const parsed = this.parse(mutation.value);
+				await atomicWrite(this.path, encodeJson(this.#options.serialize ? this.#options.serialize(parsed) : parsed), check);
+			}
 			return mutation.result;
 		}, options);
 	}

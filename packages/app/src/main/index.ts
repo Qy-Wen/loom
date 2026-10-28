@@ -80,7 +80,7 @@ import type { CommandAllowView } from "@loom/agent/tool-permission";
 import { GeneralSettingsStore } from "./settings/general-settings-store.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-library-store.ts";
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
-import { createChatStorage } from "./models/chat-storage.ts";
+import { createChatStorage, electronSecretCipher } from "./models/chat-storage.ts";
 import { DeviceIdStore } from "./models/device-id-store.ts";
 import { setStorageRecoveryLogger } from "./storage/file.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
@@ -1095,7 +1095,8 @@ app
 			if (existsSync(envFile)) process.loadEnvFile(envFile);
 		}
 
-		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"));
+		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"), electronSecretCipher);
+		await modelSettings.protect().then((rewritten) => { if (rewritten) appLog("Encrypted the model API keys that were stored in plain text."); }, (error) => appLog(`Could not encrypt stored model API keys: ${logErrorText(error)}`));
 		const chatStores = createChatStorage(app.getPath("userData"));
 		const deviceId = new DeviceIdStore(join(app.getPath("userData"), "device-id.json"));
 		chatModels = new ChatModelService(chatStores, { deviceId: () => deviceId.get(), withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });

@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 import { mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +12,8 @@ import { AgentPermissionStore } from "../src/main/settings/agent-permission-stor
 import { AgentSandboxStore } from "../src/main/settings/agent-sandbox-store.ts";
 import { GeneralSettingsStore } from "../src/main/settings/general-settings-store.ts";
 import { JsonFile, setStorageRecoveryLogger } from "../src/main/storage/file.ts";
+
+const KEY = Buffer.alloc(32, 7);
 
 const TRUNCATED = '{"half":';
 
@@ -25,7 +28,7 @@ async function backups(dir: string, name: string): Promise<string[]> {
 describe("a corrupt settings file does not stop the app", () => {
 	const cases: Array<[string, (path: string) => Promise<unknown>]> = [
 		["general.json", (path) => new GeneralSettingsStore(path).load()],
-		["model-settings.json", (path) => new ModelSettingsStore(path).load()],
+		["model-settings.json", (path) => new ModelSettingsStore(path, testChatCipher(KEY)).load()],
 		["agent-permission.json", (path) => new AgentPermissionStore(path).load()],
 		["agent-sandbox.json", (path) => new AgentSandboxStore(path).load()],
 		["last-library.json", (path) => new LastLibraryStore(path).load()],
