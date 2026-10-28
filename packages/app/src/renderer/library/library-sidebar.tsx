@@ -258,6 +258,16 @@ export function LibrarySidebar({
 	}, [fileSortDirection]);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [favoritesCollapsed, setFavoritesCollapsed] = useState(true);
+	// Clicking a file in Favorites/Tags should not scroll the file tree to it. Remember that key
+	// until the focus moves elsewhere.
+	const [quietFocusKey, setQuietFocusKey] = useState<string | null>(null);
+	useEffect(() => {
+		if (quietFocusKey !== null && focusKey !== quietFocusKey) setQuietFocusKey(null);
+	}, [focusKey, quietFocusKey]);
+	function selectFromShortcut(assetId: string, event: React.MouseEvent): void {
+		setQuietFocusKey(assetKey(assetId));
+		onSelectAsset(assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows);
+	}
 	const [tagsCollapsed, setTagsCollapsed] = useState(true);
 	const [expandedTagIds, setExpandedTagIds] = useState<Set<string>>(() => new Set());
 	const [query, setQuery] = useState("");
@@ -508,7 +518,7 @@ export function LibrarySidebar({
 										type="button"
 										className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
 										{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
-										onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
+										onClick={(event) => selectFromShortcut(asset.assetId, event)}
 										onContextMenu={(event) => {
 											event.preventDefault();
 											onAssetContextMenu(asset);
@@ -572,7 +582,7 @@ export function LibrarySidebar({
 													className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
 													style={{ paddingLeft: 35 }}
 													{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
-													onClick={(event) => onSelectAsset(asset.assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows)}
+													onClick={(event) => selectFromShortcut(asset.assetId, event)}
 													onContextMenu={(event) => {
 														event.preventDefault();
 														onAssetContextMenu(asset);
@@ -604,7 +614,7 @@ export function LibrarySidebar({
 							fileSortDirection={fileSortDirection}
 							collapsedFolders={queryActive ? new Set() : collapsedFolders}
 							selectedKeys={selectedKeys}
-							focusKey={focusKey}
+							focusKey={focusKey === quietFocusKey ? null : focusKey}
 							renamingAssetId={renamingAssetId}
 							renamingFolder={renamingFolder}
 							cutAssetIds={cutAssetIds}
