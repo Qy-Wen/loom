@@ -43,6 +43,29 @@ describe("reconcileOpenAssets", () => {
 		assert.equal(cover.fileSystemId, "1:2");
 	});
 
+	it("keeps the id when the file at a path gets a new identity, as after an atomic save or a restore", () => {
+		const next = reconcileOpenAssets(
+			[asset("doc", "doc.txt", "1:1")],
+			[file("doc.txt", "1:9")],
+			false,
+		);
+		assert.equal(next.length, 1);
+		assert.equal(next[0]?.assetId, "doc");
+		assert.equal(next[0]?.fileSystemId, "1:9");
+	});
+
+	it("does not give a recorded id to a path whose file moved elsewhere", () => {
+		const next = reconcileOpenAssets(
+			[asset("a", "a.txt", "1:1"), asset("b", "b.txt", "1:2")],
+			[file("a.txt", "1:7"), file("c.txt", "1:1"), file("b.txt", "1:2")],
+			false,
+		);
+		assert.equal(next.find((item) => item.relativePath === "c.txt")?.assetId, "a");
+		assert.notEqual(next.find((item) => item.relativePath === "a.txt")?.assetId, "a");
+		assert.equal(next.find((item) => item.relativePath === "b.txt")?.assetId, "b");
+		assert.equal(new Set(next.map((item) => item.assetId)).size, 3);
+	});
+
 	it("swaps two files without dropping either id", () => {
 		const next = reconcileOpenAssets(
 			[asset("a", "a.jpg", "1:1"), asset("b", "b.jpg", "1:2")],

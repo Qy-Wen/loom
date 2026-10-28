@@ -36,11 +36,13 @@ export function reconcileOpenAssets(
 		usedAssetIds.add(asset.assetId);
 	}
 
+	// A file still at a known path is that asset, even with a new identity: editors that save by
+	// writing a temp file and renaming it over the original, or a restore from backup, change the id.
+	// Moves were matched above, so only paths nothing moved away from are left here.
 	for (const file of diskFiles) {
 		if (usedPaths.has(file.relativePath)) continue;
 		const asset = byPath.get(file.relativePath);
 		if (!asset || usedAssetIds.has(asset.assetId)) continue;
-		if (asset.fileSystemId && file.fileSystemId && asset.fileSystemId !== file.fileSystemId) continue;
 		next.push(assetFromDisk(asset.assetId, file));
 		usedPaths.add(file.relativePath);
 		usedAssetIds.add(asset.assetId);

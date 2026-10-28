@@ -106,6 +106,33 @@ test("Library keeps both ids when two files are swapped while open", async () =>
 	}
 });
 
+test("Library keeps the id and tags when an editor saves over a file by rename while open", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-live-atomic-"));
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
+	try {
+		await writeFile(join(root, "note.txt"), "first draft");
+		const initial = await core.openLibrary(root);
+		const note = initial.assets[0];
+		assert.ok(note);
+		await core.addAssetTag(note.assetId, "keep");
+
+		await writeFile(join(root, "note.tmp"), "second draft, longer");
+		await rename(join(root, "note.tmp"), join(root, "note.txt"));
+
+		const snap = await waitUntil(
+			core,
+			(snapshot) => snapshot.assets.some((asset) => asset.size === "second draft, longer".length),
+			"atomic save",
+		);
+		assert.equal(snap.assets.length, 1);
+		assert.equal(snap.assets[0]?.assetId, note.assetId);
+		assert.deepEqual(snap.assetTags.map((row) => row.assetId), [note.assetId]);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 test("Library keeps a moved file's id when the old path is reused while open", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-live-replace-"));
 	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });

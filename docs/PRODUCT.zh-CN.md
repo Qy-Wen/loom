@@ -178,7 +178,7 @@ path     = 当前文件路径（可变，仅作定位）
 
 跨平台用 Node `fs.stat` 的 `(dev, ino)` 作为 `file_system_id`（macOS/Linux 是 inode，Windows 是卷序列号 + 64-bit file index）。这是操作系统给文件的身份，不是 Loom 的 UUID。`asset_id` 仍是 UUID；`file_system_id` 只用来判断「还是不是刚才那个文件」。
 
-- 打开库时先扫完全盘再对账：先按 `file_system_id` 认人，再按相对路径；换卷则只认路径。避免边扫边删导致挪走的文件丢掉 UUID。
+- 打开库时先扫完全盘再对账：先按 `file_system_id` 认人，再按相对路径；换卷则只认路径。按路径认人时不要求 `file_system_id` 相同：已知路径上的文件就是那个资产，哪怕身份变了，比如编辑器用「写临时文件再改名」保存，或从备份恢复。代价是：Loom 关闭期间删掉一个文件、在原路径放进另一个不同的文件，新文件会继承它的标签等数据。文件被挪走时先按身份匹配，所以旧路径不会留住这个资产。避免边扫边删导致挪走的文件丢掉 UUID。
 - 识别到增 / 删 / 移 / 更新后走 `LibraryHandlers`：metadata 与图各有处理函数。图侧在 Ladybug 里 MERGE / `DETACH DELETE` `Asset` 节点。
 - 开着时 watcher 事件停稳后再走同一套全盘对账，避免整夹改名或对调时边跟边删丢掉 UUID。
 - `file_system_id` 拿不到（FAT 等）或 inode 已被回收：退回路径匹配；hash 校验后置。

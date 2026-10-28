@@ -181,6 +181,36 @@ test("Library keeps a moved file's id when the old path is reused while closed",
 	}
 });
 
+test("Library keeps the id and tags when a file is replaced by a new file at the same path while closed", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-library-atomic-"));
+	const core = new LocalCore();
+	let reopenedCore: LocalCore | undefined;
+
+	try {
+		await writeFile(join(root, "note.txt"), "first draft");
+		const initial = await core.openLibrary(root);
+		const note = initial.assets.find((asset) => asset.relativePath === "note.txt");
+		assert.ok(note);
+		await core.addAssetTag(note.assetId, "keep");
+		await core.close();
+
+		// An editor's atomic save: write a temp file, then rename it over the original.
+		await writeFile(join(root, "note.tmp"), "second draft, longer");
+		await rename(join(root, "note.tmp"), join(root, "note.txt"));
+
+		reopenedCore = new LocalCore();
+		const reopened = await reopenedCore.openLibrary(root);
+		assert.equal(reopened.assets.length, 1);
+		const saved = reopened.assets[0];
+		assert.equal(saved?.assetId, note.assetId);
+		assert.equal(saved?.size, "second draft, longer".length);
+		assert.deepEqual(reopened.assetTags.map((row) => row.assetId), [note.assetId]);
+	} finally {
+		await Promise.all([core.close(), reopenedCore?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
 test("Library keeps both asset ids when two files are swapped while closed", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-library-swap-"));
 	const core = new LocalCore();
