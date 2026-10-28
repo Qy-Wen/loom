@@ -2,7 +2,7 @@
 
 # 设置
 
-> 应用级的模型端点。检索规则见 [TEXT.md](./RAG/TEXT.zh-CN.md)。待办见 [TODO.md](./TODO.zh-CN.md)。
+> 应用级的模型端点。检索规则见 [RAG.md](./RAG/RAG.zh-CN.md)。待办见 [TODO.md](./TODO.zh-CN.md)。
 >
 > 这里只记结论。
 
@@ -94,7 +94,7 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 - 主进程串行处理 UI/工具修改及其运行时应用。模型和通用设置只合并变更字段，Chat/MCP 按服务商或服务器提交；共用文件锁保护跨实例读改写，临时文件原子替换已保存文件，并处理 Windows 占用重试。MCP 环境变量引用原样留在磁盘。
 - 通用：界面语言（跟随系统、English、简体中文），启动时是否重新打开上次的素材库，以及联网工具开关。语言会切换应用界面，包括右键菜单。追踪窗口仍是英文。语言和启动选项修改即时保存。存在应用用户数据 `general.json`。重新打开默认开启，和之前的启动行为一致。联网工具默认开启，且只在 DeepSeek 聊天提供方已启用并有 API Key 时生效：主 Agent 会得到 `web_search` 和 `web_fetch`，用这个 Key 调 DeepSeek 自己的 `/v1/tools/search` 和 `/v1/tools/fetch`（按成功请求计费，搜索词和 URL 会发给服务商）。没有 Key 或开关关闭时不注册这两个工具。专职拿不到。工具与服务商无关：一家服务商就是 `src/main/web/` 里的一个 `WebProvider`（搜索、可选的网页抓取、限额），并对应它所接受 Key 的聊天提供方，登记在 `WEB_PROVIDERS` 里。列表中第一个有 Key 的服务商提供这两个工具；该服务商不能抓取时，不提供 `web_fetch`。
 - Models：Chat 与四个槽位在同一页。非 Chat 的 URL/模型 ID 在失焦或 Enter 时保存，开关即时保存；已启用槽位的有效提交会检查连通性，不在每次输入时发请求。无效草稿不覆盖其他槽位。API 密钥弹窗确认即保存，自定义 Chat 保留自己的保存服务商/取消操作。
-- 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [TEXT.md](./RAG/TEXT.zh-CN.md)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [MEDIA.md](./RAG/MEDIA.zh-CN.md)。改 Audio 的 `model` 会使已有音频说明作废。
+- 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [RAG.md](./RAG/RAG.zh-CN.md#文本索引)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [RAG.md](./RAG/RAG.zh-CN.md#图片视频音频)。改 Audio 的 `model` 会使已有音频说明作废。
 - MCP：增删服务器，配置命令/参数或 URL，Advanced 放 env/headers/cwd。保存服务器只提交该条目，其他未完成草稿保持本地。开关和移除即时保存并应用连接。启动时只连接启用的服务器。存在应用用户数据 `mcp.json`（或 `LOOM_MCP_CONFIG`）。
 - Agent：进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在应用用户数据 `AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。沙箱开关即时保存。常驻说明停顿 500 ms 后保存，切换 tab 或关闭时立即保存待提交文本；超过 40000 字保留输入但不持久化。检索专职和生成专职拿不到这段。
 - Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。

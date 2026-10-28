@@ -204,7 +204,7 @@ Level 4  Deep Analysis              可选
 
 Level 1 是从文件提取的本地技术元数据缓存（尺寸、时长、相机、文本）。存在 `asset_metadata` 里，打开库或文件变化时自动提取。就绪记录按源文件 `mtime` 和提取器版本失效；失败记录在下次打开或 reconcile 时重试。
 
-Level 2 先做切过的 **Markdown** embedding。规则见 [TEXT](./RAG/TEXT.zh-CN.md)。图 / 视频 / 音频先转成文字再切，见 [MEDIA](./RAG/MEDIA.zh-CN.md)。层级见 [RAG](./RAG/RAG.zh-CN.md)。
+Level 2 先做切过的 **Markdown** embedding。规则见 [RAG](./RAG/RAG.zh-CN.md#文本索引)。图 / 视频 / 音频先转成文字再切，见 [RAG](./RAG/RAG.zh-CN.md#图片视频音频)。
 
 ---
 

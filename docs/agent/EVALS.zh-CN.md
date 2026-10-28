@@ -2,7 +2,7 @@
 
 # 评测
 
-> Loom 怎么评 Agent 行为、工具调用和检索。Agent 运行时见 [AGENT.md](./AGENT.zh-CN.md)。深度检索见 [TEXT.md](../RAG/TEXT.zh-CN.md)。模型槽位见 [SETTINGS.md](../SETTINGS.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
+> Loom 怎么评 Agent 行为、工具调用和检索。Agent 运行时见 [AGENT.md](./AGENT.zh-CN.md)。深度检索见 [RAG.md](../RAG/RAG.zh-CN.md#深度检索)。模型槽位见 [SETTINGS.md](../SETTINGS.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
 >
 > 这里只记结论。
 

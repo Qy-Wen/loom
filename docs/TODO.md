@@ -26,7 +26,7 @@ Remaining acceptance:
 
 ## Background chunking
 
-Split chunking from vectors so chunking and chunk full-text finish in the background after the extract, and only the vectors wait for the user. It needs a background task that can be cancelled and yields to the event loop first. Why it is not done now: [SEARCH](./RAG/SEARCH.md).
+Split chunking from vectors so chunking and chunk full-text finish in the background after the extract, and only the vectors wait for the user. It needs a background task that can be cancelled and yields to the event loop first. Why it is not done now: [RAG](./RAG/RAG.md#when-indexing-happens).
 
 ---
 

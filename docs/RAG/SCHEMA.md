@@ -167,7 +167,7 @@ Deleting an asset deletes its enrichment row.
 
 ## `assets_fts`
 
-FTS5 virtual table for `search_assets` text queries. One row per asset. Not a source of truth. `body` is segmented before it is written (see [SEARCH](./SEARCH.md)): each run of Chinese, Japanese, or Korean text is cut into words with `Intl.Segmenter` and joined with spaces, so a query can match a word in the middle of a sentence. English and digits are unchanged.
+FTS5 virtual table for `search_assets` text queries. One row per asset. Not a source of truth. `body` is segmented before it is written (see [RAG](./RAG.md#chinese-japanese-and-korean)): each run of Chinese, Japanese, or Korean text is cut into words with `Intl.Segmenter` and joined with spaces, so a query can match a word in the middle of a sentence. English and digits are unchanged.
 
 | Column | Meaning |
 |---|---|
@@ -176,7 +176,7 @@ FTS5 virtual table for `search_assets` text queries. One row per asset. Not a so
 
 The store rebuilds the table on open when its row count differs from `assets` or `library_meta.fts_format` differs from the current tokenizing, and refreshes one row when that asset, its properties, its enrichment, or its VLM write-up change.
 
-Level 2 text RAG chunks live in `text_chunks` and `text_embed_jobs`, not in `asset_metadata`. See [TEXT](./TEXT.md).
+Level 2 text RAG chunks live in `text_chunks` and `text_embed_jobs`, not in `asset_metadata`. See [RAG](./RAG.md#text-index).
 
 Relations are not in this database. They live in Ladybug at `<library>/.loom/graph-db/graph.db`. See [Graph](#graph-ladybugdb).
 
@@ -272,7 +272,7 @@ Parent and child passages for one asset. Only child rows store a vector.
 | `embedding` | BLOB | nullable | Float32 little-endian vector. Null on parents. |
 | `model_id` | TEXT | nullable | Set on children after embed. |
 
-Index: `text_chunks_asset_idx` on `asset_id`. Deep search reads child embeddings here; see [TEXT](./TEXT.md).
+Index: `text_chunks_asset_idx` on `asset_id`. Deep search reads child embeddings here; see [RAG](./RAG.md#deep-search).
 
 Parents are inserted first, then children. Replacing an index deletes children, then parents, then writes the new rows.
 

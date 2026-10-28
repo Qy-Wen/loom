@@ -167,7 +167,7 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 ## `assets_fts`
 
-`search_assets` 文本查询用的 FTS5 虚表。每个资产一行。不是事实来源。`body` 写入前先分词（见 [SEARCH](./SEARCH.zh-CN.md)）：每段中文、日文、韩文用 `Intl.Segmenter` 切成词再用空格连起来，查询才能命中句子中间的词。英文和数字不变。
+`search_assets` 文本查询用的 FTS5 虚表。每个资产一行。不是事实来源。`body` 写入前先分词（见 [RAG](./RAG.zh-CN.md#中日韩文字)）：每段中文、日文、韩文用 `Intl.Segmenter` 切成词再用空格连起来，查询才能命中句子中间的词。英文和数字不变。
 
 | 列 | 含义 |
 |---|---|
@@ -176,7 +176,7 @@ Level 1 技术元数据缓存。每个资产一行。从磁盘文件提取，不
 
 分词器是去掉变音的 `unicode61`。打开时若行数和 `assets` 对不上，或 `library_meta.fts_format` 与当前分词方式不一致，就整表重建；资产、属性、富化或 VLM 说明变更时刷新对应行。
 
-Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [TEXT](./TEXT.zh-CN.md)。
+Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset_metadata`。见 [RAG](./RAG.zh-CN.md#文本索引)。
 
 关系不在这个库里，而在 Ladybug 的 `<library>/.loom/graph-db/graph.db`。见 [图](#graph-ladybugdb)。
 
@@ -272,7 +272,7 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `embedding` | BLOB | 可空 | Float32 小端向量。父行为空。 |
 | `model_id` | TEXT | 可空 | 子切片 embed 后写入。 |
 
-索引：`text_chunks_asset_idx`（`asset_id`）。深度检索读这里的子切片向量，见 [TEXT](./TEXT.zh-CN.md)。
+索引：`text_chunks_asset_idx`（`asset_id`）。深度检索读这里的子切片向量，见 [RAG](./RAG.zh-CN.md#深度检索)。
 
 先插父再插子。重建时先删子、再删父、再写入。
 

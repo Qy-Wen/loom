@@ -205,7 +205,7 @@ Level 4  Deep analysis               Optional
 
 Level 1 is a local cache of file-derived technical metadata (dimensions, duration, camera, text extract). It is stored in `asset_metadata` and runs when a library opens or a file changes. A ready row is invalidated by source `mtime` plus an extractor version; a failed row is retried on the next open or reconcile.
 
-Level 2 starts as chunked **Markdown** embeddings. Rules: [TEXT](./RAG/TEXT.md). Image, video, and audio become text first, then the same chunks; see [MEDIA](./RAG/MEDIA.md). Levels: [RAG](./RAG/RAG.md).
+Level 2 starts as chunked **Markdown** embeddings. Rules: [RAG](./RAG/RAG.md#text-index). Image, video, and audio become text first, then the same chunks; see [RAG](./RAG/RAG.md#image-video-and-audio).
 
 ---
 

@@ -157,7 +157,7 @@ macOS arm64、macOS x64 和 Windows x64 的安装包由 Mac 上的 `pnpm dist` �
 
 ## 按图检索
 
-有查询文本时，全文和向量用 RRF 合成候选后、重排前，从每条候选沿 `RELATED` 双向走一跳。邻居单独成行，带 `linkedFrom`（候选 id、关系类型、从该候选看出的方向）。已经在列表里的不重复。每条候选最多 8 个。类型和属性过滤只约束原来的候选。重排正文仍是段落、父段落或文件名。重排或 `limit` 丢掉的行不再补回。没有查询文本时不走图。检索专家点名相连文件时写 `<asset_ref>`，并带上关系类型。见 [TEXT](../RAG/TEXT.zh-CN.md)。
+有查询文本时，全文和向量用 RRF 合成候选后、重排前，从每条候选沿 `RELATED` 双向走一跳。邻居单独成行，带 `linkedFrom`（候选 id、关系类型、从该候选看出的方向）。已经在列表里的不重复。每条候选最多 8 个。类型和属性过滤只约束原来的候选。重排正文仍是段落、父段落或文件名。重排或 `limit` 丢掉的行不再补回。没有查询文本时不走图。检索专家点名相连文件时写 `<asset_ref>`，并带上关系类型。见 [TEXT](../RAG/RAG.zh-CN.md)。
 
 ---
 
@@ -478,7 +478,7 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 
 - sqlite-vec（或 JS 余弦）只打已有向量的 **子切片**；child 命中可以扩到 parent
 - 和 `assets_fts` 做 RRF 融合（`k = 60`）。返回 **段落 + `asset_id`**。Embedding 槽位空着或查询向量失败时退回 FTS
-- 最小评测：`packages/core/tests/hybrid-search.test.ts`。见 [TEXT](../RAG/TEXT.zh-CN.md)
+- 最小评测：`packages/core/tests/hybrid-search.test.ts`。见 [TEXT](../RAG/RAG.zh-CN.md)
 
 ---
 
@@ -488,7 +488,7 @@ SVG 画布上的活力度场。坐标只留在本次会话。
 
 - OpenAI 兼容 `POST /v1/chat/completions`，消息里带音频部分。托管 Qwen-Omni 发 `input_audio` + `modalities: ["text"]` + `stream: true`。VLM 槽位仍只做视觉。Loom 不加载、不运行模型
 - 端点拒收原格式时 FFmpeg 在本地转一版；体积上限比照视频。Markdown 落在 `audio_writeup`；mtime 没变不重跑；换 Audio 模型则说明作废
-- Details 和 `describe_audio`；再用 `embed_asset`。见 [MEDIA](../RAG/MEDIA.zh-CN.md)
+- Details 和 `describe_audio`；再用 `embed_asset`。见 [MEDIA](../RAG/RAG.zh-CN.md)
 
 ---
 
@@ -498,7 +498,7 @@ Hybrid Search 之后的可选第二轮。槽位空着就跳过。
 
 - Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`），`query` + `documents`（融合后的段落）。百炼 `qwen3-rerank` 会把 DashScope Chat URL 改写成 `.../compatible-api/v1/reranks`
 - 失败、只有一条命中、或槽位空着，都保持 RRF 顺序。开关探测发一次很小的 rerank POST（不是 `GET /v1/models`）
-- TEI 原生 `texts` 以后再说。见 [TEXT](../RAG/TEXT.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)
+- TEI 原生 `texts` 以后再说。见 [TEXT](../RAG/RAG.zh-CN.md) 和 [SETTINGS](../SETTINGS.zh-CN.md)
 
 ---
 

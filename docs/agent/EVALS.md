@@ -2,7 +2,7 @@
 
 # Evals
 
-> How Loom scores Agent behavior, tool use, and retrieval. Agent runtime: [AGENT.md](./AGENT.md). Deep search: [TEXT.md](../RAG/TEXT.md). Model slots: [SETTINGS.md](../SETTINGS.md). Roadmap: [TODO.md](../TODO.md).
+> How Loom scores Agent behavior, tool use, and retrieval. Agent runtime: [AGENT.md](./AGENT.md). Deep search: [RAG.md](../RAG/RAG.md#deep-search). Model slots: [SETTINGS.md](../SETTINGS.md). Roadmap: [TODO.md](../TODO.md).
 >
 > Record conclusions here.
 

@@ -157,7 +157,7 @@ One `pnpm dist` on a Mac produces the macOS arm64, macOS x64, and Windows x64 in
 
 ## Graph retrieval
 
-On a text query, after RRF fuses full-text and vector candidates and before rerank, walk one `RELATED` hop both ways from each candidate. A neighbor is its own row, with `linkedFrom` (candidate id, relation type, direction from that candidate). An id already in the list is not repeated. At most 8 neighbors per candidate. Type and property filters stay on the original candidates. The rerank document is still the passage, parent passage, or filename. Rows that rerank or the `limit` drop are not added back. A query with no text does not walk the graph. When the retrieve specialist names a connected file, it writes an `<asset_ref>` and the relation type. See [TEXT](../RAG/TEXT.md).
+On a text query, after RRF fuses full-text and vector candidates and before rerank, walk one `RELATED` hop both ways from each candidate. A neighbor is its own row, with `linkedFrom` (candidate id, relation type, direction from that candidate). An id already in the list is not repeated. At most 8 neighbors per candidate. Type and property filters stay on the original candidates. The rerank document is still the passage, parent passage, or filename. Rows that rerank or the `limit` drop are not added back. A query with no text does not walk the graph. When the retrieve specialist names a connected file, it writes an `<asset_ref>` and the relation type. See [TEXT](../RAG/RAG.md).
 
 ---
 
@@ -478,7 +478,7 @@ On-demand file-level write-up via the same VLM slot, then the text embedding pat
 
 - sqlite-vec (or JS cosine) over **child** chunks that already have embeddings; a child hit can expand to its parent
 - RRF fuse with `assets_fts` (`k = 60`). Return **passage + `asset_id`**. Empty Embedding slot or a failed query embed is FTS-only
-- Minimal eval: `packages/core/tests/hybrid-search.test.ts`. See [TEXT](../RAG/TEXT.md)
+- Minimal eval: `packages/core/tests/hybrid-search.test.ts`. See [TEXT](../RAG/RAG.md)
 
 ---
 
@@ -488,7 +488,7 @@ On-demand file-level write-up for standalone audio via the Audio slot, then the 
 
 - OpenAI-compatible `POST /v1/chat/completions` with an audio part. Hosted Qwen-Omni uses `input_audio` + `modalities: ["text"]` + `stream: true`. The VLM slot stays vision-only. Loom does not load or run the model
 - FFmpeg converts locally if the endpoint rejects the original; size cap like video. Markdown in `audio_writeup`; mtime skip; changing the Audio model invalidates the write-up
-- Details and `describe_audio`; then `embed_asset`. See [MEDIA](../RAG/MEDIA.md)
+- Details and `describe_audio`; then `embed_asset`. See [MEDIA](../RAG/RAG.md)
 
 ---
 
@@ -498,7 +498,7 @@ Optional second pass after Hybrid Search. Empty slot skips it.
 
 - Cohere/Jina/Qianfan `POST /v1/rerank` (or `/v2/rerank`) with `query` + `documents` (the fused passages). Bailian `qwen3-rerank` rewrites a DashScope Chat URL to `.../compatible-api/v1/reranks`
 - Failure, one hit, or a missing slot keeps the RRF order. Probe POSTs a tiny rerank call (not `GET /v1/models`)
-- TEI-native `texts` waits. See [TEXT](../RAG/TEXT.md) and [SETTINGS](../SETTINGS.md)
+- TEI-native `texts` waits. See [TEXT](../RAG/RAG.md) and [SETTINGS](../SETTINGS.md)
 
 ---
 
