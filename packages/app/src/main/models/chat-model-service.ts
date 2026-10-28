@@ -261,6 +261,14 @@ export class ChatModelService {
 		}, { agentName: "Loom", ...(deviceId ? { getDeviceId: () => deviceId } : {}) }));
 		await this.refreshNative({ providers: [providerId], allowNetwork: false, signal: options?.signal ?? AbortSignal.timeout(10_000) });
 	}
+	/** API key of an enabled provider, for Main-side tools that call the vendor directly. Undefined when none is set. */
+	async providerApiKey(providerId: string, signal: AbortSignal = AbortSignal.timeout(5000)): Promise<string | undefined> {
+		if (!this.#initialized || !this.#config.providers.some((row) => row.id === providerId && row.enabled)) return undefined;
+		const provider = this.#providers.get(providerId) ?? this.#builtins.find((row) => row.id === providerId);
+		if (!provider) return undefined;
+		try { return (await this.apiKeyForEdit(provider, signal))?.trim() || undefined; }
+		catch { return undefined; }
+	}
 	/** Read only stored/ambient API-key auth, never resolve or refresh OAuth tokens. */
 	private async apiKeyForEdit(provider: Provider, signal: AbortSignal): Promise<string | undefined> {
 		try {

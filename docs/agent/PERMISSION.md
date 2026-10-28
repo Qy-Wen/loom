@@ -12,13 +12,13 @@ The chat footer is **Basic**, **Standard** (default), or **Full**. Stored in app
 
 | Level | Waits for Approve / Skip |
 |---|---|
-| Basic | `write`, `edit`, `bash`, the FFmpeg tools that write a file, `update_settings`, and MCP tools |
-| Standard | `write` and `edit` outside the open library, `update_settings`, and MCP tools |
+| Basic | `write`, `edit`, `bash`, the FFmpeg tools that write a file, `update_settings`, `web_fetch`, and MCP tools |
+| Standard | `write` and `edit` outside the open library, `update_settings`, `web_fetch`, and MCP tools |
 | Full | nothing |
 
 Standard runs `write` and `edit` inside the open library without asking. A path that leaves the library still waits, including `..` and a symlink that points outside. A path that is not a string, or that cannot be resolved, also waits. Basic still asks for every `write` and `edit`.
 
-`bash` and the FFmpeg tools that write (`grade_image`, `run_ffmpeg`) wait only on Basic. `update_settings` and all MCP tools (`server__tool`) wait on Basic and Standard, unless the user has remembered a grant for that tool. MCP grants apply to that server/tool across arguments. Full runs them directly. `get_settings`, `run_ffprobe`, and `auto_memory` do not wait. Parent chat and specialists use the same gate. Evals set Full so they do not hang.
+`bash` and the FFmpeg tools that write (`grade_image`, `run_ffmpeg`) wait only on Basic. `update_settings` and all MCP tools (`server__tool`) wait on Basic and Standard, unless the user has remembered a grant for that tool. MCP grants apply to that server/tool across arguments. Full runs them directly. `web_fetch` also waits on both, because the URL can carry library data out and the page text is untrusted; Always remembers the site (host), not every URL. `get_settings`, `web_search`, `run_ffprobe`, and `auto_memory` do not wait. Parent chat and specialists use the same gate. Evals set Full so they do not hang.
 
 Stop cancels a wait. Switching to Full asks once more: the process sandbox will not apply, and the agent can run every operation. The sandbox switch stays as saved. Confirming approves waits that are already open.
 

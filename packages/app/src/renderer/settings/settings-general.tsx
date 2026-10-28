@@ -51,6 +51,22 @@ export function SettingsGeneral({ value, onChange }: SettingsGeneralProps): Reac
 				</div>
 				<p>{t.settings.reopenNote}</p>
 			</section>
+			<section className="settings-slot" aria-label={t.settings.webTools}>
+				<div className="settings-slot-head">
+					<span className="settings-slot-title">{t.settings.webTools}</span>
+					<label className="settings-switch">
+						<input
+							type="checkbox"
+							role="switch"
+							checked={value.webTools}
+							aria-label={t.settings.webTools}
+							onChange={(event) => onChange({ webTools: event.target.checked })}
+						/>
+						<span className="settings-switch-ui" aria-hidden="true" />
+					</label>
+				</div>
+				<p>{t.settings.webToolsNote}</p>
+			</section>
 		</div>
 	);
 }

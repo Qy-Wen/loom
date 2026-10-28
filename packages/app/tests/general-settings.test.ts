@@ -4,12 +4,14 @@ import { parseGeneralSettings, resolveAppLanguage } from "../src/shared/general-
 
 describe("general settings", () => {
 	it("keeps the current startup behavior when the file is missing fields", () => {
-		assert.deepEqual(parseGeneralSettings(null), { language: "system", reopenLastLibrary: true });
-		assert.deepEqual(parseGeneralSettings({ language: "nope" }), { language: "system", reopenLastLibrary: true });
+		assert.deepEqual(parseGeneralSettings(null), { language: "system", reopenLastLibrary: true, webTools: true });
+		assert.deepEqual(parseGeneralSettings({ language: "nope" }), { language: "system", reopenLastLibrary: true, webTools: true });
 		assert.deepEqual(parseGeneralSettings({ language: "zh-CN", reopenLastLibrary: false }), {
 			language: "zh-CN",
 			reopenLastLibrary: false,
+			webTools: true,
 		});
+		assert.equal(parseGeneralSettings({ webTools: false }).webTools, false);
 	});
 
 	it("follows a Chinese system language and leaves other systems in English", () => {

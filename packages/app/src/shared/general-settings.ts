@@ -7,19 +7,22 @@ export type AppLanguage = "en" | "zh-CN";
 export interface GeneralSettings {
 	language: AppLanguageChoice;
 	reopenLastLibrary: boolean;
+	/** Offer web_search and web_fetch when a DeepSeek API key is configured. */
+	webTools: boolean;
 }
 
 export function defaultGeneralSettings(): GeneralSettings {
-	return { language: "system", reopenLastLibrary: true };
+	return { language: "system", reopenLastLibrary: true, webTools: true };
 }
 
 export function parseGeneralSettings(value: unknown): GeneralSettings {
 	const fallback = defaultGeneralSettings();
 	if (!value || typeof value !== "object") return fallback;
-	const record = value as { language?: unknown; reopenLastLibrary?: unknown };
+	const record = value as { language?: unknown; reopenLastLibrary?: unknown; webTools?: unknown };
 	return {
 		language: isLanguageChoice(record.language) ? record.language : fallback.language,
 		reopenLastLibrary: typeof record.reopenLastLibrary === "boolean" ? record.reopenLastLibrary : fallback.reopenLastLibrary,
+		webTools: typeof record.webTools === "boolean" ? record.webTools : fallback.webTools,
 	};
 }
 
@@ -38,5 +41,6 @@ export function parseGeneralSettingsPatch(value: unknown): Partial<GeneralSettin
 	return {
 		...("language" in value ? { language: parsed.language } : {}),
 		...("reopenLastLibrary" in value ? { reopenLastLibrary: parsed.reopenLastLibrary } : {}),
+		...("webTools" in value ? { webTools: parsed.webTools } : {}),
 	};
 }

@@ -46,6 +46,7 @@ import { createAssetTools } from "./tools/asset-tools.ts";
 import { createFfmpegTools } from "./tools/ffmpeg-tools.ts";
 import { createPropertyTools } from "./tools/property-tools.ts";
 import { createRelationTools } from "./tools/relation-tools.ts";
+import { WebToolsService } from "./web/web-service.ts";
 import {
 	createSettingsTools,
 	mergeMcpServers,
@@ -367,6 +368,8 @@ function requireChatModels(): ChatModelService {
 }
 
 function notifyChatSettingsChanged(): void {
+	// Keys and providers change the web tools; sync is a no-op unless availability flipped.
+	if (chatModels && generalSettings) void syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`));
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (!window.isDestroyed()) window.webContents.send(IPC.chatSettingsChanged);
 	}
@@ -799,7 +802,9 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		if (!generalSettings) throw new Error("Settings store not started");
-		return generalSettings.save(parseGeneralSettingsPatch(raw));
+		const saved = await generalSettings.save(parseGeneralSettingsPatch(raw));
+		await syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`));
+		return saved;
 	}));
 	ipcMain.handle(IPC.getProcessSandboxNotice, async () => {
 		if (!agentSandbox) throw new Error("Settings store not started");
@@ -1139,7 +1144,7 @@ app
 		registerChatIpc();
 		await restoreLastLibrary();
 		createWindow();
-		void attachConfiguredMcp();
+		void attachConfiguredMcp().finally(() => syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`)));
 
 		app.on("activate", () => {
 			const hasMain = BrowserWindow.getAllWindows().some((window) => window.getTitle() !== "Traces");
@@ -1334,7 +1339,17 @@ async function setMcpServerLive(draft: McpServerDraft) {
 
 /** Replace registry tools without reopening the library or interrupting durable work. */
 async function syncAgentTools(): Promise<void> {
-	await requireChat().setTools([...BUILTIN_TOOLS, ...(mcpHost?.allTools() ?? [])]);
+	await requireChat().setTools([...BUILTIN_TOOLS, ...(await webTools.tools()), ...(mcpHost?.allTools() ?? [])]);
+}
+
+const webTools = new WebToolsService({
+	enabled: async () => generalSettings ? (await generalSettings.load()).webTools : false,
+	apiKey: (chatProviderId, signal) => requireChatModels().providerApiKey(chatProviderId, signal),
+});
+
+/** Re-register tools only when the web vendor just appeared, changed, or went away, so unrelated edits keep the prompt cache. */
+async function syncWebTools(): Promise<void> {
+	if (await webTools.changed()) await syncAgentTools();
 }
 
 function mcpConfigPath(): string {

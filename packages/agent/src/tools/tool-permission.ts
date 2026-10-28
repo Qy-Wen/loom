@@ -28,10 +28,12 @@ export type CommandAllowView = {
 
 /** App settings. Basic and Standard both wait. `get_settings` is not here. */
 const SETTINGS_TOOLS = ["update_settings"] as const;
-const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS] as const;
+/** Reads an arbitrary page: the URL is a way to send data out, and the text that comes back is untrusted. */
+const WEB_TOOLS = ["web_fetch"] as const;
+const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...WEB_TOOLS] as const;
 /** Child processes that can write. `run_ffprobe` only reads, so it is not here. */
 const PROCESS_TOOLS = ["bash", "grade_image", "run_ffmpeg"] as const;
-const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...PROCESS_TOOLS] as const;
+const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...WEB_TOOLS, ...PROCESS_TOOLS] as const;
 
 export function parseAgentPermissionLevel(value: unknown): AgentPermissionLevel {
 	if (value === "basic" || value === "standard" || value === "full") return value;
@@ -160,6 +162,10 @@ export function commandAllowKey(toolName: string, args: unknown, root?: string |
 		const match = ffmpegAllowMatch(args);
 		return match ? { tool: "run_ffmpeg", match } : undefined;
 	}
+	if (toolName === "web_fetch") {
+		const host = fetchHost(stringField(args, "url"));
+		return host ? { tool: "web_fetch", match: host } : undefined;
+	}
 	if (toolName === "write" || toolName === "edit") {
 		const path = toolPathArg(args);
 		if (!path) return undefined;
@@ -219,6 +225,12 @@ function commandAllowPath(root: string | null | undefined, target: string): stri
 	if (right === left) return ".";
 	if (right.startsWith(`${left}/`)) return right.slice(left.length + 1);
 	return right;
+}
+
+/** Lower-cased host of a fetch URL. "Always" remembers a site, not every address. */
+function fetchHost(url: string | undefined): string | undefined {
+	if (!url) return undefined;
+	try { return new URL(url.trim()).hostname.toLowerCase() || undefined; } catch { return undefined; }
 }
 
 function ffmpegAllowMatch(args: unknown): string | undefined {

@@ -18,8 +18,8 @@ import { workspaceWriteNeedsApproval } from "../src/tools/workspace-path.ts";
 
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
-	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "edit", "grade_image", "run_ffmpeg", "update_settings", "write"]);
+	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "web_fetch", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "edit", "grade_image", "run_ffmpeg", "update_settings", "web_fetch", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
@@ -120,4 +120,15 @@ test("remembered commands skip the next matching call", () => {
 	if (process.platform === "win32") {
 		assert.equal(commandAllowKey("write", { path: "Notes/A.md" }, "/Lib")?.match, "notes/a.md");
 	}
+});
+
+test("web_search never waits, web_fetch does, and Always remembers the site", () => {
+	assert.equal(toolNeedsApproval("standard", "web_search"), false);
+	assert.equal(toolNeedsApproval("standard", "web_fetch"), true);
+	assert.equal(toolNeedsApproval("full", "web_fetch"), false);
+	const key = commandAllowKey("web_fetch", { url: "https://Docs.Example.com/a?x=1" });
+	assert.deepEqual(key, { tool: "web_fetch", match: "docs.example.com" });
+	assert.equal(commandAllowKey("web_fetch", { url: "not a url" }), undefined);
+	assert.equal(toolCallNeedsApproval("standard", "web_fetch", null, { url: "https://docs.example.com/b" }, [key!]), false);
+	assert.equal(toolCallNeedsApproval("standard", "web_fetch", null, { url: "https://evil.example.com/b" }, [key!]), true);
 });
