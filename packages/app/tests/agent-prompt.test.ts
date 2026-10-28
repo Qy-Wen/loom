@@ -31,8 +31,9 @@ describe("systemPromptForLibrary", () => {
 
 	it("tells the model when to use each search, what deep search cannot see, and that relations need inspect", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
-		assert.match(prompt, /search_assets to find a file by its name, path, properties, or exact wording; it needs no index and sees every file/);
-		assert.match(prompt, /deep_search_assets to find what a document says or a passage by meaning; .* only sees indexed files/);
+		assert.match(prompt, /If you know a word the file or its name would contain, use search_assets: it matches those words only, needs no index, and sees every file/);
+		assert.match(prompt, /only know what the content is about.* start with deep_search_assets: .* only sees indexed files/);
+		assert.match(prompt, /Do not retry search_assets with guessed synonyms/);
 		assert.match(prompt, /indexedCount is 0 or low/);
 		assert.match(prompt, /Search does not follow relations/);
 		assert.doesNotMatch(prompt, /linkedFrom/);
