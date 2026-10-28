@@ -2,9 +2,9 @@
 
 # 检索与索引重构计划
 
-> 状态：计划，尚未实施。现状见 [TEXT.md](./TEXT.zh-CN.md)、[RAG.md](./RAG.zh-CN.md)。
+> 状态：三步均已实施。现状见 [TEXT.md](./TEXT.zh-CN.md)、[RAG.md](./RAG.zh-CN.md)、[SCHEMA.md](./SCHEMA.zh-CN.md)。本文保留当时的决定和理由。
 >
-> 标「待定」的条目在用户确认后再动手。
+> 与计划不同的地方：`MetadataStore` 另加了 `countIndexedAssets()` 供 `indexedCount` 使用；`searchAssets` 不再接收 Embedding / Rerank provider（它不用模型）；深度检索的融合与「每文件取最佳块」放在 `retrieval/deep.ts`。
 
 ---
 
@@ -145,4 +145,4 @@ FTS5 内置分词器里没有按单字或按词切中文的（`unicode61`、`asc
 
 ## 提交顺序
 
-三步各自测试通过后单独提交。工作区里未提交的「截断提示」「1 MiB」「全文 256 K」三项改动，其上限部分会被步骤 1 改写，并入步骤 1 的提交。
+三步各自测试通过后单独提交。

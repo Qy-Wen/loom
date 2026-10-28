@@ -41,10 +41,11 @@ import {
 	type AssetSearchItem,
 	type AssetSearchQuery,
 	type AssetSearchResult,
+	type DeepSearchResult,
 } from "./model/retrieval.ts";
 import { matchesPropertyFilters } from "./retrieval/filter.ts";
-import { expandSearchCandidates } from "./retrieval/graph.ts";
-import { HYBRID_CANDIDATES, rrfFuse, uniqueInOrder } from "./retrieval/rrf.ts";
+import { bestChunkPerFile, fuseChunks } from "./retrieval/deep.ts";
+import { HYBRID_CANDIDATES, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
 import type {
@@ -303,23 +304,69 @@ export class LocalCore {
 		return this.metadataStore.removeAssetProperty(assetId, propertyId);
 	}
 
-	searchAssets(query: AssetSearchQuery = {}, provider?: EmbeddingProvider, rerank?: RerankProvider, signal?: AbortSignal): Promise<AssetSearchResult> {
-		return this.runLibraryTask((jobSignal) => this.searchLibrary(query, provider, rerank, jobSignal), signal);
+	/**
+	 * Simple search: file-level full text over filename, path, properties, extracts, and
+	 * write-ups, plus type and property filters. No models. With no text it lists files.
+	 */
+	searchAssets(query: AssetSearchQuery = {}, signal?: AbortSignal): Promise<AssetSearchResult> {
+		return this.runLibraryTask(async () => {
+			const view = await this.searchView(query);
+			const textQuery = query.query?.trim();
+			if (!textQuery) return view.list();
+			const ids = uniqueInOrder((await this.metadataStore.searchAssetIds(textQuery)).filter(view.passes));
+			const items = ids.flatMap((id) => {
+				const asset = view.assetsById.get(id);
+				return asset ? [toSearchItem(asset, view.propertiesOf(id))] : [];
+			});
+			return { kind: "asset_list", assets: items.slice(0, view.limit), total: items.length };
+		}, signal);
 	}
 
-	private async searchLibrary(
-		query: AssetSearchQuery = {},
+	/**
+	 * Deep search: matching passages in indexed files. Chunk full text and chunk vectors are
+	 * fused with RRF, filtered, optionally reranked on the passage text, and cut to each file's
+	 * best passage. Without an Embedding provider only full text runs. A file with no index is
+	 * invisible here; `indexedCount` says how many files are searchable.
+	 */
+	deepSearchAssets(
+		query: AssetSearchQuery & { query: string },
 		provider?: EmbeddingProvider,
 		rerank?: RerankProvider,
 		signal?: AbortSignal,
-	): Promise<AssetSearchResult> {
-		const textQuery = query.query?.trim();
-		const [assets, definitions, values, ftsIds, nearest] = await Promise.all([
+	): Promise<DeepSearchResult> {
+		return this.runLibraryTask(async (jobSignal) => {
+			const textQuery = query.query.trim();
+			const view = await this.searchView(query);
+			const indexedCount = await this.metadataStore.countIndexedAssets();
+			if (!textQuery) return { ...view.list(), indexedCount };
+			const [fullText, vector] = await Promise.all([
+				this.metadataStore.searchChunksFts(textQuery, HYBRID_CANDIDATES),
+				this.nearestChildrenForQuery(textQuery, provider, jobSignal),
+			]);
+			const fused = bestChunkPerFile(fuseChunks(fullText, vector, view.passes));
+			const matches: AssetSearchItem[] = [];
+			for (const { hit, score } of fused) {
+				const asset = view.assetsById.get(hit.assetId);
+				if (!asset) continue;
+				matches.push({
+					...toSearchItem(asset, view.propertiesOf(hit.assetId)),
+					score,
+					passage: hit.text,
+					parentPassage: hit.parentText,
+					chunkId: hit.chunkId,
+				});
+			}
+			const ranked = await this.rerankMatches(textQuery, matches, rerank, jobSignal);
+			return { kind: "asset_list", assets: ranked.slice(0, view.limit), total: ranked.length, indexedCount };
+		}, signal);
+	}
+
+	/** Library listing, property lookup, and the type/property filter shared by both searches. */
+	private async searchView(query: AssetSearchQuery) {
+		const [assets, definitions, values] = await Promise.all([
 			this.metadataStore.listAssets(),
 			this.metadataStore.listProperties(),
 			this.metadataStore.listAllAssetProperties(),
-			textQuery ? this.metadataStore.searchAssetIds(textQuery) : Promise.resolve([] as string[]),
-			textQuery ? this.nearestChildrenForQuery(textQuery, provider, signal) : Promise.resolve([] as ChunkHit[]),
 		]);
 		const definitionsById = new Map(definitions.map((property) => [property.propertyId, property]));
 		const definitionByName = new Map(
@@ -340,53 +387,22 @@ export class LocalCore {
 		}
 		const assetsById = new Map(assets.map((asset) => [asset.assetId, asset]));
 		const filters = query.properties ?? [];
+		const propertiesOf = (assetId: string) => propertiesByAsset.get(assetId) ?? [];
 		const passes = (assetId: string): boolean => {
 			const asset = assetsById.get(assetId);
 			if (!asset) return false;
 			if (query.type && asset.type !== query.type) return false;
-			return matchesPropertyFilters(propertiesByAsset.get(assetId) ?? [], filters, definitionByName);
+			return matchesPropertyFilters(propertiesOf(assetId), filters, definitionByName);
 		};
-
 		const limit = Math.min(100, Math.max(1, Math.trunc(query.limit ?? 20)));
-		if (!textQuery) {
+		/** No query text: the filtered library in listing order. */
+		const list = (): AssetSearchResult => {
 			const matches = assets
 				.filter((asset) => passes(asset.assetId))
-				.map((asset) => toSearchItem(asset, propertiesByAsset.get(asset.assetId) ?? []));
+				.map((asset) => toSearchItem(asset, propertiesOf(asset.assetId)));
 			return { kind: "asset_list", assets: matches.slice(0, limit), total: matches.length };
-		}
-
-		const ftsRanked = uniqueInOrder(ftsIds.filter(passes)).slice(0, HYBRID_CANDIDATES);
-		const vecRanked: string[] = [];
-		const bestChild = new Map<string, ChunkHit>();
-		for (const hit of nearest) {
-			if (!passes(hit.assetId) || bestChild.has(hit.assetId)) continue;
-			bestChild.set(hit.assetId, hit);
-			vecRanked.push(hit.assetId);
-			if (vecRanked.length >= HYBRID_CANDIDATES) break;
-		}
-
-		const matches: AssetSearchItem[] = [];
-		for (const { id, score } of rrfFuse([ftsRanked, vecRanked])) {
-			const asset = assetsById.get(id);
-			if (!asset) continue;
-			const child = bestChild.get(id);
-			matches.push({
-				...toSearchItem(asset, propertiesByAsset.get(id) ?? []),
-				score,
-				...(child
-					? { passage: child.text, parentPassage: child.parentText, chunkId: child.chunkId }
-					: {}),
-			});
-		}
-		const expanded = expandSearchCandidates(
-			matches,
-			await this.graphStore.listAllRelations(),
-			assetsById,
-			propertiesByAsset,
-			bestChild,
-		);
-		const ranked = await this.rerankMatches(textQuery, expanded, rerank, signal);
-		return { kind: "asset_list", assets: ranked.slice(0, limit), total: ranked.length };
+		};
+		return { assetsById, propertiesOf, passes, limit, list };
 	}
 
 	private async rerankMatches(

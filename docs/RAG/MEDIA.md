@@ -16,13 +16,13 @@ Media becomes **text** first, then the text RAG path. Do not embed an image or v
 image / video / audio on disk
     → Markdown (VLM / Audio understanding)
     → same parent/child chunks + Embedding slot    (index)
-    → Hybrid Search                                (retrieve)
+    → deep search                                  (retrieve)
     → Agent answers or acts                        (generate / tools)
 ```
 
 Do not stuff the library into the prompt. Do not run this on the whole library by default. Do not write a sidecar `.md` into the library (that would be another asset).
 
-`search_assets` stays the retrieve step: **passage + `asset_id`**. Video hits can carry a time range later.
+`deep_search_assets` is the retrieve step: **passage + `asset_id`**. `search_assets` also finds a described file by words in its write-up. Video hits can carry a time range later.
 
 ---
 
@@ -107,6 +107,6 @@ Loom is only an HTTP client. The VLM and Audio models do not run in-process.
 
 ## Retrieve
 
-Image / video / audio vectors are **text-chunk** vectors. They share `text_chunks` and Hybrid Search with Markdown. Do not add a separate vector search for media.
+Image / video / audio vectors are **text-chunk** vectors. They share `text_chunks` and deep search with Markdown. Do not add a separate vector search for media.
 
 sqlite-vec and RRF fusion with FTS / property filters stay in [TEXT.md](./TEXT.md).

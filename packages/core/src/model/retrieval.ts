@@ -42,21 +42,20 @@ export interface AssetSearchItem {
 	parentPassage?: string;
 	chunkId?: string;
 	score?: number;
-	/** Set when this row was added by one relation hop. `direction` is from `assetId`. */
-	linkedFrom?: SearchLink;
-}
-
-/** The candidate a search row was expanded from. */
-export interface SearchLink {
-	assetId: string;
-	relationType: string;
-	direction: "out" | "in";
 }
 
 export interface AssetSearchResult {
 	kind: "asset_list";
 	assets: AssetSearchItem[];
 	total: number;
+}
+
+export interface DeepSearchResult extends AssetSearchResult {
+	/**
+	 * Files in the library that have an index. Deep search only sees these, so when
+	 * it is 0 or small the caller should use simple search or index files first.
+	 */
+	indexedCount: number;
 }
 
 export interface AssetRelationView {

@@ -2,9 +2,9 @@
 
 # Search and Index Refactor Plan
 
-> Status: planned, not implemented. Current behavior: [TEXT.md](./TEXT.md), [RAG.md](./RAG.md).
+> Status: all three steps are implemented. Current behavior: [TEXT.md](./TEXT.md), [RAG.md](./RAG.md), [SCHEMA.md](./SCHEMA.md). This page keeps the decisions and their reasons.
 >
-> Items marked "Open" wait for the user's decision before work starts.
+> Where it differs from the plan: `MetadataStore` also gained `countIndexedAssets()` for `indexedCount`; `searchAssets` no longer takes Embedding or Rerank providers (it uses no model); deep search's fusion and "best chunk per file" live in `retrieval/deep.ts`.
 
 ---
 
@@ -145,4 +145,4 @@ None.
 
 ## Commit order
 
-Each step is committed separately once its tests pass. The uncommitted "truncation notice", "1 MiB", and "full-text 256 K" changes have limits that step 1 rewrites, so they go into step 1's commit.
+Each step is committed separately once its tests pass.

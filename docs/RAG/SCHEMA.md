@@ -272,7 +272,7 @@ Parent and child passages for one asset. Only child rows store a vector.
 | `embedding` | BLOB | nullable | Float32 little-endian vector. Null on parents. |
 | `model_id` | TEXT | nullable | Set on children after embed. |
 
-Index: `text_chunks_asset_idx` on `asset_id`. Hybrid Search reads child embeddings here; see [TEXT](./TEXT.md).
+Index: `text_chunks_asset_idx` on `asset_id`. Deep search reads child embeddings here; see [TEXT](./TEXT.md).
 
 Parents are inserted first, then children. Replacing an index deletes children, then parents, then writes the new rows.
 

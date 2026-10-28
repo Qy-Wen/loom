@@ -441,6 +441,14 @@ export class InMemoryMetadataStore implements MetadataStore {
 		return hits.slice(0, cap).map(({ distance: _distance, ...hit }) => hit);
 	}
 
+	async countIndexedAssets(): Promise<number> {
+		let count = 0;
+		for (const chunks of this.textChunks.values()) {
+			if (chunks.some((chunk) => chunk.role === "child")) count += 1;
+		}
+		return count;
+	}
+
 	/** Same match as the SQLite index; there is no bm25 here, so hits come in a stable order. */
 	async searchChunksFts(query: string, limit: number): Promise<ChunkHit[]> {
 		const cap = Math.max(0, Math.trunc(limit));

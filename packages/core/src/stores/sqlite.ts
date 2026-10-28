@@ -610,6 +610,13 @@ export class SqliteMetadataStore implements MetadataStore {
 		return rows.map((row) => row.asset_id);
 	}
 
+	async countIndexedAssets(): Promise<number> {
+		const row = this.requireDatabase()
+			.prepare("SELECT COUNT(DISTINCT asset_id) AS count FROM text_chunks WHERE role = 'child'")
+			.get() as { count: number };
+		return row.count;
+	}
+
 	async searchChunksFts(query: string, limit: number): Promise<ChunkHit[]> {
 		const match = compileFtsQuery(query);
 		const cap = Math.max(0, Math.trunc(limit));

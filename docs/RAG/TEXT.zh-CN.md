@@ -16,13 +16,15 @@
     → 转成 Markdown（csv、json）
     → markdown-it（Markdown AST）
     → 父子切片 + embedding              （建索引）
-    → Hybrid Search                     （检索）
+    → 深度检索                     （检索）
     → Agent 回答或调用工具              （生成）
 ```
 
 不要把整库塞进 prompt。默认不整库 embedding。
 
-`search_assets` 是检索步。用 **RRF**（`k = 60`）融合 `assets_fts` 排名和子切片向量。这些候选再沿关系走一跳，并进同一份列表。Rerank 槽位开着时，这些行再走 `POST /v1/rerank`（`query` + `documents`），然后才截断。槽位空、只有一行、或 rerank 失败，都保持这个顺序。返回 **段落 + `asset_id`**。属性过滤仍是 AND。子切片命中后可以扩到父切片。没有查询文本时只按类型/属性列出，不走图。Embedding 槽位未开或查询向量失败时退回 FTS。
+`deep_search_assets` 是检索步。只搜**切片**：块级全文（`chunks_fts`）和子切片向量，用 **RRF**（`k = 60`）融合。Rerank 槽位开着时，这些段落再走 `POST /v1/rerank`（`query` + `documents`），然后才截断。槽位空、只有一行、或 rerank 失败，都保持融合后的顺序。每个文件返回一个最佳 **段落 + `asset_id`**，附带父段落作上下文，以及 `indexedCount`。属性过滤仍是 AND。没有查询文本时只按类型/属性列出。Embedding 槽位未开或查询向量失败时只有全文一路。
+
+`search_assets` 是简单检索，不碰切片，见 [RAG.md](./RAG.zh-CN.md)。
 
 ---
 
@@ -48,12 +50,13 @@
 
 - 检索时用 Embedding 槽位把查询 embed 一次（`POST /v1/embeddings`）
 - sqlite-vec（或 JS 余弦）只打已有向量的 **子切片**
-- `assets_fts` 仍按现在那样排文件名 / 路径 / 属性 / Level 1 / VLM 正文（`ORDER BY rank`）
-- 属性过滤对两路都是硬 AND，融合前先滤
-- 两路 `asset_id` 排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只出现在一路里的命中仍用那一路计分。每个资产只留最近的子切片。重排前从这些候选沿资产关系走一跳（双向）。每个新文件单独成行，每个候选最多 8 个，带 `linkedFrom`（候选 id、关系类型、从该候选看出的方向）。已经在列表里的 id 跳过。类型和属性过滤只约束原来的候选。重排正文仍是段落、父段落或文件名。Rerank 槽位开着时，这些正文作为 `documents` 再发。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。失败或槽位空着就保持扩展后的 RRF 顺序。重排或 limit 丢掉的行不再补回。没有查询文本时不走图。TEI 原生 `texts` 以后再说。
+- `chunks_fts` 用全文（`bm25`）给子切片排序。中文、日文、韩文先切成词，所以句子中间的词也能命中，见 [SEARCH.md](./SEARCH.zh-CN.md)
+- 类型和属性过滤对两路都是硬 AND，融合前先滤
+- 两路**切片**排名用 **RRF** 融合（`score = Σ 1/(60 + rank)`，rank 从 1 起）。只被一路找到的切片仍用那一路计分。每个文件只留最佳切片。重排正文始终是这个切片的文字，不会是文件名。Rerank 槽位开着时，这些正文作为 `documents` 再发。Cohere/Jina/千帆走 `POST /v1/rerank`（或 `/v2/rerank`）。百炼 `qwen3-rerank` 走 `POST .../compatible-api/v1/reranks`；填 DashScope 的 Chat URL 会被改写。失败或槽位空着就保持融合后的顺序。重排或 limit 丢掉的行不再补回。TEI 原生 `texts` 以后再说。
+- 不沿关系扩展。没有索引的文件深度检索看不到，Agent 对它用 `search_assets`；`indexedCount` 告诉 Agent 深度检索能看到多少文件。
 - 命中可返回子段落，并可带上父切片正文
 - 图 / 视频 / 音频先转成文字再切，检索仍是这些切片，见 [MEDIA.md](./MEDIA.zh-CN.md)
-- 最小评测：`packages/core/tests/hybrid-search.test.ts`（仅 FTS、仅向量、RRF + 属性 AND、可选 rerank）和 `packages/core/tests/graph-retrieval.test.ts`（重排前的关系扩展）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../agent/EVALS.zh-CN.md)。
+- 最小评测：`packages/core/tests/deep-search.test.ts`（仅全文、仅向量、RRF + 属性 AND、可选 rerank、`indexedCount`、中文）和 `packages/core/tests/fts-store.test.ts`（块级全文、触发器、重建）。金标 Recall@k / nDCG：`packages/core/evals/`。方案见 [EVALS](../agent/EVALS.zh-CN.md)。
 
 ---
 

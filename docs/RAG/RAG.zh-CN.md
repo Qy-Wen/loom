@@ -14,7 +14,7 @@
 磁盘上的文件
     → Level 1 摘录
     → 切片 + embedding              （建索引）
-    → Hybrid Search                 （检索）
+    → 深度检索                      （检索）
     → Agent 回答或调用工具          （生成）
 ```
 
@@ -22,7 +22,12 @@
 
 第一条路径是切过的 Markdown。规则见 [TEXT.md](./TEXT.zh-CN.md)。图 / 视频 / 音频先转成文字，再走同一套切片，见 [MEDIA.md](./MEDIA.zh-CN.md)。
 
-`search_assets` 是检索步。返回 **段落 + `asset_id`**。属性过滤仍是 AND。FTS 和向量排名用 RRF 融合；重排前从这些候选沿关系走一跳，并进同一份列表。Rerank 槽位开着时再排一次。见 [TEXT.md](./TEXT.zh-CN.md)。
+检索是两个工具，按读取的内容分开：
+
+- `search_assets` 是**简单检索**：文件级全文，覆盖文件名、路径、属性、摘录和描述，外加类型、属性过滤。不用模型、不需要索引，所有文件都能搜到。返回整个文件。
+- `deep_search_assets` 是**深度检索**，即上面流程里的检索步：块级全文和块向量用 RRF 融合，可选 Rerank 槽位再排一次，每个文件返回一个最佳 **段落 + `asset_id`**。只能搜到已索引的文件，并返回 `indexedCount`。
+
+两者都不沿关系扩展；想看某个文件的来源或派生文件，Agent 调 `inspect_asset`。见 [TEXT.md](./TEXT.zh-CN.md) 和 [SEARCH.md](./SEARCH.zh-CN.md)。
 
 ---
 

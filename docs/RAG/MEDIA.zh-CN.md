@@ -16,13 +16,13 @@
 磁盘上的图 / 视频 / 音频
     → 转成 Markdown（VLM / 音频理解）
     → 同一套父子切片 + Embedding 槽位     （建索引）
-    → Hybrid Search                        （检索）
+    → 深度检索                        （检索）
     → Agent 回答或调用工具                 （生成）
 ```
 
 不要把整库塞进 prompt。默认不整库。不写一份 sidecar `.md` 进库（那会变成另一份资产）。
 
-检索仍是 `search_assets`：命中是 **段落 + `asset_id`**。视频以后可以带时间范围。
+检索是 `deep_search_assets`：命中是 **段落 + `asset_id`**。`search_assets` 也能按描述里的词找到已描述的文件。视频以后可以带时间范围。
 
 ---
 
@@ -107,6 +107,6 @@ Loom 只当 HTTP 客户端。VLM 和 Audio 模型不进进程。
 
 ## 检索
 
-图 / 视频 / 音频的向量都是 **文字切片** 的向量，和 Markdown 走同一张 `text_chunks`、同一套 Hybrid Search。不要为媒体另开一条向量检索。
+图 / 视频 / 音频的向量都是 **文字切片** 的向量，和 Markdown 走同一张 `text_chunks`、同一套深度检索。不要为媒体另开一条向量检索。
 
 sqlite-vec、和 FTS 的 RRF 融合、属性过滤见 [TEXT.md](./TEXT.zh-CN.md)。

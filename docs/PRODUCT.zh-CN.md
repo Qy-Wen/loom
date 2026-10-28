@@ -152,7 +152,7 @@ image_gen_01.png
 video_01.mp4
 ```
 
-搜索时，每个候选结果沿关系走一跳，把相邻资产作为带 `linkedFrom` 的独立行加入（见 [RAG](./RAG/RAG.zh-CN.md)）。久而久之形成一张 **Creative Asset Graph**。
+搜索不沿关系扩展。关系图用来记录和浏览出处，Agent 用 `inspect_asset` 读取一个文件的邻居（见 [RAG](./RAG/RAG.zh-CN.md)）。久而久之形成一张 **Creative Asset Graph**。
 
 ---
 
@@ -261,7 +261,7 @@ ComfyUI / 其他创作 server
 下面是示意流程，列的是做事的顺序，工具名以实际注册的为准：
 
 ```
-1.  search_assets        属性 项目=AirPods、评分 >= 4，加语义 query
+1.  deep_search_assets   属性 项目=AirPods、评分 >= 4，加语义 query
 2.  inspect_asset        看候选的元数据、说明和关系
 3.  MCP 创作工具          → ComfyUI（或其他 server）
 3b. bash / write         必要时把结果拷进库

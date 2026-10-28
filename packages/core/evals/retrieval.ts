@@ -101,7 +101,7 @@ export async function runRetrievalEval(
 	try {
 		const cases: RetrievalCaseResult[] = [];
 		for (const qrel of RETRIEVAL_QRELS) {
-			const result = await core.searchAssets(
+			const result = await core.deepSearchAssets(
 				{ query: qrel.query, properties: qrel.properties, limit: k },
 				provider,
 			);

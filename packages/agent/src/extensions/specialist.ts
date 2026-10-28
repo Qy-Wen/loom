@@ -7,7 +7,7 @@ import { isMcpToolName } from "../tools/tool-permission.ts";
 export const RETRIEVE_AGENT_TOOL = "run_retrieve_agent";
 export const CREATE_AGENT_TOOL = "run_create_agent";
 
-const RETRIEVE_LIBRARY_TOOLS = new Set(["search_assets", "inspect_asset"]);
+const RETRIEVE_LIBRARY_TOOLS = new Set(["search_assets", "deep_search_assets", "inspect_asset"]);
 /** Resolve source asset ids and transform media. The create specialist does not search the library. */
 const CREATE_LIBRARY_TOOLS = new Set([
 	"inspect_asset", "grade_image", "run_ffmpeg", "run_ffprobe",
@@ -18,11 +18,11 @@ export type SpecialistRole = "retrieve" | "create";
 export const RETRIEVE_SYSTEM_PROMPT =
 	"You search and inspect the open asset library. " +
 	"When the task supplies an asset_id, call inspect_asset with that exact id first; do not call search_assets for that asset. " +
-	"Use search_assets only to discover assets whose ids are not supplied, then inspect_asset for the selected result. " +
+	"Use search_assets to find files by name, path, properties, or exact wording; it sees every file. Use deep_search_assets to find what a document says or a passage by meaning; it sees only indexed files, and its indexedCount says how many, so fall back to search_assets when that is 0 or low. Use them only to discover assets whose ids are not supplied, then inspect_asset for the selected result. " +
 	"inspect_asset returns metadata and available write-ups, not the full text of a source file. If you need source text, use read on the relativePath returned by inspect_asset. " +
 	"Do not create, edit, or delete files, and do not call generation tools. " +
 	"When you name a library file, write an <asset_ref> block with path, asset_id, and type on their own lines, in that order, copied from the tool result. Omit asset_id when the result has none. Do not invent paths or ids. " +
-	"If a search row has linkedFrom, it is a connected file: include its asset_ref and the relation type. " +
+	"Search does not follow relations. When provenance matters, call inspect_asset on the important results: its links are connected files, so include their asset_ref and the relation type. " +
 	"Reply with those blocks and the passages that answer the task.";
 
 export const CREATE_SYSTEM_PROMPT =
@@ -79,7 +79,7 @@ export function specialistParameters() {
 
 export function specialistDescription(role: SpecialistRole): string {
 	if (role === "retrieve") {
-		return "Consider delegation only when there are multiple independent retrieval tasks that can run in parallel. Handle a single retrieval task, including a multi-step one, directly with search_assets and inspect_asset. Pass each task's full question in goal, including asset ids when needed. Returns asset ids and passages. Independent calls in the same turn run together.";
+		return "Consider delegation only when there are multiple independent retrieval tasks that can run in parallel. Handle a single retrieval task, including a multi-step one, directly with search_assets, deep_search_assets, and inspect_asset. Pass each task's full question in goal, including asset ids when needed. Returns asset ids and passages. Independent calls in the same turn run together.";
 	}
 	return "Run a creative task with the shared MCP tools in a fresh context. Pass a self-contained brief in goal, including source asset ids when the task needs them. Can inspect supplied asset ids, read and edit files, and run FFmpeg media tools, but does not search the library. Returns an outcome summary and any library paths written. Independent calls in the same turn run together.";
 }

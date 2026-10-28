@@ -153,7 +153,7 @@ image_gen_01.png
 video_01.mp4
 ```
 
-During search, each candidate follows its relations one hop and adds the neighbouring assets as separate rows tagged `linkedFrom` (see [RAG](./RAG/RAG.md)). Over time this becomes a **Creative Asset Graph**.
+Search does not follow relations. The graph is for recording and browsing provenance, and the Agent reads a file's neighbours with `inspect_asset` (see [RAG](./RAG/RAG.md)). Over time this becomes a **Creative Asset Graph**.
 
 ---
 
@@ -264,7 +264,7 @@ If a server writes outside the library, the Agent copies the file in with `bash`
 An illustrative flow: the steps show the order of work, and tool names follow what is actually registered.
 
 ```
-1.  search_assets        property project=AirPods, rating >= 4, plus a semantic query
+1.  deep_search_assets   property project=AirPods, rating >= 4, plus a semantic query
 2.  inspect_asset        read the candidates' metadata, captions, and relations
 3.  MCP creation tool    → ComfyUI (or other server)
 3b. bash / write         → copy into the library if needed

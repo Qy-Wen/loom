@@ -51,35 +51,38 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 		{
 			name: "search_assets",
 			description:
-				"Search the open local asset library by filename/path text, Level 1 extracts, VLM/audio captions, embeddings when indexed, media type, and custom properties. " +
-				"Hybrid retrieval fuses FTS ranks with child-chunk vectors (RRF). Before rerank, one relation hop from each fused candidate is added as its own row, at most 8 per candidate. " +
-				"linkedFrom names that candidate, the relation type, and direction from it (out: it points at this row, in: this row points at it). " +
-				"Type and property filters do not apply to those rows. Rerank and the limit decide which remain. A query with no text does not walk relations. " +
-				"Returns asset IDs plus a matching passage when one exists; use inspect_asset for one result.",
-			parameters: {
-				type: "object",
-				properties: {
-					query: { type: "string", description: "Case-insensitive filename, relative path, property value, Level 1 extract, VLM/audio caption, or semantic query over indexed chunks." },
-					type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
-					properties: {
-						type: "array",
-						items: {
-							type: "object",
-							properties: {
-								name: { type: "string" },
-								operator: { type: "string", enum: ["eq", "contains", "gte", "lte"] },
-								value: { anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }] },
-							},
-							required: ["name", "operator", "value"],
-							additionalProperties: false,
-						},
-					},
-					limit: { type: "number", minimum: 1, maximum: 100 },
-				},
-				additionalProperties: false,
-			},
+				"Simple search of the open local asset library: text over filename, relative path, property values, " +
+				"text-file extracts, and image/video/audio captions, plus media type and custom property filters. " +
+				"Uses no model and needs no index, so it sees every file, but it only matches the words you type: " +
+				"it does not understand meaning and returns whole files, not passages. " +
+				"Chinese, Japanese, and Korean are matched by word. A query with no text lists files by type and property. " +
+				"Use it to find a file by name or exact wording. To find what a document says, or a passage by meaning, use deep_search_assets. " +
+				"Returns asset IDs; use inspect_asset for one result.",
+			parameters: searchParameters("Words to find in a filename, relative path, property value, text extract, or caption. Case-insensitive; every word must match."),
 			execute: async (rawArgs, signal) => {
-				const args = validateSearchArgs(rawArgs);
+				const args = validateSearchArgs(rawArgs, "search_assets");
+				const result = await core.searchAssets(args, signal);
+				return {
+					content: JSON.stringify({ total: result.total, assets: result.assets }),
+					details: result,
+				} satisfies LoomToolResult;
+			},
+		},
+		{
+			name: "deep_search_assets",
+			description:
+				"Deep search of what is inside indexed files: finds the best matching passage by exact words and, when an Embedding model is set, by meaning. " +
+				"It only sees files that have been indexed (embed_asset): .md/.txt/.csv/.json files and described images, videos, and audio. " +
+				"A file that is not indexed cannot appear; use search_assets for it. " +
+				"Full-text and vector matches are fused, then an optional Rerank model reorders the passages. Each file appears once with its best passage. " +
+				"Returns asset IDs with the matching passage (and its parent passage for context), plus indexedCount, the number of searchable files. " +
+				"If indexedCount is 0 or small, tell the user that few files are indexed, fall back to search_assets, or index files first. " +
+				"Type and property filters apply. A query is required.",
+			parameters: searchParameters("What to look for. Words that appear in the passage, or a description of its meaning."),
+			execute: async (rawArgs, signal) => {
+				const args = validateSearchArgs(rawArgs, "deep_search_assets");
+				if (!args.query?.trim()) throw new TypeError("deep_search_assets needs a non-empty query");
+				const query = { ...args, query: args.query };
 				return core.runLibraryTask(async (jobSignal) => {
 					let provider: EmbeddingProvider | undefined;
 					let rerank: RerankProvider | undefined;
@@ -93,9 +96,9 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 					} catch {
 						rerank = undefined;
 					}
-					const result = await core.searchAssets(args, provider, rerank, jobSignal);
+					const result = await core.deepSearchAssets(query, provider, rerank, jobSignal);
 					return {
-						content: JSON.stringify({ total: result.total, assets: result.assets }),
+						content: JSON.stringify({ total: result.total, indexedCount: result.indexedCount, assets: result.assets }),
 						details: result,
 					} satisfies LoomToolResult;
 				}, signal);
@@ -224,8 +227,34 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 	];
 }
 
-function validateSearchArgs(value: unknown): SearchAssetsArgs {
-	if (!isRecord(value)) throw new TypeError("search_assets arguments must be an object");
+/** Both searches take the same arguments; only the meaning of `query` differs. */
+function searchParameters(queryDescription: string) {
+	return {
+		type: "object",
+		properties: {
+			query: { type: "string", description: queryDescription },
+			type: { type: "string", enum: ["image", "video", "audio", "text", "other"] },
+			properties: {
+				type: "array",
+				items: {
+					type: "object",
+					properties: {
+						name: { type: "string" },
+						operator: { type: "string", enum: ["eq", "contains", "gte", "lte"] },
+						value: { anyOf: [{ type: "string" }, { type: "number" }, { type: "boolean" }] },
+					},
+					required: ["name", "operator", "value"],
+					additionalProperties: false,
+				},
+			},
+			limit: { type: "number", minimum: 1, maximum: 100 },
+		},
+		additionalProperties: false,
+	} as const;
+}
+
+function validateSearchArgs(value: unknown, tool: string): SearchAssetsArgs {
+	if (!isRecord(value)) throw new TypeError(`${tool} arguments must be an object`);
 	const result: SearchAssetsArgs = {};
 	if (value.query !== undefined) {
 		if (typeof value.query !== "string") throw new TypeError("query must be a string");

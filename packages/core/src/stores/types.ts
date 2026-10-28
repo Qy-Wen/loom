@@ -62,6 +62,8 @@ export interface MetadataStore {
 	upsertAudioWriteup(record: AudioWriteupRecord): Promise<void>;
 	searchAssetIds(query: string): Promise<string[]>;
 	searchNearestChildren(vector: number[], limit: number): Promise<ChunkHit[]>;
+	/** Files that have at least one child chunk, i.e. what deep search can see. */
+	countIndexedAssets(): Promise<number>;
 	/** Full-text search over child chunks, best match first. */
 	searchChunksFts(query: string, limit: number): Promise<ChunkHit[]>;
 }

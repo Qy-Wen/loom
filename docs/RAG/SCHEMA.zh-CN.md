@@ -272,7 +272,7 @@ Level 2 文本 RAG 切片在 `text_chunks` 和 `text_embed_jobs`，不在 `asset
 | `embedding` | BLOB | 可空 | Float32 小端向量。父行为空。 |
 | `model_id` | TEXT | 可空 | 子切片 embed 后写入。 |
 
-索引：`text_chunks_asset_idx`（`asset_id`）。Hybrid Search 读这里的子切片向量，见 [TEXT](./TEXT.zh-CN.md)。
+索引：`text_chunks_asset_idx`（`asset_id`）。深度检索读这里的子切片向量，见 [TEXT](./TEXT.zh-CN.md)。
 
 先插父再插子。重建时先删子、再删父、再写入。
 

@@ -2,7 +2,7 @@
 
 # 评测
 
-> Loom 怎么评 Agent 行为、工具调用和检索。Agent 运行时见 [AGENT.md](./AGENT.zh-CN.md)。Hybrid Search 见 [TEXT.md](../RAG/TEXT.zh-CN.md)。模型槽位见 [SETTINGS.md](../SETTINGS.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
+> Loom 怎么评 Agent 行为、工具调用和检索。Agent 运行时见 [AGENT.md](./AGENT.zh-CN.md)。深度检索见 [TEXT.md](../RAG/TEXT.zh-CN.md)。模型槽位见 [SETTINGS.md](../SETTINGS.zh-CN.md)。待办见 [TODO.md](../TODO.zh-CN.md)。
 >
 > 这里只记结论。
 
@@ -20,7 +20,7 @@
 | Agent / 工具 | 该调哪些、不该调哪些 | `packages/agent/evals/tasks.ts` |
 | 检索 | query → 库内相对路径 | `packages/core/evals/` |
 
-Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。它查 FTS / 向量 / RRF / 属性 AND / 可选 rerank 的接线，不是检索质量金标。
+深度检索单测（`packages/core/tests/deep-search.test.ts`）保留。它查块级全文 / 向量 / RRF / 属性 AND / 可选 rerank 的接线，不是检索质量金标。检索金标调用 `deepSearchAssets`。
 
 ---
 
@@ -52,7 +52,7 @@ Hybrid Search 单测（`packages/core/tests/hybrid-search.test.ts`）保留。�
 | CI 假 Chat | `eval:agent-tools` | 脚本化 HTTP Chat。不联网。 |
 | 现场 | `eval:agent-tools:live` | `.env` 里的真实 Chat 槽位。有一条失败就退出。 |
 
-现场 harness 会打开一份临时库，文件和检索金标相同；系统提示对齐产品：`search_assets` / `inspect_asset`、`<asset_ref>` / `<system-reminder>` / `<ui_selection>`，已经点名的库文件不要用 bash/write/edit 去查。空库、或系统提示里没有这些块，不能当 Agent 评测。
+现场 harness 会打开一份临时库，文件和检索金标相同；系统提示对齐产品：`search_assets` / `deep_search_assets` / `inspect_asset`、`<asset_ref>` / `<system-reminder>` / `<ui_selection>`，已经点名的库文件不要用 bash/write/edit 去查。空库、或系统提示里没有这些块，不能当 Agent 评测。
 
 ---
 
@@ -89,7 +89,7 @@ pnpm --filter @loom/core eval:retrieval
 pnpm --filter @loom/core eval:retrieval:live
 ```
 
-CI：假 Chat 的 Agent 任务、假向量检索、Hybrid Search 单测、指标单测。现场脚本可选，需要 `.env`。
+CI：假 Chat 的 Agent 任务、假向量检索、深度检索单测、指标单测。现场脚本可选，需要 `.env`。
 
 ## 6. Durable 迁移基线
 

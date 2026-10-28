@@ -34,8 +34,8 @@ export type {
 	AssetSearchItem,
 	AssetSearchQuery,
 	AssetSearchResult,
+	DeepSearchResult,
 	PropertyFilterOperator,
-	SearchLink,
 } from "./model/retrieval.ts";
 export type {
 	GradeImageArgs,

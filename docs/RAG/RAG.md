@@ -14,7 +14,7 @@
 file on disk
     → Level 1 extract
     → chunks + embeddings          (index)
-    → Hybrid Search                (retrieve)
+    → deep search                  (retrieve)
     → Agent answers or acts        (generate / tools)
 ```
 
@@ -22,7 +22,12 @@ That is RAG. Do not stuff the library into the prompt. Do not embed the whole li
 
 First path is chunked Markdown. Rules: [TEXT.md](./TEXT.md). Image, video, and audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md).
 
-`search_assets` is the retrieve step. It returns **passage + `asset_id`**. Property filters stay AND. FTS and vector ranks fuse with RRF; one relation hop from those candidates joins the list before an optional Rerank slot reorders it. See [TEXT.md](./TEXT.md).
+Retrieval is two tools, split by what they read:
+
+- `search_assets` is **simple search**: file-level full text over filename, path, properties, extracts, and write-ups, plus type and property filters. It uses no model, needs no index, and sees every file. It returns whole files.
+- `deep_search_assets` is **deep search**, the retrieve step of the loop above: chunk full text and chunk vectors fused with RRF, an optional Rerank slot, one best **passage + `asset_id`** per file. It only sees indexed files and reports `indexedCount`.
+
+Neither follows relations; to see a file's source or derived files the Agent calls `inspect_asset`. See [TEXT.md](./TEXT.md) and [SEARCH.md](./SEARCH.md).
 
 ---
 

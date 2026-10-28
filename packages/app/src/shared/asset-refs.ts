@@ -37,11 +37,12 @@ function pushRef(out: AssetRef[], seen: Set<string>, value: unknown): void {
 }
 
 /**
- * Clickable files from `search_assets` / `inspect_asset`.
+ * Clickable files from `search_assets` / `deep_search_assets` / `inspect_asset`.
  * Returns null for every other tool.
  */
 export function assetRefsFromTool(name: string, result: unknown): AssetRef[] | null {
-	if (name !== "search_assets" && name !== "inspect_asset") return null;
+	const isSearch = name === "search_assets" || name === "deep_search_assets";
+	if (!isSearch && name !== "inspect_asset") return null;
 	const direct = asRecord(result);
 	const row = direct && (Array.isArray(direct.assets) || typeof direct.assetId === "string")
 		? direct
@@ -51,7 +52,7 @@ export function assetRefsFromTool(name: string, result: unknown): AssetRef[] | n
 	if (!row) return [];
 	const out: AssetRef[] = [];
 	const seen = new Set<string>();
-	if (name === "search_assets") {
+	if (isSearch) {
 		const assets = Array.isArray(row.assets) ? row.assets : [];
 		for (const asset of assets) pushRef(out, seen, asset);
 		return out;

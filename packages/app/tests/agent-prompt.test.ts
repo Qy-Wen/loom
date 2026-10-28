@@ -21,12 +21,21 @@ describe("systemPromptForLibrary", () => {
 
 	it("prefers direct retrieval and considers delegation only for parallel independent tasks", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
-		assert.match(prompt, /Use search_assets and inspect_asset directly for normal library retrieval/);
+		assert.match(prompt, /Use search_assets, deep_search_assets, and inspect_asset directly for normal library retrieval/);
 		assert.match(prompt, /inspect that exact id first; do not search for the same asset/);
 		assert.match(prompt, /use read on the relativePath returned by inspect_asset/);
 		assert.match(prompt, /Consider run_retrieve_agent only when there are multiple independent retrieval tasks that can run in parallel/);
-		assert.match(prompt, /For a single retrieval task, including a multi-step one, use search_assets and inspect_asset directly/);
+		assert.match(prompt, /For a single retrieval task, including a multi-step one, use search_assets, deep_search_assets, and inspect_asset directly/);
 		assert.doesNotMatch(prompt, /You do not have search_assets or inspect_asset/);
+	});
+
+	it("tells the model when to use each search, what deep search cannot see, and that relations need inspect", () => {
+		const prompt = systemPromptForLibrary("D:\\library");
+		assert.match(prompt, /search_assets to find a file by its name, path, properties, or exact wording; it needs no index and sees every file/);
+		assert.match(prompt, /deep_search_assets to find what a document says or a passage by meaning; .* only sees indexed files/);
+		assert.match(prompt, /indexedCount is 0 or low/);
+		assert.match(prompt, /Search does not follow relations/);
+		assert.doesNotMatch(prompt, /linkedFrom/);
 	});
 
 	it("refuses to invent a directory when no library is open", () => {

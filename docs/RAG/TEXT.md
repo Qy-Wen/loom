@@ -16,13 +16,15 @@
     → convert to Markdown (csv, json)
     → markdown-it (Markdown AST)
     → parent / child chunks + embeddings    (index)
-    → Hybrid Search                         (retrieve)
+    → deep search                           (retrieve)
     → Agent answers or acts                 (generate / tools)
 ```
 
 Do not stuff the library into the prompt. Do not embed the whole library by default.
 
-`search_assets` is the retrieve step. It fuses `assets_fts` ranks with child-chunk vectors using **RRF** (`k = 60`). One relation hop from those candidates joins the list. If the Rerank slot is on, those rows go to `POST /v1/rerank` (`query` + `documents`) before the limit is applied. Empty slot, one row, or a failed rerank keeps that order. Returns **passage + `asset_id`**. Property filters stay AND. A child hit can expand to its parent for more context. No query text lists the library with type/property filters only and does not walk relations. No Embedding slot, or a failed query embed, is FTS-only.
+`deep_search_assets` is the retrieve step. It searches **chunks** only: chunk full text (`chunks_fts`) and child-chunk vectors, fused with **RRF** (`k = 60`). If the Rerank slot is on, the passages go to `POST /v1/rerank` (`query` + `documents`) before the limit is applied. Empty slot, one row, or a failed rerank keeps the fused order. Returns one best **passage + `asset_id`** per file, with the parent passage for context, and `indexedCount`. Property filters stay AND. No query text lists the library with type/property filters only. No Embedding slot, or a failed query embed, is full text only.
+
+`search_assets` is the simple search and does not touch chunks; see [RAG.md](./RAG.md).
 
 ---
 
@@ -48,12 +50,13 @@ Do not stuff the library into the prompt. Do not embed the whole library by defa
 
 - Embed the query once at search time through the Embedding slot (`POST /v1/embeddings`)
 - sqlite-vec (or JS cosine) over **child** chunks that already have embeddings
-- `assets_fts` ranks filename / path / properties / Level 1 / VLM text as today (`ORDER BY rank`)
-- Property filters stay hard AND on both lists before fusion
-- Fuse the two ranked `asset_id` lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A hit in only one list still scores from that list. Collapse to one asset, attaching the nearest child passage. Before rerank, walk one hop from those candidates along asset relations, both directions. Each new file is its own row, at most 8 per candidate, with `linkedFrom` (candidate id, relation type, direction from the candidate). Skip ids already in the list. Type and property filters stay on the original candidates. The rerank document is still passage, parent passage, or filename. If the Rerank slot is on, send those documents. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps the expanded RRF order. Rows that rerank or the limit drop are not added back. A query with no text does not walk the graph. TEI-native `texts` waits.
+- `chunks_fts` ranks child chunks by full text (`bm25`). Chinese, Japanese, and Korean are cut into words first, so a word in the middle of a sentence matches; see [SEARCH.md](./SEARCH.md)
+- Property and type filters stay hard AND on both lists before fusion
+- Fuse the two ranked **chunk** lists with **RRF** (`score = Σ 1/(60 + rank)`, rank starts at 1). A chunk found by only one list still scores from that list. Keep each file's best chunk. The rerank document is always that chunk's text, never a filename. If the Rerank slot is on, send those documents. Cohere/Jina/Qianfan use `POST /v1/rerank` (or `/v2/rerank`). Bailian `qwen3-rerank` uses `POST .../compatible-api/v1/reranks`; a DashScope Chat URL is rewritten. Failure or an empty slot keeps the fused order. Rows that rerank or the limit drop are not added back. TEI-native `texts` waits.
+- Relations are not walked. A file with no index is invisible to deep search; the Agent uses `search_assets` for it, and `indexedCount` tells it how many files deep search can see.
 - A hit can return the child passage and optionally the parent text
 - Image / video / audio become text first, then the same chunks; see [MEDIA.md](./MEDIA.md)
-- Minimal eval: `packages/core/tests/hybrid-search.test.ts` (FTS-only, vec-only, RRF + property AND, optional rerank) and `packages/core/tests/graph-retrieval.test.ts` (relation hop before rerank). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../agent/EVALS.md).
+- Minimal eval: `packages/core/tests/deep-search.test.ts` (full text only, vectors only, RRF + property AND, optional rerank, `indexedCount`, Chinese) and `packages/core/tests/fts-store.test.ts` (chunk full text, triggers, rebuild). Gold-set Recall@k / nDCG: `packages/core/evals/`. Plan: [EVALS](../agent/EVALS.md).
 
 ---
 

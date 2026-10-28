@@ -12,6 +12,13 @@ describe("assetRefsFromTool", () => {
 		);
 	});
 
+	it("reads deep search results the same way", () => {
+		assert.deepEqual(
+			assetRefsFromTool("deep_search_assets", JSON.stringify({ total: 1, indexedCount: 3, assets: [{ ...clip, passage: "a line" }] })),
+			[{ assetId: "asset-1", path: "clips/hero.mp4", filename: "hero.mp4" }],
+		);
+	});
+
 	it("reads the inspected asset and its relations", () => {
 		assert.deepEqual(
 			assetRefsFromTool("inspect_asset", {

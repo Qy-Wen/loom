@@ -2,7 +2,7 @@
 
 # Evals
 
-> How Loom scores Agent behavior, tool use, and retrieval. Agent runtime: [AGENT.md](./AGENT.md). Hybrid Search: [TEXT.md](../RAG/TEXT.md). Model slots: [SETTINGS.md](../SETTINGS.md). Roadmap: [TODO.md](../TODO.md).
+> How Loom scores Agent behavior, tool use, and retrieval. Agent runtime: [AGENT.md](./AGENT.md). Deep search: [TEXT.md](../RAG/TEXT.md). Model slots: [SETTINGS.md](../SETTINGS.md). Roadmap: [TODO.md](../TODO.md).
 >
 > Record conclusions here.
 
@@ -20,7 +20,7 @@ Three tracks:
 | Agent / tools | Expected and forbidden calls | `packages/agent/evals/tasks.ts` |
 | Retrieval | Query → library-relative paths | `packages/core/evals/` |
 
-Hybrid Search unit tests (`packages/core/tests/hybrid-search.test.ts`) stay. They check FTS / vector / RRF / property AND / optional rerank wiring. They are not the quality gold set.
+Deep search unit tests (`packages/core/tests/deep-search.test.ts`) stay. They check chunk full text / vector / RRF / property AND / optional rerank wiring. They are not the quality gold set. The retrieval gold set calls `deepSearchAssets`.
 
 ---
 
@@ -52,7 +52,7 @@ Scoring is in `agent-score.ts` over durable `tool_execution_start` events from p
 | CI stub | `eval:agent-tools` | Scripted HTTP Chat. No network. |
 | Live | `eval:agent-tools:live` | Real Chat slot from `.env`. Fail if any task fails. |
 
-The live harness opens a temp library with the retrieval gold files, and uses a system prompt that matches product: `search_assets` / `inspect_asset`, `<asset_ref>` / `<system-reminder>` / `<ui_selection>`, no bash/write/edit to look up an already identified library file. Empty library or a prompt that omits those blocks is not a valid Agent eval.
+The live harness opens a temp library with the retrieval gold files, and uses a system prompt that matches product: `search_assets` / `deep_search_assets` / `inspect_asset`, `<asset_ref>` / `<system-reminder>` / `<ui_selection>`, no bash/write/edit to look up an already identified library file. Empty library or a prompt that omits those blocks is not a valid Agent eval.
 
 ---
 
@@ -89,7 +89,7 @@ pnpm --filter @loom/core eval:retrieval
 pnpm --filter @loom/core eval:retrieval:live
 ```
 
-CI: stub Agent tasks, fake-embed retrieval, Hybrid Search unit tests, metric unit tests. Live scripts are optional and need `.env`.
+CI: stub Agent tasks, fake-embed retrieval, Deep search unit tests, metric unit tests. Live scripts are optional and need `.env`.
 
 ## 6. Durable migration baseline
 

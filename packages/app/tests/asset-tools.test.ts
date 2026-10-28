@@ -75,6 +75,26 @@ test("asset tools return structured safe results", async () => {
 		assert.equal((afterAudio.details as { audioWriteup: { status: string } }).audioWriteup.status, "ready");
 		assert.equal((await core.searchAssets({ query: "Rain on a roof" })).total, 1);
 
+		const deep = tools.find((tool) => tool.name === "deep_search_assets");
+		assert.ok(deep);
+		await assert.rejects(Promise.resolve().then(() => deep.execute({ type: "image" })), /non-empty query/);
+		await assert.rejects(Promise.resolve().then(() => deep.execute({ query: "   " })), /non-empty query/);
+		const deepEmpty = await deep.execute({ query: "test image" }) as LoomToolResult;
+		const deepBody = JSON.parse(deepEmpty.content as string) as { total: number; indexedCount: number };
+		assert.equal(deepBody.total, 0);
+		assert.equal(deepBody.indexedCount, 0);
+		assert.equal(JSON.stringify(deepEmpty).includes(root), false);
+
+		const embedded = await core.embedTextAsset(hero.assetId, { modelId: "test-embed", embed: async (texts) => texts.map(() => [0.1, 0.2]) });
+		assert.equal(embedded.status, "ready");
+		const deepHit = await deep.execute({ query: "test image", type: "image" }) as LoomToolResult;
+		const hitBody = JSON.parse(deepHit.content as string) as { total: number; indexedCount: number; assets: Array<{ assetId: string; passage?: string }> };
+		assert.equal(hitBody.indexedCount, 1);
+		assert.equal(hitBody.total, 1);
+		assert.equal(hitBody.assets[0]?.assetId, hero.assetId);
+		assert.match(hitBody.assets[0]?.passage ?? "", /test image/i);
+		assert.equal(JSON.stringify(deepHit).includes(root), false);
+
 		await assert.rejects(Promise.resolve().then(() => search.execute({ type: "invalid" })), /supported asset type/);
 		await assert.rejects(Promise.resolve().then(() => inspect.execute({ assetId: "" })), /non-empty string/);
 	} finally {
