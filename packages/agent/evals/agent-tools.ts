@@ -35,17 +35,36 @@ const AGENT_EVAL_SYSTEM_PROMPT =
 	"When your reply names a library file, write an <asset_ref> block with path, asset_id, and type on their own lines, in that order. Copy path and asset_id from the tool result or from a user <asset_ref>. Omit asset_id when you do not have one. Do not invent paths or ids. " +
 	"Do not use bash, write, or edit for looking up or inspecting a library file that is already identified.";
 
-/** Word match over the eval library, like the product's full text: every query word must appear in the file's name, path, or text. */
-function mockSearch(query: string | undefined, withPassage: boolean): { total: number; assets: unknown[] } {
-	const words = (query ?? "").toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-	const hits = EVAL_FILES.filter((file) => {
+/** Related words, so the mock "deep" search can match by meaning the way the real vectors would. */
+const MOCK_RELATED: ReadonlyArray<readonly string[]> = [
+	["bicycle", "bike", "cycle", "two-wheeled", "wheeled", "vehicle"],
+	["dock", "pier", "wharf", "waterfront", "quay", "harbor", "harbour", "river", "water"],
+];
+
+function expandWords(words: readonly string[]): Set<string> {
+	const out = new Set(words);
+	for (const group of MOCK_RELATED) if (words.some((word) => group.includes(word))) for (const word of group) out.add(word);
+	return out;
+}
+
+/**
+ * Mock search over the eval library. Simple search (deep = false) is plain full text: every query word must appear in the
+ * file's name, path, or text. Deep search ranks by word overlap after expanding related words, and returns the best few,
+ * like a vector search that always returns the nearest passages.
+ */
+function mockSearch(query: string | undefined, deep: boolean): { total: number; assets: unknown[] } {
+	const words = (query ?? "").toLowerCase().match(/[\p{L}\p{N}-]+/gu) ?? [];
+	const wanted = deep ? expandWords(words) : new Set(words);
+	const scored = EVAL_FILES.map((file) => {
 		const haystack = `${file.relativePath} ${file.text}`.toLowerCase();
-		return words.every((word) => haystack.includes(word));
-	}).slice(0, 10);
-	const assets = hits.map((file) => ({
+		const hits = [...wanted].filter((word) => haystack.includes(word)).length;
+		return { file, hits };
+	}).filter((row) => deep ? row.hits > 0 : words.every((word) => row.hits > 0 && `${row.file.relativePath} ${row.file.text}`.toLowerCase().includes(word)))
+		.sort((a, b) => b.hits - a.hits).slice(0, deep ? 3 : 10);
+	const assets = scored.map(({ file }) => ({
 		assetId: file.relativePath === "notes/river.md" ? "eval-river" : file.relativePath === "recipes/soup.md" ? "eval-soup" : `eval-${file.relativePath}`,
 		relativePath: file.relativePath, filename: file.relativePath.split("/").at(-1), type: "text", properties: [],
-		...(withPassage ? { passage: file.text } : {}),
+		...(deep ? { passage: file.text } : {}),
 	}));
 	return { total: assets.length, assets };
 }
@@ -335,8 +354,8 @@ async function writeEvalLibrary(root: string): Promise<void> {
 	}
 }
 
-export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string; model: string }, options: { taskTimeoutMs?: number; only?: readonly string[] } = {}): Promise<AgentEvalResult> {
-	const runtime = await openEvalAgent({ ...chat, model: chat.model || "eval" }, { systemPrompt: AGENT_EVAL_SYSTEM_PROMPT, tools: MOCK_TOOLS });
+export async function runAgentToolsEval(chat: { baseUrl: string; apiKey?: string; model: string }, options: { taskTimeoutMs?: number; only?: readonly string[]; systemPrompt?: string } = {}): Promise<AgentEvalResult> {
+	const runtime = await openEvalAgent({ ...chat, model: chat.model || "eval" }, { systemPrompt: options.systemPrompt ?? AGENT_EVAL_SYSTEM_PROMPT, tools: MOCK_TOOLS });
 	try {
 		await writeEvalLibrary(runtime.library);
 		const scores: AgentScore[] = [];
