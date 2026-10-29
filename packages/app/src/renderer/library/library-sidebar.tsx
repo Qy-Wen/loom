@@ -354,11 +354,12 @@ export function LibrarySidebar({
 	return (
 		<aside
 			className={collapsed ? "library-sidebar collapsed" : "library-sidebar"}
+			inert={collapsed}
+			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => onKeyDown(event, treeRows, !queryActive)}
 		>
-			{!collapsed && (
-			<>
+			<div className="library-sidebar-content">
 			<div className="library-header">
 				<span className="section-label">Loom</span>
 				<span className="library-header-rule" aria-hidden="true" />
@@ -652,8 +653,7 @@ export function LibrarySidebar({
 					)}
 				</div>
 			)}
-			</>
-			)}
+			</div>
 		</aside>
 	);
 }

@@ -1,5 +1,7 @@
 import { expect, test } from "./loom.ts";
 
+test.beforeEach(async ({ loomPage }) => { await loomPage.emulateMedia({ reducedMotion: "reduce" }); });
+
 for (const mode of ["dock", "beside", "above", "bottom"] as const) test(`five unrelated registered panels share split/join/resize/hide/reopen rules in ${mode}`, async ({ loomPage: page }) => {
 	test.skip(process.env.LOOM_E2E_PANELS !== "1" || Boolean(process.env.LOOM_CDP_URL), "build with LOOM_E2E_PANELS=1 for isolated registration acceptance");
 	await expect(page.locator(".shell")).toBeVisible();
@@ -27,7 +29,7 @@ for (const mode of ["dock", "beside", "above", "bottom"] as const) test(`five un
 		await page.mouse.up();
 		expect((await timeline.boundingBox())!.y).toBeGreaterThan((await gamma.boundingBox())!.y);
 		const region = page.locator(`.panel-region[data-region="${mode}"]`);
-		const divider = region.locator(":scope > .resize-handle.row").nth(1);
+		const divider = region.locator(":scope > .panel-region-content > .resize-handle.row").nth(1);
 		const resize = await divider.boundingBox();
 		const before = await gamma.boundingBox();
 		await page.mouse.move(resize!.x + resize!.width / 2, resize!.y + 5); await page.mouse.down();

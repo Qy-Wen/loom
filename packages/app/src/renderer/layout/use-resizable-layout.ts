@@ -69,8 +69,9 @@ export function useResizableLayout(): {
 		document.body.classList.add("resizing-columns");
 
 		const onPointerMove = (moveEvent: PointerEvent) => {
-			const besideOpen = !!shellRef.current?.querySelector(".beside-resize");
-			const sideOpen = !!shellRef.current?.querySelector(".side-resize");
+			const panelsVisible = !shellRef.current?.classList.contains("panels-collapsed");
+			const besideOpen = panelsVisible && !!shellRef.current?.querySelector(".beside-resize");
+			const sideOpen = panelsVisible && !!shellRef.current?.querySelector(".side-resize");
 			if (side === "library") {
 				const taken = (besideOpen ? besideWidth + HANDLE_WIDTH : 0) + (sideOpen ? sideWidth + HANDLE_WIDTH : 0);
 				const room = bounds.width - taken - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
@@ -100,6 +101,7 @@ export function useResizableLayout(): {
 	return {
 		shellRef,
 		shellStyle: {
+			"--library-open-width": `${libraryWidth}px`,
 			"--library-width": `${libraryCollapsed ? COLLAPSED_LIBRARY_WIDTH : libraryWidth}px`,
 			"--library-gap": libraryCollapsed ? `${COLLAPSED_LIBRARY_GAP}px` : `${HANDLE_WIDTH}px`,
 			"--side-width": `${sideWidth}px`,

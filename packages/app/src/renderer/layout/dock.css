@@ -9,6 +9,15 @@
 body.resizing-columns { cursor: col-resize; user-select: none; }
 
 .panel-region { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
+.panel-region { overflow: clip; opacity: 1; visibility: visible; transition: opacity var(--layout-toggle-duration) var(--layout-toggle-ease), visibility 0s; }
+.panel-region-content { display: flex; flex: 1; flex-direction: column; min-width: 0; min-height: 0; translate: 0 0; transition: translate var(--layout-toggle-duration) var(--layout-toggle-ease); }
+.panel-region.dock-band > .panel-region-content { width: calc(var(--side-width) + 5px); }
+.panel-region.beside-band > .panel-region-content { width: calc(var(--beside-width) + 5px); }
+.shell:not(.side-hidden) > .panel-region.beside-band > .panel-region-content { width: calc(var(--beside-width) + 10px); }
+.panel-region.bottom-band > .panel-region-content { flex: 0 0 var(--bottom-height); }
+.panel-region.above-band > .panel-region-content { flex: 0 0 var(--above-height); }
+.shell.panels-collapsed > .panel-region:is(.dock-band, .beside-band) > .panel-region-content { translate: 16px 0; }
+.shell.panels-collapsed > .panel-region:is(.bottom-band, .above-band) > .panel-region-content { translate: 0 16px; }
 .panel-region.dock-band { grid-column: 5; grid-row: 1 / -1; margin-left: -5px; }
 .shell.has-beside > .panel-region.dock-band { grid-column: 7; }
 .panel-region.beside-band { grid-column: 5; grid-row: 1 / -1; margin-left: -5px; }
@@ -26,7 +35,7 @@ body.resizing-columns { cursor: col-resize; user-select: none; }
 .shell.has-above.has-bottom > .panel-region.above-band { margin-bottom: calc(var(--join-border-width) - 10px); padding-bottom: calc(10px - var(--join-border-width)); }
 
 .panel-slot { position: relative; display: flex; flex-direction: column; min-width: 0; min-height: 0; background: #fff; }
-.panel-region > .panel-slot { flex: 1 1 0; }
+.panel-region-content > .panel-slot { flex: 1 1 0; }
 .panel-slot > .work-panel { position: relative; flex: 1 1 0; width: auto; height: auto; margin: 0; border: 0; box-shadow: none; border-radius: 0; }
 .panel-slot.joined .work-panel-title { display: none; }
 .panel-slot .joined-inactive { display: none; }
@@ -34,8 +43,9 @@ body.resizing-columns { cursor: col-resize; user-select: none; }
 .panel-region.beside-band .work-panel-title { padding-left: 17px; }
 .panel-region.dock-band .details-content { padding-left: 23px; }
 .panel-region.dock-band .session-bar { padding-left: 11px; }
-.panel-region.dock-band > .panel-slot > .panel-tabs { padding-left: 13px; }
+.panel-region.dock-band > .panel-region-content > .panel-slot > .panel-tabs { padding-left: 13px; }
 .shell > .panel-slot { position: absolute; z-index: 8; overflow: hidden; border: 1px solid #d8d8d4; border-radius: 10px; box-shadow: 0 16px 40px rgb(0 0 0 / 18%); }
+.shell > .panel-slot { opacity: 1; visibility: visible; translate: 0 0; transition: opacity var(--layout-toggle-duration) var(--layout-toggle-ease), translate var(--layout-toggle-duration) var(--layout-toggle-ease), visibility 0s; }
 body.dragging-panel { cursor: grabbing; user-select: none; }
 body.dragging-panel .work-panel-title,
 body.dragging-panel .panel-tabs,
@@ -51,9 +61,9 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.join-target.window-corner::before { border-bottom-right-radius: var(--window-corner); }
 .shell:has(.panel-slot.drop-preview)::before { display: none; }
 .panel-slot.drop-preview::after { position: absolute; inset: 0; z-index: 50; box-sizing: border-box; border: 2px solid #7896c8; background: rgb(120 150 200 / 12%); content: ""; pointer-events: none; }
-.panel-region.above-band > .panel-slot.drop-preview:first-child::after,
-.panel-region.bottom-band > .panel-slot.drop-preview:first-child::after { top: calc(0px - var(--join-border-width)); }
-.shell.has-above.has-bottom > .panel-region.above-band > .panel-slot.drop-preview:last-child::after { bottom: calc(var(--join-border-width) - 10px); }
+.panel-region.above-band > .panel-region-content > .panel-slot.drop-preview:first-child::after,
+.panel-region.bottom-band > .panel-region-content > .panel-slot.drop-preview:first-child::after { top: calc(0px - var(--join-border-width)); }
+.shell.has-above.has-bottom > .panel-region.above-band > .panel-region-content > .panel-slot.drop-preview:last-child::after { bottom: calc(var(--join-border-width) - 10px); }
 .work-panel.join-target > .work-panel-title,
 .panel-slot.join-target > .panel-tabs { background: rgb(120 150 200 / 28%); box-shadow: inset 0 -2px 0 #5d7eaf; }
 
@@ -73,8 +83,8 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .work-panel-edge.corner { right: 0; bottom: 0; width: 14px; height: 14px; cursor: nwse-resize; }
 .resize-handle.row { flex: 0 0 10px; cursor: row-resize; }
 .resize-handle.row::after { top: 4px; right: 0; bottom: auto; left: 0; width: auto; height: 1px; }
-.panel-region > .resize-handle.row { margin-top: -5px; margin-bottom: -5px; }
-.panel-region > .resize-handle.row::after { top: 5px; }
+.panel-region-content > .resize-handle.row { margin-top: -5px; margin-bottom: -5px; }
+.panel-region-content > .resize-handle.row::after { top: 5px; }
 .resize-handle.row:hover::after, .resize-handle.row.dragging::after { width: auto; height: 1px; background: #7896c8; }
 .resize-handle.bottom-resize::after, .resize-handle.above-resize::after { top: calc(100% - var(--join-border-width)); bottom: auto; }
 .shell.library-collapsed > .workbench,
@@ -98,7 +108,9 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.panel-collapse-bottom .panel-region.bottom-band .panel-tabs,
 .shell.panel-collapse-above .panel-region.above-band .work-panel-title,
 .shell.panel-collapse-above .panel-region.above-band .panel-tabs { padding-right: 40px; }
-.shell.panels-collapsed > .panel-region, .shell.panels-collapsed > .panel-slot { display: none; }
+.shell.panels-collapsed > .panel-region { opacity: 0; visibility: hidden; pointer-events: none; transition-delay: 0s, var(--layout-toggle-duration); }
+.shell.panels-collapsed > .panel-slot { opacity: 0; visibility: hidden; translate: 0 12px; pointer-events: none; transition-delay: 0s, 0s, var(--layout-toggle-duration); }
+.shell.panels-collapsed > :is(.side-resize, .beside-resize, .bottom-resize, .above-resize) { visibility: hidden; pointer-events: none; }
 
 .side-panel {
 	display: flex;

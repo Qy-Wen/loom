@@ -1,5 +1,7 @@
 import { expect, test } from "./loom.ts";
 
+test.beforeEach(async ({ loomPage }) => { await loomPage.emulateMedia({ reducedMotion: "reduce" }); });
+
 test("unrelated floating panels split, cancel, resize and restore through the shared engine", async ({ loomPage: page }) => {
 	test.skip(process.env.LOOM_E2E_PANELS !== "1" || Boolean(process.env.LOOM_CDP_URL), "build with LOOM_E2E_PANELS=1 for isolated registration acceptance");
 	await expect(page.locator(".shell")).toBeVisible();

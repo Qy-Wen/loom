@@ -3,18 +3,47 @@
 	position: relative;
 	--window-corner: 16px;
 	--join-border-width: 2px;
+	--layout-toggle-duration: 240ms;
+	--layout-toggle-ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--panel-gap: 10px;
+	--dock-track-width: var(--side-width);
+	--beside-track-width: var(--beside-width);
+	--bottom-track-height: var(--bottom-height);
+	--above-track-height: var(--above-height);
 	display: grid;
-	grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--side-width);
+	grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) var(--panel-gap) var(--dock-track-width);
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
+	transition: grid-template-columns var(--layout-toggle-duration) var(--layout-toggle-ease), grid-template-rows var(--layout-toggle-duration) var(--layout-toggle-ease);
+}
+
+body.resizing-columns .shell,
+body.resizing-rows .shell,
+body.resizing-panel .shell,
+body.dragging-panel .shell {
+	--layout-toggle-duration: 0ms;
+}
+
+.shell.panels-collapsed {
+	--panel-gap: 0px;
+	--dock-track-width: 0px;
+	--beside-track-width: 0px;
+	--bottom-track-height: 0px;
+	--above-track-height: 0px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.shell {
+		--layout-toggle-duration: 0ms;
+	}
 }
 .shell.side-hidden { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr); }
-.shell.has-beside { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--beside-width) 10px var(--side-width); }
-.shell.has-beside.side-hidden { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) 10px var(--beside-width); }
-.shell.has-bottom { grid-template-rows: minmax(0, 1fr) 10px var(--bottom-height); }
-.shell.has-above { grid-template-rows: minmax(0, 1fr) 10px var(--above-height); }
-.shell.has-above.has-bottom { grid-template-rows: minmax(0, 1fr) 10px var(--above-height) 10px var(--bottom-height); }
+.shell.has-beside { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) var(--panel-gap) var(--beside-track-width) var(--panel-gap) var(--dock-track-width); }
+.shell.has-beside.side-hidden { grid-template-columns: var(--library-width) var(--library-gap, 10px) minmax(240px, 1fr) var(--panel-gap) var(--beside-track-width); }
+.shell.has-bottom { grid-template-rows: minmax(0, 1fr) var(--panel-gap) var(--bottom-track-height); }
+.shell.has-above { grid-template-rows: minmax(0, 1fr) var(--panel-gap) var(--above-track-height); }
+.shell.has-above.has-bottom { grid-template-rows: minmax(0, 1fr) var(--panel-gap) var(--above-track-height) var(--panel-gap) var(--bottom-track-height); }
 
 .shell > .library-sidebar { grid-column: 1; grid-row: 1 / -1; }
 .shell > .library-resize { grid-column: 2; grid-row: 1 / -1; }

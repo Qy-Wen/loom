@@ -5,6 +5,12 @@ import { expect, test } from "./loom.ts";
 
 type PlaceMode = "dock" | "float" | "bottom" | "beside" | "above";
 
+// Pixel geometry is checked after an immediate layout change; panel-motion covers transitions.
+test.beforeEach(async ({ loomPage }) => {
+	await loomPage.emulateMedia({ reducedMotion: "reduce" });
+	await expect(loomPage.locator(".shell")).toBeVisible({ timeout: 30_000 });
+});
+
 async function savedPanel(page: Page, id: string) {
 	return page.evaluate((id) => {
 		const state = JSON.parse(localStorage.getItem("loom.layout.panels")!);
@@ -400,7 +406,7 @@ for (const edge of ["top", "bottom"] as const) test(`dragging onto the right pan
 		const above = edge === "top" ? agent : details;
 		const below = edge === "top" ? details : agent;
 		expect((await above.boundingBox())!.y).toBeLessThan((await below.boundingBox())!.y);
-		const divider = page.locator('.panel-region[data-region="dock"] > .resize-handle.row');
+		const divider = page.locator('.panel-region[data-region="dock"] > .panel-region-content > .resize-handle.row');
 		const resizeHandle = await divider.boundingBox();
 		const before = await above.boundingBox();
 		await page.mouse.move(resizeHandle!.x + resizeHandle!.width / 2, resizeHandle!.y + resizeHandle!.height / 2);

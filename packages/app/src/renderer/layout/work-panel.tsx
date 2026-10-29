@@ -20,6 +20,8 @@ function PanelSlotView({ slot, layout, panels }: { slot: PanelSlot; layout: Layo
 	return (
 		<div
 			data-slot={slot.id}
+			inert={mode === "float" && layout.panelsCollapsed}
+			aria-hidden={mode === "float" && layout.panelsCollapsed || undefined}
 			className={`panel-slot${joined ? ` side-stack joined ${regionClass}` : ""}${layout.isDragging(slot) ? " group-drag" : ""}${layout.isPreview(slot) ? " drop-preview" : ""}${target ? " join-target" : ""}`}
 			style={layout.slotStyle(slot)}
 		>
@@ -57,12 +59,14 @@ export function PanelWorkspace({ layout, panels }: { layout: Layout; panels: rea
 	const region = (mode: PanelRegion) => {
 		const slots = layout.regionSlots(mode);
 		if (!slots.length) return null;
-		return <div key={mode} data-region={mode} className={`panel-region ${mode}-band`}>
+		return <div key={mode} data-region={mode} className={`panel-region ${mode}-band`} inert={layout.panelsCollapsed} aria-hidden={layout.panelsCollapsed || undefined}>
+			<div className="panel-region-content">
 			{slots.map((slot, index) => <Fragment key={slot.id}>
 				{index > 0 && <div className="resize-handle row" role="separator" aria-label={t.app.resizeSplit} aria-orientation="horizontal"
 					onPointerDown={(event) => layout.beginSlotResize(slots[index - 1], slot, event)} />}
 				<PanelSlotView slot={slot} layout={layout} panels={panels} />
 			</Fragment>)}
+			</div>
 		</div>;
 	};
 	return <>

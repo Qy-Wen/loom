@@ -1110,10 +1110,10 @@ export function App(): React.JSX.Element {
 	}
 
 	const panelsCollapsed = panels.panelsCollapsed;
-	const docked = !panelsCollapsed && panels.hasRegion("dock");
-	const bottom = !panelsCollapsed && panels.hasRegion("bottom");
-	const beside = !panelsCollapsed && panels.hasRegion("beside");
-	const above = !panelsCollapsed && panels.hasRegion("above");
+	const docked = panels.hasRegion("dock");
+	const bottom = panels.hasRegion("bottom");
+	const beside = panels.hasRegion("beside");
+	const above = panels.hasRegion("above");
 	const collapseOnBottom = !panelsCollapsed && !docked && !beside && bottom;
 	const collapseOnAbove = !panelsCollapsed && !docked && !beside && !bottom && above;
 

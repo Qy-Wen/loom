@@ -1,5 +1,6 @@
 import { type CSSProperties, type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useRef, useState } from "react";
 import { bottomBand, clampFloat, dockSplitEdge, MIN_PANEL_HEIGHT, pointerDocks, pointerInside, pointerNearLowerBand, pointerOnLeftEdge, pointerOnTopEdge, type FloatRect, type PanelPlace } from "./panel-geometry.ts";
+import { readPanelLayoutRect, usePanelLayoutMotion } from "./use-panel-layout-motion.ts";
 import {
 	activeTab, extractPanel, focusPanel, movePanel, PANEL_LAYOUT_KEY, readPanelLayout,
 	reconcilePanels, relativeRect, reorderTabs, resizeSlots, slotFor, slotWeights, visibleTabs,
@@ -26,7 +27,7 @@ interface DropGeometry {
 
 function previewsLayout(target: Target | null): target is Target {
 	const drop = target?.drop;
-	return !!drop && (drop.kind === "split" || drop.kind === "band" || (drop.kind === "place" && (drop.place.mode === "above" || drop.place.mode === "bottom")));
+	return !!drop && (drop.kind === "split" || drop.kind === "band" || (drop.kind === "place" && drop.place.mode !== "float"));
 }
 interface TabReorder {
 	id: PanelId;
@@ -82,6 +83,8 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 	const effective = preview ? movePanel(state, drag!.move, preview.drop)
 		: extracted ? { ...extracted.state, slots: [...extracted.state.slots, { ...extracted.slot, place: { mode: "float", ...drag!.rect } as PanelPlace }] } : state;
 	const slots = effective.slots.filter((slot) => visibleTabs(slot, registrations).length > 0);
+	usePanelLayoutMotion(shellRef, drag ? JSON.stringify(drag.target?.drop ?? null) : "", extracted?.slot.id ?? null,
+		preview ? extracted?.slot.id ?? null : null, preview?.drop.kind === "place" && (preview.drop.place.mode === "dock" || preview.drop.place.mode === "beside"));
 	const regionSlots = (region: PanelRegion) => slots.filter((slot) => slot.place.mode === region);
 	const hasRegion = (region: PanelRegion) => regionSlots(region).length > 0;
 	const place = (id: PanelId): PanelPlace => slotFor(effective, id)?.place ?? { mode: "dock" };
@@ -140,11 +143,11 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		if (!current || !shell) return null;
 		const remaining = current.state.slots.filter((slot) => visibleTabs(slot, registrationsRef.current).length);
 		const rows = remaining.flatMap((slot) => {
-			const element = [...shell.querySelectorAll<HTMLElement>("[data-slot]")].find((element) => element.dataset.slot === slot.id);
+			const element = [...shell.querySelectorAll<HTMLElement>(".panel-slot[data-slot]")].find((element) => element.dataset.slot === slot.id);
 			if (!element) return [];
-			const box = element.getBoundingClientRect();
+			const box = readPanelLayoutRect(element);
 			const title = element.querySelector<HTMLElement>(":scope > .panel-tabs, :scope > .work-panel > .work-panel-title");
-			const top = (slot.place.mode === "bottom" || slot.place.mode === "above") && title ? title.getBoundingClientRect().top - readCssPx(shell, "--join-border-width", 2) : box.top;
+			const top = (slot.place.mode === "bottom" || slot.place.mode === "above") && title ? readPanelLayoutRect(title).top - readCssPx(shell, "--join-border-width", 2) : box.top;
 			return [{ slot, box, layer: Number.parseFloat(getComputedStyle(element).zIndex) || 0,
 				joinFrame: { x: box.left - bounds.left, y: top - bounds.top, width: box.width, height: box.bottom - top } }];
 		}).filter(({ box }) => box.width > 1 && box.height > 1);
@@ -227,7 +230,7 @@ export function usePanelLayout(shellRef: RefObject<HTMLDivElement | null>, regis
 		if (!shell || !originElement) return;
 		event.preventDefault(); event.stopPropagation();
 		if (move.kind === "panel") focus(move.id);
-		const origin = originElement.getBoundingClientRect();
+		const origin = readPanelLayoutRect(originElement);
 		const bounds = shell.getBoundingClientRect();
 		let rect = relativeRect(origin, bounds);
 		const grabX = event.clientX - origin.left;
