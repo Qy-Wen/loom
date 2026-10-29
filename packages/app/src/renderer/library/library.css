@@ -131,6 +131,19 @@
 	overflow-y: auto;
 }
 
+.library-sidebar .asset-list.thin-scroll {
+	--tree-scrollbar-thumb: transparent;
+	scrollbar-color: var(--tree-scrollbar-thumb) transparent;
+}
+
+.library-sidebar .asset-list.is-scrolling {
+	--tree-scrollbar-thumb: oklch(50% 0 0);
+}
+
+.library-sidebar .asset-list.thin-scroll::-webkit-scrollbar-thumb {
+	background: var(--tree-scrollbar-thumb);
+}
+
 .folder-row,
 .asset-row {
 	display: flex;

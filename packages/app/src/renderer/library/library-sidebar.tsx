@@ -18,6 +18,7 @@ import { assetKey, pointerMode, visibleTreeRows, type PointerMode, type TreeRow 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 const FILE_SORT_KEY = "loom.library.fileSort";
 const FILE_SORT_DIRECTION_KEY = "loom.library.fileSortDirection";
+const SCROLLBAR_HIDE_DELAY = 800;
 
 function storedFileSort(): FileSort {
 	return localStorage.getItem(FILE_SORT_KEY) === "modified" ? "modified" : "name";
@@ -242,6 +243,19 @@ export function LibrarySidebar({
 }: LibrarySidebarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const empty = library.assets.length === 0 && library.folders.length === 0;
+	const [scrolling, setScrolling] = useState(false);
+	const scrollTimerRef = useRef<number | null>(null);
+	useEffect(() => () => {
+		if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+	}, []);
+	function showScrollbar(): void {
+		setScrolling(true);
+		if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
+		scrollTimerRef.current = window.setTimeout(() => {
+			scrollTimerRef.current = null;
+			setScrolling(false);
+		}, SCROLLBAR_HIDE_DELAY);
+	}
 	const [fileDisplay, setFileDisplay] = useState<FileDisplay>(() => (
 		localStorage.getItem(FILE_DISPLAY_KEY) === "icons" ? "icons" : "list"
 	));
@@ -453,7 +467,8 @@ export function LibrarySidebar({
 				<div className="empty library-placeholder">{t.library.openFolderHint}</div>
 			) : (
 				<div
-					className="asset-list thin-scroll"
+					className={`asset-list thin-scroll${scrolling ? " is-scrolling" : ""}`}
+					onScroll={showScrollbar}
 					onDragOver={(event) => {
 						if (overFavoritesOrTags(event)) return;
 						if (hasOsFileDrag(event.dataTransfer)) {

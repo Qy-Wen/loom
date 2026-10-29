@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { useLocale } from "../locale.tsx";
 import { uiPlatform } from "../../shared/locale.ts";
 import {
@@ -305,6 +305,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 		<div className={`media-transport${clock.paused ? " is-paused" : ""}`} data-zoom-ui="">
 			<input
 				className="media-seek"
+				style={{ "--media-fill": `${clock.duration > 0 ? (Math.min(clock.time, clock.duration) / clock.duration) * 100 : 0}%` } as CSSProperties}
 				type="range"
 				min={0}
 				max={clock.duration > 0 ? clock.duration : 0}
@@ -354,6 +355,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 					</button>
 					<input
 						className="media-volume"
+						style={{ "--media-fill": `${(clock.muted ? 0 : clock.volume) * 100}%` } as CSSProperties}
 						type="range"
 						min={0}
 						max={1}
@@ -500,7 +502,7 @@ function formatClock(seconds: number): string {
 
 function PlayIcon(): React.JSX.Element {
 	return (
-		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+		<svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
 			<path fill="currentColor" d="M5.2 3.3v9.4L12.6 8 5.2 3.3z" />
 		</svg>
 	);
@@ -508,7 +510,7 @@ function PlayIcon(): React.JSX.Element {
 
 function PauseIcon(): React.JSX.Element {
 	return (
-		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+		<svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
 			<path fill="currentColor" d="M4.2 3.2h2.4v9.6H4.2zM9.4 3.2h2.4v9.6H9.4z" />
 		</svg>
 	);
@@ -516,7 +518,7 @@ function PauseIcon(): React.JSX.Element {
 
 function VolumeIcon(): React.JSX.Element {
 	return (
-		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+		<svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
 			<path fill="currentColor" d="M3 6.2h2.1L8.2 3.5v9L5.1 9.8H3V6.2z" />
 			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="M10.2 6.1a2.7 2.7 0 0 1 0 3.8" />
 		</svg>
@@ -525,7 +527,7 @@ function VolumeIcon(): React.JSX.Element {
 
 function MutedIcon(): React.JSX.Element {
 	return (
-		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
+		<svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
 			<path fill="currentColor" d="M3 6.2h2.1L8.2 3.5v9L5.1 9.8H3V6.2z" />
 			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" d="m10.2 6.4 3.2 3.2M13.4 6.4l-3.2 3.2" />
 		</svg>
