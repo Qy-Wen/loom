@@ -311,7 +311,7 @@ Panel layout conventions:
 - A new panel is registered only in `App.tsx` (`PanelRegistration`: stable `id`, title, visibility, renderer, optional initial position and first-open policy). Never branch on a panel ID in the layout hook, drag geometry, tabs, or CSS. A saved position beats the default; a hidden panel that was never opened takes no slot; unregistering removes stale IDs.
 - Each slot stores ordered tabs, the active tab, position, and a size weight. Weights are normalized over the visible slots, so the region still fills after other slots are dragged out or hidden. A floating slot stores a rectangle relative to the shell.
 - The layout is stored in `localStorage` under `loom.layout.panels` (versioned). Column widths and the central region's height are separate settings.
-- The panel registration and floating e2e specs (`registered-panels`, `registered-float`) run only in a build made with `LOOM_E2E_PANELS=1`; a normal production build has no fixture entry.
+- The panel registration and floating e2e specs (`registered-panels`, `registered-float`) run only in a `build:e2e` build made with `LOOM_E2E_PANELS=1`; a normal production build has no fixture entry.
 
 ## 9. Architecture
 

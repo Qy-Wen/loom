@@ -10,6 +10,7 @@ node_modules/
 # Build output
 dist/
 out/
+out-e2e/
 build/
 release/
 *.tsbuildinfo

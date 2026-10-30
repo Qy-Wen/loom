@@ -29,6 +29,8 @@ const require = createRequire(import.meta.url);
 const appRoot = dirname(fileURLToPath(new URL(".", import.meta.url)));
 const CDP = process.env.LOOM_CDP_URL?.trim() || "http://127.0.0.1:9344";
 const attach = Boolean(process.env.LOOM_CDP_URL?.trim());
+/** Build output the tests launch. It is separate from `out/`, which `pnpm dev` uses, so the two never overwrite each other. */
+export const E2E_OUT = process.env.LOOM_BUILD_OUT?.trim() || "out-e2e";
 
 /**
  * Start an isolated Electron. A native context menu cannot be driven from a test and, left open while the app
@@ -36,10 +38,11 @@ const attach = Boolean(process.env.LOOM_CDP_URL?.trim());
  * stalls the run). So popup() answers at once as if the menu was dismissed.
  */
 export async function launchTestElectron(userData: string): Promise<ElectronApplication> {
-	if (!existsSync(join(appRoot, "out/main/index.js"))) throw new Error("Build the app first: pnpm --filter @loom/app build");
+	const entry = join(appRoot, E2E_OUT, "main/index.js");
+	if (!existsSync(entry)) throw new Error("Build the app first: pnpm --filter @loom/app build:e2e");
 	const app = await electron.launch({
 		executablePath: require("electron") as string,
-		args: [appRoot],
+		args: [entry],
 		env: { ...process.env, LOOM_E2E: "1", LOOM_E2E_USER_DATA: userData, ELECTRON_DISABLE_SECURITY_WARNINGS: "1" },
 	});
 	await app.evaluate(({ Menu }) => {

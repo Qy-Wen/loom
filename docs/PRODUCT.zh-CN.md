@@ -308,7 +308,7 @@ ComfyUI / 其他创作 server
 - 新增面板只在 `App.tsx` 注册（`PanelRegistration`：稳定 `id`、标题、可见性、renderer，可选初始位置与首次打开策略），不在布局 hook、拖拽几何、tab 或 CSS 里按 ID 分支。已保存的位置优先于默认位置；隐藏且从未打开的面板不占槽位；注销注册项会清掉过期 ID。
 - 每个槽位保存有序 tabs、活动 tab、位置和尺寸权重；权重按当前可见槽位归一化，拖出或隐藏其他槽位后仍填满区域。浮动槽位保存相对 shell 的矩形。
 - 布局存在 `localStorage` 的 `loom.layout.panels`（带版本）；列宽与中央区域高度是独立设置。
-- 面板注册和浮动的 e2e（`registered-panels`、`registered-float`）只在 `LOOM_E2E_PANELS=1` 构建下运行，普通生产构建不含 fixture 入口。
+- 面板注册和浮动的 e2e（`registered-panels`、`registered-float`）只在带 `LOOM_E2E_PANELS=1` 的 `build:e2e` 构建下运行，普通生产构建不含 fixture 入口。
 
 ## 9. 架构
 

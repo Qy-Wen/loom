@@ -139,6 +139,8 @@ test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
 
 test("settings persist the chat provider", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running userData");
+	// A provider with models, so the model table renders. Do not rely on a developer's .env creating one.
+	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1", { model: "demo" });
 	await loomPage.getByRole("button", { name: "Settings" }).click();
 	const dialog = loomPage.getByRole("dialog", { name: "Settings" });
 	await expect(dialog).toBeVisible();

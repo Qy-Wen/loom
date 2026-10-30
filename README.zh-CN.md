@@ -60,7 +60,8 @@ pnpm dist                             # 在 Mac 上打出 macOS arm64/x64 的 dm
 pnpm --filter @loom/app check:node-sqlite  # 验证真实 Electron 主进程的 SQLite
 pnpm --filter @loom/agent try:durable  # 真实模型/工具 + 临时 SQLite/重开冒烟测试
 pnpm test                            # 全部单元 / 集成测试
-pnpm test:e2e                        # Playwright 冷启动（需先 build）
+pnpm --filter @loom/app build:e2e    # 为 e2e 构建到 out-e2e/（pnpm dev 用 out/，两者可同时运行）
+pnpm test:e2e                        # Playwright 冷启动（需先 build:e2e）
 pnpm test:e2e e2e/x.spec.ts -g "名称" --repeat-each=20   # 只跑某个文件或用例并重复；--last-failed 重跑上次失败的
 pnpm test:e2e:attach                 # Playwright 连上正在跑的 pnpm dev（:9344）
 pnpm -r typecheck

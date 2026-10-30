@@ -48,7 +48,7 @@ Counter、up-down counter 和 histogram 按十秒时间段聚合次数、总和�
 独立 Electron 验收使用临时素材库和本地模型 mock：
 
 ```bash
-LOOM_E2E_TRACE=1 pnpm --filter @loom/app build
+LOOM_E2E_TRACE=1 pnpm --filter @loom/app build:e2e
 cd packages/app
 LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
 ```

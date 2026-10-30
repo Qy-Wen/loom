@@ -60,7 +60,8 @@ pnpm dist                             # On a Mac: macOS arm64/x64 dmg and the Wi
 pnpm --filter @loom/app check:node-sqlite  # Verify SQLite in the real Electron main process
 pnpm --filter @loom/agent try:durable  # Live model/tool + temporary SQLite/reopen smoke test
 pnpm test                             # All unit and integration tests
-pnpm test:e2e                         # Playwright launch (needs app build)
+pnpm --filter @loom/app build:e2e     # Build for e2e into out-e2e/ (pnpm dev keeps out/, so both can run together)
+pnpm test:e2e                         # Playwright launch (needs build:e2e)
 pnpm test:e2e e2e/x.spec.ts -g "name" --repeat-each=20   # one spec or case, repeated; --last-failed reruns failures
 pnpm test:e2e:attach                  # Playwright attach to pnpm dev (:9344)
 pnpm -r typecheck

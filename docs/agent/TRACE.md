@@ -48,7 +48,7 @@ Coverage includes the native adapter conformance suite with actual ordered measu
 Isolated Electron acceptance uses a temporary library and a local mock model:
 
 ```bash
-LOOM_E2E_TRACE=1 pnpm --filter @loom/app build
+LOOM_E2E_TRACE=1 pnpm --filter @loom/app build:e2e
 cd packages/app
 LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
 ```

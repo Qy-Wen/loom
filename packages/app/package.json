@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "electron-vite dev",
     "build": "electron-vite build",
+    "build:e2e": "node ../../scripts/with-env.mjs LOOM_BUILD_OUT=out-e2e -- electron-vite build",
     "start": "electron-vite preview",
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "check:node-sqlite": "node scripts/check-node-sqlite.cjs",
