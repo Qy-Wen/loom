@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
-import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
 import { readFileSync } from "node:fs";
 import fs from "node:fs";
 import fsPromises from "node:fs/promises";
@@ -192,10 +192,12 @@ test("a busy lock directory is removed before the next storage update starts", a
 	const descriptor = Object.getOwnPropertyDescriptor(process, "platform")!;
 	Object.defineProperty(process, "platform", { ...descriptor, value: "win32" });
 	t.after(() => Object.defineProperty(process, "platform", descriptor));
+	// The lock sits at the canonical path, which differs from the temp path where a directory is a symlink (macOS /var).
+	const lockPath = `${join(await realpath(dir), "settings.json")}.lock`;
 	const originalRmdir = fs.rmdir;
 	let removals = 0;
 	t.mock.method(fs, "rmdir", (target: fs.PathLike, callback: fs.NoParamCallback) => {
-		if (String(target) === `${path}.lock` && ++removals <= 2) {
+		if (String(target) === lockPath && ++removals <= 2) {
 			queueMicrotask(() => callback(Object.assign(new Error("directory busy"), { code: "EBUSY" })));
 		} else originalRmdir(target, callback);
 	});
