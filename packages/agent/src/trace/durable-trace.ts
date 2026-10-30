@@ -1,6 +1,6 @@
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { TelemetrySpan } from "@earendil-works/pi-telemetry";
-import { defineExtension, CompactionTask, ToolTask, hook, type Harness } from "../durable-adapter.ts";
+import { defineExtension, CompactionTask, NestedCallDoc, ToolTask, hook, type Harness } from "../durable-adapter.ts";
 import { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";
 import { TracePrivacy } from "./trace-privacy.ts";
 import { LiveTelemetry } from "./trace-recorder.ts";
@@ -30,9 +30,6 @@ export class DurableTrace {
 				context.telemetry.setAttributes({ "conversation.id": api.conversationId });
 				this.capture(() => this.telemetry.content(context.telemetry, { "loom.io.input": this.privacy.value(call.arguments) })); return undefined;
 			},
-			afterTool: (_call, result, _api, context) => {
-				this.capture(() => this.telemetry.content(context.telemetry, { "loom.io.output": this.privacy.value(result), "loom.tool.is_error": result.isError ?? false })); return undefined;
-			},
 		}),
 	] });
 	models(models: Models): Models {
@@ -46,7 +43,13 @@ export class DurableTrace {
 					this.capture(() => {
 						const blobs: Record<string, string> = {};
 						const input = this.privacy.request(messages, (hash, text) => { blobs[hash] = text; });
-						this.telemetry.content(span, { "loom.io.input": input }, blobs); this.flush();
+						this.telemetry.content(span, { "loom.io.input": input }, blobs);
+						// Polls have no request transcript. Keep their absent registry distinct from an empty request registry.
+						if (options.name === "pi.ai.request") this.capture(() => {
+							const tools = this.privacy.requestTools(messages, (hash, text) => { blobs[hash] = text; });
+							this.telemetry.content(span, { "loom.io.tools": tools }, blobs);
+						});
+						this.flush();
 					});
 				}
 				return callback(span);
@@ -76,11 +79,20 @@ export class DurableTrace {
 						record.settlementReason = submission.reason;
 					});
 				}
+				if (change.type === "document" && change.record.kind === NestedCallDoc.definition.kind && change.version === NestedCallDoc.definition.version) {
+					const result = change.value?.result;
+					if (result && typeof result === "object" && !Array.isArray(result) && typeof result.isError === "boolean") {
+						this.telemetry.content(context.telemetry, {
+							"loom.io.output": this.privacy.toolResult(result), "loom.tool.is_error": result.isError,
+							...(typeof result.durationMs === "number" ? { "loom.tool.duration_ms": result.durationMs } : {}),
+						});
+					}
+				}
 				if (change.type !== "entry") continue;
 				const message = change.value.model?.[0];
 				if (message?.role !== "toolResult") continue;
 				this.telemetry.content(context.telemetry, {
-					"loom.io.output": this.privacy.value(message.content), "loom.tool.is_error": message.isError,
+					"loom.io.output": this.privacy.toolResult(message.content), "loom.tool.is_error": message.isError,
 					...(message.durationMs === undefined ? {} : { "loom.tool.duration_ms": message.durationMs }),
 				});
 			}

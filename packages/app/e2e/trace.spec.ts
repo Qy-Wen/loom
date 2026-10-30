@@ -258,10 +258,11 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
 	const at = Date.now();
+	const toolDefinitions = [{ name: "bash", description: "执行终端命令", parameters: { type: "object", properties: { command: { type: "string" } }, required: ["command"] } }, { name: "read", description: "读取文件", parameters: { type: "object", properties: { path: { type: "string" } } } }];
 	const turn: DevTraceRecord = { id: "ledger-1", threadId: "1", at, revision: 1, status: "completed", spans: [
 		{ id: "ledger-submit", traceId: "ledger-1", name: "pi.durable.submit", startedMs: at, endedMs: at + 1, attributes: { "submission.type": "input" }, events: [], links: [], status: { status: "ok" } },
 		{ id: "ledger-phase", traceId: "ledger-1", parentId: "ledger-submit", name: "pi.durable.phase", startedMs: at + 1, endedMs: at + 501, attributes: { "task.name": "pi.generation", phase: "request", attempt: 1, outcome: "waiting" }, events: [], links: [], status: { status: "ok" } },
-		{ id: "ledger-model", traceId: "ledger-1", parentId: "ledger-phase", name: "pi.ai.request", startedMs: at + 10, endedMs: at + 500, attributes: { model: "demo", "loom.io.input": JSON.stringify([{ role: "system", sections: { preamble: "SYSTEM_PROMPT", instructions: "当前素材库上下文" } }, { role: "user", content: "帮我看看目录" }]), "loom.io.output": JSON.stringify([{ type: "thinking", thinking: "先检查目录。" }, { type: "text", text: "**找到两个文件**\n\n- a.md\n- b.png\n\n![remote](https://example.invalid/private-image)\n\n<script>window.TRACE_UNSAFE=true</script>" }]) }, events: [{ name: "pi.ai.first_chunk", timeMs: 100, attributes: {} }], links: [], status: { status: "ok" } },
+		{ id: "ledger-model", traceId: "ledger-1", parentId: "ledger-phase", name: "pi.ai.request", startedMs: at + 10, endedMs: at + 500, attributes: { model: "demo", "loom.io.input": JSON.stringify([{ role: "system", sections: { preamble: "SYSTEM_PROMPT\n… (42 bytes cut)", instructions: "当前素材库上下文" }, toolsAdded: [{ name: "removed-tool" }] }, { role: "user", content: "帮我看看目录" }, { role: "system", toolsRemoved: [{ name: "removed-tool" }], toolsAdded: toolDefinitions }]), "loom.io.output": JSON.stringify([{ type: "thinking", thinking: "先检查目录。" }, { type: "text", text: "**找到两个文件**\n\n- a.md\n- b.png\n\n![remote](https://example.invalid/private-image)\n\n<script>window.TRACE_UNSAFE=true</script>" }]) }, events: [{ name: "pi.ai.first_chunk", timeMs: 100, attributes: {} }], links: [], status: { status: "ok" } },
 		{ id: "ledger-tool", traceId: "ledger-1", parentId: "ledger-submit", name: "pi.durable.phase", startedMs: at + 500, endedMs: at + 520, attributes: { "task.name": "pi.tool", "tool.name": "bash", phase: "call", "loom.io.input": '{"command":"ls"}', "loom.io.output": JSON.stringify([{ type: "text", text: 'a.md b.png\n---\n  157\n<script>unsafe</script>\n**not bold**' }]) }, events: [], links: [], status: { status: "ok" } },
 	] };
 	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
@@ -275,7 +276,79 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator('.trace-event[data-kind="user"]')).toHaveCount(2);
 	await expect(trace.locator('.trace-event[data-kind="phase"]')).toHaveCount(0);
 	await expect(trace.locator('.trace-event[data-kind="tool"]').first()).toContainText("→ a.md b.png");
+	const system = trace.locator('.trace-event[data-kind="system"]');
+	await expect(system.locator(".trace-event-summary")).toHaveText("系统提示词");
+	await system.click();
+	await expect(trace.locator(".trace-io")).toContainText("来自当前已加载历史中的首条模型请求记录");
+	await expect(trace.locator(".trace-io")).toContainText("SYSTEM_PROMPT");
+	const systemTools = trace.locator(".trace-system-tools");
+	await expect(systemTools.locator("h3")).toContainText("工具列表（2）");
+	const toolsToggle = systemTools.getByRole("button", { name: /^(收起|展开)工具列表$/ });
+	await expect(toolsToggle).toHaveAttribute("aria-expanded", "true");
+	await expect(systemTools).not.toContainText("可用工具：该次模型请求中提供的工具定义。");
+	await expect(systemTools).not.toContainText("部分工具定义未完整保存。");
+	await expect(systemTools).toContainText("执行终端命令");
+	await expect(systemTools).toContainText("读取文件");
+	await expect(systemTools).toContainText('"command"');
+	await expect(systemTools).not.toContainText("removed-tool");
+	await expect(systemTools).not.toContainText("帮我看看目录");
+	const promptToggle = trace.locator(".trace-prompt-toggle");
+	await expect(promptToggle).toHaveAttribute("aria-expanded", "true");
+	await trace.getByRole("button", { name: "收起提示词正文", exact: true }).press("Enter");
+	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
+	await expect(trace.locator(".trace-prompt-content")).toBeHidden();
+	await expect(trace.locator(".trace-prompt-content .trace-markdown")).toHaveCount(0);
+	await expect(systemTools).toBeVisible();
+	await expect(systemTools).toContainText("执行终端命令");
+	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "true");
+	await systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button').click();
+	await systemTools.getByRole("button", { name: "收起工具列表", exact: true }).press("Enter");
+	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
+	await expect(systemTools.locator(".trace-tools-content")).toBeHidden();
+	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
+	await publish({ ...turn, revision: 2 });
+	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "false");
+	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
+	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
+	await trace.getByRole("button", { name: "展开提示词正文", exact: true }).press("Space");
+	await expect(promptToggle).toHaveAttribute("aria-expanded", "true");
+	await expect(trace.locator(".trace-prompt-content")).toContainText("SYSTEM_PROMPT");
+	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
+	await systemTools.getByRole("button", { name: "展开工具列表", exact: true }).press("Space");
+	await expect(toolsToggle).toHaveAttribute("aria-expanded", "true");
+	await expect(systemTools.locator(".trace-tools-content")).toBeVisible();
+	await expect(systemTools).toContainText("执行终端命令");
+	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "false");
+	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await expect(trace.locator(".trace-io")).toContainText("SYSTEM_PROMPT");
+	await expect(systemTools).toContainText("执行终端命令");
+	await expect(systemTools).toContainText('"command"');
+	await expect(systemTools).not.toContainText("removed-tool");
+	await expect(trace.locator(".trace-io")).not.toContainText("帮我看看目录");
+	await expect(trace.locator(".trace-io")).not.toContainText("当前素材库上下文");
+	await expect(trace.locator(".trace-io")).not.toContainText("找到两个文件");
+	await expect(trace.getByRole("heading", { name: "Arguments", exact: true })).toHaveCount(0);
+	await expect(trace.getByRole("heading", { name: "Result", exact: true })).toHaveCount(0);
+	await expect(trace.getByRole("heading", { name: "来源调用的元数据与事件", exact: true })).toBeVisible();
+	const model = turn.spans.find((span) => span.id === "ledger-model")!;
+	const clippedMessages = JSON.parse(String(model.attributes["loom.io.input"]));
+	clippedMessages.at(-1).toolsAdded[0].description = "执行终端命令\n… (42 bytes cut)";
+	await publish({ ...turn, revision: 3, spans: turn.spans.map((span) => span === model ? { ...span, attributes: { ...span.attributes, "loom.io.input": JSON.stringify(clippedMessages) } } : span) });
+	await expect(systemTools).toContainText("部分工具定义未完整保存。");
+	await publish({ ...turn, revision: 4 });
+	await expect(systemTools).not.toContainText("部分工具定义未完整保存。");
+	await trace.locator('.trace-event[data-kind="context"]').first().click();
+	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await expect(trace.locator(".trace-io")).toContainText("当前素材库上下文");
+	await expect(trace.locator(".trace-io")).not.toContainText("SYSTEM_PROMPT");
+	await expect(trace.locator(".trace-io")).not.toContainText("帮我看看目录");
+	await trace.locator('.trace-event[data-kind="user"]').first().click();
+	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await expect(trace.locator(".trace-io")).toContainText("帮我看看目录");
+	await expect(trace.locator(".trace-io")).not.toContainText("SYSTEM_PROMPT");
+	await expect(trace.locator(".trace-io")).not.toContainText("当前素材库上下文");
 	await trace.locator('.trace-event[data-kind="assistant"]').first().click();
+	await expect(trace.locator(".trace-io")).not.toContainText("来自当前已加载历史中的首条模型请求记录");
 	await expect(trace.locator(".trace-request-number")).toHaveCount(0);
 	await expect(trace.locator(".trace-details-header")).not.toContainText(/#\d+/);
 	await expect(trace.getByRole("tab", { name: "预览", exact: true })).toHaveAttribute("aria-selected", "true");
@@ -286,6 +359,9 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await trace.getByRole("tab", { name: "概述", exact: true }).click(); await expect(trace.locator(".trace-io")).toContainText("首 chunk");
 	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
 	await expect(trace.getByRole("heading", { name: "元数据与事件", exact: true })).toBeVisible();
+	const sent = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Sent", exact: true }) });
+	await expect(sent).toContainText("SYSTEM_PROMPT");
+	await expect(sent).toContainText("帮我看看目录");
 	await expect(trace.locator(".trace-native summary")).toHaveText("底层执行记录（4）");
 	await trace.locator(".trace-native summary").click();
 	await expect(trace.locator(".trace-native")).toContainText("waiting");
@@ -297,7 +373,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
 	await trace.locator('.trace-event[data-kind="assistant"]').first().click();
 	await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
-	await publish({ ...turn, revision: 2 }); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
+	await publish({ ...turn, revision: 5 }); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
 	await toolbar.getByRole("button", { name: "⊞ 展开调用", exact: true }).click(); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
 	await toolbar.getByRole("button", { name: "⊟ 收起轮次", exact: true }).click(); await expect(trace.locator(".trace-event")).toHaveCount(0);
 	await trace.getByRole("searchbox", { name: "搜索轨迹" }).fill("bash"); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
@@ -305,13 +381,49 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await trace.getByRole("searchbox", { name: "搜索轨迹" }).fill("");
 	await toolbar.getByRole("button", { name: "⊞ 展开轮次", exact: true }).click();
 	await trace.locator('.trace-overview-block.kind-tool').first().press("Enter"); await expect(trace.locator(".trace-event.is-selected")).toHaveAttribute("data-kind", "tool");
+	await expect(trace.getByRole("heading", { name: "调用工具", exact: true })).toBeVisible();
+	await expect(trace.locator(".trace-tool-name")).toHaveText("bash");
 	await expect(trace.locator(".trace-tool-output")).toHaveText('a.md b.png\n---\n  157\n<script>unsafe</script>\n**not bold**');
 	await expect(trace.locator(".trace-io h2, .trace-io script, .trace-io strong")).toHaveCount(0);
-	const outputStyle = await trace.locator(".trace-tool-output").evaluate((element) => ({ fontSize: getComputedStyle(element).fontSize, whiteSpace: getComputedStyle(element).whiteSpace }));
-	expect(outputStyle).toEqual({ fontSize: "12px", whiteSpace: "pre-wrap" });
-	await publish({ ...turn, revision: 3, spans: turn.spans.map((span) => span.id === "ledger-tool" ? { ...span, attributes: { ...span.attributes, "loom.io.output": '{"files":["a.md","b.png"]}' } } : span) });
+	const outputStyle = await trace.locator(".trace-tool-output").evaluate((element) => {
+		const style = getComputedStyle(element);
+		return { fontSize: style.fontSize, whiteSpace: style.whiteSpace, borderWidth: style.borderTopWidth, background: style.backgroundColor, padding: style.padding };
+	});
+	expect(outputStyle).toEqual({ fontSize: "12px", whiteSpace: "pre-wrap", borderWidth: "0px", background: "rgba(0, 0, 0, 0)", padding: "0px" });
+	await publish({ ...turn, revision: 6, spans: turn.spans.map((span) => span.id === "ledger-tool" ? { ...span, attributes: { ...span.attributes, "loom.io.output": '{"files":["a.md","b.png"]}' } } : span) });
 	await expect(trace.locator(".trace-tool-output")).toHaveCount(0);
-	await expect(trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "结果", exact: true }) }).locator(".trace-json")).toContainText('"files"');
+	await expect(trace.locator(".trace-tool-name")).toHaveText("bash");
+	const resultSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "结果", exact: true }) });
+	await expect(resultSection.locator(".trace-json")).toContainText('"files"');
+	let resultRevision = 6;
+	const publishResultText = (text: string) => publish({ ...turn, revision: ++resultRevision, spans: turn.spans.map((span) => span.id === "ledger-tool" ? { ...span, attributes: { ...span.attributes, "loom.io.output": JSON.stringify({ content: [{ type: "text", text }] }) } } : span) });
+	const largeResultValue = "汉".repeat(6000);
+	const jsonResult = JSON.stringify({ nested: { list: [1, { value: true }] }, literal: "<script>not executable</script>", large: largeResultValue });
+	await publishResultText(jsonResult);
+	await expect(resultSection.locator(".trace-json")).toContainText('"nested"');
+	await expect(resultSection.locator(".trace-json")).toContainText("not executable");
+	await expect(resultSection.locator('.trace-json-node[data-json-path="/large"] .trace-json-value')).toHaveText(JSON.stringify(largeResultValue));
+	await expect(resultSection.locator(".trace-tool-output, script")).toHaveCount(0);
+	const resultFold = resultSection.locator('.trace-json-node[data-json-path="/nested"] > .trace-json-row button');
+	await expect(resultFold).toHaveAttribute("aria-expanded", "true");
+	await resultFold.click();
+	const argsSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "参数", exact: true }) });
+	const argsFold = argsSection.locator('.trace-json-node[data-json-path=""] > .trace-json-row button');
+	await expect(argsFold).toHaveAttribute("aria-expanded", "true");
+	await argsFold.click();
+	await publishResultText(jsonResult);
+	await expect(resultFold).toHaveAttribute("aria-expanded", "false");
+	await expect(argsFold).toHaveAttribute("aria-expanded", "false");
+	for (const value of [null, false, 0, "literal string"]) {
+		await publishResultText(JSON.stringify(value));
+		await expect(resultSection.locator(".trace-json-value")).toHaveText([JSON.stringify(value)]);
+		await expect(resultSection.locator(".trace-tool-output")).toHaveCount(0);
+	}
+	for (const text of ['{"partial":', 'log prefix\n{"valid":true}']) {
+		await publishResultText(text);
+		await expect(resultSection.locator(".trace-tool-output")).toHaveText(text);
+		await expect(resultSection.locator(".trace-json")).toHaveCount(0);
+	}
 	await toolbar.getByRole("button", { name: "◷ 时长", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "true");
 	const box = (await trace.locator(".trace-overview-track").boundingBox())!;
 	await trace.mouse.move(box.x + box.width * .1, box.y + 10); await trace.mouse.down(); await trace.mouse.move(box.x + box.width * .3, box.y + 10, { steps: 6 }); await trace.mouse.up();
@@ -319,6 +431,41 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await trace.locator(".trace-overview-track").press("Escape"); await expect(trace.locator(".trace-overview-range")).toHaveCount(0);
 	await trace.getByRole("button", { name: "关闭详情", exact: true }).click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
 	await trace.locator(".trace-item").first().click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(1);
+});
+
+test("system details prefer complete independent tool snapshots and retain schema folds on updates", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState();
+	const at = Date.now(), hash = "0123456789abcdef";
+	const description = "完整工具说明汉🙂 ".repeat(1000);
+	const tools = Array.from({ length: 40 }, (_, i) => ({ name: `tool_${i}`, description: `${"preview ".repeat(80)}… ⟦blob:${hash}:${description.length}⟧`, parameters: { type: "object", properties: { headers: { type: "object", additionalProperties: { type: "string" } }, apiKey: { type: "string" } } } }));
+	expect(Buffer.byteLength(JSON.stringify(tools))).toBeGreaterThan(32 * 1024);
+	const source: DevTraceRecord = { id: "independent-tools", threadId: "1", at, revision: 1, status: "completed", blobs: { [hash]: description }, spans: [
+		{ id: "tool-snapshot-request", traceId: "independent-tools", name: "pi.ai.request", startedMs: at, endedMs: at + 10, attributes: { model: "demo", "loom.io.input": JSON.stringify([{ role: "system", content: "PROMPT", toolsAdded: ["… (trace content omitted)"] }, { role: "user", content: "USER_ONLY" }]), "loom.io.tools": JSON.stringify(tools) }, events: [], links: [], status: { status: "ok" } },
+	] };
+	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	await publish(source);
+	await trace.locator(".trace-item").first().click();
+	await trace.locator('.trace-event[data-kind="system"]').click();
+	const list = trace.locator(".trace-system-tools");
+	await expect(list.locator("h3")).toContainText("工具列表（40）");
+	await expect(list).not.toContainText("部分工具定义未完整保存。");
+	await expect(list).toContainText('"headers"'); await expect(list).toContainText('"apiKey"');
+	await expect(list.locator('.trace-json-node[data-json-path="/0/description"] .trace-json-value')).toHaveText(JSON.stringify(description));
+	await expect(list).not.toContainText("USER_ONLY");
+	const fold = list.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button');
+	await fold.click();
+	await publish({ ...source, revision: 2 });
+	await expect(fold).toHaveAttribute("aria-expanded", "false");
+	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await expect(list).toContainText("工具列表（40）");
+	await expect(list).not.toContainText("部分工具定义未完整保存。");
+	await publish({ ...source, revision: 3, blobs: {} });
+	await expect(list).toContainText("部分工具定义未完整保存。");
+	await publish({ ...source, revision: 4 });
+	await expect(list).not.toContainText("部分工具定义未完整保存。");
 });
 
 test("late conversation history cannot leak across a library reset with reused conversation IDs", async ({ loomPage, electronApp }) => {

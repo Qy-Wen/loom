@@ -10,6 +10,9 @@ export type TraceEvent = {
 	label: string;
 	summary: string;
 	text?: string;
+	/** The captured fragment belonging to a snapshot event, not its source span's full request. */
+	rawContent?: string;
+	toolList?: TraceToolList;
 	record: DevTraceRecord;
 	span: LoomTraceSpan;
 	step: number;
@@ -35,6 +38,52 @@ export function contentText(value: JsonValue | undefined, record: DevTraceRecord
 	if (object.type === "toolCall") return `${object.name ?? "tool"} ${JSON.stringify(object.arguments ?? {})}`;
 	if (object.type === "image" || object.type === "image_url" || object.type === "input_image") return "[image omitted]";
 	return contentText(object.text ?? object.thinking ?? object.content, record);
+}
+export type TraceToolList = { definitions: JsonValue[]; captured: boolean; incomplete: boolean };
+/** Only recognize recorder omission markers inside tool declarations, not unrelated prompt clipping. */
+function toolDefinitionOmitted(value: JsonValue | undefined, blobs?: DevTraceRecord["blobs"]): boolean {
+	if (typeof value === "string") {
+		const resolved = jsonString(value, blobs);
+		if (resolved.missing) return true;
+		return /^(?:\[omitted\]|\[unserializable\]|… \(trace content omitted\)|… \(\d+ (?:fields|items) omitted\))$/.test(resolved.text)
+			|| /\n… \(\d+ (?:of \d+ )?bytes cut\)$/.test(resolved.text);
+	}
+	return value !== null && typeof value === "object" && Object.values(value).some((item) => toolDefinitionOmitted(item, blobs));
+}
+/** Prefer the independent request snapshot; replay legacy captured deltas only when it is absent. */
+export function capturedTools(messages: JsonValue | undefined, snapshot?: string, blobs?: DevTraceRecord["blobs"]): TraceToolList {
+	if (snapshot !== undefined) {
+		const value = parsedValue(snapshot);
+		if (!Array.isArray(value)) return { definitions: [], captured: true, incomplete: true };
+		const definitions = value.filter((item) => typeof objectValue(item)?.name === "string");
+		return { definitions, captured: true, incomplete: definitions.length !== value.length || definitions.some((item) => toolDefinitionOmitted(item, blobs)) };
+	}
+	const tools = new Map<string, JsonValue>();
+	let captured = false, omittedAdditions = false;
+	for (const value of Array.isArray(messages) ? messages : []) {
+		const message = objectValue(value);
+		if (message?.role !== "system") continue;
+		for (const key of ["toolsRemoved", "toolsAdded"] as const) {
+			if (!Object.hasOwn(message, key)) continue;
+			captured = true;
+			const changes = message[key];
+			if (!Array.isArray(changes)) {
+				if (key === "toolsAdded" && toolDefinitionOmitted(changes, blobs)) omittedAdditions = true;
+				continue;
+			}
+			for (const change of changes) {
+				const tool = objectValue(change);
+				if (!tool || typeof tool.name !== "string") {
+					if (key === "toolsAdded" && toolDefinitionOmitted(change, blobs)) omittedAdditions = true;
+					continue;
+				}
+				if (key === "toolsRemoved") tools.delete(tool.name);
+				else tools.set(tool.name, tool);
+			}
+		}
+	}
+	const definitions = [...tools.values()];
+	return { definitions, captured, incomplete: omittedAdditions || definitions.some((item) => toolDefinitionOmitted(item, blobs)) };
 }
 export function shortText(text: string, limit = 220): string { return text.replace(/\s+/g, " ").trim().slice(0, limit); }
 export function eventStatus(event: TraceEvent): string {
@@ -76,23 +125,30 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 		const rows = Array.isArray(messages) ? messages.map(objectValue).filter((row) => row !== undefined) : [];
 		const submission = spans.find((span) => span.name === "pi.durable.submit");
 		const events: TraceEvent[] = [];
-		const add = (span: LoomTraceSpan, kind: EventKind, summary: string, text?: string, marker = false) => {
-			events.push({ id: `${record.id}/${span.id}/${kind}`, kind, label: kind === "phase" ? phaseDiagnostic(span)?.label ?? eventLabels.phase : eventLabels[kind], summary, text, marker, record, span, step: marker ? 0 : events.filter((event) => !event.marker).length + 1 });
+		const add = (span: LoomTraceSpan, kind: EventKind, summary: string, text?: string, marker = false, rawValue?: JsonValue) => {
+			events.push({ id: `${record.id}/${span.id}/${kind}`, kind, label: kind === "phase" ? phaseDiagnostic(span)?.label ?? eventLabels.phase : eventLabels[kind], summary, text, rawContent: rawValue === undefined ? undefined : JSON.stringify(rawValue), marker, record, span, step: marker ? 0 : events.filter((event) => !event.marker).length + 1 });
 		};
 		if (firstRequest && turnIndex === 0) {
 			const system = rows.find((row) => row.role === "system");
-			const text = contentText(objectValue(system?.sections)?.preamble ?? system?.content, record);
-			if (text) add(firstRequest, "system", "系统提示词（已加载请求快照）", text, true);
+			const value = objectValue(system?.sections)?.preamble ?? system?.content;
+			const text = contentText(value, record);
+			const snapshot = firstRequest.attributes["loom.io.tools"];
+			const toolList = capturedTools(messages, typeof snapshot === "string" ? snapshot : undefined, record.blobs);
+			if (text || toolList.captured || (system && toolList.incomplete)) {
+				add(firstRequest, "system", "系统提示词", text || undefined, true, value);
+				events.at(-1)!.toolList = toolList;
+			}
 		}
 		if (firstRequest || submission?.attributes["submission.type"] === "input") {
 			const user = rows.findLast((row) => row.role === "user");
 			const text = contentText(user?.content, record);
-			add(submission ?? firstRequest!, "user", text ? shortText(text) : "输入内容未采集或历史 JSON 已截断", text || undefined, true);
+			add(submission ?? firstRequest!, "user", text ? shortText(text) : "输入内容未采集或历史 JSON 已截断", text || undefined, true, user?.content);
 		}
 		if (firstRequest) {
 			const system = rows.find((row) => row.role === "system");
-			const instructions = contentText(objectValue(system?.sections)?.instructions, record);
-			if (instructions && !/^<instructions>\s*<\/instructions>$/.test(instructions)) add(firstRequest, "context", shortText(instructions), instructions, true);
+			const value = objectValue(system?.sections)?.instructions;
+			const instructions = contentText(value, record);
+			if (instructions && !/^<instructions>\s*<\/instructions>$/.test(instructions)) add(firstRequest, "context", shortText(instructions), instructions, true, value);
 		}
 		for (const span of spans) {
 			if (span.name === "pi.durable.submit") continue;

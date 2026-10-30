@@ -10,7 +10,7 @@ import { Type } from "@earendil-works/pi-ai";
 import { fauxProvider, fauxAssistantMessage as answer, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, DurableTrace, TraceStore,
-	defineExtension, defineTool, createSpecialistExtension, ToolGate, LoomApprovalsDoc, clearPendingApprovals,
+	defineExtension, defineTool, createSpecialistExtension, createToolResultStorage, ToolGate, LoomApprovalsDoc, clearPendingApprovals, type NestedToolExecutionResult,
 } from "../src/durable.ts";
 import { TracePrivacy } from "../src/trace/trace-privacy.ts";
 import { splitTraceBlobs } from "../src/trace/trace-blob.ts";
@@ -145,6 +145,81 @@ test("two native runs persist model/tool spans with bounded payloads and reopen 
 	});
 });
 
+test("trace keeps finalized model tool output beyond 8 KiB, including Pi truncation and spill diagnostics", { timeout: 10_000 }, async () => {
+	await temporary(async (root) => {
+		const full = `${"x".repeat(20 * 1024)}\ntest-private-key`;
+		const tools = [
+			defineTool({ name: "inline", description: "inline", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: full }] }) }),
+			defineTool({ name: "bounded", description: "bounded", parameters: Type.Object({}), outputLimits: { maxBytes: 12 * 1024 }, execute: async () => ({ output: [{ type: "text", text: full }] }) }),
+			defineTool({ name: "spilled", description: "spilled", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: "y".repeat(60 * 1024) }] }) }),
+		];
+		const { owner, trace, faux, close } = await fixture(root, { models: createModels(), extensions: [defineExtension({ name: "tools", tools }), createToolResultStorage(root)] });
+		try {
+			const conversation = await owner.createConversation({}, context);
+			faux.setResponses([answer(tools.map((tool) => fauxToolCall(tool.name, {})), { stopReason: "toolUse" }), answer("done")]);
+			assert.equal((await (await conversation.submit({ type: "input", content: "run tools" }, context)).wait(context)).status, "done");
+			await new Promise<void>(setImmediate); trace.flush();
+			const messages = (await conversation.context(context)).messages.filter((message) => message.role === "toolResult");
+			const spans = trace.store.list()[0]!.spans;
+			for (const message of messages) {
+				const span = spans.find((span) => span.attributes["tool.name"] === message.toolName && span.attributes["task.name"] === "pi.tool")!;
+				const captured = String(span.attributes["loom.io.output"]);
+				assert.deepEqual(JSON.parse(captured), JSON.parse(JSON.stringify(message.content).replaceAll("test-private-key", "[redacted]")));
+				assert.equal(span.attributes["loom.tool.is_error"], message.isError);
+				if (message.toolName !== "spilled") assert.ok(Buffer.byteLength(captured) > 8192);
+				if (message.toolName === "bounded") assert.match(captured, /Output truncated/);
+				if (message.toolName === "spilled") {
+					assert.match(captured, /Full output:/);
+					assert.ok(captured.length < 8192); // Only Pi's preview; trace must not reopen the full-output file.
+				}
+			}
+			assert.equal(messages.length, 3);
+			assert.doesNotMatch(JSON.stringify(spans), /test-private-key|bytes cut|trace content omitted/);
+		} finally { await close(); }
+		const reopened = await TraceStore.open(root);
+		try {
+			const inline = reopened.list()[0]!.spans.find((span) => span.attributes["tool.name"] === "inline")!;
+			assert.equal(JSON.parse(String(inline.attributes["loom.io.output"]))[0].text, full.replace("test-private-key", "[redacted]"));
+		} finally { reopened.close(); }
+	});
+});
+
+test("native request spans persist complete tool snapshots independently of the prompt message budget", { timeout: 10_000 }, async () => {
+	await temporary(async (root) => {
+		let nested: Parameters<typeof defineTool>[0]["parameters"] = Type.Object({ headers: Type.Record(Type.String(), Type.String()), apiKey: Type.String() });
+		for (let i = 0; i < 15; i++) nested = Type.Object({ nested });
+		const description = "schema description ".repeat(2000);
+		const tools = Array.from({ length: 40 }, (_, i) => defineTool({ name: `tool_${i}`, description, parameters: nested, execute: async () => ({ output: [] }) }));
+		const { owner, trace, faux, close } = await fixture(root, { models: createModels(), extensions: [defineExtension({ name: "large-registry", tools })] });
+		let saved: string | undefined;
+		try {
+			const conversation = await owner.createConversation({}, context);
+			faux.setResponses([answer("done")]);
+			assert.equal((await (await conversation.submit({ type: "input", content: "inspect" }, context)).wait(context)).status, "done");
+			await new Promise<void>(setImmediate); trace.flush();
+			const record = trace.store.list()[0]!;
+			const request = record.spans.find((span) => span.name === "pi.ai.request")!;
+			saved = String(request.attributes["loom.io.tools"]);
+			const captured = JSON.parse(saved);
+			assert.ok(Buffer.byteLength(saved) > 32 * 1024);
+			assert.equal(captured.length, tools.length);
+			assert.deepEqual(captured.map((tool: { name: string }) => tool.name), tools.map((tool) => tool.name));
+			for (const tool of captured) {
+				assert.deepEqual(tool.parameters, JSON.parse(JSON.stringify(nested)));
+				const reference = splitTraceBlobs(JSON.stringify(tool.description)).find((part) => "hash" in part)!;
+				assert.equal(record.blobs![reference.hash], description);
+			}
+			assert.doesNotMatch(saved, /omitted|bytes cut/);
+			const input = JSON.parse(String(request.attributes["loom.io.input"]));
+			assert.ok(Buffer.byteLength(JSON.stringify(input[0])) <= 32 * 1024);
+			assert.ok(!JSON.stringify(input).includes('"parameters"'));
+		} finally { await close(); }
+		const store = await TraceStore.open(root);
+		try { assert.equal(store.list()[0]!.spans.find((span) => span.name === "pi.ai.request")!.attributes["loom.io.tools"], saved); }
+		finally { store.close(); }
+	});
+});
+
 test("requests in one run show the user message and store each long system text once", { timeout: 10_000 }, async () => {
 	await temporary(async (root) => {
 		const tool = defineTool({ name: "note", description: "note", parameters: Type.Object({}), execute: async () => ({ output: [{ type: "text", text: "done" }] }) });
@@ -208,6 +283,37 @@ test("nested tool calls keep a separate child span and bounded result", { timeou
 			assert.equal(child.parentId, parent.id);
 			assert.match(String(child.attributes["loom.io.output"]), /nested result/);
 			assert.ok(child.endedMs !== undefined);
+		} finally { await close(); }
+	});
+});
+
+test("nested trace results come from Pi's finalized program result, not the pre-limit afterTool object", { timeout: 10_000 }, async () => {
+	await temporary(async (root) => {
+		let programResult: NestedToolExecutionResult | undefined;
+		const leaf = defineTool({ name: "leaf", description: "leaf", parameters: Type.Object({}), outputLimits: { maxBytes: 12 * 1024 }, execute: async () => ({ output: [{ type: "text", text: "x".repeat(20 * 1024) }] }) });
+		const outer = defineTool({ name: "outer", description: "outer", parameters: Type.Object({}), execute: async (_args, api, ctx) => {
+			programResult = await api.executeTool("leaf", {}, ctx);
+			return { output: [{ type: "text", text: "outer done" }] };
+		} });
+		const { owner, trace, faux, close } = await fixture(root, { models: createModels(), extensions: [defineExtension({ name: "tools", tools: [leaf, outer] })] });
+		try {
+			const conversation = await owner.createConversation({}, context);
+			faux.setResponses([answer(fauxToolCall("outer", {}), { stopReason: "toolUse" }), answer("done")]);
+			assert.equal((await (await conversation.submit({ type: "input", content: "nested" }, context)).wait(context)).status, "done");
+			await new Promise<void>(setImmediate); trace.flush();
+			const spans = trace.store.list()[0]!.spans;
+			const parent = spans.find((span) => span.attributes["tool.name"] === "outer")!;
+			const child = spans.find((span) => span.attributes["tool.name"] === "leaf")!;
+			const captured = String(child.attributes["loom.io.output"]);
+			const parsed = JSON.parse(captured);
+			assert.ok(programResult);
+			assert.deepEqual(parsed, programResult);
+			assert.equal(parsed.structuredOutput, "x".repeat(12 * 1024));
+			assert.ok(Buffer.byteLength(captured) > 8192);
+			assert.equal(child.parentId, parent.id);
+			assert.equal(child.attributes["loom.tool.duration_ms"], parsed.durationMs);
+			assert.match(captured, /Output truncated/);
+			assert.doesNotMatch(captured, /bytes cut|trace content omitted/);
 		} finally { await close(); }
 	});
 });

@@ -2,7 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { LoomTraceSpan } from "@loom/agent";
 import type { DevTraceRecord } from "../src/shared/dev-trace.ts";
-import { conversationId, contentText, eventForSpan, eventStatus, phaseDiagnostic, timelineBlocks, traceTurns } from "../src/renderer/dev-trace/trace-events.ts";
+import type { JsonValue } from "../src/renderer/dev-trace/json-values.ts";
+import { capturedTools, conversationId, contentText, eventForSpan, eventStatus, phaseDiagnostic, timelineBlocks, traceTurns } from "../src/renderer/dev-trace/trace-events.ts";
 
 const span = (id: string, name: string, attributes: LoomTraceSpan["attributes"] = {}, parentId?: string): LoomTraceSpan => ({ id, name, attributes, parentId, traceId: "t", startedMs: 100, endedMs: 200, status: { status: "ok" }, events: [], links: [] });
 function record(id: string, at = 100): DevTraceRecord {
@@ -19,6 +20,7 @@ test("event projection keeps turns distinct and avoids duplicating request histo
 	const turns = traceTurns(records);
 	assert.deepEqual(turns.map((turn) => turn.id), ["a", "b"]);
 	assert.deepEqual(turns[0]!.events.map((row) => row.kind), ["system", "user", "assistant", "tool"]);
+	assert.equal(turns[0]!.events[0]!.summary, "系统提示词");
 	assert.deepEqual(turns[1]!.events.map((row) => row.kind), ["user", "assistant", "tool"]);
 	assert.equal(turns[1]!.events[0]!.text, "question-b");
 	assert.match(turns[0]!.events.at(-1)!.summary, /bash.*ls.*→ 2 files/);
@@ -37,11 +39,111 @@ test("legacy or absent inputs are not fabricated and exceptional phases stay vis
 	legacy.spans.push({ ...span("interrupted", "pi.durable.phase"), interrupted: true });
 	const events = traceTurns([legacy])[0]!.events;
 	assert.equal(events.find((event) => event.kind === "user")!.text, undefined);
+	assert.equal(events.find((event) => event.kind === "user")!.rawContent, undefined);
 	assert.ok(events.some((event) => event.kind === "approval"));
 	assert.equal(events.find((event) => event.span.id === "retry")!.label, "重试");
 	assert.equal(events.find((event) => event.span.id === "retry")!.summary, "模型请求重试 · 第 2 次");
 	assert.equal(eventStatus(events.find((event) => event.span.id === "interrupted")!), "interrupted");
 	assert.deepEqual(traceTurns([{ ...legacy, spans: [] }])[0]!.events, []);
+});
+
+test("snapshot raw content isolates each captured fragment while retaining blobs, structure, and source identity", () => {
+	const row = record("snapshot");
+	const preamble = "preview… ⟦blob:0123456789abcdef:11⟧";
+	const instructions = "CONTEXT_ONLY";
+	const user = [{ type: "text", text: "USER_ONLY" }, { type: "image", image: "[omitted]" }];
+	const input = JSON.stringify([{ role: "system", sections: { preamble, instructions } }, { role: "assistant", content: "OLD_REPLY" }, { role: "user", content: user }]);
+	row.blobs = { "0123456789abcdef": "SYSTEM_ONLY" };
+	row.spans = row.spans.filter((span) => span.name !== "pi.durable.submit");
+	const source = row.spans.find((span) => span.name === "pi.ai.request")!;
+	const request = { ...source, attributes: { ...source.attributes, "loom.io.input": input } };
+	row.spans = row.spans.map((span) => span.id === request.id ? request : span);
+	const events = traceTurns([row])[0]!.events;
+	const system = events.find((event) => event.kind === "system")!;
+	const context = events.find((event) => event.kind === "context")!;
+	const question = events.find((event) => event.kind === "user")!;
+	assert.equal(JSON.parse(system.rawContent!), preamble);
+	assert.equal(system.text, "SYSTEM_ONLY");
+	assert.equal(JSON.parse(context.rawContent!), instructions);
+	assert.deepEqual(JSON.parse(question.rawContent!), user);
+	for (const event of [system, context, question]) {
+		assert.equal(event.span, request);
+		assert.equal(event.marker, true);
+		assert.ok(!event.rawContent!.includes("OLD_REPLY"));
+	}
+	assert.ok(!system.rawContent!.includes("USER_ONLY"));
+	assert.ok(!system.rawContent!.includes(instructions));
+	assert.equal(request.attributes["loom.io.input"], input);
+	assert.equal(events.find((event) => event.kind === "assistant")!.rawContent, undefined);
+
+	request.attributes["loom.io.input"] = JSON.stringify([{ role: "system", content: [{ type: "text", text: "LEGACY_SYSTEM" }] }, { role: "user", content: "USER_ONLY" }]);
+	assert.deepEqual(JSON.parse(traceTurns([row])[0]!.events.find((event) => event.kind === "system")!.rawContent!), [{ type: "text", text: "LEGACY_SYSTEM" }]);
+});
+
+test("system tool lists replay captured additions, removals and replacements without reading other message roles", () => {
+	const bash = { name: "bash", description: "RUN_COMMAND", parameters: { type: "object", properties: { command: { type: "string" } } } };
+	const read = { name: "read", description: "READ_FILE", parameters: { type: "object" } };
+	const messages: JsonValue[] = [
+		{ role: "system", content: "SYSTEM_ONLY", toolsAdded: [{ ...bash, description: "OLD_DESCRIPTION" }, { name: "removed" }] },
+		{ role: "user", content: "USER_ONLY", toolsAdded: [{ name: "not-a-system-tool" }] },
+		{ role: "system", toolsRemoved: [{ name: "removed" }, { name: "bash" }], toolsAdded: [read, bash] },
+	];
+	const result = capturedTools(messages);
+	assert.deepEqual(result, { definitions: [read, bash], captured: true, incomplete: false });
+	assert.equal(result.definitions[1], bash);
+	const source = record("tools");
+	source.spans[2] = { ...source.spans[2]!, attributes: { "loom.io.input": JSON.stringify(messages) } };
+	const system = traceTurns([source])[0]!.events.find((event) => event.kind === "system")!;
+	assert.equal(system.text, "SYSTEM_ONLY");
+	assert.equal(JSON.parse(system.rawContent!), "SYSTEM_ONLY");
+	assert.deepEqual(system.toolList, result);
+	assert.ok(!JSON.stringify(system.toolList).includes("USER_ONLY"));
+	assert.ok(!JSON.stringify(system.toolList).includes("OLD_DESCRIPTION"));
+	assert.ok(!JSON.stringify(system.toolList).includes("not-a-system-tool"));
+
+	source.spans[2] = { ...source.spans[2]!, attributes: { "loom.io.input": JSON.stringify([{ role: "system", toolsAdded: [bash] }]) } };
+	const toolsOnly = traceTurns([source])[0]!.events.find((event) => event.kind === "system")!;
+	assert.equal(toolsOnly.text, undefined);
+	assert.equal(toolsOnly.rawContent, undefined);
+	assert.deepEqual(toolsOnly.toolList!.definitions, [bash]);
+});
+
+test("only confirmed tool-definition omissions trigger the incomplete warning", () => {
+	assert.deepEqual(capturedTools(undefined), { definitions: [], captured: false, incomplete: false });
+	assert.deepEqual(capturedTools([{ role: "system", content: "SYSTEM" }]), { definitions: [], captured: false, incomplete: false });
+	assert.deepEqual(capturedTools([{ role: "system", toolsAdded: [] }]), { definitions: [], captured: true, incomplete: false });
+	const tool = { name: "bash", description: "preview… ⟦blob:0123456789abcdef:1000⟧", parameters: { "… (trace omitted)": "… (trace content omitted)" } };
+	assert.deepEqual(capturedTools(["… 3 earlier messages omitted", { role: "system", toolsAdded: [tool, "… (1 items omitted)"] }]), { definitions: [tool], captured: true, incomplete: true });
+	assert.deepEqual(capturedTools([{ role: "system", toolsAdded: "[omitted]" }]), { definitions: [], captured: true, incomplete: true });
+	assert.deepEqual(capturedTools([{ role: "system", toolsRemoved: [{ name: "unknown" }] }]).definitions, []);
+	const complete = { name: "bash", description: "Explains bytes cut and trace content omitted, without being clipped.", parameters: { type: "object" } };
+	const unrelatedOmissions: JsonValue[] = ["… 3 earlier messages omitted", { role: "system", content: "PROMPT\n… (42 bytes cut)", sections: { instructions: "[omitted]" }, toolsAdded: [complete] }];
+	assert.deepEqual(capturedTools(unrelatedOmissions), { definitions: [complete], captured: true, incomplete: false });
+	assert.equal(capturedTools([{ role: "system", toolsAdded: [{ ...complete, description: "Partial\n… (42 of 100 bytes cut)" }] }]).incomplete, true);
+	assert.equal(capturedTools([{ role: "system", toolsAdded: [tool] }, { role: "system", toolsAdded: [complete] }]).incomplete, false);
+	assert.equal(capturedTools([{ role: "system", toolsAdded: [tool] }, { role: "system", toolsRemoved: [{ name: "bash" }] }]).incomplete, false);
+});
+
+test("independent tool snapshots override clipped legacy copies, including empty registries and missing blobs", () => {
+	const row = record("snapshot-tools");
+	const complete = [{ name: "update_settings", description: "full description", parameters: { type: "object", properties: { headers: { type: "object" }, apiKey: { type: "string" } } } }];
+	const request = row.spans[2]!;
+	request.attributes["loom.io.tools"] = JSON.stringify(complete);
+	request.attributes["loom.io.input"] = JSON.stringify([{ role: "system", content: "PROMPT", toolsAdded: [{ name: "update_settings", parameters: "[omitted]" }, "… (10 items omitted)"] }]);
+	assert.deepEqual(traceTurns([row])[0]!.events.find((event) => event.kind === "system")!.toolList, { definitions: complete, captured: true, incomplete: false });
+	assert.deepEqual(capturedTools(undefined, "[]"), { definitions: [], captured: true, incomplete: false });
+	assert.deepEqual(capturedTools(undefined, "invalid"), { definitions: [], captured: true, incomplete: true });
+	assert.equal(capturedTools(undefined, '["… (trace content omitted)"]').incomplete, true);
+	const reference = [{ ...complete[0]!, description: "preview… ⟦blob:0123456789abcdef:1000⟧" }];
+	assert.equal(capturedTools(undefined, JSON.stringify(reference)).incomplete, true);
+	assert.equal(capturedTools(undefined, JSON.stringify(reference), { "0123456789abcdef": "FULL_DESCRIPTION" }).incomplete, false);
+	assert.equal(capturedTools(undefined, JSON.stringify(reference), { "0123456789abcdef": "PARTIAL\n… (42 bytes cut)" }).incomplete, true);
+	request.attributes["loom.io.input"] = '"… (trace content omitted)"';
+	const toolsOnly = traceTurns([row])[0]!.events.find((event) => event.kind === "system")!;
+	assert.equal(toolsOnly.text, undefined);
+	assert.deepEqual(toolsOnly.toolList!.definitions, complete);
+	delete request.attributes["loom.io.tools"];
+	assert.equal(traceTurns([row])[0]!.events.some((event) => event.kind === "system"), false);
 });
 
 test("routine scheduling stays hidden, even without other readable events", () => {

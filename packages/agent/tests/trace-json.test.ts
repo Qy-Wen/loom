@@ -54,6 +54,26 @@ test("request messages and ordinary payloads keep valid JSON with the existing l
 	assert.match(request, /trace content omitted/);
 });
 
+test("final tool results keep large text without a second byte limit while retaining privacy safeguards", () => {
+	const privacy = new TracePrivacy(); privacy.setSecrets(["trace-private-value"]);
+	const full = "汉🙂".repeat(5000);
+	const result = { content: [{ type: "text", text: `${full}\ntrace-private-value\nBearer abc.def` }], api_key: "secret", headers: { authorization: "secret" }, image: { type: "image", data: "PRIVATE_IMAGE", mimeType: "image/png" } };
+	const captured = privacy.toolResult(result);
+	const parsed = JSON.parse(captured);
+	assert.ok(Buffer.byteLength(captured) > 32 * 1024);
+	assert.equal(parsed.content[0].text, `${full}\n[redacted]\nBearer [redacted]`);
+	assert.equal(parsed.api_key, "[redacted]");
+	assert.equal(parsed.headers, "[omitted]");
+	assert.equal(parsed.image.image, "[omitted]");
+	assert.ok(!captured.includes("trace-private-value"));
+	assert.ok(!captured.includes("PRIVATE_IMAGE"));
+	assert.doesNotMatch(captured, /bytes cut|trace content omitted/);
+	assert.ok(Buffer.byteLength(privacy.value(result)) <= 8192);
+	const cyclic: Record<string, unknown> = {}; cyclic.self = cyclic;
+	assert.equal(JSON.parse(privacy.toolResult(cyclic)).self, "[omitted]");
+	assert.equal(JSON.parse(privacy.toolResult({ unsupported: 1n })), "[unserializable]");
+});
+
 test("structural clipping reports omitted items, bounds depth and still redacts keys and images", () => {
 	const privacy = new TracePrivacy(); privacy.setSecrets(["trace-private-value"]);
 	const array = JSON.parse(privacy.value(Array.from({ length: 201 }, () => 0)));

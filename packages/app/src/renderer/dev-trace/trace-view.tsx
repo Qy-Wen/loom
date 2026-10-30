@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DevTraceRecord } from "../../shared/dev-trace.ts";
 import { TracePayload } from "./json-view.tsx";
 import { TraceSplit } from "./trace-split.tsx";
-import { EventPreview } from "./trace-preview.tsx";
+import { EventPreview, SystemTools } from "./trace-preview.tsx";
 import { TraceTimeline, type FocusRange } from "./trace-timeline.tsx";
 import { eventForSpan, eventStatus, timelineBlocks, traceTurns, type TraceEvent } from "./trace-events.ts";
 import { formatTraceDuration, spanPayload } from "./trace-spans.ts";
@@ -11,7 +11,8 @@ function EventDetails({ event, location, openTrace }: { event: TraceEvent; locat
 	const [tab, setTab] = useState<"overview" | "preview" | "raw">("preview");
 	const [error, setError] = useState("");
 	const [nativeOpen, setNativeOpen] = useState(false);
-	const payload = spanPayload(event.span);
+	const payload = event.marker ? null : spanPayload(event.span);
+	const captured = event.rawContent ?? (event.text === undefined ? undefined : JSON.stringify(event.text));
 	const attributes = event.span.attributes;
 	const first = event.span.events.find((row) => row.name === "pi.ai.first_chunk")?.timeMs;
 	const go = (id: string, span?: string) => { setError(""); void openTrace(id, span).catch(() => setError("关联轨迹已过期或不可用")); };
@@ -20,17 +21,19 @@ function EventDetails({ event, location, openTrace }: { event: TraceEvent; locat
 			{([["overview", "概述"], ["preview", "预览"], ["raw", "原始内容"]] as const).map(([id, name]) => <button type="button" role="tab" key={id} id={`trace-event-${id}`} aria-controls="trace-event-panel" aria-selected={tab === id} onClick={() => setTab(id)}>{name}</button>)}
 		</div>
 		<div className="trace-io" id="trace-event-panel" role="tabpanel" aria-labelledby={`trace-event-${tab}`}>
+			{event.kind === "system" ? <p className="trace-note">来自当前已加载历史中的首条模型请求记录，展示当时采集的系统提示词与工具声明；内容已脱敏、限长。</p> : null}
 			{tab === "preview" ? <EventPreview event={event} /> : tab === "raw" ? <>
 				<p className="trace-note">脱敏、限长后的采集内容，不是完整 HTTP 请求。</p>
-				{event.text !== undefined ? <section><h3>内容</h3><TracePayload text={JSON.stringify(event.text)} /></section> : null}
+				{captured !== undefined ? <section><h3>{event.kind === "system" ? "提示词正文" : "内容"}</h3><TracePayload text={captured} blobs={event.record.blobs} /></section> : null}
+				{event.kind === "system" ? <SystemTools event={event} /> : null}
 				{payload?.input ? <section><h3>{event.kind === "assistant" ? "Sent" : "Arguments"}</h3><TracePayload text={payload.input} blobs={event.record.blobs} /></section> : null}
 				{payload?.output ? <section><h3>{event.kind === "assistant" ? "Reply" : "Result"}</h3><TracePayload text={payload.output} blobs={event.record.blobs} /></section> : null}
-				<section><h3>元数据与事件</h3><TracePayload text={JSON.stringify({ ...event.span, attributes: Object.fromEntries(Object.entries(attributes).filter(([key]) => !key.startsWith("loom.io."))) })} /></section>
-				<details className="trace-native" open={nativeOpen} onToggle={(toggle) => setNativeOpen(toggle.currentTarget.open)}><summary>底层执行记录（{event.record.spans.length}）</summary>{nativeOpen ? <TracePayload text={JSON.stringify(event.record.spans)} blobs={event.record.blobs} /> : null}</details>
+				<section><h3>{event.marker ? "来源调用的元数据与事件" : "元数据与事件"}</h3><TracePayload text={JSON.stringify({ ...event.span, attributes: Object.fromEntries(Object.entries(attributes).filter(([key]) => !key.startsWith("loom.io."))) })} /></section>
+				<details className="trace-native" open={nativeOpen} onToggle={(toggle) => setNativeOpen(toggle.currentTarget.open)}><summary>底层执行记录（{event.record.spans.length}）</summary>{nativeOpen ? <><p className="trace-note">这里包含本轮所有执行记录，可能含有其他消息，不仅是当前事件；内容仍经过脱敏和限长。</p><TracePayload text={JSON.stringify(event.record.spans)} blobs={event.record.blobs} /></> : null}</details>
 			</> : <>
 				<dl className="trace-facts">
 					<dt>位置</dt><dd>{location}</dd><dt>状态</dt><dd>{eventStatus(event)}</dd>
-					<dt>事件</dt><dd>{event.span.name}</dd>
+					<dt>{event.marker ? "来源调用" : "事件"}</dt><dd>{event.span.name}</dd>
 					<dt>耗时</dt><dd>{event.marker ? "无独立耗时（请求快照）" : event.span.endedMs === undefined ? "运行中" : formatTraceDuration(event.span.endedMs - event.span.startedMs)}</dd>
 					{typeof first === "number" && event.kind === "assistant" ? <><dt>首 chunk</dt><dd>{formatTraceDuration(first)}</dd></> : null}
 					{["provider", "model", "usage.input", "usage.output", "usage.cache_read", "usage.cache_write", "cost.total", "phase", "attempt", "outcome"].filter((key) => attributes[key] !== undefined).map((key) => <div className="trace-fact" key={key}><dt>{key}</dt><dd>{String(attributes[key])}</dd></div>)}
