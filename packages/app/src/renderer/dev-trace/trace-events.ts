@@ -17,6 +17,8 @@ export type TraceEvent = {
 	span: LoomTraceSpan;
 	step: number;
 	marker: boolean;
+	/** The model request was cancelled or cut off; the scheduler phase that wrapped it is folded into this event. */
+	cancelled?: boolean;
 };
 export type TraceTurn = { id: string; record: DevTraceRecord; events: TraceEvent[] };
 export const eventLabels: Record<EventKind, string> = { system: "系统", user: "用户", context: "上下文", assistant: "助手", tool: "工具", approval: "审批", phase: "底层记录" };
@@ -88,7 +90,7 @@ export function capturedTools(messages: JsonValue | undefined, snapshot?: string
 export function shortText(text: string, limit = 220): string { return text.replace(/\s+/g, " ").trim().slice(0, limit); }
 export function eventStatus(event: TraceEvent): string {
 	const { span } = event;
-	if (span.interrupted) return "interrupted";
+	if (span.interrupted || event.cancelled) return "interrupted";
 	if (span.status.status === "error" || span.attributes["loom.tool.is_error"] === true) return "error";
 	if (event.kind === "user") return event.record.status;
 	return span.endedMs === undefined ? "running" : "completed";
@@ -125,6 +127,14 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 		const rows = Array.isArray(messages) ? messages.map(objectValue).filter((row) => row !== undefined) : [];
 		const submission = spans.find((span) => span.name === "pi.durable.submit");
 		const events: TraceEvent[] = [];
+		// A cancelled request phase wraps the model request it cancelled and overlaps it exactly. Show one event, not two.
+		const wrapped = new Map<string, LoomTraceSpan>();
+		for (const span of spans) {
+			if (span.name !== "pi.durable.phase" || phaseDiagnostic(span)?.label !== "中断") continue;
+			const request = spans.find((child) => child.parentId === span.id && (child.name === "pi.ai.request" || child.name === "pi.ai.poll"));
+			if (request) wrapped.set(request.id, span);
+		}
+		const folded = new Set([...wrapped.values()].map((span) => span.id));
 		const add = (span: LoomTraceSpan, kind: EventKind, summary: string, text?: string, marker = false, rawValue?: JsonValue) => {
 			events.push({ id: `${record.id}/${span.id}/${kind}`, kind, label: kind === "phase" ? phaseDiagnostic(span)?.label ?? eventLabels.phase : eventLabels[kind], summary, text, rawContent: rawValue === undefined ? undefined : JSON.stringify(rawValue), marker, record, span, step: marker ? 0 : events.filter((event) => !event.marker).length + 1 });
 		};
@@ -155,7 +165,9 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 			const payload = spanPayload(span);
 			if (span.name === "pi.ai.request" || span.name === "pi.ai.poll") {
 				const output = contentText(parsedValue(payload?.output) ?? payload?.output, record);
-				add(span, "assistant", `${span.name === "pi.ai.poll" ? "轮询 · " : ""}${shortText(output) || (span.endedMs === undefined ? "等待模型输出…" : "无已采集输出")}`);
+				const cancelled = wrapped.has(span.id);
+				add(span, "assistant", `${span.name === "pi.ai.poll" ? "轮询 · " : ""}${shortText(output) || (cancelled ? "已取消，无已采集输出" : span.endedMs === undefined ? "等待模型输出…" : "无已采集输出")}`);
+				if (cancelled) events.at(-1)!.cancelled = true;
 			} else if (span.name === "loom.approval") {
 				add(span, "approval", `工具审批 · ${span.attributes["tool.name"] ?? "tool"}`);
 			} else if (span.name === "pi.durable.phase" && span.attributes["task.name"] === "pi.tool") {
@@ -164,7 +176,7 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 				add(span, "tool", `${span.attributes["tool.name"] ?? "tool"} ${shortText(args, 120)}${result ? ` → ${shortText(result, 160)}` : ""}`);
 			} else {
 				const diagnostic = phaseDiagnostic(span);
-				if (diagnostic) add(span, "phase", diagnostic.summary);
+				if (diagnostic && !folded.has(span.id)) add(span, "phase", diagnostic.summary);
 			}
 		}
 		return { id: record.id, record, events };

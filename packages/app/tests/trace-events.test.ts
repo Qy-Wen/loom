@@ -195,3 +195,23 @@ test("timeline uses equal widths or true overlapping times, with zero-duration i
 	assert.equal(blocks[2]!.firstChunk, .25); assert.equal(blocks[2]!.width, .988);
 	assert.deepEqual(timelineLayout([], true, 0, 1000), { blocks: [], gaps: [] });
 });
+
+test("a cancelled request phase folds into the model request it wrapped, so one call is one event", () => {
+	const phase = span("wrap", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 3, outcome: "aborted" }, "submit");
+	const request = span("req", "pi.ai.request", { model: "demo", "loom.io.output": JSON.stringify([{ type: "text", text: "partial reply" }]) }, "wrap");
+	const bare = span("req-bare", "pi.ai.request", { model: "demo" }, "wrap-bare");
+	const wrapBare = span("wrap-bare", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 4, outcome: "aborted" }, "submit");
+	const tail = span("tail", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 4, outcome: "aborted" }, "submit");
+	const ordinary = span("ok", "pi.ai.request", { model: "demo" }, "other");
+	const turn = traceTurns([{ ...record("cancel"), spans: [span("submit", "pi.durable.submit", { "submission.type": "input" }), phase, request, wrapBare, bare, tail, ordinary] }])[0]!;
+	const kinds = turn.events.filter((event) => !event.marker).map((event) => `${event.kind}:${event.span.id}`);
+	assert.deepEqual(kinds, ["assistant:req", "assistant:req-bare", "phase:tail", "assistant:ok"], "wrapping phases are gone; a phase with no request under it stays");
+	const byId = (id: string) => turn.events.find((event) => event.span.id === id)!;
+	assert.equal(eventStatus(byId("req")), "interrupted");
+	assert.equal(byId("req").cancelled, true);
+	assert.match(byId("req").summary, /partial reply/);
+	assert.equal(byId("req-bare").summary, "已取消，无已采集输出");
+	assert.equal(eventStatus(byId("ok")), "completed", "a request that was not cancelled is unchanged");
+	assert.equal(eventForSpan([turn], "wrap"), undefined, "the folded phase has no row of its own; its record stays in the native spans");
+	assert.equal(turn.record.spans.length, 7, "stored spans are untouched");
+});
