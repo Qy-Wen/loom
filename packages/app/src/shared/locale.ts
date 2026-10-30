@@ -378,7 +378,10 @@ export const messages = defineLocale(
 			topics: "Help topics",
 			groups: [
 				{ title: "Basics", sections: [
-					{ id: "getting-started", title: "Getting started", paragraphs: ["Open a folder as your library, then ask the Agent about its files in the chat panel."] },
+					{ id: "getting-started", title: "Getting started", paragraphs: [
+						"Open a folder as your library, then ask the Agent about its files in the chat panel.",
+						"Chatting needs a chat model. Before your first question, add a provider and enable a model in Settings → Models, then pick it in the model selector at the bottom of the chat panel. Without one, the Agent cannot answer.",
+					] },
 					{ id: "agent", title: "What the Agent can do", paragraphs: [
 						"Ask in the chat panel. The Agent can search your library and read your files, and it does the work with tools:",
 						"Images, video, and audio: crop, cut clips, resize, convert formats, extract frames or audio, and color-grade images (exposure, contrast, saturation, curves, LUTs and more). Video and audio tools use the FFmpeg bundled with Loom.",
@@ -933,7 +936,10 @@ export const messages = defineLocale(
 			topics: "帮助主题",
 			groups: [
 				{ title: "入门", sections: [
-					{ id: "getting-started", title: "快速开始", paragraphs: ["打开一个文件夹作为素材库，然后在聊天面板里向 Agent 提问。"] },
+					{ id: "getting-started", title: "快速开始", paragraphs: [
+						"打开一个文件夹作为素材库，然后在聊天面板里向 Agent 提问。",
+						"聊天需要先配置对话模型：在设置 → 模型里添加服务商并启用一个模型，再到聊天面板底部的模型选择器里选中它。没有配置时，Agent 无法回答。",
+					] },
 					{ id: "agent", title: "Agent 能做什么", paragraphs: [
 						"在聊天面板里直接提需求。Agent 能检索素材库、读取你的文件，并用工具把事情做完：",
 						"图片、视频和音频：裁切、剪辑片段、改尺寸、转码、抽帧和提取音频，以及给图片调色（曝光、对比度、饱和度、曲线、LUT 等）。视频和音频的处理使用 Loom 内置的 FFmpeg。",
