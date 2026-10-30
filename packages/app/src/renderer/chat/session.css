@@ -953,6 +953,93 @@
 	padding: 8px 12px;
 }
 
+/* Keep message and table actions compact, without changing the composer controls. */
+.agent-content {
+	--message-action-size: 26px;
+	--message-action-icon-size: 14px;
+}
+
+.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) {
+	margin-bottom: 0;
+}
+
+.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) button {
+	width: var(--message-action-size);
+	height: var(--message-action-size);
+	padding: 0;
+	margin-bottom: 0;
+	border-radius: 6px;
+}
+
+.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) button svg {
+	width: var(--message-action-icon-size);
+	height: var(--message-action-icon-size);
+}
+
+/* Table actions sit below the table at its left edge, matching the message actions. */
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] {
+	margin-bottom: 0;
+}
+
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] table {
+	margin-top: 12px;
+	margin-bottom: 4px;
+}
+
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
+	order: 2;
+	justify-content: flex-start;
+	gap: 4px;
+	margin-bottom: 0;
+}
+
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title] {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--message-action-size);
+	height: var(--message-action-size);
+	padding: 0;
+	margin-bottom: 0;
+	border-radius: 6px;
+	color: rgb(93, 93, 93);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title]:hover,
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title]:focus-visible {
+	background: #e8e8e8;
+	color: rgb(93, 93, 93);
+}
+
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title] svg {
+	width: var(--message-action-icon-size);
+	height: var(--message-action-icon-size);
+}
+
+/* The download menu opens upwards and to the right of its button, since the buttons are now below the table. */
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) .absolute {
+	top: auto;
+	right: auto;
+	bottom: 100%;
+	left: 0;
+	margin-top: 0;
+	margin-bottom: 4px;
+}
+
+/* The last block of a reply keeps the typography's 20px bottom margin, which left a wide gap above the copy
+   button. Drop it and leave a small one. */
+.agent-content .copilotKitAssistantMessage .space-y-4 > :last-child {
+	margin-bottom: 0;
+}
+
+/* Keep the hover background inside the chat's left edge. */
+.agent-content .copilotKitAssistantMessage [data-testid="copilot-assistant-toolbar"] {
+	margin-top: 4px;
+	margin-left: 0;
+}
+
 /* Per-conversation model picker (composer toolbar) */
 .session-model-select {
 	gap: 4px;
