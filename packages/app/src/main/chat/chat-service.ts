@@ -2,7 +2,7 @@ import {
 	BACKGROUND_CONTEXT as context, clearPendingApprovals, configure,
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
-	DurableTrace, TraceStore, watchEvents, type LoomTraceRecord, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
+	DurableTrace, TraceStore, watchEvents, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
 	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type AssetRefAttachment, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
@@ -52,6 +52,20 @@ export class ChatService {
 	/** Enable local tracing before opening a library. Diagnostics never cross the Chat transport. */
 	setTracePublisher(publish: (record: LoomTraceRecord | null) => void) { this.#tracePublisher = publish; }
 	listTraces(limit = 40, before?: { at: number; id: string }): LoomTraceRecord[] { return this.#trace?.store.list(limit, before) ?? []; }
+	getTrace(id: string): LoomTraceRecord | undefined { return this.#trace?.store.get(id); }
+	async listTraceConversations(before?: { at: number; id: string }): Promise<LoomTraceConversation[]> {
+		const trace = this.#trace, runtime = this.runtime;
+		if (!trace) return [];
+		return Promise.all(trace.store.conversations(40, before).map(async (row) => {
+			if (!runtime || !/^[1-9]\d*$/.test(row.id)) return row;
+			try {
+				const metadata = await runtime.harness.snapshot(LoomConversationDoc, idOf(row.id), context);
+				return { ...row, title: metadata?.title ? trace.privacy.text(metadata.title).slice(0, 200) : undefined };
+			} catch { return row; }
+		}));
+	}
+	getTraceConversation(id: string, before?: { at: number; id: string }): LoomTraceRecord[] { return this.#trace?.store.conversation(id, 40, before) ?? []; }
+	listTraceMetrics(): LoomTraceMetric[] { return this.#trace?.store.listMetrics() ?? []; }
 
 	constructor(options: ChatServiceOptions, onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void) { this.#options = { ...options }; this.#onUsage = onUsage; }
 	readonly #chatSecrets = new Set<string>();

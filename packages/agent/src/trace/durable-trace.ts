@@ -15,7 +15,7 @@ export class DurableTrace {
 	private unsubscribe?: () => void;
 	constructor(store: TraceStore, publish: (record: LoomTraceRecord) => void = () => {}, report: (error: unknown) => void = () => {}) {
 		this.store = store;
-		this.telemetry = new LiveTelemetry(store, this.privacy, publish, report, traceStatus);
+		this.telemetry = new LiveTelemetry(store, this.privacy, { publish, report, summarize: traceStatus });
 	}
 	setSecrets(values: readonly string[]): void {
 		for (const value of values) if (value) this.secrets.add(value);

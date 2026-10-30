@@ -1,8 +1,12 @@
 import { contextBridge, ipcRenderer } from "electron";
-import { DEV_TRACE_IPC, type DevTraceRecord } from "../shared/dev-trace.ts";
+import { DEV_TRACE_IPC, type DevTraceMetric, type DevTraceRecord, type DevTraceConversation, type TraceCursor } from "../shared/dev-trace.ts";
 
 const api = {
 	getTraces: (before?: { at: number; id: string }): Promise<DevTraceRecord[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getTraces, before),
+	getTrace: (id: string): Promise<DevTraceRecord | undefined> => ipcRenderer.invoke(DEV_TRACE_IPC.getTrace, id),
+	getConversations: (before?: TraceCursor): Promise<DevTraceConversation[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getConversations, before),
+	getConversation: (id: string, before?: TraceCursor): Promise<DevTraceRecord[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getConversation, id, before),
+	getMetrics: (): Promise<DevTraceMetric[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getMetrics),
 	onTrace: (listener: (record: DevTraceRecord | null) => void): (() => void) => {
 		const handler = (_event: Electron.IpcRendererEvent, record: DevTraceRecord | null) => listener(record);
 		ipcRenderer.on(DEV_TRACE_IPC.trace, handler);

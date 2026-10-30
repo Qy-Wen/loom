@@ -1152,7 +1152,13 @@ app
 		if (import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) {
 			const devTrace = await import("./dev-trace-window.ts");
 			requireChat().setTracePublisher(devTrace.publishDevTrace);
-			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), (limit, before) => requireChat().listTraces(limit, before));
+			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
+				listTraces: (limit, before) => requireChat().listTraces(limit, before),
+				getTrace: (id) => requireChat().getTrace(id),
+				listConversations: (before) => requireChat().listTraceConversations(before),
+				getConversation: (id, before) => requireChat().getTraceConversation(id, before),
+				listMetrics: () => requireChat().listTraceMetrics(),
+			});
 		}
 		agentServer = await startAgentServer(requireChat());
 		registerAssetProtocol();

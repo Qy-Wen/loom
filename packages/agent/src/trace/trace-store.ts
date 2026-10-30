@@ -2,8 +2,8 @@ import { mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { LibraryPaths } from "@loom/core/paths";
 import { DatabaseSync } from "node:sqlite";
-import type { StoredMetric } from "@earendil-works/pi-telemetry";
-import type { LoomTraceSpan } from "./trace-types.ts";
+import type { LoomTraceMetric, LoomTraceSpan } from "./trace-types.ts";
+import { mergeMetric, metricSeries } from "./trace-metrics.ts";
 
 export const TRACE_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
 export type LoomTraceStatus = "running" | "completed" | "error" | "aborted" | "interrupted";
@@ -18,6 +18,20 @@ export interface LoomTraceRecord {
 	settlement?: "done" | "unanswered";
 	settlementReason?: string;
 }
+
+export interface LoomTraceConversation {
+	id: string;
+	at: number;
+	count: number;
+	status: LoomTraceStatus;
+	title?: string;
+}
+
+/** Missing historical conversation identities must never be merged into one fake conversation. */
+export function traceConversationId(record: Pick<LoomTraceRecord, "id" | "threadId">): string {
+	return record.threadId || `trace:${record.id}`;
+}
+const CONVERSATION_KEY = "COALESCE(NULLIF(json_extract(body, '$.threadId'), ''), 'trace:' || id)";
 
 /** Native span snapshots plus Loom content. Legacy traces.sqlite is never opened or migrated. */
 export class TraceStore {
@@ -36,6 +50,7 @@ export class TraceStore {
 				CREATE INDEX IF NOT EXISTS traces_at ON traces(at DESC, id DESC);
 				CREATE INDEX IF NOT EXISTS traces_updated ON traces(updated_at);
 				CREATE INDEX IF NOT EXISTS traces_submission ON traces(submission_id);
+				CREATE INDEX IF NOT EXISTS traces_conversation ON traces(${CONVERSATION_KEY}, at DESC, id DESC, updated_at, status);
 				CREATE TABLE IF NOT EXISTS metrics (interval_ms INTEGER, series TEXT, body TEXT NOT NULL, PRIMARY KEY(interval_ms, series));`);
 			const store = new TraceStore(path, db);
 			store.prune();
@@ -68,22 +83,45 @@ export class TraceStore {
 			: this.db.prepare("SELECT body FROM traces WHERE updated_at>=? ORDER BY at DESC, id DESC LIMIT ?").all(cutoff, limit);
 		return rows.map((row) => JSON.parse(String(row.body)) as LoomTraceRecord);
 	}
+	/** Summaries only: browsing conversations never transfers every historical payload. */
+	conversations(limit = 40, before?: { at: number; id: string }): LoomTraceConversation[] {
+		if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Invalid conversation page size");
+		const rows = this.db.prepare(`WITH retained AS (
+			SELECT ${CONVERSATION_KEY} AS conversation, at, id, status FROM traces INDEXED BY traces_conversation WHERE updated_at>=?
+		), grouped AS (
+			SELECT conversation AS id, MAX(at) AS at, COUNT(*) AS count,
+				CASE WHEN MAX(status='running') THEN 'running' ELSE
+				(SELECT status FROM retained r WHERE r.conversation=t.conversation ORDER BY at DESC, id DESC LIMIT 1) END AS status
+			FROM retained t GROUP BY conversation
+		) SELECT * FROM grouped ${before ? "WHERE at < ? OR (at = ? AND id < ?)" : ""} ORDER BY at DESC, id DESC LIMIT ?`)
+			.all(Date.now() - TRACE_RETENTION_MS, ...(before ? [before.at, before.at, before.id] : []), limit);
+		return rows.map((row) => ({ id: String(row.id), at: Number(row.at), count: Number(row.count), status: row.status as LoomTraceStatus }));
+	}
+	conversation(id: string, limit = 40, before?: { at: number; id: string }): LoomTraceRecord[] {
+		if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Invalid trace page size");
+		return this.db.prepare(`SELECT body FROM traces INDEXED BY traces_conversation WHERE updated_at>=? AND ${CONVERSATION_KEY}=?
+			${before ? "AND (at < ? OR (at = ? AND id < ?))" : ""} ORDER BY at DESC, id DESC LIMIT ?`)
+			.all(Date.now() - TRACE_RETENTION_MS, id, ...(before ? [before.at, before.at, before.id] : []), limit)
+			.map((row) => JSON.parse(String(row.body)) as LoomTraceRecord);
+	}
 	unfinished(): LoomTraceRecord[] {
 		return this.db.prepare("SELECT body FROM traces WHERE status='running'").all().map((row) => JSON.parse(String(row.body)) as LoomTraceRecord);
 	}
-	measure(metric: StoredMetric): void {
-		const attributes = Object.fromEntries(Object.entries(metric.attributes).sort(([a], [b]) => a.localeCompare(b)));
-		const series = JSON.stringify([metric.name, metric.kind, metric.unit, attributes]);
+	measure(metric: LoomTraceMetric): void {
+		const series = metricSeries(metric);
 		const previous = this.db.prepare("SELECT body FROM metrics WHERE interval_ms=? AND series=?").get(metric.intervalMs, series);
-		if (previous) {
-			const old = JSON.parse(String(previous.body)) as StoredMetric;
-			metric = { ...metric, count: old.count + metric.count, sum: old.sum + metric.sum, min: Math.min(old.min, metric.min), max: Math.max(old.max, metric.max) };
-		}
+		metric = mergeMetric(previous ? JSON.parse(String(previous.body)) as LoomTraceMetric : undefined, metric);
 		this.db.prepare("INSERT OR REPLACE INTO metrics VALUES (?, ?, ?)").run(metric.intervalMs, series, JSON.stringify(metric));
 	}
-	metrics(name: string): StoredMetric[] {
-		return this.db.prepare("SELECT body FROM metrics WHERE interval_ms>=? ORDER BY interval_ms").all(Date.now() - TRACE_RETENTION_MS)
-			.map((row) => JSON.parse(String(row.body)) as StoredMetric).filter((row) => row.name === name);
+	metrics(name: string): LoomTraceMetric[] {
+		return this.db.prepare("SELECT body FROM metrics WHERE interval_ms>=? AND json_extract(body, '$.name')=? ORDER BY interval_ms").all(Date.now() - TRACE_RETENTION_MS, name)
+			.map((row) => JSON.parse(String(row.body)) as LoomTraceMetric);
+	}
+	/** Bounded newest interval rows for the development viewer, independent of trace pagination. */
+	listMetrics(limit = 200): LoomTraceMetric[] {
+		if (!Number.isInteger(limit) || limit < 1 || limit > 200) throw new Error("Invalid metric page size");
+		return this.db.prepare("SELECT body FROM metrics WHERE interval_ms>=? ORDER BY interval_ms DESC, series LIMIT ?").all(Date.now() - TRACE_RETENTION_MS, limit)
+			.map((row) => JSON.parse(String(row.body)) as LoomTraceMetric);
 	}
 	prune(): void {
 		const cutoff = Date.now() - TRACE_RETENTION_MS;

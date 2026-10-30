@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { LoomTraceSpan } from "@loom/agent";
-import { spanPayload, toSpanData, traceSummary, visibleSpans } from "../src/renderer/dev-trace/trace-spans.ts";
+import { formatTraceDuration, spanPayload, visibleSpans } from "../src/renderer/dev-trace/trace-spans.ts";
 
 function span(partial: Pick<LoomTraceSpan, "id" | "parentId" | "name"> & Partial<LoomTraceSpan>): LoomTraceSpan {
 	return {
@@ -14,38 +14,29 @@ function span(partial: Pick<LoomTraceSpan, "id" | "parentId" | "name"> & Partial
 }
 
 describe("trace spans", () => {
-	it("drops hook spans and reparents the tool onto the run", () => {
+	it("filters ledger candidates without cloning or rewriting native parents", () => {
 		const spans = [
 			span({ id: "1", parentId: undefined, name: "pi.durable.submit" }),
 			span({ id: "2", parentId: "1", name: "pi.harness.hook" }),
 			span({ id: "3", parentId: "2", name: "pi.durable.phase", attributes: { "task.name": "pi.tool", "phase": "call", "tool.name": "read" } }),
+			span({ id: "4", parentId: "absent", name: "pi.ai.request" }),
 		];
 		const visible = visibleSpans(spans);
-		assert.deepEqual(visible.map((item) => item.name), ["pi.durable.submit", "pi.durable.phase"]);
-		assert.equal(visible[1]?.parentId, "1");
-		const data = toSpanData(spans);
-		assert.equal(data[1]?.name, "read · call");
-		assert.equal(data[1]?.type, "tool");
-		assert.equal(data[1]?.parentSpanId, "1");
-		assert.equal(data[1]?.latencyMs, 400);
+		assert.deepEqual(visible.map((item) => item.id), ["1", "3", "4"]);
+		assert.equal(visible[1], spans[2]);
+		assert.equal(visible[1]?.parentId, "2");
+		assert.equal(visible[2], spans[3]);
+		assert.equal(visible[2]?.parentId, "absent");
 	});
 
-	it("summarizes duration, tokens, and tool names", () => {
-		const summary = traceSummary([
-			span({ id: "1", parentId: undefined, name: "pi.durable.submit", startedMs: 0, endedMs: 1500 }),
-			span({
-				id: "2",
-				parentId: "1",
-				name: "pi.ai.request",
-				attributes: { "model": "gpt", "usage.input": 20, "usage.output": 5 },
-			}),
-			span({ id: "3", parentId: "1", name: "pi.durable.phase", attributes: { "tool.name": "write" } }),
-			span({ id: "4", parentId: "1", name: "pi.harness.hook" }),
-		]);
-		assert.equal(summary, "1.5s · 20 in / 5 out · write");
+	it("formats milliseconds and seconds without negative durations", () => {
+		assert.equal(formatTraceDuration(-1), "0ms");
+		assert.equal(formatTraceDuration(123.5), "124ms");
+		assert.equal(formatTraceDuration(1500), "1.5s");
+		assert.equal(formatTraceDuration(12000), "12s");
 	});
 
-	it("reads a span payload and ignores spans without one", () => {
+	it("reads captured string payloads and ignores absent or non-string values", () => {
 		assert.equal(spanPayload(span({ id: "1", parentId: undefined, name: "pi.durable.submit" })), null);
 		assert.deepEqual(
 			spanPayload(span({
@@ -56,5 +47,6 @@ describe("trace spans", () => {
 			})),
 			{ input: "{\"path\":\"a.md\"}", output: "ok" },
 		);
+		assert.equal(spanPayload(span({ id: "3", parentId: undefined, name: "pi.ai.request", attributes: { "loom.io.input": 42 } })), null);
 	});
 });

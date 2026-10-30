@@ -1,11 +1,24 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { dirname, join } from "node:path";
-import { DEV_TRACE_IPC, type DevTraceRecord } from "../shared/dev-trace.ts";
+import { DEV_TRACE_IPC, type DevTraceMetric, type DevTraceRecord, type DevTraceConversation, type TraceCursor } from "../shared/dev-trace.ts";
 import { loadAppIcon } from "./desktop/app-icon.ts";
 
 const TITLE = "Traces";
 
-let listTraces: (limit: number, before?: { at: number; id: string }) => DevTraceRecord[] = () => [];
+type TraceSource = {
+	listTraces(limit: number, before?: { at: number; id: string }): DevTraceRecord[];
+	getTrace(id: string): DevTraceRecord | undefined;
+	listConversations(before?: TraceCursor): Promise<DevTraceConversation[]>;
+	getConversation(id: string, before?: TraceCursor): DevTraceRecord[];
+	listMetrics(): DevTraceMetric[];
+};
+let source: TraceSource = { listTraces: () => [], getTrace: () => undefined, listConversations: async () => [], getConversation: () => [], listMetrics: () => [] };
+function validateCursor(before?: TraceCursor): void {
+	if (before && (!Number.isFinite(before.at) || typeof before.id !== "string" || before.id.length > 240)) throw new Error("Invalid trace cursor");
+}
+function validateId(id: string): void {
+	if (typeof id !== "string" || !id || id.length > 240) throw new Error("Invalid trace ID");
+}
 let win: BrowserWindow | null = null;
 let ipcReady = false;
 let preloadPath = "";
@@ -14,18 +27,25 @@ export function publishDevTrace(record: DevTraceRecord | null): void {
 	if (win && !win.isDestroyed()) win.webContents.send(DEV_TRACE_IPC.trace, record);
 }
 
-export function registerDevTraceIpc(preload: string, list: typeof listTraces): void {
+export function registerDevTraceIpc(preload: string, queries: TraceSource): void {
 	preloadPath = preload;
-	listTraces = list;
+	source = queries;
 	if (ipcReady) return;
 	ipcReady = true;
 	ipcMain.handle(DEV_TRACE_IPC.open, (): void => {
 		openDevTraceWindow();
 	});
 	ipcMain.handle(DEV_TRACE_IPC.getTraces, (_event, before?: { at: number; id: string }): DevTraceRecord[] => {
-		if (before && (!Number.isFinite(before.at) || typeof before.id !== "string")) throw new Error("Invalid trace cursor");
-		return listTraces(40, before);
+		validateCursor(before);
+		return source.listTraces(40, before);
 	});
+	ipcMain.handle(DEV_TRACE_IPC.getTrace, (_event, id: string): DevTraceRecord | undefined => {
+		validateId(id);
+		return source.getTrace(id);
+	});
+	ipcMain.handle(DEV_TRACE_IPC.getConversations, (_event, before?: TraceCursor) => { validateCursor(before); return source.listConversations(before); });
+	ipcMain.handle(DEV_TRACE_IPC.getConversation, (_event, id: string, before?: TraceCursor) => { validateId(id); validateCursor(before); return source.getConversation(id, before); });
+	ipcMain.handle(DEV_TRACE_IPC.getMetrics, (): DevTraceMetric[] => source.listMetrics());
 }
 
 export function openDevTraceWindow(): void {

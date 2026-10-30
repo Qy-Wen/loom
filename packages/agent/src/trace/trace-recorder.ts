@@ -1,7 +1,8 @@
 import { randomUUID } from "node:crypto";
-import { NOOP_TELEMETRY_CONTEXT, type SpanAttributes, type SpanOptions, type StoredMetric, type TelemetryCarrier,
+import { NOOP_TELEMETRY_CONTEXT, type HistogramOptions, type RecordedTelemetryMeasurement, type SpanAttributes, type SpanOptions, type TelemetryCarrier,
 	type TelemetryContext, type TelemetryMetrics, type TelemetrySpan } from "@earendil-works/pi-telemetry";
-import type { LoomTraceSpan } from "./trace-types.ts";
+import type { LoomTraceMetric, LoomTraceSpan } from "./trace-types.ts";
+import { mergeMetric, metricSeries } from "./trace-metrics.ts";
 import { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";
 import { TracePrivacy } from "./trace-privacy.ts";
 
@@ -9,11 +10,19 @@ type Span = { -readonly [K in keyof LoomTraceSpan]: LoomTraceSpan[K] };
 type Identity = { id: string; traceId: string; conversation?: string };
 type ActiveTrace = { record: LoomTraceRecord; dirty: boolean };
 
+type RecorderOptions = {
+	publish?: (record: LoomTraceRecord) => void;
+	report?: (error: unknown) => void;
+	summarize?: (record: LoomTraceRecord) => LoomTraceStatus;
+	/** Synchronous, detached measurement snapshots for diagnostics and native adapter conformance. */
+	onMeasurement?: (measurement: RecordedTelemetryMeasurement) => void;
+};
+
 /** Backend for Pi's native telemetry contract. Owns recording, never task/request instrumentation. */
 export class LiveTelemetry implements TelemetryContext {
 	private readonly identities = new WeakMap<TelemetryContext, Identity>();
 	private readonly traces = new Map<string, ActiveTrace>();
-	private readonly measurements = new Map<string, StoredMetric>();
+	private readonly measurements = new Map<string, LoomTraceMetric>();
 	private readonly scope = randomUUID();
 	private readonly timeOrigin = Date.now() - performance.now();
 	private sequence = 0;
@@ -26,10 +35,11 @@ export class LiveTelemetry implements TelemetryContext {
 	private readonly publish: (record: LoomTraceRecord) => void;
 	private readonly report: (error: unknown) => void;
 	private readonly summarize: (record: LoomTraceRecord) => LoomTraceStatus;
-	constructor(store: TraceStore, privacy: TracePrivacy, publish: (record: LoomTraceRecord) => void = () => {}, report: (error: unknown) => void = () => {},
-		summarize: (record: LoomTraceRecord) => LoomTraceStatus = spanStatus) {
-		this.store = store; this.privacy = privacy; this.publish = publish; this.report = report;
-		this.summarize = summarize;
+	private readonly onMeasurement?: RecorderOptions["onMeasurement"];
+	constructor(store: TraceStore, privacy: TracePrivacy, options: RecorderOptions = {}) {
+		this.store = store; this.privacy = privacy; this.publish = options.publish ?? (() => {}); this.report = options.report ?? (() => {});
+		this.summarize = options.summarize ?? spanStatus;
+		this.onMeasurement = options.onMeasurement;
 		this.cleanup = setInterval(() => this.observe(() => store.prune()), 60_000);
 		this.cleanup.unref();
 	}
@@ -47,10 +57,14 @@ export class LiveTelemetry implements TelemetryContext {
 		},
 	};
 	readonly metrics: TelemetryMetrics = {
-		counter: (name, options) => ({ add: (value, attrs) => this.measure(name, "counter", value, attrs, options?.unit) }),
-		upDownCounter: (name, options) => ({ add: (value, attrs) => this.measure(name, "upDownCounter", value, attrs, options?.unit) }),
-		histogram: (name, options) => ({ record: (value, attrs) => this.measure(name, "histogram", value, attrs, options?.unit) }),
+		counter: (name, options) => ({ add: this.instrument(name, "counter", options) }),
+		upDownCounter: (name, options) => ({ add: this.instrument(name, "upDownCounter", options) }),
+		histogram: (name, options) => ({ record: this.instrument(name, "histogram", options) }),
 	};
+	private instrument(name: string, kind: LoomTraceMetric["kind"], options?: HistogramOptions) {
+		const metadata = structuredClone(options ?? {});
+		return (value: number, attributes?: SpanAttributes, context?: TelemetryContext) => this.measure(name, kind, value, attributes, metadata, context);
+	}
 	startSpan<T>(options: SpanOptions, callback: (span: TelemetrySpan) => T | Promise<T>): Promise<T> { return this.start(undefined, options, callback); }
 	private inert<T>(options: SpanOptions, callback: (span: TelemetrySpan) => T | Promise<T>): Promise<T> {
 		return NOOP_TELEMETRY_CONTEXT.startSpan(options, (noop) => callback({
@@ -150,17 +164,31 @@ export class LiveTelemetry implements TelemetryContext {
 		if (this.timer || this.stopped || this.failed) return;
 		this.timer = setTimeout(() => { this.timer = undefined; this.flush(); }, 100); this.timer.unref();
 	}
-	private measure(name: string, kind: StoredMetric["kind"], value: number, attributes?: SpanAttributes, unit?: string): void {
+	private measure(name: string, kind: LoomTraceMetric["kind"], value: number, attributes: SpanAttributes | undefined, options: HistogramOptions, context?: TelemetryContext): void {
 		this.observe(() => {
 			if (this.stopped || this.failed) return;
-			const attrs = this.attributes(attributes);
-			const intervalMs = Math.floor(Date.now() / 10_000) * 10_000;
-			const key = JSON.stringify([intervalMs, name, kind, unit, Object.entries(attrs).sort(([a], [b]) => a.localeCompare(b))]);
+			const at = Date.now();
+			const carrier = context ? this.propagation.inject(context) : undefined;
+			const measurement: RecordedTelemetryMeasurement = {
+				name, kind, value, attributes: this.attributes(attributes), context: carrier ?? null,
+				...(options.unit === undefined ? {} : { unit: this.privacy.text(options.unit) }),
+				...(options.description === undefined ? {} : { description: this.privacy.text(options.description) }),
+				...(options.boundaries === undefined ? {} : { boundaries: [...options.boundaries] }),
+			};
+			const { unit, description, boundaries } = measurement;
+			const bucket = boundaries?.findIndex((boundary) => value <= boundary);
+			const metric: LoomTraceMetric = {
+				name, kind, unit, description, boundaries, attributes: measurement.attributes,
+				intervalMs: Math.floor(at / 10_000) * 10_000, count: 1, sum: value, min: value, max: value,
+				...(boundaries ? { bucketCounts: Array.from({ length: boundaries.length + 1 }, (_, index) => index === (bucket === -1 ? boundaries.length : bucket) ? 1 : 0) } : {}),
+				...(carrier ? { exemplars: [{ value, at, traceId: carrier["loom.trace"]!, spanId: carrier["loom.span"]! }] } : {}),
+			};
+			const key = JSON.stringify([metric.intervalMs, metricSeries(metric)]);
 			const previous = this.measurements.get(key);
 			if (!previous && this.measurements.size >= 10_000) return;
-			this.measurements.set(key, { name, kind, unit, attributes: attrs, intervalMs, count: (previous?.count ?? 0) + 1,
-				sum: (previous?.sum ?? 0) + value, min: Math.min(previous?.min ?? value, value), max: Math.max(previous?.max ?? value, value) });
+			this.measurements.set(key, mergeMetric(previous, metric));
 			this.schedule();
+			if (this.onMeasurement) this.observe(() => this.onMeasurement!(structuredClone(measurement)));
 		});
 	}
 	flush(): void {

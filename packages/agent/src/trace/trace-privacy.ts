@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import type { SpanAttributes } from "@earendil-works/pi-telemetry";
 import { traceBlobMark } from "./trace-blob.ts";
+import { boundedTraceJson } from "./trace-json.ts";
 
 /** Per-field limit for ordinary payloads. */
 const LIMIT = 8 * 1024;
@@ -60,26 +61,28 @@ export class TracePrivacy {
 			if (!row || typeof row !== "object") return row;
 			if (depth > 12 || seen.has(row)) return "[omitted]";
 			seen.add(row);
-			if (Array.isArray(row)) return row.slice(0, 200).map((item) => clean(item, depth + 1));
+			if (Array.isArray(row)) {
+				const items = row.slice(0, 200).map((item) => clean(item, depth + 1));
+				if (row.length > 200) items.push(`… (${row.length - 200} items omitted)`);
+				return items;
+			}
 			const object = row as Record<string, unknown>;
-			if (object.type === "image" || object.type === "image_url" || object.type === "input_image") return { type: object.type, mimeType: object.mimeType, image: "[omitted]" };
+			if (object.type === "image" || object.type === "image_url" || object.type === "input_image") return { type: object.type, mimeType: clean(object.mimeType, depth + 1), image: "[omitted]" };
 			if (object.type === "thinking" && object.redacted === true) return { type: "thinking", redacted: true };
-			return Object.fromEntries(Object.entries(object).slice(0, 200).map(([key, item]) => [key, SECRET_KEY.test(key) ? "[redacted]" : /signature|deferred|headers/i.test(key) ? "[omitted]" : clean(item, depth + 1)]));
+			const entries = Object.entries(object);
+			const kept: [string, unknown][] = entries.slice(0, 200).map(([key, item]) => [this.text(key), SECRET_KEY.test(key) ? "[redacted]" : /signature|deferred|headers/i.test(key) ? "[omitted]" : clean(item, depth + 1)]);
+			if (entries.length > 200) {
+				let key = "… (trace omitted)";
+				while (kept.some(([name]) => name === key)) key += "…";
+				kept.push([key, `… (${entries.length - 200} fields omitted)`]);
+			}
+			return Object.fromEntries(kept);
 		};
 		try {
-			const json = JSON.stringify(clean(value, 0), null, 2) ?? "";
-			// A request message may be long as a whole (many sections); only the user-visible fields are cut above.
-			return request ? this.limitMessage(json) : this.text(json);
-		} catch { return "[unserializable]"; }
-	}
-	/** One request message: previews are already short, so only a pathological message is cut here. */
-	private limitMessage(json: string): string {
-		const bytes = Buffer.from(json);
-		const limit = LIMIT * 4;
-		if (bytes.length <= limit) return json;
-		return bytes.subarray(0, limit).toString("utf8").replace(/\uFFFD$/, "") + `\n… (${bytes.length - limit} bytes cut)`;
+			return boundedTraceJson(clean(value, 0), request ? LIMIT * 4 : LIMIT);
+		} catch { return JSON.stringify("[unserializable]"); }
 	}
 	attributes(attributes: SpanAttributes): SpanAttributes {
-		return Object.fromEntries(Object.entries(attributes).filter(([, value]) => value !== undefined).map(([key, value]) => [key, SECRET_KEY.test(key) ? "[redacted]" : typeof value === "string" && !key.startsWith("loom.io.") ? this.text(value) : value]));
+		return Object.fromEntries(Object.entries(attributes).filter(([, value]) => value !== undefined).map(([key, value]) => [key, SECRET_KEY.test(key) ? "[redacted]" : typeof value === "string" && !key.startsWith("loom.io.") ? this.text(value) : Array.isArray(value) ? value.map((item) => typeof item === "string" ? this.text(item) : item) : value]));
 	}
 }

@@ -2,7 +2,7 @@
 
 # Local Agent Traces
 
-Development mode records traces in `<library>/.loom/agents/traces/telemetry.sqlite`. Records and metrics expire 30 days after their last update; cleanup runs on open and every minute. The viewer shows the latest 40 traces and supports pagination. Switching libraries resets it. Production builds do not record or include the trace window. No data is uploaded.
+Development mode records traces and metrics in `<library>/.loom/agents/traces/telemetry.sqlite`. Traces expire 30 days after their last update; metric intervals expire 30 days after their start. Cleanup runs on open and every minute. The viewer pages the latest 40 conversations and loads 40 traces per conversation at a time; both lists can load earlier history. Its Metrics tab shows the latest 200 metric rows and refreshes every second while open. Switching libraries resets both views. Production builds do not record or include the trace window. No data is uploaded.
 
 The old `traces.sqlite` is left untouched and is not read or migrated.
 
@@ -19,15 +19,29 @@ After a crash, unfinished spans become `interrupted`. Native carriers reconnect 
 
 ## Contents and privacy
 
-Native metadata includes model/provider/API, stop reason, response ID, usage/cost, first-chunk events, phase outcomes, and bounded errors. Counters and histograms aggregate into ten-second intervals.
+Native metadata includes model/provider/API, stop reason, response ID, usage/cost, first-chunk events, phase outcomes, and bounded errors.
 
-Input/output uses the existing redaction policy: known Chat secrets and credential patterns are removed; images, signatures, and headers are omitted. Requests keep the latest 200 messages, each independently bounded. Long system/tool text shows a 600-character preview with an Expand button; deduplicated redacted full text is capped at 4 MiB. Ordinary payload fields are bounded to about 8 KiB.
+Counters, up-down counters, and histograms aggregate into ten-second intervals with count, sum, minimum, and maximum. Instrument options are copied at creation; description, unit, and supplied histogram boundaries are retained. Bucket counts are non-cumulative, include an overflow bucket, and merge across flushes and reopen. Histograms retain the latest eight exemplars per series/interval; clicking one opens its trace and selects its span. Expired references are reported as unavailable. Active-task measurements are deltas, not a current-task total. Older rows remain readable without backfilled metadata. Raw measurements are not persisted.
+
+Input/output uses the existing redaction policy: known Chat secrets and credential patterns are removed; images, signatures, and headers are omitted. Requests keep the latest 200 messages, bounded to 32 KiB of encoded UTF-8 JSON per message. Ordinary payloads are bounded to 8 KiB. Long request strings retain a 600-character preview and deduplicated redacted full text capped at 4 MiB. Containers retain at most 200 fields/items with an omission notice; nesting beyond 12 levels is omitted. Clipping shortens values or omits fields without breaking JSON syntax.
+
+## Viewer
+
+The conversation list groups traces by recorded conversation identity; unidentified historical roots stay separate. An indexed summary query avoids loading every payload to build the list. Native traces and spans are not merged or recreated.
+
+The event ledger groups loaded traces into turns and shows system/context snapshots, user inputs, model replies, tool arguments → results, approvals, retries, and diagnostic phases. Request history is not repeated as new events. Input rows come from captured request snapshots; unavailable or malformed historical inputs are marked, not guessed. Turn/step numbering is local to loaded history; redundant request-number badges are omitted. Normal scheduling phases—including waiting, sleeping, and next-phase transitions—are hidden. Errors, interruptions, retries, and compaction have readable labels; a retried request does not repeat its scheduling phase as another event. All native spans remain available under Underlying execution records in raw details. Tool text results use a monospace plain-text view (preserving spacing and line breaks), not Markdown; structured results retain JSON trees.
+
+The three-lane overview uses equal event widths by default; Duration switches to actual timing with parallelism and idle gaps. Snapshot inputs have no fabricated duration. Clicking a block selects its event; dragging focuses a range. Search and manual turn/call folding operate on the ledger. Live updates preserve selection and folds. Metrics and links navigate to the exact referenced span, including native spans hidden from the ledger.
+
+Details provide Overview, Preview, and Raw tabs. Preview renders Markdown with a separate thinking section; untrusted HTML is escaped, and images/links cannot fetch remote content. Raw means the redacted, bounded capture, not a complete HTTP request. JSON objects, arrays, and long strings default to fully expanded; only explicit clicks fold them. Manual folds survive live updates and parent folding. Older incomplete JSON records fall back to text.
+
+Conversation/ledger and ledger/detail dividers can be dragged. Minimum sizes keep both panes usable; preferences survive tab changes and window reopen. Double-click resets a divider; focused dividers accept arrow keys and Home/End. No third-party trace UI or store is required.
 
 This is best-effort redaction, not anonymization: prompts, memory, paths, and tool output can contain private information. The local database is not encrypted.
 
 ## Validation
 
-Coverage includes the native adapter conformance suite, propagation/links, live and SIGKILL recovery, approvals, retry, deferred polls, compaction, diagnostic failure isolation, redaction, pagination, and 30-day cleanup.
+Coverage includes the native adapter conformance suite with actual ordered measurement assertions, metadata copying, buckets/exemplars across flush and reopen, propagation/links, live and SIGKILL recovery, approvals, retry, deferred polls, compaction, diagnostic failure isolation, redaction, pagination, and 30-day cleanup. Electron acceptance checks conversation grouping, safe Markdown previews, search/timeline focus, manual folding, resizable panes, expanded JSON nodes, legacy text fallback, live metrics, exact exemplar navigation, restart persistence, and stale-response isolation on library reset.
 
 Isolated Electron acceptance uses a temporary library and a local mock model:
 

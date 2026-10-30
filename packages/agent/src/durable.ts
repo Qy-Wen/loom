@@ -17,7 +17,8 @@ export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type Pe
 export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage, LoomSessionModel } from "./runtime/session-dto.ts";
 export { contextUsage } from "./runtime/context-usage.ts";
 export { DurableTrace } from "./trace/durable-trace.ts";
-export { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace/trace-store.ts";
+export { TraceStore, type LoomTraceRecord, type LoomTraceStatus, type LoomTraceConversation } from "./trace/trace-store.ts";
+export type { LoomTraceMetric } from "./trace/trace-types.ts";
 export {
 	FORK_TITLE_SUFFIX,
 	LoomConversationDoc,
