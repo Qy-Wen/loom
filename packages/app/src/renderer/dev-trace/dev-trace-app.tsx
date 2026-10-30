@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { DevTraceConversation, DevTraceRecord, TraceCursor } from "../../shared/dev-trace.ts";
 import { MetricsView } from "./metrics-view.tsx";
 import { TraceSplit } from "./trace-split.tsx";
-import { TraceView } from "./trace-view.tsx";
+import { TraceView, type TraceDetailTab } from "./trace-view.tsx";
 import { conversationId } from "./trace-events.ts";
 
 type ConversationRow = DevTraceConversation & { partial?: boolean };
@@ -21,6 +21,8 @@ export function DevTraceApp(): React.JSX.Element {
 	const [navigationKey, setNavigationKey] = useState(0);
 	const listVersion = useRef(0);
 	const [tab, setTab] = useState<"traces" | "metrics">("traces");
+	// A viewer preference, independent of event/conversation remounts and content folds.
+	const [detailTab, setDetailTab] = useState<TraceDetailTab>("preview");
 	const [sourceKey, setSourceKey] = useState(0);
 	const sourceRevision = useRef(0);
 	const [moreConversations, setMoreConversations] = useState(false);
@@ -141,7 +143,7 @@ export function DevTraceApp(): React.JSX.Element {
 				</aside>
 				<main className="trace-detail">
 					{error ? <p className="trace-error" role="status">{error}</p> : null}
-					{selected ? <TraceView key={`${sourceKey}:${selected}`} records={current} selectedSpan={selectedSpan} navigationKey={navigationKey} loading={loading} hasMore={moreHistory[selected] ?? false} loadOlder={loadOlder} openTrace={openTrace} /> : <p className="trace-empty">选择会话查看执行轨迹</p>}
+					{selected ? <TraceView key={`${sourceKey}:${selected}`} records={current} selectedSpan={selectedSpan} navigationKey={navigationKey} loading={loading} hasMore={moreHistory[selected] ?? false} detailTab={detailTab} onDetailTabChange={setDetailTab} loadOlder={loadOlder} openTrace={openTrace} /> : <p className="trace-empty">选择会话查看执行轨迹</p>}
 				</main>
 			</TraceSplit>
 		</div>

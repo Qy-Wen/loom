@@ -130,6 +130,87 @@ test("trace and metrics windows update live, link exemplars, persist, and reset 
 	}
 });
 
+test("event overview shows native start/end times, live settlement, snapshot sources and recovery caveats", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
+	const at = new Date(2026, 9, 30, 8, 9, 7, 5).getTime();
+	const record: DevTraceRecord = { id: "timestamp-test", threadId: "1", at, revision: 1, status: "running", spans: [
+		{ id: "timestamp-request", traceId: "timestamp-test", name: "pi.ai.request", startedMs: at + 0.25, attributes: { model: "timestamp-model", "loom.io.input": JSON.stringify([{ role: "system", content: "PROMPT" }, { role: "user", content: "USER" }]), "loom.io.output": '"reply"' }, events: [], links: [], status: { status: "ok" } },
+	] };
+	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	const facts = trace.locator(".trace-facts");
+	const value = (label: string) => facts.locator("dt").filter({ hasText: new RegExp(`^${label}$`) }).locator("+ dd");
+	await publish(record);
+	await trace.locator('.trace-event[data-kind="assistant"]').click();
+	await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await expect(value("开始时间")).toHaveText("2026-10-30 08:09:07.005");
+	await expect(value("开始时间").locator("time")).toHaveAttribute("datetime", new Date(at).toISOString());
+	await expect(value("结束时间")).toHaveText("运行中（尚未结束）");
+	const settled = { ...record, revision: 2, status: "completed" as const, spans: [{ ...record.spans[0]!, endedMs: at + 1000.75 }] };
+	await publish(settled);
+	await expect(value("结束时间")).toHaveText("2026-10-30 08:09:08.005");
+	await expect(value("耗时")).toHaveText("1.0s");
+	// Switching to the snapshot does not replace the source request's timestamps with its visual position.
+	await trace.locator('.trace-event[data-kind="system"]').click();
+	await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await expect(value("来源调用开始时间")).toHaveText("2026-10-30 08:09:07.005");
+	await expect(value("来源调用结束时间")).toHaveText("2026-10-30 08:09:08.005");
+	await expect(trace.locator(".trace-io")).toContainText("请求快照没有独立起止时间");
+	await publish({ ...settled, revision: 3, status: "interrupted", spans: [{ ...settled.spans[0]!, interrupted: true }] });
+	await trace.locator('.trace-event[data-kind="assistant"]').click();
+	await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await expect(value("结束时间")).toHaveText("2026-10-30 08:09:08.005（恢复时补填）");
+	await expect(value("耗时")).toHaveText("无法确定（执行中断）");
+	await expect(trace.locator(".trace-io")).toContainText("不代表真实结束时刻");
+	await publish({ ...record, revision: 4, status: "interrupted", spans: [{ ...record.spans[0]!, interrupted: true }] });
+	await expect(value("结束时间")).toHaveText("未采集（执行中断）");
+});
+
+test("detail tabs persist across events, conversations, closing details and live updates without sharing content folds", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
+	const at = Date.now();
+	const record = (id: string, threadId: string, offset: number): DevTraceRecord => ({ id, threadId, at: at + offset, revision: 1, status: "completed", spans: [
+		{ id: `${id}-request`, traceId: id, name: "pi.ai.request", startedMs: at + offset, endedMs: at + offset + 10, attributes: { model: "tab-model", "loom.io.input": JSON.stringify({ nested: { value: `INPUT_${id}` } }), "loom.io.output": JSON.stringify([{ type: "text", text: `REPLY_${id}` }]) }, events: [], links: [], status: { status: "ok" } },
+	] });
+	const a = record("tab-a", "1", 0), b = record("tab-b", "1", 100), c = record("tab-c", "2", 200);
+	const publish = (record: DevTraceRecord | null) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	const row = (id: string) => trace.locator('.trace-event[data-kind="assistant"]').filter({ hasText: `REPLY_${id}` });
+	const tab = (name: string) => trace.getByRole("tab", { name, exact: true });
+	const sent = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Sent", exact: true }) });
+	await publish(a); await publish(b); await row("tab-a").click();
+	await expect(tab("预览")).toHaveAttribute("aria-selected", "true");
+	await tab("原始内容").click();
+	await sent.getByRole("button", { name: "Collapse /nested", exact: true }).click();
+	await trace.locator(".trace-native summary").click();
+	await row("tab-b").click();
+	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await expect(sent).toContainText("INPUT_tab-b");
+	await expect(sent.getByRole("button", { name: "Collapse /nested", exact: true })).toHaveAttribute("aria-expanded", "true");
+	await expect(trace.locator(".trace-native")).not.toHaveAttribute("open", "");
+	await trace.getByRole("button", { name: "关闭详情", exact: true }).click(); await row("tab-a").click();
+	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await publish({ ...a, revision: 2 });
+	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await tab("Metrics").click(); await tab("Traces").click();
+	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await publish(c); await trace.locator(".trace-item").filter({ hasText: "会话 2" }).click(); await row("tab-c").click();
+	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await expect(sent).toContainText("INPUT_tab-c"); await expect(sent).not.toContainText("INPUT_tab-a");
+	await tab("概述").click();
+	await trace.locator(".trace-item").filter({ hasText: "会话 1" }).click(); await row("tab-b").click();
+	await expect(tab("概述")).toHaveAttribute("aria-selected", "true");
+	await expect(trace.locator(".trace-facts")).toContainText("tab-b-request");
+	await row("tab-a").click(); await expect(tab("概述")).toHaveAttribute("aria-selected", "true");
+	await tab("预览").click(); await row("tab-b").click();
+	await expect(tab("预览")).toHaveAttribute("aria-selected", "true");
+	await expect(trace.locator(".trace-io")).toContainText("REPLY_tab-b");
+});
+
 test("JSON fields default to expanded, preserve manual folds on live updates, and support legacy text", async ({ loomPage, electronApp }) => {
 	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
@@ -372,7 +453,8 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator(".trace-io")).not.toContainText("来自当前已加载历史中的首条模型请求记录");
 	await expect(trace.locator(".trace-request-number")).toHaveCount(0);
 	await expect(trace.locator(".trace-details-header")).not.toContainText(/#\d+/);
-	await expect(trace.getByRole("tab", { name: "预览", exact: true })).toHaveAttribute("aria-selected", "true");
+	await expect(trace.getByRole("tab", { name: "原始内容", exact: true })).toHaveAttribute("aria-selected", "true");
+	await trace.getByRole("tab", { name: "预览", exact: true }).click();
 	await expect(trace.locator(".trace-io strong")).toHaveText("找到两个文件");
 	await expect(trace.locator(".trace-io img")).toHaveCount(0); await expect(trace.locator(".trace-io script")).toHaveCount(0);
 	await expect(trace.getByRole("button", { name: /^思考/ })).toHaveAttribute("aria-expanded", "true");
@@ -523,6 +605,7 @@ test("zero-duration boundary spans join the following call instead of sharing it
 	expect((await user.boundingBox())!.x).toBeLessThan((await model.boundingBox())!.x);
 	await system.click(); await trace.getByRole("tab", { name: "概述", exact: true }).click();
 	await expect(trace.locator(".trace-facts")).toContainText("sequence-request"); // Snapshot retains its native source identity.
+	await trace.getByRole("tab", { name: "预览", exact: true }).click();
 	await zeroA.hover(); await expect(trace.getByRole("tooltip")).toHaveText("工具 · 0ms");
 	await zeroA.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-a");
 	await zeroB.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-b");

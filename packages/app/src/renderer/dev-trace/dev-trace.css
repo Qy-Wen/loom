@@ -84,6 +84,7 @@ body.trace-resizing-columns, body.trace-resizing-columns * { cursor: col-resize 
 .trace-io pre, .trace-tool-name { margin: 0; white-space: pre-wrap; word-break: break-word; font: 12px/1.5 ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .trace-note, .trace-empty { color: #989b9f; font-size: 11px; line-height: 1.5; }
 .trace-empty { margin: 16px 12px; }
+.trace-io .trace-empty { margin: 0; }
 .trace-error, .trace-metrics-error { color: #a45b5b; margin: 10px; }
 .trace-facts { display: grid; grid-template-columns: 100px minmax(0, 1fr); gap: 12px; line-height: 1.5; }
 .trace-fact { display: contents; }

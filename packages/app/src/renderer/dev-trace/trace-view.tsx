@@ -6,10 +6,21 @@ import { EventPreview, SystemTools } from "./trace-preview.tsx";
 import { TraceTimeline, type FocusRange } from "./trace-timeline.tsx";
 import { eventForSpan, eventStatus, traceTurns, type TraceEvent } from "./trace-events.ts";
 import { timelineLayout } from "./trace-timeline-layout.ts";
-import { formatTraceDuration, spanPayload } from "./trace-spans.ts";
+import { formatTraceDuration, formatTraceTimestamp, spanPayload } from "./trace-spans.ts";
 
-function EventDetails({ event, location, openTrace }: { event: TraceEvent; location: string; openTrace(id: string, span?: string): Promise<void> }): React.JSX.Element {
-	const [tab, setTab] = useState<"overview" | "preview" | "raw">("preview");
+function TraceTimestamp({ ms }: { ms: number | undefined }): React.JSX.Element {
+	const text = formatTraceTimestamp(ms);
+	if (ms === undefined || text === "未采集") return <>{text}</>;
+	const iso = new Date(ms).toISOString();
+	return <time dateTime={iso} title={iso}>{text}</time>;
+}
+
+export type TraceDetailTab = "overview" | "preview" | "raw";
+
+function EventDetails({ event, location, tab, onTabChange, openTrace }: {
+	event: TraceEvent; location: string; tab: TraceDetailTab; onTabChange(tab: TraceDetailTab): void;
+	openTrace(id: string, span?: string): Promise<void>;
+}): React.JSX.Element {
 	const [error, setError] = useState("");
 	const [nativeOpen, setNativeOpen] = useState(false);
 	const payload = event.marker ? null : spanPayload(event.span);
@@ -19,7 +30,7 @@ function EventDetails({ event, location, openTrace }: { event: TraceEvent; locat
 	const go = (id: string, span?: string) => { setError(""); void openTrace(id, span).catch(() => setError("关联轨迹已过期或不可用")); };
 	return <>
 		<div className="trace-detail-tabs" role="tablist" aria-label="事件详情">
-			{([["overview", "概述"], ["preview", "预览"], ["raw", "原始内容"]] as const).map(([id, name]) => <button type="button" role="tab" key={id} id={`trace-event-${id}`} aria-controls="trace-event-panel" aria-selected={tab === id} onClick={() => setTab(id)}>{name}</button>)}
+			{([["overview", "概述"], ["preview", "预览"], ["raw", "原始内容"]] as const).map(([id, name]) => <button type="button" role="tab" key={id} id={`trace-event-${id}`} aria-controls="trace-event-panel" aria-selected={tab === id} onClick={() => onTabChange(id)}>{name}</button>)}
 		</div>
 		<div className="trace-io" id="trace-event-panel" role="tabpanel" aria-labelledby={`trace-event-${tab}`}>
 			{event.kind === "system" ? <p className="trace-note">来自当前已加载历史中的首条模型请求记录，展示当时采集的系统提示词与工具声明；内容已脱敏、限长。</p> : null}
@@ -35,11 +46,14 @@ function EventDetails({ event, location, openTrace }: { event: TraceEvent; locat
 				<dl className="trace-facts">
 					<dt>位置</dt><dd>{location}</dd><dt>状态</dt><dd>{eventStatus(event)}</dd>
 					<dt>{event.marker ? "来源调用" : "事件"}</dt><dd>{event.span.name}</dd>
-					<dt>耗时</dt><dd>{event.marker ? "无独立耗时（请求快照）" : event.span.endedMs === undefined ? "运行中" : formatTraceDuration(event.span.endedMs - event.span.startedMs)}</dd>
+					<dt>{event.marker ? "来源调用开始时间" : "开始时间"}</dt><dd><TraceTimestamp ms={event.span.startedMs} /></dd>
+					<dt>{event.marker ? "来源调用结束时间" : "结束时间"}</dt><dd>{event.span.endedMs === undefined ? event.span.interrupted ? "未采集（执行中断）" : "运行中（尚未结束）" : <><TraceTimestamp ms={event.span.endedMs} />{event.span.interrupted ? "（恢复时补填）" : ""}</>}</dd>
+					<dt>耗时</dt><dd>{event.marker ? "无独立耗时（请求快照）" : event.span.interrupted ? "无法确定（执行中断）" : event.span.endedMs === undefined ? "运行中" : formatTraceDuration(event.span.endedMs - event.span.startedMs)}</dd>
 					{typeof first === "number" && event.kind === "assistant" ? <><dt>首 chunk</dt><dd>{formatTraceDuration(first)}</dd></> : null}
 					{["provider", "model", "usage.input", "usage.output", "usage.cache_read", "usage.cache_write", "cost.total", "phase", "attempt", "outcome"].filter((key) => attributes[key] !== undefined).map((key) => <div className="trace-fact" key={key}><dt>{key}</dt><dd>{String(attributes[key])}</dd></div>)}
 					<dt>Trace ID</dt><dd>{event.record.id}</dd><dt>Span ID</dt><dd>{event.span.id}</dd>
 				</dl>
+				<p className="trace-note">时间以本地时区显示到毫秒。{event.marker ? "请求快照没有独立起止时间，以上为来源调用的时间。" : ""}{event.span.interrupted ? "结束时间为恢复时补填（如有），不代表真实结束时刻。" : ""}</p>
 				{event.span.status.status === "error" ? <p className="trace-error">{event.span.status.error?.message ?? "执行失败"}</p> : null}
 				{event.record.settlementReason ? <p className="trace-note">{event.record.settlementReason}</p> : null}
 				{event.record.spans.flatMap((span) => span.links).map((link, index) => <button type="button" className="trace-related" key={index} onClick={() => go(link.traceId, link.spanId)}>关联调用 → {link.traceId}</button>)}
@@ -50,8 +64,9 @@ function EventDetails({ event, location, openTrace }: { event: TraceEvent; locat
 	</>;
 }
 
-export function TraceView({ records, selectedSpan, navigationKey, loading, hasMore, loadOlder, openTrace }: {
+export function TraceView({ records, selectedSpan, navigationKey, loading, hasMore, detailTab, onDetailTabChange, loadOlder, openTrace }: {
 	records: readonly DevTraceRecord[]; selectedSpan: string | null; navigationKey: number; loading: boolean; hasMore: boolean;
+	detailTab: TraceDetailTab; onDetailTabChange(tab: TraceDetailTab): void;
 	loadOlder(): Promise<void>; openTrace(id: string, span?: string): Promise<void>;
 }): React.JSX.Element {
 	const turns = useMemo(() => traceTurns(records), [records]);
@@ -131,7 +146,7 @@ export function TraceView({ records, selectedSpan, navigationKey, loading, hasMo
 			{ledger}
 			<aside className="trace-event-details" aria-label="事件详情">
 				<header className="trace-details-header"><span className={`trace-kind kind-${chosen.kind}`}>{chosen.label}</span><span>{location}</span><button type="button" aria-label="关闭详情" onClick={() => { setSelected(null); setNative(null); }}>×</button></header>
-				<EventDetails key={chosen.id} event={chosen} location={location} openTrace={openTrace} />
+				<EventDetails key={chosen.id} event={chosen} location={location} tab={detailTab} onTabChange={onDetailTabChange} openTrace={openTrace} />
 			</aside>
 		</TraceSplit> : ledger}
 	</div>;
