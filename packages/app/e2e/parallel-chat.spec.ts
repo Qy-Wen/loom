@@ -184,12 +184,13 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		expect(requests.filter((entry) => entry.lane === "ALPHA" && entry.turn === 4)).toHaveLength(1);
 		expect(routingErrors).toEqual([]);
 		const alpha = await record("ALPHA"), beta = await record("BETA");
-		const fork = await page.evaluate(({ id, entryId }) => window.loom.forkBefore(id, entryId), {
-			id: ids.ALPHA, entryId: String(alpha.messages.filter((row) => row.role === "user").at(-1)!.id),
+		const fork = await page.evaluate(({ id, entryId }) => window.loom.forkAfter(id, entryId), {
+			id: ids.ALPHA, entryId: String(alpha.messages.filter((row) => row.role === "assistant").at(-1)!.id),
 		});
 		expect(fork.model).toEqual(alpha.model);
 		expect(fork.context?.window).toBe(96_000);
-		expect(JSON.stringify(fork.messages)).not.toMatch(/ALPHA_TURN_5|BETA_/);
+		expect(JSON.stringify(fork.messages)).toContain("ALPHA_TURN_5_DONE");
+		expect(JSON.stringify(fork.messages)).not.toContain("BETA_");
 		expect(await record("BETA")).toEqual(beta);
 	} finally {
 		await app?.evaluate(({ app }) => app.exit(0)).catch(() => {}); await app?.close().catch(() => {});

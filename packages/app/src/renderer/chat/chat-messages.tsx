@@ -7,12 +7,27 @@ import { useLocale } from "../locale.tsx";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
 import { InlineMessageBody } from "./inline-asset-text.tsx";
 import { HistoryMessageEditor } from "./history-message-editor.tsx";
-import { useContext } from "react";
+import { useContext, useMemo } from "react";
 import { ChatViewContext, useChatSession } from "./chat-context.ts";
 import { editableText, messageText, placedChips } from "./chat-content.ts";
+import { turnEndReplyIds } from "./chat-turns.ts";
+
+function ForkIcon(): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+			<circle cx="12" cy="18" r="3" />
+			<circle cx="6" cy="6" r="3" />
+			<circle cx="18" cy="6" r="3" />
+			<path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
+			<path d="M12 12v3" />
+		</svg>
+	);
+}
 
 const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
 	const { t } = useLocale();
+	const { branch, stored } = useChatSession();
+	const turnEnds = useMemo(() => turnEndReplyIds(stored), [stored]);
 	if (isChatErrorMessageId(props.message.id)) {
 		const text = typeof props.message.content === "string" ? props.message.content : "";
 		return (
@@ -22,7 +37,18 @@ const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
 			</div>
 		);
 	}
-	return <CopilotChatAssistantMessage {...props} markdownRenderer={AssistantMarkdown} />;
+	const canFork = turnEnds.has(props.message.id) && !branch.busy;
+	return (
+		<CopilotChatAssistantMessage
+			{...props}
+			markdownRenderer={AssistantMarkdown}
+			additionalToolbarItems={canFork ? (
+				<CopilotChatAssistantMessage.ToolbarButton title={t.chat.fork} onClick={() => branch.fork(props.message.id)}>
+					<ForkIcon />
+				</CopilotChatAssistantMessage.ToolbarButton>
+			) : undefined}
+		/>
+	);
 }) as typeof CopilotChatAssistantMessage;
 
 function messageAssets(entryId: string | undefined, transcript: readonly LoomTranscriptMessage[]): LoomUserAttachment[] {
@@ -65,17 +91,6 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 				</div>
 			) : undefined}
 			onEditMessage={canEdit ? () => branch!.edit(entryId!) : undefined}
-			additionalToolbarItems={canEdit ? (
-				<CopilotChatUserMessage.ToolbarButton title={t.chat.fork} onClick={() => branch!.fork(entryId!, text)}>
-					<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-						<circle cx="12" cy="18" r="3" />
-						<circle cx="6" cy="6" r="3" />
-						<circle cx="18" cy="6" r="3" />
-						<path d="M18 9v2c0 .6-.4 1-1 1H7c-.6 0-1-.4-1-1V9" />
-						<path d="M12 12v3" />
-					</svg>
-				</CopilotChatUserMessage.ToolbarButton>
-			) : undefined}
 		/>
 	);
 }) as typeof CopilotChatUserMessage;

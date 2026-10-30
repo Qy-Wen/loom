@@ -159,7 +159,7 @@ export const IPC = {
 	cancelFollowUp: "loom:cancelFollowUp",
 	branchBefore: "loom:branchBefore",
 	setSessionModel: "loom:setSessionModel",
-	forkBefore: "loom:forkBefore",
+	forkAfter: "loom:forkAfter",
 	archiveSession: "loom:archiveSession",
 	unarchiveSession: "loom:unarchiveSession",
 	deleteSession: "loom:deleteSession",
@@ -287,8 +287,8 @@ export interface LoomApi {
 	branchBefore: (id: string, entryId: string, model?: SessionRecord["model"]) => Promise<SessionRecord>;
 	/** Persist this conversation's model/thinking; applies from the next request. Rejects while busy. */
 	setSessionModel: (id: string, selection: { provider: string; modelId: string; thinkingLevel?: string }) => Promise<SessionRecord>;
-	/** Open a new session from the prefix before this question. */
-	forkBefore: (id: string, entryId: string) => Promise<SessionRecord>;
+	/** Open a new session from the history up to and including this entry (a reply). */
+	forkAfter: (id: string, entryId: string) => Promise<SessionRecord>;
 	archiveSession: (id: string) => Promise<void>;
 	unarchiveSession: (id: string) => Promise<void>;
 	deleteSession: (id: string) => Promise<void>;

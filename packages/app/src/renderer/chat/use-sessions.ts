@@ -7,7 +7,6 @@ export function useSessions(libraryRoot: string | null, deleteConfirm: string) {
 	const [record, setRecord] = useState<LoomSessionRecord | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const [draft, setDraft] = useState<{ sessionId: string; text: string } | null>(null);
 	const current = useRef(record);
 	const library = useRef(libraryRoot);
 	library.current = libraryRoot;
@@ -63,7 +62,6 @@ export function useSessions(libraryRoot: string | null, deleteConfirm: string) {
 		current.current = null;
 		setRecord(null);
 		setSessions([]);
-		setDraft(null);
 		setError(null);
 		setBusy(false);
 		refreshPending.current = false;
@@ -136,5 +134,5 @@ export function useSessions(libraryRoot: string | null, deleteConfirm: string) {
 		});
 	}
 
-	return { sessions, record: recordLibrary.current === libraryRoot ? record : null, busy, error, draft, setDraft, activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession };
+	return { sessions, record: recordLibrary.current === libraryRoot ? record : null, busy, error, activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession };
 }

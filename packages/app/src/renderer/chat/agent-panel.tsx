@@ -27,7 +27,7 @@ export function AgentPanel({
 }: AgentPanelProps): React.JSX.Element {
 	const { t } = useLocale();
 	const {
-		sessions, record, busy: sessionBusy, error: sessionError, draft: composerDraft, setDraft: setComposerDraft,
+		sessions, record, busy: sessionBusy, error: sessionError,
 		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession,
 	} = useSessions(libraryRoot, t.sessions.deleteConfirm);
 	const sessionId = record?.id ?? null;
@@ -80,15 +80,12 @@ export function AgentPanel({
 									messages={record!.messages}
 									context={record!.context ?? null}
 									model={record!.model}
-									composerDraft={composerDraft?.sessionId === sessionId ? composerDraft.text : null}
-									onComposerDraftApplied={() => setComposerDraft(null)}
 									composerAttach={composerAttach}
 									onComposerAttachApplied={onComposerAttachApplied}
 									onSessionRecord={activateRecord}
 									onHistoryChanged={() => { void refreshCurrent(); }}
-									onForked={(record, text) => {
+									onForked={(record) => {
 										activateRecord(record);
-										setComposerDraft({ sessionId: record.id, text });
 										void refreshSessions().catch(() => undefined);
 									}}
 								/>

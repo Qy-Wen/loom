@@ -315,6 +315,13 @@ export class ChatService {
 		await conversation.abort(context);
 		await conversation.commit(async (tx) => { (await tx.doc(LoomConversationDoc, conversation.id)).hidden = true; }, context);
 	}
+	/** Open a new session holding the history up to and including this entry. The source keeps running untouched. */
+	async forkAfter(id: string, entryId: string) {
+		const conversation = await this.conversation(id);
+		const history = (await conversation.entries({ maxEntryId: idOf<EntryId>(entryId) }, 1, undefined, context)).items;
+		if (String(history[0]?.id) !== entryId) throw new Error("Entry not found");
+		return this.forkAt(conversation, idOf<EntryId>(entryId));
+	}
 	async forkBefore(id: string, entryId: string, model?: ChatSelection) {
 		const conversation = await this.conversation(id);
 		await conversation.abort(context);
@@ -323,6 +330,9 @@ export class ChatService {
 		// Fork before the user entry, not at it; a reset provides an empty-context anchor for first-entry forks.
 		const at = history[1]?.id;
 		if (!at) throw new Error("Cannot fork before the conversation's start anchor");
+		return this.forkAt(conversation, at, model);
+	}
+	private async forkAt(conversation: Conversation, at: EntryId, model?: ChatSelection) {
 		const fork = await conversation.fork(at, {
 			ownership: { kind: "ownerless" },
 			agent: model ? { model: { provider: model.provider, modelId: model.modelId }, thinkingLevel: model.thinkingLevel } : undefined,
@@ -332,7 +342,7 @@ export class ChatService {
 	/**
 	 * Edit-and-send. To the user this replaces the conversation: the branch takes the source's title and the
 	 * source leaves both lists. The source stays in the store, so the branch keeps its ancestry and the old
-	 * messages can still be read by id. (forkBefore is the other action: it leaves both sessions visible.)
+	 * messages can still be read by id. (forkAfter is the other action: it leaves both sessions visible.)
 	 */
 	async branchBefore(id: string, entryId: string, model?: ChatSelection) {
 		const fork = await this.forkBefore(id, entryId, model);

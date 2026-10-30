@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
-test("fork asks for confirmation before creating a branch or replacing the composer draft", async ({ loomPage }) => {
+test("branching from a reply asks for confirmation and keeps the source and the composer draft", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated settings and library required");
 	let requests = 0;
 	const server = createServer((_request, response) => {
@@ -24,14 +24,18 @@ test("fork asks for confirmation before creating a branch or replacing the compo
 		const original = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
 		await loomPage.getByRole("textbox").fill("UNSENT_DRAFT");
 		const question = loomPage.getByTestId("copilot-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" });
-		const fork = question.getByRole("button", { name: "Fork", exact: true });
+		// Branching lives on the reply, not on the question.
+		await question.hover();
+		await expect(question.getByRole("button", { name: "Branch from here", exact: true })).toHaveCount(0);
+		const answer = loomPage.getByTestId("copilot-assistant-message").filter({ hasText: "FORK_CONFIRM_REPLY" });
+		const fork = answer.getByRole("button", { name: "Branch from here", exact: true });
 		for (const approved of [false, true]) {
-			await question.hover();
+			await answer.hover();
 			const shown = loomPage.waitForEvent("dialog");
 			const click = fork.click();
 			const dialog = await shown;
 			expect(dialog.type()).toBe("confirm");
-			expect(dialog.message()).toBe("Create a new conversation from before this message? The current conversation will be kept.");
+			expect(dialog.message()).toBe("Create a new conversation from this reply? The current conversation will be kept.");
 			if (approved) await dialog.accept(); else await dialog.dismiss();
 			await click;
 			if (!approved) {
@@ -41,7 +45,10 @@ test("fork asks for confirmation before creating a branch or replacing the compo
 			}
 		}
 		await expect(loomPage.getByRole("tab", { name: `${source.title}（分支）`, selected: true, exact: true })).toBeVisible();
-		await expect(loomPage.getByRole("textbox")).toHaveText("FORK_CONFIRM_QUESTION");
+		// The branch keeps the whole exchange and starts with an empty composer.
+		await expect(loomPage.getByText("FORK_CONFIRM_REPLY", { exact: true })).toBeVisible();
+		await expect(loomPage.getByTestId("copilot-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" })).toBeVisible();
+		await expect(loomPage.getByRole("textbox")).toHaveText("");
 		const after = await loomPage.evaluate(() => window.loom.listSessions());
 		expect(after).toHaveLength(before.length + 1);
 		expect((await loomPage.evaluate((id) => window.loom.getSession(id), source.id))).toEqual(original);

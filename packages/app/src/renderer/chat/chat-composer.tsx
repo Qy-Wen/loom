@@ -34,7 +34,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
-	const { threadId, branch, runError, pendingEdit, editSubmitted, draft, onDraftApplied, composerAttach, onComposerAttachApplied, transcript, usage, model, onModelChanged } = useChatSession();
+	const { threadId, branch, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, transcript, usage, model, onModelChanged } = useChatSession();
 	const { messages: visible, connecting, threadReady } = useContext(ChatViewContext);
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
@@ -62,17 +62,14 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	}, []);
 	const textOnlyModel = modelLacksImageInput(model, catalog);
 	const hasDraft = editableText(value ?? "") || assets.length > 0;
-	const draftRef = useRef(draft);
-	draftRef.current = draft;
 	const onChangeRef = useRef(onChange);
 	onChangeRef.current = onChange;
 	useEffect(() => {
 		setAssets([]);
 		setQueued([]);
 		setAttachmentError(null);
-		if (!draftRef.current) onChangeRef.current?.("");
+		onChangeRef.current?.("");
 	}, [threadId]);
-	const appliedDraft = useRef<string | null>(null);
 	const submittedEdit = useRef<PendingEdit | null>(null);
 	useEffect(() => {
 		// A controlled thread switch connects asynchronously. Never send through the old thread's callback.
@@ -97,17 +94,6 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			}
 		})();
 	}, [pendingEdit, editSubmitted, threadId, threadReady, connecting, isRunning, onSubmitMessage, onChange, t.chat.attachFailed]);
-
-	useEffect(() => {
-		if (!draft) {
-			appliedDraft.current = null;
-			return;
-		}
-		if (appliedDraft.current === draft) return;
-		appliedDraft.current = draft;
-		onChange?.(draft);
-		onDraftApplied();
-	}, [draft, onChange, onDraftApplied]);
 
 	useLayoutEffect(() => {
 		if (!composerAttach) return;

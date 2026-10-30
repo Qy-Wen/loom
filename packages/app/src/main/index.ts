@@ -779,7 +779,7 @@ function registerIpc(): void {
 		notifyChatSettingsChanged();
 		return chatRecord(record);
 	});
-	ipcMain.handle(IPC.forkBefore, async (_event, id: string, entryId: string) => chatRecord(await requireChat().forkBefore(id, entryId)));
+	ipcMain.handle(IPC.forkAfter, async (_event, id: string, entryId: string) => chatRecord(await requireChat().forkAfter(id, entryId)));
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => requireChat().archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => requireChat().unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {

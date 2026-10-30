@@ -50,8 +50,6 @@ export function SessionChat({
 	messages,
 	context,
 	model,
-	composerDraft,
-	onComposerDraftApplied,
 	composerAttach,
 	onComposerAttachApplied,
 	onSessionRecord,
@@ -62,13 +60,11 @@ export function SessionChat({
 	messages: LoomTranscriptMessage[];
 	context: LoomContextUsage | null;
 	model: LoomSessionModel | undefined;
-	composerDraft: string | null;
-	onComposerDraftApplied: () => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	onSessionRecord: (record: LoomSessionRecord) => void;
 	onHistoryChanged: () => void;
-	onForked: (record: LoomSessionRecord, draft: string) => void;
+	onForked: (record: LoomSessionRecord) => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
@@ -107,14 +103,14 @@ export function SessionChat({
 			setEditingId(null);
 			setError(null);
 		},
-		async fork(entryId, text) {
+		async fork(entryId) {
 			if (!window.confirm(t.chat.forkConfirm)) return;
 			setBusy(true);
 			setError(null);
 			try {
-				const record = await window.loom.forkBefore(threadId, entryId);
+				const record = await window.loom.forkAfter(threadId, entryId);
 				if (activeThread.current !== threadId) return;
-				onFork.current(record, text);
+				onFork.current(record);
 			} catch (cause) {
 				setError(errorText(cause));
 			} finally {
@@ -142,7 +138,7 @@ export function SessionChat({
 	}), [busy, editingId, error, threadId, t.chat.forkConfirm]);
 
 	return (
-		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, draft: composerDraft, onDraftApplied: onComposerDraftApplied, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
+		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<div className="session-chat-shell">
 				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>

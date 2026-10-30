@@ -9,7 +9,8 @@ export type BranchActions = {
 	error: string | null;
 	edit: (entryId: string) => void;
 	cancelEdit: () => void;
-	fork: (entryId: string, text: string) => void;
+	/** Open a new conversation holding the history up to and including this reply. */
+	fork: (entryId: string) => void;
 	commitEdit: (text: string, model?: LoomSessionModel) => Promise<void>;
 };
 
@@ -21,8 +22,6 @@ export type ChatSession = {
 	runError: string | null;
 	pendingEdit: PendingEdit | null;
 	editSubmitted: (edit: PendingEdit) => void;
-	draft: string | null;
-	onDraftApplied: () => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	usage: LoomContextUsage | null;

@@ -181,6 +181,10 @@ test("app fork-before switches context and hides deletion without breaking ances
 		const empty = await host.forkBefore(fork.id, String(first.id));
 		assert.equal(empty.messages.length, 0);
 		assert.equal(empty.title, "Project（分支）", "a plain fork keeps the suffix and leaves its source listed");
+		const through = await host.forkAfter(record.id, String(first.id));
+		assert.deepEqual(through.messages.map((message) => message.content), ["first"], "forkAfter keeps the entry itself and stops there");
+		assert.equal((await host.forkAfter(record.id, String(second.id))).messages.length, 2);
+		await assert.rejects(host.forkAfter(record.id, "999999"), /Entry not found/);
 		assert.equal((await host.listSessions()).some((row) => row.id === fork.id), true);
 		await host.deleteSession(record.id);
 		assert.equal((await host.listSessions()).some((row) => row.id === record.id), false);
