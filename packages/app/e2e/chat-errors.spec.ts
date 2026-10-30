@@ -72,3 +72,36 @@ test("transport failures appear even without a RUN_ERROR event", async ({ loomPa
 		await loomPage.unroute("**/api/copilotkit/agent/loom/run");
 	}
 });
+
+test("a rejected key shows one error, with the explanation once", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated settings and library required");
+	const server = createServer((_request, response) => {
+		response.writeHead(401, { "content-type": "application/json" });
+		response.end(JSON.stringify({ message: "Authentication Fails, Your api key: ****7a01 is invalid", type: "authentication_error" }));
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await loomPage.getByRole("textbox").fill("hello");
+		await loomPage.getByRole("textbox").press("Enter");
+		const errors = loomPage.locator(".chat-error[role=alert]");
+		await expect(errors.first()).toBeVisible();
+		// The failure reaches history and the live copy gives way to it: one box, not two.
+		await expect(loomPage.getByTestId("copilot-assistant-message")).toHaveCount(0);
+		await expect(errors).toHaveCount(1);
+		await loomPage.waitForTimeout(1500);
+		await expect(errors).toHaveCount(1);
+		const body = (await errors.locator(".chat-error-body").innerText());
+		expect(body.match(/API key was rejected/g)).toHaveLength(1);
+		expect(body).toContain("****7a01");
+		// The error stays after the session is reloaded from history.
+		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
+		await loomPage.getByRole("tab", { name: "hello", exact: true }).click();
+		await expect(errors).toHaveCount(1);
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});

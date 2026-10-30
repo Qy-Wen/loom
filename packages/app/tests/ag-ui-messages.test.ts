@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { adoptMessageId, liveMessagesForSession, mergeChatMessages, toAgUiMessages, transcriptText } from "../src/shared/ag-ui-messages.ts";
-import { formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
+import { failureShownInHistory, formatChatError, isChatErrorMessageId } from "../src/shared/chat-error.ts";
 
 test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", () => {
 	const messages = toAgUiMessages([
@@ -155,4 +155,18 @@ test("chat error message ids are distinct from model replies", () => {
 	assert.equal(isChatErrorMessageId(undefined), false);
 	assert.match(formatChatError("fetch failed"), /Could not reach the Chat endpoint/);
 	assert.match(formatChatError("401 Unauthorized"), /API key was rejected/);
+});
+
+test("formatting a Chat error twice adds nothing, and the live copy gives way to the same error in history", () => {
+	for (const raw of ["401: bad key", "fetch failed", "Set a base URL and model in Settings.", "something odd"]) {
+		assert.equal(formatChatError(formatChatError(raw)), formatChatError(raw));
+	}
+	const failure = formatChatError("401: bad key");
+	const row = { id: "loom-error-7", content: failure };
+	assert.equal(failureShownInHistory([{ id: "u", content: "hello" }, row], failure), true);
+	assert.equal(failureShownInHistory([{ id: "u", content: "hello" }, row], "401: bad key"), true, "an unformatted live error matches too");
+	assert.equal(failureShownInHistory([{ id: "u", content: "hello" }], failure), false, "not in history yet");
+	assert.equal(failureShownInHistory([row, { id: "u2", content: "again" }], failure), false, "an older failure is not this one");
+	assert.equal(failureShownInHistory([row], "no_model"), false);
+	assert.equal(failureShownInHistory([row], null), false);
 });

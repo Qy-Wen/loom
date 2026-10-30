@@ -4,7 +4,7 @@ import type { Message } from "@ag-ui/core";
 import { CopilotChatInput, type CopilotChatInputProps } from "@copilotkit/react-core/v2";
 import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
-import { formatChatError } from "../../shared/chat-error.ts";
+import { failureShownInHistory, formatChatError } from "../../shared/chat-error.ts";
 import type { ChatModelView } from "../../shared/chat-models.ts";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
@@ -34,7 +34,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
-	const { threadId, branch, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, transcript, usage, model, onModelChanged } = useChatSession();
+	const { threadId, branch, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, stored, transcript, usage, model, onModelChanged } = useChatSession();
 	const { messages: visible, connecting, threadReady } = useContext(ChatViewContext);
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
@@ -371,7 +371,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				void importDroppedFiles(files);
 			}}
 		>
-			{runError !== null && (
+			{runError !== null && !failureShownInHistory(stored, runError) && (
 				<div className="chat-error" role="alert">
 					<div className="chat-error-label">{t.chat.requestFailed}</div>
 					<p className="chat-error-body">{runError.trim() === "no_model" ? t.chat.modelRequired : formatChatError(runError)}</p>
