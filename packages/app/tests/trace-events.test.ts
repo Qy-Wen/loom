@@ -3,7 +3,8 @@ import { test } from "node:test";
 import type { LoomTraceSpan } from "@loom/agent";
 import type { DevTraceRecord } from "../src/shared/dev-trace.ts";
 import type { JsonValue } from "../src/renderer/dev-trace/json-values.ts";
-import { capturedTools, conversationId, contentText, eventForSpan, eventStatus, phaseDiagnostic, timelineBlocks, traceTurns } from "../src/renderer/dev-trace/trace-events.ts";
+import { timelineLayout } from "../src/renderer/dev-trace/trace-timeline-layout.ts";
+import { capturedTools, conversationId, contentText, eventForSpan, eventStatus, phaseDiagnostic, traceTurns } from "../src/renderer/dev-trace/trace-events.ts";
 
 const span = (id: string, name: string, attributes: LoomTraceSpan["attributes"] = {}, parentId?: string): LoomTraceSpan => ({ id, name, attributes, parentId, traceId: "t", startedMs: 100, endedMs: 200, status: { status: "ok" }, events: [], links: [] });
 function record(id: string, at = 100): DevTraceRecord {
@@ -183,14 +184,14 @@ test("content decoding resolves blobs but does not parse JSON-looking message st
 
 test("timeline uses equal widths or true overlapping times, with zero-duration input markers", () => {
 	const events = traceTurns([record("time")])[0]!.events;
-	const equal = timelineBlocks(events, false, 300);
+	const equal = timelineLayout(events, false, 300, 1000).blocks;
 	assert.equal(equal[0]!.width, .25); assert.equal(equal[1]!.left, .25);
-	const actual = timelineBlocks(events, true, 300);
+	const actual = timelineLayout(events, true, 300, 1000).blocks;
 	assert.equal(actual[0]!.width, 0); assert.equal(actual[1]!.width, 0);
 	assert.equal(actual[2]!.left, actual[3]!.left);
-	assert.equal(actual[2]!.width, 1); assert.equal(actual[2]!.lane, 1); assert.equal(actual[3]!.lane, 2);
+	assert.equal(actual[2]!.width, .988); assert.equal(actual[2]!.lane, 1); assert.equal(actual[3]!.lane, 2);
 	const running = events.map((event) => event.kind === "assistant" ? { ...event, span: { ...event.span, endedMs: undefined, events: [{ name: "pi.ai.first_chunk", timeMs: 50, attributes: {} }] } } : event);
-	const blocks = timelineBlocks(running, true, 300);
-	assert.equal(blocks[2]!.firstChunk, .25); assert.equal(blocks[2]!.width, 1);
-	assert.deepEqual(timelineBlocks([], true, 0), []);
+	const blocks = timelineLayout(running, true, 300, 1000).blocks;
+	assert.equal(blocks[2]!.firstChunk, .25); assert.equal(blocks[2]!.width, .988);
+	assert.deepEqual(timelineLayout([], true, 0, 1000), { blocks: [], gaps: [] });
 });

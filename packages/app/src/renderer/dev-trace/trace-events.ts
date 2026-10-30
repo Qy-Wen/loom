@@ -175,18 +175,3 @@ export function eventForSpan(turns: readonly TraceTurn[], spanId: string): Trace
 	const events = turns.flatMap((turn) => turn.events);
 	return events.find((event) => event.span.id === spanId && !event.marker) ?? events.find((event) => event.span.id === spanId);
 }
-export type TimelineBlock = { event: TraceEvent; left: number; width: number; lane: number; firstChunk?: number };
-export function timelineBlocks(events: readonly TraceEvent[], actual: boolean, now: number): TimelineBlock[] {
-	if (!events.length) return [];
-	const start = Math.min(...events.map((event) => event.span.startedMs));
-	const end = Math.max(...events.map((event) => event.marker ? event.span.startedMs : event.span.endedMs ?? now));
-	const range = Math.max(1, end - start);
-	return events.map((event, index) => {
-		const duration = event.marker ? 0 : Math.max(0, (event.span.endedMs ?? now) - event.span.startedMs);
-		const first = event.span.events.find((row) => row.name === "pi.ai.first_chunk")?.timeMs;
-		return { event, lane: event.kind === "assistant" ? 1 : ["tool", "approval", "phase"].includes(event.kind) ? 2 : 0,
-			left: actual ? (event.span.startedMs - start) / range : index / events.length,
-			width: actual ? duration / range : 1 / events.length,
-			firstChunk: event.kind === "assistant" && typeof first === "number" && duration > 0 ? Math.min(1, Math.max(0, first / duration)) : undefined };
-	});
-}

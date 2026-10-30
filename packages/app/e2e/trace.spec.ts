@@ -267,7 +267,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	] };
 	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
 	await publish(turn);
-	await publish({ ...turn, id: "ledger-2", at: at + 1000, spans: turn.spans.map((span) => ({ ...span, id: `second-${span.id}`, traceId: "ledger-2" })) });
+	await publish({ ...turn, id: "ledger-2", at: at + 1000, spans: turn.spans.map((span) => ({ ...span, id: `second-${span.id}`, traceId: "ledger-2", startedMs: span.startedMs + 1000, endedMs: span.endedMs! + 1000 })) });
 	await publish({ ...turn, id: "ledger-other", threadId: "2", at: at + 2000, spans: turn.spans.map((span) => ({ ...span, id: `other-${span.id}`, traceId: "ledger-other" })) });
 	await expect(trace.locator(".trace-item")).toHaveCount(2);
 	await trace.locator(".trace-item").last().click();
@@ -275,6 +275,27 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator('.trace-event[data-kind="system"]')).toHaveCount(1);
 	await expect(trace.locator('.trace-event[data-kind="user"]')).toHaveCount(2);
 	await expect(trace.locator('.trace-event[data-kind="phase"]')).toHaveCount(0);
+	await expect(trace.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "true");
+	const modelBlock = trace.locator(".trace-overview-block.kind-assistant").first();
+	const tooltip = trace.getByRole("tooltip");
+	expect(await modelBlock.getAttribute("title")).toBeNull();
+	await modelBlock.hover();
+	await expect(tooltip).toBeVisible({ timeout: 500 });
+	await expect(tooltip).toHaveText("助手 · 490ms · 首 chunk 100ms");
+	await expect(modelBlock).toHaveAttribute("aria-describedby", (await tooltip.getAttribute("id"))!);
+	await trace.mouse.move(0, 0); await expect(tooltip).toHaveCount(0);
+	// A quick pass must not leave a delayed tooltip behind.
+	await modelBlock.hover(); await trace.mouse.move(0, 0); await trace.waitForTimeout(200);
+	await expect(tooltip).toHaveCount(0);
+	const lastBlock = trace.locator(".trace-overview-block.kind-tool").last();
+	await lastBlock.focus(); await expect(tooltip).toBeVisible({ timeout: 500 });
+	await expect(tooltip).toHaveText("工具 · 20ms");
+	const tipBounds = (await tooltip.boundingBox())!;
+	expect(tipBounds.x).toBeGreaterThanOrEqual(0);
+	expect(tipBounds.x + tipBounds.width).toBeLessThanOrEqual(await trace.evaluate(() => innerWidth));
+	await lastBlock.press("Escape"); await expect(tooltip).toHaveCount(0);
+	await lastBlock.hover(); await expect(tooltip).toBeVisible({ timeout: 500 });
+	await trace.mouse.down(); await expect(tooltip).toHaveCount(0); await trace.mouse.up();
 	await expect(trace.locator('.trace-event[data-kind="tool"]').first()).toContainText("→ a.md b.png");
 	const system = trace.locator('.trace-event[data-kind="system"]');
 	await expect(system.locator(".trace-event-summary")).toHaveText("系统提示词");
@@ -424,6 +445,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 		await expect(resultSection.locator(".trace-tool-output")).toHaveText(text);
 		await expect(resultSection.locator(".trace-json")).toHaveCount(0);
 	}
+	await toolbar.getByRole("button", { name: "◷ 时长", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "false");
 	await toolbar.getByRole("button", { name: "◷ 时长", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "true");
 	const box = (await trace.locator(".trace-overview-track").boundingBox())!;
 	await trace.mouse.move(box.x + box.width * .1, box.y + 10); await trace.mouse.down(); await trace.mouse.move(box.x + box.width * .3, box.y + 10, { steps: 6 }); await trace.mouse.up();
@@ -431,6 +453,134 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await trace.locator(".trace-overview-track").press("Escape"); await expect(trace.locator(".trace-overview-range")).toHaveCount(0);
 	await trace.getByRole("button", { name: "关闭详情", exact: true }).click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
 	await trace.locator(".trace-item").first().click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(1);
+});
+
+test("duration mode is the default and zero-duration calls stay visible and clickable at the right edge", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState();
+	const at = Date.now();
+	const record: DevTraceRecord = { id: "minimum-span", threadId: "1", at, revision: 1, status: "completed", spans: [
+		{ id: "minimum-model", traceId: "minimum-span", name: "pi.ai.request", startedMs: at, endedMs: at + 10_000, attributes: { model: "demo", "loom.io.output": '"reply"' }, events: [], links: [], status: { status: "ok" } },
+		...[["long", 2000, 6000], ["short", 9000, 9000.1], ["zero", 10_000, 10_000]].map(([name, start, end]) => ({ id: `minimum-${name}`, traceId: "minimum-span", name: "pi.durable.phase", startedMs: at + Number(start), endedMs: at + Number(end), attributes: { "task.name": "pi.tool", "tool.name": String(name), phase: "call", "loom.io.output": '"done"' }, events: [], links: [], status: { status: "ok" as const } })),
+	] };
+	await electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	await trace.locator(".trace-item").first().click();
+	const mode = trace.getByRole("button", { name: "◷ 时长", exact: true });
+	await expect(mode).toHaveAttribute("aria-pressed", "true");
+	const track = trace.locator(".trace-overview-track");
+	const long = track.getByRole("button", { name: /^工具 · long / });
+	const short = track.getByRole("button", { name: /^工具 · short / });
+	const zero = track.getByRole("button", { name: /^工具 · zero / });
+	const checkWidths = async () => {
+		const bounds = (await track.boundingBox())!;
+		expect((await long.boundingBox())!.width).toBeCloseTo((bounds.width - 12) * .4 - 1, 0); // Input and terminal zero reserve slots; the short call is concurrent with the model.
+		for (const block of [short, zero]) {
+			const painted = (await block.boundingBox())!;
+			expect(painted.width).toBeGreaterThanOrEqual(6);
+			expect(painted.x + painted.width).toBeLessThanOrEqual(bounds.x + bounds.width + .1);
+		}
+	};
+	await checkWidths();
+	await zero.hover(); await expect(trace.getByRole("tooltip")).toHaveText("工具 · 0ms");
+	// Click near the end of the inflated marker, not at its theoretical zero-width timestamp.
+	await zero.click({ position: { x: 5, y: 4 } });
+	await expect(trace.locator(".trace-tool-name")).toHaveText("zero");
+	await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await expect(trace.locator(".trace-facts dd")).toContainText(["0ms"]);
+	await checkWidths(); // Minima still fit with details open.
+	await mode.click(); await expect(mode).toHaveAttribute("aria-pressed", "false");
+	const equalWidths = await track.locator(".trace-overview-block").evaluateAll((blocks) => blocks.map((block) => block.getBoundingClientRect().width));
+	expect(Math.max(...equalWidths) - Math.min(...equalWidths)).toBeLessThan(1);
+	await mode.click(); await expect(mode).toHaveAttribute("aria-pressed", "true");
+	await checkWidths();
+});
+
+test("zero-duration boundary spans join the following call instead of sharing its start", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState();
+	const at = Date.now();
+	const record: DevTraceRecord = { id: "zero-sequence", threadId: "1", at, revision: 1, status: "completed", spans: [
+		{ id: "sequence-submit", traceId: "zero-sequence", name: "pi.durable.submit", startedMs: at, endedMs: at + 1, attributes: { "submission.type": "input" }, events: [], links: [], status: { status: "ok" } },
+		{ id: "sequence-request", traceId: "zero-sequence", name: "pi.ai.request", startedMs: at + 20, endedMs: at + 1000, attributes: { model: "demo", "loom.io.input": JSON.stringify([{ role: "system", content: "SYSTEM" }, { role: "user", content: "USER" }]), "loom.io.output": '"reply"' }, events: [], links: [], status: { status: "ok" } },
+		...[ ["zero-a", 1000, 1000], ["zero-b", 1000, 1000], ["next", 1000, 2000] ].map(([name, start, end]) => ({ id: `sequence-${name}`, traceId: "zero-sequence", name: "pi.durable.phase", startedMs: at + Number(start), endedMs: at + Number(end), attributes: { "task.name": "pi.tool", "tool.name": String(name), phase: "call", "loom.io.output": '"done"' }, events: [], links: [], status: { status: "ok" as const } })),
+	] };
+	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	await publish(record); await trace.locator(".trace-item").first().click();
+	const track = trace.locator(".trace-overview-track");
+	const system = track.locator(".kind-system"), user = track.locator(".kind-user"), model = track.locator(".kind-assistant");
+	const zeroA = track.getByRole("button", { name: /^工具 · zero-a / }), zeroB = track.getByRole("button", { name: /^工具 · zero-b / }), next = track.getByRole("button", { name: /^工具 · next / });
+	const checkJoined = async () => {
+		for (const [before, after] of [[system, user], [zeroA, zeroB], [zeroB, next]]) {
+			const a = (await before!.boundingBox())!, b = (await after!.boundingBox())!;
+			expect(a.width).toBeCloseTo(6, 0); expect(a.x + a.width).toBeCloseTo(b.x, 0);
+		}
+	};
+	await checkJoined();
+	expect((await user.boundingBox())!.x).toBeLessThan((await model.boundingBox())!.x);
+	await system.click(); await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await expect(trace.locator(".trace-facts")).toContainText("sequence-request"); // Snapshot retains its native source identity.
+	await zeroA.hover(); await expect(trace.getByRole("tooltip")).toHaveText("工具 · 0ms");
+	await zeroA.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-a");
+	await zeroB.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-b");
+	await next.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("next");
+	const b = (await zeroB.boundingBox())!;
+	await trace.mouse.move(b.x + 1, b.y + 4); await trace.mouse.down(); await trace.mouse.move(b.x + 5, b.y + 4, { steps: 4 }); await trace.mouse.up();
+	await expect(trace.locator('.trace-event[data-kind="tool"]').filter({ hasText: "zero-a" })).toHaveAttribute("data-focus-outside", "true");
+	await expect(trace.locator('.trace-event[data-kind="tool"]').filter({ hasText: "zero-b" })).not.toHaveAttribute("data-focus-outside", "true");
+	await track.press("Escape");
+	await publish({ ...record, revision: 2 }); await checkJoined();
+	await trace.getByRole("separator", { name: "调整会话列表宽度", exact: true }).press("ArrowRight"); await checkJoined();
+});
+
+test("inter-turn idle time folds into a narrow marker while selection, range focus and native coverage stay accurate", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState();
+	const at = Date.now();
+	const first: DevTraceRecord = { id: "gap-first", threadId: "1", at, revision: 1, status: "completed", spans: [
+		{ id: "gap-first-model", traceId: "gap-first", name: "pi.ai.request", startedMs: at, endedMs: at + 1000, attributes: { model: "demo", "loom.io.output": '"FIRST"' }, events: [], links: [], status: { status: "ok" } },
+		{ id: "gap-tool", traceId: "gap-first", name: "pi.durable.phase", startedMs: at + 1000, endedMs: at + 3000, attributes: { "task.name": "pi.tool", "tool.name": "bash", phase: "call" }, events: [], links: [], status: { status: "ok" } },
+	] };
+	const second: DevTraceRecord = { id: "gap-second", threadId: "1", at: at + 723_000, revision: 1, status: "completed", spans: [
+		{ ...first.spans[0]!, id: "gap-second-model", traceId: "gap-second", startedMs: at + 723_000, endedMs: at + 724_000, attributes: { model: "demo", "loom.io.output": '"SECOND"' } },
+	] };
+	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
+	await publish(first); await publish(second); await trace.locator(".trace-item").first().click();
+	const track = trace.locator(".trace-overview-track"), gap = track.locator(".trace-overview-gap");
+	const firstBlock = track.getByRole("button", { name: "助手 · FIRST", exact: true });
+	const secondBlock = track.getByRole("button", { name: "助手 · SECOND", exact: true });
+	await expect(gap).toHaveCount(1);
+	const checkScale = async () => {
+		const a = (await firstBlock.boundingBox())!, b = (await secondBlock.boundingBox())!;
+		expect(a.width).toBeGreaterThan(50); expect(a.width).toBeCloseTo(b.width, 0);
+		expect((await gap.boundingBox())!.width).toBeCloseTo(12, 0);
+	};
+	await checkScale();
+	await gap.hover(); await expect(trace.getByRole("tooltip")).toHaveText("轮间间隔 12分钟（已折叠）");
+	await gap.click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
+	await secondBlock.click(); await expect(trace.locator(".trace-io")).toContainText("SECOND");
+	const b = (await secondBlock.boundingBox())!;
+	await trace.mouse.move(b.x + b.width * .2, b.y + 4); await trace.mouse.down();
+	await trace.mouse.move(b.x + b.width * .8, b.y + 4, { steps: 6 }); await trace.mouse.up();
+	await expect(trace.locator('.trace-event[data-kind="assistant"]').filter({ hasText: "FIRST" })).toHaveAttribute("data-focus-outside", "true");
+	await expect(trace.locator('.trace-event[data-kind="assistant"]').filter({ hasText: "SECOND" })).not.toHaveAttribute("data-focus-outside", "true");
+	await track.press("Escape");
+	const split = trace.getByRole("separator", { name: "调整会话列表宽度", exact: true });
+	await split.press("ArrowRight"); await split.press("ArrowRight");
+	await expect.poll(async () => (await gap.boundingBox())!.width).toBeCloseTo(12, 0); await checkScale();
+	const mode = trace.getByRole("button", { name: "◷ 时长", exact: true });
+	await mode.click(); await expect(gap).toHaveCount(0);
+	await mode.click(); await expect(gap).toHaveCount(1); await checkScale();
+	const bridge = { ...first.spans[1]!, id: "hidden-work", name: "pi.durable.phase", startedMs: at + 3000, endedMs: at + 724_000, attributes: { "task.name": "pi.generation", phase: "tools", outcome: "waiting" } };
+	await publish({ ...first, revision: 2, spans: [...first.spans, bridge] });
+	await expect(gap).toHaveCount(0); // Hidden native work covers the interval, so it must not be folded.
+	await expect(trace.locator(".trace-io")).toContainText("SECOND");
+	await publish({ ...first, revision: 3 }); await expect(gap).toHaveCount(1); await checkScale();
 });
 
 test("system details prefer complete independent tool snapshots and retain schema folds on updates", async ({ loomPage, electronApp }) => {

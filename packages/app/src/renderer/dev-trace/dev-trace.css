@@ -38,9 +38,12 @@ body.trace-resizing-columns, body.trace-resizing-columns * { cursor: col-resize 
 .trace-overview { display: flex; flex: none; height: 50px; border-bottom: 1px solid #e5e5e2; background: #f3f3f1; }
 .trace-lane-labels { display: flex; flex-direction: column; justify-content: center; gap: 2px; width: 40px; flex: none; padding-right: 5px; border-right: 1px solid #e5e5e2; text-align: right; color: #8a8d91; font-size: 10px; line-height: 12px; }
 .trace-overview-track { position: relative; flex: 1; min-width: 0; overflow: hidden; cursor: crosshair; touch-action: none; user-select: none; }
-.trace-overview-block { position: absolute; min-width: 2px; height: 8px; padding: 0; border: 0; border-radius: 1px; opacity: .72; background: currentColor; }
+.trace-overview-block { position: absolute; min-width: 6px; height: 8px; padding: 0; border: 0; border-radius: 1px; opacity: .72; background: currentColor; }
 .trace-overview-block:hover, .trace-overview-block[aria-pressed="true"] { opacity: 1; outline: 1px solid currentColor; outline-offset: 1px; }
 .trace-overview-block[data-first-chunk] { background: linear-gradient(to right, color-mix(in srgb, currentColor 45%, transparent) var(--first-chunk), currentColor var(--first-chunk)); }
+.trace-timeline-tooltip { position: fixed; z-index: 10; max-width: min(360px, calc(100vw - 16px)); padding: 6px 8px; border: 1px solid #dededb; border-radius: 4px; background: #fafaf9; color: #50545c; box-shadow: 0 2px 8px #00000014; font-size: 11px; line-height: 1.5; overflow-wrap: anywhere; pointer-events: none; }
+.trace-overview-gap { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; padding: 0; border: 0; border-inline: 1px dashed #c7cbd1; background: #e5e7eb66; color: #8a8d91; font-size: 9px; overflow: hidden; cursor: help; }
+.trace-overview-gap:hover, .trace-overview-gap:focus-visible { background: #dce2eb; color: #505d73; }
 .trace-overview-boundary { position: absolute; top: 0; bottom: 0; width: 1px; background: #d6d8dd; pointer-events: none; }
 .trace-overview-range { position: absolute; top: 0; bottom: 0; border: 1px solid #8ba1c7; background: #8ba1c722; pointer-events: none; }
 .trace-ledger { flex: 1; min-height: 0; overflow: auto; }

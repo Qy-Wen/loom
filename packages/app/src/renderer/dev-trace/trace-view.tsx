@@ -4,7 +4,8 @@ import { TracePayload } from "./json-view.tsx";
 import { TraceSplit } from "./trace-split.tsx";
 import { EventPreview, SystemTools } from "./trace-preview.tsx";
 import { TraceTimeline, type FocusRange } from "./trace-timeline.tsx";
-import { eventForSpan, eventStatus, timelineBlocks, traceTurns, type TraceEvent } from "./trace-events.ts";
+import { eventForSpan, eventStatus, traceTurns, type TraceEvent } from "./trace-events.ts";
+import { timelineLayout } from "./trace-timeline-layout.ts";
 import { formatTraceDuration, spanPayload } from "./trace-spans.ts";
 
 function EventDetails({ event, location, openTrace }: { event: TraceEvent; location: string; openTrace(id: string, span?: string): Promise<void> }): React.JSX.Element {
@@ -59,8 +60,9 @@ export function TraceView({ records, selectedSpan, navigationKey, loading, hasMo
 	const [closedTurns, setClosedTurns] = useState<ReadonlySet<string>>(new Set());
 	const [closedCalls, setClosedCalls] = useState<ReadonlySet<string>>(new Set());
 	const [query, setQuery] = useState("");
-	const [actual, setActual] = useState(false);
+	const [actual, setActual] = useState(true);
 	const [range, setRange] = useState<FocusRange>(null);
+	const [timelineWidth, setTimelineWidth] = useState(0);
 	const [now, setNow] = useState(Date.now());
 	const table = useRef<HTMLDivElement>(null);
 	const [native, setNative] = useState<TraceEvent | null>(null);
@@ -99,11 +101,11 @@ export function TraceView({ records, selectedSpan, navigationKey, loading, hasMo
 	const toggle = (state: ReadonlySet<string>, setter: (next: ReadonlySet<string>) => void, id: string) => { const next = new Set(state); if (!next.delete(id)) next.add(id); setter(next); };
 	const search = query.trim().toLocaleLowerCase();
 	const matches = (event: TraceEvent) => !search || `${event.label} ${event.summary} ${event.text ?? ""} ${JSON.stringify(event.span.attributes)}`.toLocaleLowerCase().includes(search);
-	const blocks = timelineBlocks(events, actual, now);
+	const layout = useMemo(() => timelineLayout(events, actual, now, timelineWidth, records), [events, actual, now, timelineWidth, records]);
 	const inRange = (event: TraceEvent) => {
 		if (!range) return true;
-		const block = blocks.find((item) => item.event.id === event.id)!;
-		return block.left <= range.end && block.left + block.width >= range.start;
+		const block = layout.blocks.find((item) => item.event.id === event.id)!;
+		return block.paintedLeft <= range.end && block.paintedLeft + block.paintedWidth >= range.start;
 	};
 	const ledger = <div className="trace-ledger" ref={table} aria-label="轨迹事件列表">
 		<div className="trace-history"><span>{loading ? "加载中…" : `${turns.length} 条已加载轨迹${hasMore ? " · 更早历史未加载" : " · 保留期内历史"}`}</span>{hasMore ? <button type="button" disabled={loading} onClick={() => { void loadOlder(); }}>加载更早轮次</button> : null}</div>
@@ -118,13 +120,13 @@ export function TraceView({ records, selectedSpan, navigationKey, loading, hasMo
 	</div>;
 	return <div className="trace-trajectory">
 		<div className="trace-toolbar" role="toolbar" aria-label="轨迹工具栏">
-			<button type="button" title={actual ? "切换为事件等宽" : "切换为真实时长，保留并行与空闲时间"} aria-pressed={actual} onClick={() => { setActual(!actual); setRange(null); }}>◷ 时长</button>
+			<button type="button" title={actual ? "切换为事件等宽" : "切换为真实时长，折叠轮间空闲，保留轮内等待与并行"} aria-pressed={actual} onClick={() => { setActual(!actual); setRange(null); }}>◷ 时长</button>
 			<button type="button" onClick={() => setClosedTurns(turns.every((turn) => closedTurns.has(turn.id)) ? new Set() : new Set(turns.map((turn) => turn.id)))}>{turns.length && turns.every((turn) => closedTurns.has(turn.id)) ? "⊞ 展开轮次" : "⊟ 收起轮次"}</button>
 			<button type="button" onClick={() => setClosedCalls(turns.every((turn) => closedCalls.has(turn.id)) ? new Set() : new Set(turns.map((turn) => turn.id)))}>{turns.length && turns.every((turn) => closedCalls.has(turn.id)) ? "⊞ 展开调用" : "⊟ 收起调用"}</button>
 			{range ? <button type="button" onClick={() => setRange(null)}>清除范围</button> : null}
 			<input type="search" aria-label="搜索轨迹" placeholder="搜索轨迹" value={query} onChange={(event) => setQuery(event.target.value)} />
 		</div>
-		<TraceTimeline events={events} actual={actual} now={now} selected={selected} range={range} setRange={setRange} select={choose} />
+		<TraceTimeline layout={layout} onWidthChange={setTimelineWidth} now={now} selected={selected} range={range} setRange={setRange} select={choose} />
 		{chosen ? <TraceSplit label="调整事件详情宽度" storageKey="loom.devTrace.ledgerFraction" defaultSize={0.5} unit="fraction" minFirst={220} minSecond={280}>
 			{ledger}
 			<aside className="trace-event-details" aria-label="事件详情">
