@@ -140,6 +140,9 @@ type ContextMenuItem<T extends string> =
 	| { type: "separator" }
 	| { label: string; enabled?: boolean; click: () => T };
 
+/** Set only in dev and trace-enabled e2e builds, where the trace window exists. */
+let devTraceLanguageChanged: (() => void) | undefined;
+
 async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
 	const choice = generalSettings ? (await generalSettings.load()).language : "system";
 	return {
@@ -816,8 +819,10 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		if (!generalSettings) throw new Error("Settings store not started");
+		const before = (await generalSettings.load()).language;
 		const saved = await generalSettings.save(parseGeneralSettingsPatch(raw));
 		await syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`));
+		if (saved.language !== before) devTraceLanguageChanged?.();
 		return saved;
 	}));
 	ipcMain.handle(IPC.getProcessSandboxNotice, async () => {
@@ -1151,6 +1156,7 @@ app
 		mcpHost = new McpHost();
 		if (import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) {
 			const devTrace = await import("./dev-trace-window.ts");
+			devTraceLanguageChanged = devTrace.publishDevTraceLanguage;
 			requireChat().setTracePublisher(devTrace.publishDevTrace);
 			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
 				listTraces: (limit, before) => requireChat().listTraces(limit, before),
@@ -1158,6 +1164,7 @@ app
 				listConversations: (before) => requireChat().listTraceConversations(before),
 				getConversation: (id, before) => requireChat().getTraceConversation(id, before),
 				listMetrics: () => requireChat().listTraceMetrics(),
+				language: async () => generalSettings ? (await generalSettings.load()).language : "system",
 			});
 		}
 		agentServer = await startAgentServer(requireChat());

@@ -4,6 +4,8 @@ import { MetricsView } from "./metrics-view.tsx";
 import { TraceSplit } from "./trace-split.tsx";
 import { TraceView, type TraceDetailTab } from "./trace-view.tsx";
 import { conversationId } from "./trace-events.ts";
+import { useTraceLocale } from "./trace-locale.tsx";
+import { traceStatus } from "./trace-messages.ts";
 
 type ConversationRow = DevTraceConversation & { partial?: boolean };
 const order = (a: { at: number; id: string }, b: { at: number; id: string }) => b.at - a.at || b.id.localeCompare(a.id);
@@ -14,6 +16,8 @@ const mergeRecords = (old: DevTraceRecord[], rows: readonly DevTraceRecord[]) =>
 };
 
 export function DevTraceApp(): React.JSX.Element {
+	const { t } = useTraceLocale();
+	const tr = useRef(t); tr.current = t;
 	const [conversations, setConversations] = useState<ConversationRow[]>([]);
 	const [records, setRecords] = useState<DevTraceRecord[]>([]);
 	const [selected, setSelected] = useState<string | null>(null);
@@ -50,7 +54,7 @@ export function DevTraceApp(): React.JSX.Element {
 				const oldest = rows.at(-1); conversationCursor.current = oldest ? { at: oldest.at, id: oldest.id } : null;
 			}
 			setSelected((old) => old ?? rows[0]?.id ?? null);
-		} catch { if (alive.current && revision === sourceRevision.current) setError("无法加载会话列表"); }
+		} catch { if (alive.current && revision === sourceRevision.current) setError(tr.current.app.listError); }
 	}, []);
 	const refresh = useRef(loadConversations); refresh.current = loadConversations;
 
@@ -90,7 +94,7 @@ export function DevTraceApp(): React.JSX.Element {
 			setMoreHistory((old) => ({ ...old, [selected]: rows.length === 40 }));
 			const oldest = rows.at(-1);
 			historyCursor.current[selected] = oldest ? { at: oldest.at, id: oldest.id } : null;
-		}).catch(() => { if (active && revision === sourceRevision.current) setError("无法加载轨迹历史"); })
+		}).catch(() => { if (active && revision === sourceRevision.current) setError(tr.current.app.historyError); })
 			.finally(() => { if (active && revision === sourceRevision.current) setLoading(false); });
 		return () => { active = false; };
 	}, [selected, sourceKey]);
@@ -108,7 +112,7 @@ export function DevTraceApp(): React.JSX.Element {
 			if (!alive.current || revision !== sourceRevision.current) return;
 			setRecords((old) => mergeRecords(old, rows)); setMoreHistory((old) => ({ ...old, [id]: rows.length === 40 }));
 			const oldest = rows.at(-1); historyCursor.current[id] = oldest ? { at: oldest.at, id: oldest.id } : null;
-		} catch { if (alive.current && revision === sourceRevision.current && selectedRef.current === id) setError("无法加载更早轨迹"); }
+		} catch { if (alive.current && revision === sourceRevision.current && selectedRef.current === id) setError(tr.current.app.olderError); }
 		finally { if (alive.current && revision === sourceRevision.current && selectedRef.current === id) setLoading(false); }
 	};
 	const openTrace = async (traceId: string, spanId?: string) => {
@@ -124,26 +128,26 @@ export function DevTraceApp(): React.JSX.Element {
 	};
 
 	return <div className="trace-shell">
-		<nav className="trace-tabs" role="tablist" aria-label="Trace views">
-			<button role="tab" id="traces-tab" aria-controls="traces-panel" aria-selected={tab === "traces"} onClick={() => setTab("traces")}>Traces</button>
-			<button role="tab" id="metrics-tab" aria-controls="metrics-panel" aria-selected={tab === "metrics"} onClick={() => setTab("metrics")}>Metrics</button>
+		<nav className="trace-tabs" role="tablist" aria-label={t.tabs.label}>
+			<button role="tab" id="traces-tab" aria-controls="traces-panel" aria-selected={tab === "traces"} onClick={() => setTab("traces")}>{t.tabs.traces}</button>
+			<button role="tab" id="metrics-tab" aria-controls="metrics-panel" aria-selected={tab === "metrics"} onClick={() => setTab("metrics")}>{t.tabs.metrics}</button>
 		</nav>
 		{tab === "metrics" ? <MetricsView key={sourceKey} openTrace={(example) => openTrace(example.traceId, example.spanId)} /> : null}
 		<div className="trace-app" hidden={tab !== "traces"} role="tabpanel" id="traces-panel" aria-labelledby="traces-tab">
-			<TraceSplit label="调整会话列表宽度" storageKey="loom.devTrace.listWidth" defaultSize={220} minFirst={150} minSecond={440}>
-				<aside className="trace-list" aria-label="会话列表">
-					<div className="trace-list-heading">会话 <span>{conversations.length}</span></div>
-					{conversations.length === 0 ? <p className="trace-empty">No traces yet.</p> : null}
+			<TraceSplit label={t.app.resizeList} storageKey="loom.devTrace.listWidth" defaultSize={220} minFirst={150} minSecond={440}>
+				<aside className="trace-list" aria-label={t.app.listLabel}>
+					<div className="trace-list-heading">{t.app.listHeading} <span>{conversations.length}</span></div>
+					{conversations.length === 0 ? <p className="trace-empty">{t.app.empty}</p> : null}
 					{conversations.map((row) => <button type="button" key={row.id} className={`trace-item${row.id === selected ? " is-selected" : ""}`} aria-pressed={row.id === selected} onClick={() => { setSelected(row.id); setSelectedSpan(null); }}>
-						<span className="trace-item-title">{row.title || (row.id.startsWith("trace:") ? "未关联会话的轨迹" : `会话 ${row.id}`)}</span>
-						<span className="trace-item-summary"><span className={`trace-status-dot ${row.status}`} />{row.status} · {row.partial ? `已加载 ${records.filter((record) => conversationId(record) === row.id).length}` : row.count} 条轨迹</span>
+						<span className="trace-item-title">{row.title || (row.id.startsWith("trace:") ? t.app.orphan : t.app.conversation(row.id))}</span>
+						<span className="trace-item-summary"><span className={`trace-status-dot ${row.status}`} />{traceStatus(t, row.status)} · {row.partial ? t.app.loaded(records.filter((record) => conversationId(record) === row.id).length) : t.app.traces(row.count)}</span>
 						<span className="trace-item-time">{new Date(row.at).toLocaleString()}</span>
 					</button>)}
-					{moreConversations ? <button className="trace-load" type="button" onClick={() => { if (conversationCursor.current) void loadConversations(conversationCursor.current); }}>加载更早会话</button> : null}
+					{moreConversations ? <button className="trace-load" type="button" onClick={() => { if (conversationCursor.current) void loadConversations(conversationCursor.current); }}>{t.app.loadEarlier}</button> : null}
 				</aside>
 				<main className="trace-detail">
 					{error ? <p className="trace-error" role="status">{error}</p> : null}
-					{selected ? <TraceView key={`${sourceKey}:${selected}`} records={current} selectedSpan={selectedSpan} navigationKey={navigationKey} loading={loading} hasMore={moreHistory[selected] ?? false} detailTab={detailTab} onDetailTabChange={setDetailTab} loadOlder={loadOlder} openTrace={openTrace} /> : <p className="trace-empty">选择会话查看执行轨迹</p>}
+					{selected ? <TraceView key={`${sourceKey}:${selected}`} records={current} selectedSpan={selectedSpan} navigationKey={navigationKey} loading={loading} hasMore={moreHistory[selected] ?? false} detailTab={detailTab} onDetailTabChange={setDetailTab} loadOlder={loadOlder} openTrace={openTrace} /> : <p className="trace-empty">{t.app.select}</p>}
 				</main>
 			</TraceSplit>
 		</div>

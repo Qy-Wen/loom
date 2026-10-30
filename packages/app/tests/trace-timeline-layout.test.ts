@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { DevTraceRecord } from "../src/shared/dev-trace.ts";
 import type { TraceEvent } from "../src/renderer/dev-trace/trace-events.ts";
+import { traceMessagesFor } from "../src/renderer/dev-trace/trace-messages.ts";
 import { timelineGapLabel, timelineLayout } from "../src/renderer/dev-trace/trace-timeline-layout.ts";
 
 function turn(id: string, intervals: [number, number | undefined][]): { record: DevTraceRecord; events: TraceEvent[] } {
@@ -17,7 +18,7 @@ test("long inter-turn idle gaps become pixel separators while all calls use one 
 	const before = JSON.stringify(records);
 	const { blocks, gaps } = timelineLayout(events, true, 724_000, 1000, records);
 	assert.equal(gaps.length, 1);
-	assert.equal(timelineGapLabel(gaps[0]!), "轮间间隔 12分钟（已折叠）");
+	assert.equal(timelineGapLabel(gaps[0]!, traceMessagesFor("zh-CN")), "轮间间隔 12分钟（已折叠）");
 	close(gaps[0]!.width * 1000, 12);
 	close(blocks[0]!.width, blocks[2]!.width);
 	close(blocks[1]!.width, blocks[0]!.width * 2);
@@ -149,7 +150,7 @@ test("equal-event mode remains independent of wall-clock gaps", () => {
 	const layout = timelineLayout([...first.events, ...second.events], false, 101_000, 1000);
 	assert.deepEqual(layout.gaps, []);
 	assert.deepEqual(layout.blocks.map((block) => [block.left, block.width]), [[0, .5], [.5, .5]]);
-	assert.equal(timelineGapLabel({ startMs: 0, endMs: 7_200_000 }), "轮间间隔 2小时（已折叠）");
+	assert.equal(timelineGapLabel({ startMs: 0, endMs: 7_200_000 }, traceMessagesFor("zh-CN")), "轮间间隔 2小时（已折叠）");
 });
 
 test("successive work never overlaps on screen, parallel work may, and a long call stays clear of what follows", () => {

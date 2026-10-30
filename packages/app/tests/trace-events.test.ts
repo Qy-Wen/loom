@@ -4,8 +4,10 @@ import type { LoomTraceSpan } from "@loom/agent";
 import type { DevTraceRecord } from "../src/shared/dev-trace.ts";
 import type { JsonValue } from "../src/renderer/dev-trace/json-values.ts";
 import { timelineLayout } from "../src/renderer/dev-trace/trace-timeline-layout.ts";
+import { traceMessagesFor } from "../src/renderer/dev-trace/trace-messages.ts";
 import { capturedTools, conversationId, contentText, eventForSpan, eventStatus, phaseDiagnostic, traceTurns } from "../src/renderer/dev-trace/trace-events.ts";
 
+const zh = traceMessagesFor("zh-CN"), en = traceMessagesFor("en");
 const span = (id: string, name: string, attributes: LoomTraceSpan["attributes"] = {}, parentId?: string): LoomTraceSpan => ({ id, name, attributes, parentId, traceId: "t", startedMs: 100, endedMs: 200, status: { status: "ok" }, events: [], links: [] });
 function record(id: string, at = 100): DevTraceRecord {
 	return { id, at, threadId: "1", revision: 1, status: "completed", spans: [
@@ -18,7 +20,7 @@ function record(id: string, at = 100): DevTraceRecord {
 
 test("event projection keeps turns distinct and avoids duplicating request history and orchestration", () => {
 	const records = [record("b", 200), record("a", 100)];
-	const turns = traceTurns(records);
+	const turns = traceTurns(records, zh);
 	assert.deepEqual(turns.map((turn) => turn.id), ["a", "b"]);
 	assert.deepEqual(turns[0]!.events.map((row) => row.kind), ["system", "user", "assistant", "tool"]);
 	assert.equal(turns[0]!.events[0]!.summary, "系统提示词");
@@ -38,14 +40,14 @@ test("legacy or absent inputs are not fabricated and exceptional phases stay vis
 	legacy.spans.push(span("approval", "loom.approval", { "tool.name": "publish" }));
 	legacy.spans.push(span("retry", "pi.durable.phase", { "task.name": "pi.generate", phase: "prepare", attempt: 2 }));
 	legacy.spans.push({ ...span("interrupted", "pi.durable.phase"), interrupted: true });
-	const events = traceTurns([legacy])[0]!.events;
+	const events = traceTurns([legacy], zh)[0]!.events;
 	assert.equal(events.find((event) => event.kind === "user")!.text, undefined);
 	assert.equal(events.find((event) => event.kind === "user")!.rawContent, undefined);
 	assert.ok(events.some((event) => event.kind === "approval"));
 	assert.equal(events.find((event) => event.span.id === "retry")!.label, "重试");
 	assert.equal(events.find((event) => event.span.id === "retry")!.summary, "模型请求重试 · 第 2 次");
 	assert.equal(eventStatus(events.find((event) => event.span.id === "interrupted")!), "interrupted");
-	assert.deepEqual(traceTurns([{ ...legacy, spans: [] }])[0]!.events, []);
+	assert.deepEqual(traceTurns([{ ...legacy, spans: [] }], zh)[0]!.events, []);
 });
 
 test("snapshot raw content isolates each captured fragment while retaining blobs, structure, and source identity", () => {
@@ -59,7 +61,7 @@ test("snapshot raw content isolates each captured fragment while retaining blobs
 	const source = row.spans.find((span) => span.name === "pi.ai.request")!;
 	const request = { ...source, attributes: { ...source.attributes, "loom.io.input": input } };
 	row.spans = row.spans.map((span) => span.id === request.id ? request : span);
-	const events = traceTurns([row])[0]!.events;
+	const events = traceTurns([row], zh)[0]!.events;
 	const system = events.find((event) => event.kind === "system")!;
 	const context = events.find((event) => event.kind === "context")!;
 	const question = events.find((event) => event.kind === "user")!;
@@ -78,7 +80,7 @@ test("snapshot raw content isolates each captured fragment while retaining blobs
 	assert.equal(events.find((event) => event.kind === "assistant")!.rawContent, undefined);
 
 	request.attributes["loom.io.input"] = JSON.stringify([{ role: "system", content: [{ type: "text", text: "LEGACY_SYSTEM" }] }, { role: "user", content: "USER_ONLY" }]);
-	assert.deepEqual(JSON.parse(traceTurns([row])[0]!.events.find((event) => event.kind === "system")!.rawContent!), [{ type: "text", text: "LEGACY_SYSTEM" }]);
+	assert.deepEqual(JSON.parse(traceTurns([row], zh)[0]!.events.find((event) => event.kind === "system")!.rawContent!), [{ type: "text", text: "LEGACY_SYSTEM" }]);
 });
 
 test("system tool lists replay captured additions, removals and replacements without reading other message roles", () => {
@@ -94,7 +96,7 @@ test("system tool lists replay captured additions, removals and replacements wit
 	assert.equal(result.definitions[1], bash);
 	const source = record("tools");
 	source.spans[2] = { ...source.spans[2]!, attributes: { "loom.io.input": JSON.stringify(messages) } };
-	const system = traceTurns([source])[0]!.events.find((event) => event.kind === "system")!;
+	const system = traceTurns([source], zh)[0]!.events.find((event) => event.kind === "system")!;
 	assert.equal(system.text, "SYSTEM_ONLY");
 	assert.equal(JSON.parse(system.rawContent!), "SYSTEM_ONLY");
 	assert.deepEqual(system.toolList, result);
@@ -103,7 +105,7 @@ test("system tool lists replay captured additions, removals and replacements wit
 	assert.ok(!JSON.stringify(system.toolList).includes("not-a-system-tool"));
 
 	source.spans[2] = { ...source.spans[2]!, attributes: { "loom.io.input": JSON.stringify([{ role: "system", toolsAdded: [bash] }]) } };
-	const toolsOnly = traceTurns([source])[0]!.events.find((event) => event.kind === "system")!;
+	const toolsOnly = traceTurns([source], zh)[0]!.events.find((event) => event.kind === "system")!;
 	assert.equal(toolsOnly.text, undefined);
 	assert.equal(toolsOnly.rawContent, undefined);
 	assert.deepEqual(toolsOnly.toolList!.definitions, [bash]);
@@ -131,7 +133,7 @@ test("independent tool snapshots override clipped legacy copies, including empty
 	const request = row.spans[2]!;
 	request.attributes["loom.io.tools"] = JSON.stringify(complete);
 	request.attributes["loom.io.input"] = JSON.stringify([{ role: "system", content: "PROMPT", toolsAdded: [{ name: "update_settings", parameters: "[omitted]" }, "… (10 items omitted)"] }]);
-	assert.deepEqual(traceTurns([row])[0]!.events.find((event) => event.kind === "system")!.toolList, { definitions: complete, captured: true, incomplete: false });
+	assert.deepEqual(traceTurns([row], zh)[0]!.events.find((event) => event.kind === "system")!.toolList, { definitions: complete, captured: true, incomplete: false });
 	assert.deepEqual(capturedTools(undefined, "[]"), { definitions: [], captured: true, incomplete: false });
 	assert.deepEqual(capturedTools(undefined, "invalid"), { definitions: [], captured: true, incomplete: true });
 	assert.equal(capturedTools(undefined, '["… (trace content omitted)"]').incomplete, true);
@@ -140,23 +142,23 @@ test("independent tool snapshots override clipped legacy copies, including empty
 	assert.equal(capturedTools(undefined, JSON.stringify(reference), { "0123456789abcdef": "FULL_DESCRIPTION" }).incomplete, false);
 	assert.equal(capturedTools(undefined, JSON.stringify(reference), { "0123456789abcdef": "PARTIAL\n… (42 bytes cut)" }).incomplete, true);
 	request.attributes["loom.io.input"] = '"… (trace content omitted)"';
-	const toolsOnly = traceTurns([row])[0]!.events.find((event) => event.kind === "system")!;
+	const toolsOnly = traceTurns([row], zh)[0]!.events.find((event) => event.kind === "system")!;
 	assert.equal(toolsOnly.text, undefined);
 	assert.deepEqual(toolsOnly.toolList!.definitions, complete);
 	delete request.attributes["loom.io.tools"];
-	assert.equal(traceTurns([row])[0]!.events.some((event) => event.kind === "system"), false);
+	assert.equal(traceTurns([row], zh)[0]!.events.some((event) => event.kind === "system"), false);
 });
 
 test("routine scheduling stays hidden, even without other readable events", () => {
 	for (const outcome of ["waiting", "sleeping", "done", "next=tools"]) {
 		const phases = ["prepare", "request", "tools"].map((phase) => span(phase, "pi.durable.phase", { "task.name": "pi.generation", phase, attempt: 1, outcome }));
-		const normal = traceTurns([{ ...record("normal"), spans: phases }])[0]!;
+		const normal = traceTurns([{ ...record("normal"), spans: phases }], zh)[0]!;
 		assert.deepEqual(normal.events, []);
-		for (const phase of phases) assert.equal(phaseDiagnostic(phase), undefined);
+		for (const phase of phases) assert.equal(phaseDiagnostic(phase, zh), undefined);
 	}
 	const repeatedRequest = span("retry-request", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 2, outcome: "waiting" });
-	assert.equal(phaseDiagnostic(repeatedRequest), undefined);
-	assert.equal(phaseDiagnostic(span("specialist", "pi.durable.phase", { "task.name": "pi.specialist", phase: "run", outcome: "waiting" })), undefined);
+	assert.equal(phaseDiagnostic(repeatedRequest, zh), undefined);
+	assert.equal(phaseDiagnostic(span("specialist", "pi.durable.phase", { "task.name": "pi.specialist", phase: "run", outcome: "waiting" }), zh), undefined);
 });
 
 test("diagnostics use readable descriptions while preserving native identities and errors", () => {
@@ -164,12 +166,12 @@ test("diagnostics use readable descriptions while preserving native identities a
 	const compaction = span("compact", "pi.durable.phase", { "task.name": "pi.compaction", phase: "summarize" });
 	const backoff = span("backoff", "pi.durable.phase", { "task.name": "pi.generation", phase: "retry", attempt: 1, outcome: "sleeping" });
 	const cancelled = span("cancelled", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", outcome: "aborted" });
-	assert.deepEqual(phaseDiagnostic(failure), { label: "异常", summary: "模型请求失败 · Connection failed" });
-	assert.deepEqual(phaseDiagnostic(compaction), { label: "压缩", summary: "上下文压缩" });
-	assert.deepEqual(phaseDiagnostic(backoff), { label: "重试", summary: "模型请求等待重试" });
-	assert.deepEqual(phaseDiagnostic(cancelled), { label: "中断", summary: "模型请求已取消" });
+	assert.deepEqual(phaseDiagnostic(failure, zh), { kind: "error", label: "异常", summary: "模型请求失败 · Connection failed" });
+	assert.deepEqual(phaseDiagnostic(compaction, zh), { kind: "compaction", label: "压缩", summary: "上下文压缩" });
+	assert.deepEqual(phaseDiagnostic(backoff, zh), { kind: "retry", label: "重试", summary: "模型请求等待重试" });
+	assert.deepEqual(phaseDiagnostic(cancelled, zh), { kind: "interrupted", label: "中断", summary: "模型请求已取消" });
 	const source = { ...record("diagnostic"), spans: [failure, compaction, backoff, cancelled] };
-	const turn = traceTurns([source])[0]!;
+	const turn = traceTurns([source], zh)[0]!;
 	assert.deepEqual(turn.events.map((event) => event.label), ["异常", "压缩", "重试", "中断"]);
 	assert.equal(eventForSpan([turn], "failure")!.span, failure);
 	assert.equal(source.spans.length, 4);
@@ -183,7 +185,7 @@ test("content decoding resolves blobs but does not parse JSON-looking message st
 });
 
 test("timeline uses equal widths or true overlapping times, with zero-duration input markers", () => {
-	const events = traceTurns([record("time")])[0]!.events;
+	const events = traceTurns([record("time")], zh)[0]!.events;
 	const equal = timelineLayout(events, false, 300, 1000).blocks;
 	assert.equal(equal[0]!.width, .25); assert.equal(equal[1]!.left, .25);
 	const actual = timelineLayout(events, true, 300, 1000).blocks;
@@ -203,7 +205,7 @@ test("a cancelled request phase folds into the model request it wrapped, so one 
 	const wrapBare = span("wrap-bare", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 4, outcome: "aborted" }, "submit");
 	const tail = span("tail", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 4, outcome: "aborted" }, "submit");
 	const ordinary = span("ok", "pi.ai.request", { model: "demo" }, "other");
-	const turn = traceTurns([{ ...record("cancel"), spans: [span("submit", "pi.durable.submit", { "submission.type": "input" }), phase, request, wrapBare, bare, tail, ordinary] }])[0]!;
+	const turn = traceTurns([{ ...record("cancel"), spans: [span("submit", "pi.durable.submit", { "submission.type": "input" }), phase, request, wrapBare, bare, tail, ordinary] }], zh)[0]!;
 	const kinds = turn.events.filter((event) => !event.marker).map((event) => `${event.kind}:${event.span.id}`);
 	assert.deepEqual(kinds, ["assistant:req", "assistant:req-bare", "phase:tail", "assistant:ok"], "wrapping phases are gone; a phase with no request under it stays");
 	const byId = (id: string) => turn.events.find((event) => event.span.id === id)!;
@@ -214,4 +216,32 @@ test("a cancelled request phase folds into the model request it wrapped, so one 
 	assert.equal(eventStatus(byId("ok")), "completed", "a request that was not cancelled is unchanged");
 	assert.equal(eventForSpan([turn], "wrap"), undefined, "the folded phase has no row of its own; its record stays in the native spans");
 	assert.equal(turn.record.spans.length, 7, "stored spans are untouched");
+});
+
+test("the trace window has the same copy in both languages, with no Chinese left in English and no English left in Chinese", () => {
+	const paths = (value: unknown, prefix = ""): string[] => typeof value === "object" && value !== null
+		? Object.entries(value).flatMap(([key, child]) => paths(child, `${prefix}${key}.`)) : [prefix.slice(0, -1)];
+	assert.deepEqual(paths(zh), paths(en));
+	const text = (value: unknown): string[] => typeof value === "string" ? [value] : typeof value === "object" && value !== null ? Object.values(value).flatMap(text) : [];
+	// English must hold no Chinese, and Chinese must translate every sentence (product names and symbols may match).
+	assert.deepEqual(text(en).filter((value) => /[\u4e00-\u9fff]/.test(value)), []);
+	const shared = new Set(["JSON", "Trace ID", "Span ID"]);
+	const untranslated = text(zh).filter((value, index) => value === text(en)[index] && /[A-Za-z]{3}/.test(value) && !shared.has(value) && !value.startsWith("["));
+	assert.deepEqual(untranslated, []);
+});
+
+test("phase diagnostics follow the language but fold on the kind, not on the label text", () => {
+	const wrapper = span("wrap", "pi.durable.phase", { "task.name": "pi.generation", phase: "request", attempt: 3, outcome: "aborted" }, "submit");
+	const request = span("req", "pi.ai.request", {}, "wrap");
+	for (const t of [zh, en]) {
+		assert.equal(phaseDiagnostic(wrapper, t)?.kind, "interrupted");
+		const turn = traceTurns([{ ...record("lang"), spans: [span("submit", "pi.durable.submit", { "submission.type": "input" }), wrapper, request] }], t)[0]!;
+		assert.equal(turn.events.some((event) => event.span.id === "wrap"), false, "wrapper folds in either language");
+		assert.equal(turn.events.find((event) => event.span.id === "req")!.cancelled, true);
+	}
+	assert.equal(phaseDiagnostic(wrapper, en)!.summary, "Model request cancelled");
+	assert.equal(phaseDiagnostic(wrapper, zh)!.summary, "模型请求已取消");
+	const first = traceTurns([record("sys")], en)[0]!;
+	assert.equal(first.events[0]!.summary, "System prompt");
+	assert.deepEqual([...new Set(first.events.map((event) => event.label))].sort(), [...new Set(first.events.map((event) => en.kinds[event.kind]))].sort());
 });

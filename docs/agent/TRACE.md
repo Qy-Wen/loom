@@ -41,6 +41,8 @@ Conversation/ledger and ledger/detail dividers can be dragged. Minimum sizes kee
 
 This is best-effort redaction, not anonymization: prompts, memory, paths, and tool output can contain private information. The local database is not encrypted.
 
+The window follows the app's interface language (English or Simplified Chinese) and switches live when it is changed in Settings. Its copy lives in `renderer/dev-trace/trace-messages.ts`, apart from `shared/locale.ts`, because the window exists only in dev and trace-enabled builds and none of it should ship in releases. Recorded content (prompts, model output, tool arguments and results, error messages) is shown as captured and is never translated.
+
 ## Validation
 
 Coverage includes the native adapter conformance suite with actual ordered measurement assertions, metadata copying, buckets/exemplars across flush and reopen, propagation/links, live and SIGKILL recovery, approvals, retry, deferred polls, compaction, diagnostic failure isolation, redaction, pagination, and 30-day cleanup. Electron acceptance checks conversation grouping, safe Markdown previews, search/timeline focus, manual folding, resizable panes, expanded JSON nodes, legacy text fallback, live metrics, exact exemplar navigation, restart persistence, and stale-response isolation on library reset.

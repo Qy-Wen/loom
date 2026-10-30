@@ -1,6 +1,6 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
 import { createPortal } from "react-dom";
-import { eventLabels } from "./trace-events.ts";
+import { useTraceLocale } from "./trace-locale.tsx";
 import { timelineGapLabel, type TimelineLayout } from "./trace-timeline-layout.ts";
 import { formatTraceDuration } from "./trace-spans.ts";
 
@@ -9,6 +9,7 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 	layout: TimelineLayout; onWidthChange(width: number): void; now: number; selected: string | null; range: FocusRange;
 	setRange(range: FocusRange): void; select(id: string): void;
 }): React.JSX.Element {
+	const { t } = useTraceLocale();
 	const { blocks, gaps } = layout;
 	const track = useRef<HTMLDivElement>(null);
 	useLayoutEffect(() => {
@@ -30,7 +31,7 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 	const tooltipVisible = hovered !== null && visibleTooltip === hovered.id;
 	const tooltipBlock = blocks.find((block) => block.event.id === hovered?.id);
 	const tooltipGap = gaps.find((gap) => gap.id === hovered?.id);
-	const tooltipText = tooltipBlock ? `${tooltipBlock.event.label} · ${tooltipBlock.event.marker ? "请求快照，无独立耗时" : formatTraceDuration(Math.max(0, (tooltipBlock.event.span.endedMs ?? now) - tooltipBlock.event.span.startedMs))}${tooltipBlock.firstChunk === undefined ? "" : ` · 首 chunk ${formatTraceDuration(tooltipBlock.event.span.events.find((row) => row.name === "pi.ai.first_chunk")!.timeMs)}`}` : tooltipGap ? timelineGapLabel(tooltipGap) : undefined;
+	const tooltipText = tooltipBlock ? `${tooltipBlock.event.label} · ${tooltipBlock.event.marker ? t.timeline.snapshot : formatTraceDuration(Math.max(0, (tooltipBlock.event.span.endedMs ?? now) - tooltipBlock.event.span.startedMs))}${tooltipBlock.firstChunk === undefined ? "" : ` · ${t.timeline.firstChunk(formatTraceDuration(tooltipBlock.event.span.events.find((row) => row.name === "pi.ai.first_chunk")!.timeMs))}`}` : tooltipGap ? timelineGapLabel(tooltipGap, t) : undefined;
 	const tooltipHandlers = (id: string): ButtonHTMLAttributes<HTMLButtonElement> => ({
 		"aria-describedby": tooltipVisible && hovered?.id === id ? tooltipId : undefined,
 		onPointerEnter: (event) => { if (!drag.current && event.pointerType !== "touch") setHovered({ id, anchor: event.currentTarget, keyboard: false }); },
@@ -39,9 +40,9 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 		onBlur: () => setHovered((old) => old?.id === id ? null : old),
 	});
 	const fraction = (x: number, element: HTMLElement) => { const bounds = element.getBoundingClientRect(); return Math.min(1, Math.max(0, (x - bounds.left) / Math.max(1, bounds.width))); };
-	return <section className="trace-overview" aria-label="轨迹时间线">
-		<div className="trace-lane-labels" aria-hidden="true"><span>输入</span><span>模型</span><span>工具</span></div>
-		<div ref={track} className="trace-overview-track" tabIndex={0} aria-label="时间线概览，拖动聚焦事件，Escape 清除范围" onKeyDown={(event) => { if (event.key === "Escape") { setRange(null); setHovered(null); } }}
+	return <section className="trace-overview" aria-label={t.timeline.label}>
+		<div className="trace-lane-labels" aria-hidden="true"><span>{t.timeline.lanes.input}</span><span>{t.timeline.lanes.model}</span><span>{t.timeline.lanes.tools}</span></div>
+		<div ref={track} className="trace-overview-track" tabIndex={0} aria-label={t.timeline.track} onKeyDown={(event) => { if (event.key === "Escape") { setRange(null); setHovered(null); } }}
 			onPointerDown={(event) => {
 				if (event.button !== 0) return;
 				setHovered(null);
@@ -73,8 +74,8 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 			}}
 			onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
 			{blocks.filter((block, index) => index > 0 && blocks[index - 1]!.event.record.id !== block.event.record.id).map((block) => <span key={`turn-${block.event.record.id}`} className="trace-overview-boundary" aria-hidden="true" style={{ left: `${block.left * 100}%` }} />)}
-			{gaps.map((gap) => <button type="button" key={gap.id} className="trace-overview-gap" aria-label={timelineGapLabel(gap)} {...tooltipHandlers(gap.id)} style={{ left: `${gap.left * 100}%`, width: `${gap.width * 100}%` }}><span aria-hidden="true">//</span></button>)}
-			{blocks.map((block) => <button type="button" key={block.event.id} className={`trace-overview-block kind-${block.event.kind}`} aria-label={`${eventLabels[block.event.kind]} · ${block.event.summary}`} aria-pressed={selected === block.event.id}
+			{gaps.map((gap) => <button type="button" key={gap.id} className="trace-overview-gap" aria-label={timelineGapLabel(gap, t)} {...tooltipHandlers(gap.id)} style={{ left: `${gap.left * 100}%`, width: `${gap.width * 100}%` }}><span aria-hidden="true">//</span></button>)}
+			{blocks.map((block) => <button type="button" key={block.event.id} className={`trace-overview-block kind-${block.event.kind}`} aria-label={`${t.kinds[block.event.kind]} · ${block.event.summary}`} aria-pressed={selected === block.event.id}
 				{...tooltipHandlers(block.event.id)}
 				style={{ left: `${block.paintedLeft * 100}%`, width: `${block.paintedWidth * 100}%`, top: `${6 + block.lane * 14}px`, "--first-chunk": `${(block.firstChunk ?? 0) * 100}%` } as CSSProperties}
 				data-event-id={block.event.id}

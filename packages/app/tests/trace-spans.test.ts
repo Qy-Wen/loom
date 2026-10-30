@@ -42,7 +42,7 @@ describe("trace spans", () => {
 		assert.equal(formatTraceTimestamp(timestamp), "2026-10-30 08:09:07.005");
 		assert.equal(timestamp, date.getTime() + 0.75);
 		assert.equal(formatTraceTimestamp(new Date(2026, 11, 31, 23, 59, 59, 999).getTime()), "2026-12-31 23:59:59.999");
-		for (const missing of [undefined, NaN, Infinity, -Infinity, 9e15]) assert.equal(formatTraceTimestamp(missing), "未采集");
+		for (const missing of [undefined, NaN, Infinity, -Infinity, 9e15]) assert.equal(formatTraceTimestamp(missing), undefined);
 	});
 
 	it("reads captured string payloads and ignores absent or non-string values", () => {

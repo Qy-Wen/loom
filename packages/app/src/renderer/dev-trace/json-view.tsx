@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { splitTraceBlobs } from "@loom/agent/trace-blob";
 import { jsonEntries, jsonPath, jsonString, parseTraceJson, type JsonValue } from "./json-values.ts";
+import { useTraceLocale } from "./trace-locale.tsx";
 
 type Blobs = Readonly<Record<string, string>> | undefined;
 type NodeProps = {
@@ -15,6 +16,7 @@ type NodeProps = {
 };
 
 function JsonNode({ value, path, label, arrayIndex = false, comma = false, blobs, closed, toggle }: NodeProps): React.JSX.Element {
+	const { t } = useTraceLocale();
 	const container = value !== null && typeof value === "object";
 	const array = Array.isArray(value);
 	const entries = jsonEntries(value);
@@ -30,12 +32,12 @@ function JsonNode({ value, path, label, arrayIndex = false, comma = false, blobs
 	return (
 		<div className="trace-json-node" data-json-path={path}>
 			<div className="trace-json-row">
-				{expandable ? <button type="button" className="trace-json-toggle" aria-expanded={!collapsed} aria-label={`${collapsed ? "Expand" : "Collapse"} ${path || "$"}`} onClick={() => toggle(path)}>{collapsed ? "▸" : "▾"}</button> : null}
+				{expandable ? <button type="button" className="trace-json-toggle" aria-expanded={!collapsed} aria-label={`${collapsed ? t.json.expand : t.json.collapse} ${path || "$"}`} onClick={() => toggle(path)}>{collapsed ? "▸" : "▾"}</button> : null}
 				{label === undefined ? null : <><span className={arrayIndex ? "trace-json-index" : "trace-json-key"}>{arrayIndex ? label : JSON.stringify(label)}</span><span>: </span></>}
 				{container ? (
-					<span>{opening}{collapsed ? <><span className="trace-json-summary">…</span>{closing}<span className="trace-json-count"> {entries.length} {array ? "items" : "fields"}</span></> : entries.length === 0 ? closing : null}{collapsed || entries.length === 0 ? (comma ? "," : "") : null}</span>
+					<span>{opening}{collapsed ? <><span className="trace-json-summary">…</span>{closing}<span className="trace-json-count"> {entries.length} {array ? t.json.items : t.json.fields}</span></> : entries.length === 0 ? closing : null}{collapsed || entries.length === 0 ? (comma ? "," : "") : null}</span>
 				) : (
-					<><span className={`trace-json-value trace-json-${type}`}>{string ? renderedString : JSON.stringify(value)}</span>{string?.missing ? <span className="trace-blob-missing"> [full text unavailable]</span> : null}{comma ? "," : ""}</>
+					<><span className={`trace-json-value trace-json-${type}`}>{string ? renderedString : JSON.stringify(value)}</span>{string?.missing ? <span className="trace-blob-missing"> {t.json.unavailable}</span> : null}{comma ? "," : ""}</>
 				)}
 			</div>
 			{container && entries.length > 0 && !collapsed ? (
@@ -51,6 +53,7 @@ function JsonNode({ value, path, label, arrayIndex = false, comma = false, blobs
 }
 
 function JsonTree({ value, blobs }: { value: JsonValue; blobs: Blobs }): React.JSX.Element {
+	const { t } = useTraceLocale();
 	// No depth-based auto-collapse: a path is folded only after an explicit user action.
 	const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
 	const toggle = (path: string) => setClosed((previous) => {
@@ -58,26 +61,27 @@ function JsonTree({ value, blobs }: { value: JsonValue; blobs: Blobs }): React.J
 		if (!next.delete(path)) next.add(path);
 		return next;
 	});
-	return <div className="trace-json" role="group" aria-label="JSON value"><JsonNode value={value} path="" blobs={blobs} closed={closed} toggle={toggle} /></div>;
+	return <div className="trace-json" role="group" aria-label={t.json.value}><JsonNode value={value} path="" blobs={blobs} closed={closed} toggle={toggle} /></div>;
 }
 
 /** Legacy truncated records stay readable; their long text references also default to expanded. */
 function TextFallback({ text, blobs }: { text: string; blobs: Blobs }): React.JSX.Element {
+	const { t } = useTraceLocale();
 	const [closed, setClosed] = useState<ReadonlySet<string>>(new Set());
 	return (
 		<>
-			<p className="trace-json-fallback">Text view · not complete JSON</p>
+			<p className="trace-json-fallback">{t.json.fallback}</p>
 			<pre>{splitTraceBlobs(text).map((part, index) => {
 				if ("text" in part) return part.text;
 				const full = blobs?.[part.hash];
-				if (full === undefined) return <span key={index}>{part.previewJson}<span className="trace-blob-missing"> [full text unavailable]</span></span>;
+				if (full === undefined) return <span key={index}>{part.previewJson}<span className="trace-blob-missing"> {t.json.unavailable}</span></span>;
 				const key = `${index}:${part.hash}`;
 				const expanded = !closed.has(key);
 				return <span key={index}>
 					<span className="trace-blob-value">{expanded ? (part.previewJson === undefined ? full : JSON.stringify(full)) : part.previewJson}</span>
 					<button type="button" className="trace-blob-toggle" aria-expanded={expanded} onClick={() => setClosed((previous) => {
 						const next = new Set(previous); if (!next.delete(key)) next.add(key); return next;
-					})}>{expanded ? "Collapse" : `Expand (${part.length.toLocaleString()} chars)`}</button>
+					})}>{expanded ? t.json.collapse : t.json.expandChars(part.length.toLocaleString())}</button>
 				</span>;
 			})}</pre>
 		</>

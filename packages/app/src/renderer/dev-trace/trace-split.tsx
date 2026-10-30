@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { readSplitSize, splitBounds, splitSize, TRACE_SPLIT_HANDLE } from "./split-size.ts";
+import { useTraceLocale } from "./trace-locale.tsx";
 
 type Props = {
 	label: string;
@@ -13,6 +14,7 @@ type Props = {
 
 /** Development-view layout only; preferences survive trace selection, tab changes, and window reopen. */
 export function TraceSplit({ label, storageKey, defaultSize, unit = "px", minFirst, minSecond, children }: Props): React.JSX.Element {
+	const { t } = useTraceLocale();
 	const root = useRef<HTMLDivElement>(null);
 	const handle = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ pointer: number; origin: number; size: number } | null>(null);
@@ -82,8 +84,8 @@ export function TraceSplit({ label, storageKey, defaultSize, unit = "px", minFir
 				aria-valuemin={Math.round(bounds.min)}
 				aria-valuemax={Math.round(bounds.max)}
 				aria-valuenow={Math.round(first)}
-				aria-valuetext={`${Math.round(first)} pixels`}
-				title={`${label} · Drag to resize, double-click to reset`}
+				aria-valuetext={t.split.pixels(Math.round(first))}
+				title={`${label} · ${t.split.dragHint}`}
 				onDoubleClick={() => setPreferred(defaultSize)}
 				onKeyDown={(event) => {
 					if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

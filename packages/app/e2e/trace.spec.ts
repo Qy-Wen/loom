@@ -50,7 +50,7 @@ test("trace and metrics windows update live, link exemplars, persist, and reset 
 			await trace.locator(".trace-row").filter({ hasText: "demo" }).last().click();
 			await expect(trace.locator(".trace-io")).toContainText(`VISIBLE_TRACE_${turn}`);
 			if (turn === 1) {
-				await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+				await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 				const record = (await trace.evaluate(() => window.loomDev.getTraces())).find((row) => row.status === "running")!;
 				const request = record.spans.find((span) => span.name === "pi.ai.request")!;
 				const parts = splitTraceBlobs(String(request.attributes["loom.io.input"]));
@@ -99,7 +99,7 @@ test("trace and metrics windows update live, link exemplars, persist, and reset 
 		const phase = trace.getByRole("row").filter({ hasText: "pi.durable.phase.duration" }).filter({ hasText: '"task":"pi.generation"' }).first();
 		await phase.locator("summary").click();
 		await phase.getByRole("button", { name: /^Trace ·/ }).last().click();
-		await trace.getByRole("tab", { name: "概述", exact: true }).click();
+		await trace.getByRole("tab", { name: "Overview", exact: true }).click();
 		await expect(trace.locator(".trace-facts")).toContainText(phaseMetric.exemplars!.at(-1)!.spanId);
 		await close();
 		app = await launchTestElectron(userData); page = await app.firstWindow();
@@ -144,28 +144,28 @@ test("event overview shows native start/end times, live settlement, snapshot sou
 	const value = (label: string) => facts.locator("dt").filter({ hasText: new RegExp(`^${label}$`) }).locator("+ dd");
 	await publish(record);
 	await trace.locator('.trace-event[data-kind="assistant"]').click();
-	await trace.getByRole("tab", { name: "概述", exact: true }).click();
-	await expect(value("开始时间")).toHaveText("2026-10-30 08:09:07.005");
-	await expect(value("开始时间").locator("time")).toHaveAttribute("datetime", new Date(at).toISOString());
-	await expect(value("结束时间")).toHaveText("运行中（尚未结束）");
+	await trace.getByRole("tab", { name: "Overview", exact: true }).click();
+	await expect(value("Start time")).toHaveText("2026-10-30 08:09:07.005");
+	await expect(value("Start time").locator("time")).toHaveAttribute("datetime", new Date(at).toISOString());
+	await expect(value("End time")).toHaveText("Running (not finished)");
 	const settled = { ...record, revision: 2, status: "completed" as const, spans: [{ ...record.spans[0]!, endedMs: at + 1000.75 }] };
 	await publish(settled);
-	await expect(value("结束时间")).toHaveText("2026-10-30 08:09:08.005");
-	await expect(value("耗时")).toHaveText("1.0s");
+	await expect(value("End time")).toHaveText("2026-10-30 08:09:08.005");
+	await expect(value("Duration")).toHaveText("1.0s");
 	// Switching to the snapshot does not replace the source request's timestamps with its visual position.
 	await trace.locator('.trace-event[data-kind="system"]').click();
-	await trace.getByRole("tab", { name: "概述", exact: true }).click();
-	await expect(value("来源调用开始时间")).toHaveText("2026-10-30 08:09:07.005");
-	await expect(value("来源调用结束时间")).toHaveText("2026-10-30 08:09:08.005");
-	await expect(trace.locator(".trace-io")).toContainText("请求快照没有独立起止时间");
+	await trace.getByRole("tab", { name: "Overview", exact: true }).click();
+	await expect(value("Source call start time")).toHaveText("2026-10-30 08:09:07.005");
+	await expect(value("Source call end time")).toHaveText("2026-10-30 08:09:08.005");
+	await expect(trace.locator(".trace-io")).toContainText("A request snapshot has no start or end of its own");
 	await publish({ ...settled, revision: 3, status: "interrupted", spans: [{ ...settled.spans[0]!, interrupted: true }] });
 	await trace.locator('.trace-event[data-kind="assistant"]').click();
-	await trace.getByRole("tab", { name: "概述", exact: true }).click();
-	await expect(value("结束时间")).toHaveText("2026-10-30 08:09:08.005（恢复时补填）");
-	await expect(value("耗时")).toHaveText("无法确定（执行中断）");
-	await expect(trace.locator(".trace-io")).toContainText("不代表真实结束时刻");
+	await trace.getByRole("tab", { name: "Overview", exact: true }).click();
+	await expect(value("End time")).toHaveText("2026-10-30 08:09:08.005 (filled in on recovery)");
+	await expect(value("Duration")).toHaveText("Unknown (execution interrupted)");
+	await expect(trace.locator(".trace-io")).toContainText("is not the real end");
 	await publish({ ...record, revision: 4, status: "interrupted", spans: [{ ...record.spans[0]!, interrupted: true }] });
-	await expect(value("结束时间")).toHaveText("未采集（执行中断）");
+	await expect(value("End time")).toHaveText("Not recorded (execution interrupted)");
 });
 
 test("detail tabs persist across events, conversations, closing details and live updates without sharing content folds", async ({ loomPage, electronApp }) => {
@@ -183,31 +183,31 @@ test("detail tabs persist across events, conversations, closing details and live
 	const tab = (name: string) => trace.getByRole("tab", { name, exact: true });
 	const sent = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Sent", exact: true }) });
 	await publish(a); await publish(b); await row("tab-a").click();
-	await expect(tab("预览")).toHaveAttribute("aria-selected", "true");
-	await tab("原始内容").click();
+	await expect(tab("Preview")).toHaveAttribute("aria-selected", "true");
+	await tab("Raw").click();
 	await sent.getByRole("button", { name: "Collapse /nested", exact: true }).click();
 	await trace.locator(".trace-native summary").click();
 	await row("tab-b").click();
-	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await expect(tab("Raw")).toHaveAttribute("aria-selected", "true");
 	await expect(sent).toContainText("INPUT_tab-b");
 	await expect(sent.getByRole("button", { name: "Collapse /nested", exact: true })).toHaveAttribute("aria-expanded", "true");
 	await expect(trace.locator(".trace-native")).not.toHaveAttribute("open", "");
-	await trace.getByRole("button", { name: "关闭详情", exact: true }).click(); await row("tab-a").click();
-	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await trace.getByRole("button", { name: "Close details", exact: true }).click(); await row("tab-a").click();
+	await expect(tab("Raw")).toHaveAttribute("aria-selected", "true");
 	await publish({ ...a, revision: 2 });
-	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await expect(tab("Raw")).toHaveAttribute("aria-selected", "true");
 	await tab("Metrics").click(); await tab("Traces").click();
-	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
-	await publish(c); await trace.locator(".trace-item").filter({ hasText: "会话 2" }).click(); await row("tab-c").click();
-	await expect(tab("原始内容")).toHaveAttribute("aria-selected", "true");
+	await expect(tab("Raw")).toHaveAttribute("aria-selected", "true");
+	await publish(c); await trace.locator(".trace-item").filter({ hasText: "Conversation 2" }).click(); await row("tab-c").click();
+	await expect(tab("Raw")).toHaveAttribute("aria-selected", "true");
 	await expect(sent).toContainText("INPUT_tab-c"); await expect(sent).not.toContainText("INPUT_tab-a");
-	await tab("概述").click();
-	await trace.locator(".trace-item").filter({ hasText: "会话 1" }).click(); await row("tab-b").click();
-	await expect(tab("概述")).toHaveAttribute("aria-selected", "true");
+	await tab("Overview").click();
+	await trace.locator(".trace-item").filter({ hasText: "Conversation 1" }).click(); await row("tab-b").click();
+	await expect(tab("Overview")).toHaveAttribute("aria-selected", "true");
 	await expect(trace.locator(".trace-facts")).toContainText("tab-b-request");
-	await row("tab-a").click(); await expect(tab("概述")).toHaveAttribute("aria-selected", "true");
-	await tab("预览").click(); await row("tab-b").click();
-	await expect(tab("预览")).toHaveAttribute("aria-selected", "true");
+	await row("tab-a").click(); await expect(tab("Overview")).toHaveAttribute("aria-selected", "true");
+	await tab("Preview").click(); await row("tab-b").click();
+	await expect(tab("Preview")).toHaveAttribute("aria-selected", "true");
 	await expect(trace.locator(".trace-io")).toContainText("REPLY_tab-b");
 });
 
@@ -233,7 +233,7 @@ test("JSON fields default to expanded, preserve manual folds on live updates, an
 	}, value);
 	await publish(record);
 	await trace.locator(".trace-row").filter({ hasText: "json-model" }).click();
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	const sent = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Sent", exact: true }) });
 	await expect(trace.locator('.trace-io .trace-json-toggle[aria-expanded="false"]')).toHaveCount(0);
 	await expect(sent).toContainText("FULL_TEXT_END");
@@ -251,14 +251,14 @@ test("JSON fields default to expanded, preserve manual folds on live updates, an
 	await sent.getByRole("button", { name: "Expand /nested", exact: true }).click();
 	await expect(sent.getByRole("button", { name: "Expand /nested/first/preamble", exact: true })).toBeVisible();
 	await trace.locator(".trace-row").filter({ hasText: "legacy-model" }).click();
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	await expect(sent.locator(".trace-json-fallback")).toHaveText("Text view · not complete JSON");
 	await expect(sent.locator(".trace-blob-toggle")).toHaveAttribute("aria-expanded", "true");
 	expect(await sent.locator(".trace-blob-value").textContent()).toBe(JSON.stringify(full));
 	await sent.locator(".trace-blob-toggle").click();
 	expect(await sent.locator(".trace-blob-value").textContent()).toBe('"preview…"');
 	await trace.locator(".trace-row").filter({ hasText: "json-model" }).click();
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	await expect(sent.getByRole("button", { name: "Collapse /nested/first/preamble", exact: true })).toHaveAttribute("aria-expanded", "true");
 });
 
@@ -282,7 +282,7 @@ test("trace dividers resize, clamp, reset, and retain preferences across tabs an
 	}, value);
 	await publish(record);
 	await trace.locator(".trace-row").filter({ hasText: "split-model" }).click();
-	const divider = (axis: "x" | "y") => trace.getByRole("separator", { name: axis === "x" ? "调整会话列表宽度" : "调整事件详情宽度", exact: true });
+	const divider = (axis: "x" | "y") => trace.getByRole("separator", { name: axis === "x" ? "Resize conversation list" : "Resize event details", exact: true });
 	const size = async (axis: "x" | "y") => Number(await divider(axis).getAttribute("aria-valuenow"));
 	const drag = async (axis: "x" | "y", delta: number) => {
 		const box = (await divider(axis).boundingBox())!;
@@ -356,13 +356,13 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator('.trace-event[data-kind="system"]')).toHaveCount(1);
 	await expect(trace.locator('.trace-event[data-kind="user"]')).toHaveCount(2);
 	await expect(trace.locator('.trace-event[data-kind="phase"]')).toHaveCount(0);
-	await expect(trace.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "true");
+	await expect(trace.getByRole("button", { name: "◷ Duration", exact: true })).toHaveAttribute("aria-pressed", "true");
 	const modelBlock = trace.locator(".trace-overview-block.kind-assistant").first();
 	const tooltip = trace.getByRole("tooltip");
 	expect(await modelBlock.getAttribute("title")).toBeNull();
 	await modelBlock.hover();
 	await expect(tooltip).toBeVisible({ timeout: 500 });
-	await expect(tooltip).toHaveText("助手 · 490ms · 首 chunk 100ms");
+	await expect(tooltip).toHaveText("Assistant · 490ms · First chunk 100ms");
 	await expect(modelBlock).toHaveAttribute("aria-describedby", (await tooltip.getAttribute("id"))!);
 	await trace.mouse.move(0, 0); await expect(tooltip).toHaveCount(0);
 	// A quick pass must not leave a delayed tooltip behind.
@@ -370,7 +370,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(tooltip).toHaveCount(0);
 	const lastBlock = trace.locator(".trace-overview-block.kind-tool").last();
 	await lastBlock.focus(); await expect(tooltip).toBeVisible({ timeout: 500 });
-	await expect(tooltip).toHaveText("工具 · 20ms");
+	await expect(tooltip).toHaveText("Tool · 20ms");
 	const tipBounds = (await tooltip.boundingBox())!;
 	expect(tipBounds.x).toBeGreaterThanOrEqual(0);
 	expect(tipBounds.x + tipBounds.width).toBeLessThanOrEqual(await trace.evaluate(() => innerWidth));
@@ -379,16 +379,16 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await trace.mouse.down(); await expect(tooltip).toHaveCount(0); await trace.mouse.up();
 	await expect(trace.locator('.trace-event[data-kind="tool"]').first()).toContainText("→ a.md b.png");
 	const system = trace.locator('.trace-event[data-kind="system"]');
-	await expect(system.locator(".trace-event-summary")).toHaveText("系统提示词");
+	await expect(system.locator(".trace-event-summary")).toHaveText("System prompt");
 	await system.click();
-	await expect(trace.locator(".trace-io")).toContainText("来自当前已加载历史中的首条模型请求记录");
+	await expect(trace.locator(".trace-io")).toContainText("From the first model request in the loaded history");
 	await expect(trace.locator(".trace-io")).toContainText("SYSTEM_PROMPT");
 	const systemTools = trace.locator(".trace-system-tools");
-	await expect(systemTools.locator("h3")).toContainText("工具列表（2）");
-	const toolsToggle = systemTools.getByRole("button", { name: /^(收起|展开)工具列表$/ });
+	await expect(systemTools.locator("h3")).toContainText("Tool list (2)");
+	const toolsToggle = systemTools.getByRole("button", { name: /^(Collapse|Expand) tool list$/ });
 	await expect(toolsToggle).toHaveAttribute("aria-expanded", "true");
 	await expect(systemTools).not.toContainText("可用工具：该次模型请求中提供的工具定义。");
-	await expect(systemTools).not.toContainText("部分工具定义未完整保存。");
+	await expect(systemTools).not.toContainText("Some tool definitions were not fully saved.");
 	await expect(systemTools).toContainText("执行终端命令");
 	await expect(systemTools).toContainText("读取文件");
 	await expect(systemTools).toContainText('"command"');
@@ -396,7 +396,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(systemTools).not.toContainText("帮我看看目录");
 	const promptToggle = trace.locator(".trace-prompt-toggle");
 	await expect(promptToggle).toHaveAttribute("aria-expanded", "true");
-	await trace.getByRole("button", { name: "收起提示词正文", exact: true }).press("Enter");
+	await trace.getByRole("button", { name: "Collapse prompt body", exact: true }).press("Enter");
 	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
 	await expect(trace.locator(".trace-prompt-content")).toBeHidden();
 	await expect(trace.locator(".trace-prompt-content .trace-markdown")).toHaveCount(0);
@@ -404,7 +404,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(systemTools).toContainText("执行终端命令");
 	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "true");
 	await systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button').click();
-	await systemTools.getByRole("button", { name: "收起工具列表", exact: true }).press("Enter");
+	await systemTools.getByRole("button", { name: "Collapse tool list", exact: true }).press("Enter");
 	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
 	await expect(systemTools.locator(".trace-tools-content")).toBeHidden();
 	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
@@ -412,16 +412,16 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "false");
 	await expect(promptToggle).toHaveAttribute("aria-expanded", "false");
 	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
-	await trace.getByRole("button", { name: "展开提示词正文", exact: true }).press("Space");
+	await trace.getByRole("button", { name: "Expand prompt body", exact: true }).press("Space");
 	await expect(promptToggle).toHaveAttribute("aria-expanded", "true");
 	await expect(trace.locator(".trace-prompt-content")).toContainText("SYSTEM_PROMPT");
 	await expect(toolsToggle).toHaveAttribute("aria-expanded", "false");
-	await systemTools.getByRole("button", { name: "展开工具列表", exact: true }).press("Space");
+	await systemTools.getByRole("button", { name: "Expand tool list", exact: true }).press("Space");
 	await expect(toolsToggle).toHaveAttribute("aria-expanded", "true");
 	await expect(systemTools.locator(".trace-tools-content")).toBeVisible();
 	await expect(systemTools).toContainText("执行终端命令");
 	await expect(systemTools.locator('.trace-json-node[data-json-path="/0/parameters"] > .trace-json-row button')).toHaveAttribute("aria-expanded", "false");
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	await expect(trace.locator(".trace-io")).toContainText("SYSTEM_PROMPT");
 	await expect(systemTools).toContainText("执行终端命令");
 	await expect(systemTools).toContainText('"command"');
@@ -431,60 +431,60 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await expect(trace.locator(".trace-io")).not.toContainText("找到两个文件");
 	await expect(trace.getByRole("heading", { name: "Arguments", exact: true })).toHaveCount(0);
 	await expect(trace.getByRole("heading", { name: "Result", exact: true })).toHaveCount(0);
-	await expect(trace.getByRole("heading", { name: "来源调用的元数据与事件", exact: true })).toBeVisible();
+	await expect(trace.getByRole("heading", { name: "Source call metadata and events", exact: true })).toBeVisible();
 	const model = turn.spans.find((span) => span.id === "ledger-model")!;
 	const clippedMessages = JSON.parse(String(model.attributes["loom.io.input"]));
 	clippedMessages.at(-1).toolsAdded[0].description = "执行终端命令\n… (42 bytes cut)";
 	await publish({ ...turn, revision: 3, spans: turn.spans.map((span) => span === model ? { ...span, attributes: { ...span.attributes, "loom.io.input": JSON.stringify(clippedMessages) } } : span) });
-	await expect(systemTools).toContainText("部分工具定义未完整保存。");
+	await expect(systemTools).toContainText("Some tool definitions were not fully saved.");
 	await publish({ ...turn, revision: 4 });
-	await expect(systemTools).not.toContainText("部分工具定义未完整保存。");
+	await expect(systemTools).not.toContainText("Some tool definitions were not fully saved.");
 	await trace.locator('.trace-event[data-kind="context"]').first().click();
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	await expect(trace.locator(".trace-io")).toContainText("当前素材库上下文");
 	await expect(trace.locator(".trace-io")).not.toContainText("SYSTEM_PROMPT");
 	await expect(trace.locator(".trace-io")).not.toContainText("帮我看看目录");
 	await trace.locator('.trace-event[data-kind="user"]').first().click();
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
 	await expect(trace.locator(".trace-io")).toContainText("帮我看看目录");
 	await expect(trace.locator(".trace-io")).not.toContainText("SYSTEM_PROMPT");
 	await expect(trace.locator(".trace-io")).not.toContainText("当前素材库上下文");
 	await trace.locator('.trace-event[data-kind="assistant"]').first().click();
-	await expect(trace.locator(".trace-io")).not.toContainText("来自当前已加载历史中的首条模型请求记录");
+	await expect(trace.locator(".trace-io")).not.toContainText("From the first model request in the loaded history");
 	await expect(trace.locator(".trace-request-number")).toHaveCount(0);
 	await expect(trace.locator(".trace-details-header")).not.toContainText(/#\d+/);
-	await expect(trace.getByRole("tab", { name: "原始内容", exact: true })).toHaveAttribute("aria-selected", "true");
-	await trace.getByRole("tab", { name: "预览", exact: true }).click();
+	await expect(trace.getByRole("tab", { name: "Raw", exact: true })).toHaveAttribute("aria-selected", "true");
+	await trace.getByRole("tab", { name: "Preview", exact: true }).click();
 	await expect(trace.locator(".trace-io strong")).toHaveText("找到两个文件");
 	await expect(trace.locator(".trace-io img")).toHaveCount(0); await expect(trace.locator(".trace-io script")).toHaveCount(0);
-	await expect(trace.getByRole("button", { name: /^思考/ })).toHaveAttribute("aria-expanded", "true");
-	await trace.getByRole("button", { name: /^思考/ }).click(); await expect(trace.locator(".trace-thinking")).not.toContainText("先检查目录。");
-	await trace.getByRole("tab", { name: "概述", exact: true }).click(); await expect(trace.locator(".trace-io")).toContainText("首 chunk");
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
-	await expect(trace.getByRole("heading", { name: "元数据与事件", exact: true })).toBeVisible();
+	await expect(trace.getByRole("button", { name: /^Thinking/ })).toHaveAttribute("aria-expanded", "true");
+	await trace.getByRole("button", { name: /^Thinking/ }).click(); await expect(trace.locator(".trace-thinking")).not.toContainText("先检查目录。");
+	await trace.getByRole("tab", { name: "Overview", exact: true }).click(); await expect(trace.locator(".trace-io")).toContainText("First chunk");
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
+	await expect(trace.getByRole("heading", { name: "Metadata and events", exact: true })).toBeVisible();
 	const sent = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Sent", exact: true }) });
 	await expect(sent).toContainText("SYSTEM_PROMPT");
 	await expect(sent).toContainText("帮我看看目录");
-	await expect(trace.locator(".trace-native summary")).toHaveText("底层执行记录（4）");
+	await expect(trace.locator(".trace-native summary")).toHaveText("Native execution records (4)");
 	await trace.locator(".trace-native summary").click();
 	await expect(trace.locator(".trace-native")).toContainText("waiting");
 	await expect(trace.locator('.trace-event[data-kind="phase"]')).toHaveCount(0);
-	await trace.getByRole("tab", { name: "预览", exact: true }).click();
+	await trace.getByRole("tab", { name: "Preview", exact: true }).click();
 	await trace.screenshot({ path: join(tmpdir(), "loom-trace-ledger.png") });
-	const toolbar = trace.getByRole("toolbar", { name: "轨迹工具栏" });
-	await toolbar.getByRole("button", { name: "⊟ 收起调用", exact: true }).click();
+	const toolbar = trace.getByRole("toolbar", { name: "Trace toolbar" });
+	await toolbar.getByRole("button", { name: "⊟ Collapse calls", exact: true }).click();
 	await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
 	await trace.locator('.trace-event[data-kind="assistant"]').first().click();
 	await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
 	await publish({ ...turn, revision: 5 }); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(0);
-	await toolbar.getByRole("button", { name: "⊞ 展开调用", exact: true }).click(); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
-	await toolbar.getByRole("button", { name: "⊟ 收起轮次", exact: true }).click(); await expect(trace.locator(".trace-event")).toHaveCount(0);
-	await trace.getByRole("searchbox", { name: "搜索轨迹" }).fill("bash"); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
-	await trace.getByRole("searchbox", { name: "搜索轨迹" }).fill("NO_MATCH_ANYWHERE"); await expect(trace.getByText("没有匹配事件", { exact: true })).toBeVisible();
-	await trace.getByRole("searchbox", { name: "搜索轨迹" }).fill("");
-	await toolbar.getByRole("button", { name: "⊞ 展开轮次", exact: true }).click();
+	await toolbar.getByRole("button", { name: "⊞ Expand calls", exact: true }).click(); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
+	await toolbar.getByRole("button", { name: "⊟ Collapse turns", exact: true }).click(); await expect(trace.locator(".trace-event")).toHaveCount(0);
+	await trace.getByRole("searchbox", { name: "Search trace" }).fill("bash"); await expect(trace.locator('.trace-event[data-kind="tool"]')).toHaveCount(2);
+	await trace.getByRole("searchbox", { name: "Search trace" }).fill("NO_MATCH_ANYWHERE"); await expect(trace.getByText("No matching events", { exact: true })).toBeVisible();
+	await trace.getByRole("searchbox", { name: "Search trace" }).fill("");
+	await toolbar.getByRole("button", { name: "⊞ Expand turns", exact: true }).click();
 	await trace.locator('.trace-overview-block.kind-tool').first().press("Enter"); await expect(trace.locator(".trace-event.is-selected")).toHaveAttribute("data-kind", "tool");
-	await expect(trace.getByRole("heading", { name: "调用工具", exact: true })).toBeVisible();
+	await expect(trace.getByRole("heading", { name: "Tool called", exact: true })).toBeVisible();
 	await expect(trace.locator(".trace-tool-name")).toHaveText("bash");
 	await expect(trace.locator(".trace-tool-output")).toHaveText('a.md b.png\n---\n  157\n<script>unsafe</script>\n**not bold**');
 	await expect(trace.locator(".trace-io h2, .trace-io script, .trace-io strong")).toHaveCount(0);
@@ -496,7 +496,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	await publish({ ...turn, revision: 6, spans: turn.spans.map((span) => span.id === "ledger-tool" ? { ...span, attributes: { ...span.attributes, "loom.io.output": '{"files":["a.md","b.png"]}' } } : span) });
 	await expect(trace.locator(".trace-tool-output")).toHaveCount(0);
 	await expect(trace.locator(".trace-tool-name")).toHaveText("bash");
-	const resultSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "结果", exact: true }) });
+	const resultSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Result", exact: true }) });
 	await expect(resultSection.locator(".trace-json")).toContainText('"files"');
 	let resultRevision = 6;
 	const publishResultText = (text: string) => publish({ ...turn, revision: ++resultRevision, spans: turn.spans.map((span) => span.id === "ledger-tool" ? { ...span, attributes: { ...span.attributes, "loom.io.output": JSON.stringify({ content: [{ type: "text", text }] }) } } : span) });
@@ -510,7 +510,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	const resultFold = resultSection.locator('.trace-json-node[data-json-path="/nested"] > .trace-json-row button');
 	await expect(resultFold).toHaveAttribute("aria-expanded", "true");
 	await resultFold.click();
-	const argsSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "参数", exact: true }) });
+	const argsSection = trace.locator(".trace-io section").filter({ has: trace.getByRole("heading", { name: "Arguments", exact: true }) });
 	const argsFold = argsSection.locator('.trace-json-node[data-json-path=""] > .trace-json-row button');
 	await expect(argsFold).toHaveAttribute("aria-expanded", "true");
 	await argsFold.click();
@@ -527,13 +527,13 @@ test("conversation ledger shows readable events, safe previews, independent fold
 		await expect(resultSection.locator(".trace-tool-output")).toHaveText(text);
 		await expect(resultSection.locator(".trace-json")).toHaveCount(0);
 	}
-	await toolbar.getByRole("button", { name: "◷ 时长", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "false");
-	await toolbar.getByRole("button", { name: "◷ 时长", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ 时长", exact: true })).toHaveAttribute("aria-pressed", "true");
+	await toolbar.getByRole("button", { name: "◷ Duration", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ Duration", exact: true })).toHaveAttribute("aria-pressed", "false");
+	await toolbar.getByRole("button", { name: "◷ Duration", exact: true }).click(); await expect(toolbar.getByRole("button", { name: "◷ Duration", exact: true })).toHaveAttribute("aria-pressed", "true");
 	const box = (await trace.locator(".trace-overview-track").boundingBox())!;
 	await trace.mouse.move(box.x + box.width * .1, box.y + 10); await trace.mouse.down(); await trace.mouse.move(box.x + box.width * .3, box.y + 10, { steps: 6 }); await trace.mouse.up();
-	await expect(trace.getByRole("button", { name: "清除范围", exact: true })).toBeVisible(); await expect(trace.locator(".trace-overview-range")).toBeVisible();
+	await expect(trace.getByRole("button", { name: "Clear range", exact: true })).toBeVisible(); await expect(trace.locator(".trace-overview-range")).toBeVisible();
 	await trace.locator(".trace-overview-track").press("Escape"); await expect(trace.locator(".trace-overview-range")).toHaveCount(0);
-	await trace.getByRole("button", { name: "关闭详情", exact: true }).click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
+	await trace.getByRole("button", { name: "Close details", exact: true }).click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
 	await trace.locator(".trace-item").first().click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(1);
 });
 
@@ -549,12 +549,12 @@ test("duration mode is the default and zero-duration calls stay visible and clic
 	] };
 	await electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
 	await trace.locator(".trace-item").first().click();
-	const mode = trace.getByRole("button", { name: "◷ 时长", exact: true });
+	const mode = trace.getByRole("button", { name: "◷ Duration", exact: true });
 	await expect(mode).toHaveAttribute("aria-pressed", "true");
 	const track = trace.locator(".trace-overview-track");
-	const long = track.getByRole("button", { name: /^工具 · long / });
-	const short = track.getByRole("button", { name: /^工具 · short / });
-	const zero = track.getByRole("button", { name: /^工具 · zero / });
+	const long = track.getByRole("button", { name: /^Tool · long / });
+	const short = track.getByRole("button", { name: /^Tool · short / });
+	const zero = track.getByRole("button", { name: /^Tool · zero / });
 	const checkWidths = async () => {
 		const bounds = (await track.boundingBox())!;
 		expect((await long.boundingBox())!.width).toBeCloseTo((bounds.width - 12) * .4 - 1, 0); // Input and terminal zero reserve slots; the short call is concurrent with the model.
@@ -565,11 +565,11 @@ test("duration mode is the default and zero-duration calls stay visible and clic
 		}
 	};
 	await checkWidths();
-	await zero.hover(); await expect(trace.getByRole("tooltip")).toHaveText("工具 · 0ms");
+	await zero.hover(); await expect(trace.getByRole("tooltip")).toHaveText("Tool · 0ms");
 	// Click near the end of the inflated marker, not at its theoretical zero-width timestamp.
 	await zero.click({ position: { x: 5, y: 4 } });
 	await expect(trace.locator(".trace-tool-name")).toHaveText("zero");
-	await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await trace.getByRole("tab", { name: "Overview", exact: true }).click();
 	await expect(trace.locator(".trace-facts dd")).toContainText(["0ms"]);
 	await checkWidths(); // Minima still fit with details open.
 	await mode.click(); await expect(mode).toHaveAttribute("aria-pressed", "false");
@@ -594,7 +594,7 @@ test("zero-duration boundary spans join the following call instead of sharing it
 	await publish(record); await trace.locator(".trace-item").first().click();
 	const track = trace.locator(".trace-overview-track");
 	const system = track.locator(".kind-system"), user = track.locator(".kind-user"), model = track.locator(".kind-assistant");
-	const zeroA = track.getByRole("button", { name: /^工具 · zero-a / }), zeroB = track.getByRole("button", { name: /^工具 · zero-b / }), next = track.getByRole("button", { name: /^工具 · next / });
+	const zeroA = track.getByRole("button", { name: /^Tool · zero-a / }), zeroB = track.getByRole("button", { name: /^Tool · zero-b / }), next = track.getByRole("button", { name: /^Tool · next / });
 	const checkJoined = async () => {
 		for (const [before, after] of [[system, user], [zeroA, zeroB], [zeroB, next]]) {
 			const a = (await before!.boundingBox())!, b = (await after!.boundingBox())!;
@@ -603,10 +603,10 @@ test("zero-duration boundary spans join the following call instead of sharing it
 	};
 	await checkJoined();
 	expect((await user.boundingBox())!.x).toBeLessThan((await model.boundingBox())!.x);
-	await system.click(); await trace.getByRole("tab", { name: "概述", exact: true }).click();
+	await system.click(); await trace.getByRole("tab", { name: "Overview", exact: true }).click();
 	await expect(trace.locator(".trace-facts")).toContainText("sequence-request"); // Snapshot retains its native source identity.
-	await trace.getByRole("tab", { name: "预览", exact: true }).click();
-	await zeroA.hover(); await expect(trace.getByRole("tooltip")).toHaveText("工具 · 0ms");
+	await trace.getByRole("tab", { name: "Preview", exact: true }).click();
+	await zeroA.hover(); await expect(trace.getByRole("tooltip")).toHaveText("Tool · 0ms");
 	await zeroA.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-a");
 	await zeroB.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("zero-b");
 	await next.click(); await expect(trace.locator(".trace-tool-name")).toHaveText("next");
@@ -616,7 +616,7 @@ test("zero-duration boundary spans join the following call instead of sharing it
 	await expect(trace.locator('.trace-event[data-kind="tool"]').filter({ hasText: "zero-b" })).not.toHaveAttribute("data-focus-outside", "true");
 	await track.press("Escape");
 	await publish({ ...record, revision: 2 }); await checkJoined();
-	await trace.getByRole("separator", { name: "调整会话列表宽度", exact: true }).press("ArrowRight"); await checkJoined();
+	await trace.getByRole("separator", { name: "Resize conversation list", exact: true }).press("ArrowRight"); await checkJoined();
 });
 
 test("inter-turn idle time folds into a narrow marker while selection, range focus and native coverage stay accurate", async ({ loomPage, electronApp }) => {
@@ -635,8 +635,8 @@ test("inter-turn idle time folds into a narrow marker while selection, range foc
 	const publish = (record: DevTraceRecord) => electronApp!.evaluate(({ BrowserWindow }, record) => BrowserWindow.getAllWindows().find((window) => window.getTitle() === "Traces")!.webContents.send("loom:devTrace", record), record);
 	await publish(first); await publish(second); await trace.locator(".trace-item").first().click();
 	const track = trace.locator(".trace-overview-track"), gap = track.locator(".trace-overview-gap");
-	const firstBlock = track.getByRole("button", { name: "助手 · FIRST", exact: true });
-	const secondBlock = track.getByRole("button", { name: "助手 · SECOND", exact: true });
+	const firstBlock = track.getByRole("button", { name: "Assistant · FIRST", exact: true });
+	const secondBlock = track.getByRole("button", { name: "Assistant · SECOND", exact: true });
 	await expect(gap).toHaveCount(1);
 	const checkScale = async () => {
 		const a = (await firstBlock.boundingBox())!, b = (await secondBlock.boundingBox())!;
@@ -644,7 +644,7 @@ test("inter-turn idle time folds into a narrow marker while selection, range foc
 		expect((await gap.boundingBox())!.width).toBeCloseTo(12, 0);
 	};
 	await checkScale();
-	await gap.hover(); await expect(trace.getByRole("tooltip")).toHaveText("轮间间隔 12分钟（已折叠）");
+	await gap.hover(); await expect(trace.getByRole("tooltip")).toHaveText("Idle between turns 12 min (folded)");
 	await gap.click(); await expect(trace.locator(".trace-event-details")).toHaveCount(0);
 	await secondBlock.click(); await expect(trace.locator(".trace-io")).toContainText("SECOND");
 	const b = (await secondBlock.boundingBox())!;
@@ -653,10 +653,10 @@ test("inter-turn idle time folds into a narrow marker while selection, range foc
 	await expect(trace.locator('.trace-event[data-kind="assistant"]').filter({ hasText: "FIRST" })).toHaveAttribute("data-focus-outside", "true");
 	await expect(trace.locator('.trace-event[data-kind="assistant"]').filter({ hasText: "SECOND" })).not.toHaveAttribute("data-focus-outside", "true");
 	await track.press("Escape");
-	const split = trace.getByRole("separator", { name: "调整会话列表宽度", exact: true });
+	const split = trace.getByRole("separator", { name: "Resize conversation list", exact: true });
 	await split.press("ArrowRight"); await split.press("ArrowRight");
 	await expect.poll(async () => (await gap.boundingBox())!.width).toBeCloseTo(12, 0); await checkScale();
-	const mode = trace.getByRole("button", { name: "◷ 时长", exact: true });
+	const mode = trace.getByRole("button", { name: "◷ Duration", exact: true });
 	await mode.click(); await expect(gap).toHaveCount(0);
 	await mode.click(); await expect(gap).toHaveCount(1); await checkScale();
 	const bridge = { ...first.spans[1]!, id: "hidden-work", name: "pi.durable.phase", startedMs: at + 3000, endedMs: at + 724_000, attributes: { "task.name": "pi.generation", phase: "tools", outcome: "waiting" } };
@@ -683,8 +683,8 @@ test("system details prefer complete independent tool snapshots and retain schem
 	await trace.locator(".trace-item").first().click();
 	await trace.locator('.trace-event[data-kind="system"]').click();
 	const list = trace.locator(".trace-system-tools");
-	await expect(list.locator("h3")).toContainText("工具列表（40）");
-	await expect(list).not.toContainText("部分工具定义未完整保存。");
+	await expect(list.locator("h3")).toContainText("Tool list (40)");
+	await expect(list).not.toContainText("Some tool definitions were not fully saved.");
 	await expect(list).toContainText('"headers"'); await expect(list).toContainText('"apiKey"');
 	await expect(list.locator('.trace-json-node[data-json-path="/0/description"] .trace-json-value')).toHaveText(JSON.stringify(description));
 	await expect(list).not.toContainText("USER_ONLY");
@@ -692,13 +692,13 @@ test("system details prefer complete independent tool snapshots and retain schem
 	await fold.click();
 	await publish({ ...source, revision: 2 });
 	await expect(fold).toHaveAttribute("aria-expanded", "false");
-	await trace.getByRole("tab", { name: "原始内容", exact: true }).click();
-	await expect(list).toContainText("工具列表（40）");
-	await expect(list).not.toContainText("部分工具定义未完整保存。");
+	await trace.getByRole("tab", { name: "Raw", exact: true }).click();
+	await expect(list).toContainText("Tool list (40)");
+	await expect(list).not.toContainText("Some tool definitions were not fully saved.");
 	await publish({ ...source, revision: 3, blobs: {} });
-	await expect(list).toContainText("部分工具定义未完整保存。");
+	await expect(list).toContainText("Some tool definitions were not fully saved.");
 	await publish({ ...source, revision: 4 });
-	await expect(list).not.toContainText("部分工具定义未完整保存。");
+	await expect(list).not.toContainText("Some tool definitions were not fully saved.");
 });
 
 test("late conversation history cannot leak across a library reset with reused conversation IDs", async ({ loomPage, electronApp }) => {
@@ -723,7 +723,7 @@ test("late conversation history cannot leak across a library reset with reused c
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();
 	await expect(trace.locator(".trace-item")).toContainText("OLD_LIBRARY");
-	await expect(trace.locator(".trace-history")).toContainText("加载中");
+	await expect(trace.locator(".trace-history")).toContainText("Loading");
 	await electronApp!.evaluate(({ ipcMain }) => { ipcMain.emit("loom-test-reset-source"); });
 	await expect(trace.locator(".trace-item")).toContainText("NEW_LIBRARY");
 	await expect(trace.locator(".trace-event-table")).toContainText("NEW_HISTORY");
@@ -753,8 +753,31 @@ test("an older exemplar does not skip unloaded conversation history", async ({ l
 	await expect(trace.locator(".trace-turn-header")).toHaveCount(40);
 	await trace.getByRole("tab", { name: "Metrics", exact: true }).click(); await trace.getByRole("row").filter({ hasText: "old-exemplar" }).locator("summary").click();
 	await trace.getByRole("button", { name: /^Trace ·/ }).click(); await expect(trace.locator(".trace-io")).toContainText("HISTORY_ROW_10");
-	await trace.getByRole("button", { name: "加载更早轮次", exact: true }).click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(81);
+	await trace.getByRole("button", { name: "Load earlier turns", exact: true }).click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(81);
 	await expect(trace.locator(".trace-event-table")).toContainText("HISTORY_ROW_50");
-	await trace.getByRole("button", { name: "加载更早轮次", exact: true }).click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(100);
-	await expect(trace.getByRole("button", { name: "加载更早轮次", exact: true })).toHaveCount(0);
+	await trace.getByRole("button", { name: "Load earlier turns", exact: true }).click(); await expect(trace.locator(".trace-turn-header")).toHaveCount(100);
+	await expect(trace.getByRole("button", { name: "Load earlier turns", exact: true })).toHaveCount(0);
+});
+
+test("the trace window follows the interface language, including when it is changed while open", async ({ loomPage, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
+	const trace = await opened; await trace.waitForLoadState();
+	await expect(trace.getByRole("tab", { name: "Traces", exact: true })).toBeVisible();
+	await expect(trace.locator(".trace-list-heading")).toContainText("Conversations");
+	await expect(trace.locator("html")).toHaveAttribute("lang", "en");
+
+	await loomPage.evaluate(() => window.loom.saveGeneralSettings({ language: "zh-CN" }));
+	await expect(trace.getByRole("tab", { name: "轨迹", exact: true })).toBeVisible();
+	await expect(trace.getByRole("tab", { name: "指标", exact: true })).toBeVisible();
+	await expect(trace.locator(".trace-list-heading")).toContainText("会话");
+	await expect(trace.locator("html")).toHaveAttribute("lang", "zh-CN");
+	await trace.getByRole("tab", { name: "指标", exact: true }).click();
+	await expect(trace.getByText("暂无指标。", { exact: true })).toBeVisible();
+
+	await loomPage.evaluate(() => window.loom.saveGeneralSettings({ language: "en" }));
+	await expect(trace.getByRole("tab", { name: "Metrics", exact: true })).toBeVisible();
+	await expect(trace.getByText("No metrics yet.", { exact: true })).toBeVisible();
+	await expect(trace.locator("html")).toHaveAttribute("lang", "en");
 });

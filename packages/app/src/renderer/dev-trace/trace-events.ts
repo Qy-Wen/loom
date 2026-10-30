@@ -1,6 +1,7 @@
 import type { LoomTraceSpan } from "@loom/agent";
 import type { DevTraceRecord } from "../../shared/dev-trace.ts";
 import { jsonString, parseTraceJson, type JsonValue } from "./json-values.ts";
+import type { TraceMessages } from "./trace-messages.ts";
 import { spanPayload, visibleSpans } from "./trace-spans.ts";
 
 export type EventKind = "system" | "user" | "context" | "assistant" | "tool" | "approval" | "phase";
@@ -21,7 +22,6 @@ export type TraceEvent = {
 	cancelled?: boolean;
 };
 export type TraceTurn = { id: string; record: DevTraceRecord; events: TraceEvent[] };
-export const eventLabels: Record<EventKind, string> = { system: "系统", user: "用户", context: "上下文", assistant: "助手", tool: "工具", approval: "审批", phase: "底层记录" };
 export function conversationId(record: DevTraceRecord): string { return record.threadId || `trace:${record.id}`; }
 export function parsedValue(text: string | undefined): JsonValue | undefined {
 	if (text === undefined) return undefined;
@@ -97,28 +97,30 @@ export function eventStatus(event: TraceEvent): string {
 }
 
 /** Routine scheduling outcomes (waiting, sleeping, done, next=…) are not separate user-facing actions. */
-export function phaseDiagnostic(span: LoomTraceSpan): { label: string; summary: string } | undefined {
+export type PhaseDiagnostic = { kind: "interrupted" | "error" | "retry" | "compaction"; label: string; summary: string };
+export function phaseDiagnostic(span: LoomTraceSpan, t: TraceMessages): PhaseDiagnostic | undefined {
+	const text = t.events.phase;
 	const task = String(span.attributes["task.name"] ?? "");
 	const phase = String(span.attributes.phase ?? "");
 	const attempt = Number(span.attributes.attempt);
 	const compaction = task === "pi.compaction";
 	const generation = task === "pi.generation" || task === "pi.generate";
-	const subject = compaction ? "上下文压缩" : generation ? "模型请求" : "任务执行";
-	if (span.interrupted) return { label: "中断", summary: `${subject}已中断` };
+	const subject = compaction ? text.subjects.compaction : generation ? text.subjects.generation : text.subjects.task;
+	if (span.interrupted) return { kind: "interrupted", label: text.labels.interrupted, summary: text.interrupted(subject) };
 	if (span.status.status === "error") {
 		const error = span.status.error?.message;
-		return { label: "异常", summary: `${subject}失败${error ? ` · ${shortText(error, 160)}` : ""}` };
+		return { kind: "error", label: text.labels.error, summary: text.failed(subject, error ? shortText(error, 160) : "") };
 	}
-	if (span.attributes.outcome === "aborted") return { label: "中断", summary: `${subject}已取消` };
-	if (phase === "retry") return { label: "重试", summary: `${subject}等待重试` };
+	if (span.attributes.outcome === "aborted") return { kind: "interrupted", label: text.labels.interrupted, summary: text.cancelled(subject) };
+	if (phase === "retry") return { kind: "retry", label: text.labels.retry, summary: text.waitingRetry(subject) };
 	// Show the start of a new attempt once, not its normal request/tools scheduling phases again.
-	if (attempt > 1 && (phase === "prepare" || phase === "select")) return { label: "重试", summary: `${subject}重试 · 第 ${attempt} 次` };
-	if (compaction) return { label: "压缩", summary: phase === "select" ? "准备上下文压缩" : "上下文压缩" };
+	if (attempt > 1 && (phase === "prepare" || phase === "select")) return { kind: "retry", label: text.labels.retry, summary: text.retryAttempt(subject, attempt) };
+	if (compaction) return { kind: "compaction", label: text.labels.compaction, summary: phase === "select" ? text.preparingCompaction : text.compaction };
 	return undefined;
 }
 
 /** Presentation projection only. Native span identities, lifetimes and stored records are unchanged. */
-export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
+export function traceTurns(records: readonly DevTraceRecord[], t: TraceMessages): TraceTurn[] {
 	return [...records].sort((a, b) => a.at - b.at || a.id.localeCompare(b.id)).map((record, turnIndex) => {
 		const spans = visibleSpans(record.spans).sort((a, b) => a.startedMs - b.startedMs);
 		const firstRequest = spans.find((span) => span.name === "pi.ai.request");
@@ -130,13 +132,13 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 		// A cancelled request phase wraps the model request it cancelled and overlaps it exactly. Show one event, not two.
 		const wrapped = new Map<string, LoomTraceSpan>();
 		for (const span of spans) {
-			if (span.name !== "pi.durable.phase" || phaseDiagnostic(span)?.label !== "中断") continue;
+			if (span.name !== "pi.durable.phase" || phaseDiagnostic(span, t)?.kind !== "interrupted") continue;
 			const request = spans.find((child) => child.parentId === span.id && (child.name === "pi.ai.request" || child.name === "pi.ai.poll"));
 			if (request) wrapped.set(request.id, span);
 		}
 		const folded = new Set([...wrapped.values()].map((span) => span.id));
 		const add = (span: LoomTraceSpan, kind: EventKind, summary: string, text?: string, marker = false, rawValue?: JsonValue) => {
-			events.push({ id: `${record.id}/${span.id}/${kind}`, kind, label: kind === "phase" ? phaseDiagnostic(span)?.label ?? eventLabels.phase : eventLabels[kind], summary, text, rawContent: rawValue === undefined ? undefined : JSON.stringify(rawValue), marker, record, span, step: marker ? 0 : events.filter((event) => !event.marker).length + 1 });
+			events.push({ id: `${record.id}/${span.id}/${kind}`, kind, label: kind === "phase" ? phaseDiagnostic(span, t)?.label ?? t.kinds.phase : t.kinds[kind], summary, text, rawContent: rawValue === undefined ? undefined : JSON.stringify(rawValue), marker, record, span, step: marker ? 0 : events.filter((event) => !event.marker).length + 1 });
 		};
 		if (firstRequest && turnIndex === 0) {
 			const system = rows.find((row) => row.role === "system");
@@ -145,14 +147,14 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 			const snapshot = firstRequest.attributes["loom.io.tools"];
 			const toolList = capturedTools(messages, typeof snapshot === "string" ? snapshot : undefined, record.blobs);
 			if (text || toolList.captured || (system && toolList.incomplete)) {
-				add(firstRequest, "system", "系统提示词", text || undefined, true, value);
+				add(firstRequest, "system", t.events.systemPrompt, text || undefined, true, value);
 				events.at(-1)!.toolList = toolList;
 			}
 		}
 		if (firstRequest || submission?.attributes["submission.type"] === "input") {
 			const user = rows.findLast((row) => row.role === "user");
 			const text = contentText(user?.content, record);
-			add(submission ?? firstRequest!, "user", text ? shortText(text) : "输入内容未采集或历史 JSON 已截断", text || undefined, true, user?.content);
+			add(submission ?? firstRequest!, "user", text ? shortText(text) : t.events.inputMissing, text || undefined, true, user?.content);
 		}
 		if (firstRequest) {
 			const system = rows.find((row) => row.role === "system");
@@ -166,16 +168,16 @@ export function traceTurns(records: readonly DevTraceRecord[]): TraceTurn[] {
 			if (span.name === "pi.ai.request" || span.name === "pi.ai.poll") {
 				const output = contentText(parsedValue(payload?.output) ?? payload?.output, record);
 				const cancelled = wrapped.has(span.id);
-				add(span, "assistant", `${span.name === "pi.ai.poll" ? "轮询 · " : ""}${shortText(output) || (cancelled ? "已取消，无已采集输出" : span.endedMs === undefined ? "等待模型输出…" : "无已采集输出")}`);
+				add(span, "assistant", `${span.name === "pi.ai.poll" ? t.events.polling : ""}${shortText(output) || (cancelled ? t.events.cancelledNoOutput : span.endedMs === undefined ? t.events.waiting : t.events.noOutput)}`);
 				if (cancelled) events.at(-1)!.cancelled = true;
 			} else if (span.name === "loom.approval") {
-				add(span, "approval", `工具审批 · ${span.attributes["tool.name"] ?? "tool"}`);
+				add(span, "approval", t.events.approval(String(span.attributes["tool.name"] ?? "tool")));
 			} else if (span.name === "pi.durable.phase" && span.attributes["task.name"] === "pi.tool") {
 				const args = payload?.input ?? "";
 				const result = contentText(parsedValue(payload?.output) ?? payload?.output, record) || payload?.output || "";
 				add(span, "tool", `${span.attributes["tool.name"] ?? "tool"} ${shortText(args, 120)}${result ? ` → ${shortText(result, 160)}` : ""}`);
 			} else {
-				const diagnostic = phaseDiagnostic(span);
+				const diagnostic = phaseDiagnostic(span, t);
 				if (diagnostic && !folded.has(span.id)) add(span, "phase", diagnostic.summary);
 			}
 		}

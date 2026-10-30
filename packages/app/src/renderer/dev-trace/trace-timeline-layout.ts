@@ -1,5 +1,6 @@
 import type { DevTraceRecord } from "../../shared/dev-trace.ts";
 import type { TraceEvent } from "./trace-events.ts";
+import type { TraceMessages } from "./trace-messages.ts";
 import { formatTraceDuration } from "./trace-spans.ts";
 
 export type TimelineBlock = { event: TraceEvent; left: number; width: number; paintedLeft: number; paintedWidth: number; lane: number; firstChunk?: number };
@@ -138,8 +139,8 @@ export function timelineLayout(events: readonly TraceEvent[], actual: boolean, n
 	};
 }
 
-export function timelineGapLabel(gap: Pick<TimelineGap, "startMs" | "endMs">): string {
+export function timelineGapLabel(gap: Pick<TimelineGap, "startMs" | "endMs">, t: TraceMessages): string {
 	const ms = gap.endMs - gap.startMs;
-	const duration = ms >= 3_600_000 ? `${Number((ms / 3_600_000).toFixed(1))}小时` : ms >= 60_000 ? `${Number((ms / 60_000).toFixed(1))}分钟` : formatTraceDuration(ms);
-	return `轮间间隔 ${duration}（已折叠）`;
+	const duration = ms >= 3_600_000 ? t.timeline.hours(Number((ms / 3_600_000).toFixed(1))) : ms >= 60_000 ? t.timeline.minutes(Number((ms / 60_000).toFixed(1))) : formatTraceDuration(ms);
+	return t.timeline.gap(duration);
 }

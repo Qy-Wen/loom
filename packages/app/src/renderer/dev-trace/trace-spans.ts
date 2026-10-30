@@ -11,11 +11,11 @@ export function spanPayload(span: LoomTraceSpan): { input: string; output: strin
 	const sent = typeof input === "string" ? input : "", reply = typeof output === "string" ? output : "";
 	return sent || reply ? { input: sent, output: reply } : null;
 }
-/** Local wall-clock display only; native epoch timestamps retain their sub-millisecond precision. */
-export function formatTraceTimestamp(ms: number | undefined): string {
-	if (ms === undefined || !Number.isFinite(ms)) return "未采集";
+/** Local wall-clock display only; native epoch timestamps retain their sub-millisecond precision. Undefined when not recorded. */
+export function formatTraceTimestamp(ms: number | undefined): string | undefined {
+	if (ms === undefined || !Number.isFinite(ms)) return undefined;
 	const date = new Date(ms);
-	if (!Number.isFinite(date.getTime())) return "未采集";
+	if (!Number.isFinite(date.getTime())) return undefined;
 	const pad = (value: number, width = 2) => String(value).padStart(width, "0");
 	return `${pad(date.getFullYear(), 4)}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`;
 }
