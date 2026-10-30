@@ -65,8 +65,10 @@ test("many gaps stay within a bounded visual budget and zero-duration calls stil
 	const turns = Array.from({ length: 30 }, (_, i) => turn(String(i), [[i * 100_000, i * 100_000 + 1000]]));
 	const { blocks, gaps } = timelineLayout(turns.flatMap((turn) => turn.events), true, 3_000_000, 100, turns.map((turn) => turn.record));
 	close(gaps.reduce((sum, gap) => sum + gap.width, 0), .2);
-	close(blocks[0]!.width, blocks.at(-1)!.width);
-	close(blocks.at(-1)!.left + blocks.at(-1)!.width, 1);
+	// 30 blocks of minimum width cannot fit 100px, so the minimum shrinks evenly; the last block still ends at the track's end.
+	close(blocks[0]!.paintedWidth, blocks.at(-1)!.paintedWidth);
+	close(blocks.at(-1)!.paintedLeft + blocks.at(-1)!.paintedWidth, 1);
+	for (let i = 1; i < blocks.length; i++) assert.ok(blocks[i]!.paintedLeft >= blocks[i - 1]!.paintedLeft + blocks[i - 1]!.paintedWidth - 1e-9);
 	const zero = turn("zero", [[0, 0]]), later = turn("later", [[100_000, 100_000]]);
 	const points = timelineLayout([...zero.events, ...later.events], true, 100_000, 1000);
 	assert.equal(points.blocks[0]!.width, 0); assert.equal(points.blocks[1]!.width, 0);
@@ -148,4 +150,22 @@ test("equal-event mode remains independent of wall-clock gaps", () => {
 	assert.deepEqual(layout.gaps, []);
 	assert.deepEqual(layout.blocks.map((block) => [block.left, block.width]), [[0, .5], [.5, .5]]);
 	assert.equal(timelineGapLabel({ startMs: 0, endMs: 7_200_000 }), "轮间间隔 2小时（已折叠）");
+});
+
+test("successive work never overlaps on screen, parallel work may, and a long call stays clear of what follows", () => {
+	// Short tool, a long tool with a parallel short one inside it, then a model call 24ms after the long tool ends.
+	const source = turn("order", [[0, 3], [10, 1810], [12, 30], [1834, 4000]]);
+	source.events[0] = { ...source.events[0]!, kind: "tool" };
+	source.events[1] = { ...source.events[1]!, kind: "tool" };
+	source.events[2] = { ...source.events[2]!, kind: "tool" };
+	for (const extent of [1085, 300]) {
+		const { blocks } = timelineLayout(source.events, true, 4000, extent, [source.record]);
+		const right = (index: number) => blocks[index]!.paintedLeft + blocks[index]!.paintedWidth;
+		// Every pair where one has fully finished before the other starts must be ordered on screen.
+		for (const [a, b] of [[0, 1], [0, 2], [0, 3], [1, 3], [2, 3]] as const) assert.ok(right(a) <= blocks[b]!.paintedLeft + 1e-9, `${a} before ${b} at ${extent}px`);
+		// The two tools that run at the same time stay side by side instead of being strung out.
+		assert.ok(blocks[2]!.paintedLeft < right(1), "parallel tools overlap");
+		for (const block of blocks) assert.ok(block.paintedWidth * extent >= 5.99, "minimum width kept");
+		assert.ok(right(3) <= 1 + 1e-9);
+	}
 });
