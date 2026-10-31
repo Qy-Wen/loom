@@ -257,16 +257,6 @@ export function LibrarySidebar({
 	}, [fileSortDirection]);
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [favoritesCollapsed, setFavoritesCollapsed] = useState(true);
-	// Clicking a file in Favorites/Tags should not scroll the file tree to it. Remember that key
-	// until the focus moves elsewhere.
-	const [quietFocusKey, setQuietFocusKey] = useState<string | null>(null);
-	useEffect(() => {
-		if (quietFocusKey !== null && focusKey !== quietFocusKey) setQuietFocusKey(null);
-	}, [focusKey, quietFocusKey]);
-	function selectFromShortcut(assetId: string, mode: PointerMode): void {
-		setQuietFocusKey(assetKey(assetId));
-		onSelectAsset(assetId, mode, treeRows);
-	}
 	const [tagsCollapsed, setTagsCollapsed] = useState(true);
 	const [expandedTagIds, setExpandedTagIds] = useState<Set<string>>(() => new Set());
 	const [query, setQuery] = useState("");
@@ -334,7 +324,7 @@ export function LibrarySidebar({
 				cut: cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath),
 				favorite: library.favoriteAssetIds.includes(asset.assetId),
 				selectionDrag,
-				onSelect: (mode: PointerMode) => selectFromShortcut(asset.assetId, mode),
+				onSelect: (mode: PointerMode) => onSelectAsset(asset.assetId, mode, treeRows),
 				onOpenInTab: () => onOpenAssetInTab(asset.assetId),
 				onContextMenu: () => onAssetContextMenu(asset),
 				onRename: (stem: string) => onRenameAsset(asset, stem),
@@ -579,7 +569,7 @@ export function LibrarySidebar({
 							fileSortDirection={fileSortDirection}
 							collapsedFolders={queryActive ? new Set() : collapsedFolders}
 							selectedKeys={selectedKeys}
-							focusKey={focusKey === quietFocusKey ? null : focusKey}
+							focusKey={focusKey}
 							renamingAssetId={renamingAssetId}
 							renamingFolder={renamingFolder}
 							cutAssetIds={cutAssetIds}

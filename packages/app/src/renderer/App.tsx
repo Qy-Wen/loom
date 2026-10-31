@@ -396,9 +396,11 @@ export function App(): React.JSX.Element {
 		);
 	}, [viewedAsset]);
 
+	// Depend on the path, not the asset object: an update that keeps the path must not reopen a folder the user collapsed.
+	const selectedPath = selectedAsset?.relativePath;
 	useEffect(() => {
-		if (!selectedAsset) return;
-		const folders = ancestorFolders(selectedAsset.relativePath);
+		if (!selectedPath) return;
+		const folders = ancestorFolders(selectedPath);
 		if (folders.length === 0) return;
 		setCollapsedFolders((current) => {
 			let changed = false;
@@ -408,7 +410,7 @@ export function App(): React.JSX.Element {
 			}
 			return changed ? next : current;
 		});
-	}, [selectedAsset]);
+	}, [selectedPath]);
 	const relationTypes = useMemo(
 		() => [...new Set(graphEdges.map((edge) => edge.type))].sort(),
 		[graphEdges],

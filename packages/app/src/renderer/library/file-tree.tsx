@@ -117,6 +117,13 @@ export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttrib
 	};
 }
 
+/** Keep the focused tree row in view. `id` re-runs it when the same row component shows another file. */
+function useScrollWhenFocused(ref: React.RefObject<HTMLElement | null>, focused: boolean, id: string): void {
+	useEffect(() => {
+		if (focused) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+	}, [ref, focused, id]);
+}
+
 function clickMode(event: React.MouseEvent): PointerMode {
 	return pointerMode(event, uiPlatform(navigator.userAgent) === "mac");
 }
@@ -143,10 +150,7 @@ export function AssetTreeRow({
 
 	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
 
-	useEffect(() => {
-		if (!focused) return;
-		rowRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [focused, asset.assetId]);
+	useScrollWhenFocused(rowRef, focused, asset.assetId);
 
 	if (renaming) {
 		return (
@@ -236,10 +240,7 @@ export function AssetIconTile({
 	useEffect(() => {
 		cancelled.current = false;
 	}, [renaming]);
-	useEffect(() => {
-		if (!focused) return;
-		tileRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [focused, asset.assetId]);
+	useScrollWhenFocused(tileRef, focused, asset.assetId);
 
 	return (
 		<div className={`asset-icon${selected ? " selected" : ""}${cut ? " cut" : ""}`}>
@@ -354,10 +355,7 @@ function FolderTreeRow({
 	const rowRef = useRef<HTMLDivElement | null>(null);
 	const key = folderKey(folder.relativePath);
 	const focused = rowProps.focusKey === key;
-	useEffect(() => {
-		if (!focused) return;
-		rowRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [focused]);
+	useScrollWhenFocused(rowRef, focused, key);
 
 	function chooseFolder(event: React.MouseEvent): void {
 		const mode = clickMode(event);
