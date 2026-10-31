@@ -136,7 +136,7 @@
 
 .asset-icon-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(68px, 1fr));
+	grid-template-columns: repeat(auto-fill, min(68px, 100%));
 	gap: 8px 6px;
 	padding: 4px 6px 8px;
 }

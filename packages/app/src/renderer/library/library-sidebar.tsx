@@ -9,11 +9,9 @@ import {
 	readLibraryDrag,
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
-import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
-import { uiPlatform } from "../../shared/locale.ts";
-import { FileTree, FolderChevronIcon, openInTabHandlers, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
-import { assetKey, pointerMode, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { AssetIconTile, AssetTreeRow, FileTree, FolderChevronIcon, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
+import { assetKey, coversPath, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 const FILE_SORT_KEY = "loom.library.fileSort";
@@ -278,9 +276,9 @@ export function LibrarySidebar({
 	useEffect(() => {
 		if (quietFocusKey !== null && focusKey !== quietFocusKey) setQuietFocusKey(null);
 	}, [focusKey, quietFocusKey]);
-	function selectFromShortcut(assetId: string, event: React.MouseEvent): void {
+	function selectFromShortcut(assetId: string, mode: PointerMode): void {
 		setQuietFocusKey(assetKey(assetId));
-		onSelectAsset(assetId, pointerMode(event, uiPlatform(navigator.userAgent) === "mac"), treeRows);
+		onSelectAsset(assetId, mode, treeRows);
 	}
 	const [tagsCollapsed, setTagsCollapsed] = useState(true);
 	const [expandedTagIds, setExpandedTagIds] = useState<Set<string>>(() => new Set());
@@ -336,6 +334,29 @@ export function LibrarySidebar({
 			else next.add(tagId);
 			return next;
 		});
+	}
+
+	function shortcutFiles(assets: readonly Asset[], depth = 0): React.JSX.Element {
+		const items = assets.map((asset) => {
+			const props = {
+				asset,
+				selected: selectedKeys.has(assetKey(asset.assetId)),
+				// Shortcuts must not auto-scroll to another copy of the same file or host duplicate rename editors.
+				focused: false,
+				renaming: false,
+				cut: cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath),
+				favorite: library.favoriteAssetIds.includes(asset.assetId),
+				selectionDrag,
+				onSelect: (mode: PointerMode) => selectFromShortcut(asset.assetId, mode),
+				onOpenInTab: () => onOpenAssetInTab(asset.assetId),
+				onContextMenu: () => onAssetContextMenu(asset),
+				onRename: (stem: string) => onRenameAsset(asset, stem),
+				onCancelRename,
+				onDropFolder: () => {},
+			};
+			return fileDisplay === "icons" ? <AssetIconTile key={asset.assetId} {...props} /> : <AssetTreeRow key={asset.assetId} depth={depth} {...props} />;
+		});
+		return fileDisplay === "icons" && items.length > 0 ? <div className="asset-icon-grid" style={{ marginLeft: depth * 14 }}>{items}</div> : <>{items}</>;
 	}
 
 	function overFavoritesOrTags(event: React.DragEvent): boolean {
@@ -528,27 +549,7 @@ export function LibrarySidebar({
 										{t.library.favorites}
 									</span>
 								</button>
-								{queryActive || !favoritesCollapsed ? favoriteAssets.map((asset) => (
-									<button
-										key={asset.assetId}
-										type="button"
-										className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
-										{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
-										onClick={(event) => selectFromShortcut(asset.assetId, event)}
-										onContextMenu={(event) => {
-											event.preventDefault();
-											onAssetContextMenu(asset);
-										}}
-									>
-										<AssetThumbnail asset={asset} />
-										<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
-										<span className="asset-favorite" title={t.common.favorite}>
-											<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
-											</svg>
-										</span>
-									</button>
-								)) : null}
+								{queryActive || !favoritesCollapsed ? shortcutFiles(favoriteAssets) : null}
 							</div>
 						) : null}
 						{library.tags.length > 0 ? (
@@ -591,30 +592,7 @@ export function LibrarySidebar({
 													<span className="asset-name">{tag.name}</span>
 												</button>
 											</div>
-											{open ? files.map((asset) => (
-												<button
-													key={asset.assetId}
-													type="button"
-													className={`asset-row${selectedKeys.has(assetKey(asset.assetId)) ? " selected" : ""}`}
-													style={{ paddingLeft: 35 }}
-													{...openInTabHandlers(() => onOpenAssetInTab(asset.assetId))}
-													onClick={(event) => selectFromShortcut(asset.assetId, event)}
-													onContextMenu={(event) => {
-														event.preventDefault();
-														onAssetContextMenu(asset);
-													}}
-												>
-													<AssetThumbnail asset={asset} />
-													<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
-													{library.favoriteAssetIds.includes(asset.assetId) ? (
-														<span className="asset-favorite" title={t.common.favorite}>
-															<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-																<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
-															</svg>
-														</span>
-													) : null}
-												</button>
-											)) : null}
+											{open ? shortcutFiles(files, 2) : null}
 										</div>
 									);
 								}) : null}

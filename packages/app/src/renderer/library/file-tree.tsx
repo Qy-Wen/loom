@@ -121,7 +121,7 @@ function clickMode(event: React.MouseEvent): PointerMode {
 	return pointerMode(event, uiPlatform(navigator.userAgent) === "mac");
 }
 
-function AssetTreeRow({
+export function AssetTreeRow({
 	asset,
 	depth,
 	selected,
@@ -213,7 +213,7 @@ function AssetTreeRow({
 	);
 }
 
-function AssetIconTile({
+export function AssetIconTile({
 	asset,
 	selected,
 	focused,
