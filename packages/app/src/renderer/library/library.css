@@ -148,23 +148,47 @@
 	flex: 1;
 }
 
-.asset-list {
-	min-height: 0;
+.library-scroll-regions {
+	display: flex;
 	flex: 1;
-	padding: 0 6px 12px;
-	overflow-y: auto;
+	flex-direction: column;
+	min-height: 0;
+	overflow: hidden;
 }
 
-.library-sidebar .asset-list.thin-scroll {
+.library-scroll {
+	min-height: 0;
+	overflow-y: auto;
+	overscroll-behavior-y: contain;
+}
+
+.asset-list {
+	flex: 1;
+	padding: 0 6px 12px;
+}
+
+.library-shortcuts-pane { position: relative; flex: none; min-height: 0; overflow: hidden; }
+.library-shortcuts { height: 100%; padding: 0 6px; }
+.library-shortcuts-more { position: absolute; bottom: 0; left: 6px; right: 6px; height: 30px; max-height: 100%; background: linear-gradient(transparent, #f8f8f6 85%); pointer-events: none; }
+
+.library-shortcuts-content { display: flow-root; }
+.library-shortcuts-content > :last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.library-region-handle { position: relative; flex: 0 0 6px; cursor: row-resize; touch-action: none; }
+.library-region-handle::after { position: absolute; top: 2px; left: 6px; right: 6px; height: 1px; background: #e5e5e2; content: ""; }
+.library-region-handle.has-more::after { background: #b0bbc9; }
+.library-region-handle:hover::after, .library-region-handle:focus-visible::after, .library-region-handle.is-dragging::after { background: #7896c8; }
+body.library-resizing-regions, body.library-resizing-regions * { cursor: row-resize !important; user-select: none !important; }
+
+.library-sidebar .library-scroll.thin-scroll {
 	--tree-scrollbar-thumb: transparent;
 	scrollbar-color: var(--tree-scrollbar-thumb) transparent;
 }
 
-.library-sidebar .asset-list.is-scrolling {
+.library-sidebar .library-scroll.is-scrolling {
 	--tree-scrollbar-thumb: oklch(50% 0 0);
 }
 
-.library-sidebar .asset-list.thin-scroll::-webkit-scrollbar-thumb {
+.library-sidebar .library-scroll.thin-scroll::-webkit-scrollbar-thumb {
 	background: var(--tree-scrollbar-thumb);
 }
 

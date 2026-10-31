@@ -12,11 +12,11 @@ import {
 import { useLocale } from "../locale.tsx";
 import { AssetIconTile, AssetTreeRow, FileTree, FolderChevronIcon, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
 import { assetKey, coversPath, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { LibraryScrollRegions } from "./library-scroll-regions.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 const FILE_SORT_KEY = "loom.library.fileSort";
 const FILE_SORT_DIRECTION_KEY = "loom.library.fileSortDirection";
-const SCROLLBAR_HIDE_DELAY = 800;
 
 function storedFileSort(): FileSort {
 	return localStorage.getItem(FILE_SORT_KEY) === "modified" ? "modified" : "name";
@@ -241,19 +241,6 @@ export function LibrarySidebar({
 }: LibrarySidebarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const empty = library.assets.length === 0 && library.folders.length === 0;
-	const [scrolling, setScrolling] = useState(false);
-	const scrollTimerRef = useRef<number | null>(null);
-	useEffect(() => () => {
-		if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
-	}, []);
-	function showScrollbar(): void {
-		setScrolling(true);
-		if (scrollTimerRef.current !== null) window.clearTimeout(scrollTimerRef.current);
-		scrollTimerRef.current = window.setTimeout(() => {
-			scrollTimerRef.current = null;
-			setScrolling(false);
-		}, SCROLLBAR_HIDE_DELAY);
-	}
 	const [fileDisplay, setFileDisplay] = useState<FileDisplay>(() => (
 		localStorage.getItem(FILE_DISPLAY_KEY) === "icons" ? "icons" : "list"
 	));
@@ -357,12 +344,6 @@ export function LibrarySidebar({
 			return fileDisplay === "icons" ? <AssetIconTile key={asset.assetId} {...props} /> : <AssetTreeRow key={asset.assetId} depth={depth} {...props} />;
 		});
 		return fileDisplay === "icons" && items.length > 0 ? <div className="asset-icon-grid" style={{ marginLeft: depth * 14 }}>{items}</div> : <>{items}</>;
-	}
-
-	function overFavoritesOrTags(event: React.DragEvent): boolean {
-		const target = event.target;
-		const element = target instanceof Element ? target : target instanceof Node ? target.parentElement : null;
-		return element?.closest(".favorites, .library-tags") != null;
 	}
 
 	function acceptRootDrop(event: React.DragEvent): boolean {
@@ -488,49 +469,37 @@ export function LibrarySidebar({
 			{!library.rootPath ? (
 				<div className="empty library-placeholder">{t.library.openFolderHint}</div>
 			) : (
-				<div
-					className={`asset-list thin-scroll${scrolling ? " is-scrolling" : ""}`}
-					onScroll={showScrollbar}
-					onDragOver={(event) => {
-						if (overFavoritesOrTags(event)) return;
-						if (hasOsFileDrag(event.dataTransfer)) {
-							event.preventDefault();
-							event.dataTransfer.dropEffect = "copy";
-							return;
-						}
-						acceptRootDrop(event);
-					}}
-					onDrop={(event) => {
-						if (overFavoritesOrTags(event)) return;
-						if (hasOsFileDrag(event.dataTransfer)) {
-							event.preventDefault();
-							const files = [...event.dataTransfer.files];
-							if (files.length > 0) onDropFiles("", files);
-							return;
-						}
-						if (!acceptRootDrop(event)) return;
-						const item = readLibraryDrag(event.dataTransfer);
-						endLibraryDrag();
-						if (item) onDropIntoFolder("", item);
-					}}
-					onContextMenu={(event) => {
-						if (event.target !== event.currentTarget) return;
-						event.preventDefault();
-						onLibraryContextMenu();
-					}}
-				>
-					{empty ? (
-						<div
-							className="empty"
-							onContextMenu={(event) => {
+				<LibraryScrollRegions
+					label={t.library.resizeRegions}
+					moreHint={t.library.moreShortcuts}
+					filesProps={{
+						onDragOver: (event) => {
+							if (hasOsFileDrag(event.dataTransfer)) {
 								event.preventDefault();
-								onLibraryContextMenu();
-							}}
-						>
-							{t.library.emptyFolder}
-						</div>
-					) : (
-						<>
+								event.dataTransfer.dropEffect = "copy";
+								return;
+							}
+							acceptRootDrop(event);
+						},
+						onDrop: (event) => {
+							if (hasOsFileDrag(event.dataTransfer)) {
+								event.preventDefault();
+								const files = [...event.dataTransfer.files];
+								if (files.length > 0) onDropFiles("", files);
+								return;
+							}
+							if (!acceptRootDrop(event)) return;
+							const item = readLibraryDrag(event.dataTransfer);
+							endLibraryDrag();
+							if (item) onDropIntoFolder("", item);
+						},
+						onContextMenu: (event) => {
+							if (event.target !== event.currentTarget) return;
+							event.preventDefault();
+							onLibraryContextMenu();
+						},
+					}}
+					shortcuts={!empty && (favoriteAssets.length > 0 || library.tags.length > 0) ? <>
 						{favoriteAssets.length > 0 ? (
 							<div className="favorites">
 								<button
@@ -598,9 +567,11 @@ export function LibrarySidebar({
 								}) : null}
 							</div>
 						) : null}
-						{queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
-							<div className="empty">{t.common.noMatchingFiles}</div>
-						) : (
+					</> : null}
+				>
+					{empty ? <div className="empty" onContextMenu={(event) => { event.preventDefault(); onLibraryContextMenu(); }}>{t.library.emptyFolder}</div> : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
+						<div className="empty">{t.common.noMatchingFiles}</div>
+					) : (
 						<FileTree
 							library={visible}
 							fileDisplay={fileDisplay}
@@ -626,10 +597,8 @@ export function LibrarySidebar({
 							onDropIntoFolder={onDropIntoFolder}
 							onDropFiles={onDropFiles}
 						/>
-						)}
-						</>
 					)}
-				</div>
+				</LibraryScrollRegions>
 			)}
 			</div>
 		</aside>
