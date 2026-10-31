@@ -18,6 +18,7 @@ import { FileSortControl } from "./file-sort-control.tsx";
 import { filterFavorites, filterLibrary, filterTags } from "./library-filter.ts";
 import { LibraryScrollRegions } from "./library-scroll-regions.tsx";
 import { useStoredState } from "./use-stored-state.ts";
+import { WorkspaceViewIcon } from "./workspace-view-icon.tsx";
 
 const NO_FOLDERS: ReadonlySet<string> = new Set();
 
@@ -185,7 +186,8 @@ export function LibrarySidebar({
 						aria-pressed={workbenchView === view}
 						onClick={() => onWorkbenchView(view)}
 					>
-						{t.library[view]}
+						<WorkspaceViewIcon view={view} />
+						<span>{t.library[view]}</span>
 					</button>
 				))}
 			</nav>

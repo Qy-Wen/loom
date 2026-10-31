@@ -120,14 +120,23 @@
 }
 
 .library-views button {
-	flex: 1;
+	display: flex;
+	flex: 1 1 auto;
+	align-items: center;
+	justify-content: center;
+	gap: var(--lm-space-1);
 	padding: var(--lm-space-2) 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
 	background: transparent;
 	color: var(--lm-text-secondary);
 	font-size: var(--lm-text-size-sm);
+	white-space: nowrap;
 	cursor: pointer;
+}
+
+.workspace-view-icon {
+	flex: 0 0 auto;
 }
 
 .library-views button.active {
