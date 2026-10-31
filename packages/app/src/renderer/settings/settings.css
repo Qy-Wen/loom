@@ -738,7 +738,7 @@
 }
 
 .settings-status-muted {
-	color: var(--lm-text-faint);
+	color: var(--lm-text-muted);
 	font-size: var(--lm-text-size-sm);
 }
 

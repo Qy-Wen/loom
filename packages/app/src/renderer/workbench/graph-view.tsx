@@ -434,7 +434,7 @@ export function GraphView({
 					<g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
 						<defs>
 							<marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-text-faint)" }} />
+								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-graphic)" }} />
 							</marker>
 							<marker id="graph-arrow-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
 								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-text-primary)" }} />

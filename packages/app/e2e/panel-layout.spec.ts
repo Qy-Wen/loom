@@ -482,7 +482,7 @@ test("split previews restore the original layout when leaving the target or canc
 			const style = getComputedStyle(element, "::after");
 			return { border: style.borderTopWidth, color: style.borderTopColor, background: style.backgroundColor, content: style.content, pointerEvents: style.pointerEvents };
 		});
-		expect(highlight).toEqual({ border: "2px", color: "rgb(120, 150, 200)", background: "rgba(120, 150, 200, 0.12)", content: '""', pointerEvents: "none" });
+		expect(highlight).toEqual({ border: "2px", color: "rgb(106, 138, 192)", background: "rgba(106, 138, 192, 0.12)", content: '""', pointerEvents: "none" });
 		await page.screenshot({ path: testInfo.outputPath("split-preview.png") });
 		await page.mouse.move(500, 180, { steps: 12 });
 		await expect(page.locator(".panel-slot.drop-preview")).toHaveCount(0);

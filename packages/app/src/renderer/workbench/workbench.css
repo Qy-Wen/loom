@@ -321,7 +321,7 @@
 
 /* With no tab open, the welcome page takes library files dragged from the tree. */
 .welcome.drop-ready {
-	outline: 2px dashed var(--lm-text-faint);
+	outline: 2px dashed var(--lm-graphic);
 	outline-offset: -12px;
 	background: var(--lm-surface-subtle);
 }

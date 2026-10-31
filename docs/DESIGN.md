@@ -17,7 +17,7 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 ## Choosing a token
 
 - **Surface**: `app` is the page; `raised` is cards, inputs, and menus; `subtle` and `sunken` are quiet panels and wells; `hover` and `active` are interaction states; `window` is the title bar; `inverse` is dark tooltips and badges. `accent`, `danger`, `warning`, and `success` have `surface-*` tints for banners and selected rows.
-- **Text**: `primary` for headings and body, `body` for secondary prose, `secondary` for labels and icons, `muted` for captions and placeholders, `faint` for disabled and decoration. Use `accent`, `danger`, `warning`, `success` for status text.
+- **Text**: `primary` for headings and body, `body` for secondary prose, `secondary` for labels and icons, `muted` for captions and placeholders. For icons, strokes, and dashed outlines that are not words, use `--lm-graphic`; never use it for text. Use `accent`, `danger`, `warning`, `success` for status text.
 - **Border**: `subtle` for dividers inside a panel, `default` for panel and input edges, `strong` for emphasis; `accent` and `danger` for state.
 - **Spacing**: `--lm-space-1…9` is 2, 4, 6, 8, 10, 12, 16, 20, 24 px. Use it for `padding`, `margin`, and `gap`. Widths, heights, and offsets stay literal.
 - **Radius**: `sm` 5, `md` 8, `lg` 12, `xl` 20, `pill` for boxes. For thin marks the radius must stay below half the short side, so use `hair` 1 (bars up to ~3px, timeline blocks), `line` 2 (indicator lines, small handles), `xs` 3. Never round a thin mark with `sm` or larger: it turns into a pill. Use `50%` for circles.
@@ -35,6 +35,10 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 4. A one-off value that is a real exception (a vendor color, a data-visualisation hue) gets a named token too, with a comment saying why.
 
 `pnpm --filter @loom/app test` runs `tests/design-tokens.test.ts`, which fails on raw colors, off-scale radii, font sizes, weights, `z-index`, spacing, transition durations, and references to undefined tokens.
+
+## Contrast
+
+Text tokens (`primary`, `body`, `secondary`, `muted`, status text) must reach 4.5:1 on every surface they sit on, from `app` down to `active`; `--lm-graphic` and `--lm-focus-ring` must reach 3:1; white text on each `--lm-asset-*` color must reach 4.5:1. `tests/design-tokens.test.ts` checks this, so a palette edit that breaks it fails the build.
 
 ## Adding a theme
 

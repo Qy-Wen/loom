@@ -17,7 +17,7 @@
 ## 怎么选 token
 
 - **表面**：`app` 是页面底色；`raised` 是卡片、输入框、菜单；`subtle` 和 `sunken` 是安静的面板和凹陷区；`hover`、`active` 是交互状态；`window` 是标题栏；`inverse` 是深色提示和徽标。`accent`、`danger`、`warning`、`success` 各有 `surface-*` 淡底，用于提示条和选中行。
-- **文字**：`primary` 用于标题和正文，`body` 用于次级正文，`secondary` 用于标签和图标，`muted` 用于说明和占位，`faint` 用于禁用和装饰。状态文字用 `accent`、`danger`、`warning`、`success`。
+- **文字**：`primary` 用于标题和正文，`body` 用于次级正文，`secondary` 用于标签和图标，`muted` 用于说明和占位。图标、描线、虚线框这类不是文字的元素用 `--lm-graphic`，不要用于文字。状态文字用 `accent`、`danger`、`warning`、`success`。
 - **边框**：`subtle` 用于面板内的分隔线，`default` 用于面板和输入框边缘，`strong` 用于强调；状态用 `accent`、`danger`。
 - **间距**：`--lm-space-1…9` 依次是 2、4、6、8、10、12、16、20、24 px，用于 `padding`、`margin`、`gap`。宽度、高度、偏移保持字面值。
 - **圆角**：盒子用 `sm` 5、`md` 8、`lg` 12、`xl` 20、`pill`。细小的标记，圆角必须小于短边的一半：用 `hair` 1（约 3px 以内的条、时间线块）、`line` 2（指示线、小把手）、`xs` 3。细小标记不要用 `sm` 及以上，否则会变成胶囊。圆形仍用 `50%`。
@@ -35,6 +35,10 @@
 4. 确实是例外的一次性取值（第三方颜色、数据可视化色相）也要起名并写明原因。
 
 `pnpm --filter @loom/app test` 会运行 `tests/design-tokens.test.ts`。它在出现裸颜色、不在尺度内的圆角、字号、字重、`z-index`、间距、过渡时长，以及引用未定义的 token 时失败。
+
+## 对比度
+
+文字 token（`primary`、`body`、`secondary`、`muted`、状态文字）在它可能落到的每种表面上（从 `app` 到 `active`）都要达到 4.5:1；`--lm-graphic` 和 `--lm-focus-ring` 要达到 3:1；白字压在每个 `--lm-asset-*` 颜色上要达到 4.5:1。`tests/design-tokens.test.ts` 会检查，改色板时破坏这些要求会让构建失败。
 
 ## 增加主题
 

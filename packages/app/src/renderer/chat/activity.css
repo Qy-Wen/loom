@@ -43,7 +43,7 @@ button.tool-call-head:hover {
 	height: 0;
 	border-top: 4px solid transparent;
 	border-bottom: 4px solid transparent;
-	border-left: 5px solid var(--lm-text-faint);
+	border-left: 5px solid var(--lm-graphic);
 }
 
 .tool-call.open .tool-call-chevron {

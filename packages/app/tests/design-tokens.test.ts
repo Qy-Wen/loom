@@ -98,4 +98,36 @@ describe("design tokens", () => {
 		});
 		assert.deepEqual(found, [], `Use --lm-dur-* from design/tokens.css:\n${found.join("\n")}`);
 	});
+
+	describe("contrast", () => {
+		const source = readFileSync(tokensFile, "utf8");
+		const root = source.slice(source.indexOf(":root"));
+		const raw = new Map([...root.matchAll(/(--lm-[\w-]+):\s*(#[0-9a-fA-F]{3,6})\s*;/g)].map((m) => [m[1]!, m[2]!]));
+		const alias = new Map([...root.matchAll(/(--lm-[\w-]+):\s*var\((--lm-[\w-]+)\)\s*;/g)].map((m) => [m[1]!, m[2]!]));
+		const color = (name: string): string => {
+			for (let hops = 0; hops < 5; hops++) { const hex = raw.get(name); if (hex) return hex; name = alias.get(name) ?? name; }
+			throw new Error(`${name} does not resolve to a hex color`);
+		};
+		const luminance = (hex: string) => {
+			const h = hex.slice(1).length === 3 ? [...hex.slice(1)].map((c) => c + c).join("") : hex.slice(1);
+			const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+			return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+		};
+		const ratio = (a: string, b: string) => { const [hi, lo] = [luminance(color(a)), luminance(color(b))].sort((x, y) => y - x); return (hi! + 0.05) / (lo! + 0.05); };
+		const surfaces = ["app", "raised", "subtle", "window", "sunken", "hover", "active"].map((s) => `--lm-surface-${s}`);
+		const check = (names: string[], backgrounds: string[], minimum: number) => {
+			const low = names.flatMap((fg) => backgrounds.map((bg) => ({ fg, bg, value: ratio(fg, bg) }))).filter((row) => row.value < minimum);
+			assert.deepEqual(low.map((row) => `${row.fg} on ${row.bg}: ${row.value.toFixed(2)}`), [], `needs ${minimum}:1`);
+		};
+
+		it("keeps text at 4.5:1 on every surface", () => {
+			check(["primary", "body", "secondary", "muted", "accent", "danger", "warning", "success"].map((n) => `--lm-text-${n}`), surfaces, 4.5);
+		});
+		it("keeps graphics and the focus ring at 3:1", () => {
+			check(["--lm-graphic", "--lm-focus-ring"], surfaces.slice(0, 5), 3);
+		});
+		it("keeps white text readable on each asset-kind color", () => {
+			check(["image", "video", "audio", "text", "other"].map((n) => `--lm-asset-${n}`), ["--lm-text-inverse"], 4.5);
+		});
+	});
 });

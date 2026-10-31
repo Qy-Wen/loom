@@ -1,8 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoomSessionRecord, LoomSessionSummary } from "@loom/agent";
+import { useLocale } from "../locale.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 /** Own session selection and committed history. Live output never writes into this state. */
-export function useSessions(libraryRoot: string | null, deleteConfirm: string) {
+export function useSessions(libraryRoot: string | null) {
+	const { t } = useLocale();
+	const { confirm } = useConfirmation(libraryRoot);
 	const [sessions, setSessions] = useState<LoomSessionSummary[]>([]);
 	const [record, setRecord] = useState<LoomSessionRecord | null>(null);
 	const [busy, setBusy] = useState(false);
@@ -123,7 +127,15 @@ export function useSessions(libraryRoot: string | null, deleteConfirm: string) {
 	}
 
 	async function deleteSession(id: string) {
-		if (!window.confirm(deleteConfirm)) return;
+		const session = sessions.find((item) => item.id === id);
+		if (!session) return;
+		const name = session.title === "New session" ? t.sessions.untitled : session.title;
+		if (!await confirm({
+			title: t.sessions.deleteTitle,
+			description: t.sessions.deleteConfirm(name),
+			confirmLabel: t.sessions.deleteAction,
+			tone: "danger",
+		}) || library.current !== libraryRoot) return;
 		await perform(async () => {
 			if (current.current?.id === id) {
 				const next = sessions.find((session) => session.id !== id && session.status === "open");

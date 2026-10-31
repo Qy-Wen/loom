@@ -94,7 +94,7 @@
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
-	color: var(--lm-text-faint);
+	color: var(--lm-graphic);
 	background: transparent;
 	font-size: var(--lm-text-size-lg);
 	line-height: 1;
@@ -331,7 +331,7 @@
 
 .session-permission > button:focus-visible,
 .session-model-select > button:focus-visible {
-	outline: 2px solid var(--lm-text-faint);
+	outline: 2px solid var(--lm-border-accent);
 	outline-offset: 2px;
 }
 

@@ -242,7 +242,7 @@ body.resizing-table-columns {
 
 .asset-table td small {
 	margin-top: var(--lm-space-1);
-	color: var(--lm-text-faint);
+	color: var(--lm-text-muted);
 	font-size: var(--lm-text-size-2xs);
 }
 

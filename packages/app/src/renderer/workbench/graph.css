@@ -173,7 +173,7 @@
 }
 
 .graph-edge {
-	stroke: var(--lm-text-faint);
+	stroke: var(--lm-graphic);
 	stroke-width: 1.5;
 	pointer-events: none;
 }

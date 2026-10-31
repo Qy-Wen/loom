@@ -8,6 +8,7 @@ import { SettingsChatCustom } from "./settings-chat-custom.tsx";
 import { changedFields } from "../../shared/settings-changes.ts";
 import type { ChatSettingsPatch, ChatProviderPatch } from "../../shared/chat-settings.ts";
 import { SettingsSecretInput } from "./settings-secret-input.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 type LoginPromptEvent = ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" };
 
@@ -18,6 +19,7 @@ interface LoginUiState {
 /** Chat providers save immediately; they are not part of the Models save batch. */
 export function SettingsChat(): React.JSX.Element {
 	const { t } = useLocale();
+	const { confirm } = useConfirmation();
 	const [view, setView] = useState<ChatSettingsView | null>(null);
 	const [catalog, setCatalog] = useState<ChatProviderCatalogEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -91,7 +93,11 @@ export function SettingsChat(): React.JSX.Element {
 
 	/** Main announces the change, so the list refreshes through onChatSettingsChanged. */
 	async function signOut(providerId: string, name: string): Promise<void> {
-		if (!window.confirm(t.settings.chat.signOutConfirm(name))) return;
+		if (!await confirm({
+			title: t.settings.chat.signOutTitle(name),
+			description: t.settings.chat.signOutConfirm(name),
+			confirmLabel: t.settings.chat.signOut,
+		})) return;
 		await run(() => window.loom.chatLogout(providerId));
 	}
 

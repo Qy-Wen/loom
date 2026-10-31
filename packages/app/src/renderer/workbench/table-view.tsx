@@ -11,6 +11,7 @@ import { formatBytes } from "../assets/asset-utils.ts";
 import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { comparePropertyValues, displayPropertyValue } from "./table-values.ts";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 type SortKey = "filename" | "type" | "size" | "modifiedAt" | `property:${string}`;
 type SortDirection = "asc" | "desc";
@@ -53,6 +54,7 @@ export function TableView({
 	onRemovePropertyValue,
 }: TableViewProps): React.JSX.Element {
 	const { t } = useLocale();
+	const { confirm } = useConfirmation();
 	const [query, setQuery] = useState("");
 	const [fieldForm, setFieldForm] = useState<FieldForm | null>(null);
 	const [columnWidths, setColumnWidths] = useState<Record<string, number>>(() => {
@@ -156,7 +158,12 @@ export function TableView({
 		if (fieldForm?.mode !== "edit") return;
 		const property = properties.find((item) => item.propertyId === fieldForm.propertyId);
 		if (!property) return;
-		if (!window.confirm(t.table.deleteProperty(property.name))) return;
+		if (!await confirm({
+			title: t.table.deleteProperty(property.name),
+			description: t.table.deletePropertyBody,
+			confirmLabel: t.table.deletePropertyAction,
+			tone: "danger",
+		})) return;
 		await onRemoveProperty(property.propertyId);
 		setFieldForm(null);
 	}

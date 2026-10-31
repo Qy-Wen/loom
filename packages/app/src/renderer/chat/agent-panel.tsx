@@ -31,7 +31,7 @@ export function AgentPanel({
 	const {
 		sessions, record, busy: sessionBusy, error: sessionError,
 		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession,
-	} = useSessions(libraryRoot, t.sessions.deleteConfirm);
+	} = useSessions(libraryRoot);
 	const sessionId = record?.id ?? null;
 
 	useEffect(() => {

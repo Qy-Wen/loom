@@ -25,15 +25,15 @@
 	/* Cool ink: text and icons */
 	--lm-palette-ink-0: #202124;
 	--lm-palette-ink-1: #3c3f44;
-	--lm-palette-ink-2: #5f6368;
-	--lm-palette-ink-3: #85888e;
-	--lm-palette-ink-4: #a3a6ac;
+	--lm-palette-ink-2: #4b4f54;
+	--lm-palette-ink-3: #63666b;
+	--lm-palette-ink-4: #85888e;
 
 	/* Accent (blue) */
 	--lm-palette-blue-50: #eef3fb;
 	--lm-palette-blue-100: #dde6f7;
 	--lm-palette-blue-300: #a9bcdd;
-	--lm-palette-blue-500: #7896c8;
+	--lm-palette-blue-500: #6a8ac0;
 	--lm-palette-blue-700: #3d5a99;
 
 	/* Status */
@@ -43,17 +43,17 @@
 	--lm-palette-red-600: #b3261e;
 	--lm-palette-amber-100: #fff1cc;
 	--lm-palette-amber-500: #c4a35a;
-	--lm-palette-amber-700: #8a6a1f;
+	--lm-palette-amber-700: #7d5f18;
 	--lm-palette-green-100: #e3efe0;
 	--lm-palette-green-500: #2f9e44;
 	--lm-palette-green-700: #3d6b4f;
 
 	/* Asset kinds: one set for badges, graph nodes, and chips */
-	--lm-palette-asset-image: #9569c7;
-	--lm-palette-asset-video: #d25f68;
-	--lm-palette-asset-audio: #da8a3e;
-	--lm-palette-asset-text: #4d8bbf;
-	--lm-palette-asset-other: #858991;
+	--lm-palette-asset-image: #8f60c4;
+	--lm-palette-asset-video: #cc4953;
+	--lm-palette-asset-audio: #ad6521;
+	--lm-palette-asset-text: #3f7bae;
+	--lm-palette-asset-other: #72777f;
 	--lm-palette-purple-500: #8a6d9e;
 
 	/* ── Layer 2 · semantic ────────────────────────────────────────── */
@@ -81,7 +81,8 @@
 	--lm-text-body: var(--lm-palette-ink-1);
 	--lm-text-secondary: var(--lm-palette-ink-2);
 	--lm-text-muted: var(--lm-palette-ink-3);
-	--lm-text-faint: var(--lm-palette-ink-4);
+	/* Non-text only: icons, strokes, dashed outlines (3:1). Never for words; use --lm-text-muted. */
+	--lm-graphic: var(--lm-palette-ink-4);
 	--lm-text-inverse: var(--lm-palette-paper-0);
 	--lm-text-accent: var(--lm-palette-blue-700);
 	--lm-text-danger: var(--lm-palette-red-600);
@@ -102,7 +103,7 @@
 	--lm-warning: var(--lm-palette-amber-500);
 	--lm-success: var(--lm-palette-green-500);
 	--lm-focus-ring: var(--lm-palette-blue-500);
-	--lm-selection: rgb(120 150 200 / 15%);
+	--lm-selection: rgb(106 138 192 / 15%);
 	--lm-overlay: rgb(32 33 36 / 45%);
 	--lm-overlay-soft: rgb(32 33 36 / 28%);
 	--lm-scrim: rgb(255 255 255 / 92%);
@@ -111,9 +112,9 @@
 	--lm-wash-1: rgb(32 33 36 / 6%);
 	--lm-wash-2: rgb(32 33 36 / 11%);
 	--lm-wash-3: rgb(0 0 0 / 16%);
-	--lm-selection-strong: rgb(120 150 200 / 28%);
-	--lm-selection-soft: rgb(120 150 200 / 12%);
-	--lm-ring-accent: rgb(120 150 200 / 35%);
+	--lm-selection-strong: rgb(106 138 192 / 28%);
+	--lm-selection-soft: rgb(106 138 192 / 12%);
+	--lm-ring-accent: rgb(106 138 192 / 35%);
 	--lm-hairline: rgb(0 0 0 / 7%);
 	--lm-on-media: rgb(255 255 255 / 90%);
 	--lm-media-shade: rgb(0 0 0 / 45%);

@@ -6,6 +6,7 @@ import {
 	type AgentPermissionLevel,
 } from "@loom/agent/tool-permission";
 import { useLocale } from "../locale.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 import { MenuCheck, MenuChevron } from "./composer-menu-icons.tsx";
 import { composerMenuPosition } from "./composer-menu-position.ts";
 
@@ -48,6 +49,7 @@ export function useAgentPermission(): {
 
 export function AgentPermissionSelect(): React.JSX.Element {
 	const { level, setLevel } = useAgentPermission();
+	const { confirm } = useConfirmation();
 	const { t } = useLocale();
 	const rootRef = useRef<HTMLDivElement>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
@@ -91,14 +93,17 @@ export function AgentPermissionSelect(): React.JSX.Element {
 		};
 	}, [open]);
 
-	function choose(next: AgentPermissionLevel): void {
-		if (next === level) {
-			setOpen(false);
-			return;
-		}
-		if (next === "full" && !window.confirm(t.permission.fullConfirm)) return;
-		setLevel(next);
+	async function choose(next: AgentPermissionLevel): Promise<void> {
 		setOpen(false);
+		buttonRef.current?.focus();
+		if (next === level) return;
+		if (next === "full" && !await confirm({
+			title: t.permission.fullTitle,
+			description: t.permission.fullConfirm,
+			confirmLabel: t.permission.fullAction,
+			tone: "warning",
+		})) return;
+		setLevel(next);
 	}
 
 	return (
@@ -134,7 +139,7 @@ export function AgentPermissionSelect(): React.JSX.Element {
 							type="button"
 							role="option"
 							aria-selected={option.value === level}
-							onClick={() => choose(option.value)}
+							onClick={() => void choose(option.value)}
 						>
 							<MenuCheck selected={option.value === level} />
 							<span>{labels[option.value]}</span>

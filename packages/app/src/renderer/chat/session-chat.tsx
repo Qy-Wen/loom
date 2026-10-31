@@ -9,6 +9,7 @@ import { SessionScrollView } from "./chat-scroll.tsx";
 import { SessionMessageView } from "./chat-messages.tsx";
 import { FollowUpInput } from "./chat-composer.tsx";
 import { useChatStream } from "./use-chat-stream.ts";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 /** Stable slot so CopilotChat does not remount the view on every parent render. */
 function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
@@ -69,6 +70,7 @@ export function SessionChat({
 	onOpenSettings: () => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
+	const { confirm } = useConfirmation(threadId);
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
 	const [editingId, setEditingId] = useState<string | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -109,7 +111,11 @@ export function SessionChat({
 			setError(null);
 		},
 		async fork(entryId) {
-			if (!window.confirm(t.chat.forkConfirm)) return;
+			if (!await confirm({
+				title: t.chat.forkTitle,
+				description: t.chat.forkConfirm,
+				confirmLabel: t.chat.forkAction,
+			}) || activeThread.current !== threadId) return;
 			setBusy(true);
 			setError(null);
 			try {
@@ -140,7 +146,7 @@ export function SessionChat({
 				setBusy(false);
 			}
 		},
-	}), [busy, editingId, error, threadId, t.chat.forkConfirm]);
+	}), [busy, editingId, error, threadId, confirm, t.chat.forkTitle, t.chat.forkConfirm, t.chat.forkAction]);
 
 	return (
 		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
