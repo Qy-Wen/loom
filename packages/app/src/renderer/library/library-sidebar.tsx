@@ -10,13 +10,17 @@ import {
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
-import { AssetIconTile, AssetTreeRow, FileTree, FolderChevronIcon, type FileDisplay } from "./file-tree.tsx";
-import { assetKey, coversPath, visibleTreeRows, type FileSort, type FileSortDirection, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { AssetList } from "./asset-rows.tsx";
+import { FileTree, FolderChevronIcon } from "./file-tree.tsx";
+import { TreeProvider, type FileDisplay } from "./tree-context.tsx";
+import { visibleTreeRows, type FileSort, type FileSortDirection, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { LibraryScrollRegions } from "./library-scroll-regions.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
 const FILE_SORT_KEY = "loom.library.fileSort";
 const FILE_SORT_DIRECTION_KEY = "loom.library.fileSortDirection";
+
+const NO_FOLDERS: ReadonlySet<string> = new Set();
 
 function storedFileSort(): FileSort {
 	return localStorage.getItem(FILE_SORT_KEY) === "modified" ? "modified" : "name";
@@ -194,7 +198,7 @@ interface LibrarySidebarProps {
 	locateToken: unknown;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
-	collapsedFolders: Set<string>;
+	collapsedFolders: ReadonlySet<string>;
 	cutAssetIds: readonly string[];
 	cutFolders: readonly string[];
 	selectionDrag: LibraryDrag | null;
@@ -316,29 +320,6 @@ export function LibrarySidebar({
 		});
 	}
 
-	function shortcutFiles(assets: readonly Asset[], depth = 0): React.JSX.Element {
-		const items = assets.map((asset) => {
-			const props = {
-				asset,
-				selected: selectedKeys.has(assetKey(asset.assetId)),
-				// Shortcuts must not auto-scroll to another copy of the same file or host duplicate rename editors.
-				focused: false,
-				renaming: false,
-				cut: cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath),
-				favorite: library.favoriteAssetIds.includes(asset.assetId),
-				selectionDrag,
-				onSelect: (mode: PointerMode) => onSelectAsset(asset.assetId, mode, treeRows),
-				onOpenInTab: () => onOpenAssetInTab(asset.assetId),
-				onContextMenu: () => onAssetContextMenu(asset),
-				onRename: (stem: string) => onRenameAsset(asset, stem),
-				onCancelRename,
-				onDropFolder: () => {},
-			};
-			return fileDisplay === "icons" ? <AssetIconTile key={asset.assetId} {...props} /> : <AssetTreeRow key={asset.assetId} depth={depth} {...props} />;
-		});
-		return fileDisplay === "icons" && items.length > 0 ? <div className="asset-icon-grid" style={{ marginLeft: depth * 14 }}>{items}</div> : <>{items}</>;
-	}
-
 	function acceptRootDrop(event: React.DragEvent): boolean {
 		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
 		event.preventDefault();
@@ -354,6 +335,32 @@ export function LibrarySidebar({
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => onKeyDown(event, treeRows, !queryActive)}
 		>
+			<TreeProvider
+				library={visible}
+				fileDisplay={fileDisplay}
+				fileSort={fileSort}
+				fileSortDirection={fileSortDirection}
+				collapsedFolders={queryActive ? NO_FOLDERS : collapsedFolders}
+				selectedKeys={selectedKeys}
+				focusKey={focusKey}
+				locateToken={locateToken}
+				renamingAssetId={renamingAssetId}
+				renamingFolder={renamingFolder}
+				cutAssetIds={cutAssetIds}
+				cutFolders={cutFolders}
+				selectionDrag={selectionDrag}
+				onToggleFolder={onToggleFolder}
+				onSelectFolder={(relativePath, mode) => onSelectFolder(relativePath, mode, treeRows)}
+				onFolderContextMenu={onFolderContextMenu}
+				onRenameFolder={onRenameFolder}
+				onSelectAsset={(assetId, mode) => onSelectAsset(assetId, mode, treeRows)}
+				onOpenAssetInTab={onOpenAssetInTab}
+				onAssetContextMenu={onAssetContextMenu}
+				onRenameAsset={onRenameAsset}
+				onCancelRename={onCancelRename}
+				onDropIntoFolder={onDropIntoFolder}
+				onDropFiles={onDropFiles}
+			>
 			<div className="library-sidebar-content">
 			<div className="library-header">
 				<span className="section-label">Loom</span>
@@ -511,7 +518,7 @@ export function LibrarySidebar({
 										{t.library.favorites}
 									</span>
 								</button>
-								{queryActive || !favoritesCollapsed ? shortcutFiles(favoriteAssets) : null}
+								{queryActive || !favoritesCollapsed ? <AssetList assets={favoriteAssets} depth={0} quiet /> : null}
 							</div>
 						) : null}
 						{library.tags.length > 0 ? (
@@ -554,7 +561,7 @@ export function LibrarySidebar({
 													<span className="asset-name">{tag.name}</span>
 												</button>
 											</div>
-											{open ? shortcutFiles(files, 2) : null}
+											{open ? <AssetList assets={files} depth={2} quiet /> : null}
 										</div>
 									);
 								}) : null}
@@ -565,36 +572,12 @@ export function LibrarySidebar({
 					{empty ? <div className="empty" onContextMenu={(event) => { event.preventDefault(); onLibraryContextMenu(); }}>{t.library.emptyFolder}</div> : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
 						<div className="empty">{t.common.noMatchingFiles}</div>
 					) : (
-						<FileTree
-							library={visible}
-							fileDisplay={fileDisplay}
-							fileSort={fileSort}
-							fileSortDirection={fileSortDirection}
-							collapsedFolders={queryActive ? new Set() : collapsedFolders}
-							selectedKeys={selectedKeys}
-							focusKey={focusKey}
-							locateToken={locateToken}
-							renamingAssetId={renamingAssetId}
-							renamingFolder={renamingFolder}
-							cutAssetIds={cutAssetIds}
-							cutFolders={cutFolders}
-							selectionDrag={selectionDrag}
-							onToggleFolder={onToggleFolder}
-							onSelectFolder={(relativePath, mode) => onSelectFolder(relativePath, mode, treeRows)}
-							onFolderContextMenu={onFolderContextMenu}
-							onRenameFolder={onRenameFolder}
-							onSelectAsset={(assetId, mode) => onSelectAsset(assetId, mode, treeRows)}
-							onOpenAssetInTab={onOpenAssetInTab}
-							onAssetContextMenu={onAssetContextMenu}
-							onRenameAsset={onRenameAsset}
-							onCancelRename={onCancelRename}
-							onDropIntoFolder={onDropIntoFolder}
-							onDropFiles={onDropFiles}
-						/>
+						<FileTree library={visible} />
 					)}
 				</LibraryScrollRegions>
 			)}
 			</div>
+			</TreeProvider>
 		</aside>
 	);
 }

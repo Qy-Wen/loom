@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { useRef } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -10,22 +10,11 @@ import {
 	writeLibraryDrag,
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
-import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
-import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
-import { uiPlatform } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
-import {
-	assetKey,
-	compareAssetPaths,
-	compareFolderPaths,
-	contentModifiedAt,
-	coversPath,
-	folderKey,
-	pointerMode,
-	type FileSort,
-	type FileSortDirection,
-	type PointerMode,
-} from "./tree-nav.ts";
+import { AssetList } from "./asset-rows.tsx";
+import { clickMode, useScrollWhenFocused, useTree } from "./tree-context.tsx";
+import { compareAssetPaths, compareFolderPaths, coversPath, folderKey } from "./tree-nav.ts";
+import { useInlineRename } from "./use-inline-rename.ts";
 
 interface FolderNode {
 	name: string;
@@ -62,286 +51,27 @@ function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 	return root;
 }
 
-interface AssetTreeRowProps {
-	asset: Asset;
-	depth: number;
-	selected: boolean;
-	focused: boolean;
-	renaming: boolean;
-	cut: boolean;
-	favorite: boolean;
-	selectionDrag: LibraryDrag | null;
-	onSelect: (mode: PointerMode) => void;
-	onOpenInTab: () => void;
-	onContextMenu: () => void;
-	onRename: (stem: string) => Promise<void>;
-	onCancelRename: () => void;
-	onDropFolder: (destFolder: string | null) => void;
-}
-
-/**
- * Middle-click opens the file in a new tab, like a browser link. Double-click cannot: its first click already
- * replaced the active tab with this file, so the second has nothing left to open.
- */
-export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttributes<HTMLButtonElement>, "onMouseDown" | "onAuxClick"> {
-	return {
-		// Windows starts autoscroll on a middle press; keep it from stealing the click.
-		onMouseDown: (event) => {
-			if (event.button === 1) event.preventDefault();
-		},
-		onAuxClick: (event) => {
-			if (event.button === 1) open();
-		},
-	};
-}
-
-/** Changes on every selection, even a repeat click on the focused row, so the tree scrolls to it again. */
-const LocateContext = createContext<unknown>(null);
-
-/** Keep the focused tree row in view. `id` re-runs it when the same row component shows another file. */
-function useScrollWhenFocused(ref: React.RefObject<HTMLElement | null>, focused: boolean, id: string): void {
-	const locate = useContext(LocateContext);
-	useEffect(() => {
-		if (focused) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [ref, focused, id, locate]);
-}
-
-function clickMode(event: React.MouseEvent): PointerMode {
-	return pointerMode(event, uiPlatform(navigator.userAgent) === "mac");
-}
-
-export function AssetTreeRow({
-	asset,
-	depth,
-	selected,
-	focused,
-	renaming,
-	cut,
-	favorite,
-	selectionDrag,
-	onSelect,
-	onOpenInTab,
-	onContextMenu,
-	onRename,
-	onCancelRename,
-	onDropFolder,
-}: AssetTreeRowProps): React.JSX.Element {
-	const rowRef = useRef<HTMLElement | null>(null);
-	const [stem, setStem] = useState(() => filenameStem(asset.filename));
-	const cancelled = useRef(false);
-
-	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
-
-	useScrollWhenFocused(rowRef, focused, asset.assetId);
-
-	if (renaming) {
-		return (
-			<div
-				ref={(el) => {
-					rowRef.current = el;
-				}}
-				className={`asset-row rename-row ${selected ? "selected" : ""}`}
-				style={{ paddingLeft: 7 + depth * 14 }}
-			>
-				<AssetThumbnail asset={asset} />
-				<div className="rename-editor">
-					<input
-						autoFocus
-						value={stem}
-						onChange={(event) => setStem(event.target.value)}
-						onFocus={(event) => event.currentTarget.select()}
-						onKeyDown={(event) => {
-							if (event.key === "Enter") event.currentTarget.blur();
-							if (event.key === "Escape") {
-								cancelled.current = true;
-								onCancelRename();
-								event.currentTarget.blur();
-							}
-						}}
-						onBlur={() => {
-							if (!cancelled.current) void onRename(stem);
-						}}
-					/>
-					<span>{extensionOf(asset.filename)}</span>
-				</div>
-			</div>
-		);
-	}
-
-	return (
-		<button
-			ref={(el) => {
-				rowRef.current = el;
-			}}
-			className={`asset-row ${selected ? "selected" : ""}${cut ? " cut" : ""}`}
-			style={{ paddingLeft: 7 + depth * 14 }}
-			type="button"
-			draggable
-			onDragStart={(event) => {
-				const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
-				writeLibraryDrag(event.dataTransfer, selected && selectionDrag ? selectionDrag : single, asset);
-			}}
-			onDragEnd={() => {
-				endLibraryDrag();
-				onDropFolder(null);
-			}}
-			{...openInTabHandlers(onOpenInTab)}
-			onClick={(event) => onSelect(clickMode(event))}
-			onContextMenu={(event) => {
-				event.preventDefault();
-				onContextMenu();
-			}}
-		>
-			<AssetThumbnail asset={asset} />
-			<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
-			{favorite ? <FavoriteMark /> : null}
-		</button>
-	);
-}
-
-export function AssetIconTile({
-	asset,
-	selected,
-	focused,
-	renaming,
-	cut,
-	favorite,
-	selectionDrag,
-	onSelect,
-	onOpenInTab,
-	onContextMenu,
-	onRename,
-	onCancelRename,
-	onDropFolder,
-}: Omit<AssetTreeRowProps, "depth">): React.JSX.Element {
-	const tileRef = useRef<HTMLElement | null>(null);
-	const [stem, setStem] = useState(() => filenameStem(asset.filename));
-	const cancelled = useRef(false);
-
-	useEffect(() => setStem(filenameStem(asset.filename)), [asset.filename]);
-	useEffect(() => {
-		cancelled.current = false;
-	}, [renaming]);
-	useScrollWhenFocused(tileRef, focused, asset.assetId);
-
-	return (
-		<div className={`asset-icon${selected ? " selected" : ""}${cut ? " cut" : ""}`}>
-			<button
-				ref={(el) => {
-					tileRef.current = el;
-				}}
-				className="asset-icon-button"
-				type="button"
-				draggable={!renaming}
-				onDragStart={(event) => {
-					const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
-					writeLibraryDrag(event.dataTransfer, selected && selectionDrag ? selectionDrag : single, asset);
-				}}
-				onDragEnd={() => {
-					endLibraryDrag();
-					onDropFolder(null);
-				}}
-				{...openInTabHandlers(onOpenInTab)}
-				onClick={(event) => onSelect(clickMode(event))}
-				onContextMenu={(event) => {
-					event.preventDefault();
-					onContextMenu();
-				}}
-			>
-				<AssetThumbnail asset={asset} />
-				{favorite ? <FavoriteMark /> : null}
-			</button>
-			{renaming ? (
-				<input
-					className="asset-icon-rename"
-					autoFocus
-					value={stem}
-					onChange={(event) => setStem(event.target.value)}
-					onFocus={(event) => event.currentTarget.select()}
-					onKeyDown={(event) => {
-						if (event.key === "Enter") event.currentTarget.blur();
-						if (event.key === "Escape") {
-							cancelled.current = true;
-							onCancelRename();
-							event.currentTarget.blur();
-						}
-					}}
-					onBlur={() => {
-						if (!cancelled.current) void onRename(stem);
-					}}
-				/>
-			) : (
-				<span className="asset-icon-name" title={asset.relativePath}>{asset.filename}</span>
-			)}
-		</div>
-	);
-}
-
-export type FileDisplay = "list" | "icons";
-
-interface FolderTreeRowProps {
-	folder: FolderNode;
-	depth: number;
-	collapsed: boolean;
-	selected: boolean;
-	renaming: boolean;
-	cut: boolean;
-	dropFolder: string | null;
-	collapsedFolders: Set<string>;
-	selectedKeys: ReadonlySet<string>;
-	focusKey: string | null;
-	renamingAssetId: string | null;
-	renamingFolder: string | null;
-	cutAssetIds: readonly string[];
-	cutFolders: readonly string[];
-	selectionDrag: LibraryDrag | null;
-	favoriteAssetIds: ReadonlySet<string>;
-	onToggleFolder: (relativePath: string) => void;
-	onSelectFolder: (relativePath: string, mode: PointerMode) => void;
-	onFolderContextMenu: (relativePath: string) => void;
-	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
-	onSelectAsset: (assetId: string, mode: PointerMode) => void;
-	onOpenAssetInTab: (assetId: string) => void;
-	onAssetContextMenu: (asset: Asset) => void;
-	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
-	onCancelRename: () => void;
-	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
-	onDropFiles: (destFolder: string, files: File[]) => void;
-	onDropFolder: (destFolder: string | null) => void;
-	fileDisplay: FileDisplay;
-	fileSort: FileSort;
-	fileSortDirection: FileSortDirection;
-	folderModifiedAt: ReadonlyMap<string, number>;
-}
-
-function FolderTreeRow({
-	folder,
-	depth,
-	collapsed,
-	selected,
-	renaming,
-	cut,
-	dropFolder,
-	...rowProps
-}: FolderTreeRowProps): React.JSX.Element {
+function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number }): React.JSX.Element {
 	const { t } = useLocale();
-	const [name, setName] = useState(folder.name);
-	const cancelled = useRef(false);
-
-	useEffect(() => {
-		cancelled.current = false;
-		setName(folder.name);
-	}, [folder.name, renaming]);
-
-	const rowRef = useRef<HTMLDivElement | null>(null);
+	const tree = useTree();
 	const key = folderKey(folder.relativePath);
-	const focused = rowProps.focusKey === key;
-	useScrollWhenFocused(rowRef, focused, key);
+	const collapsed = tree.collapsedFolders.has(folder.relativePath);
+	const selected = tree.selectedKeys.has(key);
+	const renaming = folder.relativePath === tree.renamingFolder;
+	const cut = coversPath(tree.cutFolders, folder.relativePath);
+	const rowRef = useRef<HTMLDivElement | null>(null);
+	useScrollWhenFocused(rowRef, tree.focusKey === key, key);
+	const renameInput = useInlineRename(
+		folder.name,
+		renaming,
+		(name) => tree.onRenameFolder(folder.relativePath, name),
+		tree.onCancelRename,
+	);
 
 	function chooseFolder(event: React.MouseEvent): void {
 		const mode = clickMode(event);
-		rowProps.onSelectFolder(folder.relativePath, mode);
-		if (mode === "replace") rowProps.onToggleFolder(folder.relativePath);
+		tree.onSelectFolder(folder.relativePath, mode);
+		if (mode === "replace") tree.onToggleFolder(folder.relativePath);
 	}
 
 	return (
@@ -351,7 +81,7 @@ function FolderTreeRow({
 					event.preventDefault();
 					event.stopPropagation();
 					event.dataTransfer.dropEffect = "copy";
-					rowProps.onDropFolder(folder.relativePath);
+					tree.onDropFolder(folder.relativePath);
 					return;
 				}
 				if (!hasLibraryDrag(event.dataTransfer)) return;
@@ -362,20 +92,20 @@ function FolderTreeRow({
 					return;
 				}
 				event.dataTransfer.dropEffect = "move";
-				rowProps.onDropFolder(folder.relativePath);
+				tree.onDropFolder(folder.relativePath);
 			}}
 			onDragLeave={(event) => {
 				const next = event.relatedTarget;
 				if (next instanceof Node && event.currentTarget.contains(next)) return;
-				rowProps.onDropFolder(null);
+				tree.onDropFolder(null);
 			}}
 			onDrop={(event) => {
 				if (hasOsFileDrag(event.dataTransfer)) {
 					event.preventDefault();
 					event.stopPropagation();
-					rowProps.onDropFolder(null);
+					tree.onDropFolder(null);
 					const files = [...event.dataTransfer.files];
-					if (files.length > 0) rowProps.onDropFiles(folder.relativePath, files);
+					if (files.length > 0) tree.onDropFiles(folder.relativePath, files);
 					return;
 				}
 				if (!hasLibraryDrag(event.dataTransfer)) return;
@@ -383,15 +113,15 @@ function FolderTreeRow({
 				event.stopPropagation();
 				const item = readLibraryDrag(event.dataTransfer);
 				endLibraryDrag();
-				rowProps.onDropFolder(null);
+				tree.onDropFolder(null);
 				if (item && canDropLibraryItem(folder.relativePath, item)) {
-					rowProps.onDropIntoFolder(folder.relativePath, item);
+					tree.onDropIntoFolder(folder.relativePath, item);
 				}
 			}}
 		>
 			<div
 				ref={rowRef}
-				className={`folder-row ${selected ? "selected" : ""}${cut ? " cut" : ""}${dropFolder === folder.relativePath ? " drop-target" : ""}`}
+				className={`folder-row ${selected ? "selected" : ""}${cut ? " cut" : ""}${tree.dropFolder === folder.relativePath ? " drop-target" : ""}`}
 				style={{ paddingLeft: 7 + depth * 14 }}
 			>
 				<button
@@ -404,23 +134,7 @@ function FolderTreeRow({
 				</button>
 				{renaming ? (
 					<div className="rename-editor">
-						<input
-							autoFocus
-							value={name}
-							onChange={(event) => setName(event.target.value)}
-							onFocus={(event) => event.currentTarget.select()}
-							onKeyDown={(event) => {
-								if (event.key === "Enter") event.currentTarget.blur();
-								if (event.key === "Escape") {
-									cancelled.current = true;
-									rowProps.onCancelRename();
-									event.currentTarget.blur();
-								}
-							}}
-							onBlur={() => {
-								if (!cancelled.current) void rowProps.onRenameFolder(folder.relativePath, name);
-							}}
-						/>
+						<input {...renameInput} />
 					</div>
 				) : (
 					<button
@@ -429,16 +143,16 @@ function FolderTreeRow({
 						draggable
 						onDragStart={(event) => {
 							const single: LibraryDrag = { kind: "folder", relativePath: folder.relativePath };
-							writeLibraryDrag(event.dataTransfer, selected && rowProps.selectionDrag ? rowProps.selectionDrag : single);
+							writeLibraryDrag(event.dataTransfer, selected && tree.selectionDrag ? tree.selectionDrag : single);
 						}}
 						onDragEnd={() => {
 							endLibraryDrag();
-							rowProps.onDropFolder(null);
+							tree.onDropFolder(null);
 						}}
 						onClick={chooseFolder}
 						onContextMenu={(event) => {
 							event.preventDefault();
-							rowProps.onFolderContextMenu(folder.relativePath);
+							tree.onFolderContextMenu(folder.relativePath);
 						}}
 					>
 						<span className="folder-symbol" aria-hidden="true">
@@ -450,103 +164,13 @@ function FolderTreeRow({
 					</button>
 				)}
 			</div>
-			{!collapsed && (
-				<FileTreeRows
-					node={folder}
-					depth={depth + 1}
-					collapsedFolders={rowProps.collapsedFolders}
-					selectedKeys={rowProps.selectedKeys}
-					focusKey={rowProps.focusKey}
-					renamingAssetId={rowProps.renamingAssetId}
-					renamingFolder={rowProps.renamingFolder}
-					cutAssetIds={rowProps.cutAssetIds}
-					cutFolders={rowProps.cutFolders}
-					selectionDrag={rowProps.selectionDrag}
-					favoriteAssetIds={rowProps.favoriteAssetIds}
-					dropFolder={dropFolder}
-					onToggleFolder={rowProps.onToggleFolder}
-					onSelectFolder={rowProps.onSelectFolder}
-					onFolderContextMenu={rowProps.onFolderContextMenu}
-					onRenameFolder={rowProps.onRenameFolder}
-					onSelectAsset={rowProps.onSelectAsset}
-					onOpenAssetInTab={rowProps.onOpenAssetInTab}
-					onAssetContextMenu={rowProps.onAssetContextMenu}
-					onRenameAsset={rowProps.onRenameAsset}
-					onCancelRename={rowProps.onCancelRename}
-					onDropIntoFolder={rowProps.onDropIntoFolder}
-					onDropFiles={rowProps.onDropFiles}
-					onDropFolder={rowProps.onDropFolder}
-					fileDisplay={rowProps.fileDisplay}
-					fileSort={rowProps.fileSort}
-					fileSortDirection={rowProps.fileSortDirection}
-					folderModifiedAt={rowProps.folderModifiedAt}
-				/>
-			)}
+			{!collapsed && <FileTreeRows node={folder} depth={depth + 1} />}
 		</div>
 	);
 }
 
-interface FileTreeRowsProps {
-	node: FolderNode;
-	depth?: number;
-	collapsedFolders: Set<string>;
-	selectedKeys: ReadonlySet<string>;
-	focusKey: string | null;
-	renamingAssetId: string | null;
-	renamingFolder: string | null;
-	cutAssetIds: readonly string[];
-	cutFolders: readonly string[];
-	selectionDrag: LibraryDrag | null;
-	favoriteAssetIds: ReadonlySet<string>;
-	dropFolder: string | null;
-	onToggleFolder: (relativePath: string) => void;
-	onSelectFolder: (relativePath: string, mode: PointerMode) => void;
-	onFolderContextMenu: (relativePath: string) => void;
-	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
-	onSelectAsset: (assetId: string, mode: PointerMode) => void;
-	onOpenAssetInTab: (assetId: string) => void;
-	onAssetContextMenu: (asset: Asset) => void;
-	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
-	onCancelRename: () => void;
-	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
-	onDropFiles: (destFolder: string, files: File[]) => void;
-	onDropFolder: (destFolder: string | null) => void;
-	fileDisplay: FileDisplay;
-	fileSort: FileSort;
-	fileSortDirection: FileSortDirection;
-	folderModifiedAt: ReadonlyMap<string, number>;
-}
-
-function FileTreeRows({
-	node,
-	depth = 0,
-	collapsedFolders,
-	selectedKeys,
-	focusKey,
-	renamingAssetId,
-	renamingFolder,
-	cutAssetIds,
-	cutFolders,
-	selectionDrag,
-	favoriteAssetIds,
-	dropFolder,
-	onToggleFolder,
-	onSelectFolder,
-	onFolderContextMenu,
-	onRenameFolder,
-	onSelectAsset,
-	onOpenAssetInTab,
-	onAssetContextMenu,
-	onRenameAsset,
-	onCancelRename,
-	onDropIntoFolder,
-	onDropFiles,
-	onDropFolder,
-	fileDisplay,
-	fileSort,
-	fileSortDirection,
-	folderModifiedAt,
-}: FileTreeRowsProps): React.JSX.Element {
+function FileTreeRows({ node, depth }: { node: FolderNode; depth: number }): React.JSX.Element {
+	const { fileSort, fileSortDirection, folderModifiedAt } = useTree();
 	const folders = [...node.folders.values()].sort((a, b) => (
 		compareFolderPaths(a.relativePath, b.relativePath, fileSort, folderModifiedAt, fileSortDirection)
 	));
@@ -554,93 +178,15 @@ function FileTreeRows({
 
 	return (
 		<>
-			{folders.map((folder) => (
-				<FolderTreeRow
-					key={folder.relativePath}
-					folder={folder}
-					depth={depth}
-					collapsed={collapsedFolders.has(folder.relativePath)}
-					selected={selectedKeys.has(folderKey(folder.relativePath))}
-					renaming={folder.relativePath === renamingFolder}
-					cut={coversPath(cutFolders, folder.relativePath)}
-					dropFolder={dropFolder}
-					collapsedFolders={collapsedFolders}
-					selectedKeys={selectedKeys}
-					focusKey={focusKey}
-					renamingAssetId={renamingAssetId}
-					renamingFolder={renamingFolder}
-					cutAssetIds={cutAssetIds}
-					cutFolders={cutFolders}
-					selectionDrag={selectionDrag}
-					favoriteAssetIds={favoriteAssetIds}
-					fileDisplay={fileDisplay}
-					fileSort={fileSort}
-					fileSortDirection={fileSortDirection}
-					folderModifiedAt={folderModifiedAt}
-					onToggleFolder={onToggleFolder}
-					onSelectFolder={onSelectFolder}
-					onFolderContextMenu={onFolderContextMenu}
-					onRenameFolder={onRenameFolder}
-					onSelectAsset={onSelectAsset}
-					onOpenAssetInTab={onOpenAssetInTab}
-					onAssetContextMenu={onAssetContextMenu}
-					onRenameAsset={onRenameAsset}
-					onCancelRename={onCancelRename}
-					onDropIntoFolder={onDropIntoFolder}
-					onDropFiles={onDropFiles}
-					onDropFolder={onDropFolder}
-				/>
-			))}
-			{fileDisplay === "icons" ? (
-				assets.length > 0 ? (
-					<div className="asset-icon-grid" style={{ marginLeft: depth * 14 }}>
-						{assets.map((asset) => (
-							<AssetIconTile
-								key={asset.assetId}
-								asset={asset}
-								selected={selectedKeys.has(assetKey(asset.assetId))}
-								focused={focusKey === assetKey(asset.assetId)}
-								renaming={asset.assetId === renamingAssetId}
-								cut={cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath)}
-								favorite={favoriteAssetIds.has(asset.assetId)}
-								selectionDrag={selectionDrag}
-								onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
-								onOpenInTab={() => onOpenAssetInTab(asset.assetId)}
-								onContextMenu={() => onAssetContextMenu(asset)}
-								onRename={(stem) => onRenameAsset(asset, stem)}
-								onCancelRename={onCancelRename}
-								onDropFolder={onDropFolder}
-							/>
-						))}
-					</div>
-				) : null
-			) : assets.map((asset) => (
-				<AssetTreeRow
-					key={asset.assetId}
-					asset={asset}
-					depth={depth}
-					selected={selectedKeys.has(assetKey(asset.assetId))}
-					focused={focusKey === assetKey(asset.assetId)}
-					renaming={asset.assetId === renamingAssetId}
-					cut={cutAssetIds.includes(asset.assetId) || coversPath(cutFolders, asset.relativePath)}
-					favorite={favoriteAssetIds.has(asset.assetId)}
-					selectionDrag={selectionDrag}
-					onSelect={(mode) => onSelectAsset(asset.assetId, mode)}
-					onOpenInTab={() => onOpenAssetInTab(asset.assetId)}
-					onContextMenu={() => onAssetContextMenu(asset)}
-					onRename={(stem) => onRenameAsset(asset, stem)}
-					onCancelRename={onCancelRename}
-					onDropFolder={onDropFolder}
-				/>
-			))}
+			{folders.map((folder) => <FolderTreeRow key={folder.relativePath} folder={folder} depth={depth} />)}
+			<AssetList assets={assets} depth={depth} />
 		</>
 	);
 }
 
-export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds" | "folderModifiedAt"> {
-	library: LibrarySnapshot;
-	/** Any value that changes on each selection. */
-	locateToken: unknown;
+/** The folder tree of `library`. Needs a `TreeProvider` above it. */
+export function FileTree({ library }: { library: LibrarySnapshot }): React.JSX.Element {
+	return <FileTreeRows node={buildFileTree(library)} depth={0} />;
 }
 
 export function FolderChevronIcon(): React.JSX.Element {
@@ -655,46 +201,5 @@ export function FolderChevronIcon(): React.JSX.Element {
 				strokeLinejoin="round"
 			/>
 		</svg>
-	);
-}
-
-function FavoriteMark(): React.JSX.Element {
-	const { t } = useLocale();
-	return (
-		<span className="asset-favorite" title={t.common.favorite}>
-			<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
-				<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
-			</svg>
-		</span>
-	);
-}
-
-export function FileTree({ library, locateToken, ...props }: FileTreeProps): React.JSX.Element {
-	const [dropFolder, setDropFolder] = useState<string | null>(null);
-	useEffect(() => {
-		const clear = () => setDropFolder(null);
-		window.addEventListener("dragend", clear);
-		window.addEventListener("drop", clear);
-		return () => {
-			window.removeEventListener("dragend", clear);
-			window.removeEventListener("drop", clear);
-		};
-	}, []);
-	const favoriteAssetIds = useMemo(
-		() => new Set(library.favoriteAssetIds ?? []),
-		[library.favoriteAssetIds],
-	);
-	const folderModifiedAt = useMemo(() => contentModifiedAt(library.assets), [library.assets]);
-	return (
-		<LocateContext.Provider value={locateToken}>
-			<FileTreeRows
-				node={buildFileTree(library)}
-				favoriteAssetIds={favoriteAssetIds}
-				{...props}
-				folderModifiedAt={folderModifiedAt}
-				dropFolder={dropFolder}
-				onDropFolder={setDropFolder}
-			/>
-		</LocateContext.Provider>
 	);
 }
