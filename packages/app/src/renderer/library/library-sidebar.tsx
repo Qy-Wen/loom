@@ -305,7 +305,7 @@ export function LibrarySidebar({
 							onLibraryContextMenu();
 						},
 					}}
-					shortcuts={!empty && (favoriteAssets.length > 0 || library.tags.length > 0) ? <>
+					shortcuts={!empty && (favoriteAssets.length > 0 || visibleTags.length > 0) ? <>
 						{favoriteAssets.length > 0 ? (
 							<div className="favorites">
 								<button
@@ -327,7 +327,7 @@ export function LibrarySidebar({
 								{queryActive || !favoritesCollapsed ? <AssetList assets={favoriteAssets} depth={0} quiet /> : null}
 							</div>
 						) : null}
-						{library.tags.length > 0 ? (
+						{visibleTags.length > 0 ? (
 							<div className="library-tags">
 								<button
 									type="button"
