@@ -357,17 +357,17 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 .asset-badge {
 	color: var(--lm-text-inverse);
-	background: var(--lm-badge-other);
+	background: var(--lm-asset-other);
 	font-size: var(--lm-text-size-2xs);
 	font-weight: var(--lm-weight-bold);
 	letter-spacing: -0.02em;
 }
 
-.type-image { background: var(--lm-badge-image); }
-.type-video { background: var(--lm-badge-video); }
-.type-audio { background: var(--lm-badge-audio); font-size: var(--lm-text-size-xl); }
-.type-text { background: var(--lm-badge-text); }
-.type-other { background: var(--lm-badge-other); }
+.type-image { background: var(--lm-asset-image); }
+.type-video { background: var(--lm-asset-video); }
+.type-audio { background: var(--lm-asset-audio); font-size: var(--lm-text-size-xl); }
+.type-text { background: var(--lm-asset-text); }
+.type-other { background: var(--lm-asset-other); }
 
 .asset-name {
 	min-width: 0;

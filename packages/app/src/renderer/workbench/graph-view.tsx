@@ -54,11 +54,11 @@ type PointerDrag =
 	| { kind: "link"; fromId: string };
 
 const TYPE_COLOR: Record<AssetType, string> = {
-	image: "var(--lm-kind-image)",
-	video: "var(--lm-kind-video)",
-	audio: "var(--lm-kind-audio)",
-	text: "var(--lm-kind-text)",
-	other: "var(--lm-kind-other)",
+	image: "var(--lm-asset-image)",
+	video: "var(--lm-asset-video)",
+	audio: "var(--lm-asset-audio)",
+	text: "var(--lm-asset-text)",
+	other: "var(--lm-asset-other)",
 };
 
 const TYPE_ORDER: AssetType[] = ["image", "video", "audio", "text", "other"];

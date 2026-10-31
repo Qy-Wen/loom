@@ -48,12 +48,13 @@
 	--lm-palette-green-500: #2f9e44;
 	--lm-palette-green-700: #3d6b4f;
 
-	/* Asset kinds */
-	--lm-palette-kind-image: #6d84b4;
-	--lm-palette-kind-video: #8a6d9e;
-	--lm-palette-kind-audio: #5d8a7a;
-	--lm-palette-kind-text: #9a7b4f;
-	--lm-palette-kind-other: #8b8e93;
+	/* Asset kinds: one set for badges, graph nodes, and chips */
+	--lm-palette-asset-image: #9569c7;
+	--lm-palette-asset-video: #d25f68;
+	--lm-palette-asset-audio: #da8a3e;
+	--lm-palette-asset-text: #4d8bbf;
+	--lm-palette-asset-other: #858991;
+	--lm-palette-purple-500: #8a6d9e;
 
 	/* ── Layer 2 · semantic ────────────────────────────────────────── */
 
@@ -126,13 +127,6 @@
 	--lm-channel-g: #2f8f4e;
 	--lm-channel-b: #2f62b5;
 
-	/* Library badge colors. Still a separate set from the graph's --lm-kind-*; unify them in one step later. */
-	--lm-badge-image: #9569c7;
-	--lm-badge-video: #d25f68;
-	--lm-badge-audio: #da8a3e;
-	--lm-badge-text: #4d8bbf;
-	--lm-badge-other: #858991;
-
 	/* CopilotKit's own copy button hovers to this fixed color; Loom's table actions must match it. */
 	--lm-vendor-copy-hover: #e8e8e8;
 
@@ -143,12 +137,15 @@
 	--lm-syntax-key: #805185;
 	--lm-syntax-boolean: #915887;
 
-	/* Asset kinds */
-	--lm-kind-image: var(--lm-palette-kind-image);
-	--lm-kind-video: var(--lm-palette-kind-video);
-	--lm-kind-audio: var(--lm-palette-kind-audio);
-	--lm-kind-text: var(--lm-palette-kind-text);
-	--lm-kind-other: var(--lm-palette-kind-other);
+	/* Asset kinds: the only place that says which color means which kind */
+	--lm-asset-image: var(--lm-palette-asset-image);
+	--lm-asset-video: var(--lm-palette-asset-video);
+	--lm-asset-audio: var(--lm-palette-asset-audio);
+	--lm-asset-text: var(--lm-palette-asset-text);
+	--lm-asset-other: var(--lm-palette-asset-other);
+
+	/* Trace roles (not asset kinds) */
+	--lm-trace-assistant: var(--lm-palette-purple-500);
 
 	/* ── Layer 3 · scales ──────────────────────────────────────────── */
 

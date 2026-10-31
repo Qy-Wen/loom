@@ -67,7 +67,7 @@ body.trace-resizing-columns, body.trace-resizing-columns * { cursor: col-resize 
 .kind-system { color: var(--lm-text-muted); }
 .kind-user { color: var(--lm-text-accent); }
 .kind-context { color: var(--lm-text-success); }
-.kind-assistant { color: var(--lm-kind-video); }
+.kind-assistant { color: var(--lm-trace-assistant); }
 .kind-tool { color: var(--lm-text-warning); }
 .kind-approval { color: var(--lm-text-danger); }
 .kind-phase { color: var(--lm-text-muted); }

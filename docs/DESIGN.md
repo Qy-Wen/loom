@@ -23,6 +23,7 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 - **Radius**: `sm` 5, `md` 8, `lg` 12, `xl` 20, `pill` for boxes. For thin marks the radius must stay below half the short side, so use `hair` 1 (bars up to ~3px, timeline blocks), `line` 2 (indicator lines, small handles), `xs` 3. Never round a thin mark with `sm` or larger: it turns into a pill. Use `50%` for circles.
 - **Type**: sizes `2xs` 10 to `4xl` 44; weights `regular`, `medium`, `semibold`, `bold`. Body text is `sm` (12px).
 - **Elevation**: `shadow-xs` (resting controls), `sm` (small popovers), `md` (menus, toasts), `lg` (dialogs).
+- **Asset kinds**: `--lm-asset-image/video/audio/text/other` is the single set for list badges, graph nodes, legends, and chips. Never define a second one.
 - **Stacking**: use the named `--lm-z-*` tiers. Never write a bare number.
 - **Motion**: `dur-instant` 80, `fast` 120, `base` 200, `slow` 280 ms. `reduced-motion` handling stays with the component.
 
@@ -41,6 +42,5 @@ Dark mode needs one extra block in `tokens.css` that re-maps the layer 2 tokens 
 
 ## Known gaps
 
-- Two sets of asset-kind colors exist: `--lm-badge-*` (library list) and `--lm-kind-*` (graph). They should become one set.
 - Sizes of layout parts (panel widths, control heights) are not tokenised; they are component constants.
 - Text colors are bucketed from about 40 historical grays into five. A few elements shifted by 1–3 levels of lightness when the system was introduced.
