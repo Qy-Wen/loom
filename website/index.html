@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f6f4ed">
+  <meta name="description" content="Loom 是本地优先的开源 AI 创意素材工作台。用自然语言找素材，通过对话处理影像，让每一次创作有迹可循。">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Loom — 让灵感，有迹可循。">
+  <meta property="og:description" content="本地优先的开源 AI 创意素材工作台。找回素材，连接灵感，继续创作。">
+  <title>Loom — 让灵感，有迹可循。</title>
+  <link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="./styles.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main" data-i18n="skip">跳到正文</a>
+  <header class="site-header wrap">
+    <a class="wordmark" href="#" aria-label="Loom"><img src="./assets/favicon.svg" width="36" height="36" alt=""><span>loom<span class="wordmark-dot">.</span></span></a>
+    <nav class="header-nav" aria-label="主导航" data-i18n-aria="navigation">
+      <a href="#features" data-i18n="nav.features">功能</a>
+      <a href="#start" data-i18n="nav.start">快速开始</a>
+      <a href="#faq" data-i18n="nav.faq">常见问题</a>
+    </nav>
+    <div class="header-actions">
+      <button class="language-switch" id="language-switch" type="button" aria-label="Switch to English">EN <span aria-hidden="true">↗</span></button>
+      <a class="github-link" href="https://github.com/Qy-Wen/loom" target="_blank" rel="noopener noreferrer" data-repo-path=""><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"/></svg><span data-i18n="nav.github">Star on GitHub</span></a>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero wrap" aria-labelledby="hero-title">
+      <div class="hero-heading">
+        <p class="eyebrow"><span class="status-dot"></span><span data-i18n="hero.eyebrow">为创作者而生 · 本地优先 · 开源</span></p>
+        <h1 id="hero-title"><span data-i18n="hero.line1">让灵感，</span><br><span class="accent" data-i18n="hero.line2">有迹可循。</span><span class="hero-asterisk" aria-hidden="true">✳</span></h1>
+      </div>
+      <div class="hero-aside">
+        <p class="hero-description" data-i18n="hero.description">从散落的素材，到连贯的创作。用一句话找回画面，让 AI 帮你处理影像，把每一次灵感的来处串起来。</p>
+        <div class="hero-actions"><a class="button button-dark" href="#download"><span data-i18n="hero.download">获取 Loom</span><span aria-hidden="true">↗</span></a><a class="text-link" href="#playground"><span data-i18n="hero.explore">看看它怎么工作</span><span aria-hidden="true">↓</span></a></div>
+        <p class="platform-note" data-i18n="hero.platforms">为 macOS 与 Windows 打造</p>
+      </div>
+    </section>
+
+    <section class="showcase wrap" id="playground" aria-labelledby="demo-title">
+      <div class="showcase-topline"><h2 id="demo-title" class="mono" data-i18n="demo.heading">你的素材。你的工作台。</h2><span class="demo-label"><span class="tiny-dot"></span><span data-i18n="demo.label">可交互示意 · 非实际截图</span></span></div>
+      <div class="app-window">
+        <div class="app-titlebar"><div class="window-dots" aria-hidden="true"><i></i><i></i><i></i></div><span>loom <span class="titlebar-slash">/</span> <span data-i18n="demo.library">灵感收集室</span></span><span class="local-indicator"><span class="tiny-dot"></span><span data-i18n="demo.local">本地素材库</span></span></div>
+        <div class="app-body">
+          <aside class="app-sidebar" aria-label="示例素材库" data-i18n-aria="demo.sidebar">
+            <div class="sidebar-heading"><span data-i18n="demo.workspace">我的工作空间</span><span aria-hidden="true">⌘</span></div>
+            <div class="sidebar-item selected"><span aria-hidden="true">▦</span><span data-i18n="demo.all">全部素材</span><span class="sidebar-count">6</span></div>
+            <div class="sidebar-item"><span aria-hidden="true">☆</span><span data-i18n="demo.favorites">灵感收藏</span></div>
+            <div class="sidebar-item"><span aria-hidden="true">⌑</span><span data-i18n="demo.recent">最近打开</span></div>
+            <div class="sidebar-heading folder-heading" data-i18n="demo.folders">文件夹</div>
+            <div class="sidebar-folder"><span aria-hidden="true">⌄ ▱</span><span data-i18n="demo.trip">夏日漫游</span></div>
+            <div class="sidebar-folder nested"><span aria-hidden="true">▱</span><span data-i18n="demo.references">参考与灵感</span></div>
+            <div class="sidebar-folder nested"><span aria-hidden="true">▱</span><span data-i18n="demo.generated">生成与实验</span></div>
+            <div class="sidebar-folder"><span aria-hidden="true">› ▱</span><span data-i18n="demo.project">进行中的项目</span></div>
+            <div class="sidebar-bottom"><span class="tiny-dot"></span><span data-i18n="demo.yours">文件始终属于你</span></div>
+          </aside>
+          <div class="app-main">
+            <div class="app-toolbar"><div class="view-switch" role="group" aria-label="示意视图" data-i18n-aria="demo.views"><button type="button" class="active" data-view="library" aria-pressed="true"><span aria-hidden="true">▦</span> <span data-i18n="demo.assets">素材视图</span></button><button type="button" data-view="graph" aria-pressed="false"><span aria-hidden="true">⌘</span> <span data-i18n="demo.graph">来源图谱</span></button></div><span class="toolbar-mark" aria-hidden="true">⊞</span></div>
+            <div id="library-view">
+              <form class="demo-search" id="demo-search" role="search"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4 4"/></svg><label class="sr-only" for="asset-query" data-i18n="demo.searchLabel">搜索预置素材</label><input id="asset-query" type="search" placeholder="试试搜索「海边」…" data-i18n-placeholder="demo.placeholder" autocomplete="off" maxlength="80"><button type="submit" aria-label="搜索" data-i18n-aria="demo.search">↵</button></form>
+              <div class="demo-filterline"><div class="filter-group" role="group" aria-label="素材类型" data-i18n-aria="demo.filters"><button type="button" class="active" data-filter="all" aria-pressed="true" data-i18n="demo.filterAll">全部</button><button type="button" data-filter="image" aria-pressed="false" data-i18n="demo.filterImages">图片</button><button type="button" data-filter="video" aria-pressed="false" data-i18n="demo.filterVideos">视频</button></div><span id="result-count" class="result-count" role="status" aria-live="polite"></span></div>
+              <div class="asset-grid" id="asset-grid"></div>
+              <p class="demo-empty" id="demo-empty" hidden data-i18n="demo.empty">这组示例里还没有。试试「海边」「山」或「日落」。</p>
+              <div class="demo-footnote"><span aria-hidden="true">↳</span><span data-i18n="demo.footnote">这里搜索预置示例；Loom 中的语义检索需先描述并索引素材。</span></div>
+            </div>
+            <div id="graph-view" hidden>
+              <div class="graph-caption"><span class="tiny-dot"></span><span data-i18n="graph.caption">一张参考图，长出一个新故事。</span></div>
+              <div class="graph-stage">
+                <svg class="graph-lines" viewBox="0 0 600 310" preserveAspectRatio="none" aria-hidden="true"><path d="M130 100C250 100 200 160 295 160S390 225 477 225"/><path class="graph-line-secondary" d="M130 100C330 30 400 40 477 225"/></svg>
+                <div class="graph-node graph-source"><img src="./assets/coast.svg" width="640" height="440" alt="" loading="lazy"><span data-i18n="graph.source">海岸参考.svg</span><small data-i18n="graph.sourceType">灵感起点</small></div>
+                <div class="graph-node graph-created"><img src="./assets/sunset.svg" width="640" height="440" alt="" loading="lazy"><span data-i18n="graph.created">日落概念.svg</span><small data-i18n="graph.createdType">生成素材</small></div>
+                <div class="graph-node graph-final"><img src="./assets/sunset.svg" width="640" height="440" alt="" loading="lazy"><span data-i18n="graph.final">夏日短片.mp4</span><small data-i18n="graph.finalType">最终成片</small></div>
+                <span class="edge-label edge-one" data-i18n="graph.reference">参考</span><span class="edge-label edge-two" data-i18n="graph.derived">派生自</span>
+              </div>
+              <p class="graph-note" data-i18n="graph.note">关系由你或 Agent 显式记录，随时查看素材从哪里来。</p>
+            </div>
+          </div>
+          <aside class="app-agent" aria-label="对话操作示意" data-i18n-aria="demo.agentLabel"><div class="agent-header"><span class="agent-symbol" aria-hidden="true">✳</span><span data-i18n="agent.title">创作搭档</span><span class="agent-new" aria-hidden="true">＋</span></div><div class="agent-content"><p class="agent-date mono" data-i18n="agent.example">一个工作流示例</p><div class="agent-prompt" data-i18n="agent.prompt">找一段海边的日落素材，截取 5 秒，再关联到原素材。</div><div class="agent-reply"><span class="agent-symbol" aria-hidden="true">✳</span><p data-i18n="agent.reply">让素材找到彼此，也让灵感继续向前。</p></div><ol class="agent-steps"><li><span data-i18n="agent.step1">检索已索引的素材</span><small data-i18n="agent.step1Hint">按画面描述找到候选</small></li><li><span data-i18n="agent.step2">通过 FFmpeg 截取片段</span><small data-i18n="agent.step2Hint">在本地处理影像</small></li><li><span data-i18n="agent.step3">记录素材来源关系</span><small data-i18n="agent.step3Hint">在图谱上连接原素材</small></li></ol></div><div class="agent-input-hint"><span data-i18n="agent.hint">从一句话，开始下一次创作。</span><span aria-hidden="true">↑</span></div></aside>
+        </div>
+      </div>
+      <div class="showcase-bottomline"><span class="mono">LESS SEARCHING. MORE CREATING.</span><span data-i18n="demo.bottomline">把时间留给创作。</span></div>
+    </section>
+
+    <section class="principles wrap" aria-label="产品理念" data-i18n-aria="principles.label"><p><span class="principle-icon" aria-hidden="true">▱</span><span data-i18n="principles.files">文件夹就是素材库</span></p><p><span class="principle-icon" aria-hidden="true">⌁</span><span data-i18n="principles.ai">AI，按你的方式接入</span></p><p><span class="principle-icon" aria-hidden="true">↗</span><span data-i18n="principles.open">开源，也保持开放</span></p></section>
+
+    <section class="features wrap section" id="features" aria-labelledby="features-title">
+      <div class="section-topline"><p class="eyebrow" data-i18n="features.eyebrow">01 / 从收集，到创作</p><span class="mono muted">A LITTLE LESS FRICTION.</span></div>
+      <div class="section-intro"><h2 id="features-title"><span data-i18n="features.line1">灵感不该困在</span><br><span data-i18n="features.line2">层层文件夹里。</span></h2><p data-i18n="features.description">参考图、草稿、镜头和成片，终于可以放在同一张工作台上。找得到，也接得上。</p></div>
+      <div class="feature-editorial">
+        <article class="feature-story"><span class="feature-number mono">01 — FIND</span><h3 data-i18n="feature.search.title">记得画面，就能找。</h3><p data-i18n="feature.search.body">不记得文件名？描述一下你脑海中的画面。为素材生成描述并建立索引后，就可以按意思检索图片、视频和音频。</p><div class="search-illustration"><span class="mono" data-i18n="feature.search.query">“有山、有雾，安静一点的画面”</span><span class="illustration-arrow" aria-hidden="true">↙</span><img src="./assets/mountain.svg" width="640" height="440" alt="山谷与薄雾的示意插画" data-i18n-alt="feature.search.alt" loading="lazy"><span class="image-caption" data-i18n="feature.search.caption">模糊的记忆，也有清晰的去处。</span></div></article>
+        <article class="feature-story"><span class="feature-number mono">02 — CONNECT</span><h3 data-i18n="feature.graph.title">每个结果，都有来处。</h3><p data-i18n="feature.graph.body">从参考图到生成图，再到剪辑成片。用「参考」「派生自」连接素材，让你和 Agent 都能回看创作脉络。</p><div class="connection-illustration" aria-hidden="true"><div class="connection-paper paper-back"><img src="./assets/coast.svg" width="640" height="440" alt="" loading="lazy"><span>reference_01</span></div><span class="connection-arrow">⤴</span><div class="connection-paper paper-front"><img src="./assets/sunset.svg" width="640" height="440" alt="" loading="lazy"><span>next_idea_02 <span>↗</span></span></div></div><p class="illustration-note" data-i18n="feature.graph.caption">灵感之间，不再断线。</p></article>
+        <article class="feature-story"><span class="feature-number mono">03 — CREATE</span><h3 data-i18n="feature.create.title">说出想法，接着做。</h3><p data-i18n="feature.create.body">通过对话调用 FFmpeg 裁剪、转码和压缩，或经 MCP 连接 ComfyUI 等创作工具。新素材回到库里，继续下一步。</p><div class="create-illustration"><div class="create-prompt"><span aria-hidden="true">✳</span><span data-i18n="feature.create.prompt">“截取这段视频的前 5 秒”</span></div><div class="timeline"><span class="timeline-label mono">00:00</span><div class="timeline-track"><i></i><i></i><i></i><i></i><i></i><i></i><div class="timeline-selection"><span>00:05</span></div></div><span class="timeline-label mono">00:12</span></div><div class="tool-labels"><span>FFmpeg ↗</span><span>ComfyUI ↗</span><span>MCP ↗</span></div></div></article>
+      </div>
+    </section>
+
+    <section class="ownership" aria-labelledby="ownership-title"><div class="wrap ownership-inner"><div class="ownership-art" aria-hidden="true"><div class="folder-art"><span>loom_library/</span><div class="folder-lines"><i></i><i></i><i></i></div><small>images/ &nbsp; videos/ &nbsp; ideas/</small></div><div class="ownership-stamp">YOURS.<br>ALWAYS.</div></div><div class="ownership-copy"><p class="eyebrow" data-i18n="ownership.eyebrow">不接管你的文件，只接住你的灵感。</p><h2 id="ownership-title"><span data-i18n="ownership.line1">你的文件，</span><br><span data-i18n="ownership.line2">始终是你的。</span></h2><p data-i18n="ownership.body">打开一个文件夹，它就是你的素材库。目录由你组织，文件保持原样。完整复制文件夹（包含 .loom 元数据），就能在另一台机器上继续。</p><p class="ownership-detail" data-i18n="ownership.detail">本地优先 ≠ 模型全部离线。云端 AI 会按你的配置发送相关内容；模型服务和费用由你选择。</p></div></div></section>
+
+    <section class="getting-started wrap section" id="start" aria-labelledby="start-title"><div class="section-topline"><p class="eyebrow" data-i18n="start.eyebrow">02 / 从这里开始</p><span class="mono muted">MAKE ROOM FOR YOUR NEXT IDEA.</span></div><div class="section-intro"><h2 id="start-title" data-i18n="start.title">给灵感，安一个家。</h2><p data-i18n="start.description">先整理一个小小的素材库，再慢慢长成自己的创作空间。</p></div><ol class="start-steps"><li><span class="step-index mono">01</span><h3 data-i18n="start.step1.title">打开一个文件夹</h3><p data-i18n="start.step1.body">选择你的素材目录，浏览图片、视频、音频、PDF 和笔记。</p></li><li><span class="step-index mono">02</span><h3 data-i18n="start.step2.title">按需配置 AI</h3><p data-i18n="start.step2.body">在设置中接入模型。对需要语义检索的素材，显式生成描述并建立索引。</p></li><li><span class="step-index mono">03</span><h3 data-i18n="start.step3.title">开始一次小创作</h3><p data-i18n="start.step3.body">找一张参考图，处理一段视频，或为素材连上第一条来源关系。</p></li></ol></section>
+
+    <section class="downloads wrap" id="download" aria-labelledby="download-title"><div class="download-intro"><p class="eyebrow"><span class="status-dot"></span><span data-i18n="download.eyebrow">正在准备第一次见面</span></p><h2 id="download-title"><span data-i18n="download.line1">下一次创作，</span><br><span data-i18n="download.line2">从 Loom 开始。</span></h2><p data-i18n="download.description">预览版安装包准备中。你可以先体验页面示意，或到 GitHub 查看源码与开发说明。</p><a class="text-link" href="https://github.com/Qy-Wen/loom" target="_blank" rel="noopener noreferrer" data-repo-path=""><span data-i18n="download.source">查看开源项目</span><span aria-hidden="true">↗</span></a></div><div class="download-options"><p class="release-status mono" id="release-status" role="status" data-i18n="download.status">PREVIEW / 准备中</p><div class="download-row"><span class="os-symbol" aria-hidden="true">⊞</span><div><h3>Windows</h3><span class="download-detail">x64</span></div><a class="download-button" data-download="windows-x64" aria-disabled="true" role="link" data-i18n="download.pending">准备中</a></div><div class="download-row"><span class="os-symbol mac-symbol" aria-hidden="true">⌘</span><div><h3>macOS</h3><span class="download-detail">Apple Silicon · arm64</span></div><a class="download-button" data-download="macos-arm64" aria-disabled="true" role="link" data-i18n="download.pending">准备中</a></div><div class="download-row"><span class="os-symbol mac-symbol" aria-hidden="true">⌘</span><div><h3>macOS</h3><span class="download-detail">Intel · x64</span></div><a class="download-button" data-download="macos-x64" aria-disabled="true" role="link" data-i18n="download.pending">准备中</a></div><div class="download-secondary" id="download-secondary"></div><p class="download-note" data-i18n="download.note">正式发布后，此处优先提供国内下载源。开源软件不包含第三方模型 API 费用。</p></div></section>
+
+    <section class="faq wrap section" id="faq" aria-labelledby="faq-title"><div class="faq-heading"><p class="eyebrow" data-i18n="faq.eyebrow">03 / 你可能还想知道</p><h2 id="faq-title" data-i18n="faq.title">几个小问题。</h2><span class="faq-flower" aria-hidden="true">✳</span></div><div class="faq-list"><details><summary data-i18n="faq.q1">Loom 适合谁？</summary><p data-i18n="faq.a1">适合需要管理图片、视频、音频与创作参考的个人创作者，尤其是希望把参考素材、AI 生成结果和最终成片连接起来的用户。</p></details><details><summary data-i18n="faq.q2">必须配置模型才能使用吗？</summary><p data-i18n="faq.a2">浏览、预览、标签、收藏和基础文件检索不需要模型。对话操作、素材理解和向量检索需要相应模型配置；语义检索前需先完成描述和索引。</p></details><details><summary data-i18n="faq.q3">我的素材会上传到云端吗？</summary><p data-i18n="faq.a3">素材库文件保存在本地。使用云端模型时，相关文本、媒体或切片可能会发送到你配置的服务商；第三方 MCP 服务也有各自的数据处理方式。本地优先不代表所有 AI 调用都离线。</p></details><details><summary data-i18n="faq.q4">国内无法访问 GitHub，怎么下载？</summary><p data-i18n="faq.a4">当前安装包尚未发布。正式发布后，这个页面将提供独立的国内下载入口和使用说明；下载按钮会标明来源，无需先打开 GitHub。</p></details><details><summary data-i18n="faq.q5">能连接 ComfyUI 吗？</summary><p data-i18n="faq.a5">可以通过合适的第三方 MCP 服务连接。需要单独安装并配置相关服务，准备好 ComfyUI 工作流；它不是安装 Loom 后就自动可用的内置云服务。</p></details><details><summary data-i18n="faq.q6">在哪里反馈问题，或者参与贡献？</summary><p><span data-i18n="faq.a6">欢迎通过 GitHub Issues 反馈问题，或提交 Pull Request。独立的国内反馈入口准备中。</span> <a href="https://github.com/Qy-Wen/loom/issues" target="_blank" rel="noopener noreferrer" data-repo-path="/issues" data-i18n="faq.feedback">前往 Issues ↗</a><span id="domestic-feedback"></span></p></details></div></section>
+
+    <section class="closing wrap"><p class="mono">OPEN SOURCE. OPEN POSSIBILITIES.</p><h2><span data-i18n="closing.line1">让好工具，</span><span class="accent" data-i18n="closing.line2">遇见更多灵感。</span></h2><a class="button button-dark" href="https://github.com/Qy-Wen/loom" target="_blank" rel="noopener noreferrer" data-repo-path=""><span aria-hidden="true">☆</span><span data-i18n="closing.star">在 GitHub 上支持 Loom</span><span aria-hidden="true">↗</span></a></section>
+  </main>
+  <footer class="site-footer wrap"><a class="wordmark" href="#" aria-label="Loom"><img src="./assets/favicon.svg" width="30" height="30" alt=""><span>loom<span class="wordmark-dot">.</span></span></a><p data-i18n="footer.tagline">留住灵感，继续创作。</p><div><span>© <span id="year">2026</span> Loom</span><a href="https://github.com/Qy-Wen/loom/blob/main/LICENSE" target="_blank" rel="noopener noreferrer" data-repo-path="/blob/main/LICENSE">MIT License ↗</a></div></footer>
+  <noscript><p class="noscript-note">交互示意和语言切换需要 JavaScript。预览版安装包尚未发布。 / JavaScript is needed for the interactive demo and language switch. Installers are not available yet.</p></noscript>
+</body>
+</html>

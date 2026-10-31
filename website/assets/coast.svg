@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="440" viewBox="0 0 640 440">
+  <defs>
+    <linearGradient id="sea" x2="0.4" y2="1"><stop stop-color="#577d85"/><stop offset="1" stop-color="#a4b8ac"/></linearGradient>
+    <linearGradient id="sand" x2="0.2" y2="1"><stop stop-color="#e9ddc1"/><stop offset="1" stop-color="#c1ab88"/></linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".75" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".1"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+  </defs>
+  <g filter="url(#grain)">
+    <path fill="url(#sea)" d="M0 0h640v440H0z"/>
+    <path fill="url(#sand)" d="M640 20c-80 30-119 121-189 164S308 226 255 297 129 396 0 440h640Z"/>
+    <path d="M640 4c-96 31-123 119-202 161S297 214 240 283 120 382 0 418" fill="none" stroke="#f8f5e8" stroke-width="9" opacity=".85"/>
+    <path d="M640 0c-112 15-142 106-223 147S279 197 222 264 102 359 0 397" fill="none" stroke="#dbe4d9" stroke-width="2" opacity=".7"/>
+    <path d="M0 91c87-25 120-14 196-42m-119 130c54-29 97-21 156-49" fill="none" stroke="#e7eee1" stroke-width="2" opacity=".3"/>
+    <path d="m401 303 28-6-8 9Z" fill="#5d6661"/><path d="m414 297 2-17 3 18" fill="#f6f0da"/>
+  </g>
+</svg>

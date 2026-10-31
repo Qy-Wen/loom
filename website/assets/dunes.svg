@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="440" viewBox="0 0 640 440">
+  <defs>
+    <linearGradient id="sky" x2="0" y2="1"><stop stop-color="#d9d2bd"/><stop offset="1" stop-color="#f3dcc0"/></linearGradient>
+    <linearGradient id="dune" x2=".8" y2="1"><stop stop-color="#e0b48a"/><stop offset="1" stop-color="#a0664c"/></linearGradient>
+    <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency=".7" numOctaves="3" stitchTiles="stitch"/><feColorMatrix type="saturate" values="0"/><feComponentTransfer><feFuncA type="linear" slope=".09"/></feComponentTransfer><feBlend in="SourceGraphic" mode="soft-light"/></filter>
+  </defs>
+  <g filter="url(#grain)">
+    <path fill="url(#sky)" d="M0 0h640v440H0z"/><circle cx="444" cy="103" r="35" fill="#fff3d4" opacity=".7"/>
+    <path fill="#cfac83" d="M0 250c147-38 181-85 300-56s190 72 340-10v256H0Z"/>
+    <path fill="url(#dune)" d="M0 342C142 363 241 193 408 185c-73 51-62 154 232 174v81H0Z"/>
+    <path fill="#efc99a" d="M0 342C142 363 241 193 408 185 261 223 206 427 0 440Z"/>
+    <path d="M70 397c111-19 168-129 229-150M43 411c115-11 178-118 240-151" fill="none" stroke="#c9a379" opacity=".45"/>
+  </g>
+</svg>
