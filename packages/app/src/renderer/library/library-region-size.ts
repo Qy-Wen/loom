@@ -1,4 +1,4 @@
-export const LIBRARY_REGION_HANDLE = 6;
+export const LIBRARY_REGION_HANDLE = 12;
 export const DEFAULT_SHORTCUT_FRACTION = 0.4;
 
 /** Content-sized upper pane with a preferred cap; both minima yield proportionally in short windows. */

@@ -19,10 +19,11 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	const separator = sidebar.getByRole("separator", { name: "Resize favorites/tags and file tree", exact: true });
 	const height = async () => Number(await separator.getAttribute("aria-valuenow"));
 	const scroll = (area: typeof top) => area.evaluate((element) => element.scrollTop);
-	const extent = () => sidebar.locator(".library-scroll-regions").evaluate((element) => element.clientHeight - 6);
+	const extent = async () => (await sidebar.locator(".library-scroll-regions").evaluate((element) => element.clientHeight)) - (await separator.boundingBox())!.height;
 	const ratio = () => loomPage.evaluate(() => Number(localStorage.getItem("loom.library.shortcutFraction")));
 	const moreCue = sidebar.locator(".library-shortcuts-more");
 	await expect(separator).toBeVisible();
+	await expect(separator).toHaveCSS("height", "12px");
 	await expect(moreCue).toHaveCount(0); // Folded headings fit; don't suggest that hidden content exists.
 	await top.getByRole("button", { name: "Favorites", exact: true }).click();
 	await expect.poll(async () => Math.abs(await height() - await extent() * 0.4)).toBeLessThanOrEqual(1);
