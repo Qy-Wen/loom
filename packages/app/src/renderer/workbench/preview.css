@@ -167,8 +167,8 @@
 .grade-geometry button {
 	display: grid;
 	place-items: center;
-	width: 28px;
-	height: 28px;
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -525,8 +525,8 @@
 	display: grid;
 	place-items: center;
 	flex: 0 0 auto;
-	width: 28px;
-	height: 28px;
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -671,7 +671,7 @@
 .media-transport .media-volume {
 	flex: 0 0 48px;
 	width: 48px;
-	height: 20px;
+	height: var(--lm-size-sm);
 }
 
 .media-seek::-webkit-slider-runnable-track,
@@ -873,7 +873,7 @@
 .text-workbench > .preview-actions {
 	align-self: stretch;
 	box-sizing: border-box;
-	height: 30px;
+	height: var(--lm-size-xl);
 	margin: 0;
 	background: var(--lm-surface-subtle);
 }

@@ -30,9 +30,9 @@ body {
 	position: relative;
 	z-index: var(--lm-z-chrome);
 	display: flex;
-	flex: 0 0 40px;
+	flex: 0 0 var(--lm-size-3xl);
 	align-items: center;
-	height: 40px;
+	height: var(--lm-size-3xl);
 	gap: var(--lm-space-1);
 	padding-left: var(--lm-space-6);
 	background: var(--lm-surface-window);

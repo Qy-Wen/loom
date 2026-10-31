@@ -38,8 +38,8 @@
 .library-collapse {
 	display: grid;
 	place-items: center;
-	width: 26px;
-	height: 26px;
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -248,8 +248,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 16px;
-	height: 16px;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
 	flex: 0 0 auto;
 	padding: 0;
 	border: 0;
@@ -272,8 +272,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 18px;
-	height: 16px;
+	width: var(--lm-size-sm);
+	height: var(--lm-size-xs);
 	flex: 0 0 auto;
 	color: var(--lm-text-muted);
 }
@@ -315,7 +315,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 }
 
 .rename-editor input {
-	min-width: 20px;
+	min-width: var(--lm-size-sm);
 	flex: 1;
 	padding: var(--lm-space-1) var(--lm-space-2);
 	border: 1px solid var(--lm-border-accent);
@@ -336,8 +336,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
-	height: 30px;
+	width: var(--lm-size-xl);
+	height: var(--lm-size-xl);
 	flex: 0 0 auto;
 	overflow: hidden;
 	border: 1px solid var(--lm-hairline);
@@ -413,8 +413,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 18px;
-	height: 16px;
+	width: var(--lm-size-sm);
+	height: var(--lm-size-xs);
 	flex: 0 0 auto;
 	color: var(--lm-warning);
 }
@@ -481,8 +481,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 16px;
-	height: 16px;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-pill);
@@ -513,7 +513,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	top: 1px;
 	right: 1px;
 	bottom: 1px;
-	width: 22px;
+	width: var(--lm-size-md);
 	padding: 0;
 	border: 0;
 	background: transparent;

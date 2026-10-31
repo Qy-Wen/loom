@@ -32,8 +32,8 @@
 
 .graph-help-button {
 	display: flex;
-	width: 24px;
-	height: 24px;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
 	align-items: center;
 	justify-content: center;
 	padding: 0;

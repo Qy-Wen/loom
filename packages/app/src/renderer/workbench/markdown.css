@@ -38,15 +38,15 @@
 }
 
 .find-bar-count {
-	min-width: 36px;
+	min-width: var(--lm-size-2xl);
 	color: var(--lm-text-muted);
 	font-size: var(--lm-text-size-xs);
 	text-align: right;
 }
 
 .find-bar button {
-	width: 22px;
-	height: 22px;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -82,7 +82,7 @@
 
 .markdown-toolbar button {
 	position: relative;
-	height: 32px;
+	height: var(--lm-size-xl);
 	padding: 0 var(--lm-space-5);
 	border: 0;
 	color: var(--lm-text-muted);

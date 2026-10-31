@@ -214,6 +214,15 @@
 	--lm-z-overlay: 50;
 	--lm-z-top: 60;
 
+	/* Control and icon sizes: a 4px grid. Square hit areas, icon slots, and bar heights. */
+	--lm-size-xs: 16px;
+	--lm-size-sm: 20px;
+	--lm-size-md: 24px;
+	--lm-size-lg: 28px;
+	--lm-size-xl: 32px;
+	--lm-size-2xl: 36px;
+	--lm-size-3xl: 40px;
+
 	/* Motion */
 	--lm-dur-instant: 80ms;
 	--lm-dur-fast: 120ms;

@@ -11,7 +11,7 @@
 .session-bar {
 	display: flex;
 	align-items: stretch;
-	flex: 0 0 36px;
+	flex: 0 0 var(--lm-size-2xl);
 	gap: var(--lm-space-1);
 	min-width: 0;
 	padding: 0 var(--lm-space-3);
@@ -88,9 +88,9 @@
 }
 
 .session-tab-close {
-	flex: 0 0 18px;
-	width: 18px;
-	height: 18px;
+	flex: 0 0 var(--lm-size-sm);
+	width: var(--lm-size-sm);
+	height: var(--lm-size-sm);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -477,14 +477,14 @@
 
 .session-follow-up-slot [data-testid="copilot-send-button"],
 .session-inline-edit-send {
-	width: 30px;
-	height: 30px;
+	width: var(--lm-size-xl);
+	height: var(--lm-size-xl);
 }
 
 .session-follow-up-slot [data-testid="copilot-send-button"] svg,
 .session-inline-edit-send svg {
-	width: 16px;
-	height: 16px;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
 }
 
 .session-add-files {
@@ -492,8 +492,8 @@
 	display: flex;
 	align-items: center;
 	justify-content: center;
-	width: 36px;
-	height: 36px;
+	width: var(--lm-size-2xl);
+	height: var(--lm-size-2xl);
 	margin: 0 0 0 var(--lm-space-2);
 	padding: 0;
 	border: 0;
@@ -543,8 +543,8 @@
 	position: absolute;
 	top: 50%;
 	left: 50%;
-	width: 30px;
-	height: 30px;
+	width: var(--lm-size-xl);
+	height: var(--lm-size-xl);
 	border-radius: var(--lm-radius-pill);
 	transform: translate(-50%, -50%);
 }
@@ -589,7 +589,7 @@
 .session-inline-input {
 	position: relative;
 	box-sizing: border-box;
-	min-height: 24px;
+	min-height: var(--lm-size-md);
 	white-space: pre-wrap;
 	word-break: break-word;
 	outline: none;
@@ -655,8 +655,8 @@
 }
 
 .session-asset-chip .asset-thumbnail {
-	width: 22px;
-	height: 22px;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
 	border-radius: var(--lm-radius-sm);
 }
 
@@ -679,8 +679,8 @@
 	align-items: center;
 	justify-content: center;
 	flex: 0 0 auto;
-	width: 16px;
-	height: 16px;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
 	margin: 0;
 	padding: 0;
 	border: 0;
@@ -875,8 +875,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 30px;
-	height: 30px;
+	width: var(--lm-size-xl);
+	height: var(--lm-size-xl);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-pill);
@@ -928,7 +928,7 @@
 	bottom: 10px;
 	transform: translateX(-50%);
 	z-index: var(--lm-z-raised);
-	height: 26px;
+	height: var(--lm-size-lg);
 	padding: 0 var(--lm-space-5);
 	border: 1px solid var(--lm-border-subtle);
 	border-radius: var(--lm-radius-pill);

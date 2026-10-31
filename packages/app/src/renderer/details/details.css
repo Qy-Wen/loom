@@ -178,11 +178,11 @@
 
 .relation-list li > .icon-button {
 	display: inline-flex;
-	flex: 0 0 24px;
+	flex: 0 0 var(--lm-size-md);
 	align-items: center;
 	justify-content: center;
-	width: 24px;
-	height: 24px;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
 	padding: 0;
 	line-height: 1;
 	text-align: center;
@@ -290,8 +290,8 @@
 }
 
 .icon-button {
-	width: 24px;
-	height: 24px;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
 	border-radius: var(--lm-radius-sm);
 	font-size: var(--lm-text-size-xl);
 }

@@ -158,8 +158,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 20px;
-	height: 20px;
+	width: var(--lm-size-sm);
+	height: var(--lm-size-sm);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -594,7 +594,7 @@
 .settings-actions button {
 	box-sizing: border-box;
 	margin: 0;
-	min-height: 32px;
+	min-height: var(--lm-size-xl);
 	padding: var(--lm-space-3) var(--lm-space-6);
 	border: 1px solid var(--lm-border-strong);
 	border-radius: var(--lm-radius-sm);
@@ -903,7 +903,7 @@
 	display: grid;
 	grid-template-columns: minmax(0, 1fr) 36px;
 	align-items: center;
-	min-height: 36px;
+	min-height: var(--lm-size-2xl);
 	border: 1px solid var(--lm-border-strong);
 	border-radius: var(--lm-radius-sm);
 	background: var(--lm-surface-raised);
@@ -931,8 +931,8 @@
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: 28px;
-	height: 28px;
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
 	margin: 0;
 	padding: 0;
 	border: 0;

@@ -46,8 +46,8 @@
 .file-sort > button {
 	display: grid;
 	place-items: center;
-	width: 18px;
-	height: 18px;
+	width: var(--lm-size-sm);
+	height: var(--lm-size-sm);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -66,8 +66,8 @@
 .file-heading-tools > button {
 	display: grid;
 	place-items: center;
-	width: 18px;
-	height: 18px;
+	width: var(--lm-size-sm);
+	height: var(--lm-size-sm);
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -208,7 +208,7 @@
 	display: flex;
 	align-items: stretch;
 	/* Same height as the side panel's tab bar so the two bottom borders line up. */
-	flex: 0 0 36px;
+	flex: 0 0 var(--lm-size-2xl);
 	min-width: 0;
 	/* .workbench pads 5px inside the resize handles. Reach back out so the border meets their lines. */
 	margin: 0 -5px;
@@ -274,9 +274,9 @@
 
 .asset-tab-close {
 	align-self: center;
-	flex: 0 0 18px;
-	width: 18px;
-	height: 18px;
+	flex: 0 0 var(--lm-size-sm);
+	width: var(--lm-size-sm);
+	height: var(--lm-size-sm);
 	margin-right: var(--lm-space-2);
 	padding: 0;
 	border-radius: var(--lm-radius-sm);
