@@ -1,7 +1,7 @@
 .tool-call {
 	--tool-call-preview-height: 128px;
 	margin: 8px 0;
-	padding: 7px 10px 8px;
+	padding: 0 10px 8px;
 	border: 1px solid #e5e5e2;
 	border-radius: 8px;
 	background: #fafaf9;
@@ -17,11 +17,12 @@
 	display: flex;
 	align-items: center;
 	gap: 8px;
-	width: 100%;
-	margin: 0;
-	padding: 0;
+	width: calc(100% + 20px);
+	margin: 0 -10px;
+	padding: 7px 10px;
 	border: 0;
-	background: transparent;
+	border-bottom: 1px solid #e5e5e2;
+	background: #ededea;
 	color: #7a7d82;
 	cursor: default;
 	text-align: left;
@@ -30,6 +31,10 @@
 
 button.tool-call-head {
 	cursor: pointer;
+}
+
+button.tool-call-head:hover {
+	background: #e5e5e1;
 }
 
 .tool-call-chevron {
