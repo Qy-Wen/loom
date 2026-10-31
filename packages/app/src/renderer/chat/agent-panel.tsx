@@ -16,6 +16,7 @@ interface AgentPanelProps {
 	onOpenAsset: (assetId: string) => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
+	onOpenSettings: () => void;
 }
 
 export function AgentPanel({
@@ -24,6 +25,7 @@ export function AgentPanel({
 	onOpenAsset,
 	composerAttach,
 	onComposerAttachApplied,
+	onOpenSettings,
 }: AgentPanelProps): React.JSX.Element {
 	const { t } = useLocale();
 	const {
@@ -84,6 +86,7 @@ export function AgentPanel({
 									onComposerAttachApplied={onComposerAttachApplied}
 									onSessionRecord={activateRecord}
 									onHistoryChanged={() => { void refreshCurrent(); }}
+									onOpenSettings={onOpenSettings}
 									onForked={(record) => {
 										activateRecord(record);
 										void refreshSessions().catch(() => undefined);

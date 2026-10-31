@@ -255,7 +255,7 @@ export function App(): React.JSX.Element {
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
 	// One product registry supplies identity, content, visibility and first-use policy.
 	const panelViews: PanelView[] = [
-		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} onOpenAsset={selectAsset} composerAttach={composerAttach} onComposerAttachApplied={() => setComposerAttach(null)} /> },
+		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} onOpenAsset={selectAsset} composerAttach={composerAttach} onComposerAttachApplied={() => setComposerAttach(null)} onOpenSettings={() => setSettingsOpen(true)} /> },
 		{ id: "details", visible: true, title: t.app.details, initialJoin: ["agent"], render: () => <DetailsPanel
 			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}

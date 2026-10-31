@@ -249,6 +249,16 @@ export const messages = defineLocale(
 		},
 		chat: {
 			latest: "Latest",
+			emptyTitle: "What would you like to do with your library?",
+			emptyHint: "I can search your assets, add tags and relations, edit table fields, and process media with FFmpeg. Pick one to start, or type your own.",
+			emptyNoModelTitle: "Connect a model to start chatting",
+			emptyNoModelHint: "Add a provider and enable a model in Settings. Browsing and previewing work without one.",
+			emptyOpenSettings: "Open Settings",
+			emptySuggestions: [
+				"Find the images in my library with warm lighting.",
+				"Summarize what is in this library and suggest how to organize it.",
+				"Tag the images in my library and add a \"status\" field to the table.",
+			],
 			requestFailed: "Request failed",
 			modelRequired: "Choose a conversation model. If none are available, configure and enable one in Settings. (no_model)",
 			editQuestion: "Edit question",
@@ -811,6 +821,16 @@ export const messages = defineLocale(
 		},
 		chat: {
 			latest: "最新",
+			emptyTitle: "想用素材库做点什么？",
+			emptyHint: "可以检索素材、添加标签和关系、修改表格字段，也能用 FFmpeg 处理媒体。选一个开始，或直接输入。",
+			emptyNoModelTitle: "先连接一个模型，才能开始对话",
+			emptyNoModelHint: "在设置中添加服务商并启用模型。浏览和预览素材不需要模型。",
+			emptyOpenSettings: "打开设置",
+			emptySuggestions: [
+				"找出素材库里光线偏暖的图片。",
+				"概括一下这个素材库里有什么，并建议怎么整理。",
+				"给素材库里的图片加上标签，并在表格里新增一个「状态」字段。",
+			],
 			requestFailed: "请求失败",
 			modelRequired: "请选择会话模型；如果没有可用模型，请先在设置中配置并启用。(no_model)",
 			editQuestion: "编辑问题",

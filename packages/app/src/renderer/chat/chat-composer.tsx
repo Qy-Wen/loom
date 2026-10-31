@@ -18,7 +18,7 @@ import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
 import { hasImageAsset, modelLacksImageInput } from "./image-support.ts";
-import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
+import { appendChip, focusInlineEditor, insertChipAtPoint, lookupComposerAsset, paintInlineEditor, readInlineEditor, rememberComposerAsset, type ChipLabels } from "./inline-asset-text.tsx";
 
 /** `ready` once the main process has admitted it, i.e. it can be withdrawn. */
 type QueuedFollowUp = { id: string; label: string; ready: boolean };
@@ -34,7 +34,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
-	const { threadId, branch, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, stored, transcript, usage, model, onModelChanged } = useChatSession();
+	const { threadId, branch, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, draftRequest, draftApplied, stored, transcript, usage, model, onModelChanged } = useChatSession();
 	const { messages: visible, connecting, threadReady } = useContext(ChatViewContext);
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
@@ -135,6 +135,22 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			cancelled = true;
 		};
 	}, [composerAttach]);
+
+	useLayoutEffect(() => {
+		// A suggestion replaces an empty draft only. Typed text or attached files are never overwritten.
+		if (!draftRequest || draftRequest.threadId !== threadId) return;
+		const editor = editorRef.current;
+		if (!editor) return;
+		if (!readInlineEditor(editor) && assetsRef.current.length === 0) {
+			paintInlineEditor(editor, draftRequest.text, [], (assetId) => openAsset(assetId), chipLabels.current);
+			onChange?.(draftRequest.text);
+		}
+		draftApplied(draftRequest);
+		requestAnimationFrame(() => {
+			const current = editorRef.current;
+			if (current?.isConnected) focusInlineEditor(current, current.lastChild);
+		});
+	}, [draftRequest]);
 
 	useEffect(() => {
 		if (!isRunning) {

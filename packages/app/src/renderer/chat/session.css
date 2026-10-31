@@ -1121,3 +1121,80 @@
 	cursor: default;
 	opacity: 0.25;
 }
+
+/* Empty conversation: a short invitation, or a pointer to Settings when no model is usable. */
+.chat-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 28px 2px 8px;
+}
+
+.chat-empty-title {
+	margin: 0;
+	color: #202124;
+	font-size: 15px;
+	font-weight: 600;
+	line-height: 1.4;
+}
+
+.chat-empty-hint {
+	margin: 0 0 8px;
+	color: #6b6e72;
+	font-size: 12px;
+	line-height: 1.5;
+}
+
+.chat-empty-suggestions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	width: 100%;
+	margin: 0;
+	padding: 0;
+	list-style: none;
+}
+
+.chat-empty-suggestion {
+	width: 100%;
+	padding: 9px 12px;
+	border: 1px solid #e5e5e2;
+	border-radius: 8px;
+	background: #fff;
+	color: #3c3c3c;
+	font-size: 12px;
+	line-height: 1.45;
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 120ms ease, border-color 120ms ease;
+}
+
+.chat-empty-suggestion:hover {
+	border-color: #d4d4d0;
+	background: #f7f7f5;
+}
+
+.chat-empty-suggestion:focus-visible,
+.chat-empty-action:focus-visible {
+	outline: 2px solid #7896c8;
+	outline-offset: 2px;
+}
+
+.chat-empty-action {
+	padding: 6px 12px;
+	border: 1px solid #d4d4d0;
+	border-radius: 6px;
+	background: #fff;
+	color: #202124;
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.chat-empty-action:hover {
+	background: #f7f7f5;
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.chat-empty-suggestion { transition: none; }
+}

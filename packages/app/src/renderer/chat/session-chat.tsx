@@ -4,7 +4,7 @@ import { CopilotChat, useAgent, type CopilotChatViewProps } from "@copilotkit/re
 import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomSessionRecord, LoomTranscriptMessage } from "@loom/agent";
 import { liveMessagesForSession, mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { useLocale } from "../locale.tsx";
-import { ChatSessionContext, ChatViewContext, useChatSession, type BranchActions, type PendingEdit } from "./chat-context.ts";
+import { ChatSessionContext, ChatViewContext, useChatSession, type BranchActions, type DraftRequest, type PendingEdit } from "./chat-context.ts";
 import { SessionScrollView } from "./chat-scroll.tsx";
 import { SessionMessageView } from "./chat-messages.tsx";
 import { FollowUpInput } from "./chat-composer.tsx";
@@ -55,6 +55,7 @@ export function SessionChat({
 	onSessionRecord,
 	onHistoryChanged,
 	onForked,
+	onOpenSettings,
 }: {
 	threadId: string;
 	messages: LoomTranscriptMessage[];
@@ -65,6 +66,7 @@ export function SessionChat({
 	onSessionRecord: (record: LoomSessionRecord) => void;
 	onHistoryChanged: () => void;
 	onForked: (record: LoomSessionRecord) => void;
+	onOpenSettings: () => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const stored = useMemo(() => toAgUiMessages(messages), [messages]);
@@ -72,9 +74,11 @@ export function SessionChat({
 	const [error, setError] = useState<string | null>(null);
 	const [busy, setBusy] = useState(false);
 	const [pendingEdit, setPendingEdit] = useState<PendingEdit | null>(null);
+	const [draftRequest, setDraftRequest] = useState<DraftRequest | null>(null);
 	const editingRef = useRef<string | null>(null);
 	const activeThread = useRef(threadId);
 	activeThread.current = threadId;
+	const draftApplied = useCallback((request: DraftRequest) => setDraftRequest((current) => current === request ? null : current), []);
 	const editSubmitted = useCallback((edit: PendingEdit) => setPendingEdit((current) => current === edit ? null : current), []);
 	const onRecord = useRef(onSessionRecord);
 	const onFork = useRef(onForked);
@@ -87,6 +91,7 @@ export function SessionChat({
 		setEditingId(null);
 		setError(null);
 		setBusy(false);
+		setDraftRequest(null);
 	}, [threadId]);
 
 	const actions = useMemo<BranchActions>(() => ({
@@ -138,7 +143,7 @@ export function SessionChat({
 	}), [busy, editingId, error, threadId, t.chat.forkConfirm]);
 
 	return (
-		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
+		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<div className="session-chat-shell">
 				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
 			</div>

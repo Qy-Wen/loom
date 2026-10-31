@@ -3,6 +3,8 @@ import type { Message } from "@ag-ui/core";
 import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 
 export type PendingEdit = { threadId: string; text: string };
+/** Text to place in the composer without sending it. */
+export type DraftRequest = { threadId: string; text: string };
 export type BranchActions = {
 	busy: boolean;
 	editingId: string | null;
@@ -24,6 +26,11 @@ export type ChatSession = {
 	editSubmitted: (edit: PendingEdit) => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
+	/** Ask the composer to show this text as its draft. It is never sent automatically. */
+	requestDraft: (request: DraftRequest) => void;
+	draftRequest: DraftRequest | null;
+	draftApplied: (request: DraftRequest) => void;
+	onOpenSettings: () => void;
 	usage: LoomContextUsage | null;
 	model: LoomSessionModel | undefined;
 	/** Refresh the session record after a per-conversation model change. */

@@ -2,6 +2,7 @@ import { useCallback, useContext, useLayoutEffect, useRef, useState } from "reac
 import { CopilotChat } from "@copilotkit/react-core/v2";
 import { useLocale } from "../locale.tsx";
 import { ChatViewContext, useChatSession } from "./chat-context.ts";
+import { ChatEmptyState } from "./chat-empty.tsx";
 
 const NEAR_BOTTOM_PX = 48;
 
@@ -164,6 +165,7 @@ export function SessionScrollView({
 					onScroll?.(event);
 				}}
 			>
+				{visible.length === 0 && <ChatEmptyState />}
 				{children}
 			</div>
 			{away && overflowing ? (
