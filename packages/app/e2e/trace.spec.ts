@@ -9,7 +9,6 @@ import { splitTraceBlobs, traceBlobMark } from "@loom/agent/trace-blob";
 import type { DevTraceRecord } from "../src/shared/dev-trace.ts";
 
 test("trace and metrics windows update live, link exemplars, persist, and reset on library switch", async () => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1", "build with LOOM_E2E_TRACE=1 for isolated trace-window acceptance");
 	test.setTimeout(60_000);
 	const root = await mkdtemp(join(tmpdir(), "loom-trace-e2e-"));
 	const library = join(root, "library"); const userData = join(root, "user-data");
@@ -131,7 +130,7 @@ test("trace and metrics windows update live, link exemplars, persist, and reset 
 });
 
 test("event overview shows native start/end times, live settlement, snapshot sources and recovery caveats", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
@@ -169,7 +168,7 @@ test("event overview shows native start/end times, live settlement, snapshot sou
 });
 
 test("detail tabs persist across events, conversations, closing details and live updates without sharing content folds", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
@@ -212,7 +211,7 @@ test("detail tabs persist across events, conversations, closing details and live
 });
 
 test("JSON fields default to expanded, preserve manual folds on live updates, and support legacy text", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window");
 	await loomPage.evaluate(() => window.loom.openDevTrace!());
@@ -263,7 +262,7 @@ test("JSON fields default to expanded, preserve manual folds on live updates, an
 });
 
 test("trace dividers resize, clamp, reset, and retain preferences across tabs and window reopen", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const open = async () => {
 		const opened = electronApp!.waitForEvent("window");
@@ -334,7 +333,7 @@ test("trace dividers resize, clamp, reset, and retain preferences across tabs an
 });
 
 test("conversation ledger shows readable events, safe previews, independent folds, search and timeline focus", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState(); await expect(trace.locator(".trace-app")).toBeVisible();
@@ -538,7 +537,7 @@ test("conversation ledger shows readable events, safe previews, independent fold
 });
 
 test("duration mode is the default and zero-duration calls stay visible and clickable at the right edge", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();
@@ -580,7 +579,7 @@ test("duration mode is the default and zero-duration calls stay visible and clic
 });
 
 test("zero-duration boundary spans join the following call instead of sharing its start", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();
@@ -620,7 +619,7 @@ test("zero-duration boundary spans join the following call instead of sharing it
 });
 
 test("inter-turn idle time folds into a narrow marker while selection, range focus and native coverage stay accurate", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();
@@ -667,7 +666,7 @@ test("inter-turn idle time folds into a narrow marker while selection, range foc
 });
 
 test("system details prefer complete independent tool snapshots and retain schema folds on updates", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();
@@ -702,7 +701,7 @@ test("system details prefer complete independent tool snapshots and retain schem
 });
 
 test("late conversation history cannot leak across a library reset with reused conversation IDs", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	await electronApp!.evaluate(({ ipcMain, BrowserWindow }) => {
 		let generation = 0;
@@ -735,7 +734,7 @@ test("late conversation history cannot leak across a library reset with reused c
 });
 
 test("an older exemplar does not skip unloaded conversation history", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	await electronApp!.evaluate(({ ipcMain }) => {
 		const now = Date.now();
@@ -760,7 +759,7 @@ test("an older exemplar does not skip unloaded conversation history", async ({ l
 });
 
 test("the trace window follows the interface language, including when it is changed while open", async ({ loomPage, electronApp }) => {
-	test.skip(process.env.LOOM_E2E_TRACE !== "1" || !electronApp, "isolated trace-enabled build required");
+	test.skip(!electronApp, "needs a launched app");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const opened = electronApp!.waitForEvent("window"); await loomPage.evaluate(() => window.loom.openDevTrace!());
 	const trace = await opened; await trace.waitForLoadState();

@@ -40,6 +40,7 @@ import { stageComposerInput, takeComposerImages } from "./composer/composer-imag
 import { importComposerFiles } from "./composer/composer-import.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
 import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
+import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from "./dev-trace-window.ts";
 import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
 import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
 import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
@@ -139,9 +140,6 @@ app.on("second-instance", () => { BrowserWindow.getAllWindows()[0]?.focus(); });
 type ContextMenuItem<T extends string> =
 	| { type: "separator" }
 	| { label: string; enabled?: boolean; click: () => T };
-
-/** Set only in dev and trace-enabled e2e builds, where the trace window exists. */
-let devTraceLanguageChanged: (() => void) | undefined;
 
 async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
 	const choice = generalSettings ? (await generalSettings.load()).language : "system";
@@ -822,7 +820,7 @@ function registerIpc(): void {
 		const before = (await generalSettings.load()).language;
 		const saved = await generalSettings.save(parseGeneralSettingsPatch(raw));
 		await syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`));
-		if (saved.language !== before) devTraceLanguageChanged?.();
+		if (saved.language !== before) publishDevTraceLanguage();
 		return saved;
 	}));
 	ipcMain.handle(IPC.getProcessSandboxNotice, async () => {
@@ -1154,19 +1152,15 @@ app
 		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
-		if (import.meta.env.DEV || (process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) {
-			const devTrace = await import("./dev-trace-window.ts");
-			devTraceLanguageChanged = devTrace.publishDevTraceLanguage;
-			requireChat().setTracePublisher(devTrace.publishDevTrace);
-			devTrace.registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
-				listTraces: (limit, before) => requireChat().listTraces(limit, before),
-				getTrace: (id) => requireChat().getTrace(id),
-				listConversations: (before) => requireChat().listTraceConversations(before),
-				getConversation: (id, before) => requireChat().getTraceConversation(id, before),
-				listMetrics: () => requireChat().listTraceMetrics(),
-				language: async () => generalSettings ? (await generalSettings.load()).language : "system",
-			});
-		}
+		requireChat().setTracePublisher(publishDevTrace);
+		registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
+			listTraces: (limit, before) => requireChat().listTraces(limit, before),
+			getTrace: (id) => requireChat().getTrace(id),
+			listConversations: (before) => requireChat().listTraceConversations(before),
+			getConversation: (id, before) => requireChat().getTraceConversation(id, before),
+			listMetrics: () => requireChat().listTraceMetrics(),
+			language: async () => generalSettings ? (await generalSettings.load()).language : "system",
+		});
 		agentServer = await startAgentServer(requireChat());
 		registerAssetProtocol();
 		registerIpc();

@@ -8,15 +8,11 @@ import { defineConfig } from "electron-vite";
  */
 const OUT = process.env.LOOM_BUILD_OUT?.trim() || "out";
 
-export default defineConfig(({ command }) => {
+export default defineConfig(() => {
 	const preloadInput: Record<string, string> = {
 		index: resolve(__dirname, "src/preload/index.ts"),
+		"dev-trace": resolve(__dirname, "src/preload/dev-trace.ts"),
 	};
-	// Isolated Electron trace acceptance may include the dev window; production still omits it.
-	const trace = command === "serve" || process.env.LOOM_E2E_TRACE === "1";
-	if (trace) {
-		preloadInput["dev-trace"] = resolve(__dirname, "src/preload/dev-trace.ts");
-	}
 	return {
 		main: {
 			build: {
@@ -51,7 +47,7 @@ export default defineConfig(({ command }) => {
 				outDir: resolve(__dirname, OUT, "renderer"),
 				emptyOutDir: true,
 				rollupOptions: {
-					input: { index: resolve(__dirname, "src/renderer/index.html"), ...(trace ? { "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html") } : {}), ...(process.env.LOOM_E2E_PANELS === "1" ? { "panels-fixture": resolve(__dirname, "src/renderer/panels-fixture.html") } : {}) },
+					input: { index: resolve(__dirname, "src/renderer/index.html"), "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html"), ...(process.env.LOOM_E2E_PANELS === "1" ? { "panels-fixture": resolve(__dirname, "src/renderer/panels-fixture.html") } : {}) },
 				},
 			},
 			plugins: [react()],

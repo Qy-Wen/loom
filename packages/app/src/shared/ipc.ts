@@ -343,7 +343,7 @@ export interface LoomApi {
 	pickGradeLut: () => Promise<{ path: string; name: string } | null>;
 	isFullscreen: () => Promise<boolean>;
 	onFullscreenChanged: (listener: (fullscreen: boolean) => void) => () => void;
-	openDevTrace?: () => Promise<void>;
+	openDevTrace: () => Promise<void>;
 }
 
 declare global {

@@ -76,7 +76,7 @@ CreativeAssets/                   -- 用户选择的库根目录；Loom 不强�
         ├── command-allows/command-allows.json   -- 记住的命令
         ├── skills/               -- SKILL.md 目录
         ├── memory/MEMORY.md
-        ├── traces/telemetry.sqlite   -- 仅开发模式
+        ├── traces/telemetry.sqlite   -- 运行轨迹与指标，保留 30 天
         └── tool-results/<conversationId>/<taskId>.txt
 ```
 
@@ -355,4 +355,4 @@ Local Core
 - **对话资产引用：** 输入框可贴库内资产；回答里的 `<asset_ref>` 块先按 `asset_id`、再按路径选中该文件。见 [AGENT](./agent/AGENT.zh-CN.md) §5。
 - **从某条消息分支：** 当前会话可从任意一轮续聊，或用该前缀开新会话。见 [AGENT](./agent/AGENT.zh-CN.md) §3。
 - **Human in the loop：** Standard 确认库外的 `write` / `edit`；Basic 也确认 `bash` 和会写文件的 FFmpeg 工具。见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。
-- **可观测性：** 开发模式下记录运行轨迹、工具调用、耗时与 token，存 `.loom/agents/traces/telemetry.sqlite`。见 [TRACE](./agent/TRACE.zh-CN.md)。
+- **可观测性：** 记录运行轨迹、工具调用、耗时与 token，存 `.loom/agents/traces/telemetry.sqlite`。见 [TRACE](./agent/TRACE.zh-CN.md)。

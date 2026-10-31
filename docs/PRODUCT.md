@@ -77,7 +77,7 @@ CreativeAssets/                   -- selected library root; Loom imposes no stru
         ├── command-allows/command-allows.json   -- remembered commands
         ├── skills/               -- SKILL.md directories
         ├── memory/MEMORY.md
-        ├── traces/telemetry.sqlite   -- development mode only
+        ├── traces/telemetry.sqlite   -- run traces and metrics, kept 30 days
         └── tool-results/<conversationId>/<taskId>.txt
 ```
 
@@ -359,4 +359,4 @@ Local Core
 - **Chat asset refs:** attach library assets in the composer; an `<asset_ref>` block in a reply selects that file by `asset_id`, then by path. See [AGENT](./agent/AGENT.md) §5.
 - **Branch from a message:** continue or fork a session from any turn. See [AGENT](./agent/AGENT.md) §3.
 - **Human in the loop:** Standard confirms `write` / `edit` outside the open library; Basic also confirms `bash` and the FFmpeg tools that write. See [PERMISSION](./agent/PERMISSION.md).
-- **Observability:** in development mode, record run traces, tool calls, latency, and token usage in `.loom/agents/traces/telemetry.sqlite`. See [TRACE](./agent/TRACE.md).
+- **Observability:** record run traces, tool calls, latency, and token usage in `.loom/agents/traces/telemetry.sqlite`. See [TRACE](./agent/TRACE.md).

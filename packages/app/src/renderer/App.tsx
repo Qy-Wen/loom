@@ -1130,7 +1130,7 @@ export function App(): React.JSX.Element {
 					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
-					{import.meta.env.DEV ? <TracesButton onOpen={() => void window.loom.openDevTrace?.()} /> : null}
+					<TracesButton onOpen={() => void window.loom.openDevTrace()} />
 					<HelpButton onOpen={() => setHelpOpen(true)} />
 					<SettingsButton onOpen={() => setSettingsOpen(true)} />
 					<LibraryOpenButton opening={opening} onOpen={() => void openLibrary()} />

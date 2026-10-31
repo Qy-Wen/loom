@@ -2,7 +2,7 @@
 
 # Local Agent Traces
 
-Development mode records traces and metrics in `<library>/.loom/agents/traces/telemetry.sqlite`. Traces expire 30 days after their last update; metric intervals expire 30 days after their start. Cleanup runs on open and every minute. The viewer pages the latest 40 conversations and loads 40 traces per conversation at a time; both lists can load earlier history. Its Metrics tab shows the latest 200 metric rows and refreshes every second while open. Switching libraries resets both views. Production builds do not record or include the trace window. No data is uploaded.
+Loom (all builds, including release) records traces and metrics in `<library>/.loom/agents/traces/telemetry.sqlite`. Traces expire 30 days after their last update; metric intervals expire 30 days after their start. Cleanup runs on open and every minute. The viewer pages the latest 40 conversations and loads 40 traces per conversation at a time; both lists can load earlier history. Its Metrics tab shows the latest 200 metric rows and refreshes every second while open. Switching libraries resets both views. Production builds do not record or include the trace window. No data is uploaded.
 
 The old `traces.sqlite` is left untouched and is not read or migrated.
 
@@ -41,7 +41,7 @@ Conversation/ledger and ledger/detail dividers can be dragged. Minimum sizes kee
 
 This is best-effort redaction, not anonymization: prompts, memory, paths, and tool output can contain private information. The local database is not encrypted.
 
-The window follows the app's interface language (English or Simplified Chinese) and switches live when it is changed in Settings. Its copy lives in `renderer/dev-trace/trace-messages.ts`, apart from `shared/locale.ts`, because the window exists only in dev and trace-enabled builds and none of it should ship in releases. Recorded content (prompts, model output, tool arguments and results, error messages) is shown as captured and is never translated.
+The window follows the app's interface language (English or Simplified Chinese) and switches live when it is changed in Settings. Its copy lives in `renderer/dev-trace/trace-messages.ts`, apart from `shared/locale.ts`, because only this window uses it. Recorded content (prompts, model output, tool arguments and results, error messages) is shown as captured and is never translated.
 
 ## Validation
 
@@ -50,9 +50,7 @@ Coverage includes the native adapter conformance suite with actual ordered measu
 Isolated Electron acceptance uses a temporary library and a local mock model:
 
 ```bash
-LOOM_E2E_TRACE=1 pnpm --filter @loom/app build:e2e
+pnpm --filter @loom/app build:e2e
 cd packages/app
-LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
+pnpm exec playwright test trace.spec.ts
 ```
-
-On Windows, set the variable with the shell's environment syntax. Normal production builds omit the trace window.

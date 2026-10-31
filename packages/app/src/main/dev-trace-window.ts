@@ -58,7 +58,7 @@ export function registerDevTraceIpc(preload: string, queries: TraceSource): void
 }
 
 export function openDevTraceWindow(): void {
-	if (app.isPackaged || (!process.env.ELECTRON_RENDERER_URL && !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_TRACE === "1")) || !preloadPath) return;
+	if (!preloadPath) return;
 	if (win && !win.isDestroyed()) {
 		win.show();
 		win.focus();

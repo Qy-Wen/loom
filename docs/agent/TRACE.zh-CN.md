@@ -2,7 +2,7 @@
 
 # 本地 Agent Trace
 
-开发模式将 trace 和指标保存到 `<素材库>/.loom/agents/traces/telemetry.sqlite`。Trace 在最后更新 30 天后过期，指标时间段在起始 30 天后过期；打开数据库时及运行期间每分钟清理。窗口按最近 40 个会话分页，每个会话逐页加载 40 条 trace；两处都支持加载更早历史。Metrics 页展示最近 200 条指标记录，打开时每秒刷新。切库重置两个视图。生产构建不记录，也不包含 trace 窗口。不上传数据。
+Loom（所有构建，含发布版）将 trace 和指标保存到 `<素材库>/.loom/agents/traces/telemetry.sqlite`。Trace 在最后更新 30 天后过期，指标时间段在起始 30 天后过期；打开数据库时及运行期间每分钟清理。窗口按最近 40 个会话分页，每个会话逐页加载 40 条 trace；两处都支持加载更早历史。Metrics 页展示最近 200 条指标记录，打开时每秒刷新。切库重置两个视图。生产构建不记录，也不包含 trace 窗口。不上传数据。
 
 旧 `traces.sqlite` 文件保留，不读取、不迁移。
 
@@ -41,7 +41,7 @@ Counter、up-down counter 和 histogram 按十秒时间段聚合次数、总和�
 
 这是尽力脱敏，不是匿名化：prompt、memory、路径和工具输出仍可能含隐私。数据库未加密。
 
-窗口跟随应用的界面语言（英文或简体中文），在设置里切换后实时生效。文案放在 `renderer/dev-trace/trace-messages.ts`，不放进 `shared/locale.ts`：这个窗口只存在于开发和启用追踪的构建里，不该进入发布包。已采集的内容（提示词、模型输出、工具参数与结果、错误信息）按原样显示，不翻译。
+窗口跟随应用的界面语言（英文或简体中文），在设置里切换后实时生效。文案放在 `renderer/dev-trace/trace-messages.ts`，不放进 `shared/locale.ts`：只有这个窗口用到。已采集的内容（提示词、模型输出、工具参数与结果、错误信息）按原样显示，不翻译。
 
 ## 验证
 
@@ -50,9 +50,7 @@ Counter、up-down counter 和 histogram 按十秒时间段聚合次数、总和�
 独立 Electron 验收使用临时素材库和本地模型 mock：
 
 ```bash
-LOOM_E2E_TRACE=1 pnpm --filter @loom/app build:e2e
+pnpm --filter @loom/app build:e2e
 cd packages/app
-LOOM_E2E_TRACE=1 pnpm exec playwright test trace.spec.ts
+pnpm exec playwright test trace.spec.ts
 ```
-
-Windows 请用对应 shell 的环境变量语法；普通生产构建不包含 trace 窗口。
