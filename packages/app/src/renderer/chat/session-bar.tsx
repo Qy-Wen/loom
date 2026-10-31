@@ -16,6 +16,9 @@ interface SessionBarProps {
 	onRefresh: () => void;
 }
 
+/** The main process stores this exact string for unnamed sessions (DEFAULT_SESSION_TITLE in @loom/agent). */
+const DEFAULT_TITLE = "New session";
+
 export function SessionBar({
 	sessions,
 	currentId,
@@ -29,6 +32,7 @@ export function SessionBar({
 	onRefresh,
 }: SessionBarProps): React.JSX.Element {
 	const { t } = useLocale();
+	const titleOf = (session: SessionSummary) => session.title === DEFAULT_TITLE ? t.sessions.untitled : session.title;
 	const open = sessions.filter((session) => session.status === "open");
 	const archived = sessions.filter((session) => session.status === "archived");
 	// Closing the only session, while it is still empty, would just swap it for another empty one.
@@ -66,17 +70,17 @@ export function SessionBar({
 								role="tab"
 								aria-selected={selected}
 								disabled={busy}
-								title={session.title}
+								title={titleOf(session)}
 								onClick={() => onSelect(session.id)}
 							>
-								{session.title}
+								{titleOf(session)}
 							</button>
 							{closable && (
 								<button
 									type="button"
 									className="session-tab-close"
 									disabled={busy}
-									aria-label={t.sessions.close(session.title)}
+									aria-label={t.sessions.close(titleOf(session))}
 									onClick={(event) => {
 										event.stopPropagation();
 										onArchive(session.id);
@@ -119,19 +123,19 @@ export function SessionBar({
 										type="button"
 										role="menuitem"
 										disabled={busy}
-										title={session.title}
+										title={titleOf(session)}
 										onClick={() => {
 											setMenuOpen(false);
 											onUnarchive(session.id);
 										}}
 									>
-										{session.title}
+										{titleOf(session)}
 									</button>
 									<button
 										type="button"
 										className="session-tab-close"
 										disabled={busy}
-										aria-label={t.sessions.delete(session.title)}
+										aria-label={t.sessions.delete(titleOf(session))}
 										onClick={() => {
 											onDelete(session.id);
 										}}

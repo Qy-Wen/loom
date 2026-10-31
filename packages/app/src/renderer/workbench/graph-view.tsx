@@ -390,10 +390,7 @@ export function GraphView({
 	return (
 		<div className="graph-view">
 			<div className="graph-caption">
-				<span>
-					{assets.length} assets · {visibleEdges.length} relations
-					{" · drag a node to move · hover the rim for + to link"}
-				</span>
+				<span>{t.graph.caption(assets.length, visibleEdges.length)}</span>
 				{selectedEdge && (
 					<button
 						className="text-button"

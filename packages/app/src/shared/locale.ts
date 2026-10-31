@@ -160,6 +160,7 @@ export const messages = defineLocale(
 		},
 		graph: {
 			canvas: "Asset relationship graph",
+			caption: (assets: number, relations: number) => `${assets} assets · ${relations} relations · drag a node to move · hover the rim for + to link`,
 			emptyTitle: "No assets yet",
 			emptyBody: "Open a library to see every asset and its relationships on one canvas.",
 			types: "Asset types",
@@ -286,6 +287,8 @@ export const messages = defineLocale(
 			label: "Sessions",
 			close: (title: string) => `Close ${title}`,
 			new: "New session",
+			/** Stored default title for a session nobody has named; shown translated, never rewritten. */
+			untitled: "New session",
 			archived: "History",
 			delete: (title: string) => `Delete ${title}`,
 			deleteConfirm: "Delete this session? This cannot be undone.",
@@ -719,6 +722,7 @@ export const messages = defineLocale(
 		},
 		graph: {
 			canvas: "素材关系图",
+			caption: (assets, relations) => `${assets} 个素材 · ${relations} 条关系 · 拖动节点可移动 · 悬停在边缘点 + 可建立关系`,
 			emptyTitle: "还没有素材",
 			emptyBody: "打开素材库后，可以在一张画布上看全部素材和它们的关系。",
 			types: "素材类型",
@@ -845,6 +849,7 @@ export const messages = defineLocale(
 			label: "会话",
 			close: (title) => `关闭 ${title}`,
 			new: "新会话",
+			untitled: "新会话",
 			archived: "历史",
 			delete: (title) => `删除 ${title}`,
 			deleteConfirm: "删除这个会话？此操作无法撤销。",
