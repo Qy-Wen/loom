@@ -116,7 +116,7 @@ export const english = {
   "faq.q5": "Can I connect ComfyUI?",
   "faq.a5": "Yes, through an appropriate third-party MCP server. You need to install and configure that service separately and prepare your ComfyUI workflow. It is not a built-in cloud service that works automatically after installing Loom.",
   "faq.q6": "How can I give feedback or contribute?",
-  "faq.a6": "Report problems through GitHub Issues or contribute a Pull Request. An independent feedback channel for mainland China is being prepared.",
+  "faq.a6": "Report problems through GitHub Issues or contribute a Pull Request.",
   "faq.feedback": "Open Issues ↗",
   "closing.line1": "Good tools. ",
   "closing.line2": "More possibilities.",

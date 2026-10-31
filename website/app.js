@@ -107,16 +107,6 @@ function renderRelease() {
       ? text("下载区已接入独立下载源。标有「国内下载」的按钮无需先访问 GitHub；各系统的可用状态请以下载区为准。", "Independent downloads are available in the download section. Buttons labeled “Direct download” do not require GitHub. Availability varies by system.")
       : text("当前可用的安装包仍通过 GitHub 下载。独立的国内下载源准备中，接入后会在下载区标明。", "Available installers are currently hosted on GitHub. Independent downloads are being prepared and will be labeled in the download section.");
   }
-  const feedback = document.querySelector("#domestic-feedback");
-  feedback.replaceChildren();
-  const feedbackUrl = validPublicUrl(release.feedbackUrl);
-  if (feedbackUrl) {
-    document.querySelector('[data-i18n="faq.a6"]').textContent = text("欢迎通过 GitHub Issues 反馈问题，或提交 Pull Request。也可以使用独立反馈入口。", "Report problems through GitHub Issues, contribute a Pull Request, or use the independent feedback channel.");
-    const link = document.createElement("a");
-    link.href = feedbackUrl;
-    link.textContent = text(" 独立反馈入口 ↗", " Independent feedback ↗");
-    feedback.append(link);
-  }
 }
 
 function applyLanguage(next) {

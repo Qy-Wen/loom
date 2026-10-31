@@ -43,10 +43,9 @@ test("resume metadata only permits the exact expected artifact set", () => {
   for (const invalid of [files.slice(1), [...files.slice(0, 3), files[0]], files.map((file, index) => index === 0 ? { ...file, name: "../../private.key" } : file), files.map((file) => ({ ...file, sha256: "invalid" }))]) assert.throws(() => validateReleaseFiles(invalid, tag));
 });
 
-test("website links preserve feedback, include both sources, and refuse a downgrade", () => {
-  const current = { version: null, repository: "https://github.com/Qy-Wen/loom", feedbackUrl: "https://feedback.example.com/", downloads: {} };
+test("website links include both sources, and refuse a downgrade", () => {
+  const current = { version: null, repository: "https://github.com/Qy-Wen/loom", downloads: {} };
   const updated = websiteRelease(current, config, tag, files);
-  assert.equal(updated.feedbackUrl, current.feedbackUrl);
   assert.equal(updated.version, tag);
   assert.match(updated.downloads["windows-x64"].domestic, /ap-shanghai/);
   assert.match(updated.downloads["macos-arm64"].github, /mac-arm64\.dmg$/);

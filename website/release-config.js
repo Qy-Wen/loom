@@ -2,7 +2,6 @@
 export const release = {
   "version": "v0.1.0-alpha.1",
   "repository": "https://github.com/Qy-Wen/loom",
-  "feedbackUrl": null,
   "downloads": {
     "windows-x64": {
       "domestic": "https://loom-releases-1413700583.cos.ap-shanghai.myqcloud.com/loom/releases/v0.1.0-alpha.1/Loom-0.1.0-alpha.1-win-x64.exe",

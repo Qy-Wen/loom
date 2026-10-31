@@ -20,13 +20,12 @@ Optional port / 自定义端口：`npm run website:dev -- --port 4174`.
 
 For automatic installer uploads and download-link generation, see [one-command releases](../docs/RELEASING.md) / 安装包自动上传和下载地址自动生成见[一键发布说明](../docs/RELEASING.zh-CN.md)。
 
-Edit `release-config.js`. Use `null` for unpublished installers; the page displays “Coming soon”. Set HTTPS links only. `domestic` is the independent download URL, prioritized over the optional `github` mirror. Version, download availability, and feedback copy update in both languages.
+Edit `release-config.js`. Use `null` for unpublished installers; the page displays “Coming soon”. Set HTTPS links only. `domestic` is the independent download URL, prioritized over the optional `github` mirror. Version and download availability update in both languages.
 
-修改 `release-config.js`：未发布的安装包保持 `null`，页面显示「准备中」。下载与反馈地址只接受 HTTPS。`domestic` 为独立的国内下载地址，优先于可选的 `github` 备用地址。版本、下载状态和反馈文案会同步更新两种语言。
+修改 `release-config.js`：未发布的安装包保持 `null`，页面显示「准备中」。下载地址只接受 HTTPS。`domestic` 为独立的国内下载地址，优先于可选的 `github` 备用地址。版本和下载状态会同步更新两种语言。
 
 ```js
 version: "v0.1.0-alpha.1",
-feedbackUrl: "https://your-feedback-service.example/form",
 downloads: {
   "windows-x64": { domestic: "https://your-download-domain.example/Loom-win-x64.exe", github: null },
   "macos-arm64": { domestic: null, github: null },
