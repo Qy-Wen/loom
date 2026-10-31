@@ -8,6 +8,13 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 	const root = (JSON.parse(await readFile(join(userData, "last-library.json"), "utf8")) as { rootPath: string }).rootPath;
 	await writeFile(join(root, "a.md"), "a");
 	await writeFile(join(root, "b.md"), "b");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(2);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		await window.loom.createRelation(assets[0]!.assetId, assets[1]!.assetId, "ALPHA");
+		await window.loom.createRelation(assets[0]!.assetId, assets[1]!.assetId, "BETA");
+	});
+	await loomPage.reload();
 	await loomPage.locator(".library-views").getByRole("button", { name: "Graph", exact: true }).click();
 
 	const nodes = loomPage.locator(".graph-node");
@@ -62,10 +69,32 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 
 	// While a link is dragged onto a node, only the node's own outline marks it: no extra ring around it.
 	await openDialog();
-	await expect(dialog.getByRole("textbox")).toHaveValue("");
+	const input = dialog.getByRole("textbox");
+	const toggle = dialog.locator(".suggest-toggle");
+	const options = dialog.getByRole("option");
+	await expect(input).toHaveValue("");
+	await expect(input).toBeFocused();
+	await expect(input).toHaveAttribute("aria-expanded", "false");
+	await expect(options).toHaveCount(0);
+	await input.click();
+	await expect(options).toHaveText(["ALPHA", "BETA"]);
+	await toggle.click();
+	await expect(options).toHaveCount(0);
+	await input.click(); // Reopen even though autofocus/toggle kept the input focused.
+	await expect(options).toHaveCount(2);
+	await input.press("Escape");
+	await expect(options).toHaveCount(0);
+	await expect(dialog).toBeVisible();
+	await input.press("ArrowDown");
+	await expect(options).toHaveCount(2);
+	await input.fill("BET");
+	await expect(options).toHaveText(["BETA"]);
+	await options.click();
+	await expect(input).toHaveValue("BETA");
+	await expect(options).toHaveCount(0);
 
 	// Presses inside the dialog keep it open.
-	await dialog.getByRole("textbox").click();
+	await input.click();
 	await dialog.locator(".graph-type-dialog-title").click();
 	await expect(dialog).toBeVisible();
 

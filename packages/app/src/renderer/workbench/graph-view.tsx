@@ -591,7 +591,6 @@ export function GraphView({
 					</div>
 					<SuggestInput
 						autoFocus
-						openOnFocus={false}
 						value={typeDraft}
 						open={typeOpen}
 						suggestions={relationTypes}

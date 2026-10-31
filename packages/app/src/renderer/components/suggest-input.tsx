@@ -6,7 +6,6 @@ interface SuggestInputProps {
 	suggestions: readonly string[];
 	placeholder: string;
 	autoFocus?: boolean;
-	openOnFocus?: boolean;
 	showLabel: string;
 	hideLabel: string;
 	onChange: (value: string) => void;
@@ -19,15 +18,28 @@ export function SuggestInput({
 	suggestions,
 	placeholder,
 	autoFocus,
-	openOnFocus = true,
 	showLabel,
 	hideLabel,
 	onChange,
 	onOpenChange,
 }: SuggestInputProps): React.JSX.Element {
 	const rootRef = useRef<HTMLDivElement>(null);
+	const inputRef = useRef<HTMLInputElement>(null);
+	const autoFocusing = useRef(false);
 	const query = value.trim().toLowerCase();
 	const matches = suggestions.filter((item) => !query || item.toLowerCase().includes(query));
+
+	useEffect(() => {
+		if (!autoFocus) return;
+		// Focus new forms without opening suggestions until the user interacts.
+		autoFocusing.current = true;
+		try { inputRef.current?.focus(); }
+		finally { autoFocusing.current = false; }
+	}, [autoFocus]);
+
+	function showSuggestions(): void {
+		if (suggestions.length > 0) onOpenChange(true);
+	}
 
 	useEffect(() => {
 		if (!open) return;
@@ -41,18 +53,24 @@ export function SuggestInput({
 	return (
 		<div className="suggest" ref={rootRef}>
 			<input
-				autoFocus={autoFocus}
+				ref={inputRef}
 				value={value}
 				placeholder={placeholder}
 				aria-expanded={open}
 				onChange={(event) => {
 					onChange(event.target.value);
-					onOpenChange(true);
+					showSuggestions();
 				}}
+				onClick={showSuggestions}
 				onFocus={() => {
-					if (openOnFocus && suggestions.length > 0) onOpenChange(true);
+					if (!autoFocusing.current) showSuggestions();
 				}}
 				onKeyDown={(event) => {
+					if (event.key === "ArrowDown" && suggestions.length > 0) {
+						event.preventDefault();
+						showSuggestions();
+						return;
+					}
 					if (event.key !== "Escape" || !open) return;
 					event.stopPropagation();
 					onOpenChange(false);

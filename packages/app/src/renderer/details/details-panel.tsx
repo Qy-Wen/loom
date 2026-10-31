@@ -250,7 +250,6 @@ function RelationsEditor({
 					<div className="relation-type-row">
 						<SuggestInput
 							autoFocus
-							openOnFocus={false}
 							value={form.type}
 							open={typeOpen}
 							suggestions={relationTypes}
