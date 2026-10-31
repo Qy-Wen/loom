@@ -50,7 +50,13 @@ Loom 把一个文件夹变成你的素材库。个人相册、创作中的成片
 - `app/src/main`：`desktop`、`chat`、`composer`、`models`、`settings`、`tools`、`mcp`；存储跟随所属功能。
 - `app/src/renderer`：聊天和素材详情分别放在 `chat`、`details`，共用 UI 控件放在 `components`。`app/src/shared` 存放跨进程契约和纯函数，`preload` 桥接类型化 IPC。
 
+## 介绍页
+
+中英文介绍页位于 [`website/`](./website/README.md)。运行 `npm run website:dev` 本地预览，`npm run website:build` 生成静态文件，`npm run website:deploy` 按本地服务器配置部署，无需安装额外依赖。下载链接独立配置，发布凭据由托管账号管理。
+
 ## 开发
+
+完整的一键发布（Mac 打包 → COS 与 GitHub → 更新网站）见[发布说明](./docs/RELEASING.zh-CN.md)。
 
 ```bash
 pnpm install                          # 下载本机的 ffmpeg 和 ffprobe；Windows 上缺沙箱时安装一次

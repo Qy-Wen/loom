@@ -1,0 +1,24 @@
+name: loom-website
+
+services:
+  website:
+    image: ${LOOM_CADDY_IMAGE:-caddy:2}
+    restart: unless-stopped
+    volumes:
+      - ./site:/srv:ro
+      - ./config:/etc/caddy:ro
+    networks:
+      ingress:
+        aliases:
+          - loom-website
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/"]
+      interval: 5s
+      timeout: 3s
+      retries: 6
+      start_period: 3s
+
+networks:
+  ingress:
+    external: true
+    name: ${LOOM_INGRESS_NETWORK:-qy-site_default}

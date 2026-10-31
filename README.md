@@ -50,7 +50,13 @@ Source files follow feature ownership:
 - `app/src/main`: `desktop`, `chat`, `composer`, `models`, `settings`, `tools`, and `mcp`. Storage stays with its feature.
 - `app/src/renderer`: chat and asset details live in `chat` and `details`; shared UI controls live in `components`. `app/src/shared` holds cross-process contracts and pure helpers; `preload` bridges typed IPC.
 
+## Website
+
+The bilingual introduction page lives in [`website/`](./website/README.md). Run `npm run website:dev` to preview, `npm run website:build` for static output, or `npm run website:deploy` to publish using your local server configuration. No additional dependencies are required. Download links are configured separately from publishing credentials.
+
 ## Development
+
+For the full Mac build → COS and GitHub → website workflow, see [releasing](./docs/RELEASING.md).
 
 ```bash
 pnpm install                          # downloads ffmpeg and ffprobe; on Windows, installs the sandbox once

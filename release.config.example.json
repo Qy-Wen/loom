@@ -1,0 +1,11 @@
+{
+  "repository": "Qy-Wen/loom",
+  "cos": {
+    "bucket": null,
+    "region": "ap-shanghai",
+    "prefix": "loom/releases",
+    "publicBaseUrl": null,
+    "configPath": "~/.cos.yaml"
+  },
+  "websiteDeployConfig": "website/deploy.local.json"
+}

@@ -8,9 +8,10 @@ const archName = ["ia32", "x64", "armv7l", "arm64", "universal"];
 const config = {
 	appId: "com.loom.app",
 	productName: "Loom",
-	artifactName: "Loom-${os}-${arch}.${ext}",
+	artifactName: "Loom-${version}-${os}-${arch}.${ext}",
+	...(process.env.LOOM_RELEASE_VERSION ? { extraMetadata: { version: process.env.LOOM_RELEASE_VERSION } } : {}),
 	directories: {
-		output: "release",
+		output: process.env.LOOM_RELEASE_DIR || "release",
 	},
 	files: [
 		"out/**/*",

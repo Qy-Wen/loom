@@ -6,6 +6,10 @@ node_modules/
 .env
 .env.*
 !.env.example
+website/deploy.local.json
+release.local.json
+.release-state/
+coscli_output/
 
 # Build output
 dist/

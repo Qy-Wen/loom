@@ -1,0 +1,11 @@
+{
+  "host": "101.43.40.25",
+  "user": "ubuntu",
+  "port": 2222,
+  "domain": "loom.sanzang.site",
+  "remoteDirectory": "/home/ubuntu/loom-website",
+  "ingressNetwork": "qy-site_default",
+  "ingressContainer": "qy-site-caddy",
+  "ingressConfig": "/home/ubuntu/qy-site/Caddyfile",
+  "image": "caddy:2"
+}

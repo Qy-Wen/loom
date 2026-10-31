@@ -13,8 +13,10 @@
     "test:e2e:attach": "pnpm --filter @loom/app test:e2e:attach",
     "dev": "pnpm --filter @loom/app dev",
     "dist": "node scripts/dist.mjs",
+    "release": "node scripts/release.mjs",
     "website:dev": "node website/scripts/serve.mjs",
     "website:build": "node website/scripts/build.mjs",
+    "website:deploy": "node website/scripts/deploy.mjs",
     "postinstall": "node scripts/download-ffmpeg.mjs && node scripts/ensure-windows-sandbox.mjs",
     "vendor:sync": "pnpm --filter @loom/agent vendor:sync",
     "vendor:ffmpeg": "node scripts/download-ffmpeg.mjs"

@@ -12,7 +12,7 @@ process.env.CSC_IDENTITY_AUTO_DISCOVERY = "false";
 
 await run(process.execPath, [join(root, "scripts/download-ffmpeg.mjs"), "--all"]);
 await run("pnpm", ["--filter", "@loom/app", "build"]);
-await run("pnpm", ["--filter", "@loom/app", "exec", "electron-builder", "--mac", "--win"]);
+await run("pnpm", ["--filter", "@loom/app", "exec", "electron-builder", "--mac", "--win", "--publish", "never"]);
 
 function run(command, args) {
 	return new Promise((resolve, reject) => {
