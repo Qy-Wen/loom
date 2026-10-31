@@ -90,6 +90,27 @@ describe("design tokens", () => {
 		assert.deepEqual(found, [], `A value on the spacing scale must use its token:\n${found.join("\n")}`);
 	});
 
+	it("uses the control size scale for square hit areas and icon slots", () => {
+		const scale = new Set(["16px", "20px", "24px", "28px", "32px", "36px", "40px"]);
+		// Thin marks, sub-pixel internals and layout bands keep literal geometry; list them here with a reason.
+		const exempt = /settings-switch-ui|library-shortcuts-more|trace-turn-header|trace-event-table|trace-history|trace-toolbar|trace-lane-labels/;
+		const found: string[] = [];
+		for (const path of files(renderer, css)) {
+			if (path === tokensFile) continue;
+			const source = lines(path).map((l) => l.text).join("\n");
+			for (const rule of source.matchAll(/([^{}]*)\{([^{}]*)\}/g)) {
+				const selector = rule[1]!.trim(), body = rule[2]!;
+				if (exempt.test(selector)) continue;
+				const hit = [...body.matchAll(/(?<![\w-])(?:min-|max-)?(?:width|height)\s*:\s*(\d+px)\s*(?:!important)?\s*(?=;|$)/g)].find((d) => scale.has(d[1]!))
+					?? [...body.matchAll(/(?<![\w-])flex\s*:\s*0 0 (\d+px)/g)].find((d) => scale.has(d[1]!));
+				if (!hit) continue;
+				const line = source.slice(0, (rule.index ?? 0) + rule[0].indexOf(hit[0])).split("\n").length;
+				found.push(`${relative(renderer, path)}:${line}  raw size; use --lm-size-*  →  ${selector.split("\n").pop()!.trim().slice(0, 50)} { ${hit[0].trim()} }`);
+			}
+		}
+		assert.deepEqual(found, [], `A size on the control scale must use its token:\n${found.join("\n")}`);
+	});
+
 	it("uses the motion tokens for transition durations", () => {
 		const found = violations(css, (text) => {
 			if (custom(text)) return null;

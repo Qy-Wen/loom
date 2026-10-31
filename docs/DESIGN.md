@@ -22,6 +22,7 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 - **Spacing**: `--lm-space-1…9` is 2, 4, 6, 8, 10, 12, 16, 20, 24 px. Use it for `padding`, `margin`, and `gap`. Widths, heights, and offsets stay literal.
 - **Radius**: `sm` 5, `md` 8, `lg` 12, `xl` 20, `pill` for boxes. For thin marks the radius must stay below half the short side, so use `hair` 1 (bars up to ~3px, timeline blocks), `line` 2 (indicator lines, small handles), `xs` 3. Never round a thin mark with `sm` or larger: it turns into a pill. Use `50%` for circles.
 - **Type**: sizes `2xs` 10 to `4xl` 44; weights `regular`, `medium`, `semibold`, `bold`. Body text is `sm` (12px).
+- **Control size**: `--lm-size-xs…3xl` is 16, 20, 24, 28, 32, 36, 40 px on a 4px grid. Use it for the `width`/`height` of buttons, icon slots, and bars (`xs` icon slot, `sm` small icon button, `md` icon button, `lg` toolbar button, `xl` primary control, `3xl` window bar). Odd sizes such as 18, 22, 26, 30 snap to the nearest step. Widths of panels, menus, and dialogs are not on this scale: keep them as `min()`/`clamp()` expressions beside the component, and layout widths such as the library and side panels stay in `layout/` where drag logic owns them.
 - **Elevation**: `shadow-xs` (resting controls), `sm` (small popovers), `md` (menus, toasts), `lg` (dialogs).
 - **Asset kinds**: `--lm-asset-image/video/audio/text/other` is the single set for list badges, graph nodes, legends, and chips. Never define a second one.
 - **Stacking**: use the named `--lm-z-*` tiers. Never write a bare number.
@@ -55,5 +56,6 @@ Dark mode needs one extra block in `tokens.css` that re-maps the layer 2 tokens 
 
 ## Known gaps
 
-- Sizes of layout parts (panel widths, control heights) are not tokenised; they are component constants.
+- Panel, menu, and dialog widths are not tokenised. They are tied to content or to drag logic in `layout/`, so a shared scale would not help.
+- Some exceptions keep literal geometry: the settings switch, the trace table rows, and the shortcut fade. They are listed in `tests/design-tokens.test.ts`.
 - Text colors are bucketed from about 40 historical grays into five. A few elements shifted by 1–3 levels of lightness when the system was introduced.
