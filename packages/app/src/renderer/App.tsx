@@ -397,6 +397,7 @@ export function App(): React.JSX.Element {
 	}, [viewedAsset]);
 
 	// Depend on the path, not the asset object: an update that keeps the path must not reopen a folder the user collapsed.
+	// `picked` is replaced on every selection, so clicking the already selected file reopens its folders too.
 	const selectedPath = selectedAsset?.relativePath;
 	useEffect(() => {
 		if (!selectedPath) return;
@@ -410,7 +411,7 @@ export function App(): React.JSX.Element {
 			}
 			return changed ? next : current;
 		});
-	}, [selectedPath]);
+	}, [selectedPath, picked]);
 	const relationTypes = useMemo(
 		() => [...new Set(graphEdges.map((edge) => edge.type))].sort(),
 		[graphEdges],
@@ -1179,6 +1180,7 @@ export function App(): React.JSX.Element {
 						onWorkbenchView={setWorkbenchView}
 						selectedKeys={selectedKeys}
 						focusKey={picked.focus}
+						locateToken={picked}
 						renamingAssetId={renamingAssetId}
 						renamingFolder={renamingFolder}
 						collapsedFolders={collapsedFolders}

@@ -190,6 +190,8 @@ interface LibrarySidebarProps {
 	onWorkbenchView: (view: "library" | "table" | "graph") => void;
 	selectedKeys: ReadonlySet<string>;
 	focusKey: string | null;
+	/** Changes on every selection, so a repeat click on the focused file locates it again. */
+	locateToken: unknown;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	collapsedFolders: Set<string>;
@@ -218,6 +220,7 @@ export function LibrarySidebar({
 	onWorkbenchView,
 	selectedKeys,
 	focusKey,
+	locateToken,
 	renamingAssetId,
 	renamingFolder,
 	collapsedFolders,
@@ -570,6 +573,7 @@ export function LibrarySidebar({
 							collapsedFolders={queryActive ? new Set() : collapsedFolders}
 							selectedKeys={selectedKeys}
 							focusKey={focusKey}
+							locateToken={locateToken}
 							renamingAssetId={renamingAssetId}
 							renamingFolder={renamingFolder}
 							cutAssetIds={cutAssetIds}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -117,11 +117,15 @@ export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttrib
 	};
 }
 
+/** Changes on every selection, even a repeat click on the focused row, so the tree scrolls to it again. */
+const LocateContext = createContext<unknown>(null);
+
 /** Keep the focused tree row in view. `id` re-runs it when the same row component shows another file. */
 function useScrollWhenFocused(ref: React.RefObject<HTMLElement | null>, focused: boolean, id: string): void {
+	const locate = useContext(LocateContext);
 	useEffect(() => {
 		if (focused) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
-	}, [ref, focused, id]);
+	}, [ref, focused, id, locate]);
 }
 
 function clickMode(event: React.MouseEvent): PointerMode {
@@ -658,6 +662,8 @@ function FileTreeRows({
 
 export interface FileTreeProps extends Omit<FileTreeRowsProps, "node" | "depth" | "dropFolder" | "onDropFolder" | "favoriteAssetIds" | "folderModifiedAt"> {
 	library: LibrarySnapshot;
+	/** Any value that changes on each selection. */
+	locateToken: unknown;
 }
 
 export function FolderChevronIcon(): React.JSX.Element {
@@ -686,7 +692,7 @@ function FavoriteMark(): React.JSX.Element {
 	);
 }
 
-export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Element {
+export function FileTree({ library, locateToken, ...props }: FileTreeProps): React.JSX.Element {
 	const [dropFolder, setDropFolder] = useState<string | null>(null);
 	useEffect(() => {
 		const clear = () => setDropFolder(null);
@@ -703,13 +709,15 @@ export function FileTree({ library, ...props }: FileTreeProps): React.JSX.Elemen
 	);
 	const folderModifiedAt = useMemo(() => contentModifiedAt(library.assets), [library.assets]);
 	return (
-		<FileTreeRows
-			node={buildFileTree(library)}
-			favoriteAssetIds={favoriteAssetIds}
-			{...props}
-			folderModifiedAt={folderModifiedAt}
-			dropFolder={dropFolder}
-			onDropFolder={setDropFolder}
-		/>
+		<LocateContext.Provider value={locateToken}>
+			<FileTreeRows
+				node={buildFileTree(library)}
+				favoriteAssetIds={favoriteAssetIds}
+				{...props}
+				folderModifiedAt={folderModifiedAt}
+				dropFolder={dropFolder}
+				onDropFolder={setDropFolder}
+			/>
+		</LocateContext.Provider>
 	);
 }
