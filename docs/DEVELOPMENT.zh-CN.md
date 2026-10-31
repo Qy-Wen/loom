@@ -14,7 +14,7 @@ core 能力和 Agent 运行时都在 Electron 主进程运行。源文件按功�
 
 - `agent/src`：`runtime`、`models`、`context`、`extensions`、`tools`、`trace`；根目录保留公开入口、vendor 边界与包级契约。
 - `app/src/main`：`desktop`、`chat`、`composer`、`models`、`settings`、`tools`、`mcp`；存储跟随所属功能。
-- `app/src/renderer`：聊天和素材详情分别放在 `chat`、`details`，共用 UI 控件放在 `components`。`app/src/shared` 存放跨进程契约和纯函数，`preload` 桥接类型化 IPC。
+- `app/src/renderer`：所有视觉取值来自 `design/tokens.css`（见[设计系统](./DESIGN.zh-CN.md)）；聊天和素材详情分别放在 `chat`、`details`，共用 UI 控件放在 `components`。`app/src/shared` 存放跨进程契约和纯函数，`preload` 桥接类型化 IPC。
 
 ## 检查
 

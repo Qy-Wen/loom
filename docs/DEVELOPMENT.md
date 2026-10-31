@@ -14,7 +14,7 @@ Core capabilities and the agent runtime run in the Electron main process. Source
 
 - `agent/src`: `runtime`, `models`, `context`, `extensions`, `tools`, and `trace`. Public facades, the vendor boundary, and package-wide contracts stay at the root.
 - `app/src/main`: `desktop`, `chat`, `composer`, `models`, `settings`, `tools`, and `mcp`. Storage stays with its feature.
-- `app/src/renderer`: chat and asset details live in `chat` and `details`; shared UI controls live in `components`. `app/src/shared` holds cross-process contracts and pure helpers; `preload` bridges typed IPC.
+- `app/src/renderer`: all visual values come from `design/tokens.css` (see the [design system](./DESIGN.md)); chat and asset details live in `chat` and `details`; shared UI controls live in `components`. `app/src/shared` holds cross-process contracts and pure helpers; `preload` bridges typed IPC.
 
 ## Checks
 
