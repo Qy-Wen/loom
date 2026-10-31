@@ -430,7 +430,16 @@ export const messages = defineLocale(
 			groups: [
 				{ title: "Basics", sections: [
 					{ id: "getting-started", title: "Getting started", paragraphs: [
-						"Open a folder as your library, configure a model in Settings → Models, then try chatting with the Agent!",
+						"Open a folder as your library, configure a Chat model in Settings → Models, then try chatting with the Agent. See Configure models for detailed steps.",
+					] },
+					{ id: "model-setup", title: "Configure models", paragraphs: [
+						"Open a folder as your library. Browsing, previews, tags, favorites, and basic file search do not need a model. To start chatting with the Agent, configure one Chat model first.",
+						"1. Open Settings → Models. In the Chat section, click Add provider and select your provider, such as DeepSeek.",
+						"2. Click API key below that provider, enter the key from your provider, and confirm. Enable the model you want to use. Providers that support account login also offer a Sign in option.",
+						"3. For a custom provider, select Custom provider and enter its complete request URL and model ID. Click Save provider, then configure its API key and enable the model.",
+						"4. Return to the conversation and select the configured model from the model menu in the message composer. You can now start chatting.",
+						"For other models—text embeddings, reranking, vision, or audio—give the conversation the relevant provider's API key and tell the Agent which capabilities you want. Let it handle the configuration instead of filling in each field yourself.",
+						"For semantic search, then ask the Agent to generate asset descriptions and build the index.",
 					] },
 					{ id: "agent", title: "What the Agent can do", paragraphs: [
 						"Ask in the chat panel. The Agent can search your library and read your files, and it does the work with tools:",
@@ -1043,7 +1052,16 @@ export const messages = defineLocale(
 			groups: [
 				{ title: "入门", sections: [
 					{ id: "getting-started", title: "快速开始", paragraphs: [
-						"打开一个文件夹作为素材库，在设置 → 模型中配置模型，然后试着和 Agent 对话吧。",
+						"打开一个文件夹作为素材库，在设置 → 模型中配置一个 Chat 模型，然后试着和 Agent 对话。详细步骤见「配置模型」。",
+					] },
+					{ id: "model-setup", title: "配置模型", paragraphs: [
+						"打开一个文件夹作为素材库。浏览、预览、标签、收藏和基础文件检索不需要模型。要开始和 Agent 对话，先配置一个 Chat 对话模型即可。",
+						"1. 打开「设置 → 模型」，在「对话模型」区域点击「添加服务商」，选择你使用的服务商，例如 DeepSeek。",
+						"2. 点击该服务商下方的「API 密钥」，填入从服务商获取的 API Key 并确认，再启用要使用的模型。支持账号登录的服务商，也可以通过「登录」完成授权。",
+						"3. 如果使用自定义服务商，选择「自定义服务商」，填写服务商提供的完整请求 URL 和模型 ID，点击「保存服务商」，再配置 API 密钥并启用模型。",
+						"4. 回到会话，在输入框的模型菜单中选择刚配置的模型，就可以开始对话。",
+						"其他模型，例如文本嵌入（Embedding）、重排序（Rerank）、视觉理解（VLM）和音频模型，只需把对应服务商的 API Key 提供给会话，告诉 Agent 想使用哪些能力，让它完成配置即可，不必逐项手动填写。",
+						"需要语义检索时，再让 Agent 为素材生成描述并建立索引。",
 					] },
 					{ id: "agent", title: "Agent 能做什么", paragraphs: [
 						"在聊天面板里直接提需求。Agent 能检索素材库、读取你的文件，并用工具把事情做完：",

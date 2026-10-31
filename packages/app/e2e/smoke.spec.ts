@@ -24,10 +24,16 @@ test("help lists topics on the left and shows one on the right", async ({ loomPa
 	await loomPage.getByRole("button", { name: "Help", exact: true }).click();
 	const help = loomPage.getByRole("dialog", { name: "Help", exact: true });
 	const topics = help.getByRole("tab");
-	await expect(topics).toHaveCount(7);
+	await expect(topics).toHaveCount(8);
 	await expect(topics.first()).toHaveAttribute("aria-selected", "true");
 	await expect(help.getByRole("heading", { name: "Getting started" })).toBeVisible();
 	await expect(help.getByRole("heading", { name: "Keep the embedding model steady" })).toHaveCount(0);
+	await expect(help.locator(".help-section p")).toHaveCount(1);
+
+	await help.getByRole("tab", { name: "Configure models", exact: true }).click();
+	await expect(help.getByRole("heading", { name: "Configure models", exact: true })).toBeVisible();
+	await expect(help.getByText("1. Open Settings → Models.", { exact: false })).toBeVisible();
+	await expect(help.getByText("For other models", { exact: false })).toBeAttached();
 
 	await help.getByRole("tab", { name: "Keep the embedding model steady" }).click();
 	await expect(help.getByRole("heading", { name: "Keep the embedding model steady" })).toBeVisible();

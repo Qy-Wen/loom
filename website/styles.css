@@ -257,7 +257,10 @@ h2 { font-size: clamp(30px, 3.3vw, 46px); font-weight: 600; letter-spacing: -.04
 .faq-list summary::after { content: "+"; font-family: var(--mono); color: #87917c; font-size: 17px; flex-shrink: 0; }
 .faq-list details[open] summary::after { content: "−"; }
 .faq-list details[open] summary { color: var(--accent); }
-.faq-list details > p { padding: 0 28px 23px 0; color: #808876; font-size: 12px; line-height: 1.95; }
+.faq-list details > p, .faq-answer { padding: 0 28px 23px 0; color: #808876; font-size: 12px; line-height: 1.95; }
+.faq-answer p + p { margin-top: 14px; }
+.faq-answer ol { margin: 12px 0 18px; padding-left: 20px; }
+.faq-answer li + li { margin-top: 10px; }
 .faq-list details a { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
 .closing { text-align: center; padding: 60px 0 80px; border-top: 1px solid var(--line); }
 .closing > p { color: #929785; font-size: 9px; }
