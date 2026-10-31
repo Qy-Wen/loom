@@ -27,8 +27,8 @@ import { canDropLibraryItem, draggedAssetIds, endLibraryDrag, hasLibraryDrag, re
 import { usePanelLayout } from "./layout/use-panel-layout.ts";
 import { useResizableLayout } from "./layout/use-resizable-layout.ts";
 import { PanelWorkspace, PanelsToggle, type PanelView } from "./layout/work-panel.tsx";
-import { ancestorFolders, folderSet, parentFolder } from "./library/file-tree.tsx";
 import {
+	ancestorFolders,
 	assetKey,
 	boxSelect,
 	clearAssetSelection,
@@ -40,6 +40,7 @@ import {
 	isExtendKey,
 	isLibraryTrashKey,
 	isTreeNavKey,
+	parentFolder,
 	pointerSelect,
 	rootLibraryItems,
 	selectVisible,
@@ -278,7 +279,7 @@ export function App(): React.JSX.Element {
 		void window.loom.getLibrarySnapshot().then(async (snapshot) => {
 			if (!initialLibrary()) return;
 			setLibrary(snapshot);
-			setCollapsedFolders(folderSet(snapshot));
+			setCollapsedFolders(new Set(snapshot.folders));
 			if (snapshot.rootPath) {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				if (!initialLibrary()) return;
@@ -308,7 +309,7 @@ export function App(): React.JSX.Element {
 				setPicked((current) => withoutKey(current, assetKey(change.assetId)));
 			}
 			if (change.type === "reset") {
-				setCollapsedFolders(folderSet(change.snapshot));
+				setCollapsedFolders(new Set(change.snapshot.folders));
 				setPicked(emptyTreeSelection);
 			}
 			if (change.type === "folder_remove") {
@@ -1096,7 +1097,7 @@ export function App(): React.JSX.Element {
 				setRenamingAssetId(null);
 				setRenamingFolder(null);
 				setLibraryClipboard(null);
-				setCollapsedFolders(folderSet(snapshot));
+				setCollapsedFolders(new Set(snapshot.folders));
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
 				setGraphEdges(await window.loom.listGraphRelations());

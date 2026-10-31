@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+	ancestorFolders,
 	assetKey,
 	boxSelect,
 	clearAssetSelection,
@@ -9,6 +10,7 @@ import {
 	extendSelection,
 	folderKey,
 	isLibraryTrashKey,
+	parentFolder,
 	pointerMode,
 	pointerSelect,
 	rootLibraryItems,
@@ -252,5 +254,18 @@ describe("box selection from the graph", () => {
 		const onlyFolder = singleSelection(folderKey("docs"));
 		assert.equal(clearAssetSelection(onlyFolder), onlyFolder, "nothing to drop returns the same object");
 		assert.equal(clearAssetSelection(emptyTreeSelection), emptyTreeSelection);
+	});
+});
+
+describe("folder paths", () => {
+	it("finds the parent folder", () => {
+		assert.equal(parentFolder("a/b/c.jpg"), "a/b");
+		assert.equal(parentFolder("a"), "");
+		assert.equal(parentFolder(""), "");
+	});
+
+	it("lists ancestors outermost first", () => {
+		assert.deepEqual(ancestorFolders("a/b/c.jpg"), ["a", "a/b"]);
+		assert.deepEqual(ancestorFolders("notes.md"), []);
 	});
 });

@@ -37,9 +37,17 @@ export type TreeMotion =
 	| { type: "expand"; relativePath: string }
 	| { type: "none" };
 
-function parentPath(relativePath: string): string {
+/** Parent folder of a library-relative path: `a/b/c.jpg` → `a/b`, `notes` → ``. */
+export function parentFolder(relativePath: string): string {
 	const index = relativePath.lastIndexOf("/");
 	return index === -1 ? "" : relativePath.slice(0, index);
+}
+
+/** Parent folders of a library-relative file path, outermost first: `a/b/c.jpg` → `["a", "a/b"]`. */
+export function ancestorFolders(relativePath: string): string[] {
+	const folders: string[] = [];
+	for (let parent = parentFolder(relativePath); parent; parent = parentFolder(parent)) folders.unshift(parent);
+	return folders;
 }
 
 function folderName(relativePath: string): string {
@@ -54,10 +62,10 @@ export function contentModifiedAt(
 	const times = new Map<string, number>();
 	for (const asset of assets) {
 		const time = asset.modifiedAt ?? 0;
-		let parent = parentPath(asset.relativePath);
+		let parent = parentFolder(asset.relativePath);
 		while (parent) {
 			if (time > (times.get(parent) ?? 0)) times.set(parent, time);
-			parent = parentPath(parent);
+			parent = parentFolder(parent);
 		}
 	}
 	return times;
@@ -107,7 +115,7 @@ export function visibleTreeRows(
 	const times = sort === "modified" ? contentModifiedAt(assets) : new Map<string, number>();
 	const foldersByParent = new Map<string, string[]>();
 	for (const folder of folders) {
-		const parent = parentPath(folder);
+		const parent = parentFolder(folder);
 		const list = foldersByParent.get(parent);
 		if (list) list.push(folder);
 		else foldersByParent.set(parent, [folder]);
@@ -118,7 +126,7 @@ export function visibleTreeRows(
 
 	const assetsByParent = new Map<string, TreeAssetRef[]>();
 	for (const asset of assets) {
-		const parent = parentPath(asset.relativePath);
+		const parent = parentFolder(asset.relativePath);
 		const list = assetsByParent.get(parent);
 		if (list) list.push(asset);
 		else assetsByParent.set(parent, [asset]);
@@ -163,12 +171,12 @@ function selectAt(rows: readonly TreeRow[], index: number): TreeMotion {
 }
 
 function visibleAncestor(rows: readonly TreeRow[], relativePath: string): TreeMotion {
-	let parent = parentPath(relativePath);
+	let parent = parentFolder(relativePath);
 	while (parent) {
 		if (rows.some((row) => row.kind === "folder" && row.relativePath === parent)) {
 			return { type: "select", cursor: { kind: "folder", relativePath: parent } };
 		}
-		parent = parentPath(parent);
+		parent = parentFolder(parent);
 	}
 	return { type: "none" };
 }

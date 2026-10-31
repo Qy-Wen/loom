@@ -10,8 +10,8 @@ import {
 	type LibraryDrag,
 } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
-import { AssetIconTile, AssetTreeRow, FileTree, FolderChevronIcon, type FileDisplay, type FileSort, type FileSortDirection } from "./file-tree.tsx";
-import { assetKey, coversPath, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { AssetIconTile, AssetTreeRow, FileTree, FolderChevronIcon, type FileDisplay } from "./file-tree.tsx";
+import { assetKey, coversPath, visibleTreeRows, type FileSort, type FileSortDirection, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { LibraryScrollRegions } from "./library-scroll-regions.tsx";
 
 const FILE_DISPLAY_KEY = "loom.library.fileDisplay";
