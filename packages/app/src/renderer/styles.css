@@ -1,6 +1,7 @@
 @import "../../node_modules/katex/dist/katex.min.css";
 @import "./design/tokens.css";
 @import "./base.css";
+@import "./components/confirm-dialog.css";
 @import "./layout/shell.css";
 @import "./library/library.css";
 @import "./workbench/workbench.css";

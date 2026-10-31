@@ -119,7 +119,7 @@ test("creates a durable conversation and discards the unused tab on close",  asy
 });
 
 test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
-	await loomPage.getByRole("button", { name: "Settings" }).click();
+	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const dialog = loomPage.getByRole("dialog", { name: "Settings" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "Models" })).toBeVisible();

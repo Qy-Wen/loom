@@ -31,13 +31,14 @@ test("branching from a reply asks for confirmation and keeps the source and the 
 		const fork = answer.getByRole("button", { name: "Branch from here", exact: true });
 		for (const approved of [false, true]) {
 			await answer.hover();
-			const shown = loomPage.waitForEvent("dialog");
-			const click = fork.click();
-			const dialog = await shown;
-			expect(dialog.type()).toBe("confirm");
-			expect(dialog.message()).toBe("Create a new conversation from this reply? The current conversation will be kept.");
-			if (approved) await dialog.accept(); else await dialog.dismiss();
-			await click;
+			await fork.click();
+			const dialog = loomPage.getByRole("dialog", { name: "Create a conversation branch?", exact: true });
+			await expect(dialog).toBeVisible();
+			await expect(dialog).toContainText("A new conversation will include the history up to this reply. The current conversation will be kept.");
+			await expect(dialog.getByRole("button", { name: "Cancel", exact: true })).toBeFocused();
+			if (approved) await dialog.getByRole("button", { name: "Create branch", exact: true }).click();
+			else await loomPage.keyboard.press("Escape");
+			await expect(dialog).toHaveCount(0);
 			if (!approved) {
 				expect(await loomPage.evaluate(() => window.loom.listSessions())).toEqual(before);
 				await expect(loomPage.getByRole("tab", { name: source.title, selected: true, exact: true })).toBeVisible();

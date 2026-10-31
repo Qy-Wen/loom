@@ -1,9 +1,8 @@
-import { useState } from "react";
 import type { TextEmbedStatus } from "@loom/core";
 import { rawStatusLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { CopyableError } from "../components/copyable-error.tsx";
-import { ConfirmDialog } from "../components/confirm-dialog.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 interface TextEmbedDetailsProps {
 	status: TextEmbedStatus | undefined;
@@ -17,17 +16,25 @@ export function TextEmbedDetails({
 	onEmbed,
 }: TextEmbedDetailsProps): React.JSX.Element | null {
 	const { t } = useLocale();
-	const [confirming, setConfirming] = useState(false);
+	const { confirm } = useConfirmation();
 	if (!status?.supported) return null;
 	const busy = embedding || status.status === "embedding";
 	// A current index is never skipped silently: ask first, then rebuild it.
 	const current = status.status === "ready" && !status.stale;
 	const label = status.stale && status.status === "ready" ? t.details.reembed : t.details.embed;
+	async function embed(): Promise<void> {
+		if (current && !await confirm({
+			title: t.details.reembedConfirmTitle,
+			description: t.details.reembedConfirmBody,
+			confirmLabel: t.details.reembed,
+		})) return;
+		onEmbed(current ? true : undefined);
+	}
 	return (
 		<section>
 			<div className="section-label enrichment-heading">
 				<span>{t.details.index}</span>
-				<button type="button" className="text-button" disabled={busy} onClick={() => (current ? setConfirming(true) : onEmbed())}>
+				<button type="button" className="text-button" disabled={busy} onClick={() => void embed()}>
 					{busy ? t.details.embedding : label}
 				</button>
 			</div>
@@ -59,15 +66,6 @@ export function TextEmbedDetails({
 					</>
 				)}
 			</dl>
-			{confirming && (
-				<ConfirmDialog
-					title={t.details.reembedConfirmTitle}
-					body={t.details.reembedConfirmBody}
-					confirmLabel={t.details.reembed}
-					onCancel={() => setConfirming(false)}
-					onConfirm={() => { setConfirming(false); onEmbed(true); }}
-				/>
-			)}
 		</section>
 	);
 }

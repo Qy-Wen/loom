@@ -155,7 +155,7 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		await expect(strip.getByRole("tab")).toHaveText(["alpha.png", "beta.png", "notes.md"]);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
 
-		// Deleting the file closes its tab. The native confirm of trashAsset cannot be clicked, so remove it on disk.
+		// Removing a file externally closes its tab through the library watcher.
 		await rm(join(root, "alpha.png"));
 		await expect(strip.getByRole("tab")).toHaveText(["beta.png", "notes.md"]);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");

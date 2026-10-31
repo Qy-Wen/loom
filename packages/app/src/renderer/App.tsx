@@ -20,6 +20,7 @@ import type {
 import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
+import { useConfirmation } from "./components/confirm-dialog.tsx";
 import type { AssetRefAttachment } from "@loom/agent";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { sortAssets } from "./assets/asset-utils.ts";
@@ -134,6 +135,7 @@ export function App(): React.JSX.Element {
 	const { t } = useLocale();
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
+	const { confirm } = useConfirmation(library.rootPath);
 	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
@@ -834,7 +836,28 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	async function confirmTrash(items: { assetIds: readonly string[]; folders: readonly string[] }): Promise<boolean> {
+		const platform = uiPlatform(navigator.userAgent);
+		let title: string;
+		let description: string;
+		if (items.assetIds.length === 1 && items.folders.length === 0) {
+			const asset = library.assets.find((item) => item.assetId === items.assetIds[0]);
+			if (!asset) return false;
+			title = t.menu.trashAsset(asset.filename, platform);
+			description = t.menu.trashAssetDetail(platform);
+		} else if (items.folders.length === 1 && items.assetIds.length === 0) {
+			const name = items.folders[0].split("/").at(-1)!;
+			title = t.menu.trashFolder(name, platform);
+			description = t.menu.trashFolderDetail(platform);
+		} else {
+			title = t.menu.trashItems(items.assetIds.length + items.folders.length, platform);
+			description = t.menu.trashItemsDetail(platform);
+		}
+		return confirm({ title, description, confirmLabel: t.menu.moveToTrash(platform), tone: "warning" });
+	}
+
 	async function trashPreviewed(assetId: string): Promise<void> {
+		if (!await confirmTrash({ assetIds: [assetId], folders: [] })) return;
 		setError(null);
 		try {
 			await withTrashNotice(() => window.loom.trashAsset(assetId));
@@ -856,6 +879,7 @@ export function App(): React.JSX.Element {
 	async function trashSelection(selection: TreeSelection = picked): Promise<boolean> {
 		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
 		if (items.assetIds.length === 0 && items.folders.length === 0) return false;
+		if (!await confirmTrash(items)) return false;
 		return withTrashNotice(() => {
 			if (items.assetIds.length === 1 && items.folders.length === 0) return window.loom.trashAsset(items.assetIds[0]);
 			if (items.folders.length === 1 && items.assetIds.length === 0) return window.loom.trashFolder(items.folders[0]);

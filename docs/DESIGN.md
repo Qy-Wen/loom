@@ -36,6 +36,15 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 
 `pnpm --filter @loom/app test` runs `tests/design-tokens.test.ts`, which fails on raw colors, off-scale radii, font sizes, weights, `z-index`, spacing, transition durations, and references to undefined tokens.
 
+## Confirmation dialogs
+
+Use `useConfirmation()` from `renderer/components/confirm-dialog.tsx` for application confirmations, not `window.confirm` or Electron message boxes. `confirm({ title, description, confirmLabel, tone })` resolves to a boolean; `choose({ title, description, choices, tone })` resolves to an action ID or `null`. Each window has one `ConfirmationProvider`; questions are serialized and repeat requests from the same caller are ignored. Pass the library/session ID as the hook's scope when an action belongs to that context. Unmounting or changing scope cancels unanswered questions.
+
+- `normal`: ordinary actions; `warning`: permission changes and recoverable trash operations; `danger`: permanent deletion.
+- Use an action-specific label and explain whether the operation can be undone.
+- Cancel gets initial focus. Escape or a press on the backdrop cancels; focus stays inside and returns afterward. The HTML dialog top layer blocks background interaction, and keyboard shortcuts do not reach underlying panels.
+- Confirmation UI lives in the renderer; filesystem operations and validation stay in main. File/folder pickers and Save As keep their native dialogs.
+
 ## Contrast
 
 Text tokens (`primary`, `body`, `secondary`, `muted`, status text) must reach 4.5:1 on every surface they sit on, from `app` down to `active`; `--lm-graphic` and `--lm-focus-ring` must reach 3:1; white text on each `--lm-asset-*` color must reach 4.5:1. `tests/design-tokens.test.ts` checks this, so a palette edit that breaks it fails the build.

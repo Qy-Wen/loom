@@ -1,9 +1,8 @@
-import { useState } from "react";
 import type { AudioWriteupStatus, ImageVlmStatus, TextEmbedStatus, VideoVlmStatus } from "@loom/core";
 import { rawStatusLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { CopyableError } from "../components/copyable-error.tsx";
-import { ChoiceDialog } from "../components/confirm-dialog.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 
 type DescriptionStatus = ImageVlmStatus | VideoVlmStatus | AudioWriteupStatus;
 
@@ -26,7 +25,7 @@ export function MediaDescriptionDetails({
 	onEmbed,
 }: MediaDescriptionDetailsProps): React.JSX.Element {
 	const { t } = useLocale();
-	const [choosing, setChoosing] = useState(false);
+	const { choose } = useConfirmation();
 	const described = status.status === "ready" && !status.stale;
 	const indexing = described && textEmbed?.status === "embedding";
 	const busy = requested || embedding || status.status === "describing" || indexing;
@@ -37,11 +36,24 @@ export function MediaDescriptionDetails({
 		? t.details.chunks(textEmbed.childCount, textEmbed.parentCount)
 		: undefined;
 	const model = [status.modelId, described ? textEmbed?.modelId : undefined].filter(Boolean).join(" · ");
+	async function describe(): Promise<void> {
+		if (!described) { onDescribe(); return; }
+		const choice = await choose({
+			title: t.details.describeChoiceTitle,
+			description: t.details.describeChoiceBody,
+			choices: [
+				{ id: "index", label: t.details.indexOnly },
+				{ id: "describe", label: t.details.redescribeAndIndex, primary: true },
+			],
+		});
+		if (choice === "index") onEmbed(true);
+		else if (choice === "describe") onDescribe();
+	}
 	return (
 		<section>
 			<div className="section-label enrichment-heading">
 				<span>{t.details.caption}</span>
-				<button type="button" className="text-button" disabled={busy} onClick={() => (described ? setChoosing(true) : onDescribe())}>
+				<button type="button" className="text-button" disabled={busy} onClick={() => void describe()}>
 					{busy ? (indexing || embedding ? t.details.embedding : t.details.describing) : label}
 				</button>
 			</div>
@@ -67,17 +79,6 @@ export function MediaDescriptionDetails({
 					</>
 				)}
 			</dl>
-			{choosing && (
-				<ChoiceDialog
-					title={t.details.describeChoiceTitle}
-					body={t.details.describeChoiceBody}
-					onCancel={() => setChoosing(false)}
-					choices={[
-						{ label: t.details.indexOnly, onSelect: () => { setChoosing(false); onEmbed(true); } },
-						{ label: t.details.redescribeAndIndex, onSelect: () => { setChoosing(false); onDescribe(); }, primary: true },
-					]}
-				/>
-			)}
 		</section>
 	);
 }

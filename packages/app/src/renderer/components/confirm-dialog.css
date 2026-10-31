@@ -1,0 +1,107 @@
+.confirmation-dialog {
+	position: fixed;
+	inset: 0;
+	width: min(400px, calc(100vw - 32px));
+	max-height: calc(100vh - 48px);
+	margin: auto;
+	padding: var(--lm-space-8);
+	overflow: auto;
+	overscroll-behavior: contain;
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-lg);
+	background: var(--lm-surface-raised);
+	box-shadow: var(--lm-shadow-md);
+	color: var(--lm-text-primary);
+}
+
+.confirmation-dialog::backdrop {
+	background: var(--lm-overlay-soft);
+}
+
+.confirmation-content {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--lm-space-5);
+}
+
+.confirmation-copy {
+	flex: 1;
+	min-width: 0;
+}
+
+.confirmation-copy h2 {
+	margin: 0;
+	font-size: var(--lm-text-size-lg);
+	font-weight: var(--lm-weight-semibold);
+	line-height: 1.5;
+	overflow-wrap: anywhere;
+}
+
+.confirmation-icon {
+	display: flex;
+	flex: 0 0 auto;
+	margin-top: var(--lm-space-1);
+	color: var(--lm-text-warning);
+}
+
+.confirmation-dialog[data-tone="danger"] .confirmation-icon {
+	color: var(--lm-text-danger);
+}
+
+.confirmation-description {
+	margin: var(--lm-space-4) 0 0;
+	color: var(--lm-text-body);
+	font-size: var(--lm-text-size-sm);
+	line-height: 1.6;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+}
+
+.confirmation-actions {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-end;
+	gap: var(--lm-space-4);
+	margin-top: var(--lm-space-7);
+}
+
+.confirmation-actions button {
+	min-width: 72px;
+	padding: var(--lm-space-3) var(--lm-space-6);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-sm);
+	line-height: 1.5;
+	cursor: pointer;
+}
+
+.confirmation-actions button:hover {
+	background: var(--lm-surface-hover);
+}
+
+.confirmation-actions button:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 2px;
+}
+
+.confirmation-actions .confirmation-primary {
+	border-color: transparent;
+	background: var(--lm-accent);
+	color: var(--lm-text-inverse);
+}
+
+.confirmation-actions .confirmation-primary:hover {
+	background: var(--lm-accent-hover);
+}
+
+.confirmation-dialog[data-tone="danger"] .confirmation-primary {
+	background: var(--lm-danger);
+	color: var(--lm-text-inverse);
+}
+
+.confirmation-dialog[data-tone="danger"] .confirmation-primary:hover {
+	background: var(--lm-danger);
+	box-shadow: inset 0 0 0 2px var(--lm-border-danger);
+}

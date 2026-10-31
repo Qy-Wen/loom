@@ -1005,20 +1005,6 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.trashAsset, async (event, assetId: string): Promise<boolean> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
 		if (!filePath) throw new Error("Asset not found");
-		const owner = BrowserWindow.fromWebContents(event.sender);
-		const { t, platform } = await uiCopy();
-		const options = {
-			type: "warning" as const,
-			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
-			defaultId: 0,
-			cancelId: 0,
-			message: t.menu.trashAsset(basename(filePath), platform),
-			detail: t.menu.trashAssetDetail(platform),
-		};
-		const result = owner
-			? await dialog.showMessageBox(owner, options)
-			: await dialog.showMessageBox(options);
-		if (result.response !== 1) return false;
 		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 
 		await shell.trashItem(filePath);
@@ -1029,21 +1015,6 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.trashFolder, async (event, relativePath: string): Promise<boolean> => {
 		if (!relativePath) throw new Error("Cannot trash the library root");
 		const folderPath = localCore.getFolderFilePath(relativePath);
-		const owner = BrowserWindow.fromWebContents(event.sender);
-		const name = relativePath.includes("/") ? relativePath.slice(relativePath.lastIndexOf("/") + 1) : relativePath;
-		const { t, platform } = await uiCopy();
-		const options = {
-			type: "warning" as const,
-			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
-			defaultId: 0,
-			cancelId: 0,
-			message: t.menu.trashFolder(name, platform),
-			detail: t.menu.trashFolderDetail(platform),
-		};
-		const result = owner
-			? await dialog.showMessageBox(owner, options)
-			: await dialog.showMessageBox(options);
-		if (result.response !== 1) return false;
 		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 
 		await shell.trashItem(folderPath);
@@ -1054,20 +1025,6 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.trashLibraryItems, async (event, assetIds: string[], folders: string[]): Promise<boolean> => {
 		const count = assetIds.length + folders.length;
 		if (count === 0) return false;
-		const owner = BrowserWindow.fromWebContents(event.sender);
-		const { t, platform } = await uiCopy();
-		const options = {
-			type: "warning" as const,
-			buttons: [t.common.cancel, t.menu.moveToTrash(platform)],
-			defaultId: 0,
-			cancelId: 0,
-			message: t.menu.trashItems(count, platform),
-			detail: t.menu.trashItemsDetail(platform),
-		};
-		const result = owner
-			? await dialog.showMessageBox(owner, options)
-			: await dialog.showMessageBox(options);
-		if (result.response !== 1) return false;
 		if (!event.sender.isDestroyed()) event.sender.send(IPC.trashStarted);
 		for (const relativePath of folders) {
 			await shell.trashItem(localCore.getFolderFilePath(relativePath));

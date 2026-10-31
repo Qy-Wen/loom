@@ -36,6 +36,15 @@
 
 `pnpm --filter @loom/app test` 会运行 `tests/design-tokens.test.ts`。它在出现裸颜色、不在尺度内的圆角、字号、字重、`z-index`、间距、过渡时长，以及引用未定义的 token 时失败。
 
+## 确认框
+
+应用内确认统一使用 `renderer/components/confirm-dialog.tsx` 的 `useConfirmation()`，不用 `window.confirm` 或 Electron 消息框。`confirm({ title, description, confirmLabel, tone })` 返回布尔值；`choose({ title, description, choices, tone })` 返回操作 ID 或 `null`。每个窗口只有一个 `ConfirmationProvider`，问题按顺序显示，同一调用方的重复请求忽略。属于某个素材库或会话的操作，把对应 ID 传给 hook 作为 scope；卸载或 scope 变化会取消尚未回答的问题。
+
+- `normal` 用于普通操作；`warning` 用于权限变更和可恢复的移入废纸篓；`danger` 用于永久删除。
+- 按钮写具体动作，说明操作是否可以撤销。
+- 默认聚焦取消。Esc 或按下遮罩取消；焦点限制在框内，关闭后恢复。HTML dialog 顶层阻止背景交互，快捷键不穿透到下面的面板。
+- 确认 UI 在渲染进程，文件操作及校验仍在主进程。文件/文件夹选择和另存为保留原生窗口。
+
 ## 对比度
 
 文字 token（`primary`、`body`、`secondary`、`muted`、状态文字）在它可能落到的每种表面上（从 `app` 到 `active`）都要达到 4.5:1；`--lm-graphic` 和 `--lm-focus-ring` 要达到 3:1；白字压在每个 `--lm-asset-*` 颜色上要达到 4.5:1。`tests/design-tokens.test.ts` 会检查，改色板时破坏这些要求会让构建失败。
