@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { DevTraceApp } from "./dev-trace-app.tsx";
 import { TraceLocaleProvider } from "./trace-locale.tsx";
+import "../design/tokens.css";
 import "./dev-trace.css";
 
 const root = document.getElementById("root");

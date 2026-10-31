@@ -1,0 +1,226 @@
+/*
+ * Loom design tokens — the only place raw colors, sizes, and timings are defined.
+ * Components use the semantic and scale tokens below. See docs/DESIGN.md.
+ *
+ * Layer 1  palette    --lm-palette-*   raw values; never used by components
+ * Layer 2  semantic   --lm-surface-*, --lm-text-*, --lm-border-*, --lm-accent-*, ...   (themeable)
+ * Layer 3  scales     --lm-space-*, --lm-radius-*, --lm-text-size-*, --lm-shadow-*, --lm-z-*, --lm-dur-*
+ *
+ * Dark mode only needs a second block that re-maps layer 2 to other layer 1 values.
+ */
+
+:root {
+	/* ── Layer 1 · palette ─────────────────────────────────────────── */
+
+	/* Warm neutrals: backgrounds and lines */
+	--lm-palette-paper-0: #fff;
+	--lm-palette-paper-1: #fbfbfa;
+	--lm-palette-paper-2: #f7f7f5;
+	--lm-palette-paper-3: #f0f0ed;
+	--lm-palette-paper-4: #e5e5e2;
+	--lm-palette-line-1: #ececea;
+	--lm-palette-line-2: #e1e1de;
+	--lm-palette-line-3: #d4d4d0;
+
+	/* Cool ink: text and icons */
+	--lm-palette-ink-0: #202124;
+	--lm-palette-ink-1: #3c3f44;
+	--lm-palette-ink-2: #5f6368;
+	--lm-palette-ink-3: #85888e;
+	--lm-palette-ink-4: #a3a6ac;
+
+	/* Accent (blue) */
+	--lm-palette-blue-50: #eef3fb;
+	--lm-palette-blue-100: #dde6f7;
+	--lm-palette-blue-300: #a9bcdd;
+	--lm-palette-blue-500: #7896c8;
+	--lm-palette-blue-700: #3d5a99;
+
+	/* Status */
+	--lm-palette-red-50: #fff6f6;
+	--lm-palette-red-100: #fdeceb;
+	--lm-palette-red-300: #e8c4be;
+	--lm-palette-red-600: #b3261e;
+	--lm-palette-amber-100: #fff1cc;
+	--lm-palette-amber-500: #c4a35a;
+	--lm-palette-amber-700: #8a6a1f;
+	--lm-palette-green-100: #e3efe0;
+	--lm-palette-green-500: #2f9e44;
+	--lm-palette-green-700: #3d6b4f;
+
+	/* Asset kinds */
+	--lm-palette-kind-image: #6d84b4;
+	--lm-palette-kind-video: #8a6d9e;
+	--lm-palette-kind-audio: #5d8a7a;
+	--lm-palette-kind-text: #9a7b4f;
+	--lm-palette-kind-other: #8b8e93;
+
+	/* ── Layer 2 · semantic ────────────────────────────────────────── */
+
+	/* Surfaces, from the app background up to floating layers */
+	--lm-surface-window: #f3f3f1;
+	--lm-surface-app: var(--lm-palette-paper-1);
+	--lm-surface-raised: var(--lm-palette-paper-0);
+	--lm-surface-subtle: var(--lm-palette-paper-2);
+	--lm-surface-sunken: var(--lm-palette-paper-3);
+	--lm-surface-hover: var(--lm-palette-line-1);
+	--lm-surface-active: var(--lm-palette-paper-4);
+	--lm-surface-track: var(--lm-palette-line-3);
+	--lm-surface-strong: var(--lm-palette-ink-2);
+	--lm-surface-inverse: var(--lm-palette-ink-0);
+	--lm-surface-accent: var(--lm-palette-blue-50);
+	--lm-surface-accent-strong: var(--lm-palette-blue-100);
+	--lm-surface-danger: var(--lm-palette-red-50);
+	--lm-surface-danger-strong: var(--lm-palette-red-100);
+	--lm-surface-warning: var(--lm-palette-amber-100);
+	--lm-surface-success: var(--lm-palette-green-100);
+
+	/* Text */
+	--lm-text-primary: var(--lm-palette-ink-0);
+	--lm-text-body: var(--lm-palette-ink-1);
+	--lm-text-secondary: var(--lm-palette-ink-2);
+	--lm-text-muted: var(--lm-palette-ink-3);
+	--lm-text-faint: var(--lm-palette-ink-4);
+	--lm-text-inverse: var(--lm-palette-paper-0);
+	--lm-text-accent: var(--lm-palette-blue-700);
+	--lm-text-danger: var(--lm-palette-red-600);
+	--lm-text-warning: var(--lm-palette-amber-700);
+	--lm-text-success: var(--lm-palette-green-700);
+
+	/* Lines */
+	--lm-border-subtle: var(--lm-palette-line-1);
+	--lm-border-default: var(--lm-palette-line-2);
+	--lm-border-strong: var(--lm-palette-line-3);
+	--lm-border-accent: var(--lm-palette-blue-500);
+	--lm-border-danger: var(--lm-palette-red-300);
+
+	/* Accent and state */
+	--lm-accent: var(--lm-palette-blue-500);
+	--lm-accent-hover: var(--lm-palette-blue-700);
+	--lm-danger: var(--lm-palette-red-600);
+	--lm-warning: var(--lm-palette-amber-500);
+	--lm-success: var(--lm-palette-green-500);
+	--lm-focus-ring: var(--lm-palette-blue-500);
+	--lm-selection: rgb(120 150 200 / 15%);
+	--lm-overlay: rgb(32 33 36 / 45%);
+	--lm-overlay-soft: rgb(32 33 36 / 28%);
+	--lm-scrim: rgb(255 255 255 / 92%);
+
+	/* Translucent washes for hover/press on any background, and image-safe controls */
+	--lm-wash-1: rgb(32 33 36 / 6%);
+	--lm-wash-2: rgb(32 33 36 / 11%);
+	--lm-wash-3: rgb(0 0 0 / 16%);
+	--lm-selection-strong: rgb(120 150 200 / 28%);
+	--lm-selection-soft: rgb(120 150 200 / 12%);
+	--lm-ring-accent: rgb(120 150 200 / 35%);
+	--lm-hairline: rgb(0 0 0 / 7%);
+	--lm-on-media: rgb(255 255 255 / 90%);
+	--lm-media-shade: rgb(0 0 0 / 45%);
+	--lm-media-outline: rgb(0 0 0 / 40%);
+	--lm-scrollbar-thumb: oklch(50% 0 0);
+	--lm-scrollbar-thumb-hover: oklch(40% 0 0);
+	--lm-glow-brand: rgb(74 74 120 / 20%);
+
+	/* Data-visualisation: grade curve channels */
+	--lm-channel-r: #c4453c;
+	--lm-channel-g: #2f8f4e;
+	--lm-channel-b: #2f62b5;
+
+	/* Library badge colors. Still a separate set from the graph's --lm-kind-*; unify them in one step later. */
+	--lm-badge-image: #9569c7;
+	--lm-badge-video: #d25f68;
+	--lm-badge-audio: #da8a3e;
+	--lm-badge-text: #4d8bbf;
+	--lm-badge-other: #858991;
+
+	/* CopilotKit's own copy button hovers to this fixed color; Loom's table actions must match it. */
+	--lm-vendor-copy-hover: #e8e8e8;
+
+	/* Audio cover art */
+	--lm-art-audio: linear-gradient(145deg, #8a6cc3, #546ea7);
+
+	/* Syntax highlighting in the trace viewer */
+	--lm-syntax-key: #805185;
+	--lm-syntax-boolean: #915887;
+
+	/* Asset kinds */
+	--lm-kind-image: var(--lm-palette-kind-image);
+	--lm-kind-video: var(--lm-palette-kind-video);
+	--lm-kind-audio: var(--lm-palette-kind-audio);
+	--lm-kind-text: var(--lm-palette-kind-text);
+	--lm-kind-other: var(--lm-palette-kind-other);
+
+	/* ── Layer 3 · scales ──────────────────────────────────────────── */
+
+	/* Spacing: a 2px unit. Use these for padding, margin and gap; layout sizes (widths, heights) stay literal. */
+	--lm-space-1: 2px;
+	--lm-space-2: 4px;
+	--lm-space-3: 6px;
+	--lm-space-4: 8px;
+	--lm-space-5: 10px;
+	--lm-space-6: 12px;
+	--lm-space-7: 16px;
+	--lm-space-8: 20px;
+	--lm-space-9: 24px;
+
+	/* Radius */
+	--lm-radius-hair: 1px;
+	--lm-radius-line: 2px;
+	--lm-radius-xs: 3px;
+	--lm-radius-sm: 5px;
+	--lm-radius-md: 8px;
+	--lm-radius-lg: 12px;
+	--lm-radius-xl: 20px;
+	--lm-radius-pill: 999px;
+
+	/* Type */
+	--lm-font-sans: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+	--lm-font-mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	--lm-text-size-2xs: 10px;
+	--lm-text-size-xs: 11px;
+	--lm-text-size-sm: 12px;
+	--lm-text-size-md: 13px;
+	--lm-text-size-lg: 14px;
+	--lm-text-size-xl: 16px;
+	--lm-text-size-2xl: 20px;
+	--lm-text-size-3xl: 28px;
+	--lm-text-size-4xl: 44px;
+	--lm-weight-regular: 400;
+	--lm-weight-medium: 500;
+	--lm-weight-semibold: 600;
+	--lm-weight-bold: 700;
+
+	/* Elevation */
+	--lm-shadow-xs: 0 1px 2px rgb(32 33 36 / 8%);
+	--lm-shadow-sm: 0 6px 16px rgb(0 0 0 / 8%);
+	--lm-shadow-md: 0 8px 24px rgb(0 0 0 / 12%);
+	--lm-shadow-lg: 0 16px 48px rgb(0 0 0 / 18%);
+	--lm-shadow-field: 0 4px 4px 0 rgb(0 0 0 / 4%), 0 0 1px 0 rgb(0 0 0 / 62%);
+	--lm-shadow-focus: 0 0 0 3px rgb(92 95 102 / 28%);
+	--lm-shadow-ring: 0 0 0 1px rgb(0 0 0 / 8%);
+	--lm-shadow-ring-soft: 0 0 0 2px rgb(32 33 36 / 6%);
+	--lm-shadow-media: drop-shadow(0 1px 2px rgb(0 0 0 / 45%));
+	--lm-shadow-media-sm: drop-shadow(0 1px 1px rgb(0 0 0 / 35%));
+	--lm-shadow-brand: 0 14px 32px var(--lm-glow-brand);
+
+	/* Stacking: the numbers are the tiers; keep new layers between existing ones */
+	--lm-z-base: 1;
+	--lm-z-raised: 2;
+	--lm-z-hover: 3;
+	--lm-z-menu: 5;
+	--lm-z-panel: 8;
+	--lm-z-sticky: 10;
+	--lm-z-chrome: 20;
+	--lm-z-dropdown: 30;
+	--lm-z-popover: 40;
+	--lm-z-overlay: 50;
+	--lm-z-top: 60;
+
+	/* Motion */
+	--lm-dur-instant: 80ms;
+	--lm-dur-fast: 120ms;
+	--lm-dur-base: 200ms;
+	--lm-dur-slow: 280ms;
+	--lm-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+	--lm-ease-linear: linear;
+}

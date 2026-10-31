@@ -63,10 +63,10 @@ body.dragging-panel .shell {
 .shell.lower-target::before,
 .shell.dock-target::before {
 	position: absolute;
-	z-index: 40;
+	z-index: var(--lm-z-popover);
 	box-sizing: border-box;
-	border: 2px solid #7896c8;
-	background: rgb(120 150 200 / 12%);
+	border: 2px solid var(--lm-border-accent);
+	background: var(--lm-selection-soft);
 	content: "";
 	pointer-events: none;
 }

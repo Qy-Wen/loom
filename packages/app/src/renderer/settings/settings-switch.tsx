@@ -158,8 +158,8 @@ function ErrorIcon(): React.JSX.Element {
 	return (
 		<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
 			<circle cx="8" cy="8" r="7" fill="currentColor" />
-			<path d="M8 4.3v5" fill="none" stroke="#fff" strokeWidth="1.7" strokeLinecap="round" />
-			<circle cx="8" cy="11.5" r="1" fill="#fff" />
+			<path d="M8 4.3v5" fill="none" style={{ stroke: "var(--lm-text-inverse)" }} strokeWidth="1.7" strokeLinecap="round" />
+			<circle cx="8" cy="11.5" r="1" style={{ fill: "var(--lm-text-inverse)" }} />
 		</svg>
 	);
 }

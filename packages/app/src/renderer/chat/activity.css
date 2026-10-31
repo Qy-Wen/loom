@@ -1,29 +1,29 @@
 .tool-call {
 	--tool-call-preview-height: 128px;
-	margin: 8px 0;
-	padding: 0 10px 8px;
-	border: 1px solid #e5e5e2;
-	border-radius: 8px;
-	background: #fafaf9;
-	font-size: 12px;
+	margin: var(--lm-space-4) 0;
+	padding: 0 var(--lm-space-5) var(--lm-space-4);
+	border: 1px solid var(--lm-border-subtle);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-app);
+	font-size: var(--lm-text-size-sm);
 	overflow: hidden;
 }
 
 .tool-call:hover {
-	background: #f2f2f0;
+	background: var(--lm-surface-window);
 }
 
 .tool-call-head {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--lm-space-4);
 	width: calc(100% + 20px);
 	margin: 0 -10px;
-	padding: 7px 10px;
+	padding: 7px var(--lm-space-5);
 	border: 0;
-	border-bottom: 1px solid #e5e5e2;
-	background: #ededea;
-	color: #7a7d82;
+	border-bottom: 1px solid var(--lm-border-subtle);
+	background: var(--lm-surface-hover);
+	color: var(--lm-text-muted);
 	cursor: default;
 	text-align: left;
 	font: inherit;
@@ -34,7 +34,7 @@ button.tool-call-head {
 }
 
 button.tool-call-head:hover {
-	background: #e5e5e1;
+	background: var(--lm-surface-active);
 }
 
 .tool-call-chevron {
@@ -43,7 +43,7 @@ button.tool-call-head:hover {
 	height: 0;
 	border-top: 4px solid transparent;
 	border-bottom: 4px solid transparent;
-	border-left: 5px solid #9aa0a6;
+	border-left: 5px solid var(--lm-text-faint);
 }
 
 .tool-call.open .tool-call-chevron {
@@ -54,11 +54,11 @@ button.tool-call-head:hover {
 	flex: 1;
 	min-width: 0;
 	overflow: hidden;
-	color: #202124;
-	font-weight: 600;
+	color: var(--lm-text-primary);
+	font-weight: var(--lm-weight-semibold);
 	text-overflow: ellipsis;
 	white-space: nowrap;
-	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-family: var(--lm-font-mono);
 }
 
 .tool-call-status {
@@ -67,33 +67,33 @@ button.tool-call-head:hover {
 
 .tool-call-gate {
 	display: flex;
-	gap: 6px;
-	margin: 6px 0 0 13px;
+	gap: var(--lm-space-3);
+	margin: var(--lm-space-3) 0 0 13px;
 }
 
 .tool-call-gate button {
-	padding: 2px 8px;
-	border: 1px solid #d0d0cc;
-	border-radius: 5px;
-	background: #fff;
-	color: #202124;
+	padding: var(--lm-space-1) var(--lm-space-4);
+	border: 1px solid var(--lm-border-strong);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
 	font: inherit;
 	cursor: pointer;
 }
 
 .tool-call-gate button:hover {
-	background: #f2f2f0;
+	background: var(--lm-surface-window);
 }
 
 .tool-call-gate-error {
-	margin: 4px 0 0 13px;
-	color: #b42318;
-	font-size: 12px;
+	margin: var(--lm-space-2) 0 0 13px;
+	color: var(--lm-text-danger);
+	font-size: var(--lm-text-size-sm);
 }
 
 .tool-call-body {
 	position: relative;
-	margin: 4px 0 0;
+	margin: var(--lm-space-2) 0 0;
 	overflow: hidden;
 }
 
@@ -122,41 +122,41 @@ button.tool-call-head:hover {
 	left: 0;
 	height: 1.6em;
 	pointer-events: none;
-	background: linear-gradient(to bottom, rgb(250 250 249 / 0), #fafaf9);
+	background: linear-gradient(to bottom, transparent, var(--lm-surface-app));
 }
 
 .tool-call:hover .tool-call-body.faded::after {
-	background: linear-gradient(to bottom, rgb(242 242 240 / 0), #f2f2f0);
+	background: linear-gradient(to bottom, transparent, var(--lm-surface-window));
 }
 
 .run-activity {
-	margin: 8px 0;
-	padding: 7px 10px 8px;
-	border: 1px solid #e5e5e2;
-	border-radius: 8px;
-	background: #fafaf9;
-	color: #5c5f64;
-	font-size: 12px;
+	margin: var(--lm-space-4) 0;
+	padding: 7px var(--lm-space-5) var(--lm-space-4);
+	border: 1px solid var(--lm-border-subtle);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-app);
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-sm);
 }
 
 .run-activity-head {
 	display: flex;
 	align-items: baseline;
-	gap: 8px;
+	gap: var(--lm-space-4);
 }
 
 .run-activity-label {
-	color: #3f4246;
-	font-weight: 600;
+	color: var(--lm-text-body);
+	font-weight: var(--lm-weight-semibold);
 }
 
 .run-activity-meta {
-	color: #8a8d91;
+	color: var(--lm-text-muted);
 }
 
 .run-activity-detail,
 .run-activity-output {
-	margin: 6px 0 0;
+	margin: var(--lm-space-3) 0 0;
 	white-space: pre-wrap;
 	word-break: break-word;
 }
@@ -164,28 +164,28 @@ button.tool-call-head:hover {
 .run-activity-output {
 	max-height: 8em;
 	overflow: auto;
-	font-size: 11px;
+	font-size: var(--lm-text-size-xs);
 	line-height: 1.35;
-	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-family: var(--lm-font-mono);
 }
 
 .tool-call-output {
-	margin: 8px 0 0;
-	border-top: 1px solid #e5e5e2;
+	margin: var(--lm-space-4) 0 0;
+	border-top: 1px solid var(--lm-border-subtle);
 }
 
 .tool-call-label {
-	margin: 8px 0 0 13px;
-	font: 11px / 1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	margin: var(--lm-space-4) 0 0 13px;
+	font: 11px / 1.35 var(--lm-font-mono);
 }
 
 .tool-call-arguments,
 .tool-call-result {
-	margin: 4px 0 0 13px;
+	margin: var(--lm-space-2) 0 0 13px;
 	overflow: visible;
 	white-space: pre-wrap;
 	word-break: break-word;
-	font-size: 11px;
+	font-size: var(--lm-text-size-xs);
 	line-height: 1.35;
-	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+	font-family: var(--lm-font-mono);
 }

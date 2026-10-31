@@ -14,9 +14,9 @@ button {
 }
 
 body {
-	font-family: -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
-	color: #202124;
-	background: #f7f7f6;
+	font-family: var(--lm-font-sans);
+	color: var(--lm-text-primary);
+	background: var(--lm-surface-subtle);
 }
 
 .app {
@@ -28,14 +28,14 @@ body {
 
 .window-bar {
 	position: relative;
-	z-index: 20;
+	z-index: var(--lm-z-chrome);
 	display: flex;
 	flex: 0 0 40px;
 	align-items: center;
 	height: 40px;
-	gap: 2px;
-	padding-left: 12px;
-	background: #f3f3f1;
+	gap: var(--lm-space-1);
+	padding-left: var(--lm-space-6);
+	background: var(--lm-surface-window);
 	-webkit-app-region: drag;
 }
 
@@ -44,7 +44,7 @@ body {
 }
 
 .window-bar.mac.fullscreen {
-	padding-left: 12px;
+	padding-left: var(--lm-space-6);
 }
 
 .window-bar button {
@@ -57,13 +57,13 @@ body {
 	position: absolute;
 	top: calc(100% + 6px);
 	left: 50%;
-	z-index: 30;
+	z-index: var(--lm-z-dropdown);
 	padding: 3px 7px;
-	border-radius: 5px;
-	background: #202124;
-	color: #fff;
-	font-size: 11px;
-	font-weight: 450;
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-inverse);
+	color: var(--lm-text-inverse);
+	font-size: var(--lm-text-size-xs);
+	font-weight: var(--lm-weight-regular);
 	line-height: 1.3;
 	letter-spacing: 0;
 	text-transform: none;
@@ -71,7 +71,7 @@ body {
 	opacity: 0;
 	pointer-events: none;
 	transform: translateX(-50%);
-	transition: opacity 80ms ease 280ms;
+	transition: opacity var(--lm-dur-instant) ease var(--lm-dur-slow);
 }
 
 .window-bar button[aria-label]:hover::after {
@@ -85,21 +85,21 @@ body {
 
 .status-toast {
 	position: fixed;
-	z-index: 50;
+	z-index: var(--lm-z-overlay);
 	top: 14px;
 	left: 50%;
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--lm-space-4);
 	width: max-content;
 	max-width: min(460px, calc(100% - 32px));
-	padding: 8px 12px;
-	border: 1px solid #e3e3e0;
-	border-radius: 8px;
-	color: #3c3c3c;
-	background: #fff;
-	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-	font-size: 12px;
+	padding: var(--lm-space-4) var(--lm-space-6);
+	border: 1px solid var(--lm-border-subtle);
+	border-radius: var(--lm-radius-md);
+	color: var(--lm-text-body);
+	background: var(--lm-surface-raised);
+	box-shadow: var(--lm-shadow-md);
+	font-size: var(--lm-text-size-sm);
 	line-height: 1.4;
 	transform: translateX(-50%);
 }
@@ -108,8 +108,8 @@ body {
 	width: 12px;
 	height: 12px;
 	flex: none;
-	border: 1.5px solid #d5d5d2;
-	border-top-color: #3c3c3c;
+	border: 1.5px solid var(--lm-border-default);
+	border-top-color: var(--lm-text-body);
 	border-radius: 50%;
 	animation: status-toast-spin 0.7s linear infinite;
 }
@@ -121,7 +121,7 @@ body {
 @media (prefers-reduced-motion: reduce) {
 	.status-toast-spin {
 		animation: none;
-		border-color: #3c3c3c;
+		border-color: var(--lm-text-body);
 		border-right-color: transparent;
 	}
 }
@@ -132,21 +132,21 @@ body {
 
 .error-toast {
 	position: fixed;
-	z-index: 50;
+	z-index: var(--lm-z-overlay);
 	top: 14px;
 	left: 50%;
 	display: flex;
 	align-items: center;
-	gap: 10px;
+	gap: var(--lm-space-5);
 	width: max-content;
 	max-width: min(460px, calc(100% - 32px));
-	padding: 7px 6px 7px 12px;
-	border: 1px solid #f0c8c4;
-	border-radius: 8px;
-	color: #8d2f2a;
-	background: #fff8f7;
-	box-shadow: 0 8px 24px rgb(0 0 0 / 12%);
-	font-size: 12px;
+	padding: 7px var(--lm-space-3) 7px var(--lm-space-6);
+	border: 1px solid var(--lm-border-danger);
+	border-radius: var(--lm-radius-md);
+	color: var(--lm-text-danger);
+	background: var(--lm-surface-danger);
+	box-shadow: var(--lm-shadow-md);
+	font-size: var(--lm-text-size-sm);
 	line-height: 1.4;
 	transform: translateX(-50%);
 }
@@ -154,7 +154,7 @@ body {
 .error-toast .copyable-error {
 	flex: 1;
 	min-width: 0;
-	gap: 10px;
+	gap: var(--lm-space-5);
 }
 
 .error-toast .copyable-error-text {
@@ -164,30 +164,30 @@ body {
 .error-toast .copyable-error-copy,
 .error-toast-dismiss {
 	flex: none;
-	padding: 2px 4px;
+	padding: var(--lm-space-1) var(--lm-space-2);
 	border: 0;
-	border-radius: 4px;
-	color: #8a8d91;
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-muted);
 	background: transparent;
-	font-size: 11px;
+	font-size: var(--lm-text-size-xs);
 	line-height: 1.4;
 	cursor: pointer;
 }
 
 .error-toast-dismiss {
-	font-size: 14px;
+	font-size: var(--lm-text-size-lg);
 }
 
 .error-toast .copyable-error-copy:hover,
 .error-toast-dismiss:hover {
-	color: #3f3f3f;
-	background: #f3f3f1;
+	color: var(--lm-text-body);
+	background: var(--lm-surface-window);
 }
 
 .copyable-error {
 	display: flex;
 	align-items: center;
-	gap: 8px;
+	gap: var(--lm-space-4);
 	min-width: 0;
 }
 
@@ -204,9 +204,9 @@ body {
 }
 
 .empty {
-	padding: 12px;
-	color: #92959a;
-	font-size: 12px;
+	padding: var(--lm-space-6);
+	color: var(--lm-text-muted);
+	font-size: var(--lm-text-size-sm);
 	line-height: 1.5;
 }
 
@@ -219,26 +219,26 @@ body {
 	align-items: center;
 	justify-content: center;
 	height: 100%;
-	color: #888;
+	color: var(--lm-text-muted);
 }
 
 .open-button,
 .primary-button {
-	border: 1px solid #cacac6;
-	border-radius: 6px;
-	color: #292a2d;
-	background: #fff;
+	border: 1px solid var(--lm-border-strong);
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-primary);
+	background: var(--lm-surface-raised);
 	cursor: pointer;
 }
 
 .open-button {
-	padding: 5px 8px;
-	font-size: 11px;
+	padding: 5px var(--lm-space-4);
+	font-size: var(--lm-text-size-xs);
 }
 
 .open-button:hover:not(:disabled),
 .primary-button:hover:not(:disabled) {
-	background: #eeeeeb;
+	background: var(--lm-surface-hover);
 }
 
 .open-button:disabled,
@@ -248,16 +248,16 @@ body {
 }
 
 .primary-button {
-	margin-top: 8px;
-	padding: 8px 13px;
-	font-size: 12px;
+	margin-top: var(--lm-space-4);
+	padding: var(--lm-space-4) 13px;
+	font-size: var(--lm-text-size-sm);
 }
 
 /* Match the chat panel scrollbar (CopilotKit: 6px thumb, thin gutter). */
 .thin-scroll,
 .thin-scroll * {
 	scrollbar-width: thin;
-	scrollbar-color: oklch(50% 0 0) transparent;
+	scrollbar-color: var(--lm-scrollbar-thumb) transparent;
 }
 
 .thin-scroll::-webkit-scrollbar,
@@ -273,13 +273,13 @@ body {
 
 .thin-scroll::-webkit-scrollbar-thumb,
 .thin-scroll ::-webkit-scrollbar-thumb {
-	background: oklch(50% 0 0);
-	border-radius: 9999px;
+	background: var(--lm-scrollbar-thumb);
+	border-radius: var(--lm-radius-pill);
 }
 
 .thin-scroll::-webkit-scrollbar-thumb:hover,
 .thin-scroll ::-webkit-scrollbar-thumb:hover {
-	background: oklch(40% 0 0);
+	background: var(--lm-scrollbar-thumb-hover);
 }
 
 .tag-add input:focus,
@@ -289,6 +289,6 @@ body {
 .settings-slot input:focus,
 .settings-slot textarea:focus,
 .settings-instructions textarea:focus {
-	border-color: #7896c8;
-	box-shadow: 0 0 0 2px rgb(120 150 200 / 15%);
+	border-color: var(--lm-border-accent);
+	box-shadow: 0 0 0 2px var(--lm-selection);
 }

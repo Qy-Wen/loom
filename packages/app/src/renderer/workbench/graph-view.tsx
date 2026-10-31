@@ -54,11 +54,11 @@ type PointerDrag =
 	| { kind: "link"; fromId: string };
 
 const TYPE_COLOR: Record<AssetType, string> = {
-	image: "#6d84b4",
-	video: "#8a6d9e",
-	audio: "#5d8a7a",
-	text: "#9a7b4f",
-	other: "#8b8e93",
+	image: "var(--lm-kind-image)",
+	video: "var(--lm-kind-video)",
+	audio: "var(--lm-kind-audio)",
+	text: "var(--lm-kind-text)",
+	other: "var(--lm-kind-other)",
 };
 
 const TYPE_ORDER: AssetType[] = ["image", "video", "audio", "text", "other"];
@@ -430,10 +430,10 @@ export function GraphView({
 					<g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
 						<defs>
 							<marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-								<path d="M0,0 L8,4 L0,8 Z" fill="#9aa0a6" />
+								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-text-faint)" }} />
 							</marker>
 							<marker id="graph-arrow-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-								<path d="M0,0 L8,4 L0,8 Z" fill="#202124" />
+								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-text-primary)" }} />
 							</marker>
 						</defs>
 						{visibleEdges.map((edge) => {

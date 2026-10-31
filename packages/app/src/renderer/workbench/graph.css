@@ -12,10 +12,10 @@
 	flex: 0 0 auto;
 	align-items: center;
 	justify-content: space-between;
-	gap: 12px;
-	padding: 12px 16px 0;
-	color: #6b6e73;
-	font-size: 12px;
+	gap: var(--lm-space-6);
+	padding: var(--lm-space-6) var(--lm-space-7) 0;
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-sm);
 }
 
 .graph-canvas {
@@ -33,17 +33,17 @@
 	position: absolute;
 	bottom: 12px;
 	left: 12px;
-	z-index: 1;
+	z-index: var(--lm-z-base);
 	display: flex;
 	flex-direction: column;
 	gap: 5px;
 	margin: 0;
-	padding: 8px 10px;
-	border: 1px solid #e5e5e2;
-	border-radius: 8px;
-	background: rgb(255 255 255 / 92%);
-	color: #5f6368;
-	font-size: 11px;
+	padding: var(--lm-space-4) var(--lm-space-5);
+	border: 1px solid var(--lm-border-subtle);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-scrim);
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-xs);
 	list-style: none;
 	pointer-events: none;
 }
@@ -86,7 +86,7 @@
 }
 
 .graph-edge {
-	stroke: #c4c7cc;
+	stroke: var(--lm-text-faint);
 	stroke-width: 1.5;
 	pointer-events: none;
 }
@@ -98,18 +98,18 @@
 }
 
 .graph-edge-group.selected .graph-edge {
-	stroke: #202124;
+	stroke: var(--lm-text-primary);
 	stroke-width: 2.5;
 }
 
 .graph-edge-label {
-	fill: #6b6e73;
-	font-size: 10px;
+	fill: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-2xs);
 	pointer-events: none;
 }
 
 .graph-link-preview {
-	stroke: #202124;
+	stroke: var(--lm-text-primary);
 	stroke-width: 1.5;
 	stroke-dasharray: 6 4;
 	pointer-events: none;
@@ -124,22 +124,22 @@
 	position: absolute;
 	top: 48px;
 	left: 50%;
-	z-index: 2;
+	z-index: var(--lm-z-raised);
 	display: grid;
 	width: min(320px, calc(100% - 32px));
-	gap: 8px;
-	padding: 12px;
-	border: 1px solid #dededb;
-	border-radius: 8px;
-	background: #fff;
-	box-shadow: 0 8px 24px rgb(32 33 36 / 12%);
+	gap: var(--lm-space-4);
+	padding: var(--lm-space-6);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-raised);
+	box-shadow: var(--lm-shadow-md);
 	transform: translateX(-50%);
 }
 
 .graph-type-dialog-title,
 .graph-type-error,
 .relation-form-error {
-	font-size: 12px;
+	font-size: var(--lm-text-size-sm);
 }
 
 .graph-type-dialog-title {
@@ -150,19 +150,19 @@
 
 .graph-type-error,
 .relation-form-error {
-	color: #b3261e;
+	color: var(--lm-text-danger);
 }
 
 .graph-type-dialog input {
 	min-width: 0;
-	padding: 6px 7px;
-	border: 1px solid #d4d4d0;
-	border-radius: 5px;
+	padding: var(--lm-space-3) 7px;
+	border: 1px solid var(--lm-border-strong);
+	border-radius: var(--lm-radius-sm);
 	outline: none;
 	color: inherit;
-	background: #fff;
+	background: var(--lm-surface-raised);
 	font: inherit;
-	font-size: 12px;
+	font-size: var(--lm-text-size-sm);
 }
 
 .graph-type-dialog .suggest > input {
@@ -175,22 +175,22 @@
 }
 
 .graph-node circle {
-	stroke: #fff;
+	stroke: var(--lm-text-inverse);
 	stroke-width: 2;
 }
 
 .graph-node.hovered:not(.selected):not(.drop-target) circle {
-	stroke: #5f6368;
+	stroke: var(--lm-text-secondary);
 	stroke-width: 2.5;
 }
 
 .graph-node.selected circle {
-	stroke: #202124;
+	stroke: var(--lm-text-primary);
 	stroke-width: 3;
 }
 
 .graph-node.drop-target circle {
-	stroke: #202124;
+	stroke: var(--lm-text-primary);
 	stroke-width: 3;
 }
 
@@ -199,28 +199,28 @@
 }
 
 .graph-plus circle {
-	fill: #fff;
-	stroke: #202124;
+	fill: var(--lm-text-inverse);
+	stroke: var(--lm-text-primary);
 	stroke-width: 1.5;
 }
 
 .graph-plus-mark {
 	fill: none;
-	stroke: #202124;
+	stroke: var(--lm-text-primary);
 	stroke-width: 1.6;
 	stroke-linecap: round;
 	pointer-events: none;
 }
 
 .graph-node-name {
-	fill: #202124;
-	font-size: 11px;
+	fill: var(--lm-text-primary);
+	font-size: var(--lm-text-size-xs);
 	pointer-events: none;
 }
 
 .graph-box {
-	fill: rgb(66 133 244 / 10%);
-	stroke: #4285f4;
+	fill: var(--lm-selection);
+	stroke: var(--lm-accent);
 	stroke-width: 1;
 	vector-effect: non-scaling-stroke;
 	pointer-events: none;

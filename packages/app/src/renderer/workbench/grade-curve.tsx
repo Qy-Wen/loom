@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { normalizeCurve, type CurvePoint } from "@loom/core/grade";
+import { token } from "../design/tokens.ts";
 
 const PAD = 10;
 
@@ -29,7 +30,7 @@ export function GradeCurve({
 		canvas.height = Math.max(1, Math.round(height * ratio));
 		context.setTransform(ratio, 0, 0, ratio, 0, 0);
 		context.clearRect(0, 0, width, height);
-		context.strokeStyle = "#e4e4e0";
+		context.strokeStyle = token("surface-active");
 		context.lineWidth = 1;
 		for (const step of [0.25, 0.5, 0.75]) {
 			const vertical = toCanvas({ x: step, y: 0 }, width, height).x;
@@ -41,7 +42,7 @@ export function GradeCurve({
 			context.lineTo(width - PAD, horizontal);
 			context.stroke();
 		}
-		context.strokeStyle = "#d0d0cb";
+		context.strokeStyle = token("border-strong");
 		context.beginPath();
 		context.moveTo(PAD, height - PAD);
 		context.lineTo(width - PAD, PAD);
@@ -58,7 +59,7 @@ export function GradeCurve({
 		for (const point of points) {
 			const plotted = toCanvas(point, width, height);
 			context.beginPath();
-			context.fillStyle = "#fff";
+			context.fillStyle = token("surface-raised");
 			context.arc(plotted.x, plotted.y, 4, 0, Math.PI * 2);
 			context.fill();
 			context.lineWidth = 1.5;
