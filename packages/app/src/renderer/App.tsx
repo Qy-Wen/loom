@@ -54,7 +54,8 @@ import {
 	type TreeSelection,
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
-import { HelpButton, LibraryOpenButton, LibrarySidebar, SettingsButton, SidebarToggle, TracesButton } from "./library/library-sidebar.tsx";
+import { HelpButton, LibraryOpenButton, SettingsButton, SidebarToggle, TracesButton } from "./components/app-buttons.tsx";
+import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./components/error-toast.tsx";
 import { runActivityRenderers } from "./chat/run-activity.tsx";
 import { AgentPanel } from "./chat/agent-panel.tsx";
@@ -560,13 +561,7 @@ export function App(): React.JSX.Element {
 	function revealCreatedFolder(relativePath: string): void {
 		selectFolder(relativePath);
 		setRenamingFolder(relativePath);
-		const parent = parentFolder(relativePath);
-		setCollapsedFolders((current) => {
-			const next = new Set(current);
-			next.delete(relativePath);
-			if (parent) next.delete(parent);
-			return next;
-		});
+		revealFolders([relativePath]);
 	}
 
 	async function createFolderIn(parentRelativePath: string): Promise<void> {
