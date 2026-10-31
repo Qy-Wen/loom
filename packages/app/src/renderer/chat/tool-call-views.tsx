@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { useDefaultRenderTool } from "@copilotkit/react-core/v2";
 import { commandAllowKey, toolCallNeedsApproval, toolPathArg, type CommandAllow, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { useCommandAllows } from "./command-allows.ts";
@@ -53,21 +53,39 @@ function ToolCallCard({
 	const resultParts = done ? toolResultParts(result) : null;
 	const images = resultParts?.filter((part) => part.type === "image") ?? [];
 	const displayResult = resultParts ? resultParts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n") : result;
-	const body = refs ? `arguments\n${formatToolValue(parameters)}` : formatToolBody(parameters, done ? displayResult : undefined);
-	const faded = !open && hasMoreThanPreview(body);
+	const argumentsText = formatToolValue(parameters);
+	const resultText = done && !refs && displayResult != null && displayResult !== "" ? formatToolValue(displayResult) : "";
+	const hasResult = refs !== null || images.length > 0 || resultText !== "";
+	const bodyRef = useRef<HTMLDivElement>(null);
+	const contentRef = useRef<HTMLDivElement>(null);
+	const [expandable, setExpandable] = useState(false);
+	useLayoutEffect(() => {
+		const body = bodyRef.current!, content = contentRef.current!;
+		const measure = () => {
+			const limit = Number.parseFloat(getComputedStyle(body).getPropertyValue("--tool-call-preview-height"));
+			setExpandable(content.scrollHeight > limit + 1);
+		};
+		const observer = new ResizeObserver(measure);
+		observer.observe(body);
+		observer.observe(content);
+		measure();
+		return () => observer.disconnect();
+	}, []);
+	const expanded = expandable && open;
+	const Header = expandable ? "button" : "div";
 
 	return (
-		<div className={`tool-call${open ? " open" : ""}${faded ? " faded" : ""}`}>
-			<button
+		<div className={`tool-call${expanded ? " open" : ""}`}>
+			<Header
 				className="tool-call-head"
-				type="button"
-				aria-expanded={open}
-				onClick={() => setOpen((current) => !current)}
+				type={expandable ? "button" : undefined}
+				aria-expanded={expandable ? expanded : undefined}
+				onClick={expandable ? () => setOpen((current) => !current) : undefined}
 			>
-				<span className="tool-call-chevron" aria-hidden="true" />
+				{expandable ? <span className="tool-call-chevron" aria-hidden="true" /> : null}
 				<span className="tool-call-name">{name}</span>
 				<span className="tool-call-status">{waiting ? t.tool.waiting : done ? t.tool.done : status}</span>
-			</button>
+			</Header>
 			{waiting && toolCallId ? (
 				<div className="tool-call-gate">
 					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
@@ -78,26 +96,36 @@ function ToolCallCard({
 				</div>
 			) : null}
 			{gateError ? <p className="tool-call-gate-error">{gateError}</p> : null}
-			{body ? (
-				<div
-					className="tool-call-body"
-					onClick={open ? undefined : () => setOpen(true)}
-				>
-					<pre className="tool-call-result">{body}</pre>
+			<div
+				ref={bodyRef}
+				className={`tool-call-body${!expanded && expandable ? " faded" : ""}`}
+				onClick={!expanded && expandable ? (event) => {
+					if (!(event.target as Element).closest("button, a")) setOpen(true);
+				} : undefined}
+			>
+				<div ref={contentRef} className="tool-call-content">
+					<div className="tool-call-label">arguments</div>
+					<pre className="tool-call-arguments">{argumentsText}</pre>
+					{hasResult ? (
+						<div className="tool-call-output">
+							<div className="tool-call-label">result</div>
+							{resultText !== "" ? <pre className="tool-call-result">{resultText}</pre> : null}
+							{images.length > 0 ? (
+								<div className="tool-call-images">
+									{images.map((part, index) => <img key={index} src={"url" in part ? part.url : `data:${part.mimeType};base64,${part.data}`} loading="lazy" decoding="async" alt={`${t.tool.image} ${index + 1}`} />)}
+								</div>
+							) : null}
+							{refs ? (
+								<div className="tool-call-refs">
+									{refs.length === 0 ? <span className="tool-call-refs-empty">{t.tool.noAssets}</span> : refs.map((ref) => (
+										<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
+									))}
+								</div>
+							) : null}
+						</div>
+					) : null}
 				</div>
-			) : null}
-			{images.length > 0 ? (
-				<div className="tool-call-images">
-					{images.map((part, index) => <img key={index} src={"url" in part ? part.url : `data:${part.mimeType};base64,${part.data}`} loading="lazy" decoding="async" alt={`${t.tool.image} ${index + 1}`} />)}
-				</div>
-			) : null}
-			{refs ? (
-				<div className="tool-call-refs">
-					{refs.length === 0 ? <span className="tool-call-refs-empty">{t.tool.noAssets}</span> : refs.map((ref) => (
-						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
-					))}
-				</div>
-			) : null}
+			</div>
 		</div>
 	);
 }
@@ -131,16 +159,6 @@ function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: 
 			{asset.filename}
 		</button>
 	);
-}
-
-function formatToolBody(parameters: unknown, result: unknown): string {
-	const parts = [`arguments\n${formatToolValue(parameters)}`];
-	if (result != null && result !== "") parts.push(`result\n${formatToolValue(result)}`);
-	return parts.join("\n\n");
-}
-
-function hasMoreThanPreview(text: string): boolean {
-	return text.split("\n").filter((line) => line.trim()).length > 4;
 }
 
 function formatToolValue(value: unknown): string {

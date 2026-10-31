@@ -1,4 +1,5 @@
 .tool-call {
+	--tool-call-preview-height: 128px;
 	margin: 8px 0;
 	padding: 7px 10px 8px;
 	border: 1px solid #e5e5e2;
@@ -22,9 +23,13 @@
 	border: 0;
 	background: transparent;
 	color: #7a7d82;
-	cursor: pointer;
+	cursor: default;
 	text-align: left;
 	font: inherit;
+}
+
+button.tool-call-head {
+	cursor: pointer;
 }
 
 .tool-call-chevron {
@@ -83,12 +88,19 @@
 
 .tool-call-body {
 	position: relative;
-	margin: 4px 0 0 13px;
+	margin: 4px 0 0;
 	overflow: hidden;
 }
 
+.tool-call-content {
+	display: flow-root;
+}
+
 .tool-call:not(.open) .tool-call-body {
-	max-height: calc(11px * 1.35 * 4);
+	max-height: var(--tool-call-preview-height);
+}
+
+.tool-call-body.faded {
 	cursor: pointer;
 }
 
@@ -97,7 +109,7 @@
 	overflow: auto;
 }
 
-.tool-call.faded .tool-call-body::after {
+.tool-call-body.faded::after {
 	content: "";
 	position: absolute;
 	right: 0;
@@ -108,7 +120,7 @@
 	background: linear-gradient(to bottom, rgb(250 250 249 / 0), #fafaf9);
 }
 
-.tool-call.faded:hover .tool-call-body::after {
+.tool-call:hover .tool-call-body.faded::after {
 	background: linear-gradient(to bottom, rgb(242 242 240 / 0), #f2f2f0);
 }
 
@@ -152,8 +164,19 @@
 	font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
 }
 
+.tool-call-output {
+	margin: 8px 0 0;
+	border-top: 1px solid #e5e5e2;
+}
+
+.tool-call-label {
+	margin: 8px 0 0 13px;
+	font: 11px / 1.35 ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+
+.tool-call-arguments,
 .tool-call-result {
-	margin: 0;
+	margin: 4px 0 0 13px;
 	overflow: visible;
 	white-space: pre-wrap;
 	word-break: break-word;

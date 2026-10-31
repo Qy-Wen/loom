@@ -40,8 +40,8 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 		await expect(loomPage.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
 		await loomPage.reload();
 		await expect(loomPage.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
-		const parentCard = loomPage.locator(".tool-call").filter({ has: loomPage.getByRole("button", { name: /run_create_agent/ }) });
-		const argumentsText = await parentCard.locator(".tool-call-result").innerText();
+		const parentCard = loomPage.locator(".tool-call").filter({ has: loomPage.locator(".tool-call-name", { hasText: "run_create_agent" }) });
+		const argumentsText = await parentCard.locator(".tool-call-arguments").innerText();
 		expect(JSON.parse(argumentsText.replace(/^arguments\s*/, ""))).toEqual({ goal: "save generated.txt" });
 		await loomPage.getByRole("button", { name: "Approve", exact: true }).click();
 		await expect(loomPage.getByText("Generated and saved the result.", { exact: true }).first()).toBeVisible();
