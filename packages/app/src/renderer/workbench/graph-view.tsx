@@ -17,6 +17,7 @@ import { SuggestInput } from "../components/suggest-input.tsx";
 import { pointerMode } from "../library/tree-nav.ts";
 import { wheelZoomFactor } from "./media-zoom.ts";
 import { useGraphSimulation } from "./graph-simulation.ts";
+import { GraphHelp } from "./graph-help.tsx";
 
 interface GraphViewProps {
 	assets: Asset[];
@@ -390,7 +391,10 @@ export function GraphView({
 	return (
 		<div className="graph-view">
 			<div className="graph-caption">
-				<span>{t.graph.caption(assets.length, visibleEdges.length)}</span>
+				<div className="graph-caption-summary">
+					<span>{t.graph.caption(assets.length, visibleEdges.length)}</span>
+					<GraphHelp />
+				</div>
 				{selectedEdge && (
 					<button
 						className="text-button"

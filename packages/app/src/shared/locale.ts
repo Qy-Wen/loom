@@ -160,7 +160,35 @@ export const messages = defineLocale(
 		},
 		graph: {
 			canvas: "Asset relationship graph",
-			caption: (assets: number, relations: number) => `${assets} assets · ${relations} relations · drag a node to move · hover the rim for + to link`,
+			caption: (assets: number, relations: number) => `${assets} assets · ${relations} relations`,
+			help: {
+				title: "Graph controls",
+				close: "Close graph help",
+				move: "Move a node",
+				moveHint: "Drag the body of a node to move it.",
+				link: "Create a relation",
+				linkHint: "Hover over a node’s rim to reveal +, then drag it to another node and enter a relationship type.",
+				pan: "Pan the canvas",
+				panHint: (platform: UiPlatform) => platform === "mac"
+					? "Scroll with two fingers on the trackpad, scroll the mouse wheel, or drag with the middle mouse button."
+					: "Drag with the middle mouse button, scroll the mouse wheel, or scroll with two fingers on the touchpad.",
+				zoom: "Zoom the canvas",
+				zoomHint: (platform: UiPlatform) => platform === "mac"
+					? "Pinch on the trackpad, or hold ⌘ and scroll. Zoom centers on the pointer."
+					: "Hold Ctrl and scroll, or pinch on the touchpad. Zoom centers on the pointer.",
+				box: "Box-select nodes",
+				boxHint: "Left-drag on empty canvas to select the nodes inside the box.",
+				add: "Add to selection",
+				addHint: (platform: UiPlatform) => platform === "mac"
+					? "Hold Shift or ⌘ while box-selecting to keep the current selection."
+					: "Hold Shift or Ctrl while box-selecting to keep the current selection.",
+				clear: "Clear selection",
+				clearHint: "Click empty canvas to clear the selection.",
+				remove: "Remove a relation",
+				removeHint: (platform: UiPlatform) => platform === "mac"
+					? "Click a relation to select it, then press ⌫ or click its Remove button."
+					: "Click a relation to select it, then press Delete or Backspace, or click its Remove button.",
+			},
 			emptyTitle: "No assets yet",
 			emptyBody: "Open a library to see every asset and its relationships on one canvas.",
 			types: "Asset types",
@@ -732,7 +760,35 @@ export const messages = defineLocale(
 		},
 		graph: {
 			canvas: "素材关系图",
-			caption: (assets, relations) => `${assets} 个素材 · ${relations} 条关系 · 拖动节点可移动 · 悬停在边缘点 + 可建立关系`,
+			caption: (assets, relations) => `${assets} 个素材 · ${relations} 条关系`,
+			help: {
+				title: "图谱操作指南",
+				close: "关闭图谱帮助",
+				move: "移动节点",
+				moveHint: "拖动节点主体即可移动节点。",
+				link: "建立关系",
+				linkHint: "悬停在节点边缘显示 +，将它拖到另一个节点，再填写关系类型。",
+				pan: "平移画布",
+				panHint: (platform) => platform === "mac"
+					? "在触控板上双指滑动、滚动鼠标滚轮，或按住鼠标中键拖动。"
+					: "按住鼠标中键拖动、滚动鼠标滚轮，或在触控板上双指滑动。",
+				zoom: "缩放画布",
+				zoomHint: (platform) => platform === "mac"
+					? "在触控板上双指捏合，或按住 ⌘ 滚动。以指针所在位置为缩放中心。"
+					: "按住 Ctrl 滚动，或在触控板上双指捏合。以指针所在位置为缩放中心。",
+				box: "框选节点",
+				boxHint: "在画布空白处按住鼠标左键拖动，选中框内的节点。",
+				add: "追加选择",
+				addHint: (platform) => platform === "mac"
+					? "按住 Shift 或 ⌘ 框选，保留已有选择并追加框内节点。"
+					: "按住 Shift 或 Ctrl 框选，保留已有选择并追加框内节点。",
+				clear: "清空选择",
+				clearHint: "点击画布空白处即可清空选择。",
+				remove: "删除关系",
+				removeHint: (platform) => platform === "mac"
+					? "点击关系线选中，再按 ⌫ 或点击对应的移除按钮。"
+					: "点击关系线选中，再按 Delete、Backspace 或点击对应的移除按钮。",
+			},
 			emptyTitle: "还没有素材",
 			emptyBody: "打开素材库后，可以在一张画布上看全部素材和它们的关系。",
 			types: "素材类型",

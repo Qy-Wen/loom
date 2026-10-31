@@ -8,6 +8,7 @@
 }
 
 .graph-caption {
+	position: relative;
 	display: flex;
 	flex: 0 0 auto;
 	align-items: center;
@@ -16,6 +17,92 @@
 	padding: var(--lm-space-6) var(--lm-space-7) 0;
 	color: var(--lm-text-secondary);
 	font-size: var(--lm-text-size-sm);
+}
+
+.graph-caption-summary {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-3);
+}
+
+.graph-help {
+	display: flex;
+	flex: 0 0 auto;
+}
+
+.graph-help-button {
+	display: flex;
+	width: 24px;
+	height: 24px;
+	align-items: center;
+	justify-content: center;
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
+	color: var(--lm-text-secondary);
+	cursor: pointer;
+}
+
+.graph-help-button:hover,
+.graph-help-button[aria-expanded="true"] {
+	background: var(--lm-surface-hover);
+	color: var(--lm-text-primary);
+}
+
+.graph-help-button:focus-visible {
+	outline: 2px solid var(--lm-accent);
+	outline-offset: 2px;
+}
+
+.graph-help-popover {
+	position: absolute;
+	top: calc(100% + var(--lm-space-3));
+	left: var(--lm-space-7);
+	z-index: var(--lm-z-menu);
+	width: min(360px, calc(100% - 2 * var(--lm-space-7)));
+	max-height: min(480px, calc(100vh - 160px));
+	overflow: auto;
+	overscroll-behavior: contain;
+	padding: var(--lm-space-6);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-raised);
+	box-shadow: var(--lm-shadow-md);
+	color: var(--lm-text-body);
+	outline: none;
+}
+
+.graph-help-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--lm-space-4);
+	margin-bottom: var(--lm-space-5);
+}
+
+.graph-help-header h2 {
+	margin: 0;
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-md);
+	font-weight: var(--lm-weight-semibold);
+}
+
+.graph-help-instructions {
+	display: grid;
+	gap: var(--lm-space-5);
+	margin: 0;
+	font-size: var(--lm-text-size-sm);
+	line-height: 1.5;
+}
+
+.graph-help-instructions dt {
+	color: var(--lm-text-primary);
+	font-weight: var(--lm-weight-medium);
+}
+
+.graph-help-instructions dd {
+	margin: var(--lm-space-1) 0 0;
 }
 
 .graph-canvas {
