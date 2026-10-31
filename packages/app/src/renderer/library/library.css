@@ -176,7 +176,8 @@
 .library-region-handle { position: relative; flex: 0 0 12px; cursor: row-resize; touch-action: none; }
 .library-region-handle::after { position: absolute; top: 50%; left: 6px; right: 6px; height: 1px; transform: translateY(-50%); background: #e5e5e2; content: ""; }
 .library-region-handle.has-more::after { background: #b0bbc9; }
-.library-region-handle:hover::after, .library-region-handle:focus-visible::after, .library-region-handle.is-dragging::after { background: #7896c8; }
+.library-region-handle:not(.is-fixed):hover::after, .library-region-handle:focus-visible::after, .library-region-handle.is-dragging::after { background: #7896c8; }
+.library-region-handle.is-fixed { cursor: default; }
 body.library-resizing-regions, body.library-resizing-regions * { cursor: row-resize !important; user-select: none !important; }
 
 .library-sidebar .library-scroll.thin-scroll {

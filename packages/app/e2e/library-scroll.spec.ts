@@ -77,6 +77,14 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await top.getByRole("button", { name: "Favorites", exact: true }).click();
 	await expect.poll(() => height()).toBeLessThan(80); expect(await ratio()).toBe(preferred);
 	await expect(moreCue).toHaveCount(0);
+	// With nothing to adjust, the divider is inert: no resize cursor, not focusable, and dragging does nothing.
+	await expect(separator).toHaveClass(/is-fixed/); await expect(separator).toHaveAttribute("aria-disabled", "true");
+	await expect(separator).not.toHaveAttribute("tabindex"); await expect(separator).toHaveCSS("cursor", "default");
+	const folded = await height(), fixedBox = (await separator.boundingBox())!;
+	await loomPage.mouse.move(fixedBox.x + fixedBox.width / 2, fixedBox.y + fixedBox.height / 2); await loomPage.mouse.down();
+	await expect(loomPage.locator("body")).not.toHaveClass(/library-resizing-regions/);
+	await loomPage.mouse.move(fixedBox.x + fixedBox.width / 2, fixedBox.y + fixedBox.height / 2 + 80, { steps: 4 }); await loomPage.mouse.up();
+	expect(await height()).toBe(folded); expect(await ratio()).toBe(preferred);
 	await top.getByRole("button", { name: "Favorites", exact: true }).click();
 	await expect.poll(async () => Math.abs(await height() - await extent() * preferred)).toBeLessThanOrEqual(1);
 	await expect(moreCue).toBeVisible();

@@ -38,6 +38,8 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 	const [moreBelow, setMoreBelow] = useState(false);
 	const hasShortcuts = shortcuts !== null;
 	const layout = libraryRegionSize(height, contentHeight, fraction);
+	// Folded shortcuts leave min === max: there is nothing to drag, so the divider stops offering it.
+	const adjustable = layout.max - layout.min >= 1;
 	const updateMoreBelow = () => {
 		const element = shortcutsScroll.current;
 		setMoreBelow(!!element && element.clientHeight > 0 && element.scrollHeight - element.clientHeight - element.scrollTop > 1);
@@ -76,7 +78,7 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 		window.addEventListener("blur", endDrag);
 		return () => { window.removeEventListener("blur", endDrag); endDrag(); };
 	}, [endDrag]);
-	useEffect(() => { if (!hasShortcuts) endDrag(); }, [hasShortcuts, endDrag]);
+	useEffect(() => { if (!hasShortcuts || !adjustable) endDrag(); }, [hasShortcuts, adjustable, endDrag]);
 	return <div ref={root} className="library-scroll-regions">
 		{hasShortcuts ? <>
 			<div className="library-shortcuts-pane" style={{ height: layout.size }}>
@@ -85,18 +87,18 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 				</ScrollArea>
 				{moreBelow ? <div className="library-shortcuts-more" aria-hidden="true" /> : null}
 			</div>
-			<div ref={handle} className={`library-region-handle${moreBelow ? " has-more" : ""}${dragging ? " is-dragging" : ""}`} role="separator" tabIndex={0}
+			<div ref={handle} className={`library-region-handle${moreBelow ? " has-more" : ""}${dragging ? " is-dragging" : ""}${adjustable ? "" : " is-fixed"}`} role="separator" tabIndex={adjustable ? 0 : undefined} aria-disabled={adjustable ? undefined : true}
 				aria-label={label} aria-orientation="horizontal" aria-controls={paneId} aria-description={moreBelow ? moreHint : undefined} title={moreBelow ? moreHint : label}
 				aria-valuemin={Math.round(layout.min)} aria-valuemax={Math.round(layout.max)} aria-valuenow={Math.round(layout.size)}
 				onDoubleClick={() => setFraction(DEFAULT_SHORTCUT_FRACTION)}
 				onKeyDown={(event) => {
-					if (!["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
+					if (!adjustable || !["ArrowUp", "ArrowDown", "Home", "End"].includes(event.key)) return;
 					event.preventDefault(); event.stopPropagation();
 					const limits = current();
 					resize(event.key === "Home" ? limits.min : event.key === "End" ? limits.max : limits.size + (event.key === "ArrowUp" ? -10 : 10));
 				}}
 				onPointerDown={(event) => {
-					if (event.button !== 0 || drag.current) return;
+					if (!adjustable || event.button !== 0 || drag.current) return;
 					event.preventDefault(); event.currentTarget.focus(); event.currentTarget.setPointerCapture(event.pointerId);
 					drag.current = { pointer: event.pointerId, origin: event.clientY, size: current().size };
 					document.body.classList.add("library-resizing-regions"); setDragging(true);
