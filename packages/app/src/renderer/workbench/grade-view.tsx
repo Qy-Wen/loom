@@ -18,7 +18,6 @@ import {
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../assets/asset-utils.ts";
 import { useLocale } from "../locale.tsx";
-import { token } from "../design/tokens.ts";
 import { GradeCurve } from "./grade-curve.tsx";
 
 type CurveChannel = "rgb" | "r" | "g" | "b";
@@ -321,7 +320,7 @@ export function GradeView({
 					</div>
 					<GradeCurve
 						points={grade.curves[channel]}
-						color={token(CHANNELS.find((item) => item.id === channel)?.token ?? "text-primary")}
+						colorToken={CHANNELS.find((item) => item.id === channel)?.token ?? "text-primary"}
 						onChange={editCurve}
 					/>
 				</div>

@@ -4,6 +4,9 @@ import { DevTraceApp } from "./dev-trace-app.tsx";
 import { TraceLocaleProvider } from "./trace-locale.tsx";
 import "../design/tokens.css";
 import "./dev-trace.css";
+import { followColorScheme } from "../design/theme.ts";
+
+followColorScheme();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");

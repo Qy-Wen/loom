@@ -1,22 +1,27 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { normalizeCurve, type CurvePoint } from "@loom/core/grade";
 import { token } from "../design/tokens.ts";
+import { onThemeChange } from "../design/theme.ts";
 
 const PAD = 10;
 
 export function GradeCurve({
 	points,
-	color,
+	colorToken,
 	onChange,
 }: {
 	points: CurvePoint[];
-	color: string;
+	/** Name of the color token, without `--lm-`. Read at paint time so the curve follows the theme. */
+	colorToken: string;
 	onChange: (points: CurvePoint[]) => void;
 }): React.JSX.Element {
 	const canvasRef = useRef<HTMLCanvasElement>(null);
 	const pointsRef = useRef(points);
 	const dragRef = useRef<number | null>(null);
 	pointsRef.current = points;
+
+	const [themeTick, setThemeTick] = useState(0);
+	useEffect(() => onThemeChange(() => setThemeTick((n) => n + 1)), []);
 
 	useEffect(() => {
 		const canvas = canvasRef.current;
@@ -47,6 +52,7 @@ export function GradeCurve({
 		context.moveTo(PAD, height - PAD);
 		context.lineTo(width - PAD, PAD);
 		context.stroke();
+		const color = token(colorToken);
 		context.strokeStyle = color;
 		context.lineWidth = 1.5;
 		context.beginPath();
@@ -66,7 +72,7 @@ export function GradeCurve({
 			context.strokeStyle = color;
 			context.stroke();
 		}
-	}, [color, points]);
+	}, [colorToken, points, themeTick]);
 
 	function update(next: CurvePoint[]): void {
 		onChange(normalizeCurve(next));

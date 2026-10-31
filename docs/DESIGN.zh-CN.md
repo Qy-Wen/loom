@@ -50,12 +50,23 @@
 
 文字 token（`primary`、`body`、`secondary`、`muted`、状态文字）在它可能落到的每种表面上（从 `app` 到 `active`）都要达到 4.5:1；`--lm-graphic` 和 `--lm-focus-ring` 要达到 3:1；白字压在每个 `--lm-asset-*` 颜色上要达到 4.5:1。`tests/design-tokens.test.ts` 会检查，改色板时破坏这些要求会让构建失败。
 
-## 增加主题
+## 主题
 
-深色模式只需要在 `tokens.css` 里再加一个块，把第 2 层 token 重新映射到别的色板值，作用域用 `[data-theme="dark"]` 或 `prefers-color-scheme`，组件不用改。启用前要检查故意写成固定色的地方：媒体叠层（`--lm-media-*`）、素材类型色，以及 CopilotKit 的 `--lm-vendor-copy-hover`。
+浅色和深色都定义在 `tokens.css` 里。文件末尾的深色块把第 2 层（表面、文字、边框、强调色和状态色）以及半透明叠层、阴影重新映射到 `night-*`、`snow-*` 色板。组件不会按主题分支。
+
+- **怎么切换。** 外观设置（设置 → 通用）有 `system`、`light`、`dark` 三项。主进程设置 `nativeTheme.themeSource`，所以每个窗口的 `prefers-color-scheme` 都是对的，样式表只需要一个媒体查询。`design/theme.ts` 把结果写到 `<html data-theme>` 和 `dark` 类上，测试读前者，CopilotKit 的样式表依赖后者。
+- **两个主题下都不变的。** 素材类型色、媒体叠层（`--lm-on-media`、`--lm-media-*`）以及 `--lm-media-backdrop`（视频后面的黑底）。压在它们上面的文字用 `--lm-text-on-asset`，两个主题下都是白色。
+- **会翻转的名字。** `--lm-surface-inverse` 和 `--lm-text-inverse` 是一对"深底浅字"，用于提示气泡、主按钮和选中下划线；深色下变成"浅底深字"。实心的强调色、危险色按钮，文字用 `--lm-text-on-fill`，底色用 `--lm-accent-solid` 或 `--lm-danger`，因为浅色下 `--lm-accent` 太浅，配不了白字。
+- **CopilotKit。** `design/vendor-copilotkit.css` 把它的 `--background`、`--border` 等变量指向 Loom 的 token，聊天区跟随主题，也和周围的表面一致。
+- **原生外壳。** `shared/theme-colors.ts` 存放主进程自己绘制的几个颜色（窗口背景、Windows 标题栏）。测试会把它们和 token 对比。
+- **Canvas。** 用 `token()` 绘制的代码，主题切换时必须重绘：用 `design/theme.ts` 的 `onThemeChange` 订阅（参考 `grade-curve.tsx`）。
+- **测试。** `tests/design-tokens.test.ts` 对两个主题都跑全部对比度检查，新加的深色值太淡会让构建失败。`e2e/appearance.spec.ts` 端到端覆盖切换。
+
+新增 token 时，如果浅色值是表面、文字、边框、阴影或叠层，要同时给出深色值，合并前两个主题都要看一遍。
 
 ## 已知缺口
 
 - 面板、菜单、对话框的宽度没有 token 化。它们由内容或 `layout/` 里的拖拽逻辑决定，共用一套尺度没有意义。
 - 少数例外保留字面几何：设置开关、追踪表格行、快捷方式的渐隐。它们列在 `tests/design-tokens.test.ts` 里。
+- 聊天组件内部（代码块、工具调用标签）的颜色来自 CopilotKit 自己的样式表，只映射了它的主要变量，所以较深层的组件状态在深色下可能还会露出第三方的颜色。
 - 文字颜色把历史上约 40 种灰收成 5 档，引入设计系统时少数元素的明度有 1–3 级的变化。

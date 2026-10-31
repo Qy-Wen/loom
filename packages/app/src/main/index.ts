@@ -81,6 +81,7 @@ import { AgentPermissionStore } from "./settings/agent-permission-store.ts";
 import { CommandAllowStore } from "./settings/command-allow-store.ts";
 import type { CommandAllowView } from "@loom/agent/tool-permission";
 import { GeneralSettingsStore } from "./settings/general-settings-store.ts";
+import { applyAppearance, watchSystemTheme, windowColors } from "./appearance.ts";
 import { LastLibraryStore, lastLibraryStillOpenable } from "./desktop/last-library-store.ts";
 import { ModelSettingsStore, settingsView } from "./models/model-settings-store.ts";
 import { createChatStorage, electronSecretCipher } from "./models/chat-storage.ts";
@@ -332,12 +333,13 @@ function createWindow(): void {
 		minWidth: 860,
 		minHeight: 600,
 		icon: loadAppIcon(),
+		backgroundColor: windowColors().background,
 		// Test runs open and close many windows. Keep them off the user's desktop (see LOOM_E2E_VISIBLE).
 		show: !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1"),
 		titleBarStyle: mac ? "hiddenInset" : "hidden",
 		...(mac
 			? { trafficLightPosition: { x: 14, y: 13 } }
-			: { titleBarOverlay: { color: "#f3f3f1", symbolColor: "#202124", height: 40 } }),
+			: { titleBarOverlay: { color: windowColors().titleBar, symbolColor: windowColors().titleBarSymbol, height: 40 } }),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
@@ -817,8 +819,10 @@ function registerIpc(): void {
 	});
 	ipcMain.handle(IPC.saveGeneralSettings, async (_event, raw: unknown) => settingsWrites.run(async () => {
 		if (!generalSettings) throw new Error("Settings store not started");
-		const before = (await generalSettings.load()).language;
+		const previous = await generalSettings.load();
+		const before = previous.language;
 		const saved = await generalSettings.save(parseGeneralSettingsPatch(raw));
+		if (saved.appearance !== previous.appearance) applyAppearance(saved.appearance);
 		await syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`));
 		if (saved.language !== before) publishDevTraceLanguage();
 		return saved;
@@ -1123,6 +1127,8 @@ app
 		registerIpc();
 		registerChatIpc();
 		await restoreLastLibrary();
+		applyAppearance((await generalSettings.load()).appearance);
+		watchSystemTheme();
 		createWindow();
 		void attachConfiguredMcp().finally(() => syncWebTools().catch((error) => appLog(`Failed to sync web tools: ${logErrorText(error)}`)));
 

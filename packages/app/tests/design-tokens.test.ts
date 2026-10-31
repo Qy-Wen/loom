@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative } from "node:path";
 import { describe, it } from "node:test";
+import { WINDOW_COLORS } from "../src/shared/theme-colors.ts";
 
 /**
  * The renderer's visual language lives in src/renderer/design/tokens.css. Components must use its
@@ -120,35 +121,78 @@ describe("design tokens", () => {
 		assert.deepEqual(found, [], `Use --lm-dur-* from design/tokens.css:\n${found.join("\n")}`);
 	});
 
-	describe("contrast", () => {
+	describe("themes", () => {
 		const source = readFileSync(tokensFile, "utf8");
-		const root = source.slice(source.indexOf(":root"));
-		const raw = new Map([...root.matchAll(/(--lm-[\w-]+):\s*(#[0-9a-fA-F]{3,6})\s*;/g)].map((m) => [m[1]!, m[2]!]));
-		const alias = new Map([...root.matchAll(/(--lm-[\w-]+):\s*var\((--lm-[\w-]+)\)\s*;/g)].map((m) => [m[1]!, m[2]!]));
-		const color = (name: string): string => {
-			for (let hops = 0; hops < 5; hops++) { const hex = raw.get(name); if (hex) return hex; name = alias.get(name) ?? name; }
-			throw new Error(`${name} does not resolve to a hex color`);
+		const darkStart = source.indexOf("@media (prefers-color-scheme: dark)");
+		const light = source.slice(source.indexOf(":root"), darkStart);
+		const dark = source.slice(darkStart);
+		const declarations = (block: string) => new Map([...block.matchAll(/^\s*(--lm-[\w-]+):\s*([^;]+);/gm)].map((m) => [m[1]!, m[2]!.trim()]));
+		const lightTokens = declarations(light), darkTokens = declarations(dark);
+		const lookup = (name: string, theme: "light" | "dark"): string => {
+			let value = (theme === "dark" ? darkTokens.get(name) : undefined) ?? lightTokens.get(name);
+			for (let hops = 0; hops < 6 && value; hops++) {
+				const ref = /^var\((--lm-[\w-]+)\)$/.exec(value);
+				if (!ref) return value;
+				value = (theme === "dark" ? darkTokens.get(ref[1]!) : undefined) ?? lightTokens.get(ref[1]!);
+			}
+			throw new Error(`${name} does not resolve to a value`);
 		};
 		const luminance = (hex: string) => {
 			const h = hex.slice(1).length === 3 ? [...hex.slice(1)].map((c) => c + c).join("") : hex.slice(1);
 			const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16) / 255).map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
 			return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
 		};
-		const ratio = (a: string, b: string) => { const [hi, lo] = [luminance(color(a)), luminance(color(b))].sort((x, y) => y - x); return (hi! + 0.05) / (lo! + 0.05); };
-		const surfaces = ["app", "raised", "subtle", "window", "sunken", "hover", "active"].map((s) => `--lm-surface-${s}`);
-		const check = (names: string[], backgrounds: string[], minimum: number) => {
-			const low = names.flatMap((fg) => backgrounds.map((bg) => ({ fg, bg, value: ratio(fg, bg) }))).filter((row) => row.value < minimum);
-			assert.deepEqual(low.map((row) => `${row.fg} on ${row.bg}: ${row.value.toFixed(2)}`), [], `needs ${minimum}:1`);
+		const ratio = (a: string, b: string, theme: "light" | "dark") => {
+			const [hi, lo] = [luminance(lookup(a, theme)), luminance(lookup(b, theme))].sort((x, y) => y - x);
+			return (hi! + 0.05) / (lo! + 0.05);
 		};
+		const surfaces = ["app", "raised", "subtle", "window", "sunken", "hover", "active"].map((s) => `--lm-surface-${s}`);
+		const check = (theme: "light" | "dark", names: string[], backgrounds: string[], minimum: number) => {
+			const low = names.flatMap((fg) => backgrounds.map((bg) => ({ fg, bg, value: ratio(fg, bg, theme) }))).filter((row) => row.value < minimum);
+			assert.deepEqual(low.map((row) => `${row.fg} on ${row.bg}: ${row.value.toFixed(2)}`), [], `${theme} needs ${minimum}:1`);
+		};
+		const text = ["primary", "body", "secondary", "muted", "accent", "danger", "warning", "success"].map((n) => `--lm-text-${n}`);
 
-		it("keeps text at 4.5:1 on every surface", () => {
-			check(["primary", "body", "secondary", "muted", "accent", "danger", "warning", "success"].map((n) => `--lm-text-${n}`), surfaces, 4.5);
+		it("re-maps only tokens the light theme defines", () => {
+			const unknown = [...darkTokens.keys()].filter((name) => !lightTokens.has(name));
+			assert.deepEqual(unknown, [], "a dark override needs a light value too, or light mode loses it");
 		});
-		it("keeps graphics and the focus ring at 3:1", () => {
-			check(["--lm-graphic", "--lm-focus-ring"], surfaces.slice(0, 5), 3);
+		it("keeps the page surfaces and text of both themes distinct", () => {
+			assert.notEqual(lookup("--lm-surface-app", "light"), lookup("--lm-surface-app", "dark"));
+			assert.notEqual(lookup("--lm-text-primary", "light"), lookup("--lm-text-primary", "dark"));
 		});
-		it("keeps white text readable on each asset-kind color", () => {
-			check(["image", "video", "audio", "text", "other"].map((n) => `--lm-asset-${n}`), ["--lm-text-inverse"], 4.5);
+
+		for (const theme of ["light", "dark"] as const) {
+			describe(`contrast · ${theme}`, () => {
+				it("keeps text at 4.5:1 on every surface", () => check(theme, text, surfaces, 4.5));
+				it("keeps graphics and the focus ring at 3:1", () => check(theme, ["--lm-graphic", "--lm-focus-ring"], surfaces.slice(0, 5), 3));
+				it("keeps colored text readable on its own tinted surface", () => {
+					check(theme, ["--lm-text-accent"], ["--lm-surface-accent", "--lm-surface-accent-strong"], 4.5);
+					check(theme, ["--lm-text-danger"], ["--lm-surface-danger", "--lm-surface-danger-strong"], 4.5);
+					check(theme, ["--lm-text-warning"], ["--lm-surface-warning"], 4.5);
+					check(theme, ["--lm-text-success"], ["--lm-surface-success"], 4.5);
+				});
+				it("keeps label text readable on solid accent and danger fills", () => {
+					check(theme, ["--lm-text-on-fill"], ["--lm-accent-solid", "--lm-accent-solid-hover", "--lm-danger"], 4.5);
+				});
+				it("keeps white text readable on each asset-kind color", () => {
+					check(theme, ["--lm-text-on-asset"], ["image", "video", "audio", "text", "other"].map((n) => `--lm-asset-${n}`), 4.5);
+				});
+				it("keeps asset-kind colors visible against the page", () => {
+					check(theme, ["image", "video", "audio", "text", "other"].map((n) => `--lm-asset-${n}`), ["--lm-surface-app", "--lm-surface-raised"], 3);
+				});
+			});
+		}
+
+		it("keeps the colors the main process paints in step with the tokens", () => {
+			const pairs: Array<[string, string, string]> = [
+				["light", "--lm-surface-subtle", "background"], ["light", "--lm-surface-window", "titleBar"], ["light", "--lm-text-primary", "titleBarSymbol"],
+				["dark", "--lm-surface-subtle", "background"], ["dark", "--lm-surface-window", "titleBar"], ["dark", "--lm-text-primary", "titleBarSymbol"],
+			];
+			for (const [theme, token, key] of pairs) {
+				const expected = lookup(token, theme as "light" | "dark").toLowerCase();
+				assert.equal(WINDOW_COLORS[theme as "light" | "dark"][key as "background"].toLowerCase(), expected, `${theme} ${key} must equal ${token}`);
+			}
 		});
 	});
 });

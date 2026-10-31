@@ -88,17 +88,17 @@
 
 .confirmation-actions .confirmation-primary {
 	border-color: transparent;
-	background: var(--lm-accent);
-	color: var(--lm-text-inverse);
+	background: var(--lm-accent-solid);
+	color: var(--lm-text-on-fill);
 }
 
 .confirmation-actions .confirmation-primary:hover {
-	background: var(--lm-accent-hover);
+	background: var(--lm-accent-solid-hover);
 }
 
 .confirmation-dialog[data-tone="danger"] .confirmation-primary {
 	background: var(--lm-danger);
-	color: var(--lm-text-inverse);
+	color: var(--lm-text-on-fill);
 }
 
 .confirmation-dialog[data-tone="danger"] .confirmation-primary:hover {

@@ -50,12 +50,23 @@ Use `useConfirmation()` from `renderer/components/confirm-dialog.tsx` for applic
 
 Text tokens (`primary`, `body`, `secondary`, `muted`, status text) must reach 4.5:1 on every surface they sit on, from `app` down to `active`; `--lm-graphic` and `--lm-focus-ring` must reach 3:1; white text on each `--lm-asset-*` color must reach 4.5:1. `tests/design-tokens.test.ts` checks this, so a palette edit that breaks it fails the build.
 
-## Adding a theme
+## Themes
 
-Dark mode needs one extra block in `tokens.css` that re-maps the layer 2 tokens to other palette values, scoped to `[data-theme="dark"]` or `prefers-color-scheme`. No component changes. Before enabling it, review the places that carry fixed colors on purpose: media overlays (`--lm-media-*`), asset kinds, and the CopilotKit vendor color `--lm-vendor-copy-hover`.
+Light and dark are both defined in `tokens.css`. The dark block at the end re-maps layer 2 (surfaces, text, borders, accent and status colors) and the translucent washes and shadows to the `night-*` and `snow-*` palette. Components never branch on the theme.
+
+- **How it switches.** The Appearance setting (Settings → General) is `system`, `light`, or `dark`. The main process sets `nativeTheme.themeSource`, so `prefers-color-scheme` is correct in every window and the stylesheet needs only one media query. `design/theme.ts` mirrors the result onto `<html data-theme>` and the `dark` class, which tests read and CopilotKit's stylesheet requires.
+- **Fixed in both themes.** Asset-kind colors, media overlays (`--lm-on-media`, `--lm-media-*`), and `--lm-media-backdrop` (the letterbox behind video) do not change. Text on them uses `--lm-text-on-asset`, which is white in both.
+- **Names that flip.** `--lm-surface-inverse` and `--lm-text-inverse` are the light-on-dark pair for tooltips, primary buttons, and active tab lines. In dark they become light-on-near-black. Use `--lm-text-on-fill` on `--lm-accent-solid` and `--lm-danger` fills, since `--lm-accent` itself is too light for white text in the light theme.
+- **CopilotKit.** `design/vendor-copilotkit.css` points its `--background`, `--border`, and related variables at Loom tokens, so the chat follows the theme and matches the surfaces around it.
+- **Native chrome.** `shared/theme-colors.ts` holds the few colors the main process paints (window background, Windows title bar). A test compares them with the tokens.
+- **Canvas.** Code that paints with `token()` must repaint when the theme flips: subscribe with `onThemeChange` from `design/theme.ts` (see `grade-curve.tsx`).
+- **Tests.** `tests/design-tokens.test.ts` runs every contrast check for both themes, so a new dark value that is too faint fails the build. `e2e/appearance.spec.ts` covers the switch end to end.
+
+When adding a token, give it a dark value if the light value is a surface, text, border, shadow, or wash. Check it in both themes before merging.
 
 ## Known gaps
 
 - Panel, menu, and dialog widths are not tokenised. They are tied to content or to drag logic in `layout/`, so a shared scale would not help.
 - Some exceptions keep literal geometry: the settings switch, the trace table rows, and the shortcut fade. They are listed in `tests/design-tokens.test.ts`.
+- The chat widget's own internals (code blocks, tool-call chips) take their colors from CopilotKit's stylesheet. Only its main variables are mapped, so a deep widget state can still show a vendor color in dark.
 - Text colors are bucketed from about 40 historical grays into five. A few elements shifted by 1–3 levels of lightness when the system was introduced.

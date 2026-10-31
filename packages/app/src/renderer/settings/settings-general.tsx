@@ -1,10 +1,16 @@
-import type { AppLanguageChoice, GeneralSettings } from "../../shared/general-settings.ts";
+import type { AppAppearanceChoice, AppLanguageChoice, GeneralSettings } from "../../shared/general-settings.ts";
 import { useLocale } from "../locale.tsx";
 
 const CHOICES: Array<{ id: AppLanguageChoice; label: "followSystem" | "english" | "chinese" }> = [
 	{ id: "system", label: "followSystem" },
 	{ id: "en", label: "english" },
 	{ id: "zh-CN", label: "chinese" },
+];
+
+const APPEARANCES: Array<{ id: AppAppearanceChoice; label: "followSystem" | "lightMode" | "darkMode" }> = [
+	{ id: "system", label: "followSystem" },
+	{ id: "light", label: "lightMode" },
+	{ id: "dark", label: "darkMode" },
 ];
 
 interface SettingsGeneralProps {
@@ -34,6 +40,25 @@ export function SettingsGeneral({ value, onChange }: SettingsGeneralProps): Reac
 					))}
 				</div>
 				<p>{t.settings.languageNote}</p>
+			</section>
+			<section className="settings-slot" aria-label={t.settings.appearance}>
+				<div className="settings-slot-head">
+					<span className="settings-slot-title">{t.settings.appearance}</span>
+				</div>
+				<div className="settings-kind" role="radiogroup" aria-label={t.settings.appearanceLabel}>
+					{APPEARANCES.map((choice) => (
+						<label key={choice.id} className={value.appearance === choice.id ? "is-active" : undefined}>
+							<input
+								type="radio"
+								name="app-appearance"
+								checked={value.appearance === choice.id}
+								onChange={() => onChange({ appearance: choice.id })}
+							/>
+							{t.settings[choice.label]}
+						</label>
+					))}
+				</div>
+				<p>{t.settings.appearanceNote}</p>
 			</section>
 			<section className="settings-slot" aria-label={t.settings.startup}>
 				<div className="settings-slot-head">

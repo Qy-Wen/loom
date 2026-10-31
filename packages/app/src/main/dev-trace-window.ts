@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain } from "electron";
+import { windowColors } from "./appearance.ts";
 import { dirname, join } from "node:path";
 import { DEV_TRACE_IPC, type DevTraceMetric, type DevTraceRecord, type DevTraceConversation, type TraceCursor } from "../shared/dev-trace.ts";
 import type { AppLanguageChoice } from "../shared/general-settings.ts";
@@ -75,7 +76,7 @@ export function openDevTraceWindow(): void {
 		y: origin ? origin[1] + 40 : undefined,
 		title: TITLE,
 		icon: loadAppIcon(),
-		backgroundColor: "#f7f7f6",
+		backgroundColor: windowColors().background,
 		webPreferences: {
 			preload: preloadPath,
 			sandbox: false,

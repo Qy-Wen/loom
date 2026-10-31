@@ -6,10 +6,14 @@
  * Layer 2  semantic   --lm-surface-*, --lm-text-*, --lm-border-*, --lm-accent-*, ...   (themeable)
  * Layer 3  scales     --lm-space-*, --lm-radius-*, --lm-text-size-*, --lm-shadow-*, --lm-z-*, --lm-dur-*
  *
- * Dark mode only needs a second block that re-maps layer 2 to other layer 1 values.
+ * Dark mode is a second block at the end of this file that re-maps layer 2 (and the translucent washes) to other
+ * values. Components never branch on the theme. The main process drives `prefers-color-scheme` from the user's
+ * Appearance setting, so the block is a plain media query.
  */
 
 :root {
+	color-scheme: light;
+
 	/* ── Layer 1 · palette ─────────────────────────────────────────── */
 
 	/* Warm neutrals: backgrounds and lines */
@@ -34,6 +38,7 @@
 	--lm-palette-blue-100: #dde6f7;
 	--lm-palette-blue-300: #a9bcdd;
 	--lm-palette-blue-500: #6a8ac0;
+	--lm-palette-blue-600: #4a6dac;
 	--lm-palette-blue-700: #3d5a99;
 
 	/* Status */
@@ -47,6 +52,43 @@
 	--lm-palette-green-100: #e3efe0;
 	--lm-palette-green-500: #2f9e44;
 	--lm-palette-green-700: #3d6b4f;
+
+	/* Dark-theme neutrals: warm near-black, same hue family as the light paper */
+	--lm-palette-night-0: #121211;
+	--lm-palette-night-1: #141413;
+	--lm-palette-night-2: #181817;
+	--lm-palette-night-3: #1d1d1c;
+	--lm-palette-night-4: #252523;
+	--lm-palette-night-5: #2b2b29;
+	--lm-palette-night-6: #353533;
+	--lm-palette-night-7: #454543;
+	--lm-palette-night-8: #5a5a57;
+
+	/* Dark-theme ink */
+	--lm-palette-snow-0: #ecece9;
+	--lm-palette-snow-1: #d6d6d2;
+	--lm-palette-snow-2: #bfbfbb;
+	--lm-palette-snow-3: #a3a39f;
+	--lm-palette-snow-4: #82827e;
+
+	/* Dark-theme accent and status */
+	--lm-palette-night-blue-100: #26334a;
+	--lm-palette-night-blue-50: #1f2a3e;
+	--lm-palette-night-blue-300: #4a6290;
+	--lm-palette-night-blue-400: #7f9fd6;
+	--lm-palette-night-blue-text: #9db8e8;
+	--lm-palette-night-blue-hover: #a9c2ee;
+	--lm-palette-night-red-50: #35201f;
+	--lm-palette-night-red-100: #432826;
+	--lm-palette-night-red-300: #7a3f3a;
+	--lm-palette-night-red-fill: #e8756b;
+	--lm-palette-night-red-text: #f29a92;
+	--lm-palette-night-amber-fill: #3d3218;
+	--lm-palette-night-amber-500: #c4a35a;
+	--lm-palette-night-amber-text: #e0bf6e;
+	--lm-palette-night-green-fill: #1f3a27;
+	--lm-palette-night-green-500: #5fbf79;
+	--lm-palette-night-green-text: #7fcf92;
 
 	/* Asset kinds: one set for badges, graph nodes, and chips */
 	--lm-palette-asset-image: #8f60c4;
@@ -84,6 +126,10 @@
 	/* Non-text only: icons, strokes, dashed outlines (3:1). Never for words; use --lm-text-muted. */
 	--lm-graphic: var(--lm-palette-ink-4);
 	--lm-text-inverse: var(--lm-palette-paper-0);
+	/* Text on a solid accent, danger, or success fill. White in light, near-black in dark. */
+	--lm-text-on-fill: var(--lm-palette-paper-0);
+	/* White that stays white in both themes: labels on asset-kind colors and over images */
+	--lm-text-on-asset: #fff;
 	--lm-text-accent: var(--lm-palette-blue-700);
 	--lm-text-danger: var(--lm-palette-red-600);
 	--lm-text-warning: var(--lm-palette-amber-700);
@@ -99,6 +145,9 @@
 	/* Accent and state */
 	--lm-accent: var(--lm-palette-blue-500);
 	--lm-accent-hover: var(--lm-palette-blue-700);
+	/* Solid button fill that carries --lm-text-on-fill. --lm-accent is too light for white text. */
+	--lm-accent-solid: var(--lm-palette-blue-700);
+	--lm-accent-solid-hover: var(--lm-palette-blue-600);
 	--lm-danger: var(--lm-palette-red-600);
 	--lm-warning: var(--lm-palette-amber-500);
 	--lm-success: var(--lm-palette-green-500);
@@ -107,6 +156,9 @@
 	--lm-overlay: rgb(32 33 36 / 45%);
 	--lm-overlay-soft: rgb(32 33 36 / 28%);
 	--lm-scrim: rgb(255 255 255 / 92%);
+
+	/* Letterbox behind video and images: black in both themes */
+	--lm-media-backdrop: var(--lm-palette-ink-0);
 
 	/* Translucent washes for hover/press on any background, and image-safe controls */
 	--lm-wash-1: rgb(32 33 36 / 6%);
@@ -230,4 +282,90 @@
 	--lm-dur-slow: 280ms;
 	--lm-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
 	--lm-ease-linear: linear;
+}
+
+/*
+ * ── Dark theme ───────────────────────────────────────────────────────
+ * Re-maps layer 2 and the translucent washes. Everything that is not listed here (scales, asset-kind colors, media
+ * overlays) is the same in both themes. Text pairs are held to 4.5:1 and graphics to 3:1 by tests/design-tokens.test.ts.
+ */
+@media (prefers-color-scheme: dark) {
+	:root {
+		color-scheme: dark;
+
+		--lm-surface-window: var(--lm-palette-night-1);
+		--lm-surface-app: var(--lm-palette-night-3);
+		--lm-surface-raised: var(--lm-palette-night-4);
+		--lm-surface-subtle: var(--lm-palette-night-2);
+		--lm-surface-sunken: var(--lm-palette-night-0);
+		--lm-surface-hover: var(--lm-palette-night-5);
+		--lm-surface-active: var(--lm-palette-night-6);
+		--lm-surface-track: var(--lm-palette-night-7);
+		--lm-surface-strong: var(--lm-palette-snow-3);
+		--lm-surface-inverse: var(--lm-palette-snow-0);
+		--lm-surface-accent: var(--lm-palette-night-blue-50);
+		--lm-surface-accent-strong: var(--lm-palette-night-blue-100);
+		--lm-surface-danger: var(--lm-palette-night-red-50);
+		--lm-surface-danger-strong: var(--lm-palette-night-red-100);
+		--lm-surface-warning: var(--lm-palette-night-amber-fill);
+		--lm-surface-success: var(--lm-palette-night-green-fill);
+
+		--lm-text-primary: var(--lm-palette-snow-0);
+		--lm-text-body: var(--lm-palette-snow-1);
+		--lm-text-secondary: var(--lm-palette-snow-2);
+		--lm-text-muted: var(--lm-palette-snow-3);
+		--lm-graphic: var(--lm-palette-snow-4);
+		--lm-text-inverse: var(--lm-palette-night-2);
+		--lm-text-on-fill: var(--lm-palette-night-2);
+		--lm-text-accent: var(--lm-palette-night-blue-text);
+		--lm-text-danger: var(--lm-palette-night-red-text);
+		--lm-text-warning: var(--lm-palette-night-amber-text);
+		--lm-text-success: var(--lm-palette-night-green-text);
+
+		--lm-border-subtle: var(--lm-palette-night-5);
+		--lm-border-default: var(--lm-palette-night-6);
+		--lm-border-strong: var(--lm-palette-night-7);
+		--lm-border-accent: var(--lm-palette-night-blue-400);
+		--lm-border-danger: var(--lm-palette-night-red-300);
+
+		--lm-accent: var(--lm-palette-night-blue-400);
+		--lm-accent-hover: var(--lm-palette-night-blue-hover);
+		--lm-accent-solid: var(--lm-palette-night-blue-400);
+		--lm-accent-solid-hover: var(--lm-palette-night-blue-hover);
+		--lm-danger: var(--lm-palette-night-red-fill);
+		--lm-warning: var(--lm-palette-night-amber-500);
+		--lm-success: var(--lm-palette-night-green-500);
+		--lm-focus-ring: var(--lm-palette-night-blue-400);
+		--lm-selection: rgb(127 159 214 / 22%);
+		--lm-overlay: rgb(0 0 0 / 62%);
+		--lm-overlay-soft: rgb(0 0 0 / 45%);
+		--lm-scrim: rgb(29 29 28 / 92%);
+
+		--lm-wash-1: rgb(255 255 255 / 7%);
+		--lm-wash-2: rgb(255 255 255 / 13%);
+		--lm-wash-3: rgb(255 255 255 / 19%);
+		--lm-selection-strong: rgb(127 159 214 / 34%);
+		--lm-selection-soft: rgb(127 159 214 / 16%);
+		--lm-ring-accent: rgb(127 159 214 / 45%);
+		--lm-hairline: rgb(255 255 255 / 10%);
+		--lm-scrollbar-thumb: oklch(62% 0 0);
+		--lm-scrollbar-thumb-hover: oklch(72% 0 0);
+		--lm-glow-brand: rgb(0 0 0 / 45%);
+
+		--lm-channel-r: #e0645b;
+		--lm-channel-g: #4fbf72;
+		--lm-channel-b: #5b8fe0;
+		--lm-vendor-copy-hover: #303030;
+		--lm-syntax-key: #d79ddf;
+		--lm-syntax-boolean: #e0a0d0;
+
+		--lm-shadow-xs: 0 1px 2px rgb(0 0 0 / 40%);
+		--lm-shadow-sm: 0 6px 16px rgb(0 0 0 / 40%);
+		--lm-shadow-md: 0 8px 24px rgb(0 0 0 / 50%);
+		--lm-shadow-lg: 0 16px 48px rgb(0 0 0 / 60%);
+		--lm-shadow-field: 0 0 0 1px rgb(255 255 255 / 10%);
+		--lm-shadow-focus: 0 0 0 3px rgb(127 159 214 / 35%);
+		--lm-shadow-ring: 0 0 0 1px rgb(255 255 255 / 12%);
+		--lm-shadow-ring-soft: 0 0 0 2px rgb(255 255 255 / 8%);
+	}
 }

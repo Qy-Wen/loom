@@ -1,0 +1,25 @@
+/*
+ * CopilotKit paints the chat from its own variables and switches them on a `.dark` ancestor. Point them at Loom's
+ * tokens so the chat follows the same theme as the rest of the app. In light mode these resolve to the values the
+ * vendor already used (white surfaces, near-black text), so nothing moves. `:root` raises the specificity to match
+ * `.dark [data-copilotkit]`, and this file is imported after the vendor stylesheet.
+ */
+:root [data-copilotkit] {
+	--background: var(--lm-surface-raised);
+	--foreground: var(--lm-text-primary);
+	--card: var(--lm-surface-raised);
+	--card-foreground: var(--lm-text-primary);
+	--popover: var(--lm-surface-raised);
+	--popover-foreground: var(--lm-text-primary);
+	--primary: var(--lm-surface-inverse);
+	--primary-foreground: var(--lm-text-inverse);
+	--secondary: var(--lm-surface-subtle);
+	--secondary-foreground: var(--lm-text-primary);
+	--muted: var(--lm-surface-subtle);
+	--muted-foreground: var(--lm-text-muted);
+	--accent: var(--lm-surface-hover);
+	--accent-foreground: var(--lm-text-primary);
+	--border: var(--lm-border-default);
+	--input: var(--lm-border-default);
+	--ring: var(--lm-focus-ring);
+}

@@ -30,7 +30,7 @@
 }
 
 .video-preview video {
-	background: var(--lm-surface-inverse);
+	background: var(--lm-media-backdrop);
 }
 
 .video-preview video.pending {
@@ -69,7 +69,7 @@
 }
 
 .grade-stage video {
-	background: var(--lm-surface-inverse);
+	background: var(--lm-media-backdrop);
 }
 
 .grade-time {
@@ -379,7 +379,7 @@
 	width: 112px;
 	height: 112px;
 	border-radius: var(--lm-radius-xl);
-	color: var(--lm-text-inverse);
+	color: var(--lm-text-on-asset);
 	background: var(--lm-art-audio);
 	box-shadow: var(--lm-shadow-brand);
 	font-size: var(--lm-text-size-4xl);

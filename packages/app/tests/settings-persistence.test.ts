@@ -78,7 +78,9 @@ test("general settings merge concurrent fields and do not retain stale cached va
 	const ui = new GeneralSettingsStore(file), agent = new GeneralSettingsStore(file);
 	await ui.load(); await agent.load();
 	await Promise.all([ui.save({ reopenLastLibrary: false }), agent.save({ language: "zh-CN" })]);
-	assert.deepEqual(await ui.load(), { language: "zh-CN", reopenLastLibrary: false, webTools: true });
+	assert.deepEqual(await ui.load(), { language: "zh-CN", appearance: "system", reopenLastLibrary: false, webTools: true });
+	await Promise.all([ui.save({ appearance: "dark" }), agent.save({ webTools: false })]);
+	assert.deepEqual(await ui.load(), { language: "zh-CN", appearance: "dark", reopenLastLibrary: false, webTools: false });
 	assert.deepEqual(await agent.load(), await ui.load());
 });
 

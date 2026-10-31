@@ -365,7 +365,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 }
 
 .asset-badge {
-	color: var(--lm-text-inverse);
+	color: var(--lm-text-on-asset);
 	background: var(--lm-asset-other);
 	font-size: var(--lm-text-size-2xs);
 	font-weight: var(--lm-weight-bold);
