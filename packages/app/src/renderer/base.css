@@ -52,7 +52,8 @@ body {
 	-webkit-app-region: no-drag;
 }
 
-.window-bar button[aria-label]::after {
+.window-bar button[aria-label]::after,
+.library-view-controls button[aria-label]::after {
 	content: attr(aria-label);
 	position: absolute;
 	top: calc(100% + 6px);
@@ -74,7 +75,8 @@ body {
 	transition: opacity var(--lm-dur-instant) ease var(--lm-dur-slow);
 }
 
-.window-bar button[aria-label]:hover::after {
+.window-bar button[aria-label]:hover::after,
+.library-view-controls button[aria-label]:is(:hover, :focus-visible)::after {
 	opacity: 1;
 }
 

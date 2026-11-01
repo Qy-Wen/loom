@@ -14,7 +14,10 @@ export function WorkspaceViewIcon({ view }: { view: "library" | "table" | "graph
 			aria-hidden="true"
 		>
 			{view === "library" && (
-				<path d="M2 12V4a1 1 0 0 1 1-1h3l1.5 2H13a1 1 0 0 1 1 1v6a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1Z" />
+				<>
+					<rect x="2" y="2.5" width="12" height="3" rx="0.75" />
+					<path d="M3 5.5v7a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-7M6.5 8.5h3" />
+				</>
 			)}
 			{view === "table" && (
 				<>

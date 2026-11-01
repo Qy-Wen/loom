@@ -169,7 +169,6 @@
 	min-width: 0;
 	flex: 0 0 var(--lm-size-md);
 	gap: 0;
-	overflow: hidden;
 }
 
 .library-view-tabs > button.active {
@@ -207,6 +206,18 @@
 	font-weight: var(--lm-weight-semibold);
 }
 
+/* Edge tooltips stay inside the sidebar instead of being clipped by its scroll regions. */
+.library-view-tabs > button:first-child::after {
+	left: 0;
+	transform: none;
+}
+
+.library-display-tabs > button:last-child::after {
+	left: auto;
+	right: 0;
+	transform: none;
+}
+
 /* Keep the selected label readable alongside wider buttons in a narrow sidebar. */
 @container (max-width: 200px) {
 	.library-view-controls {
@@ -217,6 +228,9 @@
 @media (prefers-reduced-motion: reduce) {
 	.library-view-controls {
 		--library-tab-duration: 0ms;
+	}
+	.library-view-controls button[aria-label]::after {
+		transition: none;
 	}
 }
 

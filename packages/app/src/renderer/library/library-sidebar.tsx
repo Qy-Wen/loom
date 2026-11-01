@@ -188,7 +188,6 @@ export function LibrarySidebar({
 								className={workbenchView === view ? "active" : ""}
 								aria-label={t.library[view]}
 								aria-pressed={workbenchView === view}
-								title={t.library[view]}
 								onClick={() => onWorkbenchView(view)}
 							>
 								<WorkspaceViewIcon view={view} />
@@ -203,7 +202,6 @@ export function LibrarySidebar({
 						className={fileDisplay === "list" ? "active" : ""}
 						aria-label={t.library.list}
 						aria-pressed={fileDisplay === "list"}
-						title={t.library.list}
 						onClick={() => setFileDisplay("list")}
 					>
 						<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
@@ -215,7 +213,6 @@ export function LibrarySidebar({
 						className={fileDisplay === "icons" ? "active" : ""}
 						aria-label={t.library.icons}
 						aria-pressed={fileDisplay === "icons"}
-						title={t.library.icons}
 						onClick={() => setFileDisplay("icons")}
 					>
 						<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">

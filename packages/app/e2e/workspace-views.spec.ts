@@ -27,7 +27,7 @@ test("view tabs keep their icons and show only the active label without moving t
 			const nav = (await controls.boundingBox())!;
 			for (const item of await tabs.getByRole("button").all()) {
 				const bounds = (await item.boundingBox())!;
-				await expect(item).toHaveAttribute("title", (await item.getAttribute("aria-label"))!);
+				await expect(item).not.toHaveAttribute("title");
 				await expect(item.locator("svg")).toBeVisible();
 				await expect(item.locator("svg")).toHaveAttribute("aria-hidden", "true");
 				const icon = (await item.locator("svg").boundingBox())!;
@@ -65,6 +65,36 @@ test("view tabs keep their icons and show only the active label without moving t
 			expect(icons.y).toBe(library.y);
 		}
 	}
+});
+
+test("all five tab options show the same hover tooltip as the top toolbar", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated renderer required");
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.reload();
+	const controls = loomPage.locator(".library-view-controls");
+	const tooltipStyle = (element: Element) => {
+		const style = getComputedStyle(element, "::after");
+		return { background: style.backgroundColor, color: style.color, fontSize: style.fontSize, borderRadius: style.borderRadius, padding: style.padding };
+	};
+	const expectedStyle = await loomPage.locator(".window-bar button[aria-label]").first().evaluate(tooltipStyle);
+	for (const name of ["Table", "Graph", "Library", "List", "Icons"]) {
+		const button = controls.getByRole("button", { name, exact: true });
+		await expect(button).not.toHaveAttribute("title");
+		await button.hover();
+		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		expect(await button.evaluate((element) => getComputedStyle(element, "::after").content)).toBe(JSON.stringify(name));
+		expect(await button.evaluate(tooltipStyle)).toEqual(expectedStyle);
+	}
+	const first = controls.getByRole("button", { name: "Table", exact: true });
+	const last = controls.getByRole("button", { name: "Icons", exact: true });
+	expect(await first.evaluate((element) => getComputedStyle(element, "::after").left)).toBe("0px");
+	expect(await last.evaluate((element) => getComputedStyle(element, "::after").right)).toBe("0px");
+	await loomPage.mouse.move(600, 20);
+	await first.focus();
+	await loomPage.keyboard.press("Tab");
+	const graph = controls.getByRole("button", { name: "Graph", exact: true });
+	await expect(graph).toBeFocused();
+	await expect.poll(() => graph.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
 });
 
 test("both tab groups animate their selection and respect reduced motion", async ({ loomPage, electronApp }) => {
