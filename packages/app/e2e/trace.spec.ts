@@ -374,6 +374,8 @@ test("conversation ledger shows readable events, safe previews, independent fold
 	expect(tipBounds.x).toBeGreaterThanOrEqual(0);
 	expect(tipBounds.x + tipBounds.width).toBeLessThanOrEqual(await trace.evaluate(() => innerWidth));
 	await lastBlock.press("Escape"); await expect(tooltip).toHaveCount(0);
+	await modelBlock.focus(); await expect(tooltip).toBeVisible();
+	await modelBlock.press("Enter"); await expect(tooltip).toHaveCount(0);
 	await lastBlock.hover(); await expect(tooltip).toBeVisible({ timeout: 500 });
 	await trace.mouse.down(); await expect(tooltip).toHaveCount(0); await trace.mouse.up();
 	await expect(trace.locator('.trace-event[data-kind="tool"]').first()).toContainText("→ a.md b.png");

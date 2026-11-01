@@ -212,7 +212,7 @@ test("model reasoning submenus support mouse, keyboard and persisted per-model c
 	await expect.poll(selection).toMatchObject({ modelId: "demo", thinkingLevel: "off" });
 });
 
-test("Chat provider status uses green/red dots and shares the MCP error tooltip", async ({ loomPage }) => {
+test("Chat provider status uses green/red dots and shares the MCP error tooltip", async ({ loomPage, electronApp }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data required");
 	await saveChatEndpoint(loomPage, "http://127.0.0.1:1/v1");
 	await loomPage.evaluate(async () => {
@@ -244,5 +244,13 @@ test("Chat provider status uses green/red dots and shares the MCP error tooltip"
 	await expect(tooltip).toBeHidden();
 	await error.focus();
 	await expect(tooltip).toBeVisible();
+	await error.click();
+	await expect(tooltip).toHaveCount(0);
+	await settings.getByRole("button", { name: "Close settings" }).hover();
+	await error.hover();
+	await expect(tooltip).toBeVisible();
+	await tooltip.getByRole("button", { name: "Copy", exact: true }).click();
+	await expect(tooltip).toHaveCount(0);
+	await expect.poll(() => electronApp!.evaluate(({ clipboard }) => clipboard.readText())).toBe("No credentials are configured. Add an API key or sign in.");
 	await settings.getByRole("button", { name: "Close settings" }).click();
 });

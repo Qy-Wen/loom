@@ -96,8 +96,6 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 
 .panel-collapse { position: absolute; z-index: var(--lm-z-top); top: 5px; right: 6px; display: grid; place-items: center; width: var(--lm-size-lg); height: var(--lm-size-lg); padding: 0; border: 0; border-radius: var(--lm-radius-sm); color: var(--lm-text-secondary); background: transparent; cursor: pointer; }
 .panel-collapse:hover { background: var(--lm-surface-hover); }
-.panel-collapse[aria-label]::after { content: attr(aria-label); position: absolute; top: calc(100% + 6px); left: 50%; z-index: var(--lm-z-dropdown); padding: 3px 7px; border-radius: var(--lm-radius-sm); background: var(--lm-surface-inverse); color: var(--lm-text-inverse); font-size: var(--lm-text-size-xs); font-weight: var(--lm-weight-regular); line-height: 1.3; letter-spacing: 0; text-transform: none; white-space: nowrap; opacity: 0; pointer-events: none; transform: translateX(-50%); transition: opacity var(--lm-dur-instant) ease var(--lm-dur-slow); }
-.panel-collapse[aria-label]:hover::after { opacity: 1; }
 .shell.panel-collapse-bottom > .panel-collapse { top: calc(100% - var(--bottom-height) + 5px); }
 .shell.panel-collapse-above > .panel-collapse { top: calc(100% - var(--above-height) + 5px); }
 .shell:not(.side-hidden):not(.panels-collapsed) .panel-region.dock-band .work-panel-title,

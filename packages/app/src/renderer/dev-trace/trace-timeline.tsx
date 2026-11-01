@@ -3,6 +3,7 @@ import { createPortal } from "react-dom";
 import { useTraceLocale } from "./trace-locale.tsx";
 import { timelineGapLabel, type TimelineLayout } from "./trace-timeline-layout.ts";
 import { formatTraceDuration } from "./trace-spans.ts";
+import { TOOLTIP_LEAVE_DELAY_MS } from "../components/tooltip-behavior.ts";
 
 export type FocusRange = { start: number; end: number } | null;
 export function TraceTimeline({ layout, onWidthChange, now, selected, range, setRange, select }: {
@@ -22,11 +23,21 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 	const tooltipId = useId();
 	const [hovered, setHovered] = useState<{ id: string; anchor: HTMLButtonElement; keyboard: boolean } | null>(null);
 	const [visibleTooltip, setVisibleTooltip] = useState<string | null>(null);
+	const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+	const cancelLeave = () => { clearTimeout(hideTimer.current); hideTimer.current = undefined; };
+	const dismissTooltip = () => { cancelLeave(); clearTimeout(showTimer.current); setHovered(null); };
+	const leaveTooltip = (id: string) => {
+		clearTimeout(showTimer.current); // A quick pass must never open a tip after leaving.
+		cancelLeave();
+		hideTimer.current = setTimeout(() => setHovered((old) => old?.id === id ? null : old), TOOLTIP_LEAVE_DELAY_MS);
+	};
+	useEffect(() => () => { clearTimeout(showTimer.current); clearTimeout(hideTimer.current); }, []);
 	useEffect(() => {
 		setVisibleTooltip(null);
 		if (!hovered) return;
-		const timer = setTimeout(() => setVisibleTooltip(hovered.id), hovered.keyboard ? 0 : 150);
-		return () => clearTimeout(timer);
+		showTimer.current = setTimeout(() => setVisibleTooltip(hovered.id), hovered.keyboard ? 0 : 150);
+		return () => clearTimeout(showTimer.current);
 	}, [hovered]);
 	const tooltipVisible = hovered !== null && visibleTooltip === hovered.id;
 	const tooltipBlock = blocks.find((block) => block.event.id === hovered?.id);
@@ -34,10 +45,11 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 	const tooltipText = tooltipBlock ? `${tooltipBlock.event.label} · ${tooltipBlock.event.marker ? t.timeline.snapshot : formatTraceDuration(Math.max(0, (tooltipBlock.event.span.endedMs ?? now) - tooltipBlock.event.span.startedMs))}${tooltipBlock.firstChunk === undefined ? "" : ` · ${t.timeline.firstChunk(formatTraceDuration(tooltipBlock.event.span.events.find((row) => row.name === "pi.ai.first_chunk")!.timeMs))}`}` : tooltipGap ? timelineGapLabel(tooltipGap, t) : undefined;
 	const tooltipHandlers = (id: string): ButtonHTMLAttributes<HTMLButtonElement> => ({
 		"aria-describedby": tooltipVisible && hovered?.id === id ? tooltipId : undefined,
-		onPointerEnter: (event) => { if (!drag.current && event.pointerType !== "touch") setHovered({ id, anchor: event.currentTarget, keyboard: false }); },
-		onPointerLeave: () => setHovered((old) => old?.id === id ? null : old),
-		onFocus: (event) => setHovered({ id, anchor: event.currentTarget, keyboard: true }),
-		onBlur: () => setHovered((old) => old?.id === id ? null : old),
+		onPointerEnter: (event) => { if (!drag.current && event.pointerType !== "touch") { cancelLeave(); setHovered({ id, anchor: event.currentTarget, keyboard: false }); } },
+		onPointerLeave: () => leaveTooltip(id),
+		onFocus: (event) => { cancelLeave(); setHovered({ id, anchor: event.currentTarget, keyboard: true }); },
+		onBlur: dismissTooltip,
+		onClick: dismissTooltip,
 	});
 	const fraction = (x: number, element: HTMLElement) => { const bounds = element.getBoundingClientRect(); return Math.min(1, Math.max(0, (x - bounds.left) / Math.max(1, bounds.width))); };
 	return <section className="trace-overview" aria-label={t.timeline.label}>
@@ -80,7 +92,7 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 				style={{ left: `${block.paintedLeft * 100}%`, width: `${block.paintedWidth * 100}%`, top: `${6 + block.lane * 14}px`, "--first-chunk": `${(block.firstChunk ?? 0) * 100}%` } as CSSProperties}
 				data-event-id={block.event.id}
 				data-first-chunk={block.firstChunk !== undefined || undefined}
-				onClick={(event) => { if (event.detail === 0) select(block.event.id); }} />)}
+				onClick={(event) => { dismissTooltip(); if (event.detail === 0) select(block.event.id); }} />)}
 			{range ? <span className="trace-overview-range" style={{ left: `${range.start * 100}%`, width: `${(range.end - range.start) * 100}%` }} /> : null}
 		</div>
 		{tooltipVisible && hovered && tooltipText !== undefined ? <TimelineTooltip id={tooltipId} anchor={hovered.anchor} text={tooltipText} /> : null}

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../locale.tsx";
+import { TOOLTIP_LEAVE_DELAY_MS } from "../components/tooltip-behavior.ts";
 
 export type ProbeState = "idle" | "checking" | "ok" | "error";
 
@@ -60,7 +61,6 @@ function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: s
 	const hideTimer = useRef<number>(undefined);
 	const tipId = `settings-probe-tip-${useId().replace(/:/g, "")}`;
 	const [open, setOpen] = useState(false);
-	const [copied, setCopied] = useState(false);
 	const [pos, setPos] = useState({ top: 0, right: 12, maxHeight: 240 });
 
 	function place(): void {
@@ -82,12 +82,15 @@ function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: s
 		setOpen(true);
 	}
 
+	function hide(): void {
+		if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
+		hideTimer.current = undefined;
+		setOpen(false);
+	}
+
 	function hideSoon(): void {
 		if (hideTimer.current !== undefined) window.clearTimeout(hideTimer.current);
-		hideTimer.current = window.setTimeout(() => {
-			setOpen(false);
-			setCopied(false);
-		}, 160);
+		hideTimer.current = window.setTimeout(hide, TOOLTIP_LEAVE_DELAY_MS);
 	}
 
 	useEffect(() => () => {
@@ -97,9 +100,8 @@ function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: s
 	async function copy(): Promise<void> {
 		try {
 			await navigator.clipboard.writeText(error);
-			setCopied(true);
 		} catch {
-			setCopied(false);
+			// Clipboard access may be unavailable.
 		}
 	}
 
@@ -121,7 +123,7 @@ function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: s
 					if (event.relatedTarget instanceof Node && tipRef.current?.contains(event.relatedTarget)) return;
 					hideSoon();
 				}}
-				onClick={show}
+				onClick={hide}
 			>
 				{dotOnly ? <span className="settings-probe is-error" aria-hidden="true" /> : <ErrorIcon />}
 			</button>
@@ -141,9 +143,9 @@ function ErrorProbe({ error, label, title, dotOnly }: { error: string; label?: s
 							type="button"
 							className="settings-probe-copy"
 							onMouseDown={(event) => event.preventDefault()}
-							onClick={() => void copy()}
+							onClick={() => { void copy(); hide(); }}
 						>
-							{copied ? t.common.copied : t.common.copy}
+							{t.common.copy}
 						</button>
 					</div>
 					<pre className="settings-probe-tip-text">{error}</pre>

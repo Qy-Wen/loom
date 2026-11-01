@@ -97,6 +97,37 @@ test("all five tab options show the same hover tooltip as the top toolbar", asyn
 	await expect.poll(() => graph.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
 });
 
+test("toolbar, view, and panel tooltips leave after 80ms and clicks dismiss them immediately", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated renderer required");
+	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
+	for (const selector of [".window-bar button[aria-label]", ".library-view-controls button[aria-label]", ".panel-collapse[aria-label]"]) {
+		const button = loomPage.locator(selector).first();
+		await button.hover();
+		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		await loomPage.mouse.move(600, 20);
+		expect(await button.evaluate((element) => {
+			const style = getComputedStyle(element, "::after");
+			return { delay: style.transitionDelay, duration: style.transitionDuration };
+		})).toEqual({ delay: "0.08s", duration: "0s" });
+		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity), { timeout: 200, intervals: [20] }).toBe("0");
+		await button.hover();
+		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		const opacity = await button.evaluate((element) => {
+			// Keep this timing test from opening a dialog or collapsing a panel.
+			element.addEventListener("click", (event) => event.stopPropagation(), { once: true });
+			(element as HTMLButtonElement).click();
+			return getComputedStyle(element, "::after").opacity;
+		});
+		expect(opacity).toBe("0");
+		await loomPage.waitForTimeout(400);
+		expect(await button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("0");
+		await loomPage.mouse.move(600, 20);
+		await button.hover();
+		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		await loomPage.mouse.move(600, 20);
+	}
+});
+
 test("both tab groups animate their selection and respect reduced motion", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
 	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
