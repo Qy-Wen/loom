@@ -17,7 +17,7 @@ test("icon size slider and minus/plus resize both tile types and persist across 
 	const smaller = control.getByRole("button", { name: "Smaller icons", exact: true });
 	const larger = control.getByRole("button", { name: "Larger icons", exact: true });
 	const thumbnail = browser.locator(".browser-tile:not(.folder) .browser-tile-thumb").first();
-	const folderIcon = browser.locator(".browser-tile.folder .browser-tile-thumb > svg");
+	const folderIcon = browser.locator(".browser-tile.folder .browser-folder-art");
 	await expect(slider).toHaveValue("112");
 	await expect(slider).toHaveAttribute("min", "80");
 	await expect(slider).toHaveAttribute("max", "240");

@@ -12,6 +12,7 @@ import { browserRows, browseListing, folderCrumbs, gridMove, isGridKey, type Bro
 import { useBoxSelect } from "./use-box-select.ts";
 import { BrowserIconSizeControl } from "./browser-icon-size-control.tsx";
 import { useBrowserIconSize } from "./use-browser-icon-size.ts";
+import { browserFolderPreviews } from "./browser-folder-preview.ts";
 
 export interface FolderBrowserProps {
 	library: LibrarySnapshot;
@@ -73,6 +74,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 		[library, location, query, display.fileSort, display.fileSortDirection],
 	);
 	const rows = useMemo(() => browserRows(listing), [listing]);
+	const folderPreviews = useMemo(() => browserFolderPreviews(library), [library.assets, library.folders]);
 	const selectedKeys = useMemo(() => new Set(selection.keys), [selection.keys]);
 	const favoriteAssetIds = useMemo(() => new Set(library.favoriteAssetIds), [library.favoriteAssetIds]);
 	const rootName = library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder;
@@ -250,7 +252,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 						<div className="browser-empty">{emptyText}</div>
 					) : (
 						<div className="browser-grid">
-							{listing.folders.map((path) => <FolderTile key={folderKey(path)} relativePath={path} context={context} base={base} searching={searching} />)}
+							{listing.folders.map((path) => <FolderTile key={folderKey(path)} relativePath={path} preview={folderPreviews.get(path)} context={context} base={base} searching={searching} />)}
 							{listing.assets.map((asset) => <AssetTile key={assetKey(asset.assetId)} asset={asset} context={context} base={base} searching={searching} />)}
 						</div>
 					)}

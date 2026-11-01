@@ -281,9 +281,80 @@ button.browser-crumb:hover {
 	color: var(--lm-text-muted);
 }
 
-.browser-tile.folder .browser-tile-thumb > svg {
-	width: 44%;
-	height: 44%;
+.browser-folder-art {
+	--browser-folder-back-fill: var(--lm-surface-track);
+	--browser-folder-front-fill: var(--lm-surface-active);
+	--browser-folder-child-fill: var(--lm-surface-raised);
+	position: relative;
+	display: block;
+	width: 92%;
+	aspect-ratio: 100 / 88;
+	container-type: inline-size;
+	pointer-events: none;
+}
+
+.browser-folder-back,
+.browser-folder-front {
+	position: absolute;
+	inset: 0;
+	width: 100%;
+	height: 100%;
+}
+
+/* The flat front shape masks the lower part of the content card. */
+.browser-folder-content {
+	position: absolute;
+	top: 19%;
+	left: 29%;
+	width: 48%;
+	height: 58%;
+	background: transparent;
+}
+
+.browser-folder-content .asset-thumbnail {
+	border: 2px solid var(--lm-surface-raised);
+	border-radius: var(--lm-radius-xs);
+}
+
+.browser-folder-content .asset-badge {
+	background: var(--lm-surface-active);
+	color: var(--lm-text-secondary);
+	box-sizing: border-box;
+	align-items: flex-start;
+	padding-top: var(--lm-space-2);
+	font-size: clamp(6px, 12cqw, 20px);
+}
+
+.browser-folder-content .video-thumbnail::after {
+	top: 25%;
+	border-top-width: 4px;
+	border-bottom-width: 4px;
+	border-left-width: 6px;
+}
+
+.browser-folder-file,
+.browser-folder-file > svg,
+.browser-folder-child {
+	display: block;
+	width: 100%;
+	height: 100%;
+}
+
+.browser-folder-file-label {
+	position: absolute;
+	top: 18%;
+	left: 14%;
+	color: var(--lm-text-secondary);
+	font-size: clamp(6px, 11cqw, 18px);
+	font-weight: var(--lm-weight-bold);
+	line-height: 1;
+}
+
+.browser-folder-content.subfolder {
+	top: 23%;
+	left: 28%;
+	width: 49%;
+	height: 47%;
 }
 
 .browser-tile-name,

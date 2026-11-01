@@ -2,7 +2,8 @@ import type { Asset } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
-import { FolderIcon } from "../library/file-tree.tsx";
+import { BrowserFolderThumbnail } from "./browser-folder-thumbnail.tsx";
+import type { BrowserFolderPreview } from "./browser-folder-preview.ts";
 import { FavoriteMark } from "../library/asset-rows.tsx";
 import { folderDropProps, type FolderDropSurface } from "../library/folder-drop.ts";
 import { clickMode } from "../library/tree-context.tsx";
@@ -88,7 +89,7 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 	);
 }
 
-export function FolderTile({ relativePath, context, base, searching }: { relativePath: string; context: TileContext; base: string; searching: boolean }): React.JSX.Element {
+export function FolderTile({ relativePath, preview, context, base, searching }: { relativePath: string; preview?: BrowserFolderPreview; context: TileContext; base: string; searching: boolean }): React.JSX.Element {
 	const key = folderKey(relativePath);
 	const name = relativePath.slice(relativePath.lastIndexOf("/") + 1);
 	const selected = context.selectedKeys.has(key);
@@ -97,7 +98,7 @@ export function FolderTile({ relativePath, context, base, searching }: { relativ
 	const hint = searching ? pathHint(relativePath, base) : null;
 	const rename = useInlineRename(name, renaming, (next) => context.onRenameFolder(relativePath, next), context.onCancelRename);
 	const className = `browser-tile folder${selected ? " selected" : ""}${cut ? " cut" : ""}${context.dropFolder === relativePath ? " drop-target" : ""}`;
-	const thumb = <span className="browser-tile-thumb"><FolderIcon size={44} /></span>;
+	const thumb = <span className="browser-tile-thumb"><BrowserFolderThumbnail preview={preview} /></span>;
 	if (renaming) {
 		return (
 			<div className={className} data-key={key}>
