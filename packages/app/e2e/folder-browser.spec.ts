@@ -37,7 +37,19 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(strip).toHaveCount(0);
 	await expect(browser).toBeVisible();
 	await expect(sidebar.locator(".asset-row, .asset-icon")).toHaveCount(0); // The tree shows folders only.
-	await expect(sidebar.locator(".folder-row")).toHaveCount(4); // root + 3 folders
+	await expect(sidebar.locator(".folder-row")).toHaveCount(3); // Only the 3 folders; the root is the heading.
+	await expect(sidebar.locator(".folder-row.root-row")).toHaveCount(0);
+	const rootHeading = sidebar.locator(".library-root-button");
+	await expect(rootHeading).toHaveAttribute("aria-current", "location");
+	// The heading keeps the root's import target without adding a tree row.
+	expect(await rootHeading.evaluate((element) => {
+		const transfer = new DataTransfer(); transfer.items.add(new File(["hello"], "drop.txt", { type: "text/plain" }));
+		const event = new DragEvent("dragover", { bubbles: true, cancelable: true, dataTransfer: transfer });
+		element.dispatchEvent(event); return event.defaultPrevented;
+	})).toBe(true);
+	await expect(rootHeading).toHaveClass(/drop-target/);
+	await rootHeading.dispatchEvent("dragleave");
+	await expect(rootHeading).not.toHaveClass(/drop-target/);
 	await expect(browser.locator(".browser-crumb.current")).toHaveText(/./);
 	// Root: its folders, then its files.
 	await expect(browser.locator(".browser-tile")).toHaveCount(3);
@@ -60,6 +72,7 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(tile("beach.png")).toBeVisible();
 	await expect(tile("notes.md")).toBeVisible();
 	await expect(sidebar.locator(".folder-row.selected")).toHaveText("shots");
+	await expect(rootHeading).not.toHaveAttribute("aria-current");
 
 	// Search is recursive from here and shows where each hit lives.
 	const search = browser.getByRole("searchbox");
@@ -84,7 +97,9 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await sidebar.locator(".folder-row").filter({ hasText: /^sunset$/ }).locator(".folder-main").click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("sunset");
 	await expect(tile("dusk.png")).toBeVisible();
-	await sidebar.locator(".folder-row.root-row .folder-main").click();
+	await rootHeading.click();
+	await expect(rootHeading).toHaveAttribute("aria-current", "location");
+	await expect(tile("cover.png")).toBeVisible();
 
 	// Arrow keys move the single selection through the grid; Enter opens a folder.
 	await browser.locator(".browser-scroll").focus();
@@ -136,6 +151,11 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("Favorites");
 	await expect(browser.locator(".browser-tile")).toHaveCount(1);
 	await expect(tile("beach.png").locator(".asset-favorite")).toBeVisible();
+	await expect(rootHeading).not.toHaveAttribute("aria-current");
+	await rootHeading.focus();
+	await rootHeading.press("Enter");
+	await expect(rootHeading).toHaveAttribute("aria-current", "location");
+	await expect(tile("cover.png")).toBeVisible();
 
 	// The choice survives a reload.
 	await loomPage.reload();
@@ -146,4 +166,42 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(sidebar.locator(".asset-row").first()).toBeVisible();
 	await sidebar.locator(".asset-row").filter({ hasText: "cover.png" }).click();
 	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveText("cover.png");
+});
+
+test("icon-mode root heading replaces the root row and returns from folders, favorites, and tags", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	await mkdir(join(root, "empty"));
+	await writeFile(join(root, "notes.md"), "# notes");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		await window.loom.setFavorite(assets[0]!.assetId, true);
+		await window.loom.addAssetTag(assets[0]!.assetId, "Picked");
+	});
+	const sidebar = loomPage.locator(".library-sidebar");
+	await sidebar.getByRole("group", { name: "File display", exact: true }).getByRole("button", { name: "Icons", exact: true }).click();
+	const browser = loomPage.locator(".folder-browser");
+	const heading = sidebar.locator(".library-root-button");
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await expect(sidebar.locator(".folder-row")).toHaveCount(1);
+	await expect(sidebar.locator(".folder-row.root-row")).toHaveCount(0);
+	await sidebar.locator(".folder-main").filter({ hasText: /^empty$/ }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("empty");
+	await expect(heading).not.toHaveAttribute("aria-current");
+	await heading.click();
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await expect(browser.locator(".browser-tile-name")).toHaveText(["empty", "notes.md"]);
+	await sidebar.getByRole("button", { name: "Favorites", exact: true }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("Favorites");
+	await heading.click();
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await sidebar.getByRole("button", { name: "Tags", exact: true }).click();
+	await sidebar.getByRole("button", { name: "Picked", exact: true }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("Picked");
+	await heading.focus();
+	await heading.press("Enter");
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await expect(browser.locator(".browser-tile-name")).toHaveText(["empty", "notes.md"]);
 });

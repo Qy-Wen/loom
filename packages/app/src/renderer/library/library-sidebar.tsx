@@ -11,7 +11,7 @@ import {
 } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
-import { FileTree, FolderChevronIcon, LibraryRootRow } from "./file-tree.tsx";
+import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
 import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { sameLocation, type BrowseLocation } from "../workbench/folder-browser-model.ts";
@@ -89,6 +89,7 @@ export function LibrarySidebar({
 	collapsed,
 }: LibrarySidebarProps): React.JSX.Element {
 	const { t } = useLocale();
+	const rootName = library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? library.rootPath ?? t.library.noFolder;
 	const empty = library.assets.length === 0 && library.folders.length === 0;
 	const { fileDisplay, setFileDisplay, fileSort, setFileSort, fileSortDirection, setFileSortDirection } = display;
 	const iconMode = fileDisplay === "icons";
@@ -177,121 +178,120 @@ export function LibrarySidebar({
 				onDropFiles={onDropFiles}
 			>
 			<div className="library-sidebar-content">
-			<div className="library-header">
-				<span className="section-label">Loom</span>
-				<span className="library-header-rule" aria-hidden="true" />
-				<span className="library-name" title={library.rootPath ?? undefined}>
-					{library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder}
-				</span>
-			</div>
-
-			<nav className="library-views" aria-label={t.library.views}>
-				{(["library", "table", "graph"] as const).map((view) => (
+			<div className="library-view-controls">
+				<nav className="library-views" aria-label={t.library.views}>
+					<div className="library-view-tabs" data-view={workbenchView}>
+						{(["table", "graph", "library"] as const).map((view) => (
+							<button
+								key={view}
+								type="button"
+								className={workbenchView === view ? "active" : ""}
+								aria-label={t.library[view]}
+								aria-pressed={workbenchView === view}
+								title={t.library[view]}
+								onClick={() => onWorkbenchView(view)}
+							>
+								<WorkspaceViewIcon view={view} />
+								<span aria-hidden={workbenchView !== view}>{t.library[view]}</span>
+							</button>
+						))}
+					</div>
+				</nav>
+				<div className="library-display-tabs" data-display={fileDisplay} role="group" aria-label={t.library.fileDisplay}>
 					<button
-						key={view}
 						type="button"
-						className={workbenchView === view ? "active" : ""}
-						aria-pressed={workbenchView === view}
-						onClick={() => onWorkbenchView(view)}
+						className={fileDisplay === "list" ? "active" : ""}
+						aria-label={t.library.list}
+						aria-pressed={fileDisplay === "list"}
+						title={t.library.list}
+						onClick={() => setFileDisplay("list")}
 					>
-						<WorkspaceViewIcon view={view} />
-						<span>{t.library[view]}</span>
+						<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+							<path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+						</svg>
 					</button>
-				))}
-			</nav>
-
-			<div className="file-heading">
-				<span className="file-heading-title">
-					<span>{t.library.files}</span>
-					<span>{queryActive ? visible.assets.length : library.assets.length}</span>
-				</span>
-				<span className="file-heading-tools">
-					{library.rootPath ? (
-						<>
-						{iconMode ? null : (
-							<FileSortControl
-								sort={fileSort}
-								direction={fileSortDirection}
-								onSort={setFileSort}
-								onDirection={setFileSortDirection}
-							/>
-						)}
-						{iconMode ? null : (
-							<button
-								type="button"
-								className={searchOpen ? "active" : ""}
-								aria-label={t.common.searchFiles}
-								aria-pressed={searchOpen}
-								title={t.common.searchFiles}
-								onClick={() => {
-									setSearchOpen((open) => {
-										if (open) setQuery("");
-										return !open;
-									});
-								}}
-							>
-								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-									<circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
-									<path d="M10.2 10.2 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-								</svg>
-							</button>
-						)}
-						<span className="file-display" role="group" aria-label={t.library.fileDisplay}>
-							<button
-								type="button"
-								className={fileDisplay === "list" ? "active" : ""}
-								aria-label={t.library.list}
-								aria-pressed={fileDisplay === "list"}
-								title={t.library.list}
-								onClick={() => setFileDisplay("list")}
-							>
-								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-									<path d="M2.5 4h11M2.5 8h11M2.5 12h11" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-								</svg>
-							</button>
-							<button
-								type="button"
-								className={fileDisplay === "icons" ? "active" : ""}
-								aria-label={t.library.icons}
-								aria-pressed={fileDisplay === "icons"}
-								title={t.library.icons}
-								onClick={() => setFileDisplay("icons")}
-							>
-								<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
-									<rect x="2.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
-									<rect x="9.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
-									<rect x="2.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
-									<rect x="9.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
-								</svg>
-							</button>
-						</span>
-						</>
-					) : null}
-				</span>
-			</div>
-			{searchOpen && !iconMode && library.rootPath ? (
-				<div className="file-search">
-					<input
-						ref={searchRef}
-						type="search"
-						placeholder={t.library.filterFiles}
-						value={query}
-						onChange={(event) => setQuery(event.target.value)}
-						onKeyDown={(event) => {
-							if (event.key !== "Escape") return;
-							event.preventDefault();
-							setQuery("");
-							setSearchOpen(false);
-						}}
-					/>
+					<button
+						type="button"
+						className={fileDisplay === "icons" ? "active" : ""}
+						aria-label={t.library.icons}
+						aria-pressed={fileDisplay === "icons"}
+						title={t.library.icons}
+						onClick={() => setFileDisplay("icons")}
+					>
+						<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+							<rect x="2.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+							<rect x="9.25" y="2.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+							<rect x="2.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+							<rect x="9.25" y="9.25" width="4.5" height="4.5" rx="0.8" fill="none" stroke="currentColor" strokeWidth="1.3" />
+						</svg>
+					</button>
 				</div>
-			) : null}
+			</div>
 			{!library.rootPath ? (
 				<div className="empty library-placeholder">{t.library.openFolderHint}</div>
 			) : (
 				<LibraryScrollRegions
 					label={t.library.resizeRegions}
 					moreHint={t.library.moreShortcuts}
+					filesHeader={<>
+						<div className="file-heading library-files-heading">
+							<span className="file-heading-title">
+								{iconMode ? (
+									<LibraryRootButton
+										name={rootName}
+										title={library.rootPath ?? undefined}
+										onOpen={() => onLocation({ kind: "folder", path: "" })}
+									/>
+								) : <span className="library-files-name" title={library.rootPath ?? undefined}>{rootName}</span>}
+								<span>{queryActive ? visible.assets.length : library.assets.length}</span>
+							</span>
+							{!iconMode ? (
+								<span className="file-heading-tools">
+									<FileSortControl
+										sort={fileSort}
+										direction={fileSortDirection}
+										onSort={setFileSort}
+										onDirection={setFileSortDirection}
+									/>
+									<button
+										type="button"
+										className={searchOpen ? "active" : ""}
+										aria-label={t.common.searchFiles}
+										aria-pressed={searchOpen}
+										title={t.common.searchFiles}
+										onClick={() => {
+											setSearchOpen((open) => {
+												if (open) setQuery("");
+												return !open;
+											});
+										}}
+									>
+										<svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true">
+											<circle cx="7" cy="7" r="4.25" fill="none" stroke="currentColor" strokeWidth="1.4" />
+											<path d="M10.2 10.2 13 13" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+										</svg>
+									</button>
+								</span>
+							) : null}
+						</div>
+						{searchOpen && !iconMode ? (
+							<div className="file-search">
+								<input
+									ref={searchRef}
+									type="search"
+									placeholder={t.library.filterFiles}
+									value={query}
+									onChange={(event) => setQuery(event.target.value)}
+									onKeyDown={(event) => {
+										if (event.key !== "Escape") return;
+										event.preventDefault();
+										setQuery("");
+										setSearchOpen(false);
+									}}
+								/>
+							</div>
+						) : null}
+					</>}
 					filesProps={{
 						onDragOver: (event) => {
 							if (hasOsFileDrag(event.dataTransfer)) {
@@ -443,16 +443,7 @@ export function LibrarySidebar({
 					{empty && !iconMode ? <div className="empty" onContextMenu={(event) => { event.preventDefault(); onLibraryContextMenu(); }}>{t.library.emptyFolder}</div> : queryActive && visible.assets.length === 0 && visible.folders.length === 0 ? (
 						<div className="empty">{t.common.noMatchingFiles}</div>
 					) : (
-						<>
-							{iconMode ? (
-								<LibraryRootRow
-									name={library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder}
-									selected={location.kind === "folder" && location.path === ""}
-									onOpen={() => onLocation({ kind: "folder", path: "" })}
-								/>
-							) : null}
-							<FileTree library={visible} />
-						</>
+						<FileTree library={visible} />
 					)}
 				</LibraryScrollRegions>
 			)}

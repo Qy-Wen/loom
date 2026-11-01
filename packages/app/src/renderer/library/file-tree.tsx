@@ -146,21 +146,20 @@ function FileTreeRows({ node, depth }: { node: FolderNode; depth: number }): Rea
 	);
 }
 
-/** The library itself as the top row of a folders-only tree, so the root folder can be opened and dropped onto. */
-export function LibraryRootRow({ name, selected, onOpen }: { name: string; selected: boolean; onOpen: () => void }): React.JSX.Element {
+/** The icon-mode tree heading opens the root folder and accepts drops into it. */
+export function LibraryRootButton({ name, title, onOpen }: { name: string; title: string | undefined; onOpen: () => void }): React.JSX.Element {
 	const tree = useTree();
-	const rowRef = useRef<HTMLDivElement | null>(null);
-	useScrollWhenFocused(rowRef, selected, "");
 	return (
-		<div {...folderDropProps("", tree)}>
-			<div ref={rowRef} className={`folder-row root-row${selected ? " selected" : ""}${tree.dropFolder === "" ? " drop-target" : ""}`} style={{ paddingLeft: 7 }}>
-				<span className="folder-chevron-spacer" aria-hidden="true" />
-				<button className="folder-main" type="button" onClick={onOpen}>
-					<span className="folder-symbol" aria-hidden="true"><FolderIcon /></span>
-					<span className="asset-name">{name}</span>
-				</button>
-			</div>
-		</div>
+		<button
+			{...folderDropProps("", tree)}
+			className={`library-files-name library-root-button${tree.dropFolder === "" ? " drop-target" : ""}`}
+			type="button"
+			title={title}
+			aria-current={tree.currentFolder === "" ? "location" : undefined}
+			onClick={onOpen}
+		>
+			{name}
+		</button>
 	);
 }
 

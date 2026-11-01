@@ -14,6 +14,7 @@
 }
 
 .library-sidebar-content {
+	container-type: inline-size;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -65,32 +66,6 @@
 	pointer-events: none;
 }
 
-.library-header {
-	display: flex;
-	align-items: baseline;
-	gap: var(--lm-space-4);
-	min-width: 0;
-	padding: var(--lm-space-6) var(--lm-space-6) var(--lm-space-4);
-}
-
-.library-header .section-label {
-	flex: none;
-	font-size: var(--lm-text-size-sm);
-	line-height: 1;
-}
-
-.library-header-rule {
-	flex: none;
-	align-self: center;
-	width: 1px;
-	height: 12px;
-	background: var(--lm-surface-track);
-}
-
-.library-header .library-name {
-	line-height: 1;
-}
-
 .section-label,
 .file-heading {
 	color: var(--lm-text-muted);
@@ -100,26 +75,79 @@
 	text-transform: uppercase;
 }
 
-.library-name {
-	min-width: 0;
-	flex: 1;
-	overflow: hidden;
-	font-size: var(--lm-text-size-lg);
-	font-weight: var(--lm-weight-semibold);
-	text-overflow: ellipsis;
-	white-space: nowrap;
+.library-view-controls {
+	--library-tab-duration: 180ms;
+	--library-tab-ease: cubic-bezier(0.22, 1, 0.36, 1);
+	display: flex;
+	gap: var(--lm-space-3);
+	margin: var(--lm-space-5) var(--lm-space-5) var(--lm-space-6);
 }
 
 .library-views {
 	display: flex;
-	gap: var(--lm-space-1);
-	margin: var(--lm-space-5) var(--lm-space-5) var(--lm-space-6);
+	flex: 1;
+	min-width: 0;
 	padding: var(--lm-space-1);
 	border-radius: var(--lm-radius-md);
 	background: var(--lm-surface-hover);
 }
 
-.library-views button {
+.library-view-tabs {
+	position: relative;
+	display: flex;
+	flex: 1;
+	min-width: 0;
+	gap: var(--lm-space-1);
+}
+
+.library-display-tabs {
+	position: relative;
+	display: flex;
+	flex: none;
+	gap: var(--lm-space-1);
+	padding: var(--lm-space-1);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-hover);
+}
+
+.library-view-tabs::before,
+.library-display-tabs::before {
+	position: absolute;
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	content: "";
+	pointer-events: none;
+	transition: transform var(--library-tab-duration) var(--library-tab-ease);
+}
+
+/* The active view takes the space left by two fixed-width icon buttons. */
+.library-view-tabs::before {
+	inset: 0 auto 0 0;
+	width: calc(100% - 2 * (var(--lm-size-md) + var(--lm-space-1)));
+	transform: translateX(0);
+}
+
+.library-view-tabs[data-view="graph"]::before {
+	transform: translateX(calc(var(--lm-size-md) + var(--lm-space-1)));
+}
+
+.library-view-tabs[data-view="library"]::before {
+	transform: translateX(calc(2 * (var(--lm-size-md) + var(--lm-space-1))));
+}
+
+.library-display-tabs::before {
+	inset: var(--lm-space-1) auto var(--lm-space-1) var(--lm-space-1);
+	width: var(--lm-size-md);
+	transform: translateX(0);
+}
+
+.library-display-tabs[data-display="icons"]::before {
+	transform: translateX(calc(var(--lm-size-md) + var(--lm-space-1)));
+}
+
+.library-views button,
+.library-display-tabs button {
+	position: relative;
 	display: flex;
 	flex: 1 1 auto;
 	align-items: center;
@@ -133,20 +161,69 @@
 	font-size: var(--lm-text-size-sm);
 	white-space: nowrap;
 	cursor: pointer;
+	transition: color var(--library-tab-duration) var(--library-tab-ease), flex-grow var(--library-tab-duration) var(--library-tab-ease), gap var(--library-tab-duration) var(--library-tab-ease);
+}
+
+/* Only the selected view expands for its label; the two regions keep their widths. */
+.library-view-tabs > button {
+	min-width: 0;
+	flex: 0 0 var(--lm-size-md);
+	gap: 0;
+	overflow: hidden;
+}
+
+.library-view-tabs > button.active {
+	flex-grow: 1;
+	gap: var(--lm-space-1);
+}
+
+.library-view-tabs > button > span {
+	min-width: 0;
+	max-width: 0;
+	overflow: hidden;
+	opacity: 0;
+	transform: translateX(-3px);
+	transition: max-width var(--library-tab-duration) var(--library-tab-ease), opacity var(--library-tab-duration) var(--library-tab-ease), transform var(--library-tab-duration) var(--library-tab-ease);
+}
+
+.library-view-tabs > button.active > span {
+	max-width: 80px;
+	opacity: 1;
+	transform: translateX(0);
+}
+
+.library-display-tabs button {
+	flex: 0 0 var(--lm-size-md);
+	width: var(--lm-size-md);
 }
 
 .workspace-view-icon {
 	flex: 0 0 auto;
 }
 
-.library-views button.active {
-	background: var(--lm-surface-raised);
+.library-views button.active,
+.library-display-tabs button.active {
 	color: var(--lm-text-primary);
 	font-weight: var(--lm-weight-semibold);
 }
 
+/* Keep the selected label readable alongside wider buttons in a narrow sidebar. */
+@container (max-width: 200px) {
+	.library-view-controls {
+		margin-inline: var(--lm-space-2);
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.library-view-controls {
+		--library-tab-duration: 0ms;
+	}
+}
+
 .file-heading {
 	display: flex;
+	flex: none;
+	align-items: center;
 	justify-content: space-between;
 	margin: 0 var(--lm-space-2) 0 var(--lm-space-4);
 	padding: 13px 3px 7px var(--lm-space-2);
@@ -164,6 +241,65 @@
 	min-height: 0;
 	margin-right: calc(var(--lm-panel-scroll-inset) - 5px);
 	overflow: hidden;
+}
+
+.library-files-pane {
+	display: flex;
+	flex: 1;
+	flex-direction: column;
+	min-height: 0;
+}
+
+.library-files-header {
+	flex: none;
+}
+
+.library-files-heading {
+	padding-top: 7px;
+	border-top: 0;
+}
+
+/* Keep the row's height when icon mode hides the sort/search buttons. */
+.library-files-heading .file-heading-title {
+	align-items: baseline;
+	min-width: 0;
+	min-height: var(--lm-size-sm);
+	flex: 1;
+	margin-right: var(--lm-space-4);
+}
+
+.library-files-name {
+	min-width: 0;
+	overflow: hidden;
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-sm);
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	letter-spacing: 0;
+	text-transform: none;
+}
+
+.library-files-heading .file-heading-title > span:last-child {
+	flex: none;
+}
+
+.library-root-button {
+	padding: 0;
+	border: 0;
+	background: transparent;
+	font-family: inherit;
+	font-weight: inherit;
+	line-height: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.library-root-button:hover {
+	color: var(--lm-text-accent);
+}
+
+.library-root-button.drop-target {
+	background: var(--lm-surface-success);
 }
 
 .library-scroll {
@@ -221,7 +357,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .folder-main {
 	display: flex;
 	align-items: center;
-	gap: 2px;
+	gap: var(--lm-space-1);
 	min-width: 0;
 	flex: 1;
 	padding: 0;
@@ -644,8 +780,4 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .folder-chevron-spacer {
 	flex: 0 0 8px;
 	width: 8px;
-}
-
-.folder-row.root-row {
-	font-weight: var(--lm-weight-semibold);
 }

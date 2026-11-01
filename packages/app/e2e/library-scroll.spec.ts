@@ -19,7 +19,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	const separator = sidebar.getByRole("separator", { name: "Resize favorites/tags and file tree", exact: true });
 	const height = async () => Number(await separator.getAttribute("aria-valuenow"));
 	const scroll = (area: typeof top) => area.evaluate((element) => element.scrollTop);
-	const extent = async () => (await sidebar.locator(".library-scroll-regions").evaluate((element) => element.clientHeight)) - (await separator.boundingBox())!.height;
+	const extent = async () => (await sidebar.locator(".library-scroll-regions").evaluate((element) => element.clientHeight)) - (await sidebar.locator(".library-files-header").boundingBox())!.height - (await separator.boundingBox())!.height;
 	const ratio = () => loomPage.evaluate(() => Number(localStorage.getItem("loom.library.shortcutFraction")));
 	const moreCue = sidebar.locator(".library-shortcuts-more");
 	await expect(separator).toBeVisible();
@@ -64,8 +64,11 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await loomPage.mouse.wheel(0, 300); await loomPage.waitForTimeout(150);
 	expect(await scroll(files)).toBe(0); // Wheel at the upper boundary cannot chain into the file tree.
 	const filesBounds = (await files.boundingBox())!;
+	const heading = sidebar.locator(".library-files-heading");
+	const headingBounds = (await heading.boundingBox())!;
 	await loomPage.mouse.move(filesBounds.x + 60, filesBounds.y + 80); await loomPage.mouse.wheel(0, 200);
 	await expect.poll(() => scroll(files)).toBeGreaterThan(0); expect(await scroll(top)).toBe(bottomedTop);
+	expect((await heading.boundingBox())!.y).toBe(headingBounds.y); // File tools stay above their scrollport.
 	// Navigating a file only scrolls its own region, not the shortcuts above it.
 	await files.locator(".asset-row").filter({ hasText: "item-39.md" }).click();
 	expect(await scroll(top)).toBe(bottomedTop);
@@ -77,7 +80,9 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(loomPage.locator("body")).not.toHaveClass(/library-resizing-regions/);
 	await separator.press("Home"); expect(await height()).toBe(Number(await separator.getAttribute("aria-valuemin")));
 	await separator.press("ArrowDown"); await expect(separator).toHaveAttribute("aria-valuenow", "74");
-	await separator.press("End"); expect(await height()).toBe(Number(await separator.getAttribute("aria-valuemax")));
+	await separator.press("End");
+	// Fractional layout bounds can round the value and maximum to adjacent integers.
+	expect(Math.abs(await height() - Number(await separator.getAttribute("aria-valuemax")))).toBeLessThanOrEqual(1);
 	expect((await files.boundingBox())!.height).toBeGreaterThanOrEqual(120);
 	await top.evaluate((element) => { element.scrollTop = 0; });
 	// Expanding the divider to fit all content removes the cue; shrinking it brings the cue back.
@@ -127,13 +132,14 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(loomPage.locator("body")).not.toHaveClass(/library-resizing-regions/); await loomPage.mouse.up();
 });
 
-test("without shortcuts the file tree gets all space and root dragover still accepts imports", async ({ loomPage, electronApp }) => {
+test("without shortcuts the file heading and tree get all space and root dragover still accepts imports", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const sidebar = loomPage.locator(".library-sidebar"), files = sidebar.locator(".asset-list");
 	await expect(sidebar.locator(".library-shortcuts, .library-region-handle, .library-shortcuts-more")).toHaveCount(0);
 	const region = (await sidebar.locator(".library-scroll-regions").boundingBox())!, tree = (await files.boundingBox())!;
-	expect(tree.height).toBe(region.height);
+	const header = (await sidebar.locator(".library-files-header").boundingBox())!;
+	expect(tree.height + header.height).toBe(region.height);
 	// OS-file dragover still targets the root of the lower pane.
 	await files.evaluate((element) => {
 		const transfer = new DataTransfer(); transfer.items.add(new File(["hello"], "drop.txt", { type: "text/plain" }));

@@ -8,12 +8,13 @@ function ScrollArea({ className = "", scrollRef, ...props }: HTMLAttributes<HTML
 }
 
 /** Favorites/tags and the file tree scroll independently; the upper pane shrinks to its contents. */
-export function LibraryScrollRegions({ shortcuts, children, label, moreHint, filesProps }: {
-	shortcuts: ReactNode | null; children: ReactNode; label: string; moreHint: string;
+export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, moreHint, filesProps }: {
+	shortcuts: ReactNode | null; filesHeader: ReactNode; children: ReactNode; label: string; moreHint: string;
 	filesProps: Pick<HTMLAttributes<HTMLDivElement>, "onDragOver" | "onDrop" | "onContextMenu">;
 }): React.JSX.Element {
 	const root = useRef<HTMLDivElement>(null);
 	const content = useRef<HTMLDivElement>(null);
+	const header = useRef<HTMLDivElement>(null);
 	const shortcutsScroll = useRef<HTMLDivElement>(null);
 	const handle = useRef<HTMLDivElement>(null);
 	const drag = useRef<{ pointer: number; origin: number; size: number } | null>(null);
@@ -38,8 +39,10 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 		setMoreBelow(!!element && element.clientHeight > 0 && element.scrollHeight - element.clientHeight - element.scrollTop > 1);
 	};
 	useLayoutEffect(updateMoreBelow, [hasShortcuts, layout.size, contentHeight]);
+	// Reserve the fixed file heading/search before sizing the two scrollports.
+	const availableHeight = () => Math.max(0, (root.current?.getBoundingClientRect().height ?? 0) - (header.current?.getBoundingClientRect().height ?? 0));
 	const measure = () => {
-		const size = root.current?.getBoundingClientRect().height ?? 0;
+		const size = availableHeight();
 		if (size > 0) setHeight(size); // Keep the last measurement while the sidebar is hidden.
 		setContentHeight(content.current?.getBoundingClientRect().height ?? 0);
 	};
@@ -47,13 +50,14 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 		measure();
 		const observer = new ResizeObserver(measure);
 		observer.observe(root.current!);
+		if (header.current) observer.observe(header.current);
 		if (content.current) observer.observe(content.current);
 		return () => observer.disconnect();
 	}, [hasShortcuts]);
 	useEffect(() => {
 		try { localStorage.setItem(STORAGE_KEY, String(fraction)); } catch { /* Layout storage is optional. */ }
 	}, [fraction]);
-	const current = () => libraryRegionSize(root.current?.getBoundingClientRect().height || height, content.current?.getBoundingClientRect().height ?? contentHeight, fraction);
+	const current = () => libraryRegionSize(availableHeight() || height, content.current?.getBoundingClientRect().height ?? contentHeight, fraction);
 	const resize = (pixels: number) => {
 		const limits = current();
 		if (limits.extent <= 0) return;
@@ -103,6 +107,9 @@ export function LibraryScrollRegions({ shortcuts, children, label, moreHint, fil
 				onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag}
 			/>
 		</> : null}
-		<ScrollArea className="asset-list" {...filesProps}>{children}</ScrollArea>
+		<div className="library-files-pane">
+			<div ref={header} className="library-files-header">{filesHeader}</div>
+			<ScrollArea className="asset-list" {...filesProps}>{children}</ScrollArea>
+		</div>
 	</div>;
 }
