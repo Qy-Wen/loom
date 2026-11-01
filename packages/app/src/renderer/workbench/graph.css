@@ -44,7 +44,12 @@
 	cursor: pointer;
 }
 
+.graph-help-button[aria-haspopup="dialog"] {
+	color: var(--lm-graphic);
+}
+
 .graph-help-button:hover,
+.graph-help-button:focus-visible,
 .graph-help-button[aria-expanded="true"] {
 	background: var(--lm-surface-hover);
 	color: var(--lm-text-primary);
