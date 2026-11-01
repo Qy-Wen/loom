@@ -112,8 +112,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect.poll(async () => Math.abs(await height() - await extent() * preferred)).toBeLessThanOrEqual(1);
 	await top.getByRole("button", { name: "Tags", exact: true }).click();
 	await top.locator(".folder-main").filter({ hasText: /^Picked$/ }).click();
-	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
-	await expect(top.locator(".library-tags .asset-icon")).toHaveCount(12);
+	await expect(top.locator(".library-tags .asset-row")).toHaveCount(12);
 	await top.evaluate((element) => { element.scrollTop = 0; });
 	await expect(moreCue).toBeVisible();
 	await top.evaluate((element) => { element.scrollTop = element.scrollHeight; });

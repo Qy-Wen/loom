@@ -269,3 +269,16 @@ describe("folder paths", () => {
 		assert.deepEqual(ancestorFolders("notes.md"), []);
 	});
 });
+
+describe("box selection by key", () => {
+	it("replaces the selection with the boxed rows, and clears on an empty box", async () => {
+		const { boxSelectKeys, keysSelection, selectRange, folderKey: fk, assetKey: ak } = await import("../src/renderer/library/tree-nav.ts");
+		const start = keysSelection([ak("a")]);
+		assert.deepEqual(boxSelectKeys(start, [fk("x"), ak("b")], false), { keys: [fk("x"), ak("b")], anchor: fk("x"), focus: ak("b") });
+		assert.deepEqual(boxSelectKeys(start, [], false).keys, []);
+		assert.deepEqual(boxSelectKeys(start, [ak("b"), ak("a")], true).keys, [ak("a"), ak("b")]);
+		assert.equal(boxSelectKeys(start, [], true), start);
+		const rows = [ak("a"), ak("b"), ak("c")].map((key) => ({ kind: "asset" as const, relativePath: key, assetId: key.slice(6), collapsed: false }));
+		assert.deepEqual(selectRange(keysSelection([ak("a")]), rows, ak("c")).keys, [ak("a"), ak("b"), ak("c")]);
+	});
+});

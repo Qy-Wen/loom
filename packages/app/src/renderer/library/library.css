@@ -182,7 +182,8 @@
 .library-shortcuts-more { position: absolute; bottom: 0; left: 6px; right: 6px; height: 30px; max-height: 100%; background: linear-gradient(transparent, var(--lm-surface-subtle) 85%); pointer-events: none; }
 
 .library-shortcuts-content { display: flow-root; }
-.library-shortcuts-content > :last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+.library-shortcuts-content > :last-child,
+.library-shortcuts-content > .library-nav > :last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .library-region-handle { position: relative; flex: 0 0 12px; cursor: row-resize; touch-action: none; }
 .library-region-handle::after { position: absolute; top: 50%; left: 6px; right: 6px; height: 1px; transform: translateY(-50%); background: var(--lm-surface-active); content: ""; }
 .library-region-handle.has-more::after { background: var(--lm-border-strong); }
@@ -220,7 +221,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .folder-main {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 2px;
 	min-width: 0;
 	flex: 1;
 	padding: 0;
@@ -236,7 +237,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
-	width: var(--lm-size-xs);
+	width: 8px;
 	height: var(--lm-size-xs);
 	flex: 0 0 auto;
 	padding: 0;
@@ -245,7 +246,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	color: var(--lm-text-muted);
 	cursor: pointer;
 	/* Open and closed share this center, so collapsing only turns the mark. */
-	transform: translate(-1.95px, 0.69px);
 }
 
 .folder-chevron svg {
@@ -253,7 +253,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 }
 
 .folder-chevron.expanded {
-	transform: translate(-1.95px, 0.69px) rotate(90deg);
+	transform: rotate(90deg);
 }
 
 .folder-symbol {
@@ -276,9 +276,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .folder-chevron:focus,
 .folder-chevron:focus-visible,
 .asset-row:focus,
-.asset-row:focus-visible,
-.asset-icon-button:focus,
-.asset-icon-button:focus-visible {
+.asset-row:focus-visible {
 	outline: none;
 }
 
@@ -391,7 +389,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .tags-main {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 3px;
 	min-width: 0;
 	flex: 1;
 }
@@ -415,7 +413,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .tags-label {
 	display: flex;
 	align-items: center;
-	gap: 1px;
+	gap: 0;
 	width: 100%;
 	padding: var(--lm-space-3) 7px;
 	border: 0;
@@ -432,6 +430,10 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .favorites-label:hover,
 .tags-label:hover {
 	background: var(--lm-surface-hover);
+}
+
+.favorites-label.selected {
+	background: var(--lm-surface-accent-strong);
 }
 
 .tag-editor {
@@ -595,10 +597,55 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	color: var(--lm-warning);
 }
 
-.asset-icon-button .asset-favorite {
+.browser-tile-thumb .asset-favorite {
 	position: absolute;
 	top: 4px;
 	right: 4px;
 	margin-left: 0;
 	filter: var(--lm-shadow-media-sm);
+}
+
+/* Icon mode: favorites and each tag are places to go; the Tags group only folds the list of them. */
+.library-nav {
+	display: flex;
+	flex-direction: column;
+}
+
+.library-nav-item {
+	display: flex;
+	align-items: center;
+	gap: 5px;
+	width: 100%;
+	padding: var(--lm-space-3) 7px var(--lm-space-3) 21px;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	font-size: var(--lm-text-size-sm);
+	font-weight: var(--lm-weight-medium);
+	text-align: left;
+	cursor: pointer;
+}
+
+.library-nav-item:hover {
+	background: var(--lm-surface-hover);
+}
+
+.library-nav-item.selected {
+	background: var(--lm-surface-accent-strong);
+}
+
+/* Lines the name up with a tag name in the list view, which sits after a 21px indent and its arrow. */
+.library-nav-item.tag-item {
+	padding-left: 29px;
+}
+
+.folder-chevron-spacer {
+	flex: 0 0 8px;
+	width: 8px;
+}
+
+.folder-row.root-row {
+	font-weight: var(--lm-weight-semibold);
 }

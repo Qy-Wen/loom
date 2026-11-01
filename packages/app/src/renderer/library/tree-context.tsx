@@ -1,17 +1,19 @@
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import type { LibraryDrag } from "../assets/asset-drag.ts";
 import { uiPlatform } from "../../shared/locale.ts";
+import { useDropFolder } from "./folder-drop.ts";
 import { contentModifiedAt, pointerMode, type FileSort, type FileSortDirection, type PointerMode } from "./tree-nav.ts";
-
-export type FileDisplay = "list" | "icons";
 
 /**
  * Everything the file tree and the shortcut lists (favorites, tags) share. Rows read it from context
  * instead of receiving it through every level of the tree.
  */
 export interface TreeContextValue {
-	fileDisplay: FileDisplay;
+	/** Show folders only, with no files under them. The tree is then a folder navigator, not a file list. */
+	foldersOnly: boolean;
+	/** The folder the folder browser is showing, highlighted in a folders-only tree. */
+	currentFolder: string | null;
 	fileSort: FileSort;
 	fileSortDirection: FileSortDirection;
 	collapsedFolders: ReadonlySet<string>;
@@ -57,16 +59,7 @@ export type TreeProviderProps =
 
 /** Owns the drop-target highlight and derives favorites and folder times from `library`. */
 export function TreeProvider({ library, children, ...shared }: TreeProviderProps): React.JSX.Element {
-	const [dropFolder, setDropFolder] = useState<string | null>(null);
-	useEffect(() => {
-		const clear = () => setDropFolder(null);
-		window.addEventListener("dragend", clear);
-		window.addEventListener("drop", clear);
-		return () => {
-			window.removeEventListener("dragend", clear);
-			window.removeEventListener("drop", clear);
-		};
-	}, []);
+	const [dropFolder, setDropFolder] = useDropFolder();
 	const favoriteAssetIds = useMemo(() => new Set(library.favoriteAssetIds ?? []), [library.favoriteAssetIds]);
 	const folderModifiedAt = useMemo(() => contentModifiedAt(library.assets), [library.assets]);
 	const value: TreeContextValue = { ...shared, favoriteAssetIds, folderModifiedAt, dropFolder, onDropFolder: setDropFolder };

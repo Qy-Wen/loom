@@ -1,0 +1,137 @@
+import type { Asset } from "@loom/core";
+import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
+import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
+import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
+import { FolderIcon } from "../library/file-tree.tsx";
+import { FavoriteMark } from "../library/asset-rows.tsx";
+import { folderDropProps, type FolderDropSurface } from "../library/folder-drop.ts";
+import { clickMode } from "../library/tree-context.tsx";
+import { assetKey, folderKey, type PointerMode } from "../library/tree-nav.ts";
+import { useInlineRename } from "../library/use-inline-rename.ts";
+
+/** What a tile needs from the browser around it. */
+export interface TileContext extends FolderDropSurface {
+	selectedKeys: ReadonlySet<string>;
+	cutAssetIds: readonly string[];
+	cutFolders: readonly string[];
+	favoriteAssetIds: ReadonlySet<string>;
+	selectionDrag: LibraryDrag | null;
+	renamingAssetId: string | null;
+	renamingFolder: string | null;
+	onSelect: (key: string, mode: PointerMode) => void;
+	onOpenAsset: (assetId: string) => void;
+	onOpenFolder: (relativePath: string) => void;
+	onAssetContextMenu: (asset: Asset) => void;
+	onFolderContextMenu: (relativePath: string) => void;
+	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
+	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
+	onCancelRename: () => void;
+}
+
+function pathHint(relativePath: string, base: string): string | null {
+	const inside = base ? relativePath.slice(base.length + 1) : relativePath;
+	const slash = inside.lastIndexOf("/");
+	return slash === -1 ? null : inside.slice(0, slash);
+}
+
+export function AssetTile({ asset, context, base, searching }: { asset: Asset; context: TileContext; base: string; searching: boolean }): React.JSX.Element {
+	const key = assetKey(asset.assetId);
+	const selected = context.selectedKeys.has(key);
+	const renaming = context.renamingAssetId === asset.assetId;
+	const cut = context.cutAssetIds.includes(asset.assetId) || context.cutFolders.some((folder) => asset.relativePath.startsWith(`${folder}/`));
+	const hint = searching ? pathHint(asset.relativePath, base) : null;
+	const rename = useInlineRename(filenameStem(asset.filename), renaming, (stem) => context.onRenameAsset(asset, stem), context.onCancelRename);
+	const className = `browser-tile${selected ? " selected" : ""}${cut ? " cut" : ""}`;
+	const thumb = (
+		<span className="browser-tile-thumb">
+			<AssetThumbnail asset={asset} />
+			{context.favoriteAssetIds.has(asset.assetId) ? <FavoriteMark /> : null}
+		</span>
+	);
+	if (renaming) {
+		return (
+			<div className={className} data-key={key}>
+				{thumb}
+				<span className="browser-tile-rename">
+					<input {...rename} />
+					<span>{extensionOf(asset.filename)}</span>
+				</span>
+			</div>
+		);
+	}
+	return (
+		<button
+			type="button"
+			className={className}
+			data-key={key}
+			draggable
+			title={asset.relativePath}
+			onClick={(event) => context.onSelect(key, clickMode(event))}
+			onDoubleClick={() => context.onOpenAsset(asset.assetId)}
+			onContextMenu={(event) => {
+				event.preventDefault();
+				context.onAssetContextMenu(asset);
+			}}
+			onDragStart={(event) => {
+				const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
+				writeLibraryDrag(event.dataTransfer, selected && context.selectionDrag ? context.selectionDrag : single, asset);
+			}}
+			onDragEnd={() => {
+				endLibraryDrag();
+				context.onDropFolder(null);
+			}}
+		>
+			{thumb}
+			<span className="browser-tile-name">{asset.filename}</span>
+			{hint ? <span className="browser-tile-hint">{hint}</span> : null}
+		</button>
+	);
+}
+
+export function FolderTile({ relativePath, context, base, searching }: { relativePath: string; context: TileContext; base: string; searching: boolean }): React.JSX.Element {
+	const key = folderKey(relativePath);
+	const name = relativePath.slice(relativePath.lastIndexOf("/") + 1);
+	const selected = context.selectedKeys.has(key);
+	const renaming = context.renamingFolder === relativePath;
+	const cut = context.cutFolders.some((folder) => relativePath === folder || relativePath.startsWith(`${folder}/`));
+	const hint = searching ? pathHint(relativePath, base) : null;
+	const rename = useInlineRename(name, renaming, (next) => context.onRenameFolder(relativePath, next), context.onCancelRename);
+	const className = `browser-tile folder${selected ? " selected" : ""}${cut ? " cut" : ""}${context.dropFolder === relativePath ? " drop-target" : ""}`;
+	const thumb = <span className="browser-tile-thumb"><FolderIcon size={44} /></span>;
+	if (renaming) {
+		return (
+			<div className={className} data-key={key}>
+				{thumb}
+				<span className="browser-tile-rename"><input {...rename} /></span>
+			</div>
+		);
+	}
+	return (
+		<button
+			type="button"
+			className={className}
+			data-key={key}
+			draggable
+			title={relativePath}
+			onClick={(event) => context.onSelect(key, clickMode(event))}
+			onDoubleClick={() => context.onOpenFolder(relativePath)}
+			onContextMenu={(event) => {
+				event.preventDefault();
+				context.onFolderContextMenu(relativePath);
+			}}
+			onDragStart={(event) => {
+				const single: LibraryDrag = { kind: "folder", relativePath };
+				writeLibraryDrag(event.dataTransfer, selected && context.selectionDrag ? context.selectionDrag : single);
+			}}
+			onDragEnd={() => {
+				endLibraryDrag();
+				context.onDropFolder(null);
+			}}
+			{...folderDropProps(relativePath, context)}
+		>
+			{thumb}
+			<span className="browser-tile-name">{name}</span>
+			{hint ? <span className="browser-tile-hint">{hint}</span> : null}
+		</button>
+	);
+}

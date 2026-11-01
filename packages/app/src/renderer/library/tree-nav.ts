@@ -9,6 +9,9 @@ export interface TreeAssetRef {
 /** `name` compares labels. `modified` uses each file's time, and a folder's newest file. */
 export type FileSort = "name" | "modified";
 
+/** How the files are shown: as tree rows with tabs, or as tiles in a folder browser. */
+export type FileDisplay = "list" | "icons";
+
 /** `asc` is A→Z and oldest first. `desc` reverses that key. */
 export type FileSortDirection = "asc" | "desc";
 
@@ -303,18 +306,19 @@ export function pointerSelect(
 }
 
 /**
- * Files picked by a box drag in the graph. Without a modifier the box replaces the selection; with one it adds to it.
- * A box over nothing keeps the selection when adding and clears it when replacing. Folders already picked are kept when adding.
+ * Rows picked by a box drag. Without a modifier the box replaces the selection; with one it adds to it.
+ * A box over nothing keeps the selection when adding and clears it when replacing. Rows already picked are kept when adding.
  */
-export function boxSelect(selection: TreeSelection, assetIds: readonly string[], add: boolean): TreeSelection {
-	const boxed = assetIds.map(assetKey);
-	if (!add) {
-		const focus = boxed.at(-1) ?? null;
-		return { keys: boxed, anchor: boxed[0] ?? null, focus };
-	}
-	const keys = [...selection.keys, ...boxed.filter((key) => !selection.keys.includes(key))];
+export function boxSelectKeys(selection: TreeSelection, boxed: readonly string[], add: boolean): TreeSelection {
+	if (!add) return keysSelection(boxed);
 	if (boxed.length === 0) return selection;
+	const keys = [...selection.keys, ...boxed.filter((key) => !selection.keys.includes(key))];
 	return { keys, anchor: selection.anchor ?? boxed[0]!, focus: boxed.at(-1)! };
+}
+
+/** Files picked by a box drag in the graph. */
+export function boxSelect(selection: TreeSelection, assetIds: readonly string[], add: boolean): TreeSelection {
+	return boxSelectKeys(selection, assetIds.map(assetKey), add);
 }
 
 /** Clicking empty canvas in the graph drops the picked files and keeps nothing focused. */
@@ -345,9 +349,19 @@ export function extendSelection(
 	else if (current < 0) next = key === "ArrowDown" ? 0 : rows.length - 1;
 	else if (key === "ArrowDown") next = Math.min(rows.length - 1, current + 1);
 	else next = Math.max(0, current - 1);
-	const focus = rowKey(rows[next]);
+	return selectRange(selection, rows, rowKey(rows[next]));
+}
+
+/** The range from the anchor to `focus`, which becomes the focused row. */
+export function selectRange(selection: TreeSelection, rows: readonly TreeRow[], focus: string): TreeSelection {
 	const anchor = selection.anchor ?? selection.focus ?? focus;
 	return { keys: rangeKeys(rows, anchor, focus), anchor, focus };
+}
+
+/** A selection made of exactly `keys`, as a box drag in the folder browser leaves it. */
+export function keysSelection(keys: readonly string[]): TreeSelection {
+	if (keys.length === 0) return emptyTreeSelection;
+	return { keys, anchor: keys[0], focus: keys[keys.length - 1] };
 }
 
 export function selectVisible(selection: TreeSelection, rows: readonly TreeRow[]): TreeSelection {

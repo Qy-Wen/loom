@@ -62,6 +62,7 @@ export type ChatLoginPrompt =
 	| { type: "progress"; message: string };
 
 export type AssetContextAction =
+	| "open"
 	| "open_in_new_tab"
 	| "add_to_chat"
 	| "favorite"
@@ -219,7 +220,8 @@ export interface LoomApi {
 	removeAssetTag: (assetId: string, tagId: string) => Promise<void>;
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
 	onTrashStarted: (listener: () => void) => () => void;
-	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean) => Promise<AssetContextAction | null>;
+	/** `tabs` is true in list mode, where a file can open in a new tab; otherwise the first item opens the preview. */
+	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;

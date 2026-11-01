@@ -64,6 +64,10 @@ import { DetailsPanel } from "./details/details-panel.tsx";
 import { HelpDialog } from "./help/help-dialog.tsx";
 import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/asset-preview.tsx";
+import { FolderBrowser } from "./workbench/folder-browser.tsx";
+import { PreviewOverlay } from "./workbench/preview-overlay.tsx";
+import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type BrowseLocation } from "./workbench/folder-browser-model.ts";
+import { useLibraryDisplay } from "./library/use-library-display.ts";
 import { GraphView } from "./workbench/graph-view.tsx";
 import { TableView } from "./workbench/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
@@ -137,12 +141,18 @@ export function App(): React.JSX.Element {
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const { confirm } = useConfirmation(library.rootPath);
 	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
+	const display = useLibraryDisplay();
+	const iconMode = display.fileDisplay === "icons";
+	const [location, setLocation] = useState<BrowseLocation>(ROOT_LOCATION);
+	// The file open in the icon-mode preview overlay. List mode has tabs instead.
+	const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
 	// The workbench shows the active tab, not the tree focus. Only actions that mean "look at this file"
 	// change tabs (selectAsset, clicking a file). Right-click, select all, and drops move the focus and leave tabs alone.
 	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
-	const viewedAssetId = tabs.active;
+	// List mode follows the active tab. Icon mode follows the previewed file, else the focused tile.
+	const viewedAssetId = iconMode ? (previewAssetId ?? selectedAssetId) : tabs.active;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
@@ -228,7 +238,25 @@ export function App(): React.JSX.Element {
 	useLayoutEffect(() => {
 		const ids = new Set(library.assets.map((asset) => asset.assetId));
 		setTabs((current) => pruneTabs(current, (assetId) => ids.has(assetId)));
+		setPreviewAssetId((current) => current && ids.has(current) ? current : null);
 	}, [library.assets]);
+	// A folder or tag that is gone leaves the browser on the nearest place that still exists.
+	useEffect(() => {
+		setLocation((current) => existingLocation(current, library));
+	}, [library.folders, library.tags]);
+	// The overlay belongs to the icon-mode Files view.
+	useEffect(() => {
+		if (!iconMode || workbenchView !== "library") setPreviewAssetId(null);
+	}, [iconMode, workbenchView]);
+	// The sidebar tree follows the browser: its folder and the ones above it are open. Clicking a tree row only moves
+	// the browser and leaves the row's fold state to the arrow and the double click, so that one move skips this.
+	const browsedFolder = location.kind === "folder" ? location.path : null;
+	const treeClickedFolder = useRef<string | null>(null);
+	useEffect(() => {
+		const clicked = treeClickedFolder.current;
+		treeClickedFolder.current = null;
+		if (iconMode && browsedFolder && browsedFolder !== clicked) revealFolders([browsedFolder]);
+	}, [iconMode, browsedFolder]);
 	const selectedKeys = useMemo(() => new Set(picked.keys), [picked.keys]);
 	const selectedAssetIds = useMemo(
 		() => new Set(picked.keys.filter((key) => key.startsWith("asset:")).map((key) => key.slice("asset:".length))),
@@ -253,7 +281,11 @@ export function App(): React.JSX.Element {
 		|| (viewedAsset.type === "video" && isGradeableVideo(viewedAsset.filename))
 	);
 	const grading = gradeable && gradingAssetId === viewedAsset.assetId;
-	const gradeVisible = workbenchView === "library" && grading;
+	const previewAsset = useMemo(
+		() => library.assets.find((asset) => asset.assetId === previewAssetId) ?? null,
+		[library.assets, previewAssetId],
+	);
+	const gradeVisible = workbenchView === "library" && grading && (!iconMode || previewAsset !== null);
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
 	// One product registry supplies identity, content, visibility and first-use policy.
 	const panelViews: PanelView[] = [
@@ -314,6 +346,8 @@ export function App(): React.JSX.Element {
 			if (change.type === "reset") {
 				setCollapsedFolders(new Set(change.snapshot.folders));
 				setPicked(emptyTreeSelection);
+				setLocation(ROOT_LOCATION);
+				setPreviewAssetId(null);
 			}
 			if (change.type === "folder_remove") {
 				const prefix = `${change.relativePath}/`;
@@ -474,10 +508,54 @@ export function App(): React.JSX.Element {
 		});
 	}
 
-	/** Select a file and show it in the active tab. */
+	/**
+	 * Look at a file: show it in the active tab, or in icon mode open it in the preview overlay over its folder.
+	 * Outside the Files view icon mode only selects it, since there is nothing to open it in.
+	 */
 	function selectAsset(assetId: string): void {
-		setTabs((current) => showInTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
+		if (!iconMode) {
+			setTabs((current) => showInTab(current, assetId));
+			return;
+		}
+		if (workbenchView !== "library") return;
+		const asset = library.assets.find((item) => item.assetId === assetId);
+		// Stay on a favorites or tag view that already lists it; otherwise browse to its folder.
+		if (asset && !(location.kind !== "folder" && browseHolds(location, assetId))) {
+			setLocation({ kind: "folder", path: parentFolder(asset.relativePath) });
+		}
+		setPreviewAssetId(assetId);
+	}
+
+	function browseHolds(where: BrowseLocation, assetId: string): boolean {
+		if (where.kind === "favorites") return library.favoriteAssetIds.includes(assetId);
+		if (where.kind === "tag") return library.assetTags.some((row) => row.tagId === where.tagId && row.assetId === assetId);
+		return false;
+	}
+
+	/** Move the browser. What was selected is no longer on screen, so the selection is dropped. */
+	function browseTo(next: BrowseLocation): void {
+		setLocation(next);
+		setPicked(emptyTreeSelection);
+	}
+
+	/** The folder new files and pastes go to in icon mode: the one on screen. */
+	function browsedPath(): string {
+		return location.kind === "folder" ? location.path : "";
+	}
+
+	/** Select what a move or paste produced, if it landed where the browser is looking. */
+	function selectLanded(destFolder: string, keys: string[], focus: string | undefined): void {
+		if (iconMode && destFolder !== browsedPath()) {
+			setPicked(emptyTreeSelection);
+			return;
+		}
+		if (focus) setPicked({ keys, anchor: focus, focus });
+	}
+
+	/** A folder moved or was renamed: keep the browser inside it. */
+	function followFolder(from: string, to: string): void {
+		setLocation((current) => remapLocation(current, from, to));
 	}
 
 	/**
@@ -528,7 +606,7 @@ export function App(): React.JSX.Element {
 		const next = pointerSelect(picked, rows, key, mode);
 		setPicked(next);
 		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
-		if (next.focus?.startsWith("asset:")) setTabs((current) => showInTab(current, next.focus!.slice("asset:".length)));
+		if (!iconMode && next.focus?.startsWith("asset:")) setTabs((current) => showInTab(current, next.focus!.slice("asset:".length)));
 	}
 
 	function cancelRename(): void {
@@ -537,6 +615,7 @@ export function App(): React.JSX.Element {
 	}
 
 	function pasteDestination(selection: TreeSelection = picked): string {
+		if (iconMode) return browsedPath();
 		const focus = selection.focus;
 		if (!focus) return "";
 		if (focus.startsWith("folder:")) return focus.slice("folder:".length);
@@ -561,6 +640,7 @@ export function App(): React.JSX.Element {
 	}
 
 	function revealCreatedFolder(relativePath: string): void {
+		if (iconMode) setLocation({ kind: "folder", path: parentFolder(relativePath) });
 		selectFolder(relativePath);
 		setRenamingFolder(relativePath);
 		revealFolders([relativePath]);
@@ -613,7 +693,7 @@ export function App(): React.JSX.Element {
 	function showPlaced(destFolder: string, placed: { assets: { assetId: string }[]; folders: string[] }): void {
 		const keys = [...placed.folders.map(folderKey), ...placed.assets.map((asset) => assetKey(asset.assetId))];
 		const focus = placed.assets[0] ? assetKey(placed.assets[0].assetId) : keys[0];
-		if (focus) setPicked({ keys, anchor: focus, focus });
+		selectLanded(destFolder, keys, focus);
 		revealFolders(destFolder ? [destFolder, ...placed.folders] : placed.folders);
 	}
 
@@ -638,7 +718,11 @@ export function App(): React.JSX.Element {
 						: [];
 					const folders: string[] = [];
 					const placeFolder = move ? window.loom.moveFolderInto : window.loom.copyFolderInto;
-					for (const folder of libraryClipboard.folders) folders.push(await placeFolder(folder, destFolder));
+					for (const folder of libraryClipboard.folders) {
+						const placed = await placeFolder(folder, destFolder);
+						folders.push(placed);
+						if (move) followFolder(folder, placed);
+					}
 					showPlaced(destFolder, { assets: next, folders });
 					if (move) setLibraryClipboard(null);
 				} catch (cause) {
@@ -682,17 +766,24 @@ export function App(): React.JSX.Element {
 					? await window.loom.moveAssetsInto(item.assets.map((asset) => asset.assetId), destFolder)
 					: [];
 				const movedFolders: string[] = [];
-				for (const folder of item.folders) movedFolders.push(await window.loom.moveFolderInto(folder, destFolder));
+				for (const folder of item.folders) {
+					const moved = await window.loom.moveFolderInto(folder, destFolder);
+					movedFolders.push(moved);
+					followFolder(folder, moved);
+				}
 				const keys = [...movedFolders.map(folderKey), ...movedAssets.map((asset) => assetKey(asset.assetId))];
 				const focus = movedAssets[0] ? assetKey(movedAssets[0].assetId) : keys[0];
-				if (focus) setPicked({ keys, anchor: focus, focus });
+				selectLanded(destFolder, keys, focus);
 				revealFolders(movedFolders);
 			} else if (item.kind === "asset") {
 				const moved = await window.loom.moveAssetsInto([item.assetId], destFolder);
-				if (moved[0]) selectAsset(moved[0].assetId);
+				if (moved[0] && iconMode) selectLanded(destFolder, [assetKey(moved[0].assetId)], assetKey(moved[0].assetId));
+				else if (moved[0]) selectAsset(moved[0].assetId);
 			} else {
 				const moved = await window.loom.moveFolderInto(item.relativePath, destFolder);
-				selectFolder(moved);
+				followFolder(item.relativePath, moved);
+				if (iconMode) selectLanded(destFolder, [folderKey(moved)], folderKey(moved));
+				else selectFolder(moved);
 				revealFolders([moved]);
 			}
 		} catch (cause) {
@@ -705,8 +796,10 @@ export function App(): React.JSX.Element {
 		setPicked(next);
 		setError(null);
 		try {
-			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1);
-			if (action === "open_in_new_tab") {
+			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1, !iconMode);
+			if (action === "open") {
+				selectAsset(asset.assetId);
+			} else if (action === "open_in_new_tab") {
 				openAssetInNewTab(asset.assetId);
 			} else if (action === "favorite" || action === "unfavorite") {
 				await window.loom.setFavorite(asset.assetId, action === "favorite");
@@ -750,6 +843,8 @@ export function App(): React.JSX.Element {
 		try {
 			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
 			if (action === "rename" && next.keys.length === 1) {
+				// The tree has no editor in icon mode: rename on the folder's tile, in the folder above it.
+				if (iconMode) setLocation({ kind: "folder", path: parentFolder(relativePath) });
 				setRenamingFolder(relativePath);
 			} else if (action === "copy") {
 				copySelection(next);
@@ -776,7 +871,12 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const created = await window.loom.createMarkdownFile(parentRelativePath);
-			selectAsset(created.assetId);
+			if (iconMode) {
+				setLocation({ kind: "folder", path: parentRelativePath });
+				setPicked(singleSelection(assetKey(created.assetId)));
+			} else {
+				selectAsset(created.assetId);
+			}
 			setRenamingAssetId(created.assetId);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -788,9 +888,10 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
-			if (action === "new_folder") await createFolderIn("");
-			else if (action === "new_md_file") await createMarkdownIn("");
-			else if (action === "paste") await pasteInto("");
+			const here = iconMode ? browsedPath() : "";
+			if (action === "new_folder") await createFolderIn(here);
+			else if (action === "new_md_file") await createMarkdownIn(here);
+			else if (action === "paste") await pasteInto(here);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -967,7 +1068,9 @@ export function App(): React.JSX.Element {
 	async function renameFolder(relativePath: string, name: string): Promise<void> {
 		setError(null);
 		try {
-			selectFolder(await window.loom.renameFolder(relativePath, name));
+			const renamed = await window.loom.renameFolder(relativePath, name);
+			followFolder(relativePath, renamed);
+			selectFolder(renamed);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -1140,6 +1243,70 @@ export function App(): React.JSX.Element {
 	const collapseOnBottom = !panelsCollapsed && !docked && !beside && bottom;
 	const collapseOnAbove = !panelsCollapsed && !docked && !beside && !bottom && above;
 
+	const welcome = (
+		<div
+			className={`welcome${welcomeDrop ? " drop-ready" : ""}`}
+			onDragOver={(event) => {
+				if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
+				event.preventDefault();
+				event.dataTransfer.dropEffect = "copy";
+				if (!welcomeDrop) setWelcomeDrop(true);
+			}}
+			onDragLeave={(event) => {
+				if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setWelcomeDrop(false);
+			}}
+			onDrop={(event) => {
+				if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
+				event.preventDefault();
+				setWelcomeDrop(false);
+				const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
+				endLibraryDrag();
+				openDroppedFiles(ids, null);
+			}}
+		>
+			<div className="welcome-mark">L</div>
+			<h1>{library.rootPath ? t.app.chooseAsset : t.app.openWorkspace}</h1>
+			<p>
+				{library.rootPath
+					? t.app.selectFile
+					: t.app.filesStayLocal}
+			</p>
+			{!library.rootPath && (
+				<button className="primary-button" type="button" onClick={() => void openLibrary()} disabled={opening}>
+					{opening ? t.app.opening : t.app.openFolder}
+				</button>
+			)}
+		</div>
+	);
+
+	function renderPreview(asset: Asset): React.JSX.Element {
+		return (
+			<AssetPreview
+				key={asset.assetId}
+				asset={asset}
+				assets={library.assets}
+				onGraded={selectAsset}
+				gradeHost={gradeHost}
+				grading={grading && asset.assetId === viewedAssetId}
+				actions={(
+					<PreviewActions
+						canGrade={gradeable && asset.assetId === viewedAssetId}
+						grading={grading && asset.assetId === viewedAssetId}
+						leaveVideo={asset.type === "video"}
+						favorite={library.favoriteAssetIds.includes(asset.assetId)}
+						onGrade={() => {
+							setGradingAssetId(asset.assetId);
+							panels.focus("grade");
+						}}
+						onLeaveGrade={() => setGradingAssetId(null)}
+						onToggleFavorite={() => void togglePreviewFavorite(asset)}
+						onDelete={() => void trashPreviewed(asset.assetId)}
+					/>
+				)}
+			/>
+		);
+	}
+
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
@@ -1196,6 +1363,13 @@ export function App(): React.JSX.Element {
 				>
 					<LibrarySidebar
 						library={library}
+						display={display}
+						location={location}
+						onLocation={(next) => {
+							// Only a real move reaches the effect above, so only then is there a mark to consume.
+							if (next.kind === "folder" && !sameLocation(location, next)) treeClickedFolder.current = next.path;
+							browseTo(next);
+						}}
 						workbenchView={workbenchView}
 						onWorkbenchView={setWorkbenchView}
 						selectedKeys={selectedKeys}
@@ -1233,7 +1407,7 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{workbenchView === "library" && (
+						{workbenchView === "library" && !iconMode && (
 							<TabStrip
 								tabs={tabs}
 								assets={library.assets}
@@ -1274,64 +1448,45 @@ export function App(): React.JSX.Element {
 								onCreateRelation={createRelation}
 								onRemoveRelation={removeRelation}
 							/>
+						) : iconMode ? (
+							library.rootPath ? (
+								<FolderBrowser
+									library={library}
+									location={location}
+									onLocation={browseTo}
+									display={display}
+									selection={picked}
+									onSelection={setPicked}
+									onSelect={(key, mode, rows) => setPicked((current) => pointerSelect(current, rows, key, mode))}
+									renamingAssetId={renamingAssetId}
+									renamingFolder={renamingFolder}
+									cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
+									cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
+									selectionDrag={selectionDrag}
+									onOpenAsset={selectAsset}
+									onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
+									onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
+									onLibraryContextMenu={() => void showLibraryContextMenu()}
+									onRenameAsset={renameAsset}
+									onRenameFolder={renameFolder}
+									onCancelRename={cancelRename}
+									onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
+									onDropFiles={(dest, files) => void dropExternalFiles(dest, files)}
+									onKeyDown={onLibraryKeyDown}
+								>
+									{previewAsset ? (
+										<PreviewOverlay title={previewAsset.relativePath} onClose={() => setPreviewAssetId(null)}>
+											{renderPreview(previewAsset)}
+										</PreviewOverlay>
+									) : null}
+								</FolderBrowser>
+							) : (
+								welcome
+							)
 						) : viewedAsset ? (
-							<AssetPreview
-								key={viewedAsset.assetId}
-								asset={viewedAsset}
-								assets={library.assets}
-								onGraded={selectAsset}
-								gradeHost={gradeHost}
-								grading={grading}
-								actions={(
-									<PreviewActions
-										canGrade={gradeable}
-										grading={grading}
-										leaveVideo={viewedAsset.type === "video"}
-										favorite={library.favoriteAssetIds.includes(viewedAsset.assetId)}
-										onGrade={() => {
-											setGradingAssetId(viewedAsset.assetId);
-											panels.focus("grade");
-										}}
-										onLeaveGrade={() => setGradingAssetId(null)}
-										onToggleFavorite={() => void togglePreviewFavorite(viewedAsset)}
-										onDelete={() => void trashPreviewed(viewedAsset.assetId)}
-									/>
-								)}
-							/>
+							renderPreview(viewedAsset)
 						) : (
-							<div
-								className={`welcome${welcomeDrop ? " drop-ready" : ""}`}
-								onDragOver={(event) => {
-									if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
-									event.preventDefault();
-									event.dataTransfer.dropEffect = "copy";
-									if (!welcomeDrop) setWelcomeDrop(true);
-								}}
-								onDragLeave={(event) => {
-									if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setWelcomeDrop(false);
-								}}
-								onDrop={(event) => {
-									if (!library.rootPath || !hasLibraryDrag(event.dataTransfer)) return;
-									event.preventDefault();
-									setWelcomeDrop(false);
-									const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
-									endLibraryDrag();
-									openDroppedFiles(ids, null);
-								}}
-							>
-								<div className="welcome-mark">L</div>
-								<h1>{library.rootPath ? t.app.chooseAsset : t.app.openWorkspace}</h1>
-								<p>
-									{library.rootPath
-										? t.app.selectFile
-										: t.app.filesStayLocal}
-								</p>
-								{!library.rootPath && (
-									<button className="primary-button" type="button" onClick={() => void openLibrary()} disabled={opening}>
-										{opening ? t.app.opening : t.app.openFolder}
-									</button>
-								)}
-							</div>
+							welcome
 						)}
 					</main>
 

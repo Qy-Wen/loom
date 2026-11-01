@@ -12,8 +12,8 @@ const api: LoomApi = {
 	setFavorite: (assetId, favorite) => ipcRenderer.invoke(IPC.setFavorite, assetId, favorite),
 	addAssetTag: (assetId, name) => ipcRenderer.invoke(IPC.addAssetTag, assetId, name),
 	removeAssetTag: (assetId, tagId) => ipcRenderer.invoke(IPC.removeAssetTag, assetId, tagId),
-	showAssetContextMenu: (assetId, canPaste, single) =>
-		ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste, single),
+	showAssetContextMenu: (assetId, canPaste, single, tabs) =>
+		ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste, single, tabs),
 	showFolderContextMenu: (relativePath, canPaste, single) =>
 		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
 	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),

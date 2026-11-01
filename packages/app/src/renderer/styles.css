@@ -6,6 +6,7 @@
 @import "./library/library.css";
 @import "./workbench/workbench.css";
 @import "./workbench/graph.css";
+@import "./workbench/folder-browser.css";
 @import "./workbench/preview.css";
 @import "./workbench/markdown.css";
 @import "./layout/dock.css";

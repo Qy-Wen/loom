@@ -523,12 +523,14 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showAssetContextMenu,
-		async (event, assetId: string, canPaste: boolean, single: boolean): Promise<AssetContextAction | null> => {
+		async (event, assetId: string, canPaste: boolean, single: boolean, tabs: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
 			const favorite = (await localCore.getLibrarySnapshot()).favoriteAssetIds.includes(assetId);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<AssetContextAction>(event, [
-				{ label: t.menu.openInNewTab, click: () => "open_in_new_tab" },
+				tabs
+					? { label: t.menu.openInNewTab, click: () => "open_in_new_tab" }
+					: { label: t.menu.openPreview, click: () => "open" },
 				{ label: t.menu.addToChat, click: () => "add_to_chat" },
 				{
 					label: favorite ? t.menu.removeFromFavorites : t.menu.addToFavorites,
