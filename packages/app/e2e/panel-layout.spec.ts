@@ -336,7 +336,8 @@ for (const grouped of [false, true]) test(`Chat can stack below a lower ${groupe
 			return { top: box.top + Number.parseFloat(css.top), bottom: box.bottom - Number.parseFloat(css.bottom), line: divider.getBoundingClientRect().top + Number.parseFloat(getComputedStyle(divider, "::after").top), shellBottom: shell.getBoundingClientRect().bottom };
 		});
 		expect(preview.top, "lower landing preview starts at the divider line").toBeCloseTo(preview.line, 1);
-		expect(preview.bottom).toBeCloseTo(preview.shellBottom, 1);
+		// The preview stops 1px short of the window edge so its bottom border is not clipped by the rounded corner.
+		expect(preview.bottom).toBeCloseTo(preview.shellBottom - 1, 1);
 		await page.mouse.up();
 		await expect(agent).toHaveClass(/\bbottom\b/);
 		await expect(details).toHaveClass(/\babove\b/);
