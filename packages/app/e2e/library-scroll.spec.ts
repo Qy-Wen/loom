@@ -2,6 +2,31 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
+test("expanding tags that fit resizes the shortcuts pane before a frame can show overflow", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	await writeFile(join(root, "tagged.md"), "# tagged");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		await window.loom.addAssetTag(assets[0]!.assetId, "Picked");
+	});
+	await expect(loomPage.locator(".tags-label")).toBeVisible();
+	for (const selector of [".tags-label", ".library-tags .folder-main"]) {
+		const frames = await loomPage.evaluate(async (selector) => {
+			const scroller = document.querySelector<HTMLElement>(".library-shortcuts")!;
+			const samples: Array<{ height: number; overflow: number }> = [];
+			document.querySelector<HTMLButtonElement>(selector)!.click();
+			for (let frame = 0; frame < 6; frame++) {
+				await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+				samples.push({ height: scroller.clientHeight, overflow: scroller.scrollHeight - scroller.clientHeight });
+			}
+			return samples;
+		}, selector);
+		expect(frames.every((frame) => frame.height > 0 && frame.overflow <= 1), JSON.stringify(frames)).toBe(true);
+	}
+});
+
 test("favorites/tags and files scroll independently, resize with bounds, and preserve a content-sized preference", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
@@ -45,6 +70,16 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await loomPage.mouse.move(600, 20);
 	expect(await scrollbarStyle(top)).toEqual(expectedScrollbar);
 	expect(await scrollbarStyle(files)).toEqual(expectedScrollbar);
+	// The custom scrollbar retains working arrow buttons at both ends.
+	const fileScrollport = (await files.boundingBox())!;
+	await loomPage.mouse.move(fileScrollport.x + fileScrollport.width - 4, fileScrollport.y + fileScrollport.height - 4);
+	await loomPage.mouse.click(fileScrollport.x + fileScrollport.width - 4, fileScrollport.y + fileScrollport.height - 4);
+	await expect.poll(() => scroll(files)).toBeGreaterThan(0);
+	const afterDown = await scroll(files);
+	await loomPage.mouse.move(fileScrollport.x + fileScrollport.width - 4, fileScrollport.y + 4);
+	await loomPage.mouse.click(fileScrollport.x + fileScrollport.width - 4, fileScrollport.y + 4);
+	await expect.poll(() => scroll(files)).toBeLessThan(afterDown);
+	await files.evaluate((element) => { element.scrollTop = 0; });
 	// The shortcuts pane is not a root import/drop target.
 	expect(await top.evaluate((element) => {
 		const transfer = new DataTransfer(); transfer.items.add(new File(["hello"], "drop.txt", { type: "text/plain" }));

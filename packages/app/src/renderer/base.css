@@ -288,14 +288,66 @@ body {
 	background: transparent;
 }
 
+.thin-scroll::-webkit-scrollbar-button,
+.thin-scroll ::-webkit-scrollbar-button {
+	display: none;
+}
+
+/* Keep one native, clickable arrow at each end of the custom scrollbar. */
+.thin-scroll::-webkit-scrollbar-button:single-button,
+.thin-scroll ::-webkit-scrollbar-button:single-button {
+	display: block;
+	width: var(--lm-scrollbar-size);
+	height: var(--lm-scrollbar-size);
+	color: var(--lm-scrollbar-thumb);
+	background-image: conic-gradient(from 135deg at 50% 0, transparent, currentColor 0.5deg 89.5deg, transparent 90deg);
+	background-position: center;
+	/* Fill the 5px visible inset even when the triangle rasterizes to whole pixels. */
+	background-size: 7px 4px;
+	background-repeat: no-repeat;
+}
+
+.thin-scroll::-webkit-scrollbar-button:single-button:vertical:increment,
+.thin-scroll ::-webkit-scrollbar-button:single-button:vertical:increment {
+	background-image: conic-gradient(from 315deg at 50% 100%, transparent, currentColor 0.5deg 89.5deg, transparent 90deg);
+}
+
+.thin-scroll::-webkit-scrollbar-button:single-button:horizontal:decrement,
+.thin-scroll ::-webkit-scrollbar-button:single-button:horizontal:decrement {
+	background-image: conic-gradient(from 45deg at 0 50%, transparent, currentColor 0.5deg 89.5deg, transparent 90deg);
+	background-size: 4px 7px;
+}
+
+.thin-scroll::-webkit-scrollbar-button:single-button:horizontal:increment,
+.thin-scroll ::-webkit-scrollbar-button:single-button:horizontal:increment {
+	background-image: conic-gradient(from 225deg at 100% 50%, transparent, currentColor 0.5deg 89.5deg, transparent 90deg);
+	background-size: 4px 7px;
+}
+
+.thin-scroll::-webkit-scrollbar-button:single-button:hover,
+.thin-scroll ::-webkit-scrollbar-button:single-button:hover {
+	color: var(--lm-scrollbar-thumb-hover);
+}
+
+.thin-scroll::-webkit-scrollbar-button:single-button,
+.thin-scroll ::-webkit-scrollbar-button:single-button,
 .thin-scroll::-webkit-scrollbar-thumb,
 .thin-scroll ::-webkit-scrollbar-thumb {
-	background: var(--lm-scrollbar-thumb);
 	/* An 8px track with 3px of transparent border leaves a 5px visible thumb. */
+	/* Use the same inset for the arrows so their centers match the visible thumb. */
 	border: solid transparent;
 	border-width: 1px 2px 2px 1px;
 	background-clip: padding-box;
-	border-radius: var(--lm-radius-line);
+}
+
+.thin-scroll::-webkit-scrollbar-thumb,
+.thin-scroll ::-webkit-scrollbar-thumb {
+	background-color: var(--lm-scrollbar-thumb);
+	/* Radius applies outside the transparent border; compensate to keep 2px visible corners. */
+	border-top-left-radius: calc(var(--lm-radius-line) + 1px);
+	border-top-right-radius: calc(var(--lm-radius-line) + 2px) calc(var(--lm-radius-line) + 1px);
+	border-bottom-right-radius: calc(var(--lm-radius-line) + 2px);
+	border-bottom-left-radius: calc(var(--lm-radius-line) + 1px) calc(var(--lm-radius-line) + 2px);
 }
 
 .thin-scroll::-webkit-scrollbar-thumb:hover,

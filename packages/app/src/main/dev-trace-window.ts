@@ -82,6 +82,7 @@ export function openDevTraceWindow(): void {
 			sandbox: false,
 		},
 	});
+	if (process.platform !== "darwin") win.removeMenu();
 	win.on("closed", () => {
 		win = null;
 	});

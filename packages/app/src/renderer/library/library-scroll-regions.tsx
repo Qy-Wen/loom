@@ -46,8 +46,10 @@ export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, 
 		if (size > 0) setHeight(size); // Keep the last measurement while the sidebar is hidden.
 		setContentHeight(content.current?.getBoundingClientRect().height ?? 0);
 	};
+	// React expands/collapses shortcut content before ResizeObserver can resize its scrollport.
+	// Measure each commit before paint so fitting content never flashes a scrollbar for one frame.
+	useLayoutEffect(measure);
 	useLayoutEffect(() => {
-		measure();
 		const observer = new ResizeObserver(measure);
 		observer.observe(root.current!);
 		if (header.current) observer.observe(header.current);
