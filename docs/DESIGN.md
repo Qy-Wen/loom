@@ -26,7 +26,7 @@ Every token starts with `--lm-` so it never collides with the CopilotKit stylesh
 - **Elevation**: `shadow-xs` (resting controls), `sm` (small popovers), `md` (menus, toasts), `lg` (dialogs).
 - **Asset kinds**: `--lm-asset-image/video/audio/text/other` is the single set for list badges, graph nodes, legends, and chips. Never define a second one.
 - **Stacking**: use the named `--lm-z-*` tiers. Never write a bare number.
-- **Motion**: `dur-instant` 80, `fast` 120, `base` 200, `slow` 280 ms. `reduced-motion` handling stays with the component.
+- **Motion**: `dur-instant` 80, `fast` 120, `slow` 280 ms. `reduced-motion` handling stays with the component.
 
 ## Rules
 

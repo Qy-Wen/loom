@@ -36,7 +36,6 @@
 	/* Accent (blue) */
 	--lm-palette-blue-50: #eef3fb;
 	--lm-palette-blue-100: #dde6f7;
-	--lm-palette-blue-300: #a9bcdd;
 	--lm-palette-blue-500: #6a8ac0;
 	--lm-palette-blue-600: #4a6dac;
 	--lm-palette-blue-700: #3d5a99;
@@ -62,7 +61,6 @@
 	--lm-palette-night-5: #2b2b29;
 	--lm-palette-night-6: #353533;
 	--lm-palette-night-7: #454543;
-	--lm-palette-night-8: #5a5a57;
 
 	/* Dark-theme ink */
 	--lm-palette-snow-0: #ecece9;
@@ -74,7 +72,6 @@
 	/* Dark-theme accent and status */
 	--lm-palette-night-blue-100: #26334a;
 	--lm-palette-night-blue-50: #1f2a3e;
-	--lm-palette-night-blue-300: #4a6290;
 	--lm-palette-night-blue-400: #7f9fd6;
 	--lm-palette-night-blue-text: #9db8e8;
 	--lm-palette-night-blue-hover: #a9c2ee;
@@ -144,7 +141,6 @@
 
 	/* Accent and state */
 	--lm-accent: var(--lm-palette-blue-500);
-	--lm-accent-hover: var(--lm-palette-blue-700);
 	/* Solid button fill that carries --lm-text-on-fill. --lm-accent is too light for white text. */
 	--lm-accent-solid: var(--lm-palette-blue-700);
 	--lm-accent-solid-hover: var(--lm-palette-blue-600);
@@ -278,10 +274,7 @@
 	/* Motion */
 	--lm-dur-instant: 80ms;
 	--lm-dur-fast: 120ms;
-	--lm-dur-base: 200ms;
 	--lm-dur-slow: 280ms;
-	--lm-ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
-	--lm-ease-linear: linear;
 }
 
 /*
@@ -329,7 +322,6 @@
 		--lm-border-danger: var(--lm-palette-night-red-300);
 
 		--lm-accent: var(--lm-palette-night-blue-400);
-		--lm-accent-hover: var(--lm-palette-night-blue-hover);
 		--lm-accent-solid: var(--lm-palette-night-blue-400);
 		--lm-accent-solid-hover: var(--lm-palette-night-blue-hover);
 		--lm-danger: var(--lm-palette-night-red-fill);

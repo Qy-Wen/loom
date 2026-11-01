@@ -26,7 +26,7 @@
 - **层次阴影**：`shadow-xs`（静态控件）、`sm`（小浮层）、`md`（菜单、提示）、`lg`（对话框）。
 - **素材类型色**：`--lm-asset-image/video/audio/text/other` 是列表徽标、图谱节点、图例、chip 共用的唯一一套，不要再另起一套。
 - **层级**：用有名字的 `--lm-z-*`，不要写裸数字。
-- **动效**：`dur-instant` 80、`fast` 120、`base` 200、`slow` 280 ms。`reduced-motion` 仍由组件自己处理。
+- **动效**：`dur-instant` 80、`fast` 120、`slow` 280 ms。`reduced-motion` 仍由组件自己处理。
 
 ## 规则
 
