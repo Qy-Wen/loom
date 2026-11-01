@@ -54,7 +54,8 @@ body {
 
 .window-bar button[aria-label]::after,
 .library-view-controls button[aria-label]::after,
-.panel-collapse[aria-label]::after {
+.panel-collapse[aria-label]::after,
+.browser-icon-size button[aria-label]::after {
 	content: attr(aria-label);
 	position: absolute;
 	top: calc(100% + 6px);
@@ -79,14 +80,16 @@ body {
 
 .window-bar button[aria-label]:not([data-tooltip-dismissed]):is(:hover, :focus-visible)::after,
 .library-view-controls button[aria-label]:not([data-tooltip-dismissed]):is(:hover, :focus-visible)::after,
-.panel-collapse[aria-label]:not([data-tooltip-dismissed]):is(:hover, :focus-visible)::after {
+.panel-collapse[aria-label]:not([data-tooltip-dismissed]):is(:hover, :focus-visible)::after,
+.browser-icon-size button[aria-label]:not([data-tooltip-dismissed]):is(:hover, :focus-visible)::after {
 	opacity: 1;
 	transition: opacity var(--lm-dur-instant) ease var(--lm-dur-slow);
 }
 
 .window-bar button[data-tooltip-dismissed]::after,
 .library-view-controls button[data-tooltip-dismissed]::after,
-.panel-collapse[data-tooltip-dismissed]::after {
+.panel-collapse[data-tooltip-dismissed]::after,
+.browser-icon-size button[data-tooltip-dismissed]::after {
 	opacity: 0;
 	transition: none;
 }

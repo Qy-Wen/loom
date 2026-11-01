@@ -108,6 +108,9 @@ export const messages = defineLocale(
 		browser: {
 			label: "Folder contents",
 			path: "Folder path",
+			iconSize: "Icon size",
+			smallerIcons: "Smaller icons",
+			largerIcons: "Larger icons",
 			items: (count: number) => count === 1 ? "1 item" : `${count} items`,
 			search: (where: string) => `Search in ${where}`,
 			clearSearch: "Clear search",
@@ -759,6 +762,9 @@ export const messages = defineLocale(
 		browser: {
 			label: "文件夹内容",
 			path: "文件夹路径",
+			iconSize: "图标大小",
+			smallerIcons: "缩小图标",
+			largerIcons: "放大图标",
 			items: (count) => `${count} 项`,
 			search: (where) => `在“${where}”中搜索`,
 			clearSearch: "清除搜索",

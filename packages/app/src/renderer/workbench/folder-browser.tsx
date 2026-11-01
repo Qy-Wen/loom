@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import { endLibraryDrag, hasLibraryDrag, hasOsFileDrag, readLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
 import { FileSortControl } from "../library/file-sort-control.tsx";
@@ -10,6 +10,8 @@ import { useLocale } from "../locale.tsx";
 import { AssetTile, FolderTile, type TileContext } from "./browser-tiles.tsx";
 import { browserRows, browseListing, folderCrumbs, gridMove, isGridKey, type BrowseLocation } from "./folder-browser-model.ts";
 import { useBoxSelect } from "./use-box-select.ts";
+import { BrowserIconSizeControl } from "./browser-icon-size-control.tsx";
+import { useBrowserIconSize } from "./use-browser-icon-size.ts";
 
 export interface FolderBrowserProps {
 	library: LibrarySnapshot;
@@ -55,6 +57,7 @@ function tileColumns(content: HTMLElement): number {
 export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const { library, location, onLocation, display, selection, onSelection, onSelect } = props;
 	const { t } = useLocale();
+	const [iconSize, setIconSize] = useBrowserIconSize();
 	const [query, setQuery] = useState("");
 	const [dropFolder, onDropFolder] = useDropFolder();
 	const scrollRef = useRef<HTMLDivElement>(null);
@@ -158,7 +161,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const dropPath = location.kind === "folder" ? location.path : "";
 
 	return (
-		<section className="folder-browser" aria-label={t.browser.label}>
+		<section className="folder-browser" aria-label={t.browser.label} style={{ "--browser-icon-size": `${iconSize}px` } as CSSProperties}>
 			<header className="browser-bar">
 				<nav className="browser-crumbs" aria-label={t.browser.path}>
 					{crumbs.map((crumb, index) => {
@@ -182,7 +185,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 						);
 					})}
 				</nav>
-				<span className="browser-count">{t.browser.items(count)}</span>
+				<BrowserIconSizeControl size={iconSize} onSize={setIconSize} />
 				<FileSortControl
 					sort={display.fileSort}
 					direction={display.fileSortDirection}

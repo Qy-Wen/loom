@@ -3,7 +3,12 @@ import { useEffect } from "react";
 /** Short enough to feel immediate, but lets the pointer enter an interactive error tip. */
 export const TOOLTIP_LEAVE_DELAY_MS = 80;
 
-const BUTTON_TIPS = ".window-bar button[aria-label], .library-view-controls button[aria-label], .panel-collapse[aria-label]";
+const BUTTON_TIPS = [
+	".window-bar button[aria-label]",
+	".library-view-controls button[aria-label]",
+	".panel-collapse[aria-label]",
+	".browser-icon-size button[aria-label]",
+].join(", ");
 
 /** A clicked CSS tooltip stays dismissed until the next hover or keyboard focus. */
 export function useTooltipDismissal(): void {

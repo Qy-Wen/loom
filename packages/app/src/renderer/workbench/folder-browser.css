@@ -9,13 +9,17 @@
 
 .browser-bar {
 	display: flex;
-	flex: 0 0 var(--lm-size-2xl);
+	flex: none;
+	flex-wrap: nowrap;
+	min-height: var(--lm-size-2xl);
+	/* Crop horizontally without clipping the sort menu and tooltips below the bar. */
+	overflow-x: clip;
 	align-items: center;
 	gap: var(--lm-space-5);
 	min-width: 0;
 	/* .workbench pads 5px inside the resize handles. Reach back out so the border meets their lines. */
 	margin: 0 -5px;
-	padding: 0 calc(var(--lm-space-6) + 5px);
+	padding: var(--lm-space-2) calc(var(--lm-space-6) + 5px);
 	border-bottom: 1px solid var(--lm-border-subtle);
 }
 
@@ -68,16 +72,81 @@ button.browser-crumb:hover {
 	cursor: default;
 }
 
-.browser-count {
-	flex: 0 0 auto;
+.browser-icon-size {
+	display: flex;
+	flex: 0 1 124px;
+	min-width: calc(2 * var(--lm-size-md) + 2 * var(--lm-space-1));
+	align-items: center;
+	gap: var(--lm-space-1);
+}
+
+.browser-icon-size button {
+	display: grid;
+	place-items: center;
+	flex: 0 0 var(--lm-size-md);
+	position: relative;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
 	color: var(--lm-text-muted);
-	font-size: var(--lm-text-size-xs);
+	cursor: pointer;
+}
+
+.browser-icon-size button:hover:not(:disabled) {
+	background: var(--lm-surface-hover);
+	color: var(--lm-text-primary);
+}
+
+.browser-icon-size button:disabled {
+	opacity: 0.4;
+	cursor: default;
+}
+
+.browser-icon-size input {
+	flex: 0 1 72px;
+	min-width: 0;
+	width: 72px;
+	height: var(--lm-size-md);
+	margin: 0;
+	appearance: none;
+	-webkit-appearance: none;
+	background: transparent;
+	cursor: pointer;
+}
+
+.browser-icon-size input::-webkit-slider-runnable-track {
+	height: 2px;
+	border-radius: var(--lm-radius-pill);
+	background: linear-gradient(to right, var(--lm-text-muted) 0 var(--browser-size-fill), var(--lm-surface-active) var(--browser-size-fill) 100%);
+}
+
+.browser-icon-size input::-webkit-slider-thumb {
+	width: 8px;
+	height: 8px;
+	margin-top: -3px;
+	-webkit-appearance: none;
+	border: 0;
+	border-radius: 50%;
+	background: var(--lm-text-muted);
+}
+
+.browser-icon-size input:hover::-webkit-slider-thumb {
+	background: var(--lm-text-primary);
+}
+
+.browser-icon-size input:focus-visible {
+	outline: 2px solid var(--lm-border-accent);
+	outline-offset: 2px;
+	border-radius: var(--lm-radius-sm);
 }
 
 .browser-search {
 	position: relative;
-	flex: 0 1 220px;
-	min-width: 120px;
+	flex: 0 1 165px;
+	min-width: 90px;
 	color: var(--lm-text-muted);
 }
 
@@ -131,7 +200,7 @@ button.browser-crumb:hover {
 /* Tiles grow to fill the row, so the grid never leaves a ragged strip on the right. */
 .browser-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+	grid-template-columns: repeat(auto-fill, minmax(min(var(--browser-icon-size, 112px), 100%), 1fr));
 	gap: var(--lm-space-6) var(--lm-space-4);
 }
 
@@ -185,7 +254,8 @@ button.browser-crumb:hover {
 .browser-tile-thumb {
 	position: relative;
 	display: block;
-	width: 100%;
+	align-self: center;
+	width: min(100%, calc(var(--browser-icon-size, 112px) - 2 * var(--lm-space-3)));
 	aspect-ratio: 1;
 	overflow: hidden;
 	border-radius: var(--lm-radius-sm);
@@ -209,6 +279,11 @@ button.browser-crumb:hover {
 	display: grid;
 	place-items: center;
 	color: var(--lm-text-muted);
+}
+
+.browser-tile.folder .browser-tile-thumb > svg {
+	width: 44%;
+	height: 44%;
 }
 
 .browser-tile-name,
