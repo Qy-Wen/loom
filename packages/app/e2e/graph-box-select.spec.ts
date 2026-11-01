@@ -71,6 +71,10 @@ test("dragging on empty graph canvas box-selects files and the file tree follows
 	await expect(loomPage.locator(".library-sidebar .asset-row.selected", { hasText: "a.md" })).toHaveCount(1);
 	await expect(loomPage.locator(".library-sidebar .asset-row.selected", { hasText: "b.md" })).toHaveCount(1);
 	await expect(loomPage.locator(".graph-node.selected")).toHaveCount(2);
+	await expect(loomPage.locator(".graph-node-selection-ring")).toHaveCount(2);
+	for (const outline of await nodes.locator(".graph-node-outline").all()) {
+		await expect(outline).toHaveAttribute("r", "14");
+	}
 
 	// Boxing another one replaces the selection.
 	const cc = around(c, c);
@@ -86,6 +90,7 @@ test("dragging on empty graph canvas box-selects files and the file tree follows
 	await loomPage.mouse.click(left.x, bottom);
 	await expect(selectedRows).toHaveCount(0);
 	await expect(loomPage.locator(".graph-node.selected")).toHaveCount(0);
+	await expect(loomPage.locator(".graph-node-selection-ring")).toHaveCount(0);
 	await dragBox(ab.from, ab.to);
 	await expect(selectedRows).toHaveCount(2);
 	await loomPage.mouse.click(c.x, c.y);

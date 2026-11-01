@@ -4,7 +4,7 @@ import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import {
 	GRAPH_NODE_RADIUS,
 	GRAPH_PLUS_OFFSET,
-	GRAPH_SELECTED_RADIUS,
+	GRAPH_SELECTION_RING_RADIUS,
 	GRAPH_SNAP_PAD,
 	graphBounds,
 	nearestNode,
@@ -199,7 +199,7 @@ export function GraphView({
 				world.x,
 				world.y,
 				fromId,
-				GRAPH_SELECTED_RADIUS + GRAPH_SNAP_PAD,
+				GRAPH_SELECTION_RING_RADIUS + GRAPH_SNAP_PAD,
 			)?.id ?? null
 		);
 		const onMove = (event: PointerEvent) => {
@@ -331,16 +331,12 @@ export function GraphView({
 		};
 	}
 
-	function radiusOf(id: string): number {
-		return selectedAssetIds.has(id) ? GRAPH_SELECTED_RADIUS : GRAPH_NODE_RADIUS;
-	}
-
 	function hoverAt(world: { x: number; y: number }): HoverState | null {
 		let best: HoverState | null = null;
 		let bestDist = Infinity;
 		for (const node of nodes) {
 			const dist = Math.hypot(world.x - node.x, world.y - node.y);
-			const zone = nodeHitZone(dist, radiusOf(node.id));
+			const zone = nodeHitZone(dist, GRAPH_NODE_RADIUS);
 			if (zone === "none" || dist >= bestDist) continue;
 			best = { id: node.id, angle: Math.atan2(world.y - node.y, world.x - node.x), zone };
 			bestDist = dist;
@@ -379,14 +375,14 @@ export function GraphView({
 	const plusNode = !linking && !moving && hover?.zone === "rim" ? byId.get(hover.id) : undefined;
 	const plusPos = plusNode && hover
 		? {
-			x: plusNode.x + Math.cos(hover.angle) * (radiusOf(hover.id) + GRAPH_PLUS_OFFSET),
-			y: plusNode.y + Math.sin(hover.angle) * (radiusOf(hover.id) + GRAPH_PLUS_OFFSET),
+			x: plusNode.x + Math.cos(hover.angle) * (GRAPH_NODE_RADIUS + GRAPH_PLUS_OFFSET),
+			y: plusNode.y + Math.sin(hover.angle) * (GRAPH_NODE_RADIUS + GRAPH_PLUS_OFFSET),
 		}
 		: null;
 	const previewFrom = linking && drag.current?.kind === "link" ? byId.get(drag.current.fromId) : undefined;
 	const previewTo = linkTargetId ? byId.get(linkTargetId) : undefined;
 	const previewEnd = previewTo
-		? edgePoint(previewTo.x, previewTo.y, previewFrom?.x ?? previewTo.x, previewFrom?.y ?? previewTo.y, radiusOf(previewTo.id))
+		? edgePoint(previewTo.x, previewTo.y, previewFrom?.x ?? previewTo.x, previewFrom?.y ?? previewTo.y, GRAPH_NODE_RADIUS)
 		: linkPreview;
 
 	return (
@@ -498,7 +494,7 @@ export function GraphView({
 							const asset = assetsById.get(node.id);
 							if (!asset) return null;
 							const selected = selectedAssetIds.has(node.id);
-							const radius = selected ? GRAPH_SELECTED_RADIUS : GRAPH_NODE_RADIUS;
+							const radius = GRAPH_NODE_RADIUS;
 							const dropTarget = node.id === linkTargetId;
 							return (
 								<g
@@ -544,7 +540,8 @@ export function GraphView({
 									>
 										<AssetThumbnail asset={asset} />
 									</foreignObject>
-									<circle r={radius} fill="none" stroke={TYPE_COLOR[asset.type]} />
+									<circle className="graph-node-outline" r={radius} fill="none" stroke={TYPE_COLOR[asset.type]} />
+									{selected && <circle className="graph-node-selection-ring" r={GRAPH_SELECTION_RING_RADIUS} aria-hidden="true" />}
 									<text className="graph-node-name" y={radius + 14} textAnchor="middle">
 										{truncate(asset.filename)}
 									</text>

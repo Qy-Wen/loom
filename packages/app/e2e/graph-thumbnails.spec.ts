@@ -36,24 +36,44 @@ for (const colorScheme of ["light", "dark"] as const) {
 		for (const [filename, type] of [["photo.png", "image"], ["clip.mp4", "video"], ["notes.md", "text"], ["sound.wav", "audio"], ["archive.zip", "other"]] as const) {
 			const color = await loomPage.locator(`.graph-legend-swatch[style*="--lm-asset-${type}"]`).evaluate((swatch) => getComputedStyle(swatch).borderTopColor);
 			colors.set(type, color);
-			await expect(node(filename).locator("circle")).toHaveCSS("stroke", color);
+			await expect(node(filename).locator(".graph-node-outline")).toHaveCSS("stroke", color);
 		}
 		expect(new Set(colors.values()).size).toBe(5);
 
 		// The preview must leave the node's body and rim available for selection and linking.
-		const radius = Number(await photo.locator("circle").getAttribute("r"));
-		await photo.locator("circle").click();
+		const outline = photo.locator(".graph-node-outline");
+		const radius = Number(await outline.getAttribute("r"));
+		const previewWidth = await photo.locator(".graph-node-preview").getAttribute("width");
+		const label = photo.locator(".graph-node-name");
+		const labelY = await label.getAttribute("y");
+		const unselectedLabelColor = await label.evaluate((element) => getComputedStyle(element).fill);
+		await expect(label).toHaveCSS("font-weight", "400");
+		await expect(photo.locator(".graph-node-selection-ring")).toHaveCount(0);
+		await outline.click();
 		await expect(photo).toHaveClass(/selected/);
-		expect(Number(await photo.locator("circle").getAttribute("r"))).toBeGreaterThan(radius);
-		await expect(photo.locator("circle")).toHaveCSS("stroke", colors.get("image")!);
-		await expect(photo.locator("circle")).toHaveCSS("stroke-width", "3px");
-		const from = (await photo.locator("circle").boundingBox())!;
-		const to = (await video.locator("circle").boundingBox())!;
+		expect(Number(await outline.getAttribute("r"))).toBe(radius);
+		await expect(photo.locator(".graph-node-preview")).toHaveAttribute("width", previewWidth!);
+		await expect(label).toHaveAttribute("y", labelY!);
+		await expect(label).toHaveCSS("font-weight", "600");
+		const selectedLabelColor = await loomPage.locator("#graph-arrow-selected path").evaluate((arrow) => getComputedStyle(arrow).fill);
+		await expect(label).toHaveCSS("fill", selectedLabelColor);
+		expect(selectedLabelColor).not.toBe(unselectedLabelColor);
+		await expect(outline).toHaveCSS("stroke", colors.get("image")!);
+		await expect(outline).toHaveCSS("stroke-width", "2px");
+		const ring = photo.locator(".graph-node-selection-ring");
+		await expect(ring).toHaveCSS("stroke", unselectedLabelColor);
+		await expect(ring).toHaveCSS("stroke-width", "3px");
+		await expect(ring).toHaveCSS("fill", "none");
+		await expect(ring).toHaveCSS("pointer-events", "none");
+		// Three-unit ring remains separated from the node's own two-unit outline.
+		expect(Number(await ring.getAttribute("r")) - 1.5 - (radius + 1)).toBe(1.5);
+		const from = (await outline.boundingBox())!;
+		const to = (await video.locator(".graph-node-outline").boundingBox())!;
 		await loomPage.mouse.move(from.x + from.width * 0.925, from.y + from.height / 2);
 		await loomPage.mouse.down();
 		await loomPage.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
 		await expect(video).toHaveClass(/drop-target/);
-		await expect(video.locator("circle")).toHaveCSS("stroke", colors.get("video")!);
+		await expect(video.locator(".graph-node-outline")).toHaveCSS("stroke", colors.get("video")!);
 		await loomPage.mouse.up();
 		await expect(loomPage.getByRole("dialog", { name: "Create relation" })).toBeVisible();
 		await loomPage.keyboard.press("Escape");

@@ -267,9 +267,16 @@
 	cursor: default;
 }
 
-.graph-node circle {
+.graph-node-outline {
 	stroke-width: 2;
 	pointer-events: all;
+}
+
+.graph-node-selection-ring {
+	fill: none;
+	stroke: var(--lm-text-secondary);
+	stroke-width: 3;
+	pointer-events: none;
 }
 
 .graph-node-preview {
@@ -292,15 +299,11 @@
 	display: none;
 }
 
-.graph-node.hovered:not(.selected):not(.drop-target) circle {
+.graph-node.hovered:not(.selected):not(.drop-target) .graph-node-outline {
 	stroke-width: 2.5;
 }
 
-.graph-node.selected circle {
-	stroke-width: 3;
-}
-
-.graph-node.drop-target circle {
+.graph-node.drop-target .graph-node-outline {
 	stroke-width: 4;
 }
 
@@ -323,9 +326,14 @@
 }
 
 .graph-node-name {
-	fill: var(--lm-text-primary);
+	fill: var(--lm-text-secondary);
 	font-size: var(--lm-text-size-xs);
 	pointer-events: none;
+}
+
+.graph-node.selected .graph-node-name {
+	fill: var(--lm-text-primary);
+	font-weight: var(--lm-weight-semibold);
 }
 
 .graph-box {

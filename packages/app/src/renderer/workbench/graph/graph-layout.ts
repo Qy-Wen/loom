@@ -1,5 +1,5 @@
 export const GRAPH_NODE_RADIUS = 14;
-export const GRAPH_SELECTED_RADIUS = 18;
+export const GRAPH_SELECTION_RING_RADIUS = 18;
 export const GRAPH_PLUS_OFFSET = 10;
 export const GRAPH_SNAP_PAD = 16;
 
