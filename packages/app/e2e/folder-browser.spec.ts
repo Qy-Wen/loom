@@ -137,9 +137,16 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(loomPage.locator('.panel-tabs button[data-tab="details"]')).toBeVisible(); // Side panels stay in reach.
 	await expect(overlay.getByRole("button", { name: "Full screen" })).toHaveCount(1); // The image's own button is hidden.
 	await expect(overlay.locator(".image-toolbar .preview-fullscreen")).toBeHidden();
+	await electronApp!.evaluate(({ BrowserWindow }) => {
+		(globalThis as { __entered?: boolean }).__entered = false;
+		BrowserWindow.getAllWindows()[0]!.once("enter-full-screen", () => { (globalThis as { __entered?: boolean }).__entered = true; });
+	});
 	await overlay.locator(".preview-overlay-bar").getByRole("button", { name: "Full screen" }).click();
 	await expect.poll(() => loomPage.evaluate(() => document.fullscreenElement?.classList.contains("preview-overlay-card") ?? false)).toBe(true);
 	await expect(overlay.locator(".preview-overlay-bar").getByRole("button", { name: "Exit full screen" })).toHaveAttribute("aria-pressed", "true");
+	// The page goes full screen at once but the window finishes its animation (~0.6s on macOS) later; an exit asked for
+	// in between is dropped and leaves the page stuck in full screen. Wait for the window's own event.
+	await expect.poll(() => electronApp!.evaluate(() => (globalThis as { __entered?: boolean }).__entered === true)).toBe(true);
 	await overlay.locator(".preview-overlay-bar").getByRole("button", { name: "Exit full screen" }).click();
 	await expect.poll(() => loomPage.evaluate(() => document.fullscreenElement === null), { timeout: 15_000 }).toBe(true);
 	await loomPage.keyboard.press("Escape");
