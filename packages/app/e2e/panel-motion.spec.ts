@@ -21,6 +21,34 @@ async function settle(page: Page) {
 	});
 }
 
+async function expectUniformPreviewBorder(page: Page) {
+	const frame = await page.locator(".panel-slot.drop-preview").evaluate((element) => {
+		const box = element.getBoundingClientRect();
+		const style = getComputedStyle(element, "::after");
+		const x = box.x + Number.parseFloat(style.left), y = box.y + Number.parseFloat(style.top);
+		const width = Number.parseFloat(style.width), height = Number.parseFloat(style.height);
+		return { color: style.borderTopColor.match(/\d+/g)!.map(Number),
+			points: [0.5, 1.5].flatMap((inset) => [
+				[x + width / 2, y + inset], [x + width / 2, y + height - inset],
+				[x + inset, y + height / 2], [x + width - inset, y + height / 2],
+			]) };
+	});
+	const png = (await page.screenshot({ scale: "css" })).toString("base64");
+	const pixels = await page.evaluate(async ({ png, points }) => {
+		const image = new Image();
+		image.src = `data:image/png;base64,${png}`;
+		await image.decode();
+		const canvas = document.createElement("canvas");
+		canvas.width = image.naturalWidth; canvas.height = image.naturalHeight;
+		const context = canvas.getContext("2d")!;
+		context.drawImage(image, 0, 0);
+		return points.map(([x, y]) => [...context.getImageData(Math.floor(x!), Math.floor(y!), 1, 1).data].slice(0, 3));
+	}, { png, points: frame.points });
+	// Rounded borders can antialias the outer pixel by one color value.
+	const difference = Math.max(...pixels.flatMap((pixel) => pixel.map((channel, index) => Math.abs(channel - frame.color[index]!))));
+	expect(difference, "both pixels of all four blue edges stay visible above the dividers and window frame").toBeLessThanOrEqual(2);
+}
+
 for (const mode of ["dock", "beside", "above", "bottom"] as const) test(`a ${mode} placeholder animates, keeps its drop zone stable, and restores on cancel`, async ({ loomPage: page }, testInfo) => {
 	test.skip(process.env.LOOM_E2E_PANELS !== "1" || Boolean(process.env.LOOM_CDP_URL), "isolated panel fixture build required");
 	const saved = await setup(page, mode);
@@ -107,6 +135,49 @@ for (const region of ["dock", "beside"] as const) test(`opening a new ${region} 
 		await expect(page.locator(`[data-panel="gamma"]`)).toHaveClass(new RegExp(`\\b${region}\\b`));
 		expect(await page.locator('[data-slot="g"]').boundingBox()).toEqual(landing);
 	} finally { await page.mouse.up().catch(() => {}); }
+});
+
+const windowEdgePreviews = [
+	{ name: "dock", mode: "dock", edge: null },
+	{ name: "bottom", mode: "dock", edge: null },
+	{ name: "dock top split", mode: "dock", edge: "top" },
+	{ name: "dock bottom split", mode: "dock", edge: "bottom" },
+	{ name: "beside bottom split", mode: "beside", edge: "bottom" },
+	{ name: "above bottom split", mode: "above", edge: "bottom" },
+	{ name: "bottom bottom split", mode: "bottom", edge: "bottom" },
+] as const;
+
+for (const { name, mode, edge } of windowEdgePreviews) test(`a settled ${name} preview keeps both blue border pixels above the dividers and window frame`, async ({ loomPage: page, electronApp }) => {
+	test.skip(process.env.LOOM_E2E_PANELS !== "1" || Boolean(process.env.LOOM_CDP_URL), "isolated panel fixture build required");
+	await setup(page, mode);
+	await electronApp?.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]?.setContentSize(1414, 800));
+	if (name === "dock") {
+		await page.evaluate(() => {
+			const state = JSON.parse(localStorage.getItem("loom.layout.panels")!);
+			for (const slot of state.slots) if (slot.id !== "g") slot.place = { mode: "float", x: 0, y: 300, width: 300, height: 200 };
+			localStorage.setItem("loom.layout.panels", JSON.stringify(state));
+		});
+		await page.reload();
+	}
+	const handle = (await page.locator('[data-panel="gamma"] .work-panel-title').boundingBox())!;
+	const shell = (await page.locator(".shell").boundingBox())!;
+	const target = (await page.locator(edge === "bottom" ? '[data-slot="t"]' : '[data-slot="a"]').boundingBox())!;
+	try {
+		await page.mouse.move(handle.x + 100, handle.y + 18);
+		await page.mouse.down();
+		await page.mouse.move(550, 180);
+		await page.mouse.move(edge ? target.x + target.width * 0.65 : name === "dock" ? shell.x + shell.width - 8 : shell.x + shell.width / 2,
+			edge ? target.y + (edge === "top" ? 12 : target.height - 12) : name === "dock" ? shell.y + 180 : shell.y + shell.height - 16);
+		await expect(page.locator(".panel-slot.drop-preview")).toBeVisible();
+		await settle(page);
+		if (name === "dock") await expect(page.locator(".shell.dock-target")).toBeVisible();
+		// Electron captures omit the native frame; reproduce its right/bottom pixel.
+		await page.addStyleTag({ content: "body::after { content: ''; position: fixed; inset: 0; border-right: 1px solid #3c3c3c; border-bottom: 1px solid #3c3c3c; z-index: 2147483647; pointer-events: none; }" });
+		await expectUniformPreviewBorder(page);
+	} finally {
+		await page.evaluate(() => window.dispatchEvent(new PointerEvent("pointercancel")));
+		await page.mouse.up().catch(() => {});
+	}
 });
 
 test("reduced motion shows the final placeholder immediately and commits the previewed split", async ({ loomPage: page }) => {
