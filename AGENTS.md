@@ -5,3 +5,4 @@
 3. Keep documentation concise and clear. Omit discussion history unless it is necessary; record final conclusions instead.
 4. When writing code, account for both macOS and Windows.
 5. Follow the existing commit message format: `type(scope): summary`, e.g. `fix(chat): polish tool call headers`. Omit `(scope)` when unnecessary.
+6. Running the full e2e suite is slow. Unless necessary, run only the e2e tests related to the files you changed.

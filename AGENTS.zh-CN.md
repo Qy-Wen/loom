@@ -5,3 +5,4 @@
 3、写文档的时候尽量简洁清晰，讨论的过程如果没有必要可以不记入文档，记录最后的结论即可
 4、写代码时同时考虑 macOS 和 Windows。
 5、提交信息遵循既有格式：`type(scope): summary`，例如 `fix(chat): polish tool call headers`。无需指定范围时可省略 `(scope)`。
+6、全量 e2e 测试耗时很长，非必要不要跑全量，只运行与所修改文件相关的 e2e 测试即可。
