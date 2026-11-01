@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Asset, AssetRelation, AssetType } from "@loom/core";
+import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import {
 	GRAPH_NODE_RADIUS,
 	GRAPH_PLUS_OFFSET,
@@ -533,7 +534,17 @@ export function GraphView({
 									}}
 								>
 									<title>{asset.filename}</title>
-									<circle r={radius} fill={TYPE_COLOR[asset.type]} />
+									<foreignObject
+										className="graph-node-preview"
+										x={-radius}
+										y={-radius}
+										width={radius * 2}
+										height={radius * 2}
+										aria-hidden="true"
+									>
+										<AssetThumbnail asset={asset} />
+									</foreignObject>
+									<circle r={radius} fill="none" stroke={TYPE_COLOR[asset.type]} />
 									<text className="graph-node-name" y={radius + 14} textAnchor="middle">
 										{truncate(asset.filename)}
 									</text>
@@ -567,7 +578,7 @@ export function GraphView({
 					<ul className="graph-legend" aria-label={t.graph.types}>
 						{legendTypes.map((type) => (
 							<li key={type}>
-								<span className="graph-legend-swatch" style={{ background: TYPE_COLOR[type] }} />
+								<span className="graph-legend-swatch" style={{ color: TYPE_COLOR[type] }} />
 								{assetTypeLabel(t, type)}
 							</li>
 						))}
