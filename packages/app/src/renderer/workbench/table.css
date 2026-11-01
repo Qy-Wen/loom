@@ -97,6 +97,7 @@
 	position: relative;
 	min-height: 0;
 	flex: 1;
+	margin-right: calc(var(--lm-panel-scroll-inset) - 5px);
 	overflow: auto;
 }
 

@@ -237,7 +237,7 @@
 	flex: 1;
 	min-height: 0;
 	overflow: hidden;
-	padding: 0 18px;
+	padding: 0 var(--lm-panel-scroll-inset) 0 18px;
 }
 
 /* Copilot's own side padding is removed so the gutter does not make the left gap larger.
@@ -407,6 +407,7 @@
 .agent-chat [data-testid="copilot-input-overlay"] {
 	position: relative;
 	inset: auto;
+	margin-right: calc(18px - var(--lm-panel-scroll-inset));
 	pointer-events: auto;
 }
 
@@ -917,6 +918,7 @@
 .session-chat-scroll {
 	flex: 1;
 	min-height: 0;
+	padding-right: calc(18px - var(--lm-panel-scroll-inset));
 	overflow-x: hidden;
 	overflow-y: auto;
 	overflow-anchor: none;
@@ -924,7 +926,7 @@
 
 .session-chat-jump {
 	position: absolute;
-	left: 50%;
+	left: calc(50% - (18px - var(--lm-panel-scroll-inset)) / 2);
 	bottom: 10px;
 	transform: translateX(-50%);
 	z-index: var(--lm-z-raised);

@@ -1,6 +1,7 @@
 .details-content {
 	container: details / inline-size;
-	padding: 18px;
+	margin-right: var(--lm-panel-scroll-inset);
+	padding: 18px calc(18px - var(--lm-panel-scroll-inset)) 18px 18px;
 	overflow-y: auto;
 }
 

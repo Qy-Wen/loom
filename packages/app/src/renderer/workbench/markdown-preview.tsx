@@ -110,7 +110,7 @@ export function MarkdownPreview({
 			</div>
 			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${mode}:${html}:${diagramsKey}`} />
 			<div
-				className={mode === "preview" ? "markdown-preview" : "text-preview"}
+				className={mode === "preview" ? "markdown-preview thin-scroll" : "text-preview thin-scroll"}
 				ref={contentRef}
 			>
 				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} /> : content}

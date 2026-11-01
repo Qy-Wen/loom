@@ -126,7 +126,7 @@ export function SessionScrollView({
 			<div
 				{...props}
 				ref={scrollerRef}
-				className={`session-chat-scroll${className ? ` ${className}` : ""}`}
+				className={`session-chat-scroll thin-scroll${className ? ` ${className}` : ""}`}
 				onWheel={(event) => {
 					const el = scrollerRef.current;
 					if (!el || event.deltaY >= 0) return;

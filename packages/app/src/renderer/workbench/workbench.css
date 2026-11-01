@@ -136,9 +136,9 @@
 
 .asset-icon-grid {
 	display: grid;
-	grid-template-columns: repeat(auto-fill, min(68px, 100%));
+	grid-template-columns: repeat(auto-fill, minmax(min(68px, 100%), 1fr));
 	gap: var(--lm-space-4) var(--lm-space-3);
-	padding: var(--lm-space-2) var(--lm-space-3) var(--lm-space-4);
+	padding: var(--lm-space-2) 0 var(--lm-space-4) var(--lm-space-3);
 }
 
 .asset-icon {

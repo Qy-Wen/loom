@@ -35,6 +35,16 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(separator).toHaveAttribute("aria-description", "More favorites/tags below. Scroll down or drag the divider.");
 	await expect(top).toHaveCSS("overflow-y", "auto"); await expect(files).toHaveCSS("overflow-y", "auto");
 	await expect(top).toHaveCSS("overscroll-behavior-y", "contain");
+	const scrollbarStyle = (area: typeof top) => area.evaluate((element) => {
+		const width = getComputedStyle(element, "::-webkit-scrollbar").width;
+		const thumb = getComputedStyle(element, "::-webkit-scrollbar-thumb");
+		return { width, color: thumb.backgroundColor, visibleWidth: parseFloat(width) - parseFloat(thumb.borderLeftWidth) - parseFloat(thumb.borderRightWidth) };
+	});
+	const expectedScrollbar = { width: "8px", color: "rgb(196, 198, 200)", visibleWidth: 5 };
+	// Measure the idle color with the pointer outside both scrollports.
+	await loomPage.mouse.move(600, 20);
+	expect(await scrollbarStyle(top)).toEqual(expectedScrollbar);
+	expect(await scrollbarStyle(files)).toEqual(expectedScrollbar);
 	// The shortcuts pane is not a root import/drop target.
 	expect(await top.evaluate((element) => {
 		const transfer = new DataTransfer(); transfer.items.add(new File(["hello"], "drop.txt", { type: "text/plain" }));
@@ -44,7 +54,9 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	const topBounds = (await top.boundingBox())!;
 	await loomPage.mouse.move(topBounds.x + 60, topBounds.y + 60); await loomPage.mouse.wheel(0, 100);
 	await expect.poll(() => scroll(top)).toBeGreaterThan(0); expect(await scroll(files)).toBe(0);
-	await expect(top).toHaveClass(/is-scrolling/); await expect(files).not.toHaveClass(/is-scrolling/);
+	await loomPage.mouse.move(600, 20);
+	expect(await scrollbarStyle(top)).toEqual(expectedScrollbar);
+	expect(await scrollbarStyle(files)).toEqual(expectedScrollbar);
 	await top.evaluate((element) => { element.scrollTop = element.scrollHeight; });
 	await expect(moreCue).toHaveCount(0);
 	await expect(separator).not.toHaveClass(/has-more/);

@@ -2,7 +2,7 @@ import { copyFile, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
-test("icon grids keep fixed tile sizes across sidebar widths and indentation without overflowing narrow grids", async ({ loomPage, electronApp }) => {
+test("icon grids grow tiles to fill available width and add columns without overflowing indented grids", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
 	await expect(loomPage.locator(".library-sidebar")).toBeVisible();
 	const measurements = await loomPage.evaluate(() => {
@@ -10,29 +10,42 @@ test("icon grids keep fixed tile sizes across sidebar widths and indentation wit
 		host.style.cssText = "position:absolute;left:-10000px;top:0";
 		document.body.append(host);
 		try {
-			return [80, 150, 240, 320].flatMap((width) => [0, 14, 28].map((indent) => {
+			return [60, 80, 150, 160, 180, 190, 240, 320].flatMap((width) => [0, 14, 28].map((indent) => {
 				host.style.width = `${width}px`;
 				host.innerHTML = `<div class="asset-icon-grid" style="margin-left:${indent}px">${'<div class="asset-icon"><button class="asset-icon-button"></button><span class="asset-icon-name">file.png</span></div>'.repeat(4)}</div>`;
 				const grid = host.firstElementChild!, bounds = grid.getBoundingClientRect();
-				return { width, indent, sizes: [...grid.querySelectorAll(".asset-icon-button")].map((button) => {
+				const sizes = [...grid.querySelectorAll(".asset-icon-button")].map((button) => {
 					const box = button.getBoundingClientRect();
-					return { width: box.width, height: box.height, overflows: box.right > bounds.right };
-				}) };
+					return { width: box.width, height: box.height, top: box.top, right: box.right, overflows: box.left < bounds.left || box.right > bounds.right };
+				});
+				const row = sizes.filter((size) => size.top === sizes[0]!.top);
+				// Removing files must not stretch the remaining tile across the empty columns.
+				while (grid.children.length > 1) grid.lastElementChild!.remove();
+				const singleWidth = grid.querySelector(".asset-icon-button")!.getBoundingClientRect().width;
+				return { width, indent, sizes, columns: row.length, rightGap: bounds.right - row.at(-1)!.right, singleWidth };
 			}));
 		} finally { host.remove(); }
 	});
 	for (const measurement of measurements) {
-		const expected = Math.min(68, measurement.width - measurement.indent - 12);
 		for (const size of measurement.sizes) {
-			expect(size.width).toBeCloseTo(expected, 1);
-			expect(size.height).toBeCloseTo(expected, 1);
+			expect(size.width).toBeGreaterThan(0);
+			expect(size.width).toBeCloseTo(measurement.sizes[0]!.width, 1);
+			expect(size.height).toBeCloseTo(size.width, 1);
 			expect(size.overflows).toBe(false);
 		}
+		expect(measurement.rightGap).toBeCloseTo(0, 1);
+		expect(measurement.singleWidth).toBeCloseTo(measurement.sizes[0]!.width, 1);
 	}
+	const at = (width: number) => measurements.find((measurement) => measurement.width === width && measurement.indent === 0)!;
+	expect(at(190).columns).toBe(at(180).columns);
+	expect(at(190).sizes[0]!.width).toBeGreaterThan(at(180).sizes[0]!.width);
+	expect(at(240).columns).toBeGreaterThan(at(190).columns);
+	expect(at(240).sizes[0]!.width).toBeLessThan(at(190).sizes[0]!.width);
 });
 
 test("favorites and tagged files follow list/icon mode while keeping headings, selection, actions and filtering", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
+	test.setTimeout(60_000);
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
 	await mkdir(join(root, "nested"));
@@ -118,10 +131,11 @@ test("favorites and tagged files follow list/icon mode while keeping headings, s
 	const nested = sidebar.locator(".folder-row").filter({ hasText: /^nested$/ });
 	if (!(await nested.locator(".folder-chevron").evaluate((button) => button.classList.contains("expanded")))) await nested.locator(".folder-main").click();
 	await expect(sidebar.locator(".asset-icon-button")).toHaveCount(7);
-	// Favorites, tags, root files and files inside a folder all use the same painted icon size.
+	// Favorites, tags, root files and nested files keep square tiles as their available widths differ.
 	for (const button of await sidebar.locator(".asset-icon-button").all()) {
 		const box = (await button.boundingBox())!;
-		expect([box.width, box.height]).toEqual([68, 68]);
+		expect(box.width).toBeGreaterThanOrEqual(68);
+		expect(box.height).toBeCloseTo(box.width, 1);
 	}
 	await loomPage.reload();
 	await expect(display.getByRole("button", { name: "Icons", exact: true })).toHaveAttribute("aria-pressed", "true");

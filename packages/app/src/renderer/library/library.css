@@ -162,6 +162,7 @@
 	flex: 1;
 	flex-direction: column;
 	min-height: 0;
+	margin-right: calc(var(--lm-panel-scroll-inset) - 5px);
 	overflow: hidden;
 }
 
@@ -188,19 +189,6 @@
 .library-region-handle:not(.is-fixed):hover::after, .library-region-handle:focus-visible::after, .library-region-handle.is-dragging::after { background: var(--lm-accent); }
 .library-region-handle.is-fixed { cursor: default; }
 body.library-resizing-regions, body.library-resizing-regions * { cursor: row-resize !important; user-select: none !important; }
-
-.library-sidebar .library-scroll.thin-scroll {
-	--tree-scrollbar-thumb: transparent;
-	scrollbar-color: var(--tree-scrollbar-thumb) transparent;
-}
-
-.library-sidebar .library-scroll.is-scrolling {
-	--tree-scrollbar-thumb: var(--lm-scrollbar-thumb);
-}
-
-.library-sidebar .library-scroll.thin-scroll::-webkit-scrollbar-thumb {
-	background: var(--tree-scrollbar-thumb);
-}
 
 .folder-row,
 .asset-row {

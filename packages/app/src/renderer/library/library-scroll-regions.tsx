@@ -3,15 +3,8 @@ import { DEFAULT_SHORTCUT_FRACTION, libraryRegionSize } from "./library-region-s
 
 const STORAGE_KEY = "loom.library.shortcutFraction";
 
-function ScrollArea({ className = "", children, scrollRef, onScroll, ...props }: HTMLAttributes<HTMLDivElement> & { scrollRef?: Ref<HTMLDivElement> }): React.JSX.Element {
-	const [scrolling, setScrolling] = useState(false);
-	const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	useEffect(() => () => clearTimeout(timer.current), []);
-	return <div {...props} ref={scrollRef} className={`library-scroll thin-scroll ${className}${scrolling ? " is-scrolling" : ""}`} onScroll={(event) => {
-		onScroll?.(event);
-		setScrolling(true); clearTimeout(timer.current);
-		timer.current = setTimeout(() => setScrolling(false), 800);
-	}}>{children}</div>;
+function ScrollArea({ className = "", scrollRef, ...props }: HTMLAttributes<HTMLDivElement> & { scrollRef?: Ref<HTMLDivElement> }): React.JSX.Element {
+	return <div {...props} ref={scrollRef} className={`library-scroll thin-scroll ${className}`} />;
 }
 
 /** Favorites/tags and the file tree scroll independently; the upper pane shrinks to its contents. */

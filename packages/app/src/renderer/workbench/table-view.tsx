@@ -218,7 +218,7 @@ export function TableView({
 					)}
 				</div>
 			)}
-			<div className="asset-table-scroll">
+			<div className="asset-table-scroll thin-scroll">
 				<table className="asset-table" style={{ width: tableWidth }}>
 					<colgroup>
 						{columns.map((column) => <col key={column} style={{ width: columnWidth(column) }} />)}

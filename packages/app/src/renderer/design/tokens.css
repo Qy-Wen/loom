@@ -167,8 +167,8 @@
 	--lm-on-media: rgb(255 255 255 / 90%);
 	--lm-media-shade: rgb(0 0 0 / 45%);
 	--lm-media-outline: rgb(0 0 0 / 40%);
-	--lm-scrollbar-thumb: oklch(50% 0 0);
-	--lm-scrollbar-thumb-hover: oklch(40% 0 0);
+	--lm-scrollbar-thumb: #c4c6c8;
+	--lm-scrollbar-thumb-hover: #adb0b4;
 	--lm-glow-brand: rgb(74 74 120 / 20%);
 
 	/* Data-visualisation: grade curve channels */
@@ -208,6 +208,10 @@
 	--lm-space-7: 16px;
 	--lm-space-8: 20px;
 	--lm-space-9: 24px;
+
+	/* Shared panel scrollbar geometry. */
+	--lm-panel-scroll-inset: var(--lm-space-3);
+	--lm-scrollbar-size: 8px;
 
 	/* Radius */
 	--lm-radius-hair: 1px;

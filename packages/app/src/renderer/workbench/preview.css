@@ -210,7 +210,8 @@
 	gap: var(--lm-space-4);
 	width: auto;
 	min-height: 0;
-	padding: var(--lm-space-6) var(--lm-space-6) var(--lm-space-7);
+	margin-right: var(--lm-panel-scroll-inset);
+	padding: var(--lm-space-6) calc(var(--lm-space-6) - var(--lm-panel-scroll-inset)) var(--lm-space-7) var(--lm-space-6);
 	overflow: auto;
 	background: var(--lm-surface-raised);
 }
