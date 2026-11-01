@@ -53,7 +53,7 @@ test("hard-killed Electron recovers the same owned child and asks for approval a
 		await page.evaluate(() => window.loom.setAgentPermission("basic"));
 		await page.getByRole("textbox").fill("Recover this task"); await page.getByRole("textbox").press("Enter");
 		await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
-		const childBefore = (await page.getByRole("button", { name: "write waiting", exact: true }).count());
+		const childBefore = await page.locator(".tool-call").filter({ has: page.locator(".tool-call-name", { hasText: /^write$/ }) }).filter({ hasText: "waiting" }).count();
 		expect(childBefore).toBe(1);
 		await expect.poll(() => parentRequests).toBe(1); expect(childRequests).toBe(1);
 		await expect(readFile(join(library, "recovered.txt"))).rejects.toMatchObject({ code: "ENOENT" });
