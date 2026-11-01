@@ -4,7 +4,7 @@ import { expect, test } from "./loom.ts";
 
 for (const platform of ["mac", "windows"] as const) {
 	test(`graph help shows ${platform} controls without crowding the caption`, async ({ loomPage, electronApp }) => {
-		await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
+		await expect(loomPage.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 		const userData = await electronApp!.evaluate(() => process.env.LOOM_E2E_USER_DATA as string);
 		const root = (JSON.parse(await readFile(join(userData, "last-library.json"), "utf8")) as { rootPath: string }).rootPath;
 		await writeFile(join(root, "help.md"), "Graph help fixture");

@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
 test("dragging on empty graph canvas box-selects files and the file tree follows", async ({ loomPage, electronApp }) => {
-	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
+	await expect(loomPage.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 	const userData = await electronApp!.evaluate(() => process.env.LOOM_E2E_USER_DATA as string);
 	const root = (JSON.parse(await readFile(join(userData, "last-library.json"), "utf8")) as { rootPath: string }).rootPath;
 	for (const name of ["a.md", "b.md", "c.md"]) await writeFile(join(root, name), name);

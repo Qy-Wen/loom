@@ -3,8 +3,7 @@ import { join } from "node:path";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 test("workbench shell is visible", async ({ loomPage }) => {
-	await expect(loomPage.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
-	await expect(loomPage.getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+	await expect(loomPage.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 	await expect(loomPage.getByRole("button", { name: "Agent permission", exact: true })).toBeVisible();
 });
 

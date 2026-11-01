@@ -39,7 +39,7 @@ test.describe("links cannot take the window off the app", () => {
 			shell.openExternal = async (url: string) => { opened.push(url); };
 		});
 		page = await app.firstWindow();
-		await expect(page.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
+		await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 		start = page.url();
 	});
 

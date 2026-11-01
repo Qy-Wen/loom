@@ -35,7 +35,7 @@ async function checkSuggestions(suggest: Locator, first: string, second: string)
 }
 
 test("tag and relationship suggestions share click, typing, toggle and keyboard behavior without opening on autofocus", async ({ loomPage: page }) => {
-	await expect(page.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
 	await writeFile(join(root, "a.txt"), "a");
 	await writeFile(join(root, "b.txt"), "b");
@@ -70,7 +70,7 @@ test("tag and relationship suggestions share click, typing, toggle and keyboard 
 });
 
 test("inputs without suggestions remain editable without an empty dropdown or toggle", async ({ loomPage: page }) => {
-	await expect(page.getByText("Loom", { exact: true })).toBeVisible({ timeout: 30_000 });
+	await expect(page.getByRole("button", { name: "Settings", exact: true })).toBeVisible({ timeout: 30_000 });
 	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
 	await writeFile(join(root, "empty.txt"), "empty");
 	await page.locator(".asset-row").filter({ hasText: "empty.txt" }).click();
