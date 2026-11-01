@@ -32,7 +32,7 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 			await loomPage.waitForTimeout(250);
 		}
 	}
-	// Drag from the first node's rim onto the second node.
+	// Hover outside the first node, then drag its + handle onto the second node.
 	async function openDialog(): Promise<void> {
 		await settle();
 		const from = await box(0);
@@ -41,8 +41,11 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 		const fromY = from.y + from.height / 2;
 		const toX = to.x + to.width / 2;
 		const toY = to.y + to.height / 2;
-		await loomPage.mouse.move(fromX + (from.width / 2) * 0.85, fromY, { steps: 3 });
-		await loomPage.waitForTimeout(150);
+		await loomPage.mouse.move(fromX + (from.width / 2) * 1.25, fromY, { steps: 3 });
+		const handle = loomPage.locator(".graph-plus circle");
+		await expect(handle).toBeVisible();
+		const handleBox = (await handle.boundingBox())!;
+		await loomPage.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
 		await loomPage.mouse.down();
 		await loomPage.mouse.move((fromX + toX) / 2, (fromY + toY) / 2, { steps: 5 });
 		await loomPage.mouse.move(toX, toY, { steps: 5 });
@@ -51,11 +54,27 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 		await expect(dialog).toBeVisible();
 	}
 
-	// Hovering a node's rim shows a "+" handle; its mark sits at the centre of its circle.
+	// Inside the disc (including its old link band) never shows +, selected or not.
 	await settle();
-	const hovered = await box(0);
-	await loomPage.mouse.move(hovered.x + hovered.width / 2 + (hovered.width / 2) * 0.85, hovered.y + hovered.height / 2, { steps: 3 });
-	await expect(loomPage.locator(".graph-plus")).toHaveCount(1);
+	for (const selected of [false, true]) {
+		const hovered = await box(0);
+		const centreX = hovered.x + hovered.width / 2;
+		const centreY = hovered.y + hovered.height / 2;
+		await expect(nodes.nth(0)).toHaveClass(selected ? /selected/ : /^(?!.*selected)/);
+		for (const fraction of [0, 0.65, 0.85, 0.99]) {
+			await loomPage.mouse.move(centreX + hovered.width / 2 * fraction, centreY, { steps: 3 });
+			await expect(loomPage.locator(".graph-plus")).toHaveCount(0);
+		}
+		await loomPage.mouse.move(centreX + hovered.width / 2 * 1.25, centreY, { steps: 3 });
+		await expect(loomPage.locator(".graph-plus")).toHaveCount(1);
+		if (!selected) {
+			// A click near the inside edge selects, rather than starting a link.
+			await loomPage.mouse.click(centreX + hovered.width / 2 * 0.85, centreY);
+			await expect(nodes.nth(0)).toHaveClass(/selected/);
+			await expect(dialog).toHaveCount(0);
+		}
+	}
+	// The + mark remains centred within its circle.
 	const offset = await loomPage.evaluate(() => {
 		const circle = document.querySelector(".graph-plus circle")!.getBoundingClientRect();
 		const mark = document.querySelector(".graph-plus-mark")!.getBoundingClientRect();

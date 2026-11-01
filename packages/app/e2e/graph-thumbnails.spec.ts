@@ -69,7 +69,11 @@ for (const colorScheme of ["light", "dark"] as const) {
 		expect(Number(await ring.getAttribute("r")) - 1.5 - (radius + 1)).toBe(1.5);
 		const from = (await outline.boundingBox())!;
 		const to = (await video.locator(".graph-node-outline").boundingBox())!;
-		await loomPage.mouse.move(from.x + from.width * 0.925, from.y + from.height / 2);
+		await loomPage.mouse.move(from.x + from.width / 2 + from.width / 2 * 1.25, from.y + from.height / 2);
+		const handle = loomPage.locator(".graph-plus circle");
+		await expect(handle).toBeVisible();
+		const handleBox = (await handle.boundingBox())!;
+		await loomPage.mouse.move(handleBox.x + handleBox.width / 2, handleBox.y + handleBox.height / 2);
 		await loomPage.mouse.down();
 		await loomPage.mouse.move(to.x + to.width / 2, to.y + to.height / 2, { steps: 8 });
 		await expect(video).toHaveClass(/drop-target/);

@@ -14,11 +14,16 @@ test("layoutForceGraph keeps every id and separates a linked pair", () => {
 	assert.equal(out.x === src.x && out.y === src.y, false);
 });
 
-test("nodeHitZone splits the disc into body and rim", () => {
+test("nodeHitZone reveals the link handle only outside the disc and outline", () => {
 	assert.equal(nodeHitZone(0, 14), "body");
 	assert.equal(nodeHitZone(8, 14), "body");
-	assert.equal(nodeHitZone(14, 14), "rim");
+	assert.equal(nodeHitZone(13.9, 14), "body");
+	assert.equal(nodeHitZone(14, 14), "body");
+	assert.equal(nodeHitZone(15, 14), "body");
+	assert.equal(nodeHitZone(15.1, 14), "rim");
 	assert.equal(nodeHitZone(24, 14), "rim");
+	assert.equal(nodeHitZone(30, 14), "rim");
+	assert.equal(nodeHitZone(30.1, 14), "none");
 	assert.equal(nodeHitZone(40, 14), "none");
 });
 

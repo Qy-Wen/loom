@@ -506,26 +506,14 @@ export function GraphView({
 										if (event.button !== 0 || pendingLink) return;
 										event.stopPropagation();
 										window.getSelection()?.removeAllRanges();
-										const world = screenToWorld(event.clientX, event.clientY);
-										const zone = nodeHitZone(
-											Math.hypot(world.x - node.x, world.y - node.y),
-											radius,
-										);
-										if (zone === "rim") {
-											drag.current = { kind: "link", fromId: node.id };
-											setActiveDrag("link");
-											setLinkPreview(world);
-											setLinkTargetId(null);
-											setHover(null);
-										} else {
-											drag.current = {
-												kind: "move",
-												id: node.id,
-												x: event.clientX,
-												y: event.clientY,
-												started: false,
-											};
-										}
+										// Any press on the node selects or moves it. Links start from the outside + handle.
+										drag.current = {
+											kind: "move",
+											id: node.id,
+											x: event.clientX,
+											y: event.clientY,
+											started: false,
+										};
 										event.currentTarget.setPointerCapture(event.pointerId);
 									}}
 								>

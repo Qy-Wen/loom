@@ -5,9 +5,9 @@ export const GRAPH_SNAP_PAD = 16;
 
 export type NodeHitZone = "body" | "rim" | "none";
 
-/** Inner disc moves the node; the rim band is the link handle. */
+/** The entire disc and its outline move the node; only the outside band reveals the link handle. */
 export function nodeHitZone(distance: number, radius: number): NodeHitZone {
-	if (distance <= radius * 0.62) return "body";
+	if (distance <= radius + 1) return "body";
 	if (distance <= radius + GRAPH_PLUS_OFFSET + 6) return "rim";
 	return "none";
 }
