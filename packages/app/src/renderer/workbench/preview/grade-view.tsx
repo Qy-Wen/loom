@@ -16,8 +16,8 @@ import {
 	type ImageRotation,
 } from "@loom/core/grade";
 import type { Asset } from "@loom/core";
-import { assetPreviewUrl } from "../assets/asset-utils.ts";
-import { useLocale } from "../locale.tsx";
+import { assetPreviewUrl } from "../../assets/asset-utils.ts";
+import { useLocale } from "../../locale.tsx";
 import { GradeCurve } from "./grade-curve.tsx";
 
 type CurveChannel = "rgb" | "r" | "g" | "b";

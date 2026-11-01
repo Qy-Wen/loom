@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
-import { useLocale } from "../locale.tsx";
-import { uiPlatform } from "../../shared/locale.ts";
+import { useLocale } from "../../locale.tsx";
+import { uiPlatform } from "../../../shared/locale.ts";
 import {
 	FIT_MEDIA_VIEW,
 	MAX_MEDIA_SCALE,

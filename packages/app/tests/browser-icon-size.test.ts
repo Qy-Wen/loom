@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { BROWSER_ICON_SIZE, normalizeBrowserIconSize } from "../src/renderer/workbench/use-browser-icon-size.ts";
+import { BROWSER_ICON_SIZE, normalizeBrowserIconSize } from "../src/renderer/workbench/browser/use-browser-icon-size.ts";
 
 test("browser icon sizes retain the existing default and snap to slider steps", () => {
 	assert.equal(BROWSER_ICON_SIZE.default, 112);

@@ -1,4 +1,4 @@
-import type { UiPlatform } from "../../shared/locale.ts";
+import type { UiPlatform } from "../../../shared/locale.ts";
 
 export type MediaSize = {
 	width: number;

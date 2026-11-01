@@ -16,7 +16,7 @@ import type {
 import { formatBytes } from "../assets/asset-utils.ts";
 import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
-import { displayPropertyValue } from "../workbench/table-values.ts";
+import { displayPropertyValue } from "../workbench/table/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
 import { MediaDescriptionDetails } from "./media-description-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";

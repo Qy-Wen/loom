@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from "react";
-import { boxSelectKeys, emptyTreeSelection, pointerMode, type TreeSelection } from "../library/tree-nav.ts";
-import { uiPlatform } from "../../shared/locale.ts";
+import { boxSelectKeys, emptyTreeSelection, pointerMode, type TreeSelection } from "../../library/tree-nav.ts";
+import { uiPlatform } from "../../../shared/locale.ts";
 import { rectBetween, rectsIntersect, type Rect } from "./folder-browser-model.ts";
 
 const DRAG_THRESHOLD = 4;

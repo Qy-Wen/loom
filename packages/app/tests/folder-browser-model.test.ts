@@ -11,7 +11,7 @@ import {
 	rectsIntersect,
 	remapLocation,
 	ROOT_LOCATION,
-} from "../src/renderer/workbench/folder-browser-model.ts";
+} from "../src/renderer/workbench/browser/folder-browser-model.ts";
 
 function asset(assetId: string, relativePath: string, modifiedAt = 0): Asset {
 	return { assetId, relativePath, filename: relativePath.split("/").at(-1)!, type: "image", size: 1, modifiedAt } as unknown as Asset;

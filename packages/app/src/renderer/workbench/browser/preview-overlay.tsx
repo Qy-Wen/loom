@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useLocale } from "../locale.tsx";
+import { useLocale } from "../../locale.tsx";
 
 /** How long to wait for the window's full screen event before the next request goes out anyway. */
 const FULLSCREEN_SETTLE_MS = 1500;

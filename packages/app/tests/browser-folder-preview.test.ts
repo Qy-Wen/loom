@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Asset } from "@loom/core";
-import { browserFolderPreviews } from "../src/renderer/workbench/browser-folder-preview.ts";
+import { browserFolderPreviews } from "../src/renderer/workbench/browser/browser-folder-preview.ts";
 
 function asset(relativePath: string, type: Asset["type"]): Asset {
 	return { assetId: relativePath, relativePath, filename: relativePath.split("/").at(-1)!, type, size: 1, createdAt: 0, modifiedAt: 0 };

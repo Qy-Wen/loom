@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { comparePropertyValues, displayPropertyValue } from "../src/renderer/workbench/table-values.ts";
+import { comparePropertyValues, displayPropertyValue } from "../src/renderer/workbench/table/table-values.ts";
 
 describe("table property values", () => {
 	it("sorts numbers and booleans by their real types", () => {

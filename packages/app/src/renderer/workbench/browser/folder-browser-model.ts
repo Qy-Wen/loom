@@ -7,7 +7,7 @@ import {
 	type FileSort,
 	type FileSortDirection,
 	type TreeRow,
-} from "../library/tree-nav.ts";
+} from "../../library/tree-nav.ts";
 
 /** What the icon-mode browser shows: a folder, or a virtual set of files from the sidebar shortcuts. */
 export type BrowseLocation =

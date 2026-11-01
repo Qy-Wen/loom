@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { graphBounds, layoutForceGraph, nearestNode, nodeHitZone, nodesInRect, rectBetween } from "../src/renderer/workbench/graph-layout.ts";
+import { graphBounds, layoutForceGraph, nearestNode, nodeHitZone, nodesInRect, rectBetween } from "../src/renderer/workbench/graph/graph-layout.ts";
 
 test("layoutForceGraph keeps every id and separates a linked pair", () => {
 	const nodes = layoutForceGraph(

@@ -1,6 +1,6 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
-import { useLocale } from "../locale.tsx";
+import { useLocale } from "../../locale.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { renderMarkdown } from "./markdown.ts";
 import { hydrateMermaid } from "./mermaid.ts";

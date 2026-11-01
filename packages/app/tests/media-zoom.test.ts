@@ -10,7 +10,7 @@ import {
 	toggleMediaZoom,
 	wheelZoomFactor,
 	zoomMediaAt,
-} from "../src/renderer/workbench/media-zoom.ts";
+} from "../src/renderer/workbench/preview/media-zoom.ts";
 
 function close(actual: number, expected: number, epsilon = 0.001): void {
 	assert.ok(Math.abs(actual - expected) <= epsilon, `${actual} !== ${expected}`);

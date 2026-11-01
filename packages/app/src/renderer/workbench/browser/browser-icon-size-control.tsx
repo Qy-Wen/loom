@@ -1,5 +1,5 @@
 import type { CSSProperties } from "react";
-import { useLocale } from "../locale.tsx";
+import { useLocale } from "../../locale.tsx";
 import { BROWSER_ICON_SIZE } from "./use-browser-icon-size.ts";
 
 export function BrowserIconSizeControl({ size, onSize }: { size: number; onSize: (size: number) => void }): React.JSX.Element {

@@ -1,5 +1,5 @@
 import type { Asset, LibrarySnapshot } from "@loom/core";
-import { compareAssetPaths, parentFolder } from "../library/tree-nav.ts";
+import { compareAssetPaths, parentFolder } from "../../library/tree-nav.ts";
 
 export type BrowserFolderPreview = { kind: "asset"; asset: Asset } | { kind: "folder" };
 

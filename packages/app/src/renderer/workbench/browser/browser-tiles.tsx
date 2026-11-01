@@ -1,14 +1,14 @@
 import type { Asset } from "@loom/core";
-import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
-import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
-import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
+import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
+import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
+import { extensionOf, filenameStem } from "../../assets/asset-utils.ts";
 import { BrowserFolderThumbnail } from "./browser-folder-thumbnail.tsx";
 import type { BrowserFolderPreview } from "./browser-folder-preview.ts";
-import { FavoriteMark } from "../library/asset-rows.tsx";
-import { folderDropProps, type FolderDropSurface } from "../library/folder-drop.ts";
-import { clickMode } from "../library/tree-context.tsx";
-import { assetKey, folderKey, type PointerMode } from "../library/tree-nav.ts";
-import { useInlineRename } from "../library/use-inline-rename.ts";
+import { FavoriteMark } from "../../library/asset-rows.tsx";
+import { folderDropProps, type FolderDropSurface } from "../../library/folder-drop.ts";
+import { clickMode } from "../../library/tree-context.tsx";
+import { assetKey, folderKey, type PointerMode } from "../../library/tree-nav.ts";
+import { useInlineRename } from "../../library/use-inline-rename.ts";
 
 /** What a tile needs from the browser around it. */
 export interface TileContext extends FolderDropSurface {

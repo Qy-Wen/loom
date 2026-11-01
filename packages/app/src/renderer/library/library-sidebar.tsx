@@ -14,7 +14,7 @@ import { AssetList } from "./asset-rows.tsx";
 import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
 import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
-import { sameLocation, type BrowseLocation } from "../workbench/folder-browser-model.ts";
+import { sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
 import type { LibraryDisplay } from "./use-library-display.ts";
 import { FileSortControl } from "./file-sort-control.tsx";
 import { filterFavorites, filterLibrary, filterTags } from "./library-filter.ts";

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { normalizeCurve, type CurvePoint } from "@loom/core/grade";
-import { token } from "../design/tokens.ts";
-import { onThemeChange } from "../design/theme.ts";
+import { token } from "../../design/tokens.ts";
+import { onThemeChange } from "../../design/theme.ts";
 
 const PAD = 10;
 

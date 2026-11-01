@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Asset, AssetRelation, AssetType } from "@loom/core";
-import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
+import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import {
 	GRAPH_NODE_RADIUS,
 	GRAPH_PLUS_OFFSET,
@@ -12,11 +12,11 @@ import {
 	nodesInRect,
 	rectBetween,
 } from "./graph-layout.ts";
-import { assetTypeLabel, uiPlatform } from "../../shared/locale.ts";
-import { useLocale } from "../locale.tsx";
-import { SuggestInput } from "../components/suggest-input.tsx";
-import { pointerMode } from "../library/tree-nav.ts";
-import { wheelZoomFactor } from "./media-zoom.ts";
+import { assetTypeLabel, uiPlatform } from "../../../shared/locale.ts";
+import { useLocale } from "../../locale.tsx";
+import { SuggestInput } from "../../components/suggest-input.tsx";
+import { pointerMode } from "../../library/tree-nav.ts";
+import { wheelZoomFactor } from "../preview/media-zoom.ts";
 import { useGraphSimulation } from "./graph-simulation.ts";
 import { GraphHelp } from "./graph-help.tsx";
 

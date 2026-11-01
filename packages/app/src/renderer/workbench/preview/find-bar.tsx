@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useLocale } from "../locale.tsx";
+import { useLocale } from "../../locale.tsx";
 import {
 	applyFindHighlights,
 	clearFindHighlights,

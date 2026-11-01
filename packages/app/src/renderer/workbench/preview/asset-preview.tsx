@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@loom/core";
-import { useLocale } from "../locale.tsx";
-import { assetPreviewUrl, extensionOf } from "../assets/asset-utils.ts";
+import { useLocale } from "../../locale.tsx";
+import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { FindBar } from "./find-bar.tsx";
 import { GradeView } from "./grade-view.tsx";

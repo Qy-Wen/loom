@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Asset } from "@loom/core";
-import { findMatchOffsets, overflowScrollDelta, preferVisibleRect } from "../src/renderer/workbench/find-in-view.ts";
-import { renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/markdown.ts";
+import { findMatchOffsets, overflowScrollDelta, preferVisibleRect } from "../src/renderer/workbench/preview/find-in-view.ts";
+import { renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/preview/markdown.ts";
 
 test("findMatchOffsets is case-insensitive and non-overlapping", () => {
 	assert.deepEqual(findMatchOffsets("Hello hello HELLO", "hello"), [0, 6, 12]);

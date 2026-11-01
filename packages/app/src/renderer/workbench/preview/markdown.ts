@@ -2,7 +2,7 @@ import type { Asset } from "@loom/core";
 import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
 import katex from "katex";
-import { assetPreviewUrl } from "../assets/asset-utils.ts";
+import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 
 export interface MarkdownRenderContext {
 	fromRelativePath: string;

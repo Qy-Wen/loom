@@ -1,5 +1,5 @@
-import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
-import { assetBadgeLabel } from "../assets/asset-utils.ts";
+import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
+import { assetBadgeLabel } from "../../assets/asset-utils.ts";
 import type { BrowserFolderPreview } from "./browser-folder-preview.ts";
 
 /** Flat browser artwork, independent of the sidebar's small line icon. */

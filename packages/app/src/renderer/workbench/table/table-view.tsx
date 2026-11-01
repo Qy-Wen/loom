@@ -6,12 +6,12 @@ import type {
 	PropertyType,
 	PropertyValue,
 } from "@loom/core";
-import { endLibraryDrag, writeLibraryDrag } from "../assets/asset-drag.ts";
-import { formatBytes } from "../assets/asset-utils.ts";
-import { assetTypeLabel } from "../../shared/locale.ts";
-import { useLocale } from "../locale.tsx";
+import { endLibraryDrag, writeLibraryDrag } from "../../assets/asset-drag.ts";
+import { formatBytes } from "../../assets/asset-utils.ts";
+import { assetTypeLabel } from "../../../shared/locale.ts";
+import { useLocale } from "../../locale.tsx";
 import { comparePropertyValues, displayPropertyValue } from "./table-values.ts";
-import { useConfirmation } from "../components/confirm-dialog.tsx";
+import { useConfirmation } from "../../components/confirm-dialog.tsx";
 
 type SortKey = "filename" | "type" | "size" | "modifiedAt" | `property:${string}`;
 type SortDirection = "asc" | "desc";

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { uiPlatform } from "../../shared/locale.ts";
-import { useLocale } from "../locale.tsx";
+import { uiPlatform } from "../../../shared/locale.ts";
+import { useLocale } from "../../locale.tsx";
 
 /** Local canvas instructions, separate from graph gestures and relation editing. */
 export function GraphHelp(): React.JSX.Element {
