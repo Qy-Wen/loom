@@ -149,6 +149,20 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect.poll(() => electronApp!.evaluate(() => (globalThis as { __entered?: boolean }).__entered === true)).toBe(true);
 	await overlay.locator(".preview-overlay-bar").getByRole("button", { name: "Exit full screen" }).click();
 	await expect.poll(() => loomPage.evaluate(() => document.fullscreenElement === null), { timeout: 15_000 }).toBe(true);
+
+	// Pressing the button again before the window has finished its animation must not wedge full screen: the second
+	// press waits for the first to settle, so the pair ends back out of full screen and one more press goes in again.
+	const toggle = overlay.locator(".preview-overlay-bar button").first();
+	const pageFullscreen = () => loomPage.evaluate(() => document.fullscreenElement !== null);
+	await toggle.click();
+	await loomPage.waitForTimeout(150);
+	await toggle.click();
+	await expect.poll(pageFullscreen, { timeout: 15_000 }).toBe(false);
+	await expect.poll(() => electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.isFullScreen()), { timeout: 15_000 }).toBe(false);
+	await toggle.click();
+	await expect.poll(pageFullscreen, { timeout: 15_000 }).toBe(true);
+	await toggle.click();
+	await expect.poll(pageFullscreen, { timeout: 15_000 }).toBe(false);
 	await loomPage.keyboard.press("Escape");
 	await expect(overlay).toHaveCount(0);
 	await expect(tile("cover.png")).toHaveClass(/selected/);

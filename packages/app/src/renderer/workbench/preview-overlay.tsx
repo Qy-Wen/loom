@@ -1,6 +1,9 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useLocale } from "../locale.tsx";
 
+/** How long to wait for the window's full screen event before the next request goes out anyway. */
+const FULLSCREEN_SETTLE_MS = 1500;
+
 /**
  * A file preview drawn over the folder browser, inside the workbench so the side panels stay usable.
  * Escape, the scrim, and the close button dismiss it. The expand button takes the card to full screen.
@@ -12,10 +15,42 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 	const close = useRef(onClose);
 	close.current = onClose;
 
+	// The page flips to full screen at once, but the window finishes its animation (macOS: about 0.6s) later. A request
+	// made in between leaves the page's idea of full screen out of step with the window's, and every later exit hangs.
+	// So a click during the change waits for the window's own event (or a timeout, where a platform sends none).
+	const changing = useRef(false);
+	const queued = useRef(false);
+	const settle = useRef<number | undefined>(undefined);
+	const toggle = useRef<() => void>(() => undefined);
+	toggle.current = () => {
+		const element = card.current;
+		if (!element) return;
+		if (changing.current) {
+			queued.current = true;
+			return;
+		}
+		changing.current = true;
+		window.clearTimeout(settle.current);
+		settle.current = window.setTimeout(() => settled.current(), FULLSCREEN_SETTLE_MS);
+		const request = document.fullscreenElement === element ? document.exitFullscreen() : element.requestFullscreen();
+		void request.catch(() => settled.current());
+	};
+	const settled = useRef<() => void>(() => undefined);
+	settled.current = () => {
+		window.clearTimeout(settle.current);
+		changing.current = false;
+		if (!queued.current) return;
+		queued.current = false;
+		toggle.current();
+	};
+
+	useEffect(() => window.loom.onFullscreenChanged(() => settled.current()), []);
+
 	useEffect(() => {
 		const sync = () => setFullscreen(document.fullscreenElement === card.current);
 		document.addEventListener("fullscreenchange", sync);
 		return () => {
+			window.clearTimeout(settle.current);
 			document.removeEventListener("fullscreenchange", sync);
 			if (document.fullscreenElement === card.current) void document.exitFullscreen().catch(() => undefined);
 		};
@@ -48,12 +83,7 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 						title={label}
 						aria-label={label}
 						aria-pressed={fullscreen}
-						onClick={() => {
-							const element = card.current;
-							if (!element) return;
-							const request = document.fullscreenElement === element ? document.exitFullscreen() : element.requestFullscreen();
-							void request.catch(() => undefined);
-						}}
+						onClick={() => toggle.current()}
 					>
 						<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
 							<path
