@@ -226,3 +226,60 @@ test("icon-mode root heading replaces the root row and returns from folders, fav
 	await expect(heading).toHaveAttribute("aria-current", "location");
 	await expect(browser.locator(".browser-tile-name")).toHaveText(["empty", "notes.md"]);
 });
+
+test("switching between list and icons keeps both on the same folder", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	await mkdir(join(root, "a", "b"), { recursive: true });
+	await writeFile(join(root, "a", "b", "deep.md"), "# deep");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	const sidebar = loomPage.locator(".library-sidebar");
+	const display = sidebar.getByRole("group", { name: "File display", exact: true });
+	const browser = loomPage.locator(".folder-browser");
+
+	// A selected file: icons browse its folder, keep it selected and show no preview.
+	await sidebar.locator(".asset-row").filter({ hasText: "deep.md" }).click();
+	await display.getByRole("button", { name: "Icons", exact: true }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("b");
+	await expect(browser.locator(".browser-tile.selected .browser-tile-name")).toHaveText("deep.md");
+	await expect(loomPage.locator(".preview-overlay")).toHaveCount(0);
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText("b");
+
+	// Nothing selected: list mode selects the folder being browsed.
+	await browser.locator(".browser-crumb").filter({ hasText: /^a$/ }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("a");
+	await display.getByRole("button", { name: "List", exact: true }).click();
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText("a");
+});
+
+test("the icon-mode tree supports multi-select without moving the browser", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	for (const name of ["one", "two", "three"]) await mkdir(join(root, name));
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).folders.length).toBe(3);
+	const sidebar = loomPage.locator(".library-sidebar");
+	await sidebar.getByRole("group", { name: "File display", exact: true }).getByRole("button", { name: "Icons", exact: true }).click();
+	const browser = loomPage.locator(".folder-browser");
+	const row = (name: string) => sidebar.locator(".folder-row").filter({ hasText: new RegExp(`^${name}$`) });
+	const mod = process.platform === "darwin" ? "Meta" : "Control";
+
+	// A plain click browses the folder.
+	await row("one").locator(".folder-main").click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("one");
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText("one");
+
+	// Modifier clicks add to it and leave the browser where it is.
+	await row("two").locator(".folder-main").click({ modifiers: [mod] });
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("one");
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText(["one", "two"]);
+	await row("three").locator(".folder-main").click({ modifiers: ["Shift"] });
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("one");
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText(["three", "two"]); // The range runs from the anchor (two) to three.
+
+	// A plain click goes back to a single browsed folder.
+	await row("three").locator(".folder-main").click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("three");
+	await expect(sidebar.locator(".folder-row.selected")).toHaveText("three");
+});

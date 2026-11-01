@@ -13,7 +13,7 @@ import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
 import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
-import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { isTreeNavKey, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
 import type { LibraryDisplay } from "./use-library-display.ts";
 import { FileSortControl } from "./file-sort-control.tsx";
@@ -108,12 +108,17 @@ export function LibrarySidebar({
 	const treeRows = useMemo(
 		() => visibleTreeRows(
 			visible.folders,
-			visible.assets,
+			iconMode ? [] : visible.assets,
 			queryActive ? new Set() : collapsedFolders,
 			fileSort,
 			fileSortDirection,
 		),
-		[visible, queryActive, collapsedFolders, fileSort, fileSortDirection],
+		[visible, iconMode, queryActive, collapsedFolders, fileSort, fileSortDirection],
+	);
+	// The icon-mode tree lists folders only, so only the picked folders show in it.
+	const treeSelectedKeys = useMemo(
+		() => iconMode ? new Set([...selectedKeys].filter((key) => key.startsWith("folder:"))) : selectedKeys,
+		[iconMode, selectedKeys],
 	);
 	const favoriteAssets = useMemo(() => filterFavorites(library, query), [library, query]);
 	const visibleTags = useMemo(() => filterTags(library, query), [library, query]);
@@ -148,7 +153,11 @@ export function LibrarySidebar({
 			inert={collapsed}
 			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
-			onKeyDown={collapsed || iconMode ? undefined : (event) => onKeyDown(event, treeRows, !queryActive)}
+			onKeyDown={collapsed ? undefined : (event) => {
+				// In icon mode the arrows and F2 belong to the browser; the tree only takes selection and file shortcuts.
+				if (iconMode && !event.shiftKey && !event.metaKey && !event.ctrlKey && (isTreeNavKey(event.key) || event.key === "F2")) return;
+				onKeyDown(event, treeRows, !queryActive);
+			}}
 		>
 			<TreeProvider
 				library={visible}
@@ -157,8 +166,8 @@ export function LibrarySidebar({
 				fileSort={fileSort}
 				fileSortDirection={fileSortDirection}
 				collapsedFolders={queryActive ? NO_FOLDERS : collapsedFolders}
-				selectedKeys={iconMode ? NO_FOLDERS : selectedKeys}
-				focusKey={iconMode ? null : focusKey}
+				selectedKeys={treeSelectedKeys}
+				focusKey={focusKey}
 				locateToken={locateToken}
 				renamingAssetId={iconMode ? null : renamingAssetId}
 				renamingFolder={iconMode ? null : renamingFolder}
@@ -166,7 +175,7 @@ export function LibrarySidebar({
 				cutFolders={cutFolders}
 				selectionDrag={selectionDrag}
 				onToggleFolder={onToggleFolder}
-				onSelectFolder={(relativePath, mode) => iconMode ? onLocation({ kind: "folder", path: relativePath }) : onSelectFolder(relativePath, mode, treeRows)}
+				onSelectFolder={(relativePath, mode) => iconMode && mode === "replace" ? onLocation({ kind: "folder", path: relativePath }) : onSelectFolder(relativePath, mode, treeRows)}
 				onFolderContextMenu={onFolderContextMenu}
 				onRenameFolder={onRenameFolder}
 				onSelectAsset={(assetId, mode) => onSelectAsset(assetId, mode, treeRows)}

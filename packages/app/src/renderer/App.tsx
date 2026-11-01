@@ -50,6 +50,7 @@ import {
 	treeMotion,
 	withoutFolder,
 	withoutKey,
+	type FileDisplay,
 	type PointerMode,
 	type TreeCursor,
 	type TreeRow,
@@ -68,13 +69,14 @@ import { AssetPreview, PreviewActions } from "./workbench/preview/asset-preview.
 import { FolderBrowser } from "./workbench/browser/folder-browser.tsx";
 import { PreviewOverlay } from "./workbench/browser/preview-overlay.tsx";
 import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type BrowseLocation } from "./workbench/browser/folder-browser-model.ts";
-import { useLibraryDisplay } from "./library/use-library-display.ts";
+import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-display.ts";
 import { GraphView } from "./workbench/graph/graph-view.tsx";
 import { TableView } from "./workbench/table/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
 import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, showInTab, type AssetTabs } from "./workbench/asset-tabs.ts";
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
+const NO_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 
@@ -143,8 +145,12 @@ export function App(): React.JSX.Element {
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const { confirm } = useConfirmation(library.rootPath);
 	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
-	const display = useLibraryDisplay();
-	const iconMode = display.fileDisplay === "icons";
+	// The icon-mode tree shows `picked` only while it made that selection itself; a tile click in the browser replaces it.
+	const [treePicked, setTreePicked] = useState<TreeSelection | null>(null);
+	const treeOwnsPick = treePicked === picked;
+	const libraryDisplay = useLibraryDisplay();
+	const display: LibraryDisplay = { ...libraryDisplay, setFileDisplay: changeFileDisplay };
+	const iconMode = libraryDisplay.fileDisplay === "icons";
 	const [location, setLocation] = useState<BrowseLocation>(ROOT_LOCATION);
 	// The file open in the icon-mode preview overlay. List mode has tabs instead.
 	const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
@@ -250,14 +256,15 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		if (!iconMode || workbenchView !== "library") setPreviewAssetId(null);
 	}, [iconMode, workbenchView]);
-	// The sidebar tree follows the browser: its folder and the ones above it are open. Clicking a tree row only moves
-	// the browser and leaves the row's fold state to the arrow and the double click, so that one move skips this.
+	// The sidebar tree follows the browser: the folders above it are open so it is visible. The folder itself keeps its
+	// fold state, since the browser shows its contents. Clicking a tree row only moves the browser and leaves
+	// the row's fold state to the arrow and the double click, so that one move skips this.
 	const browsedFolder = location.kind === "folder" ? location.path : null;
 	const treeClickedFolder = useRef<string | null>(null);
 	useEffect(() => {
 		const clicked = treeClickedFolder.current;
 		treeClickedFolder.current = null;
-		if (iconMode && browsedFolder && browsedFolder !== clicked) revealFolders([browsedFolder]);
+		if (iconMode && browsedFolder && browsedFolder !== clicked) revealFolders(ancestorFolders(browsedFolder));
 	}, [iconMode, browsedFolder]);
 	const selectedKeys = useMemo(() => new Set(picked.keys), [picked.keys]);
 	const selectedAssetIds = useMemo(
@@ -535,6 +542,34 @@ export function App(): React.JSX.Element {
 		return false;
 	}
 
+	/**
+	 * Switch between list and icons so both point at the same folder. To icons: browse the focused folder, or the one
+	 * holding the focused file, and keep only the selection that is on screen there (a folder's own tile is not).
+	 * To list: select the browsed folder unless something is already selected.
+	 */
+	function changeFileDisplay(next: FileDisplay): void {
+		if (next === libraryDisplay.fileDisplay) return;
+		libraryDisplay.setFileDisplay(next);
+		if (next === "icons") {
+			const focus = picked.focus;
+			if (!focus) return;
+			const asset = focus.startsWith("asset:") ? library.assets.find((item) => item.assetId === focus.slice("asset:".length)) : undefined;
+			const dest = focus.startsWith("folder:") ? focus.slice("folder:".length) : asset ? parentFolder(asset.relativePath) : null;
+			if (dest === null) return;
+			const parentOf = (key: string): string | null => {
+				if (key.startsWith("folder:")) return parentFolder(key.slice("folder:".length));
+				const item = library.assets.find((candidate) => candidate.assetId === key.slice("asset:".length));
+				return item ? parentFolder(item.relativePath) : null;
+			};
+			const keys = picked.keys.filter((key) => parentOf(key) === dest);
+			setLocation({ kind: "folder", path: dest });
+			setPicked(keys.length === 0 ? emptyTreeSelection : { keys, anchor: keys.includes(picked.anchor ?? "") ? picked.anchor : keys[0], focus: keys.includes(focus) ? focus : keys[0] });
+		} else if (!picked.focus && location.kind === "folder" && location.path) {
+			selectFolder(location.path);
+			revealFolders(ancestorFolders(location.path));
+		}
+	}
+
 	/** Move the browser. What was selected is no longer on screen, so the selection is dropped. */
 	function browseTo(next: BrowseLocation): void {
 		setLocation(next);
@@ -605,8 +640,13 @@ export function App(): React.JSX.Element {
 	}
 
 	function chooseTreeKey(key: string, mode: PointerMode, rows: readonly TreeRow[]): void {
-		const next = pointerSelect(picked, rows, key, mode);
+		// In the icon-mode tree the folder on screen counts as picked until the first modifier click, so ctrl/shift add to it.
+		const seeded = iconMode && !treeOwnsPick
+			? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
+			: picked;
+		const next = pointerSelect(seeded, rows, key, mode);
 		setPicked(next);
+		if (iconMode) setTreePicked(next);
 		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
 		if (!iconMode && next.focus?.startsWith("asset:")) setTabs((current) => showInTab(current, next.focus!.slice("asset:".length)));
 	}
@@ -841,6 +881,8 @@ export function App(): React.JSX.Element {
 	async function showFolderContextMenu(relativePath: string): Promise<void> {
 		const next = contextSelection(picked, folderKey(relativePath));
 		setPicked(next);
+		// Right-clicking inside the tree's own selection keeps the tree showing it.
+		if (treeOwnsPick && picked.keys.includes(folderKey(relativePath))) setTreePicked(next);
 		setError(null);
 		try {
 			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
@@ -990,7 +1032,17 @@ export function App(): React.JSX.Element {
 		});
 	}
 
-	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean): void {
+	/** Change the selection by `edit`; made in the icon-mode tree, the tree then shows it. */
+	function pickRows(edit: (current: TreeSelection, rows: readonly TreeRow[]) => TreeSelection, rows: readonly TreeRow[], fromTree: boolean): void {
+		const base = fromTree && iconMode && !treeOwnsPick
+			? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
+			: picked;
+		const next = edit(base, rows);
+		setPicked(next);
+		if (fromTree && iconMode) setTreePicked(next);
+	}
+
+	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean, fromTree = false): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 		if (!library.rootPath) return;
 		const mod = event.metaKey || event.ctrlKey;
@@ -1004,7 +1056,7 @@ export function App(): React.JSX.Element {
 			void revealSelected();
 		} else if (mod && !event.altKey && !event.shiftKey && key === "a") {
 			event.preventDefault();
-			setPicked((current) => selectVisible(current, rows));
+			pickRows(selectVisible, rows, fromTree);
 		} else if (mod && !event.altKey && key === "c") {
 			event.preventDefault();
 			copySelection();
@@ -1038,7 +1090,7 @@ export function App(): React.JSX.Element {
 		} else if (!mod && !event.altKey && event.shiftKey && isExtendKey(event.key)) {
 			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
 			event.preventDefault();
-			setPicked((current) => extendSelection(current, rows, event.key as "ArrowUp" | "ArrowDown" | "Home" | "End"));
+			pickRows((current, all) => extendSelection(current, all, event.key as "ArrowUp" | "ArrowDown" | "Home" | "End"), rows, fromTree);
 		} else if (!mod && !event.altKey && !event.shiftKey && isTreeNavKey(event.key)) {
 			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
 			const motion = treeMotion(rows, libraryCursor(), event.key, folding);
@@ -1374,7 +1426,7 @@ export function App(): React.JSX.Element {
 						}}
 						workbenchView={workbenchView}
 						onWorkbenchView={setWorkbenchView}
-						selectedKeys={selectedKeys}
+						selectedKeys={iconMode && !treeOwnsPick ? NO_KEYS : selectedKeys}
 						focusKey={picked.focus}
 						locateToken={picked}
 						renamingAssetId={renamingAssetId}
@@ -1395,7 +1447,7 @@ export function App(): React.JSX.Element {
 						onCancelRename={cancelRename}
 						onDropIntoFolder={(dest, item) => void dropLibraryItem(dest, item)}
 						onDropFiles={(dest, files) => void dropExternalFiles(dest, files)}
-						onKeyDown={onLibraryKeyDown}
+						onKeyDown={(event, rows, folding) => onLibraryKeyDown(event, rows, folding, true)}
 						collapsed={libraryCollapsed}
 					/>
 

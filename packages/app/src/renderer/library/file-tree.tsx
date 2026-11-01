@@ -53,12 +53,14 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 	const collapsed = tree.collapsedFolders.has(folder.relativePath);
 	// A folder shows its arrow only when opening it reveals something: subfolders, plus files in the list view.
 	const expandable = folder.folders.size > 0 || (!tree.foldersOnly && folder.assets.length > 0);
-	const selected = tree.foldersOnly ? tree.currentFolder === folder.relativePath : tree.selectedKeys.has(key);
+	// The folders tree highlights the picked folders, or the folder the browser is showing when none is picked.
+	const picking = !tree.foldersOnly || tree.selectedKeys.size > 0;
+	const selected = picking ? tree.selectedKeys.has(key) : tree.currentFolder === folder.relativePath;
 	const renaming = folder.relativePath === tree.renamingFolder;
 	const cut = coversPath(tree.cutFolders, folder.relativePath);
 	const rowRef = useRef<HTMLDivElement | null>(null);
 	const lastClick = useRef(0);
-	useScrollWhenFocused(rowRef, tree.foldersOnly ? selected : tree.focusKey === key, key);
+	useScrollWhenFocused(rowRef, picking ? tree.focusKey === key : selected, key);
 	const renameInput = useInlineRename(
 		folder.name,
 		renaming,
@@ -68,9 +70,15 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 
 	function chooseFolder(event: React.MouseEvent): void {
 		if (tree.foldersOnly) {
+			// A modifier click edits the selection and leaves the browser where it is.
+			const mode = clickMode(event);
+			tree.onSelectFolder(folder.relativePath, mode);
+			if (mode !== "replace") {
+				lastClick.current = 0;
+				return;
+			}
 			// A click opens the folder in the browser; a second one soon after folds it. The clicks are timed here
 			// instead of using `dblclick`, which fires once per run of clicks and so ignores a quick second double click.
-			tree.onSelectFolder(folder.relativePath, "replace");
 			const double = lastClick.current > 0 && event.timeStamp - lastClick.current <= DOUBLE_CLICK_MS;
 			lastClick.current = double ? 0 : event.timeStamp;
 			if (double) tree.onToggleFolder(folder.relativePath);
@@ -109,7 +117,7 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 						draggable
 						onDragStart={(event) => {
 							const single: LibraryDrag = { kind: "folder", relativePath: folder.relativePath };
-							writeLibraryDrag(event.dataTransfer, selected && !tree.foldersOnly && tree.selectionDrag ? tree.selectionDrag : single);
+							writeLibraryDrag(event.dataTransfer, selected && picking && tree.selectionDrag ? tree.selectionDrag : single);
 						}}
 						onDragEnd={() => {
 							endLibraryDrag();
