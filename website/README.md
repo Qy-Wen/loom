@@ -1,8 +1,8 @@
 # Loom website / 发布页
 
-Independent, bilingual static website. Requires Node.js 22+, no package installation. All assets are local; no runtime API, analytics, external fonts, or CDN dependencies. The workspace illustration uses preset examples, not a screenshot or a live AI service.
+Independent, bilingual static website. Requires Node.js 22+, no package installation. All assets are local; no runtime API, analytics, external fonts, or CDN dependencies. The interactive workspace mirrors the current desktop layout, colors, icons, and controls. Its assets and conversation are preset examples, not a live AI service.
 
-独立的中英文静态介绍页。需要 Node.js 22+，无需安装依赖。所有素材随站点提供，无外部字体、CDN、统计或 API 请求。交互工作台为预置示意，并非实际截图或在线 AI。
+独立的中英文静态介绍页。需要 Node.js 22+，无需安装依赖。所有素材随站点提供，无外部字体、CDN、统计或 API 请求。交互工作台按当前桌面应用的布局、颜色、图标和控件还原；素材与对话为预置示例，不调用在线 AI。
 
 ## Preview / 预览
 
