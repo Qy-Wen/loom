@@ -1,17 +1,22 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Asset, AssetRelation, AssetType } from "@loom/core";
-import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import {
 	GRAPH_NODE_RADIUS,
 	GRAPH_PLUS_OFFSET,
 	GRAPH_SELECTION_RING_RADIUS,
 	GRAPH_SNAP_PAD,
 	graphBounds,
+	graphNodeDetail,
 	nearestNode,
+	rectContains,
 	nodeHitZone,
 	nodesInRect,
 	rectBetween,
+	segmentMayCross,
+	viewWorldRect,
 } from "./graph-layout.ts";
+import { GraphEdge } from "./graph-edge.tsx";
+import { GraphNode } from "./graph-node.tsx";
 import { assetTypeLabel, uiPlatform } from "../../../shared/locale.ts";
 import { useLocale } from "../../locale.tsx";
 import { SuggestInput } from "../../components/suggest-input.tsx";
@@ -69,6 +74,8 @@ const MOVE_THRESHOLD = 6;
 const PARALLEL_GAP = 12;
 const PLUS_RADIUS = 8;
 const PLUS_ARM = 3.5;
+/** Nodes and edges this far outside the canvas, in screen pixels, are still drawn, so a pan does not show pop-in. */
+const CULL_MARGIN_PX = 120;
 
 export function GraphView({
 	assets,
@@ -97,6 +104,9 @@ export function GraphView({
 	const [typeOpen, setTypeOpen] = useState(false);
 	const [typeError, setTypeError] = useState<string | null>(null);
 	const [saving, setSaving] = useState(false);
+	const [canvasSize, setCanvasSize] = useState<{ width: number; height: number } | null>(null);
+	const pendingLinkRef = useRef(pendingLink);
+	pendingLinkRef.current = pendingLink;
 	const [activeDrag, setActiveDrag] = useState<"pan" | "move" | "link" | null>(null);
 	// The box being dragged, in world coordinates so scrolling the canvas mid-drag does not move its corners.
 	const [box, setBox] = useState<{ from: { x: number; y: number }; to: { x: number; y: number } } | null>(null);
@@ -105,10 +115,12 @@ export function GraphView({
 		const ids = new Set(assets.map((asset) => asset.assetId));
 		return edges.filter((edge) => ids.has(edge.fromAssetId) && ids.has(edge.toAssetId));
 	}, [assets, edges]);
-	const { nodes, pin, unpin } = useGraphSimulation(
-		assets.map((asset) => asset.assetId),
-		visibleEdges.map((edge) => ({ fromId: edge.fromAssetId, toId: edge.toAssetId })),
+	const assetIds = useMemo(() => assets.map((asset) => asset.assetId), [assets]);
+	const layoutEdges = useMemo(
+		() => visibleEdges.map((edge) => ({ fromId: edge.fromAssetId, toId: edge.toAssetId })),
+		[visibleEdges],
 	);
+	const { nodes, pin, unpin } = useGraphSimulation(assetIds, layoutEdges);
 	const live = useRef({
 		nodes,
 		pin,
@@ -124,6 +136,21 @@ export function GraphView({
 		() => TYPE_ORDER.filter((type) => assets.some((asset) => asset.type === type)),
 		[assets],
 	);
+
+	const hasAssets = assets.length > 0;
+	useLayoutEffect(() => {
+		const element = canvasRef.current;
+		if (!element) return;
+		const measure = () => setCanvasSize((current) => (
+			current && current.width === element.clientWidth && current.height === element.clientHeight
+				? current
+				: { width: element.clientWidth, height: element.clientHeight }
+		));
+		measure();
+		const observer = new ResizeObserver(measure);
+		observer.observe(element);
+		return () => observer.disconnect();
+	}, [hasAssets]);
 
 	useLayoutEffect(() => {
 		const element = canvasRef.current;
@@ -320,6 +347,16 @@ export function GraphView({
 		return () => window.removeEventListener("keydown", onKey);
 	}, [onRemoveRelation, pendingLink, selectedEdgeId]);
 
+	// Stable so a memoized node is not re-rendered just because the view did.
+	const onNodePointerDown = useCallback((event: React.PointerEvent<SVGGElement>, id: string) => {
+		if (event.button !== 0 || pendingLinkRef.current) return;
+		event.stopPropagation();
+		window.getSelection()?.removeAllRanges();
+		// Any press on the node selects or moves it. Links start from the outside + handle.
+		drag.current = { kind: "move", id, x: event.clientX, y: event.clientY, started: false };
+		event.currentTarget.setPointerCapture(event.pointerId);
+	}, []);
+
 	function screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
 		const element = canvasRef.current;
 		const view = viewportRef.current;
@@ -338,7 +375,7 @@ export function GraphView({
 			const dist = Math.hypot(world.x - node.x, world.y - node.y);
 			const zone = nodeHitZone(dist, GRAPH_NODE_RADIUS);
 			if (zone === "none" || dist >= bestDist) continue;
-			best = { id: node.id, angle: Math.atan2(world.y - node.y, world.x - node.x), zone };
+			best = { id: node.id, angle: zone === "rim" ? Math.atan2(world.y - node.y, world.x - node.x) : 0, zone };
 			bestDist = dist;
 		}
 		return best;
@@ -368,6 +405,9 @@ export function GraphView({
 		);
 	}
 
+	// Only what is on screen is rendered; the rest costs nothing until a pan or zoom brings it in.
+	const viewRect = canvasSize ? viewWorldRect(viewport, canvasSize, CULL_MARGIN_PX) : null;
+	const detail = graphNodeDetail(viewport.scale);
 	const selectedEdge = visibleEdges.find((edge) => edge.relationId === selectedEdgeId);
 	const linking = activeDrag === "link";
 	const moving = activeDrag === "move";
@@ -424,7 +464,12 @@ export function GraphView({
 					event.currentTarget.setPointerCapture(event.pointerId);
 				}}
 				onPointerMove={(event) => {
-					if (!drag.current) setHover(hoverAt(screenToWorld(event.clientX, event.clientY)));
+					if (drag.current) return;
+					const next = hoverAt(screenToWorld(event.clientX, event.clientY));
+					// Keep the old object while nothing changed, so moving over a node's body does not re-render the graph.
+					setHover((current) => (
+						current?.id === next?.id && current?.zone === next?.zone && current?.angle === next?.angle ? current : next
+					));
 				}}
 			>
 				<svg className="graph-world" role="img" aria-label={t.graph.canvas}>
@@ -441,35 +486,23 @@ export function GraphView({
 							const from = byId.get(edge.fromAssetId);
 							const to = byId.get(edge.toAssetId);
 							if (!from || !to) return null;
+							if (viewRect && !segmentMayCross(viewRect, from.x, from.y, to.x, to.y)) return null;
 							const shifted = offsetPair(from, to, parallelIndex.get(edge.relationId) ?? 0);
 							const start = edgePoint(shifted.from.x, shifted.from.y, shifted.to.x, shifted.to.y, GRAPH_NODE_RADIUS);
 							const end = edgePoint(shifted.to.x, shifted.to.y, shifted.from.x, shifted.from.y, GRAPH_NODE_RADIUS + 6);
-							const selected = edge.relationId === selectedEdgeId;
-							const mid = { x: (start.x + end.x) / 2, y: (start.y + end.y) / 2 };
 							return (
-								<g
+								<GraphEdge
 									key={edge.relationId}
-									className={`graph-edge-group${selected ? " selected" : ""}`}
-									onPointerDown={(event) => {
-										event.stopPropagation();
-										setSelectedEdgeId(edge.relationId);
-									}}
-								>
-									<line className="graph-edge-hit" x1={start.x} y1={start.y} x2={end.x} y2={end.y} />
-									<line
-										className="graph-edge"
-										x1={start.x}
-										y1={start.y}
-										x2={end.x}
-										y2={end.y}
-										markerEnd={selected ? "url(#graph-arrow-selected)" : "url(#graph-arrow)"}
-									>
-										<title>{edge.type}</title>
-									</line>
-									<text className="graph-edge-label" x={mid.x} y={mid.y - 4} textAnchor="middle">
-										{edge.type}
-									</text>
-								</g>
+									relationId={edge.relationId}
+									type={edge.type}
+									x1={start.x}
+									y1={start.y}
+									x2={end.x}
+									y2={end.y}
+									selected={edge.relationId === selectedEdgeId}
+									showLabel={detail === "full"}
+									onSelect={setSelectedEdgeId}
+								/>
 							);
 						})}
 						{box && (
@@ -493,47 +526,20 @@ export function GraphView({
 						{nodes.map((node) => {
 							const asset = assetsById.get(node.id);
 							if (!asset) return null;
-							const selected = selectedAssetIds.has(node.id);
-							const radius = GRAPH_NODE_RADIUS;
-							const dropTarget = node.id === linkTargetId;
+							if (viewRect && !rectContains(viewRect, node.x, node.y)) return null;
 							return (
-								<g
+								<GraphNode
 									key={node.id}
-									className={`graph-node${selected ? " selected" : ""}${dropTarget ? " drop-target" : ""}${hover?.id === node.id && !linking && !moving ? " hovered" : ""}`}
-									data-asset-id={node.id}
-									transform={`translate(${node.x} ${node.y})`}
-									onPointerDown={(event) => {
-										if (event.button !== 0 || pendingLink) return;
-										event.stopPropagation();
-										window.getSelection()?.removeAllRanges();
-										// Any press on the node selects or moves it. Links start from the outside + handle.
-										drag.current = {
-											kind: "move",
-											id: node.id,
-											x: event.clientX,
-											y: event.clientY,
-											started: false,
-										};
-										event.currentTarget.setPointerCapture(event.pointerId);
-									}}
-								>
-									<title>{asset.filename}</title>
-									<foreignObject
-										className="graph-node-preview"
-										x={-radius}
-										y={-radius}
-										width={radius * 2}
-										height={radius * 2}
-										aria-hidden="true"
-									>
-										<AssetThumbnail asset={asset} />
-									</foreignObject>
-									<circle className="graph-node-outline" r={radius} fill="none" stroke={TYPE_COLOR[asset.type]} />
-									{selected && <circle className="graph-node-selection-ring" r={GRAPH_SELECTION_RING_RADIUS} aria-hidden="true" />}
-									<text className="graph-node-name" y={radius + 14} textAnchor="middle">
-										{truncate(asset.filename)}
-									</text>
-								</g>
+									asset={asset}
+									color={TYPE_COLOR[asset.type]}
+									x={node.x}
+									y={node.y}
+									selected={selectedAssetIds.has(node.id)}
+									dropTarget={node.id === linkTargetId}
+									hovered={hover?.id === node.id && !linking && !moving}
+									detail={detail}
+									onPointerDown={onNodePointerDown}
+								/>
 							);
 						})}
 						{plusPos && (
@@ -655,10 +661,6 @@ function edgePoint(x: number, y: number, towardX: number, towardY: number, radiu
 	const dy = towardY - y;
 	const dist = Math.hypot(dx, dy) || 1;
 	return { x: x + (dx / dist) * radius, y: y + (dy / dist) * radius };
-}
-
-function truncate(filename: string): string {
-	return filename.length > 22 ? `${filename.slice(0, 21)}…` : filename;
 }
 
 function isTextInput(target: EventTarget | null): boolean {

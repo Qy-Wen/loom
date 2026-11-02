@@ -11,7 +11,7 @@ import {
 	type SimulationLinkDatum,
 	type SimulationNodeDatum,
 } from "d3-force";
-import { GRAPH_NODE_RADIUS, layoutForceGraph } from "./graph-layout.ts";
+import { FR_MAX_NODES, GRAPH_NODE_RADIUS, layoutForceGraph } from "./graph-layout.ts";
 
 export interface SimNode extends SimulationNodeDatum {
 	id: string;
@@ -130,7 +130,9 @@ function settle(sim: Simulation<SimNode, SimLink>): void {
 	const decay = sim.alphaDecay();
 	sim.stop();
 	sim.alphaTarget(0).alphaDecay(0.0228).alpha(1);
-	for (let i = 0; i < 320; i += 1) sim.tick();
+	// Past the Fruchterman-Reingold range each tick is costly (about 1 s per 100 ticks at 3000 nodes) and 150 already leave no overlaps.
+	const ticks = sim.nodes().length > FR_MAX_NODES ? 150 : 320;
+	for (let i = 0; i < ticks; i += 1) sim.tick();
 	sim.alphaDecay(decay).alpha(0).stop();
 	if (onTick) sim.on("tick", onTick);
 }

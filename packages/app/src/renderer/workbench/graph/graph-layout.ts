@@ -3,6 +3,16 @@ export const GRAPH_SELECTION_RING_RADIUS = 18;
 export const GRAPH_PLUS_OFFSET = 10;
 export const GRAPH_SNAP_PAD = 16;
 
+/** `dot` is a plain type-colored disc for a node too small on screen to read a thumbnail or name. */
+export type GraphNodeDetail = "full" | "dot";
+
+/** Below this on-screen radius a node is a dot: no image is mounted and no label is drawn. */
+export const GRAPH_DOT_RADIUS_PX = 3;
+
+export function graphNodeDetail(scale: number): GraphNodeDetail {
+	return GRAPH_NODE_RADIUS * scale < GRAPH_DOT_RADIUS_PX ? "dot" : "full";
+}
+
 export type NodeHitZone = "body" | "rim" | "none";
 
 /** The entire disc and its outline move the node; only the outside band reveals the link handle. */
@@ -22,6 +32,30 @@ export interface WorldRect {
 /** The rectangle between two corners, whichever way the drag went. */
 export function rectBetween(a: { x: number; y: number }, b: { x: number; y: number }): WorldRect {
 	return { minX: Math.min(a.x, b.x), minY: Math.min(a.y, b.y), maxX: Math.max(a.x, b.x), maxY: Math.max(a.y, b.y) };
+}
+
+/** The part of the world a canvas of `size` shows, grown by `marginPx` screen pixels on every side. */
+export function viewWorldRect(
+	viewport: { x: number; y: number; scale: number },
+	size: { width: number; height: number },
+	marginPx: number,
+): WorldRect {
+	return {
+		minX: (-viewport.x - marginPx) / viewport.scale,
+		minY: (-viewport.y - marginPx) / viewport.scale,
+		maxX: (size.width - viewport.x + marginPx) / viewport.scale,
+		maxY: (size.height - viewport.y + marginPx) / viewport.scale,
+	};
+}
+
+export function rectContains(rect: WorldRect, x: number, y: number): boolean {
+	return x >= rect.minX && x <= rect.maxX && y >= rect.minY && y <= rect.maxY;
+}
+
+/** True when the segment's bounding box overlaps the rectangle. May keep a diagonal that just misses a corner. */
+export function segmentMayCross(rect: WorldRect, ax: number, ay: number, bx: number, by: number): boolean {
+	return Math.max(ax, bx) >= rect.minX && Math.min(ax, bx) <= rect.maxX
+		&& Math.max(ay, by) >= rect.minY && Math.min(ay, by) <= rect.maxY;
 }
 
 /** Ids of the nodes whose centre lies inside the rectangle, edges included. */
@@ -57,6 +91,9 @@ export interface GraphLayoutNode {
 	y: number;
 }
 
+/** Largest graph that still gets the O(n²) Fruchterman-Reingold pass before the force simulation. */
+export const FR_MAX_NODES = 400;
+
 export interface GraphLayoutEdge {
 	fromId: string;
 	toId: string;
@@ -79,7 +116,8 @@ export function layoutForceGraph(
 		return { id, x: Math.cos(angle) * radius, y: Math.sin(angle) * radius, vx: 0, vy: 0 };
 	});
 	const k = Math.max(64, 240 / Math.sqrt(n));
-	const steps = Math.min(iterations, 40 + n * 2);
+	// Every step compares every pair. Past FR_MAX_NODES the ring is the seed and the force simulation does the layout.
+	const steps = n > FR_MAX_NODES ? 0 : Math.min(iterations, 40 + n * 2);
 
 	for (let step = 0; step < steps; step++) {
 		const cool = 1 - step / steps;
