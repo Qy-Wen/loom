@@ -11,7 +11,9 @@
 	display: flex;
 	flex: none;
 	flex-wrap: nowrap;
-	min-height: var(--lm-size-2xl);
+	/* Same height as the panel tab strip beside it (border included), so the two bottom lines meet. */
+	box-sizing: border-box;
+	height: var(--lm-size-2xl);
 	/* Crop horizontally without clipping the sort menu and tooltips below the bar. */
 	overflow-x: clip;
 	align-items: center;
@@ -19,7 +21,8 @@
 	min-width: 0;
 	/* .workbench pads 5px inside the resize handles. Reach back out so the border meets their lines. */
 	margin: 0 -5px;
-	padding: var(--lm-space-2) calc(var(--lm-space-6) + 5px);
+	/* The extra 1px below evens out the border, so centered controls sit on whole pixels. */
+	padding: 0 calc(var(--lm-space-6) + 5px) 1px;
 	border-bottom: 1px solid var(--lm-border-subtle);
 }
 
@@ -161,7 +164,7 @@ button.browser-crumb:hover {
 .browser-search input {
 	box-sizing: border-box;
 	width: 100%;
-	height: var(--lm-size-lg);
+	height: var(--lm-size-md);
 	padding: 0 var(--lm-space-4) 0 var(--lm-size-md);
 	border: 1px solid var(--lm-border-default);
 	border-radius: var(--lm-radius-sm);

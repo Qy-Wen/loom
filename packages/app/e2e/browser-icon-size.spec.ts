@@ -106,7 +106,7 @@ test("large icons fit a narrow browser and invalid saved sizes fall back safely"
 		const bounds = (await browser.locator(selector).boundingBox())!;
 		expect(bounds.x).toBeGreaterThanOrEqual(bar.x);
 		expect(bounds.x + bounds.width).toBeLessThanOrEqual(bar.x + bar.width);
-		expect(bounds.y + bounds.height / 2).toBeCloseTo(bar.y + (bar.height - 1) / 2, 0);
+		expect(bounds.y + bounds.height / 2).toBeCloseTo(bar.y + (bar.height - 2) / 2, 0); // Centered above the border and its 1px balancing padding.
 	}
 	// Horizontal cropping must not swallow the sort dropdown below the bar.
 	await browser.getByRole("button", { name: "Sort files", exact: true }).click();
