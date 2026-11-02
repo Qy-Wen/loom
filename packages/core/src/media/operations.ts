@@ -29,6 +29,30 @@ export function buildImageStillArgs(inputPath: string, outputPath: string): stri
 	return ["-y", "-i", inputPath, "-frames:v", "1", outputPath];
 }
 
+/**
+ * One square WebP still for list, grid, graph and chip previews, center-cropped like `object-fit: cover`.
+ * `seekSeconds` skips a black first frame in video.
+ */
+export function buildThumbnailArgs(inputPath: string, outputPath: string, size: number, seekSeconds?: number): string[] {
+	return [
+		"-y",
+		...(seekSeconds ? ["-ss", formatSeconds(seekSeconds)] : []),
+		"-i",
+		inputPath,
+		"-frames:v",
+		"1",
+		"-vf",
+		`scale=${size}:${size}:force_original_aspect_ratio=increase,crop=${size}:${size}`,
+		"-c:v",
+		"libwebp",
+		"-quality",
+		"75",
+		"-f",
+		"webp",
+		outputPath,
+	];
+}
+
 export function buildAudioCompactArgs(inputPath: string, outputPath: string): string[] {
 	return [
 		"-y",

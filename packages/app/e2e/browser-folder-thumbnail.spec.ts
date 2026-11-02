@@ -30,8 +30,8 @@ for (const colorScheme of ["light", "dark"] as const) {
 		await expect(tile("Empty").locator(".browser-folder-content")).toHaveCount(0);
 		await expect(tile("Photos").locator("img")).toBeVisible();
 		await expect.poll(async () => tile("Photos").locator("img").evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-		await expect(tile("Videos").locator("video")).toBeVisible();
-		await expect.poll(async () => tile("Videos").locator("video").evaluate((video) => (video as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
+		await expect(tile("Videos").locator("img")).toBeVisible();
+		await expect.poll(async () => tile("Videos").locator("img").evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(tile("Documents").locator(".browser-folder-file-label")).toHaveText("MD");
 		await expect(tile("Audio").locator(".browser-folder-file-label")).toHaveText("♪");
 		await expect(tile("Other").locator(".browser-folder-file-label")).toHaveText("ZIP");

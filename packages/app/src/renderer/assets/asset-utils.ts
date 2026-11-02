@@ -21,12 +21,24 @@ export function filenameStem(filename: string): string {
 	return extension ? filename.slice(0, -extension.length) : filename;
 }
 
-export function assetPreviewUrl(asset: { assetId: string; modifiedAt?: number; size?: number }): string {
+type AssetVersion = { assetId: string; modifiedAt?: number; size?: number };
+
+function assetUrl(host: "asset" | "thumb", asset: AssetVersion): string {
 	const id = encodeURIComponent(asset.assetId);
-	if (asset.modifiedAt == null) return `loom-asset://asset/${id}`;
+	if (asset.modifiedAt == null) return `loom-asset://${host}/${id}`;
 	// Size changes when a file is still being written, so a just-saved video does not keep the first empty response.
 	const version = asset.size ? `${asset.modifiedAt}-${asset.size}` : String(asset.modifiedAt);
-	return `loom-asset://asset/${id}?v=${version}`;
+	return `loom-asset://${host}/${id}?v=${version}`;
+}
+
+/** The original file's bytes. */
+export function assetPreviewUrl(asset: AssetVersion): string {
+	return assetUrl("asset", asset);
+}
+
+/** A small cached still of an image or video, shared by every thumbnail. */
+export function assetThumbnailUrl(asset: AssetVersion): string {
+	return assetUrl("thumb", asset);
 }
 
 /** Same badge letters the library tree uses for audio / text / other. */

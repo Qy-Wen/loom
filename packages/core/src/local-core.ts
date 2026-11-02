@@ -48,6 +48,7 @@ import { bestChunkPerFile, fuseChunks } from "./retrieval/deep.ts";
 import { HYBRID_CANDIDATES, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
+import { ThumbnailService } from "./media/thumbnail.ts";
 import type {
 	GradeImageArgs,
 	GradeImageResult,
@@ -82,6 +83,7 @@ export class LocalCore {
 	private readonly videoVlm: VideoVlmService;
 	private readonly audioWriteup: AudioWriteupService;
 	private readonly media: MediaService;
+	private readonly thumbnails: ThumbnailService;
 	private tasks: LibraryTaskScope | undefined;
 	private transition: Promise<void> = Promise.resolve();
 	private transitions = 0;
@@ -114,7 +116,12 @@ export class LocalCore {
 			prepareAudioForModel,
 		);
 		this.media = new MediaService(this.library);
+		this.thumbnails = new ThumbnailService({
+			getAsset: (assetId) => this.metadataStore.getAsset(assetId),
+			getPaths: () => this.library.getPaths(),
+		});
 		this.library.subscribe((change) => {
+			if (change.type === "remove") void this.thumbnails.forget(change.assetId).catch(() => undefined);
 			const tasks = this.tasks;
 			if (!tasks?.active) return;
 			const assets = change.type === "reset" ? change.snapshot.assets : change.type === "upsert" ? [change.asset] : undefined;
@@ -136,7 +143,9 @@ export class LocalCore {
 			try {
 				if (!(await stat(rootPath)).isDirectory()) throw new Error("Library path is not a directory");
 				await this.graphStore.open(new LibraryPaths(rootPath));
-				return await this.library.open(rootPath);
+				const snapshot = await this.library.open(rootPath);
+				void this.thumbnails.prune(snapshot.assets.map((asset) => asset.assetId)).catch(() => undefined);
+				return snapshot;
 			} catch (error) {
 				await this.closeCurrentLibrary();
 				throw error;
@@ -219,6 +228,12 @@ export class LocalCore {
 
 	getAssetFilePath(assetId: string): Promise<string | undefined> {
 		return this.library.getAssetFilePath(assetId);
+	}
+
+	/** Absolute path of the cached preview image for an image or video, made on first request. Undefined if it has none. */
+	async getThumbnailPath(assetId: string, signal?: AbortSignal): Promise<string | undefined> {
+		if (!this.tasks?.active || this.transitions) return undefined;
+		return this.thumbnails.get(assetId, signal);
 	}
 
 	renameAsset(assetId: string, stem: string): Promise<Asset> {

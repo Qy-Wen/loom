@@ -1,4 +1,4 @@
-import { copyFile, writeFile } from "node:fs/promises";
+import { copyFile, readdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
@@ -26,8 +26,11 @@ for (const colorScheme of ["light", "dark"] as const) {
 		const photo = node("photo.png");
 		const video = node("clip.mp4");
 		await expect.poll(() => photo.locator("img").evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
-		await expect.poll(() => video.locator("video").evaluate((media) => (media as HTMLVideoElement).readyState)).toBeGreaterThanOrEqual(2);
-		expect(await video.locator("video").evaluate((media) => (media as HTMLVideoElement).paused)).toBe(true);
+		// A video shows a cached still, never a <video> element, and both come from the shared thumbnail cache.
+		await expect.poll(() => video.locator("img").evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await expect(video.locator("video")).toHaveCount(0);
+		for (const node of [photo, video]) await expect(node.locator("img")).toHaveAttribute("src", /^loom-asset:\/\/thumb\//);
+		await expect.poll(() => readdir(join(root, ".loom", "thumbnails"))).toHaveLength(2);
 		await expect(node("notes.md").locator(".asset-badge")).toHaveText("MD");
 		await expect(node("sound.wav").locator(".asset-badge")).toHaveText("♪");
 		await expect(node("archive.zip").locator(".asset-badge")).toHaveText("ZIP");

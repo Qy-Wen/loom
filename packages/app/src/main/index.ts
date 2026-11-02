@@ -290,6 +290,7 @@ function registerAssetProtocol(): void {
 				if (!image || !/^image\/[a-z0-9.+-]+$/i.test(image.mimeType)) return new Response("Image not found", { status: 404 });
 				return new Response(Buffer.from(image.data, "base64"), { headers: { "Content-Type": image.mimeType, "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" } });
 			}
+			if (url.hostname === "thumb") return await thumbnailResponse(decodeURIComponent(url.pathname.slice(1)), url.searchParams.has("v"), request);
 			if (url.hostname !== "asset") return new Response("Not found", { status: 404 });
 
 			const assetId = decodeURIComponent(url.pathname.slice(1));
@@ -323,6 +324,27 @@ function registerAssetProtocol(): void {
 			return new Response("Failed to load asset", { status: 500 });
 		}
 	});
+}
+
+/**
+ * The cached preview of an image or video. A URL that carries `?v=` names one version of the file, so Chromium
+ * may keep it forever; without it the response is revalidated against its ETag.
+ */
+async function thumbnailResponse(assetId: string, versioned: boolean, request: Request): Promise<Response> {
+	const file = await localCore.getThumbnailPath(assetId, request.signal);
+	if (!file) return new Response("No thumbnail", { status: 404, headers: { "Cache-Control": "no-store" } });
+	const info = await stat(file);
+	const etag = `"${info.size}-${Math.round(info.mtimeMs)}"`;
+	const headers = new Headers({
+		ETag: etag,
+		"Access-Control-Allow-Origin": "*",
+		"Cache-Control": versioned ? "public, max-age=31536000, immutable" : "no-cache",
+	});
+	if (request.headers.get("if-none-match") === etag) return new Response(null, { status: 304, headers });
+	headers.set("Content-Type", "image/webp");
+	headers.set("Content-Length", String(info.size));
+	if (request.method === "HEAD") return new Response(null, { status: 200, headers });
+	return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, { status: 200, headers });
 }
 
 function createWindow(): void {

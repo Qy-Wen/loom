@@ -15,6 +15,8 @@ export class LibraryPaths {
 	readonly metadataDb: string;
 	readonly graphDb: string;
 	readonly gradeLuts: string;
+	/** Disposable preview cache, one `<assetId>.webp` per image or video. The only part of `.loom` that is not user data. */
+	readonly thumbnails: string;
 	readonly agents: string;
 	readonly sessionsDb: string;
 	readonly commandAllows: string;
@@ -30,6 +32,7 @@ export class LibraryPaths {
 		this.metadataDb = resolve(this.loom, "metadata-db", "metadata.db");
 		this.graphDb = resolve(this.loom, "graph-db", "graph.db");
 		this.gradeLuts = resolve(this.loom, "grades", "luts");
+		this.thumbnails = resolve(this.loom, "thumbnails");
 		this.agents = resolve(this.loom, "agents");
 		this.sessionsDb = resolve(this.agents, "sessions", "loom.sqlite");
 		this.commandAllows = resolve(this.agents, "command-allows", "command-allows.json");

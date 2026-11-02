@@ -71,6 +71,8 @@ CreativeAssets/                   -- 用户选择的库根目录；Loom 不强�
     │   └── graph.db/             -- LadybugDB EXPORT 目录
     ├── grades/
     │   └── luts/*.cube           -- 从库外导入的 LUT（首次导入时才创建）
+    ├── thumbnails/
+    │   └── <asset_id>.webp       -- 每个图片和视频的 256px 预览；可随时删除的缓存，用到时重新生成
     └── agents/
         ├── sessions/loom.sqlite  -- durable 会话存储（含 -wal、-shm）
         ├── command-allows/command-allows.json   -- 记住的命令
@@ -97,7 +99,7 @@ Loom 写到系统临时目录的内容都放在同一个根下，不进素材库
 路径只由 `core/src/temp.ts` 构造，不写死 `/tmp`（进程沙盒只能写素材库和 `os.tmpdir()`）。应用启动时清掉超过 24 小时的残留。
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
-- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存：标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
+- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存，只有可随时删除的 `.loom/thumbnails/` 例外：标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 
