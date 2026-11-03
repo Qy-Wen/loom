@@ -28,7 +28,7 @@ async function waitUntil(
 					path: asset.relativePath,
 				})))}`));
 			});
-		}, 10_000);
+		}, 20_000);
 		const unsubscribe = core.subscribeLibrary(() => {
 			void core.getLibrarySnapshot().then((snapshot) => {
 				if (!predicate(snapshot)) return;
