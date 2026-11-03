@@ -41,8 +41,8 @@ The NSIS installer is per-user. Development installs the sandbox from [ensure-wi
 
 ## Release
 
-After `pnpm dist` on this Mac, `gh` uploads `Loom-mac-arm64.dmg`, `Loom-mac-x64.dmg`, and `Loom-win-x64.exe` to a GitHub Release. GitHub Actions is not used.
+`pnpm release --version v0.1.1` builds these installers, uploads them to COS and GitHub, and deploys the website; see [RELEASING.md](./RELEASING.md). GitHub Actions is not used.
 
-The version is the latest `v*` Release on GitHub with the last number incremented. The first Release is `v0.1.0`.
+Installer names carry the version (`Loom-0.1.1-mac-arm64.dmg`), so `releases/latest/download/<name>` cannot address them. Use `releases/download/<tag>/<name>`, or the links `release-config.js` hands to the website.
 
-On a public repo the download URL is `https://github.com/Qy-Wen/loom/releases/latest/download/` plus the filename. The installers are unsigned. There is no notarization and no auto-update.
+There is no notarization and no auto-update.

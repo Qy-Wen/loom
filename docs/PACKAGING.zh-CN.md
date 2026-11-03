@@ -41,8 +41,8 @@ NSIS 安装程序按当前用户安装。开发时由 [ensure-windows-sandbox.mj
 
 ## 发布
 
-本机 `pnpm dist` 之后，用 `gh` 把 `Loom-mac-arm64.dmg`、`Loom-mac-x64.dmg` 和 `Loom-win-x64.exe` 上传到 GitHub Release。不用 GitHub Actions。
+`pnpm release --version v0.1.1` 会构建这些安装包、上传到 COS 与 GitHub，并部署网站；见 [RELEASING.zh-CN.md](./RELEASING.zh-CN.md)。不用 GitHub Actions。
 
-版本号取 GitHub 上最新的 `v*` Release，末段加一。还没有 Release 时从 `v0.1.0` 开始。
+安装包文件名带版本号（`Loom-0.1.1-mac-arm64.dmg`），所以 `releases/latest/download/<文件名>` 取不到它们。请用 `releases/download/<tag>/<文件名>`，或直接用 `release-config.js` 交给网站的那组链接。
 
-公开仓库的下载地址是 `https://github.com/Qy-Wen/loom/releases/latest/download/` 加上文件名。安装包不签名，也不做公证和自动更新。
+安装包不签名，也不做公证和自动更新。
