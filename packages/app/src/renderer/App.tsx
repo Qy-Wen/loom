@@ -79,6 +79,7 @@ const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: []
 const NO_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
 type WorkbenchView = "library" | "table" | "graph";
+type FolderRename = { relativePath: string; view: "tree" | "browser" };
 
 function meetsWindowCorner(
 	frame: { x: number; y: number; width: number; height: number },
@@ -162,7 +163,7 @@ export function App(): React.JSX.Element {
 	// List mode follows the active tab. Icon mode follows the previewed file, else the focused tile.
 	const viewedAssetId = iconMode ? (previewAssetId ?? selectedAssetId) : tabs.active;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
-	const [renamingFolder, setRenamingFolder] = useState<string | null>(null);
+	const [renamingFolder, setRenamingFolder] = useState<FolderRename | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
@@ -363,7 +364,7 @@ export function App(): React.JSX.Element {
 				setPicked((current) => withoutFolder(current, change.relativePath));
 				setRenamingFolder((current) => {
 					if (!current) return current;
-					return current === change.relativePath || current.startsWith(prefix) ? null : current;
+					return current.relativePath === change.relativePath || current.relativePath.startsWith(prefix) ? null : current;
 				});
 			}
 			if (change.type === "enrichment" && change.assetId === selectedAssetIdRef.current) {
@@ -656,6 +657,10 @@ export function App(): React.JSX.Element {
 		setRenamingFolder(null);
 	}
 
+	function beginFolderRename(relativePath: string, fromTree = false): void {
+		setRenamingFolder({ relativePath, view: fromTree || !iconMode ? "tree" : "browser" });
+	}
+
 	function pasteDestination(selection: TreeSelection = picked): string {
 		if (iconMode) return browsedPath();
 		const focus = selection.focus;
@@ -684,7 +689,7 @@ export function App(): React.JSX.Element {
 	function revealCreatedFolder(relativePath: string): void {
 		if (iconMode) setLocation({ kind: "folder", path: parentFolder(relativePath) });
 		selectFolder(relativePath);
-		setRenamingFolder(relativePath);
+		beginFolderRename(relativePath);
 		revealFolders([relativePath]);
 	}
 
@@ -878,7 +883,7 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function showFolderContextMenu(relativePath: string): Promise<void> {
+	async function showFolderContextMenu(relativePath: string, fromTree = false): Promise<void> {
 		const next = contextSelection(picked, folderKey(relativePath));
 		setPicked(next);
 		// Right-clicking inside the tree's own selection keeps the tree showing it.
@@ -887,9 +892,7 @@ export function App(): React.JSX.Element {
 		try {
 			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
 			if (action === "rename" && next.keys.length === 1) {
-				// The tree has no editor in icon mode: rename on the folder's tile, in the folder above it.
-				if (iconMode) setLocation({ kind: "folder", path: parentFolder(relativePath) });
-				setRenamingFolder(relativePath);
+				beginFolderRename(relativePath, fromTree);
 			} else if (action === "copy") {
 				copySelection(next);
 			} else if (action === "cut") {
@@ -1053,9 +1056,12 @@ export function App(): React.JSX.Element {
 			void duplicateSelection();
 		} else if (event.key === "F2") {
 			event.preventDefault();
-			if (picked.keys.length !== 1) return;
-			if (selectedFolder) setRenamingFolder(selectedFolder);
-			else if (selectedAssetId) setRenamingAssetId(selectedAssetId);
+			const selection = fromTree && iconMode && !treeOwnsPick
+				? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
+				: picked;
+			if (selection.keys.length !== 1) return;
+			if (selection.focus?.startsWith("folder:")) beginFolderRename(selection.focus.slice("folder:".length), fromTree);
+			else if (selection.focus?.startsWith("asset:")) setRenamingAssetId(selection.focus.slice("asset:".length));
 		} else if (mod && event.shiftKey && key === "n") {
 			event.preventDefault();
 			void createFolderIn(pasteDestination());
@@ -1106,7 +1112,9 @@ export function App(): React.JSX.Element {
 		try {
 			const renamed = await window.loom.renameFolder(relativePath, name);
 			followFolder(relativePath, renamed);
-			selectFolder(renamed);
+			const next = singleSelection(folderKey(renamed));
+			setPicked(next);
+			if (iconMode && renamingFolder?.view === "tree") setTreePicked(next);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
@@ -1412,7 +1420,7 @@ export function App(): React.JSX.Element {
 						focusKey={picked.focus}
 						locateToken={picked}
 						renamingAssetId={renamingAssetId}
-						renamingFolder={renamingFolder}
+						renamingFolder={renamingFolder?.view === "tree" ? renamingFolder.relativePath : null}
 						collapsedFolders={collapsedFolders}
 						cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
 						cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
@@ -1422,7 +1430,7 @@ export function App(): React.JSX.Element {
 						onOpenAssetInTab={openAssetInNewTab}
 						onSelectFolder={(relativePath, mode, rows) => chooseTreeKey(folderKey(relativePath), mode, rows)}
 						onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
-						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
+						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath, true)}
 						onLibraryContextMenu={() => void showLibraryContextMenu()}
 						onRenameAsset={renameAsset}
 						onRenameFolder={renameFolder}
@@ -1495,7 +1503,7 @@ export function App(): React.JSX.Element {
 									onSelection={setPicked}
 									onSelect={(key, mode, rows) => setPicked((current) => pointerSelect(current, rows, key, mode))}
 									renamingAssetId={renamingAssetId}
-									renamingFolder={renamingFolder}
+									renamingFolder={renamingFolder?.view === "browser" ? renamingFolder.relativePath : null}
 									cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
 									cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
 									selectionDrag={selectionDrag}

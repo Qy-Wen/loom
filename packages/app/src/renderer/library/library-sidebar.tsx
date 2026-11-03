@@ -159,8 +159,8 @@ export function LibrarySidebar({
 			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => {
-				// In icon mode the arrows and F2 belong to the browser; the tree only takes selection and file shortcuts.
-				if (iconMode && !event.shiftKey && !event.metaKey && !event.ctrlKey && (isTreeNavKey(event.key) || event.key === "F2")) return;
+				// In icon mode the browser handles arrow navigation; file shortcuts stay with the focused tree.
+				if (iconMode && !event.shiftKey && !event.metaKey && !event.ctrlKey && isTreeNavKey(event.key)) return;
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>
@@ -175,7 +175,7 @@ export function LibrarySidebar({
 				focusKey={focusKey}
 				locateToken={locateToken}
 				renamingAssetId={iconMode ? null : renamingAssetId}
-				renamingFolder={iconMode ? null : renamingFolder}
+				renamingFolder={renamingFolder}
 				cutAssetIds={cutAssetIds}
 				cutFolders={cutFolders}
 				selectionDrag={selectionDrag}
