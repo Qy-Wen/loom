@@ -1,0 +1,114 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { expect, test } from "./loom.ts";
+
+test("icon mode browses Tags as a directory of virtual tag folders", async ({ loomPage, electronApp }, testInfo) => {
+	test.skip(!electronApp, "isolated library required");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	await mkdir(join(root, "nested", "child"), { recursive: true });
+	await writeFile(join(root, "one.md"), "# one");
+	await writeFile(join(root, "nested", "two.md"), "# two");
+	await writeFile(join(root, "untagged.md"), "# untagged");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(3);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		const one = assets.find((asset) => asset.filename === "one.md")!.assetId;
+		const two = assets.find((asset) => asset.filename === "two.md")!.assetId;
+		await window.loom.addAssetTag(one, "Alpha");
+		await window.loom.addAssetTag(two, "Alpha");
+		await window.loom.addAssetTag(two, "Photo / picks");
+	});
+	const sidebar = loomPage.locator(".library-sidebar");
+	await sidebar.getByRole("group", { name: "File display", exact: true }).getByRole("button", { name: "Icons", exact: true }).click();
+	const browser = loomPage.locator(".folder-browser");
+	const current = browser.locator(".browser-crumb.current");
+	const names = browser.locator(".browser-tile-name");
+	const tile = (name: string) => browser.locator(".browser-tile").filter({ has: loomPage.getByText(name, { exact: true }) });
+	const scroll = browser.locator(".browser-scroll");
+	// The ordinary folder and Tags share the same repeated double-click behavior.
+	const nested = sidebar.locator(".folder-row").filter({ has: loomPage.getByRole("button", { name: "nested", exact: true }) });
+	const child = sidebar.getByRole("button", { name: "child", exact: true });
+	await expect(child).toBeVisible();
+	await nested.getByRole("button", { name: "nested", exact: true }).dblclick();
+	await expect(child).toHaveCount(0);
+	await nested.getByRole("button", { name: "nested", exact: true }).dblclick();
+	await expect(child).toBeVisible();
+	const tagsButton = sidebar.getByRole("button", { name: "Tags", exact: true });
+	const tagsChevron = sidebar.locator(".tags-label .folder-chevron");
+	await tagsButton.click();
+	await expect(current).toHaveText("Tags");
+	await expect(tagsChevron).toHaveAttribute("aria-expanded", "false");
+	await expect(sidebar.locator(".tag-item")).toHaveCount(0);
+	await tagsButton.dblclick();
+	await expect(tagsChevron).toHaveAttribute("aria-expanded", "true");
+	await expect(sidebar.locator(".tag-item")).toHaveCount(2);
+	await tagsButton.dblclick();
+	await expect(tagsChevron).toHaveAttribute("aria-expanded", "false");
+	await expect(sidebar.locator(".tag-item")).toHaveCount(0);
+	await expect(current).toHaveText("Tags");
+	await tagsChevron.click();
+	await expect(sidebar.locator(".tag-item")).toHaveCount(2);
+	await tagsChevron.click();
+	await expect(sidebar.locator(".tag-item")).toHaveCount(0);
+	await expect(sidebar.locator(".tags-label")).toHaveClass(/selected/);
+	await expect(names).toHaveText(["Alpha", "Photo / picks"]);
+	await expect(browser.locator(".browser-tile.folder")).toHaveCount(2);
+	await expect(browser.locator(".browser-tile:not(.folder)")).toHaveCount(0);
+	await tile("Alpha").click();
+	await expect(tile("Alpha")).toHaveClass(/selected/);
+	await expect(current).toHaveText("Tags");
+	// Tag selection must not become a real folder/file deletion or rename.
+	await loomPage.keyboard.press("Delete");
+	expect((await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets).toHaveLength(3);
+	await expect(names).toHaveText(["Alpha", "Photo / picks"]);
+	const screenshot = testInfo.outputPath("tag-folders.png");
+	await browser.screenshot({ path: screenshot });
+	await testInfo.attach("tag-folders", { path: screenshot, contentType: "image/png" });
+
+	await tile("Alpha").dblclick();
+	await expect(current).toHaveText("Alpha");
+	await expect(names).toHaveText(["two.md", "one.md"]);
+	await expect(sidebar.locator(".tag-item.selected")).toHaveText("Alpha");
+	await tile("one.md").dblclick();
+	await expect(loomPage.getByRole("dialog", { name: "File preview" })).toBeVisible();
+	await loomPage.keyboard.press("Escape");
+	await expect(current).toHaveText("Alpha");
+	await browser.locator(".browser-crumbs").getByRole("button", { name: "Tags", exact: true }).click();
+	await expect(names).toHaveText(["Alpha", "Photo / picks"]);
+	const search = browser.getByRole("searchbox");
+	await search.fill("PICKS");
+	await expect(names).toHaveText(["Photo / picks"]);
+	await tile("Photo / picks").dblclick();
+	await expect(current).toHaveText("Photo / picks");
+	await expect(search).toHaveValue("");
+	await expect(names).toHaveText(["two.md"]);
+	await scroll.focus();
+	await scroll.press("Backspace");
+	await expect(current).toHaveText("Tags");
+	await scroll.focus();
+	await scroll.press("Home");
+	await expect(tile("Alpha")).toHaveClass(/selected/);
+	await scroll.press("ArrowRight");
+	await expect(tile("Photo / picks")).toHaveClass(/selected/);
+	await scroll.press("Enter");
+	await expect(current).toHaveText("Photo / picks");
+
+	// Removing the tag currently being browsed returns to its virtual parent, which updates live.
+	await loomPage.evaluate(async () => {
+		const { tags, assetTags } = await window.loom.getLibrarySnapshot();
+		const tag = tags.find((tag) => tag.name === "Photo / picks")!;
+		for (const row of assetTags.filter((row) => row.tagId === tag.tagId)) await window.loom.removeAssetTag(row.assetId, tag.tagId);
+	});
+	await expect(current).toHaveText("Tags");
+	await expect(names).toHaveText(["Alpha"]);
+	await loomPage.evaluate(async () => {
+		const { assetTags } = await window.loom.getLibrarySnapshot();
+		for (const row of assetTags) await window.loom.removeAssetTag(row.assetId, row.tagId);
+	});
+	await expect(browser.locator(".browser-empty")).toHaveText("No tags yet.");
+	await expect(sidebar.getByRole("button", { name: "Tags", exact: true })).toHaveAttribute("aria-current", "location");
+	await scroll.focus();
+	await scroll.press("Backspace");
+	await expect(sidebar.locator(".library-root-button")).toHaveAttribute("aria-current", "location");
+});

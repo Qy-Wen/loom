@@ -1,4 +1,4 @@
-import type { Asset } from "@loom/core";
+import type { Asset, Tag } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import { extensionOf, filenameStem } from "../../assets/asset-utils.ts";
@@ -9,6 +9,7 @@ import { folderDropProps, type FolderDropSurface } from "../../library/folder-dr
 import { clickMode } from "../../library/tree-context.tsx";
 import { assetKey, folderKey, type PointerMode } from "../../library/tree-nav.ts";
 import { useInlineRename } from "../../library/use-inline-rename.ts";
+import { TagHashIcon } from "../../components/tag-icon.tsx";
 
 /** What a tile needs from the browser around it. */
 export interface TileContext extends FolderDropSurface {
@@ -85,6 +86,27 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 			{thumb}
 			<span className="browser-tile-name">{asset.filename}</span>
 			{hint ? <span className="browser-tile-hint">{hint}</span> : null}
+		</button>
+	);
+}
+
+/** A tag is a virtual folder; its selection never enters filesystem commands or drag payloads. */
+export function TagTile({ tag, selected, onSelect, onOpen }: { tag: Tag; selected: boolean; onSelect: () => void; onOpen: () => void }): React.JSX.Element {
+	return (
+		<button
+			type="button"
+			className={`browser-tile folder tag${selected ? " selected" : ""}`}
+			data-key={`tag:${tag.tagId}`}
+			title={tag.name}
+			onFocus={onSelect}
+			onClick={onSelect}
+			onDoubleClick={onOpen}
+		>
+			<span className="browser-tile-thumb">
+				<BrowserFolderThumbnail />
+				<TagHashIcon className="browser-tag-mark" />
+			</span>
+			<span className="browser-tile-name">{tag.name}</span>
 		</button>
 	);
 }

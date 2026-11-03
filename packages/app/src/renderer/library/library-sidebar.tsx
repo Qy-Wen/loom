@@ -20,6 +20,8 @@ import { FileSortControl } from "./file-sort-control.tsx";
 import { filterFavorites, filterLibrary, filterTags } from "./library-filter.ts";
 import { LibraryScrollRegions } from "./library-scroll-regions.tsx";
 import { WorkspaceViewIcon } from "./workspace-view-icon.tsx";
+import { useFolderDoubleClick } from "./use-folder-double-click.ts";
+import { TagHashIcon, TagIcon } from "../components/tag-icon.tsx";
 
 const NO_FOLDERS: ReadonlySet<string> = new Set();
 
@@ -96,8 +98,11 @@ export function LibrarySidebar({
 	const [searchOpen, setSearchOpen] = useState(false);
 	const [favoritesCollapsed, setFavoritesCollapsed] = useState(true);
 	const [tagsCollapsed, setTagsCollapsed] = useState(true);
-	// In icon mode the current tag must stay visible, so Tags opens while one is the location.
-	const tagsOpen = iconMode ? !tagsCollapsed || location.kind === "tag" : !tagsCollapsed;
+	const isTagsDoubleClick = useFolderDoubleClick();
+	const tagsOpen = !tagsCollapsed;
+	useEffect(() => {
+		if (iconMode && location.kind === "tag") setTagsCollapsed(false);
+	}, [iconMode, location]);
 	const [expandedTagIds, setExpandedTagIds] = useState<Set<string>>(() => new Set());
 	const [typed, setQuery] = useState("");
 	// The folder browser has its own search; the sidebar only filters the file tree.
@@ -325,7 +330,7 @@ export function LibrarySidebar({
 							onLibraryContextMenu();
 						},
 					}}
-					shortcuts={iconMode ? (!empty && (library.favoriteAssetIds.length > 0 || library.tags.length > 0) ? (
+					shortcuts={iconMode ? (!empty && (library.favoriteAssetIds.length > 0 || library.tags.length > 0 || location.kind === "tags") ? (
 						<div className="library-nav">
 							{library.favoriteAssetIds.length > 0 ? (
 								<button
@@ -344,25 +349,33 @@ export function LibrarySidebar({
 									</span>
 								</button>
 							) : null}
-							{library.tags.length > 0 ? (
+							{library.tags.length > 0 || location.kind === "tags" ? (
 								<div className="library-tags">
-									<button
-										type="button"
-										className="tags-label"
-										aria-expanded={tagsOpen}
-										onClick={() => setTagsCollapsed(tagsOpen)}
-									>
-										<span className={`folder-chevron${tagsOpen ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
-										<span className="tags-main">
+									<div className={`tags-label${location.kind === "tags" ? " selected" : ""}`}>
+										<button
+											type="button"
+											className={`folder-chevron${tagsOpen ? " expanded" : ""}`}
+											aria-label={tagsOpen ? t.library.collapseFolder : t.library.expandFolder}
+											aria-expanded={tagsOpen}
+											onClick={() => setTagsCollapsed(tagsOpen)}
+										>
+											<FolderChevronIcon />
+										</button>
+										<button
+											type="button"
+											className="folder-main tags-main"
+											aria-current={location.kind === "tags" ? "location" : undefined}
+											onClick={(event) => {
+												onLocation({ kind: "tags" });
+												if (isTagsDoubleClick(event)) setTagsCollapsed((current) => !current);
+											}}
+										>
 											<span className="tags-symbol" aria-hidden="true">
-												<svg viewBox="0 0 16 16" width="16" height="16">
-													<path fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" d="M2.5 8.2 8 2.7h5.2V8l-5.6 5.4a1.2 1.2 0 0 1-1.7 0L2.5 9.6a1 1 0 0 1 0-1.4Z" />
-													<circle cx="10.4" cy="5.2" r="0.8" fill="currentColor" stroke="none" />
-												</svg>
+												<TagIcon />
 											</span>
 											{t.library.tags}
-										</span>
-									</button>
+										</button>
+									</div>
 									{tagsOpen ? library.tags.map((tag) => (
 										<button
 											key={tag.tagId}
@@ -370,6 +383,7 @@ export function LibrarySidebar({
 											className={`library-nav-item tag-item${sameLocation(location, { kind: "tag", tagId: tag.tagId }) ? " selected" : ""}`}
 											onClick={() => onLocation({ kind: "tag", tagId: tag.tagId })}
 										>
+											<span className="tag-symbol"><TagHashIcon /></span>
 											<span className="asset-name">{tag.name}</span>
 										</button>
 									)) : null}
@@ -409,10 +423,7 @@ export function LibrarySidebar({
 									<span className={`folder-chevron${queryActive || !tagsCollapsed ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
 									<span className="tags-main">
 										<span className="tags-symbol" aria-hidden="true">
-											<svg viewBox="0 0 16 16" width="16" height="16">
-												<path fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" d="M2.5 8.2 8 2.7h5.2V8l-5.6 5.4a1.2 1.2 0 0 1-1.7 0L2.5 9.6a1 1 0 0 1 0-1.4Z" />
-												<circle cx="10.4" cy="5.2" r="0.8" fill="currentColor" stroke="none" />
-											</svg>
+											<TagIcon />
 										</span>
 										{t.library.tags}
 									</span>
@@ -435,6 +446,7 @@ export function LibrarySidebar({
 													type="button"
 													onClick={() => toggleTag(tag.tagId)}
 												>
+													<span className="tag-symbol"><TagHashIcon /></span>
 													<span className="asset-name">{tag.name}</span>
 												</button>
 											</div>

@@ -11,6 +11,7 @@ import {
 	rectsIntersect,
 	remapLocation,
 	ROOT_LOCATION,
+	sameLocation,
 } from "../src/renderer/workbench/browser/folder-browser-model.ts";
 
 function asset(assetId: string, relativePath: string, modifiedAt = 0): Asset {
@@ -61,6 +62,29 @@ describe("browseListing", () => {
 	it("sorts by modified time, newest first when descending", () => {
 		const timed = { ...library, assets: [asset("1", "x.png", 1), asset("2", "y.png", 3), asset("3", "z.png", 2)], folders: [] };
 		assert.deepEqual(names(browseListing(timed, ROOT_LOCATION, "", "modified", "desc")), ["y.png", "z.png", "x.png"]);
+	});
+
+	it("lists tags as virtual folders, searching names without listing their files", () => {
+		const tagged = { ...library, tags: [{ tagId: "b", name: "Work / drafts" }, { tagId: "a", name: "Picked" }] };
+		const listing = browseListing(tagged, { kind: "tags" }, "", "name", "asc");
+		assert.deepEqual(listing.tags.map((tag) => tag.tagId), ["a", "b"]);
+		assert.deepEqual(listing.assets, []);
+		assert.deepEqual(listing.folders, []);
+		assert.deepEqual(browserRows(listing), []); // Virtual tags never become filesystem selection rows.
+		assert.deepEqual(browseListing(tagged, { kind: "tags" }, " DRAFTS ", "name", "asc").tags, [tagged.tags[0]]);
+		assert.deepEqual(browseListing(tagged, { kind: "tags" }, "two.png", "name", "asc").tags, []);
+		assert.deepEqual(browseListing(tagged, { kind: "tags" }, "", "name", "desc").tags.map((tag) => tag.tagId), ["b", "a"]);
+	});
+
+	it("sorts tag folders by the newest file in each tag", () => {
+		const tagged = {
+			...library,
+			tags: [{ tagId: "a", name: "A" }, { tagId: "b", name: "B" }],
+			assets: [asset("old", "old.png", 1), asset("new", "new.png", 3), asset("middle", "middle.png", 2)],
+			assetTags: [{ assetId: "old", tagId: "a", createdAt: 0 }, { assetId: "new", tagId: "a", createdAt: 0 }, { assetId: "middle", tagId: "b", createdAt: 0 }],
+		};
+		assert.deepEqual(browseListing(tagged, { kind: "tags" }, "", "modified", "desc").tags.map((tag) => tag.tagId), ["a", "b"]);
+		assert.deepEqual(browseListing(tagged, { kind: "tags" }, "", "modified", "asc").tags.map((tag) => tag.tagId), ["b", "a"]);
 	});
 });
 
@@ -124,9 +148,15 @@ describe("locations", () => {
 	it("falls back to the nearest folder that still exists", () => {
 		assert.deepEqual(existingLocation({ kind: "folder", path: "a/gone/deeper" }, library), { kind: "folder", path: "a" });
 		assert.deepEqual(existingLocation({ kind: "folder", path: "gone" }, library), ROOT_LOCATION);
-		assert.deepEqual(existingLocation({ kind: "tag", tagId: "nope" }, library), ROOT_LOCATION);
+		assert.deepEqual(existingLocation({ kind: "tag", tagId: "nope" }, library), { kind: "tags" });
 		const kept = { kind: "folder", path: "a/deep" } as const;
 		assert.equal(existingLocation(kept, library), kept);
+	});
+
+	it("keeps the tag directory even when the last tag is removed", () => {
+		assert.deepEqual(existingLocation({ kind: "tags" }, { folders: [], tags: [] }), { kind: "tags" });
+		assert.equal(sameLocation({ kind: "tags" }, { kind: "tags" }), true);
+		assert.equal(sameLocation({ kind: "tags" }, { kind: "tag", tagId: "t" }), false);
 	});
 
 	it("builds crumbs from the root down", () => {

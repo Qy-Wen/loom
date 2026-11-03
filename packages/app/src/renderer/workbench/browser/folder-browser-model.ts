@@ -1,4 +1,4 @@
-import type { Asset, LibrarySnapshot } from "@loom/core";
+import type { Asset, LibrarySnapshot, Tag } from "@loom/core";
 import {
 	compareAssetPaths,
 	compareFolderPaths,
@@ -9,10 +9,11 @@ import {
 	type TreeRow,
 } from "../../library/tree-nav.ts";
 
-/** What the icon-mode browser shows: a folder, or a virtual set of files from the sidebar shortcuts. */
+/** A real folder, the tag directory, or a virtual set of files from a sidebar shortcut. */
 export type BrowseLocation =
 	| { kind: "folder"; path: string }
 	| { kind: "favorites" }
+	| { kind: "tags" }
 	| { kind: "tag"; tagId: string };
 
 export const ROOT_LOCATION: BrowseLocation = { kind: "folder", path: "" };
@@ -27,6 +28,7 @@ export function sameLocation(a: BrowseLocation, b: BrowseLocation): boolean {
 export interface BrowseListing {
 	folders: string[];
 	assets: Asset[];
+	tags: Tag[];
 }
 
 function lastSegment(path: string): string {
@@ -36,7 +38,7 @@ function lastSegment(path: string): string {
 /**
  * The tiles of `location`, folders first. Without a query a folder shows its direct children.
  * A query searches everything below the folder: files whose path (relative to it) matches, and folders whose name matches.
- * Favorites and tags are flat sets of files, filtered by the same path match.
+ * Favorites and individual tags are flat sets of files. The tag directory lists tags by name.
  */
 export function browseListing(
 	library: LibrarySnapshot,
@@ -46,6 +48,18 @@ export function browseListing(
 	direction: FileSortDirection,
 ): BrowseListing {
 	const normalized = query.trim().toLowerCase();
+	if (location.kind === "tags") {
+		const modified = new Map(library.assets.map((asset) => [asset.assetId, asset.modifiedAt]));
+		const times = new Map<string, number>();
+		for (const row of library.assetTags) {
+			times.set(row.tagId, Math.max(times.get(row.tagId) ?? 0, modified.get(row.assetId) ?? 0));
+		}
+		const tags = library.tags.filter((tag) => tag.name.toLowerCase().includes(normalized)).sort((a, b) => {
+			const order = sort === "modified" ? (times.get(a.tagId) ?? 0) - (times.get(b.tagId) ?? 0) : a.name.localeCompare(b.name);
+			return order ? (direction === "desc" ? -order : order) : a.name.localeCompare(b.name);
+		});
+		return { folders: [], assets: [], tags };
+	}
 	let folders: string[] = [];
 	let assets: Asset[];
 	if (location.kind === "folder") {
@@ -73,7 +87,7 @@ export function browseListing(
 	const times = contentModifiedAt(library.assets);
 	folders.sort((a, b) => compareFolderPaths(a, b, sort, times, direction));
 	assets = [...assets].sort((a, b) => compareAssetPaths(a, b, sort, direction));
-	return { folders, assets };
+	return { folders, assets, tags: [] };
 }
 
 /** The tiles as selection rows, in the order they are painted. */
@@ -135,10 +149,10 @@ export function remapLocation(location: BrowseLocation, from: string, to: string
 	return path === location.path ? location : { kind: "folder", path };
 }
 
-/** `location` if it still exists, else the nearest folder above it, else the library root. */
+/** Keep an existing location, or fall back to its nearest real or virtual parent. */
 export function existingLocation(location: BrowseLocation, library: Pick<LibrarySnapshot, "folders" | "tags">): BrowseLocation {
-	if (location.kind === "favorites") return location;
-	if (location.kind === "tag") return library.tags.some((tag) => tag.tagId === location.tagId) ? location : ROOT_LOCATION;
+	if (location.kind === "favorites" || location.kind === "tags") return location;
+	if (location.kind === "tag") return library.tags.some((tag) => tag.tagId === location.tagId) ? location : { kind: "tags" };
 	const folders = new Set(library.folders);
 	let path = location.path;
 	while (path && !folders.has(path)) path = parentFolder(path);

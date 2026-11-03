@@ -219,6 +219,7 @@ test("icon-mode root heading replaces the root row and returns from folders, fav
 	await heading.click();
 	await expect(heading).toHaveAttribute("aria-current", "location");
 	await sidebar.getByRole("button", { name: "Tags", exact: true }).click();
+	await sidebar.locator(".tags-label .folder-chevron").click();
 	await sidebar.getByRole("button", { name: "Picked", exact: true }).click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("Picked");
 	await heading.focus();

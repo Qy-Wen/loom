@@ -284,6 +284,17 @@ button.browser-crumb:hover {
 	color: var(--lm-text-muted);
 }
 
+.browser-tag-mark {
+	position: absolute;
+	top: 63%;
+	left: 50%;
+	width: 26%;
+	height: 26%;
+	color: var(--lm-graphic);
+	transform: translate(-50%, -50%);
+	pointer-events: none;
+}
+
 .browser-folder-art {
 	--browser-folder-back-fill: var(--lm-surface-track);
 	--browser-folder-front-fill: var(--lm-surface-active);

@@ -545,7 +545,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 }
 
 .favorites-symbol,
-.tags-symbol {
+.tags-symbol,
+.tag-symbol {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -557,6 +558,10 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 .tags-symbol {
 	color: var(--lm-text-accent);
+}
+
+.tag-symbol {
+	color: var(--lm-graphic);
 }
 
 .favorites-label,
@@ -582,7 +587,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	background: var(--lm-surface-hover);
 }
 
-.favorites-label.selected {
+.favorites-label.selected,
+.tags-label.selected {
 	background: var(--lm-surface-accent-strong);
 }
 
@@ -786,9 +792,10 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	background: var(--lm-surface-accent-strong);
 }
 
-/* Lines the name up with a tag name in the list view, which sits after a 21px indent and its arrow. */
+/* Match the list view's 21px indent plus its arrow, then the same icon and label gap. */
 .library-nav-item.tag-item {
 	padding-left: 29px;
+	gap: var(--lm-space-1);
 }
 
 .folder-chevron-spacer {

@@ -7,7 +7,7 @@ import { folderDropProps, useDropFolder } from "../../library/folder-drop.ts";
 import type { LibraryDisplay } from "../../library/use-library-display.ts";
 import { assetKey, folderKey, parentFolder, rowKey, selectRange, singleSelection, type PointerMode, type TreeRow, type TreeSelection } from "../../library/tree-nav.ts";
 import { useLocale } from "../../locale.tsx";
-import { AssetTile, FolderTile, type TileContext } from "./browser-tiles.tsx";
+import { AssetTile, FolderTile, TagTile, type TileContext } from "./browser-tiles.tsx";
 import { browserRows, browseListing, folderCrumbs, gridMove, isGridKey, type BrowseLocation } from "./folder-browser-model.ts";
 import { useBoxSelect } from "./use-box-select.ts";
 import { BrowserIconSizeControl } from "./browser-icon-size-control.tsx";
@@ -60,14 +60,15 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const { t } = useLocale();
 	const [iconSize, setIconSize] = useBrowserIconSize();
 	const [query, setQuery] = useState("");
+	const [selectedTagId, setSelectedTagId] = useState<string | null>(null);
 	const [dropFolder, onDropFolder] = useDropFolder();
 	const scrollRef = useRef<HTMLDivElement>(null);
 	const contentRef = useRef<HTMLDivElement>(null);
 	const searchRef = useRef<HTMLInputElement>(null);
 	const searching = query.trim().length > 0;
 	const base = location.kind === "folder" ? location.path : "";
-	const locationId = location.kind === "folder" ? `folder:${location.path}` : location.kind === "tag" ? `tag:${location.tagId}` : "favorites";
-	useEffect(() => setQuery(""), [locationId, library.rootPath]);
+	const locationId = location.kind === "folder" ? `folder:${location.path}` : location.kind === "tag" ? `tag:${location.tagId}` : location.kind;
+	useEffect(() => { setQuery(""); setSelectedTagId(null); }, [locationId, library.rootPath]);
 
 	const listing = useMemo(
 		() => browseListing(library, location, query, display.fileSort, display.fileSortDirection),
@@ -79,17 +80,18 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const favoriteAssetIds = useMemo(() => new Set(library.favoriteAssetIds), [library.favoriteAssetIds]);
 	const rootName = library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? t.library.noFolder;
 	const tag = location.kind === "tag" ? library.tags.find((item) => item.tagId === location.tagId) : undefined;
-	const where = location.kind === "favorites" ? t.library.favorites : location.kind === "tag" ? (tag?.name ?? "") : (base ? base.slice(base.lastIndexOf("/") + 1) : rootName);
+	const where = location.kind === "favorites" ? t.library.favorites : location.kind === "tags" ? t.library.tags : location.kind === "tag" ? (tag?.name ?? "") : (base ? base.slice(base.lastIndexOf("/") + 1) : rootName);
 
 	const { box, onPointerDown } = useBoxSelect({ scrollRef, contentRef, selection, onSelection });
 
 	// Keep the focused tile in view as the arrow keys move it.
 	useLayoutEffect(() => {
-		if (!selection.focus) return;
+		const focus = location.kind === "tags" ? (selectedTagId ? `tag:${selectedTagId}` : null) : selection.focus;
+		if (!focus) return;
 		for (const element of contentRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? []) {
-			if (element.dataset.key === selection.focus) element.scrollIntoView({ block: "nearest", inline: "nearest" });
+			if (element.dataset.key === focus) element.scrollIntoView({ block: "nearest", inline: "nearest" });
 		}
-	}, [selection.focus, locationId]);
+	}, [selection.focus, selectedTagId, locationId]);
 
 	const context: TileContext = {
 		selectedKeys,
@@ -115,11 +117,29 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 
 	function goUp(): void {
 		if (location.kind === "folder" && location.path) onLocation({ kind: "folder", path: parentFolder(location.path) });
+		else if (location.kind === "tag") onLocation({ kind: "tags" });
+		else if (location.kind === "tags") onLocation({ kind: "folder", path: "" });
 	}
 
 	function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 		const mod = event.metaKey || event.ctrlKey;
+		if (location.kind === "tags") {
+			if (mod || event.altKey) return;
+			if (isGridKey(event.key)) {
+				event.preventDefault();
+				event.currentTarget.focus();
+				const next = gridMove(listing.tags.findIndex((tag) => tag.tagId === selectedTagId), event.key, contentRef.current ? tileColumns(contentRef.current) : 1, listing.tags.length);
+				if (next >= 0) setSelectedTagId(listing.tags[next].tagId);
+			} else if (event.key === "Enter" && selectedTagId && listing.tags.some((tag) => tag.tagId === selectedTagId)) {
+				event.preventDefault();
+				onLocation({ kind: "tag", tagId: selectedTagId });
+			} else if (event.key === "Backspace") {
+				event.preventDefault();
+				goUp();
+			}
+			return;
+		}
 		if (!mod && !event.altKey) {
 			const current = rows.findIndex((row) => rowKey(row) === selection.focus);
 			if (isGridKey(event.key)) {
@@ -152,13 +172,16 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const crumbs: { label: string; target: BrowseLocation | null; drop: string | null }[] = [{ label: rootName, target: { kind: "folder", path: "" }, drop: "" }];
 	if (location.kind === "folder") {
 		for (const crumb of folderCrumbs(location.path)) crumbs.push({ label: crumb.name, target: { kind: "folder", path: crumb.path }, drop: crumb.path });
+	} else if (location.kind === "tag" || location.kind === "tags") {
+		crumbs.push({ label: t.library.tags, target: { kind: "tags" }, drop: null });
+		if (location.kind === "tag") crumbs.push({ label: where, target: null, drop: null });
 	} else {
 		crumbs.push({ label: where, target: null, drop: null });
 	}
 	const emptyText = searching ? t.browser.noMatches
 		: location.kind === "favorites" ? t.browser.noFavorites
-			: location.kind === "tag" ? t.browser.noTagged : t.browser.empty;
-	const count = rows.length;
+			: location.kind === "tag" ? t.browser.noTagged : location.kind === "tags" ? t.browser.noTags : t.browser.empty;
+	const count = rows.length + listing.tags.length;
 	const dropHere = location.kind === "folder" && dropFolder === location.path;
 	const dropPath = location.kind === "folder" ? location.path : "";
 
@@ -220,7 +243,13 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 				className={`browser-scroll thin-scroll${dropHere ? " drop-target" : ""}`}
 				tabIndex={0}
 				onKeyDown={onKeyDown}
-				onPointerDown={onPointerDown}
+				onPointerDown={(event) => {
+					if (location.kind !== "tags") { onPointerDown(event); return; }
+					if (event.button === 0 && event.target instanceof Element && !event.target.closest("[data-key], button")) {
+						setSelectedTagId(null);
+						event.currentTarget.focus({ preventScroll: true });
+					}
+				}}
 				onDragOver={(event) => {
 					if (location.kind !== "folder") return;
 					if (hasOsFileDrag(event.dataTransfer)) {
@@ -244,7 +273,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 				onContextMenu={(event) => {
 					if (event.target instanceof Element && event.target.closest("[data-key]")) return;
 					event.preventDefault();
-					if (location.kind === "folder") props.onLibraryContextMenu();
+						if (location.kind === "folder") props.onLibraryContextMenu();
 				}}
 			>
 				<div ref={contentRef} className="browser-content">
@@ -252,6 +281,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 						<div className="browser-empty">{emptyText}</div>
 					) : (
 						<div className="browser-grid">
+							{listing.tags.map((tag) => <TagTile key={tag.tagId} tag={tag} selected={selectedTagId === tag.tagId} onSelect={() => setSelectedTagId(tag.tagId)} onOpen={() => onLocation({ kind: "tag", tagId: tag.tagId })} />)}
 							{listing.folders.map((path) => <FolderTile key={folderKey(path)} relativePath={path} preview={folderPreviews.get(path)} context={context} base={base} searching={searching} />)}
 							{listing.assets.map((asset) => <AssetTile key={assetKey(asset.assetId)} asset={asset} context={context} base={base} searching={searching} />)}
 						</div>

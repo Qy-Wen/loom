@@ -7,6 +7,7 @@ import { folderDropProps } from "./folder-drop.ts";
 import { clickMode, useScrollWhenFocused, useTree } from "./tree-context.tsx";
 import { compareAssetPaths, compareFolderPaths, coversPath, folderKey } from "./tree-nav.ts";
 import { useInlineRename } from "./use-inline-rename.ts";
+import { useFolderDoubleClick } from "./use-folder-double-click.ts";
 
 interface FolderNode {
 	name: string;
@@ -43,9 +44,6 @@ function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 	return root;
 }
 
-/** Two clicks on a folder row this close together fold it in icon mode. */
-const DOUBLE_CLICK_MS = 400;
-
 function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number }): React.JSX.Element {
 	const { t } = useLocale();
 	const tree = useTree();
@@ -59,7 +57,7 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 	const renaming = folder.relativePath === tree.renamingFolder;
 	const cut = coversPath(tree.cutFolders, folder.relativePath);
 	const rowRef = useRef<HTMLDivElement | null>(null);
-	const lastClick = useRef(0);
+	const isDoubleClick = useFolderDoubleClick();
 	useScrollWhenFocused(rowRef, picking ? tree.focusKey === key : selected, key);
 	const renameInput = useInlineRename(
 		folder.name,
@@ -71,16 +69,14 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 	function chooseFolder(event: React.MouseEvent): void {
 		if (tree.foldersOnly) {
 			// A modifier click edits the selection and leaves the browser where it is.
+			const double = isDoubleClick(event);
 			const mode = clickMode(event);
 			tree.onSelectFolder(folder.relativePath, mode);
 			if (mode !== "replace") {
-				lastClick.current = 0;
 				return;
 			}
 			// A click opens the folder in the browser; a second one soon after folds it. The clicks are timed here
 			// instead of using `dblclick`, which fires once per run of clicks and so ignores a quick second double click.
-			const double = lastClick.current > 0 && event.timeStamp - lastClick.current <= DOUBLE_CLICK_MS;
-			lastClick.current = double ? 0 : event.timeStamp;
 			if (double) tree.onToggleFolder(folder.relativePath);
 			return;
 		}
