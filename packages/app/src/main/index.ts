@@ -602,7 +602,6 @@ function registerIpc(): void {
 			const { t } = await uiCopy();
 			return popupContextMenu<LibraryContextAction>(event, [
 				{ label: t.menu.newFolder, click: () => "new_folder" },
-				{ label: t.menu.newMdFile, click: () => "new_md_file" },
 				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 			]);
 		},
@@ -626,10 +625,6 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.createFolder, (_event, parentRelativePath: string) => {
 		return localCore.createFolder(parentRelativePath);
-	});
-
-	ipcMain.handle(IPC.createMarkdownFile, (_event, parentRelativePath: string) => {
-		return localCore.createMarkdownFile(parentRelativePath);
 	});
 
 	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {

@@ -910,23 +910,6 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function createMarkdownIn(parentRelativePath: string): Promise<void> {
-		if (!library.rootPath) return;
-		setError(null);
-		try {
-			const created = await window.loom.createMarkdownFile(parentRelativePath);
-			if (iconMode) {
-				setLocation({ kind: "folder", path: parentRelativePath });
-				setPicked(singleSelection(assetKey(created.assetId)));
-			} else {
-				selectAsset(created.assetId);
-			}
-			setRenamingAssetId(created.assetId);
-		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
-		}
-	}
-
 	async function showLibraryContextMenu(): Promise<void> {
 		if (!library.rootPath) return;
 		setError(null);
@@ -934,7 +917,6 @@ export function App(): React.JSX.Element {
 			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
 			const here = iconMode ? browsedPath() : "";
 			if (action === "new_folder") await createFolderIn(here);
-			else if (action === "new_md_file") await createMarkdownIn(here);
 			else if (action === "paste") await pasteInto(here);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));

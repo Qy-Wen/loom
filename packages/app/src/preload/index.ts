@@ -22,7 +22,6 @@ const api: LoomApi = {
 	copyAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.copyAssetsInto, assetIds, destFolder),
 	moveAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.moveAssetsInto, assetIds, destFolder),
 	createFolder: (parentRelativePath) => ipcRenderer.invoke(IPC.createFolder, parentRelativePath),
-	createMarkdownFile: (parentRelativePath) => ipcRenderer.invoke(IPC.createMarkdownFile, parentRelativePath),
 	renameFolder: (relativePath, name) => ipcRenderer.invoke(IPC.renameFolder, relativePath, name),
 	copyFolderInto: (sourceFolder, destFolder) =>
 		ipcRenderer.invoke(IPC.copyFolderInto, sourceFolder, destFolder),
