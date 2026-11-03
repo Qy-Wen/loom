@@ -118,7 +118,6 @@ function renderRelease() {
   const secondary = document.querySelector("#download-secondary");
   secondary.replaceChildren();
   let available = false;
-  let hasDomestic = false;
   for (const button of document.querySelectorAll("[data-download]")) {
     const download = release.downloads[button.dataset.download];
     const domestic = validPublicUrl(download?.domestic);
@@ -131,7 +130,6 @@ function renderRelease() {
       continue;
     }
     available = true;
-    hasDomestic ||= !!domestic;
     button.href = url;
     button.removeAttribute("aria-disabled");
     button.textContent = domestic ? text("国内下载 ↗", "Direct download ↗") : text("GitHub 下载 ↗", "GitHub download ↗");
@@ -147,12 +145,6 @@ function renderRelease() {
     document.querySelector("#release-status").textContent = `${release.version || "PREVIEW"} / ${text("可下载", "AVAILABLE")}`;
     document.querySelector('[data-i18n="download.eyebrow"]').textContent = text("预览版已就绪", "THE PREVIEW IS READY");
     document.querySelector('[data-i18n="download.description"]').textContent = text("选择适合你系统的预览版安装包。首次使用可参考上方快速开始，模型服务需按需配置。", "Choose a preview installer for your system. Follow the quick start above and configure model services as needed.");
-    document.querySelector('[data-i18n="download.note"]').textContent = hasDomestic
-      ? text("优先使用独立的国内下载源。部分系统的安装包可能仍在准备中。第三方模型 API 费用另计。", "Independent direct downloads are prioritized. Installers for some systems may still be in preparation. Third-party model API fees are separate.")
-      : text("当前已提供的安装包通过 GitHub 下载，国内下载源仍在准备中。第三方模型 API 费用另计。", "Available installers are currently hosted on GitHub. Independent downloads for mainland China are still being prepared. Third-party model API fees are separate.");
-    document.querySelector('[data-i18n="faq.a4"]').textContent = hasDomestic
-      ? text("下载区已接入独立下载源。标有「国内下载」的按钮无需先访问 GitHub；各系统的可用状态请以下载区为准。", "Independent downloads are available in the download section. Buttons labeled “Direct download” do not require GitHub. Availability varies by system.")
-      : text("当前可用的安装包仍通过 GitHub 下载。独立的国内下载源准备中，接入后会在下载区标明。", "Available installers are currently hosted on GitHub. Independent downloads are being prepared and will be labeled in the download section.");
   }
 }
 

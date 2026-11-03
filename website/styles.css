@@ -306,10 +306,23 @@ h2 { font-size: clamp(30px, 3.3vw, 46px); font-weight: 600; letter-spacing: -.04
 .mac-symbol { font-size: 25px; }
 .download-button { margin-left: auto; padding: 7px 12px; border: 1px solid #ccd4be; border-radius: 4px; color: #9aa48b; font-size: 10px; white-space: nowrap; }
 .download-button:not([aria-disabled="true"]) { color: #526748; background: #f5f7ed; }
-.download-note { font-size: 10px; color: #909a80; line-height: 1.8; margin-top: 12px; border-top: 1px solid #d3dac6; padding-top: 14px; }
 .download-secondary { display: grid; gap: 8px; font-size: 10px; color: #6b8059; }
 .download-secondary:empty { display: none; }
 .download-secondary a { text-decoration: underline; text-underline-offset: 3px; }
+.install-help { margin-top: 24px; padding-top: 20px; border-top: 1px solid #d3dac6; color: #65745a; }
+.install-help h3 { font-size: 13px; font-weight: 550; color: #526748; }
+.install-notice { margin: 10px 0 16px; font-size: 11px; line-height: 1.9; }
+.install-notice p + p { margin-top: 12px; }
+.install-help details { border-top: 1px solid #d3dac6; }
+.install-help summary { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; font-size: 12px; line-height: 1.6; list-style: none; cursor: pointer; }
+.install-help summary::-webkit-details-marker { display: none; }
+.install-help summary::after { content: "+"; flex-shrink: 0; font-family: var(--mono); font-size: 16px; }
+.install-help details[open] summary::after { content: "−"; }
+.install-steps { padding-bottom: 18px; font-size: 12px; line-height: 1.9; overflow-wrap: anywhere; }
+.install-steps ol { margin: 0; padding-left: 20px; }
+.install-steps li + li { margin-top: 10px; }
+.install-steps p { margin: 12px 0; }
+.install-help a { color: #526748; text-decoration: underline; text-underline-offset: 3px; }
 .faq { display: grid; grid-template-columns: .8fr 1.2fr; gap: 80px; }
 .faq-heading .eyebrow { color: #8a9183; font-size: 10px; margin-bottom: 24px; }
 .faq-heading h2 { font-size: 37px; }
