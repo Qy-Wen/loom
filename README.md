@@ -8,6 +8,8 @@ A local-first AI workbench that turns your folders into an asset library you can
 
 Preview installers for macOS (Apple Silicon and Intel) and Windows x64 are available from the website. You can also run Loom from source using the steps below.
 
+![Loom showing a local asset library, an image preview, and the chat panel](./docs/images/library-preview.png)
+
 ## What you can do
 
 - **Browse your files.** Keep your own folder layout. Preview images, video, audio, PDFs, and Markdown; organize assets with tags and favorites.
@@ -18,6 +20,10 @@ Preview installers for macOS (Apple Silicon and Intel) and Windows x64 are avail
 - **Connect creative tools.** Add MCP servers such as ComfyUI for generation, or third-party servers for social publishing. These require separate setup and authentication; available features depend on the server.
 
 For example, ask Loom to find a reference image, extract a frame from a video, or update a project's status. Attach a library file to the composer to identify the asset you mean.
+
+| Organize assets in a table | Trace relationships between assets |
+| --- | --- |
+| [![Asset table with custom approval, rating, and status fields](./docs/images/asset-table.png)](./docs/images/asset-table.png) | [![Asset graph connecting references, generated images, and video](./docs/images/asset-graph.png)](./docs/images/asset-graph.png) |
 
 ## Quick start
 

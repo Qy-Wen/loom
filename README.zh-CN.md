@@ -8,6 +8,8 @@
 
 目前提供 macOS（Apple Silicon 与 Intel）和 Windows x64 的预发布安装包，可从官网获取；也可以按下方步骤从源码运行。
 
+![Loom 本地素材库、图片预览与对话面板](./docs/images/library-preview.png)
+
 ## 可以做什么
 
 - **浏览和整理文件。** 保留自己的目录结构，预览图片、视频、音频、PDF 和 Markdown，用标签与收藏组织素材。
@@ -18,6 +20,10 @@
 - **接入创作工具。** 通过 MCP 连接 ComfyUI 等生成工具，也可接入第三方社交平台发布服务。服务需要另行配置和鉴权，具体能力取决于服务本身。
 
 例如，让 Loom 找一张参考图、从视频里截一帧，或更新项目状态。把库里的文件放进输入框，就能明确指定要操作的素材。
+
+| 用表格整理素材 | 用关系图追溯创作过程 |
+| --- | --- |
+| [![素材表格：自定义审核、评分和状态字段](./docs/images/asset-table.png)](./docs/images/asset-table.png) | [![素材关系图：连接参考图、生成图片与视频](./docs/images/asset-graph.png)](./docs/images/asset-graph.png) |
 
 ## 快速开始
 
