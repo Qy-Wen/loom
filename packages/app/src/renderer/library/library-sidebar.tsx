@@ -304,6 +304,9 @@ export function LibrarySidebar({
 						) : null}
 					</>}
 					filesProps={{
+						onClick: (event) => {
+							if (iconMode && event.target === event.currentTarget) onLocation({ kind: "folder", path: "" });
+						},
 						onDragOver: (event) => {
 							if (hasOsFileDrag(event.dataTransfer)) {
 								event.preventDefault();

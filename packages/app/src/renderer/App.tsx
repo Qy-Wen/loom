@@ -686,18 +686,20 @@ export function App(): React.JSX.Element {
 		if (next) setLibraryClipboard(next);
 	}
 
-	function revealCreatedFolder(relativePath: string): void {
-		if (iconMode) setLocation({ kind: "folder", path: parentFolder(relativePath) });
-		selectFolder(relativePath);
-		beginFolderRename(relativePath);
+	function revealCreatedFolder(relativePath: string, fromTree: boolean): void {
+		if (iconMode && !fromTree) setLocation({ kind: "folder", path: parentFolder(relativePath) });
+		const next = singleSelection(folderKey(relativePath));
+		setPicked(next);
+		if (iconMode && fromTree) setTreePicked(next);
+		beginFolderRename(relativePath, fromTree);
 		revealFolders([relativePath]);
 	}
 
-	async function createFolderIn(parentRelativePath: string): Promise<void> {
+	async function createFolderIn(parentRelativePath: string, fromTree = false): Promise<void> {
 		if (!library.rootPath) return;
 		setError(null);
 		try {
-			revealCreatedFolder(await window.loom.createFolder(parentRelativePath));
+			revealCreatedFolder(await window.loom.createFolder(parentRelativePath), fromTree);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -900,7 +902,7 @@ export function App(): React.JSX.Element {
 			} else if (action === "paste") {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
-				await createFolderIn(relativePath);
+				await createFolderIn(relativePath, fromTree);
 			} else if (action === "copy_path") {
 				await copySelectionPaths(next);
 			} else if (action === "reveal") {
@@ -913,14 +915,13 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function showLibraryContextMenu(): Promise<void> {
+	async function showLibraryContextMenu(relativePath: string, fromTree = false): Promise<void> {
 		if (!library.rootPath) return;
 		setError(null);
 		try {
 			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
-			const here = iconMode ? browsedPath() : "";
-			if (action === "new_folder") await createFolderIn(here);
-			else if (action === "paste") await pasteInto(here);
+			if (action === "new_folder") await createFolderIn(relativePath, fromTree);
+			else if (action === "paste") await pasteInto(relativePath);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -1064,7 +1065,7 @@ export function App(): React.JSX.Element {
 			else if (selection.focus?.startsWith("asset:")) setRenamingAssetId(selection.focus.slice("asset:".length));
 		} else if (mod && event.shiftKey && key === "n") {
 			event.preventDefault();
-			void createFolderIn(pasteDestination());
+			void createFolderIn(pasteDestination(), fromTree);
 		} else if (isLibraryTrashKey(event, mac)) {
 			event.preventDefault();
 			setError(null);
@@ -1431,7 +1432,7 @@ export function App(): React.JSX.Element {
 						onSelectFolder={(relativePath, mode, rows) => chooseTreeKey(folderKey(relativePath), mode, rows)}
 						onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
 						onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath, true)}
-						onLibraryContextMenu={() => void showLibraryContextMenu()}
+						onLibraryContextMenu={() => void showLibraryContextMenu("", true)}
 						onRenameAsset={renameAsset}
 						onRenameFolder={renameFolder}
 						onCancelRename={cancelRename}
@@ -1510,7 +1511,7 @@ export function App(): React.JSX.Element {
 									onOpenAsset={selectAsset}
 									onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}
 									onFolderContextMenu={(relativePath) => void showFolderContextMenu(relativePath)}
-									onLibraryContextMenu={() => void showLibraryContextMenu()}
+									onLibraryContextMenu={() => void showLibraryContextMenu(browsedPath())}
 									onRenameAsset={renameAsset}
 									onRenameFolder={renameFolder}
 									onCancelRename={cancelRename}

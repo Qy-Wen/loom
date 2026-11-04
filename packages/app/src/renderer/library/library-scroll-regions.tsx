@@ -10,7 +10,7 @@ function ScrollArea({ className = "", scrollRef, ...props }: HTMLAttributes<HTML
 /** Favorites/tags and the file tree scroll independently; the upper pane shrinks to its contents. */
 export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, moreHint, filesProps }: {
 	shortcuts: ReactNode | null; filesHeader: ReactNode; children: ReactNode; label: string; moreHint: string;
-	filesProps: Pick<HTMLAttributes<HTMLDivElement>, "onDragOver" | "onDrop" | "onContextMenu">;
+	filesProps: Pick<HTMLAttributes<HTMLDivElement>, "onClick" | "onDragOver" | "onDrop" | "onContextMenu">;
 }): React.JSX.Element {
 	const root = useRef<HTMLDivElement>(null);
 	const content = useRef<HTMLDivElement>(null);

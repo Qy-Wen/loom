@@ -189,7 +189,7 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveText("cover.png");
 });
 
-test("icon-mode root heading replaces the root row and returns from folders, favorites, and tags", async ({ loomPage, electronApp }) => {
+test("icon-mode root heading and sidebar blank area return from folders, favorites, and tags", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
 	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
@@ -208,20 +208,36 @@ test("icon-mode root heading replaces the root row and returns from folders, fav
 	await expect(heading).toHaveAttribute("aria-current", "location");
 	await expect(sidebar.locator(".folder-row")).toHaveCount(1);
 	await expect(sidebar.locator(".folder-row.root-row")).toHaveCount(0);
+	const blank = sidebar.locator(".asset-list");
+	const clickBlank = async () => {
+		const bounds = await blank.boundingBox();
+		await blank.click({ position: { x: bounds!.width / 2, y: bounds!.height - 10 } });
+		await expect(heading).toHaveAttribute("aria-current", "location");
+		await expect(sidebar.locator(".folder-row.selected")).toHaveCount(0);
+		await expect(browser.locator(".browser-crumb-item")).toHaveCount(1);
+	};
 	await sidebar.locator(".folder-main").filter({ hasText: /^empty$/ }).click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("empty");
 	await expect(heading).not.toHaveAttribute("aria-current");
+	await browser.locator(".browser-empty").click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("empty");
+	await clickBlank();
+	await sidebar.locator(".folder-main").filter({ hasText: /^empty$/ }).click();
 	await heading.click();
 	await expect(heading).toHaveAttribute("aria-current", "location");
 	await expect(browser.locator(".browser-tile-name")).toHaveText(["empty", "notes.md"]);
 	await sidebar.getByRole("button", { name: "Favorites", exact: true }).click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("Favorites");
+	await clickBlank();
+	await sidebar.getByRole("button", { name: "Favorites", exact: true }).click();
 	await heading.click();
 	await expect(heading).toHaveAttribute("aria-current", "location");
 	await sidebar.getByRole("button", { name: "Tags", exact: true }).click();
 	await sidebar.locator(".tags-label .folder-chevron").click();
 	await sidebar.getByRole("button", { name: "Picked", exact: true }).click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("Picked");
+	await clickBlank();
+	await sidebar.getByRole("button", { name: "Picked", exact: true }).click();
 	await heading.focus();
 	await heading.press("Enter");
 	await expect(heading).toHaveAttribute("aria-current", "location");
