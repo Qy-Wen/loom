@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useLocale } from "../../locale.tsx";
 import { uiPlatform } from "../../../shared/locale.ts";
 import {
@@ -63,6 +63,7 @@ export function MediaViewport({
 	children: ReactNode;
 }): React.JSX.Element {
 	const { t } = useLocale();
+	const stageRef = useRef<HTMLDivElement>(null);
 	const frameRef = useRef<HTMLDivElement>(null);
 	const viewportRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<MediaView>(FIT_MEDIA_VIEW);
@@ -76,6 +77,20 @@ export function MediaViewport({
 	const [media, setMedia] = useState<HTMLImageElement | HTMLVideoElement | null>(null);
 	const [panning, setPanning] = useState(false);
 	const [zoomControlsVisible, setZoomControlsVisible] = useState(false);
+
+	useEffect(() => {
+		if (kind !== "video") return;
+		const stage = stageRef.current;
+		stage?.focus({ preventScroll: true });
+		let fullscreen = false;
+		const onFullscreen = () => {
+			const active = stage !== null && document.fullscreenElement?.contains(stage) === true;
+			if (active || fullscreen) stage?.focus({ preventScroll: true });
+			fullscreen = active;
+		};
+		document.addEventListener("fullscreenchange", onFullscreen);
+		return () => document.removeEventListener("fullscreenchange", onFullscreen);
+	}, [assetId, kind]);
 
 	function commit(next: MediaView): void {
 		viewRef.current = next;
@@ -216,8 +231,43 @@ export function MediaViewport({
 	const video = kind === "video" && media instanceof HTMLVideoElement ? media : null;
 	const percent = `${Math.round(view.scale * 100)}%`;
 
+	function onVideoKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
+		if (!video || video.readyState < 1 || event.defaultPrevented || event.nativeEvent.isComposing || event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+		const target = event.target;
+		if (target instanceof Element && target.closest("input, textarea, select, [contenteditable]:not([contenteditable='false']), [role='listbox'], [role='option']")) return;
+		if (event.key === " ") {
+			// Keep native Space activation for focused buttons, including play/pause.
+			if (target instanceof Element && target.closest("button, a[href]")) return;
+			if (!event.repeat) {
+				if (video.paused) void video.play().catch(() => undefined);
+				else video.pause();
+			}
+		} else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+			if (!Number.isFinite(video.duration)) return;
+			video.currentTime = Math.max(0, Math.min(video.duration, video.currentTime + (event.key === "ArrowRight" ? 5 : -5)));
+		} else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+			const volume = video.muted ? 0 : video.volume;
+			const next = Math.round(Math.max(0, Math.min(1, volume + (event.key === "ArrowUp" ? 0.05 : -0.05))) * 100) / 100;
+			video.volume = next;
+			video.muted = next === 0;
+		} else return;
+		event.preventDefault();
+		event.stopPropagation();
+	}
+
 	return (
-		<div className="media-stage">
+		<div
+			ref={stageRef}
+			className="media-stage"
+			tabIndex={kind === "video" ? 0 : undefined}
+			aria-keyshortcuts={kind === "video" ? "Space ArrowUp ArrowDown ArrowLeft ArrowRight" : undefined}
+			onKeyDown={onVideoKeyDown}
+			onPointerDownCapture={(event) => {
+				if (kind !== "video") return;
+				if (event.target instanceof Element && event.target.closest("button, a[href], input, textarea, select, [contenteditable]:not([contenteditable='false'])")) return;
+				event.currentTarget.focus({ preventScroll: true });
+			}}
+		>
 			<div ref={frameRef} className={`media-frame${panning ? " is-panning" : ""}`}>
 				<div
 					ref={viewportRef}

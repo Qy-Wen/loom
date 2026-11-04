@@ -69,7 +69,7 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 	}, []);
 
 	useEffect(() => {
-		card.current?.focus({ preventScroll: true });
+		if (!card.current?.contains(document.activeElement)) card.current?.focus({ preventScroll: true });
 	}, []);
 
 	const label = fullscreen ? t.browser.exitFullscreen : t.browser.fullscreen;
