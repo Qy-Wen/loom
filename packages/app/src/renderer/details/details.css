@@ -7,6 +7,7 @@
 
 .enrichment-heading {
 	display: flex;
+	flex-wrap: wrap;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--lm-space-4);
@@ -406,4 +407,87 @@
 	display: flex;
 	align-items: center;
 	gap: var(--lm-space-3);
+}
+
+.detail-section-heading {
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-sm);
+	text-transform: none;
+}
+
+.media-analysis-sections {
+	margin-top: var(--lm-space-6);
+}
+
+.media-analysis-sections > section + section {
+	margin-top: var(--lm-space-6);
+	padding-top: 0;
+	border-top: 0;
+}
+
+.media-analysis-sections > section > .properties {
+	margin-top: 0;
+}
+
+.detail-action-button {
+	min-height: var(--lm-size-md);
+	padding: var(--lm-space-2) var(--lm-space-4);
+	border: 1px solid var(--lm-border-strong);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-xs);
+	font-weight: 500;
+	line-height: 1.5;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.detail-action-button:hover:not(:disabled) {
+	background: var(--lm-surface-hover);
+}
+
+.detail-action-primary {
+	border-color: transparent;
+	background: var(--lm-accent-solid);
+	color: var(--lm-text-on-fill);
+}
+
+.detail-action-primary:hover:not(:disabled) {
+	background: var(--lm-accent-solid-hover);
+}
+
+.detail-action-button:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 2px;
+}
+
+.detail-action-button:disabled {
+	opacity: 0.55;
+	cursor: default;
+}
+
+.properties.analysis-properties {
+	grid-template-columns: 70px minmax(0, 1fr);
+}
+
+.analysis-properties .analysis-status-label {
+	align-self: center;
+}
+
+.properties dd.analysis-status {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--lm-space-3);
+	overflow: visible;
+	white-space: normal;
+}
+
+.analysis-status .detail-action-button {
+	margin-left: auto;
+	min-height: calc(var(--lm-size-sm) + var(--lm-space-1));
+	padding: var(--lm-space-1) var(--lm-space-3);
+	font-size: var(--lm-text-size-xs);
 }

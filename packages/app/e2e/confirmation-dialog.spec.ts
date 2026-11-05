@@ -227,7 +227,7 @@ test("sign-out confirmation sits above Settings and Escape closes only the confi
 });
 
 for (const media of [false, true]) {
-	test(`existing ${media ? "description choices" : "reindex confirmation"} use the shared dialog`, async ({ loomPage, electronApp }) => {
+	test(`existing ${media ? "media index and description" : "text index"} use separate confirmations`, async ({ loomPage, electronApp }) => {
 		test.skip(!electronApp, "isolated enrichment required");
 		await expect(loomPage.locator(".library-sidebar")).toBeVisible();
 		const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
@@ -247,18 +247,20 @@ for (const media of [false, true]) {
 		}, media);
 		await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: name }).click();
 		await loomPage.getByRole("button", { name: "Details", exact: true }).click();
-		const trigger = loomPage.locator(".details-content").getByRole("button", { name: media ? "Describe" : "Embed", exact: true });
+		const trigger = loomPage.locator(".details-content").getByRole("button", { name: "Re-index", exact: true });
 		await trigger.click();
-		const dialog = loomPage.getByRole("dialog", { name: media ? "Already described" : "Already indexed", exact: true });
-		await expect(dialog.getByRole("button")).toHaveCount(media ? 3 : 2);
+		const dialog = loomPage.getByRole("dialog", { name: "Already indexed", exact: true });
+		await expect(dialog.getByRole("button")).toHaveCount(2);
 		await loomPage.keyboard.press("Escape");
 		expect(await electronApp!.evaluate(() => (globalThis as typeof globalThis & { confirmationEnrichment: string[] }).confirmationEnrichment)).toEqual([]);
 		await trigger.click();
-		await dialog.getByRole("button", { name: media ? "Index only" : "Re-embed", exact: true }).click();
+		await dialog.getByRole("button", { name: "Re-index", exact: true }).click();
 		await expect.poll(() => electronApp!.evaluate(() => (globalThis as typeof globalThis & { confirmationEnrichment: string[] }).confirmationEnrichment)).toEqual(["index"]);
 		if (media) {
-			await trigger.click();
-			await dialog.getByRole("button", { name: "Re-describe and index", exact: true }).click();
+			await loomPage.locator(".details-content").getByRole("button", { name: "Re-describe", exact: true }).click();
+			const descriptionDialog = loomPage.getByRole("dialog", { name: "Already described", exact: true });
+			await expect(descriptionDialog).not.toContainText("Index only");
+			await descriptionDialog.getByRole("button", { name: "Re-describe", exact: true }).click();
 			await expect.poll(() => electronApp!.evaluate(() => (globalThis as typeof globalThis & { confirmationEnrichment: string[] }).confirmationEnrichment)).toEqual(["index", "describe"]);
 		}
 	});

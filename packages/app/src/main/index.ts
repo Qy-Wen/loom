@@ -727,19 +727,19 @@ function registerIpc(): void {
 		signal.throwIfAborted();
 		return localCore.getImageVlmStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeThenIndex(assetId, () => describeImageWithSettings(assetId, undefined, { force: true })));
+	ipcMain.handle(IPC.describeImage, (_event, assetId: string) => describeImageWithSettings(assetId, undefined, { force: true }));
 	ipcMain.handle(IPC.getVideoVlmStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).vlm.model.trim() : "";
 		signal.throwIfAborted();
 		return localCore.getVideoVlmStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeThenIndex(assetId, () => describeVideoWithSettings(assetId, undefined, { force: true })));
+	ipcMain.handle(IPC.describeVideo, (_event, assetId: string) => describeVideoWithSettings(assetId, undefined, { force: true }));
 	ipcMain.handle(IPC.getAudioWriteupStatus, (_event, assetId: string) => localCore.runLibraryTask(async (signal) => {
 		const modelId = modelSettings ? (await modelSettings.load()).audio.model.trim() : "";
 		signal.throwIfAborted();
 		return localCore.getAudioWriteupStatus(assetId, modelId || undefined);
 	}));
-	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeThenIndex(assetId, () => describeAudioWithSettings(assetId, undefined, { force: true })));
+	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId, undefined, { force: true }));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.createSession, async () => {
 		return chatRecord(await requireChat().createSession());
@@ -1266,22 +1266,6 @@ async function restoreLastLibrary(): Promise<void> {
 	} catch (error) {
 		console.error("Failed to reopen last library", error);
 	}
-}
-
-/**
- * The Details button always asks the model again (the renderer confirms first when a fresh
- * description exists) and then indexes, in one step. Agent tools keep calling the
- * single-step functions. An unusable Embedding slot only skips indexing; it never fails the description.
- */
-async function describeThenIndex<T extends { status: string }>(assetId: string, describe: () => Promise<T>): Promise<T> {
-	const status = await describe();
-	if (status.status !== "ready" || openingLibrary || shutdownStarted) return status;
-	try {
-		if (await embeddingProviderFromSettings()) await embedAssetWithSettings(assetId);
-	} catch (error) {
-		appLog(`Indexing after describe failed: ${error instanceof Error ? error.message : String(error)}`);
-	}
-	return status;
 }
 
 async function describeImageWithSettings(assetId: string, signal?: AbortSignal, options?: DescribeOptions) {

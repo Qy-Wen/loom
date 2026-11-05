@@ -55,7 +55,7 @@ Neither follows relations; the Agent calls `inspect_asset` for those. Why they a
 
 ### When indexing happens
 
-Chunking and vectors go together. They happen only when the user clicks Embed, the Agent calls `embed_asset`, or an image / video / audio write-up finishes and indexing follows. Importing and opening a library do not chunk.
+Chunking and vectors go together. They happen only when the user clicks Index or the Agent calls `embed_asset`. Describe only generates a write-up; Describe and index runs the two steps in order and stops if describing fails. Importing and opening a library do not chunk.
 
 - Why: synchronous chunking takes about 2 s per MiB, too heavy to run over a whole library on its own; vectors call an external API and cost money, so the user must ask for them.
 - Result: a file that was never embedded has no chunks and deep search cannot see it. Without an Embedding model no chunks are built.
@@ -128,7 +128,7 @@ Standalone audio files. A separate Audio slot, not the VLM slot (which is vision
 - Simple search also covers the write-up, so a word in a caption finds the file without an index.
 - Index freshness follows the write-up: one saved after the index was built, or no longer matching the file's modified time, makes the index stale.
 - Chunk offsets point into the write-up Markdown. Video and audio hits carry no time range yet.
-- Describing and indexing are two steps in the core; only the app joins them (the Describe button, and the Agent's `describe_*` then `embed_asset`).
+- Describing and indexing are separate actions with independent statuses and retry buttons. Media shows the Index section only after a successful, current description. The Agent calls `describe_*` then `embed_asset` when both are needed.
 
 ---
 

@@ -304,7 +304,7 @@ export function App(): React.JSX.Element {
 			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}
 			enrichment={enrichment} textEmbed={textEmbed} embedding={embedding} onEmbed={(force) => void embedSelected(force)}
-			imageVlm={imageVlm} videoVlm={videoVlm} audioWriteup={audioWriteup} describing={describing} onDescribe={() => void describeSelected()}
+			imageVlm={imageVlm} videoVlm={videoVlm} audioWriteup={audioWriteup} describing={describing} onDescribe={(indexAfter) => void describeSelected(indexAfter)}
 			relations={relations} assets={library.assets} relationTypes={relationTypes}
 			onSelectAsset={(assetId) => { selectAsset(assetId); panels.focus("details"); }}
 			onCreateRelation={createRelation} onRemoveRelation={removeRelation}
@@ -1123,28 +1123,42 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function describeSelected(): Promise<void> {
+	async function describeSelected(indexAfter = false): Promise<void> {
 		if (!viewedAssetId) return;
 		const assetId = viewedAssetId;
 		const current = detailRequests.current.request("describe-action", assetId);
 		setDescribing(true);
 		setError(null);
 		try {
+			let described = false;
 			if (viewedAsset?.type === "video") {
 				const status = await window.loom.describeVideo(assetId);
+				described = status.status === "ready" && !status.stale;
 				if (current()) setVideoVlm(status);
 			} else if (viewedAsset?.type === "audio") {
 				const status = await window.loom.describeAudio(assetId);
+				described = status.status === "ready" && !status.stale;
 				if (current()) setAudioWriteup(status);
 			} else {
 				const status = await window.loom.describeImage(assetId);
+				described = status.status === "ready" && !status.stale;
 				if (current()) setImageVlm(status);
 			}
-			if (current()) readDetail("text_embed", assetId, () => window.loom.getTextEmbedStatus(assetId), setTextEmbed);
+			if (indexAfter && described && current()) {
+				setDescribing(false);
+				setEmbedding(true);
+				const status = await window.loom.embedAsset(assetId);
+				if (current()) setTextEmbed(status);
+			} else if (current()) {
+				readDetail("text_embed", assetId, () => window.loom.getTextEmbedStatus(assetId), setTextEmbed);
+			}
 		} catch (cause) {
 			if (current()) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			if (current()) setDescribing(false);
+			if (current()) {
+				setDescribing(false);
+				if (indexAfter) setEmbedding(false);
+			}
 		}
 	}
 

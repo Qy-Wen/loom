@@ -3,6 +3,7 @@ import { rawStatusLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { CopyableError } from "../components/copyable-error.tsx";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
+import { TooltipText } from "../components/tooltip-text.tsx";
 
 interface TextEmbedDetailsProps {
 	status: TextEmbedStatus | undefined;
@@ -21,7 +22,9 @@ export function TextEmbedDetails({
 	const busy = embedding || status.status === "embedding";
 	// A current index is never skipped silently: ask first, then rebuild it.
 	const current = status.status === "ready" && !status.stale;
-	const label = status.stale && status.status === "ready" ? t.details.reembed : t.details.embed;
+	const label = status.status === "ready" ? t.details.reembed : t.details.embed;
+	const chunks = status.status === "ready" ? t.details.chunks(status.childCount, status.parentCount) : undefined;
+	const tooltip = [status.modelId ? `${t.details.model}: ${status.modelId}` : undefined, chunks].filter(Boolean).join("\n") || undefined;
 	async function embed(): Promise<void> {
 		if (current && !await confirm({
 			title: t.details.reembedConfirmTitle,
@@ -31,28 +34,15 @@ export function TextEmbedDetails({
 		onEmbed(current ? true : undefined);
 	}
 	return (
-		<section>
-			<div className="section-label enrichment-heading">
-				<span>{t.details.index}</span>
-				<button type="button" className="text-button" disabled={busy} onClick={() => void embed()}>
-					{busy ? t.details.embedding : label}
-				</button>
-			</div>
-			<dl className="properties">
-				<dt>{t.details.status}</dt>
-				<dd>{formatStatus(t, status)}</dd>
-				{status.modelId && (
-					<>
-						<dt>{t.details.model}</dt>
-						<dd data-tooltip={status.modelId}>{status.modelId}</dd>
-					</>
-				)}
-				{(status.status !== "idle" || status.childCount > 0) && (
-					<>
-						<dt>{t.details.chunksLabel}</dt>
-						<dd>{t.details.chunks(status.childCount, status.parentCount)}</dd>
-					</>
-				)}
+		<section aria-label={t.details.indexStatus}>
+			<dl className="properties analysis-properties">
+				<dt className="analysis-status-label">{t.details.index}<br />{t.details.status}</dt>
+				<dd className="analysis-status">
+					<TooltipText text={formatStatus(t, status)} tooltip={tooltip} />
+					<button type="button" className="detail-action-button" disabled={busy} onClick={() => void embed()}>
+						{busy ? t.details.embedding : label}
+					</button>
+				</dd>
 				{status.truncated && (
 					<>
 						<dt>{t.details.coverage}</dt>

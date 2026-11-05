@@ -18,7 +18,7 @@ import { assetTypeLabel } from "../../shared/locale.ts";
 import { useLocale } from "../locale.tsx";
 import { displayPropertyValue } from "../workbench/table/table-values.ts";
 import { EnrichmentDetails } from "./enrichment-details.tsx";
-import { MediaDescriptionDetails } from "./media-description-details.tsx";
+import { MediaAnalysisDetails } from "./media-analysis-details.tsx";
 import { TextEmbedDetails } from "./text-embed-details.tsx";
 import { SuggestInput } from "../components/suggest-input.tsx";
 import { TagEditor } from "./tag-editor.tsx";
@@ -39,7 +39,7 @@ interface DetailsPanelProps {
 	videoVlm: VideoVlmStatus | undefined;
 	audioWriteup: AudioWriteupStatus | undefined;
 	describing: boolean;
-	onDescribe: () => void;
+	onDescribe: (indexAfter?: boolean) => void;
 	relations: AssetRelationsResult;
 	assets: Asset[];
 	relationTypes: string[];
@@ -73,12 +73,13 @@ export function DetailsPanel({
 	onRemoveRelation,
 }: DetailsPanelProps): React.JSX.Element {
 	const { t } = useLocale();
+	const media = asset && ["image", "video", "audio"].includes(asset.type);
 	const describer = imageVlm?.supported ? imageVlm : videoVlm?.supported ? videoVlm : audioWriteup;
 	return (
 		<div className="side-panel">
 			<div className="panel-content details-content thin-scroll active">
 				<section>
-					<div className="section-label">{t.details.file}</div>
+					<div className="section-label detail-section-heading">{t.details.file}</div>
 					{asset ? (
 						<dl className="properties">
 							<dt>{t.details.type}</dt><dd>{assetTypeLabel(t, asset.type)}</dd>
@@ -107,22 +108,23 @@ export function DetailsPanel({
 						/>
 					</section>
 				)}
-				{asset && (describer?.supported ? (
-					<MediaDescriptionDetails
+				{asset && describer?.supported && (
+					<MediaAnalysisDetails
 						status={describer}
 						textEmbed={textEmbed}
-						busy={describing}
+						describing={describing}
 						embedding={embedding}
-						onDescribe={onDescribe}
 						onEmbed={onEmbed}
+						onDescribe={onDescribe}
 					/>
-				) : (
+				)}
+				{asset && !media && (
 					<TextEmbedDetails
 						status={textEmbed}
 						embedding={embedding}
 						onEmbed={onEmbed}
 					/>
-				))}
+				)}
 				<section className="relations-section">
 					<RelationsEditor
 						asset={asset}
@@ -228,7 +230,7 @@ function RelationsEditor({
 	return (
 		<>
 			<div className="property-heading">
-				<div className="section-label">{t.details.relations}</div>
+				<div className="section-label detail-section-heading">{t.details.relations}</div>
 				{asset && others.length > 0 && (
 					<button
 						className="icon-button"
