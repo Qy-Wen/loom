@@ -22,7 +22,7 @@ test("switching libraries aborts detail jobs, drops old UI results, and reopenin
 		for await (const _chunk of request) { /* consume input */ }
 		if (released) {
 			response.setHeader("content-type", "application/json");
-			response.end(JSON.stringify({ choices: [{ message: { content: "A fresh caption" } }] }));
+			response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ caption: "A fresh caption", tags: [] }) } }] }));
 		} else pending.push(response);
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -64,7 +64,7 @@ test("switching libraries aborts detail jobs, drops old UI results, and reopenin
 		await describe.click();
 		await expect.poll(async () => (await loomPage.evaluate((id) => window.loom.getImageVlmStatus(id), asset.assetId)).status).toBe("ready");
 		await expect(loomPage.getByText("A fresh caption", { exact: false }).first()).toBeVisible();
-		await expect(describe).toBeEnabled();
+		await expect(loomPage.getByRole("button", { name: "Re-describe", exact: true })).toBeEnabled();
 	} finally {
 		released = true;
 		for (const response of pending) response.destroy();

@@ -4,11 +4,8 @@ export const VIDEO_VLM_NATIVE_MAX_BYTES = 32 * 1024 * 1024;
 
 export const VIDEO_VLM_SYSTEM_PROMPT =
 	"You describe one video for a local asset library. " +
-	"Reply with Markdown only, using exactly these headings:\n" +
-	"## Caption\n" +
-	"Two to six sentences covering what happens. Include any readable on-screen text.\n" +
-	"## Tags\n" +
-	"A short comma-separated list of tags.";
+	'Return only a JSON object with "caption" (non-empty plain text) and "tags" (an array of 3 to 5 concise tag names). No Markdown or code fences. ' +
+	"Describe the visible events and setting in two to six sentences. Include readable on-screen text. Do not infer events that the input does not show.";
 
 export const VIDEO_VLM_USER_PROMPT = "Describe this video.";
 

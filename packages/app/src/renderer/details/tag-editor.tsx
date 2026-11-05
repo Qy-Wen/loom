@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { AssetTag, Tag } from "@loom/core";
 import { useLocale } from "../locale.tsx";
 import { SuggestInput } from "../components/suggest-input.tsx";
+import { TagActionIcon } from "../components/tag-icon.tsx";
 
 interface TagEditorProps {
 	assetId: string;
@@ -43,7 +44,7 @@ export function TagEditor({ assetId, tags, assetTags, onAdd, onRemove }: TagEdit
 								aria-label={t.details.removeTag(tag.name)}
 								onClick={() => void onRemove(tag.tagId).catch(() => undefined)}
 							>
-								×
+								<TagActionIcon action="remove" />
 							</button>
 						</span>
 					))}

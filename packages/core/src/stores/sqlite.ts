@@ -1,3 +1,4 @@
+import { mediaDescriptionMarkdown, parseMediaDescriptionJson } from "../model/media-description.ts";
 import { randomUUID } from "node:crypto";
 import { mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
@@ -511,16 +512,16 @@ export class SqliteMetadataStore implements MetadataStore {
 		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
 		this.requireDatabase().prepare(`
 			INSERT INTO image_vlm (
-				asset_id, status, model_id, source_modified_at, error, markdown, updated_at
+				asset_id, status, model_id, source_modified_at, error, description_json, updated_at
 			) VALUES (
-				@assetId, @status, @modelId, @sourceModifiedAt, @error, @markdown, @updatedAt
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @description_json, @updatedAt
 			)
 			ON CONFLICT(asset_id) DO UPDATE SET
 				status = excluded.status,
 				model_id = excluded.model_id,
 				source_modified_at = excluded.source_modified_at,
 				error = excluded.error,
-				markdown = excluded.markdown,
+				description_json = excluded.description_json,
 				updated_at = excluded.updated_at
 		`).run({
 			assetId: record.assetId,
@@ -528,7 +529,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			modelId: record.modelId ?? null,
 			sourceModifiedAt: record.sourceModifiedAt,
 			error: record.error ?? null,
-			markdown: record.markdown ?? null,
+			description_json: record.description ? JSON.stringify(record.description) : null,
 			updatedAt: record.updatedAt,
 		});
 		this.refreshFts(this.requireDatabase(), record.assetId);
@@ -545,16 +546,16 @@ export class SqliteMetadataStore implements MetadataStore {
 		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
 		this.requireDatabase().prepare(`
 			INSERT INTO video_vlm (
-				asset_id, status, model_id, source_modified_at, error, markdown, updated_at
+				asset_id, status, model_id, source_modified_at, error, description_json, updated_at
 			) VALUES (
-				@assetId, @status, @modelId, @sourceModifiedAt, @error, @markdown, @updatedAt
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @description_json, @updatedAt
 			)
 			ON CONFLICT(asset_id) DO UPDATE SET
 				status = excluded.status,
 				model_id = excluded.model_id,
 				source_modified_at = excluded.source_modified_at,
 				error = excluded.error,
-				markdown = excluded.markdown,
+				description_json = excluded.description_json,
 				updated_at = excluded.updated_at
 		`).run({
 			assetId: record.assetId,
@@ -562,7 +563,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			modelId: record.modelId ?? null,
 			sourceModifiedAt: record.sourceModifiedAt,
 			error: record.error ?? null,
-			markdown: record.markdown ?? null,
+			description_json: record.description ? JSON.stringify(record.description) : null,
 			updatedAt: record.updatedAt,
 		});
 		this.refreshFts(this.requireDatabase(), record.assetId);
@@ -579,16 +580,16 @@ export class SqliteMetadataStore implements MetadataStore {
 		if (!await this.getAsset(record.assetId)) throw new Error("Asset not found");
 		this.requireDatabase().prepare(`
 			INSERT INTO audio_writeup (
-				asset_id, status, model_id, source_modified_at, error, markdown, updated_at
+				asset_id, status, model_id, source_modified_at, error, description_json, updated_at
 			) VALUES (
-				@assetId, @status, @modelId, @sourceModifiedAt, @error, @markdown, @updatedAt
+				@assetId, @status, @modelId, @sourceModifiedAt, @error, @description_json, @updatedAt
 			)
 			ON CONFLICT(asset_id) DO UPDATE SET
 				status = excluded.status,
 				model_id = excluded.model_id,
 				source_modified_at = excluded.source_modified_at,
 				error = excluded.error,
-				markdown = excluded.markdown,
+				description_json = excluded.description_json,
 				updated_at = excluded.updated_at
 		`).run({
 			assetId: record.assetId,
@@ -596,7 +597,7 @@ export class SqliteMetadataStore implements MetadataStore {
 			modelId: record.modelId ?? null,
 			sourceModifiedAt: record.sourceModifiedAt,
 			error: record.error ?? null,
-			markdown: record.markdown ?? null,
+			description_json: record.description ? JSON.stringify(record.description) : null,
 			updatedAt: record.updatedAt,
 		});
 		this.refreshFts(this.requireDatabase(), record.assetId);
@@ -792,14 +793,14 @@ export class SqliteMetadataStore implements MetadataStore {
 			.prepare("SELECT * FROM asset_metadata WHERE asset_id = ?")
 			.get(assetId) as AssetMetadataRow | undefined;
 		const vlmRow = database
-			.prepare("SELECT status, markdown FROM image_vlm WHERE asset_id = ?")
-			.get(assetId) as { status: ImageVlmJobStatus; markdown: string | null } | undefined;
+			.prepare("SELECT status, description_json FROM image_vlm WHERE asset_id = ?")
+			.get(assetId) as { status: ImageVlmJobStatus; description_json: string | null } | undefined;
 		const videoRow = database
-			.prepare("SELECT status, markdown FROM video_vlm WHERE asset_id = ?")
-			.get(assetId) as { status: VideoVlmJobStatus; markdown: string | null } | undefined;
+			.prepare("SELECT status, description_json FROM video_vlm WHERE asset_id = ?")
+			.get(assetId) as { status: VideoVlmJobStatus; description_json: string | null } | undefined;
 		const audioRow = database
-			.prepare("SELECT status, markdown FROM audio_writeup WHERE asset_id = ?")
-			.get(assetId) as { status: AudioWriteupJobStatus; markdown: string | null } | undefined;
+			.prepare("SELECT status, description_json FROM audio_writeup WHERE asset_id = ?")
+			.get(assetId) as { status: AudioWriteupJobStatus; description_json: string | null } | undefined;
 		database.prepare("INSERT INTO assets_fts (asset_id, body) VALUES (?, ?)").run(
 			assetId,
 			segmentForIndex(searchDocument(
@@ -970,7 +971,7 @@ interface ImageVlmRow {
 	model_id: string | null;
 	source_modified_at: number;
 	error: string | null;
-	markdown: string | null;
+	description_json: string | null;
 	updated_at: number;
 }
 
@@ -981,7 +982,7 @@ function toImageVlm(row: ImageVlmRow): ImageVlmRecord {
 		modelId: row.model_id ?? undefined,
 		sourceModifiedAt: row.source_modified_at,
 		error: row.error ?? undefined,
-		markdown: row.markdown ?? undefined,
+		description: row.description_json ? parseMediaDescriptionJson(row.description_json) : undefined,
 		updatedAt: row.updated_at,
 	};
 }
@@ -992,7 +993,7 @@ interface VideoVlmRow {
 	model_id: string | null;
 	source_modified_at: number;
 	error: string | null;
-	markdown: string | null;
+	description_json: string | null;
 	updated_at: number;
 }
 
@@ -1003,7 +1004,7 @@ function toVideoVlm(row: VideoVlmRow): VideoVlmRecord {
 		modelId: row.model_id ?? undefined,
 		sourceModifiedAt: row.source_modified_at,
 		error: row.error ?? undefined,
-		markdown: row.markdown ?? undefined,
+		description: row.description_json ? parseMediaDescriptionJson(row.description_json) : undefined,
 		updatedAt: row.updated_at,
 	};
 }
@@ -1014,7 +1015,7 @@ interface AudioWriteupRow {
 	model_id: string | null;
 	source_modified_at: number;
 	error: string | null;
-	markdown: string | null;
+	description_json: string | null;
 	updated_at: number;
 }
 
@@ -1025,13 +1026,13 @@ function toAudioWriteup(row: AudioWriteupRow): AudioWriteupRecord {
 		modelId: row.model_id ?? undefined,
 		sourceModifiedAt: row.source_modified_at,
 		error: row.error ?? undefined,
-		markdown: row.markdown ?? undefined,
+		description: row.description_json ? parseMediaDescriptionJson(row.description_json) : undefined,
 		updatedAt: row.updated_at,
 	};
 }
 
-function readyMarkdown(row: { status: string; markdown: string | null } | undefined): string | undefined {
-	return row?.status === "ready" ? row.markdown ?? undefined : undefined;
+function readyMarkdown(row: { status: string; description_json: string | null } | undefined): string | undefined {
+	return row?.status === "ready" && row.description_json ? mediaDescriptionMarkdown(parseMediaDescriptionJson(row.description_json)) : undefined;
 }
 
 function deleteUnusedTags(database: Database.Database): void {

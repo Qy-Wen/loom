@@ -267,7 +267,7 @@ describe("TextEmbedService truncated source", () => {
 			status: "ready",
 			sourceModifiedAt: asset.modifiedAt,
 			modelId: "vlm",
-			markdown: "## Caption\nA red bicycle.",
+			description: { caption: "A red bicycle.", tags: [] },
 			updatedAt: 1,
 		});
 		const status = await service.embed(asset.assetId, recordingProvider());

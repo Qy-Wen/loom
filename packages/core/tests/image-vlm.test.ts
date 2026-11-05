@@ -34,7 +34,7 @@ function recordingProvider(modelId = "test-vlm"): ImageVlmProvider & { calls: nu
 		calls: 0,
 		async describe() {
 			this.calls += 1;
-			return "A red bicycle on a wet street.";
+			return JSON.stringify({ caption: "A red bicycle on a wet street.", tags: [], transcript: null });
 		},
 	};
 }
@@ -53,7 +53,7 @@ describe("ImageVlmService", () => {
 		assert.equal(provider.calls, 0);
 	});
 
-	it("persists markdown, skips an unchanged rerun, and remakes on model or mtime change", async () => {
+	it("persists structured descriptions, skips an unchanged rerun, and remakes on model or mtime change", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
 		const asset = imageAsset();
@@ -65,7 +65,7 @@ describe("ImageVlmService", () => {
 				this.calls += 1;
 				assert.equal(image.filename, "shot.png");
 				assert.ok(image.bytes.length > 0);
-				return "A red bicycle on a wet street.";
+				return JSON.stringify({ caption: "A red bicycle on a wet street.", tags: [], transcript: null });
 			},
 		};
 
@@ -76,7 +76,7 @@ describe("ImageVlmService", () => {
 			const service = new ImageVlmService(store, async () => path, prepareImageForModel);
 			const first = await service.describe(asset.assetId, bytesProvider);
 			assert.equal(first.status, "ready");
-			assert.match(first.markdown ?? "", /## Caption/);
+			assert.match(first.description?.caption ?? "", /.+/);
 			assert.equal(bytesProvider.calls, 1);
 
 			const second = await service.describe(asset.assetId, bytesProvider);
@@ -88,13 +88,13 @@ describe("ImageVlmService", () => {
 				calls: 0,
 				async describe() {
 					this.calls += 1;
-					return "Updated caption.";
+					return JSON.stringify({ caption: "Updated caption.", tags: [], transcript: null });
 				},
 			};
 			const third = await service.describe(asset.assetId, otherModel);
 			assert.equal(third.status, "ready");
 			assert.equal(otherModel.calls, 1);
-			assert.match(third.markdown ?? "", /Updated caption/);
+			assert.match(third.description?.caption ?? "", /Updated caption/);
 
 			await store.upsertAsset({ ...asset, modifiedAt: 20, size: 12 });
 			const fourth = await service.describe(asset.assetId, otherModel);
@@ -133,11 +133,11 @@ describe("image vlm store", () => {
 				status: "ready",
 				modelId: "qwen/qwen3-vl-4b",
 				sourceModifiedAt: asset.modifiedAt,
-				markdown: "## Caption\nHello.\n",
+				description: { caption: "Hello.", tags: [] },
 				updatedAt: 1,
 			});
 			const row = await store.getImageVlm(asset.assetId);
-			assert.equal(row?.markdown, "## Caption\nHello.\n");
+			assert.equal(row?.description?.caption, "Hello.");
 			assert.equal(row?.modelId, "qwen/qwen3-vl-4b");
 		} finally {
 			await store.close();
@@ -203,13 +203,13 @@ describe("LocalCore describeImageAsset force", () => {
 			await writeFile(join(root, "poster.png"), "png-bytes");
 			const asset = (await core.openLibrary(root)).assets[0]!;
 			let calls = 0;
-			const provider = { modelId: "m", describe: async () => `## Caption\ncall ${++calls}` };
+			const provider = { modelId: "m", describe: async () => JSON.stringify({ caption: `call ${++calls}`, tags: [] }) };
 			await core.describeImageAsset(asset.assetId, provider);
 			await core.describeImageAsset(asset.assetId, provider);
 			assert.equal(calls, 1);
 			const forced = await core.describeImageAsset(asset.assetId, provider, undefined, { force: true });
 			assert.equal(calls, 2);
-			assert.match(forced.markdown!, /call 2/);
+			assert.match(forced.description?.caption!, /call 2/);
 		} finally {
 			await core.close();
 			await rm(root, { recursive: true, force: true });

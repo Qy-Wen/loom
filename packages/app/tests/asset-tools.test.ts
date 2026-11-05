@@ -29,15 +29,15 @@ test("asset tools return structured safe results", async () => {
 			}),
 			describeImage: (assetId) => core.describeImageAsset(assetId, {
 				modelId: "test-vlm",
-				describe: async () => "## Caption\nA test image.\n\n## Tags\ntest",
+				describe: async () => JSON.stringify({ caption: "A test image.", tags: ["test"] }),
 			}),
 			describeVideo: (assetId) => core.describeVideoAsset(assetId, {
 				modelId: "test-vlm",
-				describe: async () => "## Caption\nA test clip.\n\n## Tags\nvideo",
+				describe: async () => JSON.stringify({ caption: "A test clip.", tags: ["video"] }),
 			}),
 			describeAudio: (assetId) => core.describeAudioAsset(assetId, {
 				modelId: "qwen2-audio-7b-instruct",
-				describe: async () => "## Caption\nRain on a roof.\n\n## Tags\nrain\n\n## Transcript\nNone",
+				describe: async () => JSON.stringify({ caption: "Rain on a roof.", tags: ["rain"], transcript: null }),
 			}),
 		});
 		const search = tools.find((tool) => tool.name === "search_assets");

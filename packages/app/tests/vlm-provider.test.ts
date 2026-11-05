@@ -33,7 +33,7 @@ test("createHttpVlmProvider posts OpenAI chat/completions with image_url", async
 	globalThis.fetch = (async (url, init) => {
 		calls.push({ url: String(url), init: init ?? {} });
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "## Caption\nGreen.\n" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "Green.", tags: [], transcript: null }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -53,6 +53,9 @@ test("createHttpVlmProvider posts OpenAI chat/completions with image_url", async
 	};
 	assert.equal(body.model, "qwen/qwen3-vl-4b");
 	assert.equal(body.messages[0]?.role, "system");
+	assert.match(String(body.messages[0]?.content), /JSON object/);
+	// Library tags are never sent: the model would copy them instead of describing the image.
+	assert.doesNotMatch(JSON.stringify(body.messages), /existing|library tag/i);
 	const content = body.messages[1]?.content as Array<{ type: string; image_url?: { url: string } }>;
 	assert.equal(content.some((part) => part.type === "image_url" && part.image_url?.url.startsWith("data:image/jpeg;base64,")), true);
 });
@@ -62,7 +65,7 @@ test("createHttpVlmProvider sends a Bearer key for remote APIs", async () => {
 		const headers = new Headers(init?.headers);
 		assert.equal(headers.get("authorization"), "Bearer secret");
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "ok" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "ok", tags: [] }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -71,7 +74,7 @@ test("createHttpVlmProvider sends a Bearer key for remote APIs", async () => {
 		apiKey: "secret",
 		model: "gpt-4o-mini",
 	});
-	assert.equal(await provider.describe({ filename: "shot.png", bytes: new Uint8Array([1]) }), "ok");
+	assert.deepEqual(JSON.parse(await provider.describe({ filename: "shot.png", bytes: new Uint8Array([1]) })), { caption: "ok", tags: [] });
 });
 
 test("parseVlmResponse reads OpenAI choices", () => {
@@ -104,7 +107,7 @@ test("createHttpVideoVlmProvider posts video_url then falls back to stills", asy
 			return new Response("unknown type video_url", { status: 400 });
 		}
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "## Caption\nFrom stills.\n" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "From stills.", tags: [], transcript: null }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -144,7 +147,7 @@ test("createHttpVideoVlmProvider uses native video when the endpoint accepts it"
 			part.type === "video_url" && part.video_url?.url.startsWith("data:video/mp4;base64,")
 		)), true);
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "## Caption\nNative.\n" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "Native.", tags: [], transcript: null }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -177,7 +180,7 @@ test("createHttpAudioProvider posts audio_url then falls back to input_audio", a
 			return new Response("unknown type audio_url", { status: 400 });
 		}
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "## Caption\nFrom input_audio.\n" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "From input_audio.", tags: [], transcript: null }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -209,7 +212,7 @@ test("createHttpAudioProvider uses audio_url when the endpoint accepts it", asyn
 			part.type === "audio_url" && part.audio_url?.url.startsWith("data:audio/mpeg;base64,")
 		)), true);
 		return new Response(JSON.stringify({
-			choices: [{ message: { content: "## Caption\nNative audio.\n" } }],
+			choices: [{ message: { content: JSON.stringify({ caption: "Native audio.", tags: [], transcript: null }) } }],
 		}), { status: 200 });
 	}) as typeof fetch;
 
@@ -264,7 +267,7 @@ test("createHttpAudioProvider streams Omni on DashScope URLs", async () => {
 	globalThis.fetch = (async (url, init) => {
 		calls.push({ url: String(url), init: init ?? {} });
 		return new Response([
-			"data: {\"choices\":[{\"delta\":{\"content\":\"## Caption\\nHosted.\\n\"}}]}",
+			`data: ${JSON.stringify({ choices: [{ delta: { content: JSON.stringify({ caption: "Hosted.", tags: [], transcript: null }) } }] })}`,
 			"data: [DONE]",
 		].join("\n"), { status: 200 });
 	}) as typeof fetch;

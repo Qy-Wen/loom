@@ -17,3 +17,11 @@ export function TagHashIcon({ size = 16, className }: TagIconProps): React.JSX.E
 		</svg>
 	);
 }
+
+export function TagActionIcon({ action }: { action: "add" | "remove" }): React.JSX.Element {
+	return (
+		<svg viewBox="0 0 12 12" width="10" height="10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" aria-hidden="true">
+			<path d={action === "add" ? "M6 2v8M2 6h8" : "M3 3l6 6m0-6L3 9"} />
+		</svg>
+	);
+}

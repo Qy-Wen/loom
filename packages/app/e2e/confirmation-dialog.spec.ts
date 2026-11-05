@@ -238,7 +238,7 @@ for (const media of [false, true]) {
 			const state = globalThis as typeof globalThis & { confirmationEnrichment: string[] };
 			state.confirmationEnrichment = [];
 			const text = (assetId: string) => ({ assetId, supported: true, status: "ready", stale: false, childCount: 1, parentCount: 1 });
-			const image = (assetId: string) => ({ assetId, supported: media, status: "ready", stale: false, markdown: "Fixture description" });
+			const image = (assetId: string) => ({ assetId, supported: media, status: "ready", stale: false, description: { caption: "Fixture description", tags: [] } });
 			for (const key of ["getTextEmbedStatus", "getImageVlmStatus", "embedAsset", "describeImage"]) ipcMain.removeHandler(`loom:${key}`);
 			ipcMain.handle("loom:getTextEmbedStatus", (_event, id: string) => text(id));
 			ipcMain.handle("loom:getImageVlmStatus", (_event, id: string) => image(id));

@@ -1,5 +1,6 @@
 import type { Asset } from "../model/asset.ts";
 import type { DescriptionRecord, DescriptionStatus } from "../model/description.ts";
+import { parseMediaDescriptionJson } from "../model/media-description.ts";
 
 export interface DescribeOptions {
 	/** Skip the "already described" shortcut and ask the model again. */
@@ -60,7 +61,7 @@ export class DescriptionService<Provider extends { modelId: string }> {
 
 		const previous = await this.workflow.getRecord(assetId);
 		if (!force && previous?.status === "ready" && previous.modelId === provider.modelId
-			&& previous.markdown?.trim() && !isStale(asset, previous, provider.modelId)) {
+			&& previous.description?.caption.trim() && !isStale(asset, previous, provider.modelId)) {
 			return toStatus(asset, previous, provider.modelId);
 		}
 
@@ -70,23 +71,24 @@ export class DescriptionService<Provider extends { modelId: string }> {
 			status: "describing",
 			modelId: provider.modelId,
 			sourceModifiedAt: asset.modifiedAt,
-			markdown: previous?.markdown,
+			description: previous?.description,
 			updatedAt: Date.now(),
 		};
 		await this.workflow.writeRecord(record);
 		onUpdate?.(toStatus(asset, record, provider.modelId));
 
 		try {
-			const markdown = await this.workflow.generate(asset, provider, signal);
+			const raw = await this.workflow.generate(asset, provider, signal);
+			const description = parseMediaDescriptionJson(raw, asset.type === "audio");
 			signal?.throwIfAborted();
-			await this.workflow.writeRecord({ ...record, status: "ready", markdown, updatedAt: Date.now() });
+			await this.workflow.writeRecord({ ...record, status: "ready", description, updatedAt: Date.now() });
 		} catch (error) {
 			// The library scope keeps storage open until this terminal write finishes, including on abort.
 			await this.workflow.writeRecord({
 				...record,
 				status: "failed",
 				error: error instanceof Error ? error.message : String(error),
-				markdown: undefined,
+				description: undefined,
 				updatedAt: Date.now(),
 			});
 		}
@@ -120,7 +122,7 @@ function toStatus(asset: Asset, record: DescriptionRecord, currentModelId?: stri
 		modelId: record.modelId,
 		sourceModifiedAt: record.sourceModifiedAt,
 		error: record.error,
-		markdown: record.markdown,
+		description: record.description,
 	};
 }
 

@@ -76,12 +76,12 @@ for (const media of mediaCases) {
 		it("publishes persisted transitions and cache hits, and checks model/source freshness", async (t) => {
 			const { store, asset, service } = await setup(t, media);
 			let calls = 0;
-			const provider = { modelId: "m", describe: async () => { calls++; return "caption"; } };
+			const provider = { modelId: "m", describe: async () => { calls++; return JSON.stringify({ caption: "caption", tags: [], transcript: null }); } };
 			const updates: DescriptionStatus[] = [];
 			const first = await service.describe(asset.assetId, provider, (status) => updates.push(status));
 			assert.deepEqual(updates.map((status) => status.status), ["describing", "ready"]);
 			assert.equal(first.stale, false);
-			assert.equal((await media.read(store, asset.assetId))?.markdown, first.markdown);
+			assert.equal((await media.read(store, asset.assetId))?.description?.caption, first.description?.caption);
 			updates.length = 0;
 			assert.deepEqual(await service.describe(asset.assetId, provider, (status) => updates.push(status)), first);
 			assert.deepEqual(updates.map((status) => status.status), ["ready"]);
@@ -97,28 +97,28 @@ for (const media of mediaCases) {
 
 		it("regenerates incomplete cached records", async (t) => {
 			const { store, asset, service } = await setup(t, media);
-			for (const cached of [{ modelId: undefined, markdown: "old" }, { modelId: "m", markdown: "  " }]) {
+			for (const cached of [{ modelId: undefined, description: { caption: "old", tags: [] } }, { modelId: "m", description: { caption: "", tags: [] } }]) {
 				await media.write(store, { assetId: asset.assetId, status: "ready", sourceModifiedAt: asset.modifiedAt, updatedAt: 1, ...cached });
 				let calls = 0;
-				const status = await service.describe(asset.assetId, { modelId: "m", describe: async () => { calls++; return "new"; } });
+				const status = await service.describe(asset.assetId, { modelId: "m", describe: async () => { calls++; return JSON.stringify({ caption: "new", tags: [], transcript: null }); } });
 				assert.equal(calls, 1);
-				assert.match(status.markdown!, /new/);
+				assert.match(status.description?.caption!, /new/);
 			}
 		});
 
 		it("clears old output on failure or empty output and permits retry", async (t) => {
 			const { asset, service } = await setup(t, media);
-			await service.describe(asset.assetId, { modelId: "old", describe: async () => "old caption" });
+			await service.describe(asset.assetId, { modelId: "old", describe: async () => JSON.stringify({ caption: "old caption", tags: [], transcript: null }) });
 			const updates: DescriptionStatus[] = [];
 			const failed = await service.describe(asset.assetId, { modelId: "m", describe: async () => { throw new Error("provider offline"); } }, (status) => updates.push(status));
 			assert.deepEqual(updates.map((status) => status.status), ["describing", "failed"]);
-			assert.match(updates[0]!.markdown!, /old caption/);
+			assert.match(updates[0]!.description?.caption!, /old caption/);
 			assert.equal(failed.error, "provider offline");
-			assert.equal(failed.markdown, undefined);
-			const empty = await service.describe(asset.assetId, { modelId: "m", describe: async () => "  " });
+			assert.equal(failed.description?.caption, undefined);
+			const empty = await service.describe(asset.assetId, { modelId: "m", describe: async () => JSON.stringify({ caption: "  ", tags: [], transcript: null }) });
 			assert.equal(empty.status, "failed");
-			assert.match(empty.error!, /empty description/);
-			const ready = await service.describe(asset.assetId, { modelId: "m", describe: async () => "retry" });
+			assert.match(empty.error!, /non-empty text/);
+			const ready = await service.describe(asset.assetId, { modelId: "m", describe: async () => JSON.stringify({ caption: "retry", tags: [], transcript: null }) });
 			assert.equal(ready.status, "ready");
 			assert.equal(ready.error, undefined);
 		});
@@ -135,10 +135,10 @@ for (const media of mediaCases) {
 			controller.abort();
 			assert.equal((await pending).status, "failed");
 			assert.deepEqual(updates.map((status) => status.status), ["describing", "failed"]);
-			const ready = await service.describe(asset.assetId, { modelId: "m", describe: async () => "fresh" });
-			late.resolve("obsolete");
+			const ready = await service.describe(asset.assetId, { modelId: "m", describe: async () => JSON.stringify({ caption: "fresh", tags: [], transcript: null }) });
+			late.resolve(JSON.stringify({ caption: "obsolete", tags: [], transcript: null }));
 			await new Promise<void>((resolve) => setImmediate(resolve));
-			assert.equal((await media.read(store, asset.assetId))?.markdown, ready.markdown);
+			assert.equal((await media.read(store, asset.assetId))?.description?.caption, ready.description?.caption);
 		});
 
 		it("skips cancelled queued jobs and reads the current asset when the queue resumes", async (t) => {
@@ -150,14 +150,14 @@ for (const media of mediaCases) {
 			let cancelledCalls = 0;
 			const updates: DescriptionStatus[] = [];
 			const cancelled = service.describe(asset.assetId, {
-				modelId: "cancelled", describe: async () => { cancelledCalls++; return "unused"; },
+				modelId: "cancelled", describe: async () => { cancelledCalls++; return JSON.stringify({ caption: "unused", tags: [], transcript: null }); },
 			}, (status) => updates.push(status), controller.signal);
 			const rejected = assert.rejects(cancelled, { name: "AbortError" });
-			const next = service.describe(asset.assetId, { modelId: "next", describe: async () => "new" });
+			const next = service.describe(asset.assetId, { modelId: "next", describe: async () => JSON.stringify({ caption: "new", tags: [], transcript: null }) });
 			await new Promise<void>((resolve) => setImmediate(resolve));
 			await store.upsertAsset({ ...asset, modifiedAt: 20 });
 			controller.abort();
-			finish.resolve("old");
+			finish.resolve(JSON.stringify({ caption: "old", tags: [], transcript: null }));
 			await active;
 			await rejected;
 			assert.equal(cancelledCalls, 0);
@@ -173,16 +173,16 @@ for (const media of mediaCases) {
 			const removed = { ...asset, assetId: "removed", relativePath: `removed-${asset.filename}` };
 			await store.upsertAsset(removed);
 			let calls = 0;
-			const queued = service.describe(removed.assetId, { modelId: "m", describe: async () => { calls++; return "unused"; } });
+			const queued = service.describe(removed.assetId, { modelId: "m", describe: async () => { calls++; return JSON.stringify({ caption: "unused", tags: [], transcript: null }); } });
 			const rejected = assert.rejects(queued, /Asset not found/);
 			await new Promise<void>((resolve) => setImmediate(resolve));
 			await store.removeAsset(removed.assetId);
-			finish.resolve("done");
+			finish.resolve(JSON.stringify({ caption: "done", tags: [], transcript: null }));
 			await active;
 			await rejected;
 			assert.equal(calls, 0);
 			assert.equal(await media.read(store, removed.assetId), undefined);
-			assert.equal((await service.describe(asset.assetId, { modelId: "next", describe: async () => "next" })).status, "ready");
+			assert.equal((await service.describe(asset.assetId, { modelId: "next", describe: async () => JSON.stringify({ caption: "next", tags: [], transcript: null }) })).status, "ready");
 		});
 	});
 }

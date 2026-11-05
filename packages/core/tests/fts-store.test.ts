@@ -195,7 +195,7 @@ for (const [name, make] of stores) {
 					status: "ready",
 					modelId: "m",
 					sourceModifiedAt: 2,
-					markdown: "## Caption\n人工智能生成的海报",
+					description: { caption: "人工智能生成的海报", tags: [] },
 					updatedAt: 1,
 				});
 				assert.deepEqual(await store.searchAssetIds("天气"), ["a"]);

@@ -52,6 +52,7 @@ export type {
 export type { EmbeddingProvider, TextEmbedStatus, TextEmbedStatusKind } from "./model/text-embed.ts";
 export type { RerankProvider } from "./model/rerank.ts";
 export type { DescribeOptions } from "./rag/description.ts";
+export type { MediaDescription } from "./model/media-description.ts";
 export type { EmbedOptions } from "./rag/service.ts";
 export { IMAGE_VLM_SYSTEM_PROMPT, IMAGE_VLM_USER_PROMPT } from "./model/image-vlm.ts";
 export type { ImageVlmInput, ImageVlmProvider, ImageVlmStatus, ImageVlmStatusKind } from "./model/image-vlm.ts";

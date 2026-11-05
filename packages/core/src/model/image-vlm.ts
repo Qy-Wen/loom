@@ -4,11 +4,8 @@ export const IMAGE_VLM_MAX_BYTES = 10 * 1024 * 1024;
 
 export const IMAGE_VLM_SYSTEM_PROMPT =
 	"You describe one image for a local asset library. " +
-	"Reply with Markdown only, using exactly these headings:\n" +
-	"## Caption\n" +
-	"Two to six sentences. Include any readable text in the image.\n" +
-	"## Tags\n" +
-	"A short comma-separated list of tags.";
+	'Return only a JSON object with "caption" (non-empty plain text) and "tags" (an array of 3 to 5 concise tag names). No Markdown or code fences. ' +
+	"Describe the visible subjects, setting, composition, colors, lighting, and style in two to six sentences. Include readable text. Do not invent details.";
 
 export const IMAGE_VLM_USER_PROMPT = "Describe this image.";
 
@@ -33,10 +30,3 @@ export interface ImageVlmProvider {
 
 export type ImageVlmRecord = DescriptionRecord;
 export type ImageVlmStatus = DescriptionStatus;
-
-export function normalizeImageVlmMarkdown(raw: string): string {
-	const text = raw.trim();
-	if (!text) throw new Error("VLM returned an empty description");
-	if (/^##\s+Caption\b/im.test(text)) return text;
-	return `## Caption\n${text}\n`;
-}

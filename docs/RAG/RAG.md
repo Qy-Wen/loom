@@ -65,13 +65,17 @@ Chunking and vectors go together. They happen only when the user clicks Index or
 
 ## Image, video, and audio
 
-Media becomes a Markdown **write-up** first, then goes through the text index above. Write-ups are on demand: import does not run them, and the Agent or the user asks for one file. No sidecar `.md` is written into the library (it would be another asset).
+Media models return JSON (`caption`, `tags`, plus `transcript` for audio). Core validates and stores the structured description as JSON. Markdown is generated from these fields only for full-text search and indexing. Write-ups are on demand: import does not run them, and the Agent or the user asks for one file. No sidecar `.md` is written into the library (it would be another asset).
+
+Old Markdown descriptions are not read or converted; they must be regenerated. Updating the metadata schema invalidates their derived indexes and preserves source files and user tags.
 
 Rules shared by all three:
 
 - Loom is only an HTTP client; no model runs in-process. Local is a server the user runs, remote adds an API key, and endpoints are user-configured with no built-in default vendor; see [SETTINGS.md](../SETTINGS.md).
 - The write-up is folded into fixed Markdown and handed to the Embedding slot. If that slot is empty, the text still stays.
 - Invalidation is the same mtime rule as Level 1. Rename/move does not rerun. Changing the VLM or Audio model invalidates the write-up; changing the embedding model invalidates the chunk vectors.
+
+Details displays captions and suggested tags separately, with audio transcripts collapsed. Users can append suggestions manually or enable automatic application for the current app session (off by default). Tag names are deduplicated and existing user tags are retained.
 
 ### Images
 
@@ -87,7 +91,7 @@ Rules shared by all three:
 
 ### Video
 
-Same VLM slot as images. One Markdown write-up per file.
+Same VLM slot as images. One structured description per file.
 
 1. **Native video** when the endpoint accepts it: `POST /v1/chat/completions` with a `video_url` data URI (files up to 32 MB). Models such as Qwen3-VL can do this. A 400/413/415/422/5xx from native is remembered per endpoint+model for the process, then frames are used.
 2. **Frames as `image_url`** when native is skipped or rejected: FFmpeg extracts 1–3 temp JPEGs (about 10% / 50% / 90% of duration; fewer for short clips). They are not library assets.

@@ -16,7 +16,7 @@
 - `foreign_keys = ON`
 - `busy_timeout = 5000`
 
-`open` runs `migrate` (`stores/schema.ts`). `PRAGMA user_version` is the number of migrations that have run, and version 1 is the schema below. To change a table, append a migration; never edit one that has shipped. All pending migrations run in one transaction, so a failure leaves the file untouched. A library written by a newer Loom (a higher `user_version`) is refused with a message to update, rather than opened and corrupted. A library from before versions existed (`user_version` 0) is adopted as version 1 without changing its rows.
+`open` runs `migrate` (`stores/schema.ts`). `PRAGMA user_version` is the number of migrations that have run, and the current schema is version 2. Version 2 replaces media Markdown with structured JSON and requires old descriptions to be regenerated. To change a table, append a migration; never edit one that has shipped. All pending migrations run in one transaction, so a failure leaves the file untouched. A library written by a newer Loom (a higher `user_version`) is refused with a message to update, rather than opened and corrupted. A library from before versions existed (`user_version` 0) runs the pending migrations while retaining user metadata.
 
 On open, try to load the sqlite-vec extension. Child KNN uses `vec_distance_cosine` on `text_chunks.embedding` blobs. There is no `vec0` virtual table: dimension follows the Embedding slot. If the extension is missing, the same cosine runs in JavaScript.
 
@@ -221,10 +221,10 @@ One row per image that has been (or is being) described by the VLM slot. Missing
 | `model_id` | TEXT | nullable | VLM slot `model` used for the last run. |
 | `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at describe time. Same mtime skip as Level 1. |
 | `error` | TEXT | nullable | Failure reason. |
-| `markdown` | TEXT | nullable | Caption / tags Markdown when `status = ready`. |
+| `description_json` | TEXT | nullable | Structured `caption` and `tags` JSON when `status = ready`. |
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
-A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
+A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. Search text is generated from the JSON fields when the user clicks Index or the Agent calls `embed_asset`.
 
 ---
 
@@ -239,10 +239,10 @@ One row per video that has been (or is being) described by the VLM slot. Missing
 | `model_id` | TEXT | nullable | VLM slot `model` used for the last run. |
 | `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at describe time. Same mtime skip as Level 1. |
 | `error` | TEXT | nullable | Failure reason. |
-| `markdown` | TEXT | nullable | Caption / tags Markdown when `status = ready`. |
+| `description_json` | TEXT | nullable | Structured `caption` and `tags` JSON when `status = ready`. |
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
-A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. Native video is tried first (`video_url` data URI, files up to 32 MB). If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs (not library assets) and sends them as `image_url`. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
+A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different VLM model. Rename or move does not rerun if mtime is unchanged. Native video is tried first (`video_url` data URI, files up to 32 MB). If the endpoint rejects it or the file is larger, FFmpeg extracts 1–3 temp JPEGs (not library assets) and sends them as `image_url`. Search text is generated from the JSON fields when the user clicks Index or the Agent calls `embed_asset`.
 
 ---
 
@@ -257,10 +257,10 @@ One row per standalone audio file that has been (or is being) described by the A
 | `model_id` | TEXT | nullable | Audio slot `model` used for the last run. |
 | `source_modified_at` | REAL | NOT NULL | `assets.modified_at` at describe time. Same mtime skip as Level 1. |
 | `error` | TEXT | nullable | Failure reason. |
-| `markdown` | TEXT | nullable | Caption / tags / transcript Markdown when `status = ready`. |
+| `description_json` | TEXT | nullable | Structured `caption`, `tags`, and `transcript` JSON when `status = ready`. |
 | `updated_at` | REAL | NOT NULL | `Date.now()` when the row was last written. |
 
-A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different Audio model. Rename or move does not rerun if mtime is unchanged. DashScope-looking URLs send hosted Omni first (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Other URLs try `audio_url` (data URI, files up to 32 MB), then `input_audio`, then Omni. Files over 32 MB are compacted locally to 16 kHz mono MP3. DashScope’s encoded-audio cap is 10 MB. The Markdown is folded into `text_chunks` only when the user or Agent runs Embed.
+A ready write-up is stale when `source_modified_at` differs from `assets.modified_at`, or when Settings uses a different Audio model. Rename or move does not rerun if mtime is unchanged. DashScope-looking URLs send hosted Omni first (`input_audio.data` as `data:;base64,...` + `modalities: ["text"]` + `stream: true`). Other URLs try `audio_url` (data URI, files up to 32 MB), then `input_audio`, then Omni. Files over 32 MB are compacted locally to 16 kHz mono MP3. DashScope’s encoded-audio cap is 10 MB. Search text is generated from the JSON fields when the user clicks Index or the Agent calls `embed_asset`.
 
 ---
 

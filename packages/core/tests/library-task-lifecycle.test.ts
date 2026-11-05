@@ -57,7 +57,7 @@ test("switching cancels active and queued descriptions; late provider output can
 	// Even a copied asset identity in the new library must not receive old output.
 	const other = (await core.getLibrarySnapshot()).assets[0]!;
 	await metadata.upsertAsset({ ...other, assetId: image.assetId });
-	late.resolve("late old caption");
+	late.resolve(JSON.stringify({ caption: "late old caption", tags: [], transcript: null }));
 	await new Promise<void>((resolve) => setImmediate(resolve));
 	assert.equal(await metadata.getImageVlm(image.assetId), undefined);
 	assert.equal(events.some((change) => change.type === "image_vlm"), false);
@@ -65,10 +65,10 @@ test("switching cancels active and queued descriptions; late provider output can
 	await core.openLibrary(a);
 	const status = await core.getImageVlmStatus(image.assetId);
 	assert.equal(status.status, "failed");
-	assert.equal(status.markdown, undefined);
-	const retried = await core.describeImageAsset(image.assetId, { modelId: "retry", describe: async () => "new caption" });
+	assert.equal(status.description?.caption, undefined);
+	const retried = await core.describeImageAsset(image.assetId, { modelId: "retry", describe: async () => JSON.stringify({ caption: "new caption", tags: [], transcript: null }) });
 	assert.equal(retried.status, "ready");
-	assert.match(retried.markdown!, /new caption/);
+	assert.match(retried.description?.caption!, /new caption/);
 });
 
 test("close drains embedding cancellation before closing SQLite and reopening permits retry", { timeout: 10000 }, async (t) => {
@@ -101,13 +101,13 @@ test("a preparatory await stays bound to its original opening and cannot submit 
 		signal.throwIfAborted();
 		return core.describeImageAsset(image.assetId, {
 			modelId: "old",
-			describe: async () => { providerCalled = true; return "wrong"; },
+			describe: async () => { providerCalled = true; return JSON.stringify({ caption: "wrong", tags: [], transcript: null }); },
 		}, signal);
 	});
 	const rejected = assert.rejects(pending, { name: "AbortError" });
 	await entered.promise;
 	const switched = core.openLibrary(b);
-	await assert.rejects(core.describeImageAsset(image.assetId, { modelId: "new", describe: async () => "" }), /not accepting/);
+	await assert.rejects(core.describeImageAsset(image.assetId, { modelId: "new", describe: async () => JSON.stringify({ caption: "", tags: [], transcript: null }) }), /not accepting/);
 	settings.resolve();
 	await Promise.all([switched, rejected]);
 	assert.equal(providerCalled, false);
@@ -159,7 +159,7 @@ for (const storage of ["sqlite", "memory"] as const) {
 		await store.open(new LibraryPaths(root));
 		const asset: Asset = { assetId: "one", filename: "shot.png", relativePath: "shot.png", type: "image", size: 10, createdAt: 1, modifiedAt: 1 };
 		await store.upsertAsset(asset);
-		const record = { assetId: asset.assetId, sourceModifiedAt: 1, updatedAt: 1, modelId: "m", markdown: "old output" };
+		const record = { assetId: asset.assetId, sourceModifiedAt: 1, updatedAt: 1, modelId: "m", description: { caption: "old output", tags: [] } };
 		await store.upsertImageVlm({ ...record, status: "describing" });
 		await store.upsertVideoVlm({ ...record, status: "describing" });
 		await store.upsertAudioWriteup({ ...record, status: "ready" });
@@ -170,7 +170,7 @@ for (const storage of ["sqlite", "memory"] as const) {
 			assert.match(row?.error ?? "", /interrupted/);
 		}
 		assert.equal((await store.getAudioWriteup("one"))?.status, "ready");
-		assert.equal((await store.getAudioWriteup("one"))?.markdown, "old output");
+		assert.equal((await store.getAudioWriteup("one"))?.description?.caption, "old output");
 	});
 }
 
@@ -194,7 +194,7 @@ test("video cancellation waits for lazy frame extraction cleanup", async () => {
 		await cleanup.promise;
 		throw signal!.reason;
 	});
-	const job = scope.run((signal) => service.describe("video", { modelId: "m", describe: async (input) => { await input.frames(); return "unused"; } }, undefined, signal));
+	const job = scope.run((signal) => service.describe("video", { modelId: "m", describe: async (input) => { await input.frames(); return JSON.stringify({ caption: "unused", tags: [], transcript: null }); } }, undefined, signal));
 	const rejected = assert.rejects(job, { name: "AbortError" });
 	await entered.promise; scope.cancel();
 	let drained = false;
@@ -228,9 +228,9 @@ test("caller cancellation still publishes failed status in the active library an
 	await rejected;
 	assert.equal((await core.getImageVlmStatus(image.assetId)).status, "failed");
 	assert.equal(events.filter((event) => event.type === "image_vlm").length, 2);
-	const next = await core.describeImageAsset(image.assetId, { modelId: "next", describe: async () => "fresh" });
-	late.resolve("obsolete");
+	const next = await core.describeImageAsset(image.assetId, { modelId: "next", describe: async () => JSON.stringify({ caption: "fresh", tags: [], transcript: null }) });
+	late.resolve(JSON.stringify({ caption: "obsolete", tags: [], transcript: null }));
 	await new Promise<void>((resolve) => setImmediate(resolve));
-	assert.equal((await core.getImageVlmStatus(image.assetId)).markdown, next.markdown);
+	assert.equal((await core.getImageVlmStatus(image.assetId)).description?.caption, next.description?.caption);
 	off();
 });

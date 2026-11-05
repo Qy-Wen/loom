@@ -35,7 +35,7 @@ function recordingProvider(modelId = "test-vlm"): VideoVlmProvider & { calls: nu
 		async describe(request) {
 			this.calls += 1;
 			if (!request.native) this.usedFrames = true;
-			return "A person walks out of a car.";
+			return JSON.stringify({ caption: "A person walks out of a car.", tags: [], transcript: null });
 		},
 	};
 }
@@ -50,7 +50,7 @@ describe("vlmFrameTimes", () => {
 });
 
 describe("VideoVlmService", () => {
-	it("persists markdown, skips an unchanged rerun, and remakes on model or mtime change", async () => {
+	it("persists structured descriptions, skips an unchanged rerun, and remakes on model or mtime change", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
 		const asset = videoAsset();
@@ -66,7 +66,7 @@ describe("VideoVlmService", () => {
 
 			const first = await service.describe(asset.assetId, provider);
 			assert.equal(first.status, "ready");
-			assert.match(first.markdown ?? "", /## Caption/);
+			assert.match(first.description?.caption ?? "", /.+/);
 			assert.equal(provider.calls, 1);
 			assert.equal(provider.usedFrames, false);
 
@@ -102,7 +102,7 @@ describe("VideoVlmService", () => {
 				assert.equal(request.frames(), first);
 				const frames = await first;
 				assert.equal(frames.length, 1);
-				return "Wide shot of a street.";
+				return JSON.stringify({ caption: "Wide shot of a street.", tags: [], transcript: null });
 			},
 		};
 		const service = new VideoVlmService(store, async () => "/unused.mp4", async () => {
@@ -144,11 +144,11 @@ describe("video vlm store", () => {
 				status: "ready",
 				modelId: "qwen/qwen3-vl-4b",
 				sourceModifiedAt: asset.modifiedAt,
-				markdown: "## Caption\nA person disembarks.\n",
+				description: { caption: "A person disembarks.", tags: [] },
 				updatedAt: 1,
 			});
 			const row = await store.getVideoVlm(asset.assetId);
-			assert.equal(row?.markdown, "## Caption\nA person disembarks.\n");
+			assert.equal(row?.description?.caption, "A person disembarks.");
 			assert.equal((await store.searchAssetIds("disembarks")).includes(asset.assetId), true);
 		} finally {
 			await store.close();

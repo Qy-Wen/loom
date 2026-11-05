@@ -135,4 +135,27 @@ describe("schema versions", () => {
 		MIGRATIONS.forEach((migration, index) => assert.equal(migration.version, index + 1));
 		assert.equal(SCHEMA_VERSION, MIGRATIONS.length);
 	});
+
+	it("requires fresh structured descriptions without converting old Markdown or removing user tags", () => {
+		const database = memoryDatabase();
+		migrate(database, MIGRATIONS.slice(0, 1));
+		database.prepare("INSERT INTO assets VALUES ('media', 'a.png', 'a.png', 'image', 1, 1, 1, NULL)").run();
+		database.prepare("INSERT INTO tags VALUES ('tag', 'keep', 1)").run();
+		database.prepare("INSERT INTO asset_tags VALUES ('media', 'tag', 1)").run();
+		for (const table of ["image_vlm", "video_vlm", "audio_writeup"]) {
+			database.prepare(`INSERT INTO ${table} VALUES ('media', 'ready', 'm', 1, NULL, '## Caption\nOld', 1)`).run();
+		}
+		database.prepare("INSERT INTO text_chunks VALUES ('parent', 'media', NULL, 'parent', 0, 3, 'old', 1, NULL, NULL)").run();
+		database.prepare("INSERT INTO text_chunks VALUES ('old', 'media', 'parent', 'child', 0, 3, 'old', 1, NULL, NULL)").run();
+		migrate(database);
+		for (const table of ["image_vlm", "video_vlm", "audio_writeup"]) {
+			const row = database.prepare(`SELECT status, description_json, error FROM ${table}`).get() as { status: string; description_json: unknown; error: string };
+			assert.equal(row.status, "failed");
+			assert.equal(row.description_json, null);
+			assert.match(row.error, /Describe this asset again/);
+		}
+		assert.equal((database.prepare("SELECT count(*) AS n FROM text_chunks").get() as { n: number }).n, 0);
+		assert.equal((database.prepare("SELECT count(*) AS n FROM asset_tags").get() as { n: number }).n, 1);
+		database.close();
+	});
 });

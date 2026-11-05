@@ -40,6 +40,9 @@ interface DetailsPanelProps {
 	audioWriteup: AudioWriteupStatus | undefined;
 	describing: boolean;
 	onDescribe: (indexAfter?: boolean) => void;
+	autoTagDescriptions: boolean;
+	onAutoTagDescriptionsChange: (enabled: boolean) => void;
+	onAddSuggestedTags: (names: string[]) => Promise<void>;
 	relations: AssetRelationsResult;
 	assets: Asset[];
 	relationTypes: string[];
@@ -65,6 +68,9 @@ export function DetailsPanel({
 	audioWriteup,
 	describing,
 	onDescribe,
+	autoTagDescriptions,
+	onAutoTagDescriptionsChange,
+	onAddSuggestedTags,
 	relations,
 	assets,
 	relationTypes,
@@ -110,6 +116,11 @@ export function DetailsPanel({
 				)}
 				{asset && describer?.supported && (
 					<MediaAnalysisDetails
+						key={asset.assetId}
+						appliedTags={assetTags.filter((link) => link.assetId === asset.assetId).flatMap((link) => tags.find((tag) => tag.tagId === link.tagId)?.name ?? [])}
+						autoTagDescriptions={autoTagDescriptions}
+						onAutoTagDescriptionsChange={onAutoTagDescriptionsChange}
+						onAddSuggestedTags={onAddSuggestedTags}
 						status={describer}
 						textEmbed={textEmbed}
 						describing={describing}

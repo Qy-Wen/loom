@@ -1,3 +1,5 @@
+declare module "*.css" {}
+
 declare module "markdown-it-texmath" {
 	import type MarkdownIt from "markdown-it";
 	import type { KatexOptions } from "katex";

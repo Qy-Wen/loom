@@ -1,3 +1,5 @@
+import type { MediaDescription } from "./media-description.ts";
+
 export type DescriptionJobStatus = "describing" | "ready" | "failed";
 export type DescriptionStatusKind = "idle" | DescriptionJobStatus;
 
@@ -7,7 +9,7 @@ export interface DescriptionRecord {
 	modelId?: string;
 	sourceModifiedAt: number;
 	error?: string;
-	markdown?: string;
+	description?: MediaDescription;
 	updatedAt: number;
 }
 
@@ -19,5 +21,5 @@ export interface DescriptionStatus {
 	modelId?: string;
 	sourceModifiedAt?: number;
 	error?: string;
-	markdown?: string;
+	description?: MediaDescription;
 }

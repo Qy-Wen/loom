@@ -2,7 +2,6 @@ import { abortableProviderCall } from "../library/task-scope.ts";
 import { readFile } from "node:fs/promises";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
-import { normalizeImageVlmMarkdown } from "../model/image-vlm.ts";
 import {
 	VIDEO_VLM_NATIVE_MAX_BYTES,
 	type VideoFrameExtractor,
@@ -35,13 +34,13 @@ export class VideoVlmService {
 				const native = await nativeInput(asset, absolutePath, signal);
 				let extraction: Promise<VideoVlmFrame[]> | undefined;
 				try {
-					return normalizeImageVlmMarkdown(await abortableProviderCall(() => provider.describe({
+					return await abortableProviderCall(() => provider.describe({
 						native,
 						frames: () => {
 							signal?.throwIfAborted();
 							return extraction ??= extractFrames(absolutePath, signal);
 						},
-					}, signal), signal));
+					}, signal), signal);
 				} finally {
 					// A provider may return or abort while its lazy extraction still owns temp files.
 					await extraction?.catch(() => undefined);

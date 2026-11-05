@@ -1,3 +1,4 @@
+import { mediaDescriptionMarkdown } from "../model/media-description.ts";
 import { randomUUID } from "node:crypto";
 import type { Asset } from "../model/asset.ts";
 import { normalizeTagName, tagNameKey, type AssetTag, type Tag } from "../model/tag.ts";
@@ -498,9 +499,9 @@ function readyVlmText(
 	video: VideoVlmRecord | undefined,
 	audio: AudioWriteupRecord | undefined,
 ): string | undefined {
-	if (image?.status === "ready") return image.markdown;
-	if (video?.status === "ready") return video.markdown;
-	if (audio?.status === "ready") return audio.markdown;
+	if (image?.status === "ready" && image.description) return mediaDescriptionMarkdown(image.description);
+	if (video?.status === "ready" && video.description) return mediaDescriptionMarkdown(video.description);
+	if (audio?.status === "ready" && audio.description) return mediaDescriptionMarkdown(audio.description);
 	return undefined;
 }
 

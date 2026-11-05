@@ -3,7 +3,6 @@ import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
 import {
 	IMAGE_VLM_MAX_BYTES,
-	normalizeImageVlmMarkdown,
 	type ImagePrepareFn,
 	type ImageVlmProvider,
 	type ImageVlmStatus,
@@ -36,7 +35,7 @@ export class ImageVlmService {
 				if (image.bytes.byteLength > IMAGE_VLM_MAX_BYTES) {
 					throw new Error("Image VLM accepts files up to 10 MB");
 				}
-				return normalizeImageVlmMarkdown(await abortableProviderCall(() => provider.describe(image, signal), signal));
+				return abortableProviderCall(() => provider.describe(image, signal), signal);
 			},
 		});
 	}

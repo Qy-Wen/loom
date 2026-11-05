@@ -599,6 +599,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	background: var(--lm-surface-accent-strong);
 	color: var(--lm-text-accent);
 	font-size: var(--lm-text-size-sm);
+	line-height: var(--lm-size-xs);
 }
 
 .tag-chip-name {
@@ -610,10 +611,11 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 .tag-chip button {
 	display: inline-flex;
+	flex: none;
 	align-items: center;
 	justify-content: center;
-	width: var(--lm-size-xs);
-	height: var(--lm-size-xs);
+	width: calc(var(--lm-size-xs) - var(--lm-space-1));
+	height: calc(var(--lm-size-xs) - var(--lm-space-1));
 	padding: 0;
 	border: 0;
 	border-radius: var(--lm-radius-pill);
@@ -624,8 +626,30 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	cursor: pointer;
 }
 
-.tag-chip button:hover {
-	background: var(--lm-surface-accent-strong);
+.tag-chip button > svg {
+	display: block;
+	flex: none;
+	pointer-events: none;
+}
+
+.tag-chip button:hover:not(:disabled) {
+	background: var(--lm-accent-solid);
+	color: var(--lm-text-on-fill);
+}
+
+.tag-chip button:active:not(:disabled) {
+	background: var(--lm-accent-solid-hover);
+	color: var(--lm-text-on-fill);
+}
+
+.tag-chip button:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 2px;
+}
+
+.tag-chip button:disabled {
+	opacity: 0.55;
+	cursor: default;
 }
 
 .tag-add {

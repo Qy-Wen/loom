@@ -2,7 +2,6 @@ import { abortableProviderCall } from "../library/task-scope.ts";
 import { extname } from "node:path";
 import type { Asset } from "../model/asset.ts";
 import {
-	normalizeAudioWriteupMarkdown,
 	type AudioPrepareFn,
 	type AudioWriteupProvider,
 	type AudioWriteupStatus,
@@ -29,7 +28,7 @@ export class AudioWriteupService {
 				const absolutePath = await resolvePath(asset.assetId);
 				if (!absolutePath) throw new Error("Asset not found");
 				const prepared = await prepare(absolutePath, asset.size, signal);
-				return normalizeAudioWriteupMarkdown(await abortableProviderCall(() => provider.describe(prepared, signal), signal));
+				return abortableProviderCall(() => provider.describe(prepared, signal), signal);
 			},
 		});
 	}

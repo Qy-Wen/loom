@@ -184,6 +184,7 @@ export function App(): React.JSX.Element {
 	const [graphEdges, setGraphEdges] = useState<AssetRelation[]>([]);
 	const [embedding, setEmbedding] = useState(false);
 	const [describing, setDescribing] = useState(false);
+	const [autoTagDescriptions, setAutoTagDescriptions] = useState(false);
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [helpOpen, setHelpOpen] = useState(false);
 	const [fullscreen, setFullscreen] = useState(false);
@@ -305,6 +306,7 @@ export function App(): React.JSX.Element {
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}
 			enrichment={enrichment} textEmbed={textEmbed} embedding={embedding} onEmbed={(force) => void embedSelected(force)}
 			imageVlm={imageVlm} videoVlm={videoVlm} audioWriteup={audioWriteup} describing={describing} onDescribe={(indexAfter) => void describeSelected(indexAfter)}
+			autoTagDescriptions={autoTagDescriptions} onAutoTagDescriptionsChange={setAutoTagDescriptions} onAddSuggestedTags={addSuggestedTags}
 			relations={relations} assets={library.assets} relationTypes={relationTypes}
 			onSelectAsset={(assetId) => { selectAsset(assetId); panels.focus("details"); }}
 			onCreateRelation={createRelation} onRemoveRelation={removeRelation}
@@ -1131,18 +1133,27 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			let described = false;
+			let suggestedTags: string[] = [];
 			if (viewedAsset?.type === "video") {
 				const status = await window.loom.describeVideo(assetId);
+				suggestedTags = status.description?.tags ?? [];
 				described = status.status === "ready" && !status.stale;
 				if (current()) setVideoVlm(status);
 			} else if (viewedAsset?.type === "audio") {
 				const status = await window.loom.describeAudio(assetId);
+				suggestedTags = status.description?.tags ?? [];
 				described = status.status === "ready" && !status.stale;
 				if (current()) setAudioWriteup(status);
 			} else {
 				const status = await window.loom.describeImage(assetId);
+				suggestedTags = status.description?.tags ?? [];
 				described = status.status === "ready" && !status.stale;
 				if (current()) setImageVlm(status);
+			}
+			if (autoTagDescriptions && described && current()) {
+				// Tag failure must not discard the description or prevent indexing.
+				try { await addSuggestedTags(suggestedTags); }
+				catch { /* addSuggestedTags reports the error and keeps successful additions */ }
 			}
 			if (indexAfter && described && current()) {
 				setDescribing(false);
@@ -1175,6 +1186,22 @@ export function App(): React.JSX.Element {
 			if (current()) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
 			if (current()) setEmbedding(false);
+		}
+	}
+
+	async function addSuggestedTags(names: string[]): Promise<void> {
+		if (!viewedAssetId) return;
+		const assetId = viewedAssetId;
+		const current = detailRequests.current.request("suggested-tags", assetId);
+		setError(null);
+		try {
+			for (const name of names) {
+				if (!current()) return;
+				await window.loom.addAssetTag(assetId, name);
+			}
+		} catch (cause) {
+			if (current()) setError(cause instanceof Error ? cause.message : String(cause));
+			throw cause;
 		}
 	}
 

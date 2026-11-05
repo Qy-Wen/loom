@@ -1,3 +1,4 @@
+import { mediaDescriptionMarkdown } from "../model/media-description.ts";
 import { abortableProviderCall } from "../library/task-scope.ts";
 import { randomUUID } from "node:crypto";
 import { open } from "node:fs/promises";
@@ -162,7 +163,7 @@ export class TextEmbedService {
 			if (canDescribeAudio(asset)) return { error: "Describe the audio with the Audio slot first" };
 			return { unsupported: true };
 		}
-		if (writeup) return { text: writeup.markdown };
+		if (writeup) return { text: writeup.text };
 		return { unsupported: true };
 	}
 
@@ -176,7 +177,7 @@ export class TextEmbedService {
 			if (
 				record?.status !== "ready"
 				|| record.sourceModifiedAt !== asset.modifiedAt
-				|| !record.markdown?.trim()
+				|| !record.description?.caption.trim()
 				|| record.updatedAt > job.updatedAt
 			) {
 				return undefined;
@@ -212,7 +213,7 @@ export class TextEmbedService {
 		if (!canIndexAsset(asset)) return unsupportedStatus(asset);
 		if (needsVlmWriteup(asset)) {
 			const record = await this.writeupRecord(asset);
-			if (record?.status !== "ready" || !record.markdown?.trim()) return unsupportedStatus(asset);
+			if (record?.status !== "ready" || !record.description?.caption.trim()) return unsupportedStatus(asset);
 		}
 		const job = await this.metadata.getTextEmbedJob(asset.assetId);
 		if (!job) return idleStatus(asset);
@@ -240,15 +241,12 @@ export class TextEmbedService {
 
 	private async readyWriteup(
 		asset: Asset,
-	): Promise<{ markdown: string } | "missing" | undefined> {
+	): Promise<{ text: string } | "missing" | undefined> {
 		if (!needsVlmWriteup(asset)) return undefined;
 		const record = await this.writeupRecord(asset);
-		const markdown = record?.status === "ready"
-			&& record.sourceModifiedAt === asset.modifiedAt
-			? record.markdown?.trim()
-			: undefined;
-		if (!markdown) return "missing";
-		return { markdown };
+		const description = record?.status === "ready" && record.sourceModifiedAt === asset.modifiedAt ? record.description : undefined;
+		if (!description?.caption.trim()) return "missing";
+		return { text: mediaDescriptionMarkdown(description) };
 	}
 }
 

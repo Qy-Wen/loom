@@ -1,4 +1,4 @@
-import { copyFile } from "node:fs/promises";
+import { copyFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -24,7 +24,7 @@ test("media descriptions and indexes fail and retry independently", async ({ loo
 			response.writeHead(400);
 			response.end(JSON.stringify({ error: { message: describing ? "Description unavailable" : "Index unavailable" } }));
 		} else if (describing) {
-			response.end(JSON.stringify({ choices: [{ message: { content: "A blue reference image" } }] }));
+			response.end(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ caption: "A blue reference image", tags: ["Landscape", "Blue", "landscape"] }) } }] }));
 		} else {
 			const { input } = JSON.parse(body) as { input: string[] };
 			response.end(JSON.stringify({ data: input.map((_, index) => ({ index, embedding: [0.5, 0.5] })) }));
@@ -55,7 +55,7 @@ test("media descriptions and indexes fail and retry independently", async ({ loo
 
 		failDescription = false;
 		await caption.getByRole("button", { name: "Describe", exact: true }).click();
-		await expect(group.locator(".media-writeup")).toContainText("A blue reference image");
+		await expect(group.locator(".description-caption")).toContainText("A blue reference image");
 		await expect(index).toContainText("Not indexed");
 		await expect(caption.locator("dt", { hasText: /^Model$/ })).toHaveCount(0);
 		const captionStatus = caption.locator(".analysis-status > span");
@@ -66,7 +66,7 @@ test("media descriptions and indexes fail and retry independently", async ({ loo
 		await index.getByRole("button", { name: "Index", exact: true }).click();
 		await expect(index).toContainText("Index unavailable");
 		await expect(caption).not.toContainText("Index unavailable");
-		await expect(group.locator(".media-writeup")).toContainText("A blue reference image");
+		await expect(group.locator(".description-caption")).toContainText("A blue reference image");
 
 		failIndex = false;
 		await index.getByRole("button", { name: "Index", exact: true }).click();
@@ -116,7 +116,7 @@ test("media descriptions and indexes fail and retry independently", async ({ loo
 		failIndex = true;
 		await combined.click();
 		await expect(index).toContainText("Index unavailable");
-		await expect(group.locator(".media-writeup")).toContainText("A blue reference image");
+		await expect(group.locator(".description-caption")).toContainText("A blue reference image");
 		await expect(caption).not.toContainText("Index unavailable");
 		expect(descriptions).toBe(5);
 		failIndex = false;
@@ -132,8 +132,80 @@ test("media descriptions and indexes fail and retry independently", async ({ loo
 		await expect.poll(() => indexes).toBe(5);
 		await expect(index.locator(".analysis-status > span")).toHaveText("ready");
 		expect(descriptions).toBe(6);
+		await expect(group.locator(".description-caption")).not.toContainText("## Caption");
+		await expect(group.locator(".description-suggestions .tag-chip")).toHaveCount(2);
+		const snapshot = await loomPage.evaluate(() => window.loom.getLibrarySnapshot());
+		const assetId = snapshot.assets.find((asset) => asset.filename === "fixture.png")!.assetId;
+		expect(snapshot.assetTags.filter((tag) => tag.assetId === assetId)).toHaveLength(0);
+		await loomPage.evaluate((id) => window.loom.addAssetTag(id, "Manual"), assetId);
+		const landscape = group.locator('.description-suggestions .tag-chip').filter({ hasText: "Landscape" });
+		const addLandscape = landscape.getByRole("button", { name: "Add Landscape to tags", exact: true });
+		const addBackground = await addLandscape.evaluate((button) => getComputedStyle(button).backgroundColor);
+		await addLandscape.hover();
+		await expect(addLandscape).not.toHaveCSS("background-color", addBackground);
+		await addLandscape.focus();
+		await addLandscape.press("Tab");
+		await loomPage.keyboard.press("Shift+Tab");
+		await expect(addLandscape).toHaveCSS("outline-style", "solid");
+		await addLandscape.press("Enter");
+		await expect(landscape).toHaveCount(0);
+		await expect(group.getByRole("button", { name: "Add Blue to tags", exact: true })).toBeEnabled();
+		await expect(details.locator(".tag-editor .tag-chip")).toHaveCount(2);
+		await group.getByRole("button", { name: "Add Blue to tags", exact: true }).click();
+		await expect(group.locator(".description-suggestions")).toHaveCount(0);
+		await expect(details.locator(".tag-editor .tag-chip")).toHaveCount(3);
+
+		// Automatic tag application does not depend on the following index succeeding.
+		const removeBlue = details.locator(".tag-editor").getByRole("button", { name: "Remove Blue", exact: true });
+		const removeBackground = await removeBlue.evaluate((button) => getComputedStyle(button).backgroundColor);
+		await removeBlue.hover();
+		await expect(removeBlue).not.toHaveCSS("background-color", removeBackground);
+		await removeBlue.focus();
+		await removeBlue.press("Tab");
+		await loomPage.keyboard.press("Shift+Tab");
+		await expect(removeBlue).toHaveCSS("outline-style", "solid");
+		await removeBlue.press("Enter");
+		await expect(group.getByRole("button", { name: "Add Blue to tags", exact: true })).toBeEnabled();
+		await group.getByRole("checkbox", { name: "Automatically add description tags" }).check();
+		failIndex = true;
+		await combined.click();
+		await dialog.getByRole("button", { name: "Describe and index", exact: true }).click();
+		await expect(index).toContainText("Index unavailable");
+		await expect(group.locator(".description-suggestions")).toHaveCount(0);
+		await expect(details.locator(".tag-editor .tag-chip")).toHaveCount(3);
+		expect(descriptions).toBe(7);
+		expect(indexes).toBe(6);
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
+});
+
+test("structured audio descriptions display suggestions and a collapsed transcript", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await expect(loomPage.locator(".library-sidebar")).toBeVisible();
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	const wave = Buffer.alloc(46);
+	wave.write("RIFF"); wave.writeUInt32LE(38, 4); wave.write("WAVEfmt ", 8);
+	wave.writeUInt32LE(16, 16); wave.writeUInt16LE(1, 20); wave.writeUInt16LE(1, 22);
+	wave.writeUInt32LE(16000, 24); wave.writeUInt32LE(32000, 28); wave.writeUInt16LE(2, 32); wave.writeUInt16LE(16, 34);
+	wave.write("data", 36); wave.writeUInt32LE(2, 40);
+	await writeFile(join(root, "voice.wav"), wave);
+	await electronApp!.evaluate(({ ipcMain }) => {
+		ipcMain.removeHandler("loom:getAudioWriteupStatus");
+		ipcMain.handle("loom:getAudioWriteupStatus", (_event, assetId: string) => ({
+			assetId, supported: true, status: "ready", stale: false,
+			description: { caption: "A speaker reads a greeting.", tags: ["speech", "greeting"], transcript: "00:01 Hello there." },
+		}));
+	});
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "voice.wav" }).click();
+	await loomPage.getByRole("button", { name: "Details", exact: true }).click();
+	const group = loomPage.getByRole("region", { name: "Description & index", exact: true });
+	await expect(group.locator(".media-description-body")).toContainText("A speaker reads a greeting.");
+	await expect(group.locator(".description-suggestions .tag-chip")).toHaveCount(2);
+	const transcript = group.locator(".description-transcript");
+	await expect(transcript).not.toHaveAttribute("open");
+	await expect(transcript.locator("p")).not.toBeVisible();
+	await transcript.locator("summary").click();
+	await expect(transcript.locator("p")).toHaveText("00:01 Hello there.");
 });

@@ -155,6 +155,26 @@ CREATE TABLE IF NOT EXISTS audio_writeup (
 
 export const MIGRATIONS: readonly Migration[] = [
 	{ version: 1, up: (database) => database.exec(INITIAL_SCHEMA) },
+	{
+		version: 2,
+		up(database) {
+			// Old descriptions are not converted. Preserve their rows and user metadata,
+			// invalidate the derived media index, and require a fresh model response.
+			for (const table of ["image_vlm", "video_vlm", "audio_writeup"]) {
+				const columns = database.prepare(`PRAGMA table_info(${table})`).all() as Array<{ name: string }>;
+				if (columns.some((column) => column.name === "description_json")) continue;
+				database.exec(`
+					ALTER TABLE ${table} ADD COLUMN description_json TEXT;
+					ALTER TABLE ${table} DROP COLUMN markdown;
+					DELETE FROM text_chunks WHERE asset_id IN (SELECT asset_id FROM ${table});
+					DELETE FROM text_embed_jobs WHERE asset_id IN (SELECT asset_id FROM ${table});
+					UPDATE ${table} SET status = 'failed', error = 'Description format changed. Describe this asset again.';
+				`);
+			}
+			// Opening the library rebuilds file-level FTS from the current fields.
+			database.prepare("DELETE FROM library_meta WHERE key = 'fts_format'").run();
+		},
+	},
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS.length;

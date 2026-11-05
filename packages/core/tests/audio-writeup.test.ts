@@ -5,7 +5,6 @@ import { tmpdir } from "node:os";
 import { describe, it } from "node:test";
 import type { Asset } from "../src/model/asset.ts";
 import type { AudioWriteupProvider } from "../src/model/audio-writeup.ts";
-import { normalizeAudioWriteupMarkdown } from "../src/model/audio-writeup.ts";
 import { AudioWriteupService } from "../src/rag/audio-writeup.ts";
 import { LocalCore } from "../src/local-core.ts";
 import { LibraryPaths } from "../src/library/paths.ts";
@@ -30,16 +29,10 @@ function recordingProvider(modelId = "qwen2-audio-7b-instruct"): AudioWriteupPro
 		calls: 0,
 		async describe() {
 			this.calls += 1;
-			return "Rain on a metal roof, no speech.";
+			return JSON.stringify({ caption: "Rain on a metal roof, no speech.", tags: [], transcript: null });
 		},
 	};
 }
-
-describe("normalizeAudioWriteupMarkdown", () => {
-	it("wraps plain text under Caption", () => {
-		assert.match(normalizeAudioWriteupMarkdown("Birds at dawn."), /^## Caption\nBirds at dawn\.\n$/);
-	});
-});
 
 describe("AudioWriteupService", () => {
 	it("passes the prepared audio and cancellation signal to the provider", async () => {
@@ -60,13 +53,13 @@ describe("AudioWriteupService", () => {
 			describe: async (input, providerSignal) => {
 				assert.equal(input, prepared);
 				assert.equal(providerSignal, signal);
-				return "speech";
+				return JSON.stringify({ caption: "speech", tags: [], transcript: null });
 			},
 		}, undefined, signal);
 		assert.equal(status.status, "ready");
 	});
 
-	it("persists markdown, skips an unchanged rerun, and remakes on model or mtime change", async () => {
+	it("persists structured descriptions, skips an unchanged rerun, and remakes on model or mtime change", async () => {
 		const store = new InMemoryMetadataStore();
 		await store.open();
 		const asset = audioAsset();
@@ -83,7 +76,7 @@ describe("AudioWriteupService", () => {
 
 			const first = await service.describe(asset.assetId, provider);
 			assert.equal(first.status, "ready");
-			assert.match(first.markdown ?? "", /## Caption/);
+			assert.match(first.description?.caption ?? "", /.+/);
 			assert.equal(provider.calls, 1);
 
 			const second = await service.describe(asset.assetId, provider);
@@ -134,11 +127,11 @@ describe("audio writeup store", () => {
 				status: "ready",
 				modelId: "qwen2-audio-7b-instruct",
 				sourceModifiedAt: asset.modifiedAt,
-				markdown: "## Caption\nRain on a metal roof.\n",
+				description: { caption: "Rain on a metal roof.", tags: [] },
 				updatedAt: 1,
 			});
 			const row = await store.getAudioWriteup(asset.assetId);
-			assert.equal(row?.markdown, "## Caption\nRain on a metal roof.\n");
+			assert.equal(row?.description?.caption, "Rain on a metal roof.");
 			assert.equal((await store.searchAssetIds("metal roof")).includes(asset.assetId), true);
 		} finally {
 			await store.close();
