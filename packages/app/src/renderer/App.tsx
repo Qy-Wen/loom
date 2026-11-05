@@ -21,7 +21,7 @@ import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
 import { useConfirmation } from "./components/confirm-dialog.tsx";
-import { useTooltipDismissal } from "./components/tooltip-behavior.ts";
+import { useChatTooltips } from "./chat/use-chat-tooltips.ts";
 import type { AssetRefAttachment } from "@loom/agent";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { sortAssets } from "./assets/asset-utils.ts";
@@ -140,7 +140,7 @@ function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): Li
 }
 
 export function App(): React.JSX.Element {
-	useTooltipDismissal();
+	useChatTooltips();
 	const { t } = useLocale();
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);

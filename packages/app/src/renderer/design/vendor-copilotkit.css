@@ -23,3 +23,8 @@
 	--input: var(--lm-border-default);
 	--ring: var(--lm-focus-ring);
 }
+
+/* Vendor triggers use Loom's shared tooltip; suppress their duplicate Radix bubble. */
+[data-copilotkit][data-slot="tooltip-content"] {
+	display: none !important;
+}

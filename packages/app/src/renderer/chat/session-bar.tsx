@@ -70,7 +70,7 @@ export function SessionBar({
 								role="tab"
 								aria-selected={selected}
 								disabled={busy}
-								title={titleOf(session)}
+								data-tooltip={titleOf(session)}
 								onClick={() => onSelect(session.id)}
 							>
 								{titleOf(session)}
@@ -98,7 +98,7 @@ export function SessionBar({
 				className="session-tab-new"
 				disabled={busy}
 				aria-label={t.sessions.new}
-				title={t.sessions.new}
+				data-tooltip={t.sessions.new}
 				onClick={onCreate}
 			>
 				+
@@ -123,7 +123,7 @@ export function SessionBar({
 										type="button"
 										role="menuitem"
 										disabled={busy}
-										title={titleOf(session)}
+										data-tooltip={titleOf(session)}
 										onClick={() => {
 											setMenuOpen(false);
 											onUnarchive(session.id);

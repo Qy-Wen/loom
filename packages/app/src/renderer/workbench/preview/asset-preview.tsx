@@ -183,25 +183,25 @@ export function PreviewActions({
 	return (
 		<div className="preview-actions">
 			{canGrade && !grading && (
-				<button type="button" title={t.common.edit} aria-label={t.common.edit} onClick={onGrade}>
+				<button type="button" data-tooltip={t.common.edit} aria-label={t.common.edit} onClick={onGrade}>
 					<PencilIcon />
 				</button>
 			)}
 			{canGrade && grading && (
-				<button type="button" title={t.grade.leave} aria-label={t.grade.leave} onClick={onLeaveGrade}>
+				<button type="button" data-tooltip={t.grade.leave} aria-label={t.grade.leave} onClick={onLeaveGrade}>
 					{leaveVideo ? <LeaveGradeIcon /> : <LeaveStillIcon />}
 				</button>
 			)}
 			<button
 				type="button"
-				title={favoriteLabel}
+				data-tooltip={favoriteLabel}
 				aria-label={favoriteLabel}
 				aria-pressed={favorite}
 				onClick={onToggleFavorite}
 			>
 				<StarIcon filled={favorite} />
 			</button>
-			<button type="button" className="danger" title={t.common.delete} aria-label={t.common.delete} onClick={onDelete}>
+			<button type="button" className="danger" data-tooltip={t.common.delete} aria-label={t.common.delete} onClick={onDelete}>
 				<TrashIcon />
 			</button>
 		</div>

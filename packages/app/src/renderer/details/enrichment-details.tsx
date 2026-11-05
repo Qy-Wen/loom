@@ -58,7 +58,7 @@ function EnrichmentFields({ data }: { data: EnrichmentData }): React.JSX.Element
 	return (
 		<>
 			<dt>{t.details.characters}</dt><dd>{data.charCount}{data.truncated ? t.details.truncated : ""}</dd>
-			<dt>{t.details.text}</dt><dd title={data.text}>{data.text.slice(0, 160)}</dd>
+			<dt>{t.details.text}</dt><dd data-tooltip={data.text}>{data.text.slice(0, 160)}</dd>
 		</>
 	);
 }

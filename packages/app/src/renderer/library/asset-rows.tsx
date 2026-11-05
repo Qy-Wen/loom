@@ -103,7 +103,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 			{...assetButtonProps(tree, asset, selected)}
 		>
 			<AssetThumbnail asset={asset} />
-			<span className="asset-name" title={asset.relativePath}>{asset.filename}</span>
+			<span className="asset-name" data-tooltip={asset.relativePath}>{asset.filename}</span>
 			{favorite ? <FavoriteMark /> : null}
 		</button>
 	);
@@ -112,7 +112,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 export function FavoriteMark(): React.JSX.Element {
 	const { t } = useLocale();
 	return (
-		<span className="asset-favorite" title={t.common.favorite}>
+		<span className="asset-favorite" data-tooltip={t.common.favorite}>
 			<svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true">
 				<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
 			</svg>

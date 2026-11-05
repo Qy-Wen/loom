@@ -142,7 +142,7 @@ export function AddFilesButton({ className, disabled }: { className?: string; di
 				aria-label={t.chat.add}
 				aria-expanded={open}
 				aria-haspopup="menu"
-				title={t.chat.add}
+				data-tooltip={t.chat.add}
 				onClick={(event) => {
 					event.preventDefault();
 					event.stopPropagation();

@@ -56,7 +56,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(moreCue).toHaveCSS("pointer-events", "none");
 	await expect(moreCue).toHaveCSS("height", "30px");
 	await expect(moreCue.locator("svg")).toHaveCount(0);
-	await expect(separator).toHaveAttribute("title", "More favorites/tags below. Scroll down or drag the divider.");
+	await expect(separator).toHaveAttribute("data-tooltip", "More favorites/tags below. Scroll down or drag the divider.");
 	await expect(separator).toHaveAttribute("aria-description", "More favorites/tags below. Scroll down or drag the divider.");
 	await expect(top).toHaveCSS("overflow-y", "auto"); await expect(files).toHaveCSS("overflow-y", "auto");
 	await expect(top).toHaveCSS("overscroll-behavior-y", "contain");

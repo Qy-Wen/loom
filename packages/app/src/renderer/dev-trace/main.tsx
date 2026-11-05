@@ -1,3 +1,4 @@
+import { TooltipProvider } from "../components/tooltip.tsx";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { DevTraceApp } from "./dev-trace-app.tsx";
@@ -12,8 +13,10 @@ const root = document.getElementById("root");
 if (!root) throw new Error("#root not found");
 createRoot(root).render(
 	<StrictMode>
-		<TraceLocaleProvider>
-			<DevTraceApp />
-		</TraceLocaleProvider>
+		<TooltipProvider>
+			<TraceLocaleProvider>
+				<DevTraceApp />
+			</TraceLocaleProvider>
+		</TooltipProvider>
 	</StrictMode>,
 );

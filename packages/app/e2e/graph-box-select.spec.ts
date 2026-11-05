@@ -19,7 +19,7 @@ test("dragging on empty graph canvas box-selects files and the file tree follows
 		for (let index = 0; index < 3; index++) {
 			const node = nodes.nth(index);
 			const rect = (await node.locator("circle").first().boundingBox())!;
-			found.push({ name: (await node.locator("title").textContent())!, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
+			found.push({ name: (await node.getAttribute("aria-label"))!, x: rect.x + rect.width / 2, y: rect.y + rect.height / 2 });
 		}
 		return found.sort((left, right) => left.name.localeCompare(right.name));
 	}

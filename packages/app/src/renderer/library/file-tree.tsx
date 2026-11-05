@@ -158,7 +158,7 @@ export function LibraryRootButton({ name, title, onOpen }: { name: string; title
 			{...folderDropProps("", tree)}
 			className={`library-files-name library-root-button${tree.dropFolder === "" ? " drop-target" : ""}`}
 			type="button"
-			title={title}
+			data-tooltip={title}
 			aria-current={tree.currentFolder === "" ? "location" : undefined}
 			onClick={onOpen}
 		>

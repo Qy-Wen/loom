@@ -252,7 +252,7 @@ export function SettingsChat(): React.JSX.Element {
 										{models.map((model) => {
 											return (
 												<tr key={model.id}>
-													<td title={`${model.provider} / ${model.id} · ${model.contextWindow.toLocaleString()} ctx · ${model.maxTokens.toLocaleString()} max`}>
+													<td data-tooltip={`${model.provider} / ${model.id} · ${model.contextWindow.toLocaleString()} ctx · ${model.maxTokens.toLocaleString()} max`}>
 														{model.name}
 													</td>
 													<td>

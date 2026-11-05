@@ -293,19 +293,19 @@ export function MediaViewport({
 				<div className={`media-zoom-controls${zoomControlsVisible ? " is-visible" : ""}`} data-zoom-ui="">
 					<button
 						type="button"
-						title={t.preview.zoomOut}
+						data-tooltip={t.preview.zoomOut}
 						aria-label={t.preview.zoomOut}
 						disabled={!fitted || view.scale <= MIN_MEDIA_SCALE + 0.001}
 						onClick={() => zoomBy(1 / MEDIA_ZOOM_STEP)}
 					>
 						<ZoomStepIcon />
 					</button>
-					<button type="button" className="media-zoom-percent" title={t.preview.resetZoom} aria-label={t.preview.resetZoom} onClick={() => commitZoom(FIT_MEDIA_VIEW)}>
+					<button type="button" className="media-zoom-percent" data-tooltip={t.preview.resetZoom} aria-label={t.preview.resetZoom} onClick={() => commitZoom(FIT_MEDIA_VIEW)}>
 						{percent}
 					</button>
 					<button
 						type="button"
-						title={t.preview.zoomIn}
+						data-tooltip={t.preview.zoomIn}
 						aria-label={t.preview.zoomIn}
 						disabled={!fitted || view.scale >= maxScale - 0.001}
 						onClick={() => zoomBy(MEDIA_ZOOM_STEP)}
@@ -371,7 +371,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 				<div className="media-transport-group">
 					<button
 						type="button"
-						title={playLabel}
+						data-tooltip={playLabel}
 						aria-label={playLabel}
 						onClick={() => {
 							if (video.paused) void video.play().catch(() => undefined);
@@ -391,7 +391,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 					<button
 						type="button"
 						className="preview-fullscreen"
-						title={fullscreenLabel}
+						data-tooltip={fullscreenLabel}
 						aria-label={fullscreenLabel}
 						aria-pressed={clock.fullscreen}
 						onClick={() => { void toggleVideoFullscreen(video); }}
@@ -400,7 +400,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 					</button>
 				</div>
 				<div className="media-transport-group">
-					<button type="button" title={muteLabel} aria-label={muteLabel} onClick={() => { video.muted = !video.muted; }}>
+					<button type="button" data-tooltip={muteLabel} aria-label={muteLabel} onClick={() => { video.muted = !video.muted; }}>
 						{clock.muted || clock.volume === 0 ? <MutedIcon /> : <VolumeIcon />}
 					</button>
 					<input
@@ -467,7 +467,7 @@ export function MediaFullscreenButton(): React.JSX.Element {
 			ref={buttonRef}
 			type="button"
 			className="preview-fullscreen"
-			title={label}
+			data-tooltip={label}
 			aria-label={label}
 			aria-pressed={active}
 			onClick={() => {
@@ -507,7 +507,7 @@ function SpeedControl({ rate, onChange }: { rate: number; onChange: (rate: numbe
 		<div ref={rootRef} className="media-speed" onMouseLeave={() => setOpen(false)}>
 			<button
 				type="button"
-				title={t.preview.speed}
+				data-tooltip={t.preview.speed}
 				aria-label={t.preview.speed}
 				aria-haspopup="listbox"
 				aria-expanded={open}

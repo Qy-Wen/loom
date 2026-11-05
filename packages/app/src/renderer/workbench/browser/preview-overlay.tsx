@@ -77,10 +77,10 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 		<div className="preview-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<div className="preview-overlay-card" ref={card} role="dialog" aria-label={t.browser.preview} tabIndex={-1}>
 				<div className="preview-overlay-bar">
-					<span className="preview-overlay-title" title={title}>{title}</span>
+					<span className="preview-overlay-title" data-tooltip={title}>{title}</span>
 					<button
 						type="button"
-						title={label}
+						data-tooltip={label}
 						aria-label={label}
 						aria-pressed={fullscreen}
 						onClick={() => toggle.current()}
@@ -92,7 +92,7 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 							/>
 						</svg>
 					</button>
-					<button type="button" title={t.browser.closePreview} aria-label={t.browser.closePreview} onClick={onClose}>
+					<button type="button" data-tooltip={t.browser.closePreview} aria-label={t.browser.closePreview} onClick={onClose}>
 						<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
 							<path fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" d="m4 4 8 8M12 4l-8 8" />
 						</svg>

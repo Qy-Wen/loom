@@ -67,63 +67,67 @@ test("view tabs keep their icons and show only the active label without moving t
 	}
 });
 
-test("all five tab options show the same hover tooltip as the top toolbar", async ({ loomPage, electronApp }) => {
+test("tab options share the toolbar tooltip, stay within the viewport, and support keyboard focus", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
 	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
 	await loomPage.reload();
 	const controls = loomPage.locator(".library-view-controls");
+	const tooltip = loomPage.getByRole("tooltip");
 	const tooltipStyle = (element: Element) => {
-		const style = getComputedStyle(element, "::after");
+		const style = getComputedStyle(element);
 		return { background: style.backgroundColor, color: style.color, fontSize: style.fontSize, borderRadius: style.borderRadius, padding: style.padding };
 	};
-	const expectedStyle = await loomPage.locator(".window-bar button[aria-label]").first().evaluate(tooltipStyle);
+	await loomPage.locator(".window-bar button[aria-label]").first().hover();
+	await expect(tooltip).toBeVisible({ timeout: 500 });
+	const expectedStyle = await tooltip.evaluate(tooltipStyle);
 	for (const name of ["Table", "Graph", "Library", "List", "Icons"]) {
 		const button = controls.getByRole("button", { name, exact: true });
 		await expect(button).not.toHaveAttribute("title");
 		await button.hover();
-		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
-		expect(await button.evaluate((element) => getComputedStyle(element, "::after").content)).toBe(JSON.stringify(name));
-		expect(await button.evaluate(tooltipStyle)).toEqual(expectedStyle);
+		await expect(tooltip).toHaveText(name, { timeout: 500 });
+		expect(await tooltip.evaluate(tooltipStyle)).toEqual(expectedStyle);
+		await expect(button).toHaveAttribute("aria-describedby", (await tooltip.getAttribute("id"))!);
+		const bounds = (await tooltip.boundingBox())!;
+		expect(bounds.x).toBeGreaterThanOrEqual(0);
+		expect(bounds.x + bounds.width).toBeLessThanOrEqual(await loomPage.evaluate(() => innerWidth));
 	}
-	const first = controls.getByRole("button", { name: "Table", exact: true });
-	const last = controls.getByRole("button", { name: "Icons", exact: true });
-	expect(await first.evaluate((element) => getComputedStyle(element, "::after").left)).toBe("0px");
-	expect(await last.evaluate((element) => getComputedStyle(element, "::after").right)).toBe("0px");
 	await loomPage.mouse.move(600, 20);
-	await first.focus();
+	await controls.getByRole("button", { name: "Table", exact: true }).focus();
 	await loomPage.keyboard.press("Tab");
+	await expect(controls.getByRole("button", { name: "Graph", exact: true })).toBeFocused();
+	await expect(tooltip).toHaveText("Graph", { timeout: 500 });
+	// Live labels must update the open tooltip without requiring another hover.
 	const graph = controls.getByRole("button", { name: "Graph", exact: true });
-	await expect(graph).toBeFocused();
-	await expect.poll(() => graph.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+	await graph.evaluate((element) => element.setAttribute("data-tooltip", "Updated graph hint"));
+	await expect(tooltip).toHaveText("Updated graph hint");
+	await graph.evaluate((element) => element.removeAttribute("data-tooltip"));
+	await expect(tooltip).toHaveText("Graph");
 });
 
 test("toolbar, view, and panel tooltips leave after 80ms and clicks dismiss them immediately", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
-	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
+	const tooltip = loomPage.getByRole("tooltip");
 	for (const selector of [".window-bar button[aria-label]", ".library-view-controls button[aria-label]", ".panel-collapse[aria-label]"]) {
 		const button = loomPage.locator(selector).first();
 		await button.hover();
-		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		await expect(tooltip).toBeVisible({ timeout: 500 });
 		await loomPage.mouse.move(600, 20);
-		expect(await button.evaluate((element) => {
-			const style = getComputedStyle(element, "::after");
-			return { delay: style.transitionDelay, duration: style.transitionDuration };
-		})).toEqual({ delay: "0.08s", duration: "0s" });
-		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity), { timeout: 200, intervals: [20] }).toBe("0");
+		await expect(tooltip).toHaveCount(0, { timeout: 250 });
 		await button.hover();
-		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
-		const opacity = await button.evaluate((element) => {
-			// Keep this timing test from opening a dialog or collapsing a panel.
+		await expect(tooltip).toBeVisible({ timeout: 500 });
+		await button.evaluate((element) => {
+			// Keep the dismissal test from opening dialogs or collapsing panels.
 			element.addEventListener("click", (event) => event.stopPropagation(), { once: true });
 			(element as HTMLButtonElement).click();
-			return getComputedStyle(element, "::after").opacity;
 		});
-		expect(opacity).toBe("0");
-		await loomPage.waitForTimeout(400);
-		expect(await button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("0");
+		await expect(tooltip).toHaveCount(0);
+		await loomPage.waitForTimeout(200);
+		await expect(tooltip).toHaveCount(0);
 		await loomPage.mouse.move(600, 20);
 		await button.hover();
-		await expect.poll(() => button.evaluate((element) => getComputedStyle(element, "::after").opacity)).toBe("1");
+		await expect(tooltip).toBeVisible({ timeout: 500 });
+		await loomPage.keyboard.press("Escape");
+		await expect(tooltip).toHaveCount(0);
 		await loomPage.mouse.move(600, 20);
 	}
 });

@@ -78,7 +78,7 @@ export function PanelWorkspace({ layout, panels }: { layout: Layout; panels: rea
 export function PanelsToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }): React.JSX.Element {
 	const { t } = useLocale();
 	const label = collapsed ? t.app.expandPanels : t.app.collapsePanels;
-	return <button className="panel-collapse" type="button" aria-label={label} onClick={onToggle}>
+	return <button className="panel-collapse" type="button" aria-label={label} data-tooltip={label} onClick={onToggle}>
 		<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
 			<rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
 			<path d="M10.3 2.8v10.4" fill="none" stroke="currentColor" strokeWidth="1.4" />

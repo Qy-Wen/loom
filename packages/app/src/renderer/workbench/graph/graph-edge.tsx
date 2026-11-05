@@ -27,6 +27,8 @@ export const GraphEdge = memo(function GraphEdge({
 	return (
 		<g
 			className={`graph-edge-group${selected ? " selected" : ""}`}
+			data-tooltip={type}
+			aria-label={type}
 			onPointerDown={(event) => {
 				event.stopPropagation();
 				onSelect(relationId);
@@ -40,9 +42,7 @@ export const GraphEdge = memo(function GraphEdge({
 				x2={x2}
 				y2={y2}
 				markerEnd={selected ? "url(#graph-arrow-selected)" : "url(#graph-arrow)"}
-			>
-				<title>{type}</title>
-			</line>
+			/>
 			{showLabel && (
 				<text className="graph-edge-label" x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 4} textAnchor="middle">
 					{type}

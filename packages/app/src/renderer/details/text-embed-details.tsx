@@ -44,7 +44,7 @@ export function TextEmbedDetails({
 				{status.modelId && (
 					<>
 						<dt>{t.details.model}</dt>
-						<dd title={status.modelId}>{status.modelId}</dd>
+						<dd data-tooltip={status.modelId}>{status.modelId}</dd>
 					</>
 				)}
 				{(status.status !== "idle" || status.childCount > 0) && (

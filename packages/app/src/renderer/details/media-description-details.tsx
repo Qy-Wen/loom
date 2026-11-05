@@ -59,17 +59,17 @@ export function MediaDescriptionDetails({
 			</div>
 			<dl className="properties">
 				<dt>{t.details.status}</dt>
-				<dd title={chunks}>{formatStatus(t, status, textEmbed, described)}</dd>
+				<dd data-tooltip={chunks}>{formatStatus(t, status, textEmbed, described)}</dd>
 				{status.modelId && (
 					<>
 						<dt>{t.details.model}</dt>
-						<dd title={model}>{status.modelId}</dd>
+						<dd data-tooltip={model}>{status.modelId}</dd>
 					</>
 				)}
 				{status.markdown && (
 					<>
 						<dt>{t.details.writeup}</dt>
-						<dd className="vlm-markdown" title={status.markdown}>{status.markdown}</dd>
+						<dd className="vlm-markdown" data-tooltip={status.markdown}>{status.markdown}</dd>
 					</>
 				)}
 				{error && (

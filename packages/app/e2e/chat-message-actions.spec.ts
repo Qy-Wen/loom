@@ -25,11 +25,21 @@ test("a reply's table actions sit under the table and match the message copy but
 		await expect(loomPage.getByText("Done.", { exact: true })).toBeVisible({ timeout: 20_000 });
 
 		const table = loomPage.locator('[data-streamdown="table-wrapper"] table');
-		const copyTable = loomPage.locator('button[title="Copy table as markdown"]');
-		const downloadTable = loomPage.locator('button[title="Download table"]');
+		const copyTable = loomPage.locator('button[data-tooltip="Copy table as markdown"]');
+		const downloadTable = loomPage.locator('button[data-tooltip="Download table"]');
 		const messageCopy = loomPage.locator('[data-testid="copilot-copy-button"]');
 		await expect(copyTable).toBeVisible();
 		await expect(messageCopy).toBeVisible();
+		await messageCopy.hover();
+		const tooltip = loomPage.getByRole("tooltip");
+		await expect(tooltip).toBeVisible({ timeout: 500 });
+		await expect(tooltip).toHaveClass("tooltip");
+		await expect(tooltip).toHaveCount(1);
+		await copyTable.hover();
+		await expect(tooltip).toHaveText("Copy table as markdown", { timeout: 500 });
+		await expect(copyTable).not.toHaveAttribute("title");
+		await loomPage.keyboard.press("Escape");
+		await expect(tooltip).toHaveCount(0);
 		const [tableBox, copyBox, downloadBox, messageBox] = [table, copyTable, downloadTable, messageCopy].map((locator) => locator.boundingBox());
 		const [t, c, d, m] = [(await tableBox)!, (await copyBox)!, (await downloadBox)!, (await messageBox)!];
 

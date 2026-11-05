@@ -60,7 +60,7 @@ export function FileSortControl({
 				aria-label={t.library.sortFiles}
 				aria-haspopup="menu"
 				aria-expanded={open}
-				title={sort === "name" ? t.library.sortByName : t.library.sortByModified}
+				data-tooltip={sort === "name" ? t.library.sortByName : t.library.sortByModified}
 				onClick={() => setOpen((current) => !current)}
 			>
 				{sort === "name" ? <NameSortIcon /> : <ModifiedSortIcon />}
@@ -68,7 +68,7 @@ export function FileSortControl({
 			<button
 				type="button"
 				aria-label={directionLabel}
-				title={directionLabel}
+				data-tooltip={directionLabel}
 				onClick={() => {
 					setOpen(false);
 					onDirection(direction === "asc" ? "desc" : "asc");

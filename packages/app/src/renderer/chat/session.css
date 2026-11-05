@@ -995,7 +995,7 @@
 	margin-bottom: 0;
 }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title] {
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip] {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1009,13 +1009,13 @@
 	transition: background-color var(--lm-dur-fast) ease, color var(--lm-dur-fast) ease;
 }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title]:hover,
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title]:focus-visible {
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip]:hover,
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip]:focus-visible {
 	background: var(--lm-vendor-copy-hover);
 	color: var(--lm-text-secondary);
 }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[title] svg {
+.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip] svg {
 	width: var(--message-action-icon-size);
 	height: var(--message-action-icon-size);
 }

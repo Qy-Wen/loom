@@ -181,9 +181,8 @@
 	background: var(--lm-surface-danger-strong);
 }
 
-.settings-probe-tip {
-	position: fixed;
-	z-index: var(--lm-z-popover);
+.tooltip.settings-probe-tip {
+	max-height: min(240px, calc(100vh - 16px));
 	display: grid;
 	grid-template-rows: auto minmax(0, 1fr);
 	gap: var(--lm-space-4);

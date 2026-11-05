@@ -102,7 +102,7 @@ export function TabStrip({
 					<div
 						key={asset.assetId}
 						className={`asset-tab${selected ? " active" : ""}${dragging === asset.assetId ? " dragging" : ""}${marked ? " drop-before" : ""}${markedEnd ? " drop-after" : ""}`}
-						title={asset.relativePath}
+						data-tooltip={asset.relativePath}
 						draggable
 						onDragStart={(event) => {
 							event.dataTransfer.effectAllowed = "move";

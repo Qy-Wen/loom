@@ -263,7 +263,7 @@ export function TableView({
 								}}
 								onClick={() => onSelectAsset(asset.assetId)}
 							>
-								<td title={asset.relativePath}>
+								<td data-tooltip={asset.relativePath}>
 									<strong>{asset.filename}</strong>
 									<small>{asset.relativePath}</small>
 								</td>

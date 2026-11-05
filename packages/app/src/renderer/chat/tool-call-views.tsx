@@ -153,7 +153,7 @@ function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: 
 		<button
 			type="button"
 			className="asset-ref"
-			title={asset.path}
+			data-tooltip={asset.path}
 			onClick={() => onOpen(asset.assetId)}
 		>
 			{asset.filename}

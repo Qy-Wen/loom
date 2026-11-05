@@ -50,7 +50,7 @@ export function MetricsView({ openTrace }: { openTrace: (example: Exemplar) => P
 									{metric.description ? <p>{metric.description}</p> : null}
 									{metricBuckets(metric).map((bucket) => <div key={bucket.label}><code>{bucket.label}</code>: {bucket.count}</div>)}
 									{metric.exemplars?.map((example, i) => (
-										<button type="button" key={i} title={`${example.traceId} / ${example.spanId}`} onClick={() => {
+										<button type="button" key={i} data-tooltip={`${example.traceId} / ${example.spanId}`} onClick={() => {
 											setNavigationError("");
 											void openTrace(example).catch(() => { if (alive.current) setNavigationError(t.referenceUnavailable); });
 										}}>{tm.exemplar(new Date(example.at).toLocaleTimeString(), formatMetricValue(example.value))}</button>

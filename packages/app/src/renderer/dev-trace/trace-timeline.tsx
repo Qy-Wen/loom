@@ -1,9 +1,7 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ButtonHTMLAttributes, type CSSProperties } from "react";
-import { createPortal } from "react-dom";
+import { useLayoutEffect, useRef, type CSSProperties } from "react";
 import { useTraceLocale } from "./trace-locale.tsx";
 import { timelineGapLabel, type TimelineLayout } from "./trace-timeline-layout.ts";
 import { formatTraceDuration } from "./trace-spans.ts";
-import { TOOLTIP_LEAVE_DELAY_MS } from "../components/tooltip-behavior.ts";
 
 export type FocusRange = { start: number; end: number } | null;
 export function TraceTimeline({ layout, onWidthChange, now, selected, range, setRange, select }: {
@@ -20,44 +18,13 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 		return () => observer.disconnect();
 	}, [onWidthChange]);
 	const drag = useRef<{ pointer: number; start: number; x: number; moved: boolean } | null>(null);
-	const tooltipId = useId();
-	const [hovered, setHovered] = useState<{ id: string; anchor: HTMLButtonElement; keyboard: boolean } | null>(null);
-	const [visibleTooltip, setVisibleTooltip] = useState<string | null>(null);
-	const showTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	const hideTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
-	const cancelLeave = () => { clearTimeout(hideTimer.current); hideTimer.current = undefined; };
-	const dismissTooltip = () => { cancelLeave(); clearTimeout(showTimer.current); setHovered(null); };
-	const leaveTooltip = (id: string) => {
-		clearTimeout(showTimer.current); // A quick pass must never open a tip after leaving.
-		cancelLeave();
-		hideTimer.current = setTimeout(() => setHovered((old) => old?.id === id ? null : old), TOOLTIP_LEAVE_DELAY_MS);
-	};
-	useEffect(() => () => { clearTimeout(showTimer.current); clearTimeout(hideTimer.current); }, []);
-	useEffect(() => {
-		setVisibleTooltip(null);
-		if (!hovered) return;
-		showTimer.current = setTimeout(() => setVisibleTooltip(hovered.id), hovered.keyboard ? 0 : 150);
-		return () => clearTimeout(showTimer.current);
-	}, [hovered]);
-	const tooltipVisible = hovered !== null && visibleTooltip === hovered.id;
-	const tooltipBlock = blocks.find((block) => block.event.id === hovered?.id);
-	const tooltipGap = gaps.find((gap) => gap.id === hovered?.id);
-	const tooltipText = tooltipBlock ? `${tooltipBlock.event.label} · ${tooltipBlock.event.marker ? t.timeline.snapshot : formatTraceDuration(Math.max(0, (tooltipBlock.event.span.endedMs ?? now) - tooltipBlock.event.span.startedMs))}${tooltipBlock.firstChunk === undefined ? "" : ` · ${t.timeline.firstChunk(formatTraceDuration(tooltipBlock.event.span.events.find((row) => row.name === "pi.ai.first_chunk")!.timeMs))}`}` : tooltipGap ? timelineGapLabel(tooltipGap, t) : undefined;
-	const tooltipHandlers = (id: string): ButtonHTMLAttributes<HTMLButtonElement> => ({
-		"aria-describedby": tooltipVisible && hovered?.id === id ? tooltipId : undefined,
-		onPointerEnter: (event) => { if (!drag.current && event.pointerType !== "touch") { cancelLeave(); setHovered({ id, anchor: event.currentTarget, keyboard: false }); } },
-		onPointerLeave: () => leaveTooltip(id),
-		onFocus: (event) => { cancelLeave(); setHovered({ id, anchor: event.currentTarget, keyboard: true }); },
-		onBlur: dismissTooltip,
-		onClick: dismissTooltip,
-	});
+	const tooltipText = (block: typeof blocks[number]) => `${block.event.label} · ${block.event.marker ? t.timeline.snapshot : formatTraceDuration(Math.max(0, (block.event.span.endedMs ?? now) - block.event.span.startedMs))}${block.firstChunk === undefined ? "" : ` · ${t.timeline.firstChunk(formatTraceDuration(block.event.span.events.find((row) => row.name === "pi.ai.first_chunk")!.timeMs))}`}`;
 	const fraction = (x: number, element: HTMLElement) => { const bounds = element.getBoundingClientRect(); return Math.min(1, Math.max(0, (x - bounds.left) / Math.max(1, bounds.width))); };
 	return <section className="trace-overview" aria-label={t.timeline.label}>
 		<div className="trace-lane-labels" aria-hidden="true"><span>{t.timeline.lanes.input}</span><span>{t.timeline.lanes.model}</span><span>{t.timeline.lanes.tools}</span></div>
-		<div ref={track} className="trace-overview-track" tabIndex={0} aria-label={t.timeline.track} onKeyDown={(event) => { if (event.key === "Escape") { setRange(null); setHovered(null); } }}
+		<div ref={track} className="trace-overview-track" tabIndex={0} aria-label={t.timeline.track} onKeyDown={(event) => { if (event.key === "Escape") { setRange(null); } }}
 			onPointerDown={(event) => {
 				if (event.button !== 0) return;
-				setHovered(null);
 				event.preventDefault(); event.currentTarget.setPointerCapture(event.pointerId);
 				drag.current = { pointer: event.pointerId, start: fraction(event.clientX, event.currentTarget), x: event.clientX, moved: false };
 			}}
@@ -86,35 +53,14 @@ export function TraceTimeline({ layout, onWidthChange, now, selected, range, set
 			}}
 			onPointerCancel={() => { drag.current = null; }} onLostPointerCapture={() => { drag.current = null; }}>
 			{blocks.filter((block, index) => index > 0 && blocks[index - 1]!.event.record.id !== block.event.record.id).map((block) => <span key={`turn-${block.event.record.id}`} className="trace-overview-boundary" aria-hidden="true" style={{ left: `${block.left * 100}%` }} />)}
-			{gaps.map((gap) => <button type="button" key={gap.id} className="trace-overview-gap" aria-label={timelineGapLabel(gap, t)} {...tooltipHandlers(gap.id)} style={{ left: `${gap.left * 100}%`, width: `${gap.width * 100}%` }}><span aria-hidden="true">//</span></button>)}
+			{gaps.map((gap) => <button type="button" key={gap.id} className="trace-overview-gap" aria-label={timelineGapLabel(gap, t)} data-tooltip={timelineGapLabel(gap, t)} style={{ left: `${gap.left * 100}%`, width: `${gap.width * 100}%` }}><span aria-hidden="true">//</span></button>)}
 			{blocks.map((block) => <button type="button" key={block.event.id} className={`trace-overview-block kind-${block.event.kind}`} aria-label={`${t.kinds[block.event.kind]} · ${block.event.summary}`} aria-pressed={selected === block.event.id}
-				{...tooltipHandlers(block.event.id)}
+				data-tooltip={tooltipText(block)}
 				style={{ left: `${block.paintedLeft * 100}%`, width: `${block.paintedWidth * 100}%`, top: `${6 + block.lane * 14}px`, "--first-chunk": `${(block.firstChunk ?? 0) * 100}%` } as CSSProperties}
 				data-event-id={block.event.id}
 				data-first-chunk={block.firstChunk !== undefined || undefined}
-				onClick={(event) => { dismissTooltip(); if (event.detail === 0) select(block.event.id); }} />)}
+				onClick={(event) => { if (event.detail === 0) select(block.event.id); }} />)}
 			{range ? <span className="trace-overview-range" style={{ left: `${range.start * 100}%`, width: `${(range.end - range.start) * 100}%` }} /> : null}
 		</div>
-		{tooltipVisible && hovered && tooltipText !== undefined ? <TimelineTooltip id={tooltipId} anchor={hovered.anchor} text={tooltipText} /> : null}
 	</section>;
-}
-
-/** Portal avoids clipping by the timeline and split panes; measure to keep the tooltip inside the viewport. */
-function TimelineTooltip({ id, anchor, text }: { id: string; anchor: HTMLButtonElement; text: string }): React.JSX.Element {
-	const element = useRef<HTMLDivElement>(null);
-	const [position, setPosition] = useState({ left: 0, top: 0 });
-	useLayoutEffect(() => {
-		const place = () => {
-			if (!element.current || !anchor.isConnected) return;
-			const bounds = anchor.getBoundingClientRect(), tip = element.current.getBoundingClientRect();
-			const left = Math.max(8, Math.min(bounds.left + bounds.width / 2 - tip.width / 2, window.innerWidth - tip.width - 8));
-			const top = bounds.bottom + tip.height + 8 <= window.innerHeight ? bounds.bottom + 8 : Math.max(8, bounds.top - tip.height - 8);
-			setPosition({ left, top });
-		};
-		place();
-		const observer = new ResizeObserver(place); observer.observe(anchor); observer.observe(element.current!);
-		window.addEventListener("resize", place); window.addEventListener("scroll", place, true);
-		return () => { observer.disconnect(); window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
-	}, [anchor, text]);
-	return createPortal(<div ref={element} id={id} role="tooltip" className="trace-timeline-tooltip" style={position}>{text}</div>, document.body);
 }

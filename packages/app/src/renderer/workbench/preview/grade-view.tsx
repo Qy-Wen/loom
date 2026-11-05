@@ -276,19 +276,19 @@ export function GradeView({
 			</div>
 			{panelHost && createPortal(<div className="grade-panel thin-scroll">
 				<div className="grade-geometry">
-					<button type="button" title={t.grade.rotateLeft} aria-label={t.grade.rotateLeft} disabled={saving !== null} onClick={() => turn(-1)}>
+					<button type="button" data-tooltip={t.grade.rotateLeft} aria-label={t.grade.rotateLeft} disabled={saving !== null} onClick={() => turn(-1)}>
 						<RotateLeftIcon />
 					</button>
-					<button type="button" title={t.grade.rotateRight} aria-label={t.grade.rotateRight} disabled={saving !== null} onClick={() => turn(1)}>
+					<button type="button" data-tooltip={t.grade.rotateRight} aria-label={t.grade.rotateRight} disabled={saving !== null} onClick={() => turn(1)}>
 						<RotateRightIcon />
 					</button>
-					<button type="button" title={t.grade.flipHorizontal} aria-label={t.grade.flipHorizontal} aria-pressed={grade.flipH} disabled={saving !== null} onClick={() => mirror("h")}>
+					<button type="button" data-tooltip={t.grade.flipHorizontal} aria-label={t.grade.flipHorizontal} aria-pressed={grade.flipH} disabled={saving !== null} onClick={() => mirror("h")}>
 						<FlipHorizontalIcon />
 					</button>
-					<button type="button" title={t.grade.flipVertical} aria-label={t.grade.flipVertical} aria-pressed={grade.flipV} disabled={saving !== null} onClick={() => mirror("v")}>
+					<button type="button" data-tooltip={t.grade.flipVertical} aria-label={t.grade.flipVertical} aria-pressed={grade.flipV} disabled={saving !== null} onClick={() => mirror("v")}>
 						<FlipVerticalIcon />
 					</button>
-					<button type="button" className="grade-crop-toggle" title={t.grade.crop} aria-label={t.grade.crop} aria-pressed={cropping} disabled={saving !== null} onClick={() => setCropping((on) => !on)}>
+					<button type="button" className="grade-crop-toggle" data-tooltip={t.grade.crop} aria-label={t.grade.crop} aria-pressed={cropping} disabled={saving !== null} onClick={() => setCropping((on) => !on)}>
 						<CropIcon />
 					</button>
 				</div>
@@ -326,7 +326,7 @@ export function GradeView({
 				</div>
 				<div className="grade-lut">
 					<span>{t.grade.lut}</span>
-					<strong title={lut}>{lutName}</strong>
+					<strong data-tooltip={lut}>{lutName}</strong>
 					<button type="button" className="open-button" onClick={() => {
 						void window.loom.pickGradeLut().then((picked) => {
 							if (!picked) return;

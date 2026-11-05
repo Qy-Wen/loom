@@ -43,7 +43,7 @@ const SessionAssistantMessage = ((props: CopilotChatAssistantMessageProps) => {
 			{...props}
 			markdownRenderer={AssistantMarkdown}
 			additionalToolbarItems={canFork ? (
-				<CopilotChatAssistantMessage.ToolbarButton title={t.chat.fork} onClick={() => branch.fork(props.message.id)}>
+				<CopilotChatAssistantMessage.ToolbarButton title={t.chat.fork} data-tooltip={t.chat.fork} onClick={() => branch.fork(props.message.id)}>
 					<ForkIcon />
 				</CopilotChatAssistantMessage.ToolbarButton>
 			) : undefined}

@@ -169,7 +169,7 @@ export function ChatModelSelect({ model, onChange, disabled }: {
 		<div className="session-model-select" ref={rootRef}>
 			{error && <span className="session-model-error" role="alert">{t.chat.modelChangeFailed}</span>}
 			<button ref={buttonRef} type="button" aria-label={t.chat.modelSelect} aria-haspopup="menu"
-				aria-expanded={open} aria-controls={open ? menuId : undefined} disabled={disabled} title={label}
+				aria-expanded={open} aria-controls={open ? menuId : undefined} disabled={disabled} data-tooltip={label}
 				onClick={() => { if (open) close(); else setOpen(true); }}
 				onKeyDown={(event) => {
 					if (event.key === "ArrowDown" || event.key === "ArrowUp") { event.preventDefault(); setOpen(true); }

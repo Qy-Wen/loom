@@ -35,7 +35,7 @@ function AssistantAssetLink({ href, children }: { href?: string; children?: Reac
 		const asset = library.get(assetId);
 		if (!asset) return <span className="asset-path asset-path-missing">{children}</span>;
 		return (
-			<button type="button" className="asset-ref asset-path" title={asset.path} onClick={() => openAsset(assetId)}>
+			<button type="button" className="asset-ref asset-path" data-tooltip={asset.path} onClick={() => openAsset(assetId)}>
 				{children}
 			</button>
 		);

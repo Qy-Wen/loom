@@ -41,11 +41,11 @@ export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRe
 	return (
 		<span className="session-asset-chip" contentEditable={false}>
 			<AssetThumbnail asset={chipPreview(asset)} />
-			<button type="button" className="asset-ref" title={asset.path} onClick={() => openAsset(asset.assetId)}>
+			<button type="button" className="asset-ref" data-tooltip={asset.path} onClick={() => openAsset(asset.assetId)}>
 				{label}
 			</button>
 			{onRemove && (
-				<button type="button" className="session-asset-chip-remove" aria-label={t.chat.removeNamed(label)} title={t.common.remove} onClick={onRemove}>
+				<button type="button" className="session-asset-chip-remove" aria-label={t.chat.removeNamed(label)} data-tooltip={t.common.remove} onClick={onRemove}>
 					<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true">
 						<path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" />
 					</svg>
@@ -190,7 +190,7 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	name.type = "button";
 	name.tabIndex = -1;
 	name.className = "asset-ref";
-	name.title = asset.path;
+	name.dataset.tooltip = asset.path;
 	name.textContent = label;
 	name.addEventListener("mousedown", (event) => event.preventDefault());
 	name.addEventListener("click", (event) => {
@@ -203,7 +203,7 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	remove.tabIndex = -1;
 	remove.className = "session-asset-chip-remove";
 	remove.setAttribute("aria-label", labels.removeNamed(label));
-	remove.title = labels.remove;
+	remove.dataset.tooltip = labels.remove;
 	remove.innerHTML = `<svg viewBox="0 0 16 16" width="10" height="10" aria-hidden="true"><path d="M3.5 3.5 12.5 12.5M12.5 3.5 3.5 12.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" /></svg>`;
 	remove.addEventListener("mousedown", (event) => event.preventDefault());
 	remove.addEventListener("click", (event) => {

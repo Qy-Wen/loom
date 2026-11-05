@@ -59,7 +59,7 @@ export function GraphHelp(): React.JSX.Element {
 				type="button"
 				className="graph-help-button"
 				aria-label={help.title}
-				title={help.title}
+				data-tooltip={help.title}
 				aria-haspopup="dialog"
 				aria-expanded={open}
 				aria-controls={open ? panelId : undefined}

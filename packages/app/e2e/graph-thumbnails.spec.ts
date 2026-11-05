@@ -21,7 +21,7 @@ for (const colorScheme of ["light", "dark"] as const) {
 		await loomPage.locator(".library-views").getByRole("button", { name: "Graph", exact: true }).click();
 
 		const nodes = loomPage.locator(".graph-node");
-		const node = (filename: string) => nodes.filter({ has: loomPage.locator("title", { hasText: new RegExp(`^${filename.replaceAll(".", "\\.")}$`) }) });
+		const node = (filename: string) => loomPage.locator(`.graph-node[aria-label="${filename}"]`);
 		await expect(nodes).toHaveCount(6);
 		const photo = node("photo.png");
 		const video = node("clip.mp4");

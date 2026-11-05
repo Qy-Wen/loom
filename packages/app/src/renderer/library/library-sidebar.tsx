@@ -200,7 +200,7 @@ export function LibrarySidebar({
 								key={view}
 								type="button"
 								className={workbenchView === view ? "active" : ""}
-								aria-label={t.library[view]}
+								aria-label={t.library[view]} data-tooltip={t.library[view]}
 								aria-pressed={workbenchView === view}
 								onClick={() => onWorkbenchView(view)}
 							>
@@ -214,7 +214,7 @@ export function LibrarySidebar({
 					<button
 						type="button"
 						className={fileDisplay === "list" ? "active" : ""}
-						aria-label={t.library.list}
+						aria-label={t.library.list} data-tooltip={t.library.list}
 						aria-pressed={fileDisplay === "list"}
 						onClick={() => setFileDisplay("list")}
 					>
@@ -225,7 +225,7 @@ export function LibrarySidebar({
 					<button
 						type="button"
 						className={fileDisplay === "icons" ? "active" : ""}
-						aria-label={t.library.icons}
+						aria-label={t.library.icons} data-tooltip={t.library.icons}
 						aria-pressed={fileDisplay === "icons"}
 						onClick={() => setFileDisplay("icons")}
 					>
@@ -253,7 +253,7 @@ export function LibrarySidebar({
 										title={library.rootPath ?? undefined}
 										onOpen={() => onLocation({ kind: "folder", path: "" })}
 									/>
-								) : <span className="library-files-name" title={library.rootPath ?? undefined}>{rootName}</span>}
+								) : <span className="library-files-name" data-tooltip={library.rootPath ?? undefined}>{rootName}</span>}
 								<span>{queryActive ? visible.assets.length : library.assets.length}</span>
 							</span>
 							{!iconMode ? (
@@ -269,7 +269,7 @@ export function LibrarySidebar({
 										className={searchOpen ? "active" : ""}
 										aria-label={t.common.searchFiles}
 										aria-pressed={searchOpen}
-										title={t.common.searchFiles}
+										data-tooltip={t.common.searchFiles}
 										onClick={() => {
 											setSearchOpen((open) => {
 												if (open) setQuery("");

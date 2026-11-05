@@ -70,3 +70,7 @@ When adding a token, give it a dark value if the light value is a surface, text,
 - Some exceptions keep literal geometry: the settings switch, the trace table rows, and the shortcut fade. They are listed in `tests/design-tokens.test.ts`.
 - The chat widget's own internals (code blocks, tool-call chips) take their colors from CopilotKit's stylesheet. Only its main variables are mapped, so a deep widget state can still show a vendor color in dark.
 - Text colors are bucketed from about 40 historical grays into five. A few elements shifted by 1–3 levels of lightness when the system was introduced.
+
+## Tooltips
+
+Mount one `TooltipProvider` per window. Use `data-tooltip` on an existing element, `TooltipText` for focusable text, or `useTooltip` for interactive content such as copyable errors. Hover opens after 150 ms, keyboard focus opens immediately, and leaving closes after 80 ms; clicks and Escape dismiss. The shared portal handles positioning, viewport bounds, and `aria-describedby`. Avoid native `title` hints and separate CSS bubbles. Chat vendor controls are adapted by `useChatTooltips`.

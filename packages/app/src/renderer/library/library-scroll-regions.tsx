@@ -87,7 +87,7 @@ export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, 
 				{moreBelow ? <div className="library-shortcuts-more" aria-hidden="true" /> : null}
 			</div>
 			<div ref={handle} className={`library-region-handle${moreBelow ? " has-more" : ""}${dragging ? " is-dragging" : ""}${adjustable ? "" : " is-fixed"}`} role="separator" tabIndex={adjustable ? 0 : undefined} aria-disabled={adjustable ? undefined : true}
-				aria-label={label} aria-orientation="horizontal" aria-controls={paneId} aria-description={moreBelow ? moreHint : undefined} title={moreBelow ? moreHint : label}
+				aria-label={label} aria-orientation="horizontal" aria-controls={paneId} aria-description={moreBelow ? moreHint : undefined} data-tooltip={moreBelow ? moreHint : label}
 				aria-valuemin={Math.round(layout.min)} aria-valuemax={Math.round(layout.max)} aria-valuenow={Math.round(layout.size)}
 				onDoubleClick={() => setFraction(DEFAULT_SHORTCUT_FRACTION)}
 				onKeyDown={(event) => {

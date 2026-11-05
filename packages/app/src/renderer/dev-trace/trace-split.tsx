@@ -85,7 +85,7 @@ export function TraceSplit({ label, storageKey, defaultSize, unit = "px", minFir
 				aria-valuemax={Math.round(bounds.max)}
 				aria-valuenow={Math.round(first)}
 				aria-valuetext={t.split.pixels(Math.round(first))}
-				title={`${label} · ${t.split.dragHint}`}
+				data-tooltip={`${label} · ${t.split.dragHint}`}
 				onDoubleClick={() => setPreferred(defaultSize)}
 				onKeyDown={(event) => {
 					if (!["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)) return;

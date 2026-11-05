@@ -69,12 +69,12 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 					<AgentPermissionSelect />
 					<ChatModelSelect model={draftModel ?? model} onChange={setDraftModel} disabled={busy} />
 					<div className="session-inline-edit-actions">
-						<button type="button" className="session-inline-edit-cancel" aria-label={t.common.cancel} title={t.common.cancel} disabled={busy} onClick={onCancel}>
+						<button type="button" className="session-inline-edit-cancel" aria-label={t.common.cancel} data-tooltip={t.common.cancel} disabled={busy} onClick={onCancel}>
 							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 								<path d="M18 6 6 18M6 6l12 12" />
 							</svg>
 						</button>
-						<CopilotChatInput.SendButton className="session-inline-edit-send" aria-label={t.chat.send} title={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
+						<CopilotChatInput.SendButton className="session-inline-edit-send" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
 							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 								<path d="m5 12 7-7 7 7M12 19V5" />
 							</svg>

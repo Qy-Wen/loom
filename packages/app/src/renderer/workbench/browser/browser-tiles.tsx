@@ -67,7 +67,7 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 			className={className}
 			data-key={key}
 			draggable
-			title={asset.relativePath}
+			data-tooltip={asset.relativePath}
 			onClick={(event) => context.onSelect(key, clickMode(event))}
 			onDoubleClick={() => context.onOpenAsset(asset.assetId)}
 			onContextMenu={(event) => {
@@ -97,7 +97,7 @@ export function TagTile({ tag, selected, onSelect, onOpen }: { tag: Tag; selecte
 			type="button"
 			className={`browser-tile folder tag${selected ? " selected" : ""}`}
 			data-key={`tag:${tag.tagId}`}
-			title={tag.name}
+			data-tooltip={tag.name}
 			onFocus={onSelect}
 			onClick={onSelect}
 			onDoubleClick={onOpen}
@@ -135,7 +135,7 @@ export function FolderTile({ relativePath, preview, context, base, searching }: 
 			className={className}
 			data-key={key}
 			draggable
-			title={relativePath}
+			data-tooltip={relativePath}
 			onClick={(event) => context.onSelect(key, clickMode(event))}
 			onDoubleClick={() => context.onOpenFolder(relativePath)}
 			onContextMenu={(event) => {

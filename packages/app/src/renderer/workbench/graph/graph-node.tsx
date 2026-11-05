@@ -35,10 +35,11 @@ export const GraphNode = memo(function GraphNode({
 		<g
 			className={`graph-node${selected ? " selected" : ""}${dropTarget ? " drop-target" : ""}${hovered ? " hovered" : ""}`}
 			data-asset-id={asset.assetId}
+			aria-label={asset.filename}
+			data-tooltip={asset.filename}
 			transform={`translate(${x} ${y})`}
 			onPointerDown={(event) => onPointerDown(event, asset.assetId)}
 		>
-			<title>{asset.filename}</title>
 			{detail === "full" && (
 				<foreignObject
 					className="graph-node-preview"

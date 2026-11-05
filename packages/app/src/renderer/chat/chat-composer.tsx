@@ -403,7 +403,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 						{queued.map((item) => (
 							<li key={item.id}>
 								<span>{item.label}</span>
-								<button type="button" className="session-follow-up-remove" aria-label={t.chat.removeQueued} title={t.chat.removeQueued} disabled={!item.ready} onClick={() => removeQueued(item.id)}>×</button>
+								<button type="button" className="session-follow-up-remove" aria-label={t.chat.removeQueued} data-tooltip={t.chat.removeQueued} disabled={!item.ready} onClick={() => removeQueued(item.id)}>×</button>
 							</li>
 						))}
 					</ol>

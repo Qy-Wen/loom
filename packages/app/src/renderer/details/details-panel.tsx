@@ -84,7 +84,7 @@ export function DetailsPanel({
 							<dt>{t.details.type}</dt><dd>{assetTypeLabel(t, asset.type)}</dd>
 							<dt>{t.details.size}</dt><dd>{formatBytes(asset.size)}</dd>
 							<dt>{t.details.modified}</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
-							<dt>{t.details.assetId}</dt><dd title={asset.assetId}>{asset.assetId}</dd>
+							<dt>{t.details.assetId}</dt><dd data-tooltip={asset.assetId}>{asset.assetId}</dd>
 							<EnrichmentDetails enrichment={enrichment} />
 							<PropertySummary
 								assetId={asset.assetId}
@@ -234,7 +234,7 @@ function RelationsEditor({
 						className="icon-button"
 						type="button"
 						aria-label={t.details.addRelation}
-						title={t.details.addRelation}
+						data-tooltip={t.details.addRelation}
 						onClick={() => {
 							setForm({ type: "", toAssetId: "", direction: "out" });
 							setTypeOpen(false);
@@ -292,7 +292,7 @@ function RelationsEditor({
 											<button
 												type="button"
 												className={item.assetId === form.toAssetId ? "selected" : undefined}
-												title={item.relativePath}
+												data-tooltip={item.relativePath}
 												onClick={() => {
 													setForm({ ...form, toAssetId: item.assetId });
 													setAssetOpen(false);
@@ -367,7 +367,7 @@ function RelationGroup({
 						<button
 							className="icon-button"
 							type="button"
-							title={t.details.removeRelation}
+							data-tooltip={t.details.removeRelation}
 							onClick={() => void onRemove(item.relationId)}
 						>×</button>
 					</li>

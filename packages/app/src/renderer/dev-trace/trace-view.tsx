@@ -15,7 +15,7 @@ function TraceTimestamp({ ms }: { ms: number | undefined }): React.JSX.Element {
 	const text = formatTraceTimestamp(ms);
 	if (ms === undefined || text === undefined) return <>{t.notRecorded}</>;
 	const iso = new Date(ms).toISOString();
-	return <time dateTime={iso} title={iso}>{text}</time>;
+	return <time dateTime={iso} data-tooltip={iso}>{text}</time>;
 }
 
 export type TraceDetailTab = "overview" | "preview" | "raw";
@@ -142,7 +142,7 @@ export function TraceView({ records, selectedSpan, navigationKey, loading, hasMo
 	</div>;
 	return <div className="trace-trajectory">
 		<div className="trace-toolbar" role="toolbar" aria-label={v.toolbar}>
-			<button type="button" title={actual ? v.toEqual : v.toActual} aria-pressed={actual} onClick={() => { setActual(!actual); setRange(null); }}>{v.duration}</button>
+			<button type="button" data-tooltip={actual ? v.toEqual : v.toActual} aria-pressed={actual} onClick={() => { setActual(!actual); setRange(null); }}>{v.duration}</button>
 			<button type="button" onClick={() => setClosedTurns(turns.every((turn) => closedTurns.has(turn.id)) ? new Set() : new Set(turns.map((turn) => turn.id)))}>{turns.length && turns.every((turn) => closedTurns.has(turn.id)) ? v.expandTurns : v.collapseTurns}</button>
 			<button type="button" onClick={() => setClosedCalls(turns.every((turn) => closedCalls.has(turn.id)) ? new Set() : new Set(turns.map((turn) => turn.id)))}>{turns.length && turns.every((turn) => closedCalls.has(turn.id)) ? v.expandCalls : v.collapseCalls}</button>
 			{range ? <button type="button" onClick={() => setRange(null)}>{v.clearRange}</button> : null}
@@ -170,7 +170,7 @@ function TurnRows({ number, events, status, collapsed, callsCollapsed, toggleTur
 		{folded ? null : events.filter((event) => searching || !callsCollapsed || event.kind !== "tool").map((event) => <tr key={event.id} className={`trace-row trace-event${selected === event.id ? " is-selected" : ""}`} tabIndex={0} aria-selected={selected === event.id} aria-label={`${event.label} · ${event.summary}`} data-event-id={event.id} data-kind={event.kind} data-focus-outside={!inRange(event) || undefined}
 			onClick={() => choose(event.id)} onKeyDown={(key) => { if (key.key === "Enter" || key.key === " ") { key.preventDefault(); choose(event.id); } }}>
 			<td><span className={`trace-kind kind-${event.kind}`}>{event.label}</span></td>
-			<td><div className="trace-event-content"><span className="trace-event-summary" title={event.summary}>{event.summary}</span><span className="trace-event-meta">{event.kind === "assistant" ? String(event.span.attributes.model ?? "model") : ""}{event.marker ? "" : ` · ${formatTraceDuration(Math.max(0, (event.span.endedMs ?? now) - event.span.startedMs))}`}{eventStatus(event) === "error" || eventStatus(event) === "interrupted" ? ` · ${traceStatus(t, eventStatus(event))}` : ""}</span></div></td>
+			<td><div className="trace-event-content"><span className="trace-event-summary" data-tooltip={event.summary}>{event.summary}</span><span className="trace-event-meta">{event.kind === "assistant" ? String(event.span.attributes.model ?? "model") : ""}{event.marker ? "" : ` · ${formatTraceDuration(Math.max(0, (event.span.endedMs ?? now) - event.span.startedMs))}`}{eventStatus(event) === "error" || eventStatus(event) === "interrupted" ? ` · ${traceStatus(t, eventStatus(event))}` : ""}</span></div></td>
 		</tr>)}
 	</>;
 }

@@ -27,7 +27,7 @@ export function CopyableError({ text }: CopyableErrorProps): React.JSX.Element {
 
 	return (
 		<span className="copyable-error">
-			<span className="copyable-error-text" title={text}>{text}</span>
+			<span className="copyable-error-text" data-tooltip={text}>{text}</span>
 			<button
 				type="button"
 				className="text-button copyable-error-copy"
