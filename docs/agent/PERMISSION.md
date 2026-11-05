@@ -46,4 +46,4 @@ Full permission also runs them directly. The switch stays as saved. Leaving Full
 
 With the sandbox on, no open library prevents execution. On macOS/Linux, sandbox startup failure also prevents execution. On Windows, initialization failure turns the saved switch off and runs commands directly after cleanup and failure reporting finish; concurrent commands wait for that transition. The failure notice is retained in `agent-sandbox.json` and displayed after startup, reload or restart until dismissed. Dismissal does not re-enable the sandbox.
 
-On Windows, ffmpeg and ffprobe run under `cmd.exe`. The bash tool still needs Git Bash. `pnpm install` provisions the sandbox user the first time it is missing (one UAC prompt) and skips that step once it is in place.
+On Windows, ffmpeg and ffprobe run under `cmd.exe`. The shell tool uses Git Bash when available, otherwise built-in Windows PowerShell. `pnpm install` provisions the sandbox user the first time it is missing (one UAC prompt) and skips that step once it is in place.

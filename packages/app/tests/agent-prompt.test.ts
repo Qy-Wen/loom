@@ -6,7 +6,7 @@ describe("systemPromptForLibrary", () => {
 	it("names the open asset library as the working directory", () => {
 		const prompt = systemPromptForLibrary("D:\\library");
 		assert.match(prompt, /working directory, is D:\\library/);
-		assert.match(prompt, /read, edit, write, and bash/);
+		assert.match(prompt, /read, edit, write, and the available shell tool \(bash or powershell\)/);
 		assert.match(prompt, /<asset_ref>/);
 		assert.match(prompt, /Omit asset_id when you do not have one/);
 		assert.match(prompt, /<system-reminder>/);

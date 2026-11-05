@@ -46,4 +46,4 @@ Full permission 也直接跑。开关仍保存原样。离开 Full 后按这个�
 
 开启沙箱时，没有打开的库就不执行命令。macOS/Linux 上沙箱启动失败也不执行。Windows 上初始化失败会关闭并保存沙箱开关，清理和失败通知处理完成后直接运行命令；并发命令等待同一降级过程。失败通知保留在 `agent-sandbox.json`，启动、刷新或重启后都会显示，直到手动关闭。关闭通知不会重新启用沙箱。
 
-Windows 上 ffmpeg 和 ffprobe 用 `cmd.exe` 在沙箱里跑。bash 工具仍然需要 Git Bash。`pnpm install` 在沙箱还没装时做一次管理员安装（一次 UAC），已经装好就跳过。
+Windows 上 ffmpeg 和 ffprobe 用 `cmd.exe` 在沙箱里跑。Shell 工具优先使用 Git Bash，未安装时使用系统自带的 Windows PowerShell。`pnpm install` 在沙箱还没装时做一次管理员安装（一次 UAC），已经装好就跳过。

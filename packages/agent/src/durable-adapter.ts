@@ -7,6 +7,7 @@ export {
 	createWriteTool,
 	createEditTool,
 	createBashTool,
+	createPowerShellTool,
 	type BashExecution,
 	type BashPrepare,
 	type ImageProcessor,

@@ -18,14 +18,14 @@ import { tryResolveMediaBinaries } from "../media/binaries.ts";
 import { unpackAsarPath } from "../packaged-path.ts";
 
 /**
- * Process sandbox for bash and bundled ffmpeg/ffprobe.
+ * Process sandbox for shell commands and bundled ffmpeg/ffprobe.
  * The open library and the temp directory are writable. The user profile is not
  * readable. Network is off. No library prevents spawning. On Windows, failed
  * sandbox initialization disables the setting and lets the command run directly.
  * Read, edit, and write stay in-process. MCP and generation jobs are not wrapped.
  * Windows must name the packaged srt-win.exe; the runtime does not pick it up.
  * On Windows the inner shell is cmd.exe. Program Files and Windows are already
- * readable, so they are not granted another ACE. The bash tool still uses Git Bash.
+ * readable, so they are not granted another ACE. Shell commands use Git Bash when available, otherwise Windows PowerShell.
  */
 
 const WINDOWS_PROXY_PORT_RANGE: [number, number] = [20080, 20089];
@@ -157,6 +157,41 @@ export async function prepareSandboxedBash(execution: {
 		LOOM_SANDBOX_SPEC: specPath,
 		ELECTRON_RUN_AS_NODE: "1",
 	};
+}
+
+/** The available Windows shell determines which tool and command syntax the model receives. */
+export function workspaceShell(): "bash" | "powershell" {
+	return process.platform === "win32" && !windowsBash() ? "powershell" : "bash";
+}
+
+/** Use the built-in PowerShell, so no additional Windows installation or PATH entry is required. */
+export function windowsPowerShell(): string {
+	const root = process.env.SystemRoot ?? process.env.windir ?? "C:\\Windows";
+	return join(root, "System32", "WindowsPowerShell", "v1.0", "powershell.exe");
+}
+
+/** PowerShell stays PowerShell both inside and outside the sandbox; never reinterpret Bash syntax. */
+export async function prepareSandboxedPowerShell(execution: {
+	command: string;
+	cwd: string;
+	env: Record<string, string>;
+}): Promise<void> {
+	while (fallbackPending) await fallbackPending;
+	if (!enabled) return;
+	const script = "try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}\n" + execution.command;
+	const encoded = Buffer.from(script, "utf16le").toString("base64");
+	const wrapped = await sandboxedArgv(shellCommand([
+		windowsPowerShell(), "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", encoded,
+	]), execution.cwd);
+	if (wrapped === undefined) return;
+	const helper = await spawnHelperPath();
+	const specPath = join(await ensureTempDir("sandbox"), `${randomBytes(16).toString("hex")}.json`);
+	const env = stringEnv(wrapped.env);
+	delete env.LOOM_SANDBOX_SPEC;
+	await writeFile(specPath, JSON.stringify({ argv: wrapped.argv, env, cwd: wrapped.cwd }), { mode: 0o600 });
+	const quote = (value: string) => `'${value.replaceAll("'", "''")}'`;
+	execution.command = `& ${quote(process.execPath)} ${quote(helper)}; exit $LASTEXITCODE`;
+	execution.env = { ...execution.env, LOOM_SANDBOX_SPEC: specPath, ELECTRON_RUN_AS_NODE: "1" };
 }
 
 /** One command for the sandbox shell. POSIX on macOS and Linux, cmd.exe on Windows. */
@@ -432,7 +467,8 @@ function windowsBash(): string | undefined {
 		if (!entry) continue;
 		candidates.push(join(entry, "bash.exe"));
 	}
-	return candidates.find((candidate) => existsSync(candidate));
+	// Windows' legacy WSL launcher is not a local Bash installation.
+	return candidates.find((candidate) => !/[\\/](?:System32|Sysnative)[\\/]bash\.exe$/i.test(candidate) && existsSync(candidate));
 }
 
 function spawnHelperPath(): Promise<string> {

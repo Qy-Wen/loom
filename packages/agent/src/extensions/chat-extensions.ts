@@ -12,7 +12,7 @@ export async function createChatExtensions(
 	const workspace = await createWorkspaceTools(options.workspace);
 	const sharedExtensions = options.sharedExtensions ?? [];
 	const retrieve = createSpecialistExtension("retrieve", [...workspace.filter((tool) => tool.name === "read"), ...grouped.retrieve.map(toDurableTool)], options.permission, sharedExtensions);
-	const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash"].includes(tool.name)), ...grouped.create.map(toDurableTool)], options.permission, sharedExtensions);
+	const create = createSpecialistExtension("create", [...workspace.filter((tool) => ["read", "edit", "write", "bash", "powershell"].includes(tool.name)), ...grouped.create.map(toDurableTool)], options.permission, sharedExtensions);
 	const assembly = await createLibraryExtension(root, { ...options, tools: grouped.parent });
 	return {
 		extension: { ...assembly.extension, tools: [...assembly.extension.tools!, retrieve.tool, create.tool] },

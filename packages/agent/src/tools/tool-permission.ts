@@ -32,7 +32,7 @@ const SETTINGS_TOOLS = ["update_settings"] as const;
 const WEB_TOOLS = ["web_fetch"] as const;
 const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...WEB_TOOLS] as const;
 /** Child processes that can write. `run_ffprobe` only reads, so it is not here. */
-const PROCESS_TOOLS = ["bash", "grade_image", "run_ffmpeg"] as const;
+const PROCESS_TOOLS = ["bash", "powershell", "grade_image", "run_ffmpeg"] as const;
 const BASIC_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...WEB_TOOLS, ...PROCESS_TOOLS] as const;
 
 export function parseAgentPermissionLevel(value: unknown): AgentPermissionLevel {
@@ -154,9 +154,9 @@ export function commandAllowId(allow: CommandAllow): string {
 
 /** Stable identity for "always allow". Undefined when the call has no specific command to remember. */
 export function commandAllowKey(toolName: string, args: unknown, root?: string | null): CommandAllow | undefined {
-	if (toolName === "bash") {
+	if (toolName === "bash" || toolName === "powershell") {
 		const command = stringField(args, "command")?.trim();
-		return command ? { tool: "bash", match: command } : undefined;
+		return command ? { tool: toolName, match: command } : undefined;
 	}
 	if (toolName === "run_ffmpeg") {
 		const match = ffmpegAllowMatch(args);

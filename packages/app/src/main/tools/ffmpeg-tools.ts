@@ -95,7 +95,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 		{
 			name: "run_ffmpeg",
 			description:
-				"Run ffmpeg with an argv array. This is the only way to run ffmpeg: it may not be on the shell PATH, so do not look for it or call it from bash. " +
+				"Run ffmpeg with an argv array. This is the only way to run ffmpeg: it may not be on the shell PATH, so do not look for it or call it from the shell. " +
 				"Use it for every media edit except still-image color grading (grade_image). " +
 				"Pass args as a string array without the program name. File operands may be workspace-relative or absolute. " +
 				"Write results under outputs/ unless the user names a path, and never overwrite the source file; leave out -y so an existing output is not replaced. " +
@@ -111,7 +111,7 @@ export function createFfmpegTools(core: LocalCore): LoomTool[] {
 		{
 			name: "run_ffprobe",
 			description:
-				"Run ffprobe with an argv array and return its stdout. This is the only way to run ffprobe: it may not be on the shell PATH, so do not look for it or call it from bash. " +
+				"Run ffprobe with an argv array and return its stdout. This is the only way to run ffprobe: it may not be on the shell PATH, so do not look for it or call it from the shell. " +
 				"Use it to read duration, resolution, codecs, streams, chapters, or frame counts, for example -show_format, -show_streams, -show_entries, or -count_frames. " +
 				"Pass args as a string array without the program name, for example [\"-v\", \"error\", \"-of\", \"json\", \"-show_format\", \"clips/hero.mp4\"]. File operands may be workspace-relative or absolute.",
 			parameters: argvSchema,

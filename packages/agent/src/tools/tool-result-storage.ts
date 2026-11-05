@@ -58,7 +58,7 @@ export function createToolResultStorage(root: string) {
 					output,
 					diagnostics: [...(result.diagnostics ?? []), {
 						severity: "info", code: "full_output",
-						message: `Output too large (${bytes} bytes). Showing a preview of up to ${PREVIEW_BYTES} bytes. Full output: ${path}\nUse read with offset/limit for specific portions. For a long single line, use bash to select byte ranges or query JSON with jq instead of reading the whole file.`,
+						message: `Output too large (${bytes} bytes). Showing a preview of up to ${PREVIEW_BYTES} bytes. Full output: ${path}\nUse read with offset/limit for specific portions. For a long single line, use the available shell tool to select byte ranges or query JSON with jq instead of reading the whole file.`,
 					}],
 				};
 			},

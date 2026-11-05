@@ -19,7 +19,7 @@ import { workspaceWriteNeedsApproval } from "../src/tools/workspace-path.ts";
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
 	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "web_fetch", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "edit", "grade_image", "run_ffmpeg", "update_settings", "web_fetch", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "edit", "grade_image", "powershell", "run_ffmpeg", "update_settings", "web_fetch", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
@@ -131,4 +131,15 @@ test("web_search never waits, web_fetch does, and Always remembers the site", ()
 	assert.equal(commandAllowKey("web_fetch", { url: "not a url" }), undefined);
 	assert.equal(toolCallNeedsApproval("standard", "web_fetch", null, { url: "https://docs.example.com/b" }, [key!]), false);
 	assert.equal(toolCallNeedsApproval("standard", "web_fetch", null, { url: "https://evil.example.com/b" }, [key!]), true);
+});
+
+
+test("PowerShell uses the shell permission gate and remembers only the approved command", () => {
+	assert.equal(toolNeedsApproval("basic", "powershell"), true);
+	assert.equal(toolNeedsApproval("standard", "powershell"), false);
+	const allow = commandAllowKey("powershell", { command: "  Get-ChildItem  " });
+	assert.deepEqual(allow, { tool: "powershell", match: "Get-ChildItem" });
+	assert.equal(toolCallNeedsApproval("basic", "powershell", "/lib", { command: "Get-ChildItem" }, [allow!]), false);
+	assert.equal(toolCallNeedsApproval("basic", "powershell", "/lib", { command: "Remove-Item foo" }, [allow!]), true);
+	assert.equal(toolCallNeedsApproval("basic", "bash", "/lib", { command: "Get-ChildItem" }, [allow!]), true);
 });

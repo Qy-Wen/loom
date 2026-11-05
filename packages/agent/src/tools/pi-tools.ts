@@ -1,9 +1,10 @@
 /** Durable coding tools. Each call gets its cwd/environment from HarnessOptions.env. */
-import { prepareSandboxedBash } from "@loom/core/sandbox";
+import { prepareSandboxedBash, prepareSandboxedPowerShell, windowsPowerShell, workspaceShell } from "@loom/core/sandbox";
 import { Type, type TSchema } from "@earendil-works/pi-ai";
 import { copyJson, type JsonValue } from "@earendil-works/chord";
 import {
 	createBashTool,
+	createPowerShellTool,
 	createEditTool,
 	createNodePhotonImages,
 	createReadTool,
@@ -20,13 +21,16 @@ export type WorkspaceToolOptions = {
 	images?: ImageProcessor | false;
 	/** Defaults to Loom's process sandbox. Used by hosts with their own sandbox implementation. */
 	prepareBash?: BashPrepare;
+	preparePowerShell?: BashPrepare;
 };
 
 export async function createWorkspaceTools(options: WorkspaceToolOptions = {}): Promise<ToolRegistration[]> {
 	const images = options.images === false ? undefined : options.images ?? await createNodePhotonImages();
 	return [
 		createReadTool({ images }),
-		createBashTool({ prepare: options.prepareBash ?? ((execution) => prepareSandboxedBash(execution)) }),
+		workspaceShell() === "powershell"
+			? createPowerShellTool({ programs: [windowsPowerShell()], prepare: options.preparePowerShell ?? ((execution) => prepareSandboxedPowerShell(execution)) })
+			: createBashTool({ prepare: options.prepareBash ?? ((execution) => prepareSandboxedBash(execution)) }),
 		createEditTool(),
 		createWriteTool(),
 	];
