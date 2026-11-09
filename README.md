@@ -12,14 +12,17 @@ Preview installers for macOS (Apple Silicon and Intel) and Windows x64 are avail
 
 ## What you can do
 
-- **Browse your files.** Keep your own folder layout. Preview images, video, audio, PDFs, and Markdown; organize assets with tags and favorites.
-- **Find assets by meaning.** Search names and properties directly, or configure models to describe and index selected assets for semantic search.
-- **Track relationships.** Connect references, generated images, and finished videos to record how your work came together.
-- **Build your own table.** Add text, number, checkbox, and date columns for project status, ratings, and other metadata. Edit them yourself or ask the agent.
-- **Process media locally.** Use FFmpeg through the agent to crop, grade, transcode, compress, extract frames, or cut clips. Results return to your library.
-- **Connect creative tools.** Add MCP servers such as ComfyUI for generation, or third-party servers for social publishing. These require separate setup and authentication; available features depend on the server.
+Loom is for anyone who works with images, video, audio, and documents: AI artists and video makers, content creators and editors, photographers, designers, and illustrators.
 
-For example, ask Loom to find a reference image, extract a frame from a video, or update a project's status. Attach a library file to the composer to identify the asset you mean.
+- **Keep the source of AI-made work.** Link references, generated images, and finished cuts with reference and derivation links, so you can still see where each one came from weeks later.
+- **Let the agent tidy your files.** Ask it to sort, rename, and regroup a messy folder, such as filing by type or giving files consistent names. Tags, properties, and relationships follow each file when it moves. In Basic permission mode every file change waits for your approval, and commands run in a sandbox that can only write to your library.
+- **Cut, compress, and publish.** Ask the agent to trim, transcode, or compress with FFmpeg; results return to your library. Publishing connects through MCP, and posting to Xiaohongshu has been tested with xiaohongshu-mcp (you set it up and sign in yourself).
+- **Find years of references in a sentence.** Keep your folders as they are. Describe and index the assets you want, then search by meaning, for example "warm tones, a backlit street scene".
+- **Track every asset in one table.** Add text, number, checkbox, and date columns for status, ratings, clients, and more. Edit them yourself or ask the agent to update many at once.
+
+Also included: browse and preview images, video, audio, PDFs, and Markdown in your own folder layout; organize with tags and favorites; connect creative tools such as ComfyUI through MCP (separate setup and authentication required; available features depend on the server).
+
+Try asking Loom to find a reference image, extract a frame from a video, or mark this week's final cuts as approved. Attach a library file to the composer to identify the asset you mean.
 
 | Organize assets in a table | Trace relationships between assets |
 | --- | --- |
