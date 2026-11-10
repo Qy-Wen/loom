@@ -1,6 +1,7 @@
+import { useEffect, useState } from "react";
 import type { Asset, Tag } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
-import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
+import { BrowserAssetThumbnail } from "./browser-asset-thumbnail.tsx";
 import { extensionOf, filenameStem } from "../../assets/asset-utils.ts";
 import { BrowserFolderThumbnail } from "./browser-folder-thumbnail.tsx";
 import type { BrowserFolderPreview } from "./browser-folder-preview.ts";
@@ -40,13 +41,15 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 	const key = assetKey(asset.assetId);
 	const selected = context.selectedKeys.has(key);
 	const renaming = context.renamingAssetId === asset.assetId;
+	const [hovered, setHovered] = useState(false);
+	useEffect(() => { if (renaming) setHovered(false); }, [renaming]);
 	const cut = context.cutAssetIds.includes(asset.assetId) || context.cutFolders.some((folder) => asset.relativePath.startsWith(`${folder}/`));
 	const hint = searching ? pathHint(asset.relativePath, base) : null;
 	const rename = useInlineRename(filenameStem(asset.filename), renaming, (stem) => context.onRenameAsset(asset, stem), context.onCancelRename);
 	const className = `browser-tile${selected ? " selected" : ""}${cut ? " cut" : ""}`;
 	const thumb = (
 		<span className="browser-tile-thumb">
-			<AssetThumbnail asset={asset} />
+			<BrowserAssetThumbnail asset={asset} active={hovered && !renaming} />
 			{context.favoriteAssetIds.has(asset.assetId) ? <FavoriteMark /> : null}
 		</span>
 	);
@@ -68,13 +71,18 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 			data-key={key}
 			draggable
 			data-tooltip={asset.relativePath}
+			onPointerEnter={(event) => { if (event.pointerType !== "touch") setHovered(true); }}
+			onPointerLeave={() => setHovered(false)}
+			onPointerCancel={() => setHovered(false)}
 			onClick={(event) => context.onSelect(key, clickMode(event))}
 			onDoubleClick={() => context.onOpenAsset(asset.assetId)}
 			onContextMenu={(event) => {
 				event.preventDefault();
+				setHovered(false);
 				context.onAssetContextMenu(asset);
 			}}
 			onDragStart={(event) => {
+				setHovered(false);
 				const single: LibraryDrag = { kind: "asset", assetId: asset.assetId, path: asset.relativePath };
 				writeLibraryDrag(event.dataTransfer, selected && context.selectionDrag ? context.selectionDrag : single, asset);
 			}}

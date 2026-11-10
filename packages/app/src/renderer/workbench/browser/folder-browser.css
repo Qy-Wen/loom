@@ -278,6 +278,15 @@ button.browser-crumb:hover {
 	border-left-width: 14px;
 }
 
+.browser-tile-thumb .browser-hover-preview {
+	opacity: 0;
+	pointer-events: none;
+}
+
+.browser-tile-thumb .browser-hover-preview.ready {
+	opacity: 1;
+}
+
 .browser-tile.folder .browser-tile-thumb {
 	display: grid;
 	place-items: center;
