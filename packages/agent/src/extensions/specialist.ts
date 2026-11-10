@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { AssistantEntry, configure, defineExtension, defineTool, type Extension, type ToolRegistration } from "../durable-adapter.ts";
 import { userTextFromContent } from "../context/attachments.ts";
 import type { LoomTool } from "../types.ts";

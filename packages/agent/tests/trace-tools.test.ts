@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { Type, type Message, type Tool } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
+import type { Message, Tool } from "@earendil-works/pi-ai";
 import { TracePrivacy } from "../src/trace/trace-privacy.ts";
 import { traceBlobReference } from "../src/trace/trace-blob.ts";
 

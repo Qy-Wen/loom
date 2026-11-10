@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { fauxAssistantMessage as answer, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, defineExtension, LibraryRuntime,
@@ -37,7 +37,7 @@ for (const level of ["basic", "standard"] as const) {
 				const conversation = await owner.createConversation({}, context);
 				const pending = Promise.withResolvers<string>();
 				const watch = await owner.harness.watchDoc(LoomApprovalsDoc, conversation.id, context);
-				watch!.start(async (doc) => { if (doc?.pending[0]) pending.resolve(doc.pending[0].toolCallId); });
+				watch!.start(async (call) => { if (call.kind === "failed") throw call.error; const doc = call.value; if (doc?.pending[0]) pending.resolve(doc.pending[0].toolCallId); });
 				const args = { file: "media/first.mp4", title: "First post" };
 				faux.setResponses([
 					answer(fauxToolCall("social__publish", args), { stopReason: "toolUse" }), answer("Done"),

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { fauxAssistantMessage as answer, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, createSpecialistExtension, defineExtension, defineTool,
@@ -127,14 +127,14 @@ for (const toolName of ["write", "comfy__generate"]) for (const action of ["appr
 			const parent = await owner.createConversation({}, context);
 			const submission = await parent.submit({ type: "input", content: "parent-secret", requestId: "parent-request" }, context);
 			const approval = Promise.withResolvers<{ id: string; child: number }>();
-			const unsubscribe = owner.harness.subscribeCommits((publication) => {
+			const unsubscribe = owner.harness.observeCommits({ advance: (publication) => {
 				for (const change of publication.changes) if (change.type === "document" && change.record.kind === "loom.approvals" && change.record.scope.kind === "conversation") {
 					const child = change.record.scope.conversationId;
 					void owner!.harness.snapshot(LoomApprovalsDoc, child, context).then((doc) => {
 						if (doc?.pending[0]) approval.resolve({ id: doc.pending[0].toolCallId, child });
 					});
 				}
-			});
+			}, end: () => {} });
 			const pending = await approval.promise;
 			const childId = pending.child as typeof parent.id;
 			assert.equal((await listLoomConversations(owner.harness, {}, context)).length, 1);
@@ -142,14 +142,14 @@ for (const toolName of ["write", "comfy__generate"]) for (const action of ["appr
 			await assert.rejects(parent.submit({ type: "input", content: "busy", whenBusy: "reject" }, context), /busy/i);
 			if (action === "stop") await parent.abort(context);
 			else if (action === "reopen") {
-				unsubscribe(); await owner.close(context);
+				unsubscribe.detach(); await owner.close(context);
 				gate = new ToolGate(); gate.level = toolName === "write" ? "basic" : "standard";
 				owner = await open();
 				await clearPendingApprovals(owner.harness);
 				assert.deepEqual((await owner.harness.snapshot(LoomApprovalsDoc, childId, context))?.pending, []);
 				const reapproval = Promise.withResolvers<string>();
 				const watch = await owner.harness.watchDoc(LoomApprovalsDoc, childId, context);
-				watch!.start(async (doc) => { if (doc?.pending[0]) reapproval.resolve(doc.pending[0].toolCallId); });
+				watch!.start(async (call) => { if (call.kind === "failed") throw call.error; const doc = call.value; if (doc?.pending[0]) reapproval.resolve(doc.pending[0].toolCallId); });
 				owner.harness.resume();
 				gate.resolve(await reapproval.promise, "reject");
 				await watch!.stop();
@@ -162,7 +162,7 @@ for (const toolName of ["write", "comfy__generate"]) for (const action of ["appr
 			assert.deepEqual((await owner.harness.snapshot(LoomApprovalsDoc, childId, context))?.pending, []);
 			const entries = (await resumed!.context(context)).entries;
 			assert.ok(!entries.some((entry) => ToolResultEntry.is(entry) && entry.model?.some((message) => message.role === "toolResult" && message.toolName === toolName)));
-			unsubscribe();
+			unsubscribe.detach();
 		} finally { await owner?.close(context); await rm(path, { recursive: true, force: true }); }
 	});
 }

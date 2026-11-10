@@ -1,6 +1,6 @@
 import { AbstractAgent, type RunAgentInput } from "@ag-ui/client";
 import { EventType, type BaseEvent } from "@ag-ui/core";
-import type { AgentEventStream, DocumentWatch, PendingToolApproval } from "@loom/agent";
+import { BACKGROUND_CONTEXT as context, ConversationTranscript, type ConversationView, type ConversationWatch, type DocumentWatch, type EntryId, type LiveState, type PendingToolApproval, type TranscriptView } from "@loom/agent";
 import type { ChatService } from "./chat-service.ts";
 import { createAgUiEvents, temporaryMessageId } from "./ag-ui-events.ts";
 import { createConversationActivity } from "./conversation-activity.ts";
@@ -8,7 +8,7 @@ import { transcriptText } from "../../shared/ag-ui-messages.ts";
 import { formatChatError } from "../../shared/chat-error.ts";
 import { Observable } from "rxjs";
 
-/** Protocol boundary: durable commit events + Loom approval document -> AG-UI increments. */
+/** Protocol boundary: native conversation state and Loom approvals become AG-UI increments. */
 export class AgUiAdapter extends AbstractAgent {
 	active = new Map<string, { abort: () => Promise<void>; done: Promise<void> }>();
 	private service: ChatService;
@@ -25,20 +25,26 @@ export class AgUiAdapter extends AbstractAgent {
 
 	private observe(input: RunAgentInput, submit: boolean): Observable<BaseEvent> {
 		return new Observable((subscriber) => {
-			const emit = (event: object) => subscriber.next(event as BaseEvent);
 			let cancelled = false;
+			const emit = (event: object) => { if (!cancelled) subscriber.next(event as BaseEvent); };
 			let finished = false;
 			let abort = async () => {};
 			const complete = Promise.withResolvers<void>();
 			const detached = Promise.withResolvers<void>();
+			const failure = Promise.withResolvers<never>();
+			// A child watcher may fail before the main watcher reaches its completion race.
+			void failure.promise.catch(() => {});
 			const handle = { abort: () => abort(), done: complete.promise };
 			const previous = submit ? this.active.get(input.threadId) : undefined;
 			if (submit) this.active.set(input.threadId, handle);
 			void (async () => {
 				const childWatches: Array<{ stop: () => Promise<unknown> }> = [];
 				const watchedChildren = new Set<number>();
-				let stream: AgentEventStream | undefined;
+				let stream: ConversationWatch | undefined;
 				let approvals: DocumentWatch<{ pending: PendingToolApproval[] }> | undefined;
+				const checkEnd = (watch: { closed: Promise<import("@loom/agent").WatchEnd> }) => {
+					void watch.closed.then((end) => { if ("error" in end) failure.reject(end.error); });
+				};
 				try {
 					if (previous) { await previous.abort(); await previous.done; }
 					if (cancelled) return;
@@ -47,39 +53,59 @@ export class AgUiAdapter extends AbstractAgent {
 					const optimisticUser = input.messages.findLast((message) => message.role === "user");
 					const turn = submit ? await connection.prepareTurn(transcriptText(optimisticUser?.content), { requestId: input.runId, clientMessageId: optimisticUser?.id }) : undefined;
 					if (cancelled) return;
-					stream = await connection.watch();
+					const attached = await connection.watch();
+					stream = attached.watch;
+					const snapshot = stream.value;
+					const transcript = new ConversationTranscript((query, limit, ctx) => attached.conversation.entries(query, limit, undefined, ctx));
 					if (cancelled) return;
 					const submission = await turn?.submit();
 					if (cancelled) { if (submission) await abort(); return; }
-					if (!submit) input = { ...input, runId: await connection.requestIdForInput(stream.snapshot.run?.inputs[0]) ?? input.runId };
+					if (!submit) input = { ...input, runId: await connection.requestIdForInput((snapshot.docs["pi.live"] as LiveState | undefined)?.run?.inputs[0]) ?? input.runId };
 					emit({ type: EventType.RUN_STARTED, threadId: input.threadId, runId: input.runId });
+					const present = async (transcript: ConversationTranscript, view: ConversationView, render: (view: TranscriptView) => Promise<void>) => {
+						let merged = transcript.merge(view);
+						// A slow listener can miss an entire tool round when the bounded window advances.
+						for (let gap = merged.items.find((item) => item.kind === "gap"); gap?.kind === "gap" && !cancelled; gap = merged.items.find((item) => item.kind === "gap")) merged = await transcript.fillGap(gap, context);
+						if (!cancelled) await render(merged);
+					};
 					const events = createAgUiEvents(emit, { threadId: input.threadId, submit, replay: Boolean(turn?.existingRequest), optimisticUser, watchChild: async (id) => {
-						if (watchedChildren.has(id)) return;
+						if (watchedChildren.has(id) || cancelled) return;
 						watchedChildren.add(id);
-						const child = await connection.watch(String(id));
-						childWatches.push(child);
-						await events.onChildEvent(id, child.snapshot);
-						child.start(async (batch) => { for (const event of batch) if (!cancelled) await events.onChildEvent(id, event); });
+						const attached = await connection.watch(String(id));
+						const child = attached.watch;
+						childWatches.push(child); checkEnd(child);
+						const transcript = new ConversationTranscript((query, limit, ctx) => attached.conversation.entries(query, limit, undefined, ctx));
+						await present(transcript, child.value, (view) => events.onChildView(id, view));
+						child.start(async (call) => {
+							if (call.kind === "failed") throw call.error;
+							await present(transcript, call.value, (view) => events.onChildView(id, view));
+						});
 						const approval = await connection.approvals(String(id));
 						if (approval) {
-							childWatches.push(approval);
+							childWatches.push(approval); checkEnd(approval);
 							const show = events.approvals(); show(approval.value);
-							approval.start(async (value) => { if (!cancelled) show(value); });
+							approval.start(async (call) => { if (call.kind === "failed") throw call.error; if (!cancelled) show(call.retired ? null : call.value); });
 						}
 					} });
-					const activity = createConversationActivity(stream.snapshot, submission ? { id: submission.id, existedAtSnapshot: Boolean(turn?.existingRequest) } : undefined);
-					await events.onEvent(stream.snapshot);
-					stream.start(async (batch) => {
-						for (const event of batch) if (!cancelled) await events.onEvent(event);
-						// Apply the whole commit before checking completion: it may end one run and start another.
-						activity.apply(batch);
+					const activity = createConversationActivity(snapshot, submission ? { id: submission.id, existedAtSnapshot: Boolean(turn?.existingRequest) } : undefined);
+					await present(transcript, snapshot, events.onView);
+					stream.start(async (call) => {
+						if (call.kind === "failed") throw call.error;
+						await present(transcript, call.value, events.onView);
+						activity.apply(call.value);
 					});
+					if (submission) void submission.wait(context).then((record) => activity.settle(("answer" in record ? record.answer : "entry" in record ? record.entry : undefined) as EntryId | undefined), failure.reject);
 					approvals = await connection.approvals();
-					if (approvals) { const show = events.approvals(); show(approvals.value); approvals.start(async (value) => { show(value); }); }
+					if (approvals) {
+						checkEnd(approvals);
+						const show = events.approvals(); show(approvals.value);
+						approvals.start(async (call) => { if (call.kind === "failed") throw call.error; if (!cancelled) show(call.retired ? null : call.value); });
+					}
 					const idle = await Promise.race([
 						activity.idle.then(() => true),
 						stream.closed.then((end) => { if ("error" in end) throw end.error; return false; }),
 						detached.promise.then(() => false),
+						failure.promise,
 					]);
 					if (idle && submission) await this.service.waitForTurn(submission);
 					events.close();

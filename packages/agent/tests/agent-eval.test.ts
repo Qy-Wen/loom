@@ -76,17 +76,15 @@ test("a model request that never answers fails the task with what was in flight 
 	}
 });
 
-test("stalledMessage names the tools that started and did not end", async () => {
+test("stalledMessage names tools still running in native state", async () => {
 	const { stalledMessage } = await import("../evals/agent-tools.ts");
-	const events = [
-		{ type: "tool_execution_start", toolCallId: "a", toolName: "run_retrieve_agent", args: {} },
-		{ type: "tool_execution_start", toolCallId: "b", toolName: "inspect_asset", args: {} },
-		{ type: "tool_execution_end", toolCallId: "b", toolName: "inspect_asset" },
-	] as never;
-	const text = stalledMessage("t", "waiting for the answer", events);
-	assert.match(text, /tools still running: run_retrieve_agent$|tools still running: run_retrieve_agent;/);
+	const states: import("../src/durable.ts").LiveState[] = [{ tools: [
+		{ callId: "a", name: "run_retrieve_agent", status: "running" },
+		{ callId: "b", name: "inspect_asset", status: "done" },
+	] }];
+	const text = stalledMessage("t", "waiting for the answer", states);
+	assert.match(text, /tools still running: run_retrieve_agent/);
 	assert.doesNotMatch(text, /inspect_asset/);
-	assert.match(text, /3 events seen, last "tool_execution_end"/);
 });
 
 test("firstSearch fails a task whose first search was the other tool, even if the right one came later", () => {

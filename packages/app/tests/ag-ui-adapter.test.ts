@@ -182,6 +182,9 @@ test("trace persists streaming increments before completion and reloads from the
 				await Promise.race([published.promise, new Promise<never>((_, reject) => { const timer = setTimeout(() => reject(new Error("No live trace before completion")), 2000); timer.unref(); })]);
 				assert.equal(host.listTraces()[0]!.status, "running");
 			} finally { finish.resolve(); await run; }
+			// Native phase spans unwind after their decision commit becomes visible.
+			await host.requireRuntime().harness.waitForIdle(context);
+			await new Promise<void>(setImmediate);
 			const records = host.listTraces(); assert.equal(records.length, 1); assert.equal(records[0]!.status, "completed");
 			assert.ok(updates.length > 1);
 			await host.close(); await host.openLibrary(root);
@@ -459,3 +462,36 @@ for (const decision of ["approve", "reject", "stop"] as const) {
 		});
 	});
 }
+
+test("native transcript paging preserves entries when a live window drops an entire batch", { timeout: 10_000 }, async () => {
+	const finish = Promise.withResolvers<void>();
+	const partial = Promise.withResolvers<void>();
+	try {
+		await fixture(async (host, adapter) => {
+			const session = await host.createSession();
+			const events: import("@ag-ui/core").BaseEvent[] = [];
+			const complete = Promise.withResolvers<void>();
+			const subscription = adapter.run(input(session.id)).subscribe({
+				next: (event) => { events.push(event); if (event.type === EventType.TEXT_MESSAGE_CONTENT) partial.resolve(); },
+				error: complete.reject,
+				complete: () => complete.resolve(),
+			});
+			try {
+				await partial.promise;
+				const conversation = await host.conversation(session.id);
+				await conversation.commit(async (tx) => {
+					for (let i = 0; i < 130; i++) await tx.appendEntry(conversation.id, { kind: "loom.user", model: [{ role: "user", content: `BULK_${i}`, timestamp: i }] });
+				}, context);
+				finish.resolve();
+				await complete.promise;
+				assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
+				const rows = events.filter((event) => event.type === EventType.TEXT_MESSAGE_CONTENT && "delta" in event && String(event.delta).startsWith("BULK_"));
+				assert.deepEqual(rows.map((event) => "delta" in event ? event.delta : undefined), Array.from({ length: 130 }, (_, i) => `BULK_${i}`));
+			} finally { finish.resolve(); subscription.unsubscribe(); }
+		}, (_request, response) => {
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.write('data: {"id":"window","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"partial"},"finish_reason":null}]}\n\n');
+			void finish.promise.then(() => response.end('data: {"id":"window","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{},"finish_reason":"stop"}]}\n\ndata: [DONE]\n\n'));
+		});
+	} finally { finish.resolve(); }
+});

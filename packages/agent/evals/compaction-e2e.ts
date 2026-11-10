@@ -10,7 +10,7 @@
  *   3. the summary keeps anchor facts the later turns can still recall
  */
 import { pathToFileURL } from "node:url";
-import { CompactionEntry, watchEvents, type AgentEvent } from "../src/durable.ts";
+import { CompactionEntry } from "../src/durable.ts";
 import { estimateMessageTokens } from "@earendil-works/pi-ai/utils/estimate";
 import { userTextFromContent } from "../src/context/attachments.ts";
 import { openEvalAgent, context } from "./runtime.ts";
@@ -52,12 +52,13 @@ export async function runCompactionE2E(
 		systemPrompt: "You are Loom. Answer briefly in one sentence. Do not call tools.",
 		settings: { compaction: { reserveTokens: Math.min(16_384, Math.floor(window / 4)), keepRecentTokens: Math.min(4000, Math.floor(window / 8)), backgroundTokens: 0 } },
 	});
-	const events: AgentEvent[] = [];
-	let stream: Awaited<ReturnType<typeof watchEvents>> | undefined;
+	const summaries = new Set<number>();
+	let observation: import("../src/durable.ts").CommitObservation | undefined;
 	try {
 		const conversation = await runtime.owner.createConversation({}, context);
-		stream = await watchEvents(runtime.owner.harness, conversation.id, context);
-		stream.start(async (batch) => { events.push(...batch); });
+		observation = runtime.owner.harness.observeCommits({ advance: (publication) => {
+			for (const change of publication.changes) if (change.type === "entry" && change.value.conversationId === conversation.id && CompactionEntry.is(change.value)) summaries.add(change.value.id);
+		}, end: () => {} });
 		const prompt = async (content: string) => {
 			if ((await (await conversation.submit({ type: "input", content }, context)).wait(context)).status !== "done") throw new Error("Compaction eval request failed");
 		};
@@ -85,11 +86,11 @@ export async function runCompactionE2E(
 		await prompt("One line: what is the project code, main file, and theme color?");
 		const final = await conversation.context(context);
 		const recallAnswer = userTextFromContent(final.messages.findLast((message) => message.role === "assistant")?.content);
-		const summaries = final.entries.filter((entry) => CompactionEntry.is(entry));
-		const summary = summaries.map((entry) => userTextFromContent(entry.model?.[0]?.content)).join("\n");
+		const summaryEntries = final.entries.filter((entry) => CompactionEntry.is(entry));
+		const summary = summaryEntries.map((entry) => userTextFromContent(entry.model?.[0]?.content)).join("\n");
 		return {
 			window,
-			compactionEvents: events.filter((event) => event.type === "compaction_end" && !event.error).length,
+			compactionEvents: summaries.size,
 			contextBefore: contextBefore ?? lastContext,
 			contextAfterCompaction,
 			summary,
@@ -99,7 +100,7 @@ export async function runCompactionE2E(
 			turns,
 		};
 	} finally {
-		await stream?.stop(); await runtime.close();
+		observation?.detach(); await runtime.close();
 	}
 }
 

@@ -94,14 +94,14 @@ Durable 统一限制结果文字（2,000 行 / 50 KiB）；图片没有通用大
 
 ## 6. AG-UI 与实时显示
 
-`AgUiAdapter` 继承 `AbstractAgent`；clone 保留聊天服务和共享连接生命周期。`ag-ui-events.ts` 独立转换 durable 事件，处理文字/思考增量、子对话工具和审批，不负责提交或订阅管理。`watchEvents` 的原子 `stream.snapshot` 与后续 commit batch 分开提供，两者都需消费。
+`AgUiAdapter` 继承 `AbstractAgent`；clone 保留聊天服务和共享连接生命周期。`ag-ui-events.ts` 独立展示原生会话状态，处理文字/思考增量、子对话工具和审批，不负责提交或订阅管理。`Conversation.watch()` 提供初始值和后续状态；`ConversationTranscript` 合并有界窗口并补齐遗漏区间。完成判断同时等待 submission 结算、最终回答展示和当前 run 结束。
 
 | Durable / Loom 状态 | AG-UI |
 |---|---|
 | Input submission / settlement | `RUN_STARTED`、`RUN_FINISHED` / `RUN_ERROR` |
-| `message_start`、`message_update` | text/reasoning 增量 |
+| `pi.live.generation.message` | text/reasoning 增量 |
 | 已提交 entry | `loom.user_entry`、`loom.adopt_entry` |
-| `tool_execution_*` | 工具 start/args/end/result、progress activity |
+| `pi.live.tools`、已提交工具结果 | 工具 start/args/end/result、progress activity |
 | 审批 document | `loom.tool_gate` activity |
 | 工具 details | `loom.tool_result` custom event |
 | 重试 / 压缩 | retry activity / compaction custom event |

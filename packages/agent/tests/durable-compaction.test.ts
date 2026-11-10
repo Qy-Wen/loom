@@ -3,8 +3,8 @@ import { test } from "node:test";
 import { fauxAssistantMessage as answer, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
 import { createModels } from "@earendil-works/pi-ai/models";
 import {
-	BACKGROUND_CONTEXT as context, CompactionEntry, createRegistry, Harness, MemoryStorage, watchEvents,
-	type AgentEvent, type HarnessSettings,
+	BACKGROUND_CONTEXT as context, CompactionEntry, createRegistry, Harness, MemoryStorage,
+	type HarnessSettings,
 } from "../src/durable.ts";
 
 async function fixture(settings: HarnessSettings, run: (harness: Harness, faux: ReturnType<typeof fauxProvider>) => Promise<void>) {
@@ -25,16 +25,11 @@ for (const reason of ["threshold", "overflow"] as const) {
 			const responses = [answer("Summary: preserve project LOOM-7F3K and main file projects/aurora/main.mp4."), answer("completed")];
 			if (reason === "overflow") responses.unshift(answer([], { stopReason: "error", errorMessage: "prompt is too long: 250000 tokens > 200000 maximum" }));
 			faux.setResponses(responses);
-			const events: AgentEvent[] = [];
-			const stream = await watchEvents(harness, conversation.id, context);
-			stream.start(async (batch) => { events.push(...batch); });
-			try {
-				const submission = await conversation.submit({ type: "input", content: "continue" }, context);
-				assert.equal((await submission.wait(context)).status, "done");
-			} finally { await stream.stop(); }
+			const submission = await conversation.submit({ type: "input", content: "continue" }, context);
+			assert.equal((await submission.wait(context)).status, "done");
 			const active = await conversation.context(context);
 			assert.ok(active.entries.some((entry) => CompactionEntry.is(entry)), JSON.stringify(active));
-			assert.ok(events.some((event) => event.type === "compaction_end" && event.reason === reason && !event.error));
+			assert.ok(active.entries.some((entry) => CompactionEntry.is(entry) && entry.data?.reason === reason));
 			assert.equal(faux.getPendingResponseCount(), 0);
 		});
 	});

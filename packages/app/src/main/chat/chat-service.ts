@@ -2,8 +2,8 @@ import {
 	BACKGROUND_CONTEXT as context, clearPendingApprovals, configure,
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
-	DurableTrace, TraceStore, watchEvents, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
-	type AgentChange, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
+	DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
+	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type AssetRefAttachment, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
 import type { Models } from "@earendil-works/pi-ai/models";
@@ -42,7 +42,7 @@ export class ChatService {
 	readonly #options: ChatServiceOptions;
 	#instructions = "";
 	readonly #agentDefaults: { -readonly [Key in keyof AgentChange]: AgentChange[Key] } = {};
-	#unsubscribe: (() => void) | undefined;
+	#observation: CommitObservation | undefined;
 	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
 	#revision = 0;
 	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
@@ -134,16 +134,16 @@ export class ChatService {
 		this.#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 		const baseline = await this.runtime.harness.usage(context);
 		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];
-		this.#unsubscribe = this.runtime.harness.subscribeCommits((publication) => {
+		this.#observation = this.runtime.harness.observeCommits({ advance: (publication) => {
 			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
 			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
-		});
+		}, end: () => {} });
 		this.runtime.harness.resume();
 		await this.publish();
 	}
 	async close(): Promise<void> {
 		const runtime = this.runtime;
-		this.#unsubscribe?.(); this.#unsubscribe = undefined;
+		this.#observation?.detach(); this.#observation = undefined;
 		try { if (runtime) await runtime.close(context); }
 		finally { this.#trace?.stop(); this.#trace = undefined; this.#tracePublisher?.(null); }
 		if (this.runtime === runtime) this.runtime = undefined;
@@ -210,7 +210,11 @@ export class ChatService {
 				if (this.runtime !== runtime) throw new Error("The open library changed.");
 				return this.prepareTurn(id, text, options);
 			},
-			watch: (childId = id) => watchEvents(runtime.harness, idOf<ConversationId>(childId), context),
+			watch: async (childId = id) => {
+				const handle = await runtime.harness.conversation(idOf<ConversationId>(childId), context);
+				if (!handle) throw new Error(`Conversation not found: ${childId}`);
+				return { conversation: handle, watch: await handle.watch(context) };
+			},
 			approvals: (childId = id) => runtime.harness.watchDoc(LoomApprovalsDoc, idOf<ConversationId>(childId), context),
 			requestIdForInput: async (submissionId: SubmissionId | undefined) => submissionId === undefined ? undefined : (await (await runtime.harness.submission(submissionId, context))?.status(context))?.requestId,
 			abort: () => conversation.abort(context),

@@ -93,14 +93,14 @@ Durable applies its common text limits (2,000 lines / 50 KiB); images have no co
 
 ## 6. AG-UI and live rendering
 
-`AgUiAdapter` extends `AbstractAgent`; clones retain the chat service and shared connection lifecycle. `ag-ui-events.ts` translates durable events, including partial text/reasoning, child tools, and approvals, independently of submission and subscription management. `watchEvents` provides an atomic `stream.snapshot` separately from later commit batches; consume both.
+`AgUiAdapter` extends `AbstractAgent`; clones retain the chat service and shared connection lifecycle. `ag-ui-events.ts` presents native conversation state, including partial text/reasoning, child tools, and approvals, independently of submission and subscription management. `Conversation.watch()` provides the initial value and subsequent states; `ConversationTranscript` merges bounded windows and fills missed ranges. Completion waits for submission settlement and presentation of its answer, with no active run.
 
 | Durable / Loom state | AG-UI |
 |---|---|
 | Input submission / settlement | `RUN_STARTED`, `RUN_FINISHED` / `RUN_ERROR` |
-| `message_start`, `message_update` | text/reasoning increments |
+| `pi.live.generation.message` | text/reasoning increments |
 | Committed entry | `loom.user_entry`, `loom.adopt_entry` |
-| `tool_execution_*` | tool start/args/end/result, progress activity |
+| `pi.live.tools`, committed tool results | tool start/args/end/result, progress activity |
 | Approval document | `loom.tool_gate` activity |
 | Tool result details | `loom.tool_result` custom event |
 | Retry / compaction | retry activity / compaction custom event |

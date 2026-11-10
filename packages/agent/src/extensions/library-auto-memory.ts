@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { LibraryPaths } from "@loom/core/paths";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { defineTool } from "../durable-adapter.ts";
 
 export const AUTO_MEMORY_CHAR_LIMIT = 2000;

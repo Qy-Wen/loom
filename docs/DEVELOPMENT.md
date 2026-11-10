@@ -51,9 +51,11 @@ For versioned builds, COS/GitHub uploads, and website updates, follow [releasing
 
 ## Vendored pi engine
 
-Loom vendors pi durable and codemode from upstream `v1.4.0` (`4a080252`). Each vendor directory records its source in `UPSTREAM`. The pi-ai, Chord, telemetry, and codemode versions are aligned at `1.4.0`. `packages/agent/src/durable-adapter.ts` is the import boundary; Loom-owned code stays outside vendor `src/`.
+Loom vendors pi durable and codemode from upstream `v1.5.1` (`dd30101c`). Each vendor directory records its source in `UPSTREAM`. The pi-ai, pi-schema, Chord, telemetry, and codemode versions are aligned at `1.5.1`. `packages/agent/src/durable-adapter.ts` is the import boundary; Loom-owned code stays outside vendor `src/`.
 
 Opening an existing library migrates durable SQLite schema v1 to v2 for sleeping tasks. Older durable versions cannot open the migrated database. To preserve rollback, close Loom and back up the library's `.loom/` directory before opening it with the newer version.
+
+Conversation and task documents also migrate; older engines cannot read all upgraded state. The chat bridge uses native `Conversation.watch()` and `ConversationTranscript`; live progress displays immediately and persists within 1 second by default. pi-schema validates tool schemas and accepts existing TypeBox definitions.
 
 ### Sync upstream
 

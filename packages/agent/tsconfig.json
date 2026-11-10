@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
     "target": "ES2024",
-    "lib": ["ES2024"],
+    "lib": ["ES2024", "DOM"],
     "paths": {
       "#vendor/pi-durable": ["./vendor-pi-durable/src/index.ts"],
       "#vendor/pi-durable/tools": ["./vendor-pi-durable/src/tools/index.ts"],

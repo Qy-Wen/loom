@@ -9,13 +9,13 @@ import type { AddressInfo } from "node:net";
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { EVAL_FILES } from "../../core/evals/library.ts";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, type AssetRefAttachment } from "../src/context/attachments.ts";
-import { watchEvents, type AgentEvent, type LibraryRuntime } from "../src/durable.ts";
+import type { EntryRecord, LiveState, LibraryRuntime } from "../src/durable.ts";
 import { openEvalAgent, context } from "./runtime.ts";
 import type { LoomTool } from "../src/types.ts";
-import { answerFromEvents, callsFromEvents, scoreAgentTask, type AgentScore } from "./agent-score.ts";
+import { answerFromEntries, callsFromEntries, scoreAgentTask, type AgentScore } from "./agent-score.ts";
 import { chatFromEnv } from "./compaction-e2e.ts";
 import { AGENT_EVAL_TASKS, type AgentEvalTask } from "./tasks.ts";
 
@@ -282,18 +282,11 @@ export function startStubChat(): Promise<{ baseUrl: string; close: () => Promise
 /** A real model call that never answers must fail the task with a reason instead of hanging the whole eval. */
 const DEFAULT_TASK_TIMEOUT_MS = Number(process.env.LOOM_EVAL_TASK_TIMEOUT_MS) || 120_000;
 
-/** What was in flight when a task stalled: the tools that started but did not end, and the last event seen. */
-export function stalledMessage(taskId: string, step: string, events: readonly AgentEvent[]): string {
-	const open = new Map<string, string>();
-	for (const event of events) {
-		if (event.type === "tool_execution_start") open.set(event.toolCallId, event.toolName);
-		else if (event.type === "tool_execution_end") open.delete(event.toolCallId);
-	}
-	const running = [...open.values()];
-	const last = events.at(-1)?.type ?? "none";
+/** Inspect the latest native state of each conversation instead of reconstructing removed events. */
+export function stalledMessage(taskId: string, step: string, states: readonly LiveState[]): string {
+	const running = states.flatMap((live) => [...live.tools ?? [], ...live.nestedTools ?? []]).filter((slot) => slot.status !== "done").map((slot) => slot.name);
 	return `Eval task "${taskId}" stalled while ${step}: ` +
-		(running.length ? `tools still running: ${running.join(", ")}` : "no tool was running, so the model request itself did not finish") +
-		`; ${events.length} events seen, last "${last}".`;
+		(running.length ? `tools still running: ${running.join(", ")}` : "no tool was running, so the model request itself did not finish") + ".";
 }
 
 async function withTimeout<T>(work: Promise<T>, ms: number, message: () => string): Promise<T> {
@@ -312,22 +305,16 @@ async function runTask(
 	timeoutMs: number,
 ): Promise<AgentScore> {
 	const conversation = await owner.createConversation({}, context);
-	const events: AgentEvent[] = [];
+	const entries = new Map<number, EntryRecord>();
+	const states = new Map<number, LiveState>();
 	const chips: AssetRefAttachment[] = (task.chips ?? []).map((chip) => ({ type: "asset_ref", ...chip }));
 	const attachments = implicitSelectionAttachments(chips, task.selection ?? null, []);
-	const stream = await watchEvents(owner.harness, conversation.id, context);
-	const children = new Map<number, Awaited<ReturnType<typeof watchEvents>>>();
-	stream.start(async (batch) => {
-		events.push(...batch);
-		for (const event of batch) if (event.type === "tool_execution_update") {
-			const childId = (event.details as { conversationId?: number } | undefined)?.conversationId;
-			if (childId && !children.has(childId)) {
-				const child = await watchEvents(owner.harness, childId as typeof conversation.id, context);
-				children.set(childId, child);
-				child.start(async (batch) => { events.push(...batch); });
-			}
+	const observation = owner.harness.observeCommits({ advance: (publication) => {
+		for (const change of publication.changes) {
+			if (change.type === "entry") entries.set(change.value.id, change.value);
+			if (change.type === "document" && change.kind === "change" && change.record.kind === "pi.live" && change.conversationId !== undefined) states.set(change.conversationId, change.value as LiveState);
 		}
-	});
+	}, end: () => {} });
 	try {
 		const step = { value: "submitting the input" };
 		const run = async () => {
@@ -337,13 +324,13 @@ async function runTask(
 			if (result.status !== "done") throw new Error(`Eval input ${result.status}`);
 		};
 		try {
-			await withTimeout(run(), timeoutMs, () => stalledMessage(task.id, step.value, events));
+			await withTimeout(run(), timeoutMs, () => stalledMessage(task.id, step.value, [...states.values()]));
 		} catch (error) {
-			const score = scoreAgentTask(task, callsFromEvents(events), answerFromEvents(events));
+			const score = scoreAgentTask(task, callsFromEntries([...entries.values()]), answerFromEntries([...entries.values()]));
 			return { ...score, ok: false, error: error instanceof Error ? error.message : String(error) };
 		}
-	} finally { await stream.stop(); for (const child of children.values()) await child.stop(); }
-	return scoreAgentTask(task, callsFromEvents(events), answerFromEvents(events));
+	} finally { await conversation.abort(context); observation.detach(); }
+	return scoreAgentTask(task, callsFromEntries([...entries.values()]), answerFromEntries([...entries.values()]));
 }
 
 async function writeEvalLibrary(root: string): Promise<void> {

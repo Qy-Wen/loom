@@ -41,10 +41,11 @@
     "test:vendor:build": "pnpm build:vendor && node --conditions=loom-vendor-build --test vendor-tests/build.test.mjs"
   },
   "dependencies": {
-    "@earendil-works/chord": "1.4.0",
-    "@earendil-works/pi-ai": "1.4.0",
+    "@earendil-works/chord": "1.5.1",
+    "@earendil-works/pi-ai": "1.5.1",
     "@earendil-works/pi-codemode": "workspace:*",
-    "@earendil-works/pi-telemetry": "1.4.0",
+    "@earendil-works/pi-schema": "1.5.1",
+    "@earendil-works/pi-telemetry": "1.5.1",
     "@loom/core": "workspace:*",
     "@silvia-odwyer/photon": "0.3.3",
     "diff": "8.0.4",

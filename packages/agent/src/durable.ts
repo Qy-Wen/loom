@@ -1,7 +1,7 @@
 // Thin facade: forward native durable primitives and add Loom library assembly/policy.
 export * from "./durable-adapter.ts";
 export { createModels } from "@earendil-works/pi-ai/models";
-export type { Context } from "@earendil-works/chord";
+export type { Context } from "@earendil-works/chord/context";
 export { BACKGROUND_CONTEXT, withAbortSignal } from "@earendil-works/chord/context";
 export { LibraryRuntime, type LibraryRuntimeOptions } from "./runtime/library-runtime.ts";
 export { createChatCustomProvider } from "./models/chat-provider.ts";

@@ -1,4 +1,4 @@
-import type { AgentEvent } from "../src/durable.ts";
+import type { EntryRecord } from "../src/durable.ts";
 import type { AgentEvalTask } from "./tasks.ts";
 
 export type AgentCall = { name: string; args: unknown };
@@ -17,13 +17,13 @@ export type AgentScore = {
 	error?: string;
 };
 
-export function callsFromEvents(events: AgentEvent[]): AgentCall[] {
-	return events.flatMap((event) => event.type === "tool_execution_start" ? [{ name: event.toolName, args: event.args }] : []);
+export function callsFromEntries(entries: readonly EntryRecord[]): AgentCall[] {
+	return entries.flatMap((entry) => entry.model ?? []).flatMap((message) => message.role === "assistant"
+		? message.content.flatMap((part) => part.type === "toolCall" ? [{ name: part.name, args: part.arguments }] : []) : []);
 }
 
-export function answerFromEvents(events: AgentEvent[]): string {
-	return events.flatMap((event) => event.type === "message_end" ? event.entry.model ?? [] : [])
-		.filter((message) => message.role === "assistant")
+export function answerFromEntries(entries: readonly EntryRecord[]): string {
+	return entries.flatMap((entry) => entry.model ?? []).filter((message) => message.role === "assistant")
 		.flatMap((message) => message.content.filter((part) => part.type === "text").map((part) => part.text)).join("");
 }
 

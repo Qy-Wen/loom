@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT } from "@earendil-works/chord/context";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
@@ -21,7 +21,6 @@ import {
 	openNodeJsonlStorage,
 	openNodeSqliteStorage,
 	ToolResultEntry,
-	watchEvents,
 	type Storage,
 } from "@loom/agent/durable";
 
@@ -92,7 +91,7 @@ for (const backend of ["memory", "jsonl", "sqlite"] as const) {
 	});
 }
 
-test("faux provider: coding tools and committed agent events", { timeout: 10_000 }, async () => {
+test("faux provider: coding tools and native conversation views", { timeout: 10_000 }, async () => {
 	const directory = await mkdtemp(join(tmpdir(), "loom-durable-tools-"));
 	const { faux, models, model } = chat();
 	const registry = createRegistry();
@@ -102,10 +101,10 @@ test("faux provider: coding tools and committed agent events", { timeout: 10_000
 	}, context);
 	try {
 		const root = await harness.root(context, { agent: { model, cwd: directory } });
-		const events = await watchEvents(harness, root.id, context);
+		const events = await root.watch(context);
 		try {
 			const observed = Promise.withResolvers<void>();
-			events.start(async (batch) => { if (batch.length > 0) observed.resolve(); });
+			events.start(async (call) => { if (call.kind === "failed") throw call.error; if (call.value.entries.length > 0) observed.resolve(); });
 			faux.setResponses([
 				fauxAssistantMessage(fauxToolCall("write", { path: "note.txt", content: "hello" }), { stopReason: "toolUse" }),
 				fauxAssistantMessage(fauxToolCall("read", { path: "note.txt" }), { stopReason: "toolUse" }),

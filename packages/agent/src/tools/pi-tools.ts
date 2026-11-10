@@ -1,7 +1,7 @@
 /** Durable coding tools. Each call gets its cwd/environment from HarnessOptions.env. */
 import { prepareSandboxedBash, prepareSandboxedPowerShell, windowsPowerShell, workspaceShell } from "@loom/core/sandbox";
-import { Type, type TSchema } from "@earendil-works/pi-ai";
-import { copyJson, type JsonValue } from "@earendil-works/chord";
+import { Type, type TSchema } from "typebox";
+import { copyJson, type JsonValue } from "@earendil-works/chord/json";
 import {
 	createBashTool,
 	createPowerShellTool,

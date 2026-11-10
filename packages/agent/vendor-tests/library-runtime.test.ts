@@ -100,7 +100,7 @@ test("metadata is watchable, raw creation initializes it, and unknown IDs do not
 			assert.ok(watch);
 			assert.equal(watch.value?.title, "New session");
 			const changed = Promise.withResolvers<string>();
-			watch.start(async (value) => { changed.resolve(value!.title); });
+			watch.start(async (call) => { if (call.kind === "failed") throw call.error; const value = call.value; changed.resolve(value!.title); });
 			try {
 				await setConversationTitle(owner.harness, raw.id, "Watched", context);
 				assert.equal(await changed.promise, "Watched");

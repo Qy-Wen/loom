@@ -51,9 +51,11 @@ pnpm test:e2e:attach
 
 ## Vendored pi 引擎
 
-Loom 从上游 `v1.4.0`（`4a080252`）引入 pi durable 和 codemode，每个 vendor 目录的 `UPSTREAM` 记录来源。pi-ai、Chord、telemetry 与 codemode 版本统一为 `1.4.0`。`packages/agent/src/durable-adapter.ts` 是 import 边界，Loom 自有代码放在 vendor `src/` 之外。
+Loom 从上游 `v1.5.1`（`dd30101c`）引入 pi durable 和 codemode，每个 vendor 目录的 `UPSTREAM` 记录来源。pi-ai、pi-schema、Chord、telemetry 与 codemode 版本统一为 `1.5.1`。`packages/agent/src/durable-adapter.ts` 是 import 边界，Loom 自有代码放在 vendor `src/` 之外。
 
 打开已有库会将 durable SQLite schema v1 升到 v2，以支持休眠任务。旧版 durable 无法打开升级后的数据库。如需保留回退能力，请在首次用新版本打开前关闭 Loom，并备份库内的 `.loom/` 目录。
+
+会话与任务文档也会迁移到新版，打开后不支持用旧引擎回退。聊天桥接使用原生 `Conversation.watch()` 和 `ConversationTranscript`；实时进度立即显示，默认最多延迟 1 秒落盘。工具 schema 由 pi-schema 校验，现有 TypeBox 定义仍可使用。
 
 ### 同步上游
 

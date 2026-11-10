@@ -1,16 +1,14 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import type { AgentEvent, ConversationId, EntryId, SnapshotEvent, SubmissionId } from "@loom/agent";
+import type { ConversationId, ConversationView, EntryId, SubmissionId } from "@loom/agent";
 import { createConversationActivity } from "../src/main/chat/conversation-activity.ts";
 
 const first = 1 as SubmissionId;
 const second = 2 as SubmissionId;
-const snapshot = (value: Partial<SnapshotEvent> = {}): SnapshotEvent => ({
-	type: "snapshot", entries: [], tools: [], nestedTools: [], compactions: [], inbox: [], agent: {}, usage: { models: {}, tools: {} }, ...value,
+const snapshot = (run?: SubmissionId[], inbox: SubmissionId[] = [], tail = 0): ConversationView => ({
+	conversation: { id: 1 as ConversationId }, entries: [], ...(tail ? { before: tail as EntryId } : {}),
+	docs: { "pi.live": run ? { run: { taskId: 10, inputs: run, turns: 0 } } : {}, "pi.inbox": { items: inbox.map((id) => ({ id, mode: "followUp" })) } },
 });
-const settled = (id = first): AgentEvent => ({ type: "submission", record: {
-	id, conversationId: 1 as ConversationId, type: "input", status: "done", entry: 1 as EntryId, answer: 2 as EntryId,
-} });
 async function pending(idle: Promise<void>) {
 	let finished = false;
 	void idle.then(() => { finished = true; });
@@ -18,65 +16,75 @@ async function pending(idle: Promise<void>) {
 	assert.equal(finished, false, "the observer must stay attached");
 }
 
-test("a new request does not finish at the idle snapshot taken before admission", async () => {
+test("a new request waits for settlement and for its answer to be presented", async () => {
 	const activity = createConversationActivity(snapshot(), { id: first, existedAtSnapshot: false });
 	await pending(activity.idle);
-	activity.apply([{ type: "run_start", inputs: [first] }]);
+	activity.settle(20 as EntryId);
 	await pending(activity.idle);
-	activity.apply([{ type: "run_end", inputs: [first] }, settled()]);
-	await activity.idle;
-});
-
-test("completion is checked after the entire commit, including a follow-up start", async () => {
-	const activity = createConversationActivity(snapshot({ run: { inputs: [first] } }), { id: first, existedAtSnapshot: true });
-	activity.apply([{ type: "run_end", inputs: [first] }, settled(), { type: "run_start", inputs: [second] }]);
+	activity.apply(snapshot([first], [], 15));
 	await pending(activity.idle);
-	activity.apply([{ type: "run_end", inputs: [second] }, settled(second)]);
+	activity.apply(snapshot(undefined, [], 20));
 	await activity.idle;
 });
 
-test("paused follow-ups after a failed run do not keep the chat stream open", async () => {
-	const activity = createConversationActivity(snapshot({ run: { inputs: [first] }, inbox: [{ id: second, mode: "followUp" }] }));
-	activity.apply([{ type: "run_end", inputs: [first] }, { type: "submission", record: {
-		id: first, conversationId: 1 as ConversationId, type: "input", status: "unanswered", reason: "model_error",
-	} }]);
-	await activity.idle;
-	await createConversationActivity(snapshot({ inbox: [{ id: second, mode: "followUp" }] })).idle;
-});
-
-test("overflow snapshots recover completion even when run and submission events were dropped", async () => {
+test("presentation before settlement also waits for the submission", async () => {
 	const activity = createConversationActivity(snapshot(), { id: first, existedAtSnapshot: false });
-	activity.apply([snapshot({ run: { inputs: [first] } })]);
+	activity.apply(snapshot(undefined, [], 20));
 	await pending(activity.idle);
-	activity.apply([snapshot({ run: { inputs: [second] } })]);
-	await pending(activity.idle);
-	activity.apply([snapshot()]);
+	activity.settle(20 as EntryId);
 	await activity.idle;
-	const fast = createConversationActivity(snapshot(), { id: first, existedAtSnapshot: false });
-	fast.apply([snapshot()]);
-	await fast.idle;
 });
 
-test("another request settling cannot complete a new request before its events arrive", async () => {
+test("a follow-up started in the same view keeps the stream open", async () => {
+	const activity = createConversationActivity(snapshot([first]), { id: first, existedAtSnapshot: true });
+	activity.apply(snapshot([second], [], 20));
+	activity.settle(20 as EntryId);
+	await pending(activity.idle);
+	activity.apply(snapshot(undefined, [], 30));
+	await activity.idle;
+});
+
+test("paused follow-ups after a failed run do not keep the stream open", async () => {
+	const activity = createConversationActivity(snapshot([first], [second]));
+	activity.apply(snapshot(undefined, [second]));
+	await activity.idle;
+	await createConversationActivity(snapshot(undefined, [second])).idle;
+});
+
+test("coalesced views can skip the entire run without losing completion", async () => {
 	const activity = createConversationActivity(snapshot(), { id: first, existedAtSnapshot: false });
-	activity.apply([settled(second)]);
-	await pending(activity.idle);
-	activity.apply([{ type: "run_start", inputs: [first] }]);
-	activity.apply([{ type: "run_end", inputs: [first] }, settled()]);
+	activity.apply(snapshot(undefined, [], 20));
+	activity.settle(20 as EntryId);
 	await activity.idle;
 });
 
-test("an already completed request needs no new event, including after history compaction", async () => {
+test("an unrelated state update cannot complete an unadmitted request", async () => {
+	const activity = createConversationActivity(snapshot(), { id: first, existedAtSnapshot: false });
+	activity.apply(snapshot(undefined, [], 5));
+	await pending(activity.idle);
+	activity.apply(snapshot([first], [], 10));
+	activity.settle(20 as EntryId);
+	await pending(activity.idle);
+	activity.apply(snapshot(undefined, [], 20));
+	await activity.idle;
+});
+
+test("a withdrawn queued request waits until its removal has been presented", async () => {
+	const activity = createConversationActivity(snapshot(undefined, [first]), { id: first, existedAtSnapshot: true });
+	activity.settle();
+	await pending(activity.idle);
+	activity.apply(snapshot());
+	await activity.idle;
+});
+
+test("completed requests and idle reconnects finish without a new revision", async () => {
 	await createConversationActivity(snapshot(), { id: first, existedAtSnapshot: true }).idle;
+	await createConversationActivity(snapshot()).idle;
 });
 
-test("a reconnect keeps watching the active run without submitting a request", async () => {
-	const activity = createConversationActivity(snapshot({ run: { inputs: [first] } }));
+test("a reconnect keeps watching the active run without submitting", async () => {
+	const activity = createConversationActivity(snapshot([first]));
 	await pending(activity.idle);
-	activity.apply([snapshot()]);
+	activity.apply(snapshot());
 	await activity.idle;
-});
-
-test("passive entry writes do not keep an otherwise finished chat stream open", async () => {
-	await createConversationActivity(snapshot({ inbox: [{ id: first, mode: "write" }] })).idle;
 });

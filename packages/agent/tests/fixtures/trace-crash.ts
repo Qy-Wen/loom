@@ -1,4 +1,4 @@
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { fauxProvider, fauxAssistantMessage as answer, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, DurableTrace, TraceStore, defineExtension, defineTool } from "../../src/durable.ts";
 

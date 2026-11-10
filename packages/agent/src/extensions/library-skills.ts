@@ -1,4 +1,4 @@
-import type { Context } from "@earendil-works/chord";
+import type { Context } from "@earendil-works/chord/context";
 import ignore from "ignore";
 import { parse } from "yaml";
 import { LibraryPaths } from "@loom/core/paths";

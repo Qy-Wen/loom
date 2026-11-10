@@ -1,32 +1,23 @@
-import type { AgentEvent, SnapshotEvent, SubmissionId } from "@loom/agent";
+import type { ConversationView, EntryId, InboxState, LiveState, SubmissionId } from "@loom/agent";
 
-/** Completion follows the state of fully presented commit batches. */
-export function createConversationActivity(snapshot: SnapshotEvent, request?: { id: SubmissionId; existedAtSnapshot: boolean }) {
-	let running = snapshot.run !== undefined;
-	const containsRequest = (value: SnapshotEvent) => request !== undefined &&
-		(value.run?.inputs.includes(request.id) || value.inbox.some((item) => item.id === request.id));
+/** Completion follows fully presented state and explicit submission settlement, including coalesced watches. */
+export function createConversationActivity(snapshot: ConversationView, request?: { id: SubmissionId; existedAtSnapshot: boolean }) {
+	let running = (snapshot.docs["pi.live"] as LiveState | undefined)?.run !== undefined;
+	const containsRequest = (value: ConversationView) => request !== undefined &&
+		((value.docs["pi.live"] as LiveState | undefined)?.run?.inputs.includes(request.id) ||
+		(value.docs["pi.inbox"] as InboxState | undefined)?.items.some((item) => item.id === request.id));
 	let requestSettled = request === undefined || (request.existedAtSnapshot && !containsRequest(snapshot));
+	let presented = snapshot;
+	let settledAt: EntryId | undefined;
 	const idle = Promise.withResolvers<void>();
-	// Runnable follow-ups start in the same commit that ends their predecessor. An inbox without a run is paused.
-	const check = () => { if (requestSettled && !running) idle.resolve(); };
+	const check = () => { if (requestSettled && !running && !containsRequest(presented) && (settledAt === undefined || (presented.entries.at(-1)?.id ?? presented.before ?? 0) >= settledAt)) idle.resolve(); };
 	check();
 	return {
 		idle: idle.promise,
-		apply(batch: readonly AgentEvent[]) {
-			for (const event of batch) {
-				switch (event.type) {
-					case "snapshot":
-						running = event.run !== undefined;
-						// Later snapshots replace dropped batches, including request settlement events.
-						requestSettled = !containsRequest(event);
-						break;
-					case "run_start": running = true; break;
-					case "run_end": running = false; break;
-					case "submission":
-						if (event.record.id === request?.id) requestSettled = event.record.status === "done" || event.record.status === "unanswered";
-						break;
-				}
-			}
+		settle(at?: EntryId) { requestSettled = true; settledAt = at; check(); },
+		apply(view: ConversationView) {
+			presented = view;
+			running = (view.docs["pi.live"] as LiveState | undefined)?.run !== undefined;
 			check();
 		},
 	};

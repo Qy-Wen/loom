@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { InMemoryCredentialStore, Type, type Api, type Model } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
+import { InMemoryCredentialStore, type Api, type Model } from "@earendil-works/pi-ai";
 import { createModels, getSupportedThinkingLevels } from "@earendil-works/pi-ai/models";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { fauxProvider, fauxAssistantMessage as answer } from "@earendil-works/pi-ai/providers/faux";

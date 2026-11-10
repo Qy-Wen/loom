@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import {
 	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, ToolGate, LoomApprovalsDoc,
 	clearPendingApprovals, defineExtension, defineTool,
@@ -27,7 +27,7 @@ for (const action of ["approve", "reject", "abort"] as const) {
 			const conversation = await owner.createConversation({}, context);
 			const changed = Promise.withResolvers<string>();
 			const watch = await owner.harness.watchDoc(LoomApprovalsDoc, conversation.id, context);
-			watch!.start(async (value) => { if (value?.pending[0]) changed.resolve(value.pending[0].toolCallId); });
+			watch!.start(async (call) => { if (call.kind === "failed") throw call.error; const value = call.value; if (value?.pending[0]) changed.resolve(value.pending[0].toolCallId); });
 			faux.setResponses([fauxAssistantMessage(fauxToolCall("write", {}), { stopReason: "toolUse" }), fauxAssistantMessage("done")]);
 			const submission = await conversation.submit({ type: "input", content: "write" }, context);
 			const id = await changed.promise;

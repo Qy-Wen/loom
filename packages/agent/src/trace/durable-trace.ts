@@ -1,6 +1,6 @@
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { TelemetrySpan } from "@earendil-works/pi-telemetry";
-import { defineExtension, CompactionTask, NestedCallDoc, ToolTask, hook, type Harness } from "../durable-adapter.ts";
+import { defineExtension, CompactionTask, NestedCallDoc, ToolTask, hook, type CommitObservation, type Harness } from "../durable-adapter.ts";
 import { TraceStore, type LoomTraceRecord, type LoomTraceStatus } from "./trace-store.ts";
 import { TracePrivacy } from "./trace-privacy.ts";
 import { LiveTelemetry } from "./trace-recorder.ts";
@@ -12,7 +12,7 @@ export class DurableTrace {
 	readonly telemetry: LiveTelemetry;
 	readonly store: TraceStore;
 	private readonly secrets = new Set<string>();
-	private unsubscribe?: () => void;
+	private observation?: CommitObservation;
 	constructor(store: TraceStore, publish: (record: LoomTraceRecord) => void = () => {}, report: (error: unknown) => void = () => {}) {
 		this.store = store;
 		this.telemetry = new LiveTelemetry(store, this.privacy, { publish, report, summarize: traceStatus });
@@ -68,18 +68,21 @@ export class DurableTrace {
 	}
 	/** Add committed result content and submission summaries; all span identities and lifetimes stay native. */
 	attach(harness: Harness): void {
-		this.unsubscribe?.();
-		this.unsubscribe = harness.subscribeCommits((publication, context) => this.capture(() => {
+		this.observation?.detach();
+		this.observation = harness.observeCommits({ advance: (publication, context) => this.capture(() => {
 			for (const change of publication.changes) {
 				if (change.type === "submission" && change.value.type === "input" && (change.value.status === "done" || change.value.status === "unanswered")) {
 					const submission = change.value;
 					const trace = this.store.forSubmission(submission.id);
-					if (trace) this.telemetry.updateTrace(trace.id, (record) => {
-						record.settlement = submission.status;
-						record.settlementReason = submission.reason;
-					});
+					if (trace) {
+						this.telemetry.updateTrace(trace.id, (record) => {
+							record.settlement = submission.status;
+							record.settlementReason = submission.reason;
+						});
+						this.flush();
+					}
 				}
-				if (change.type === "document" && change.record.kind === NestedCallDoc.definition.kind && change.version === NestedCallDoc.definition.version) {
+				if (change.type === "document" && change.kind === "change" && change.record.kind === NestedCallDoc.definition.kind && change.version === NestedCallDoc.definition.version) {
 					const result = change.value?.result;
 					if (result && typeof result === "object" && !Array.isArray(result) && typeof result.isError === "boolean") {
 						this.telemetry.content(context.telemetry, {
@@ -96,10 +99,10 @@ export class DurableTrace {
 					...(message.durationMs === undefined ? {} : { "loom.tool.duration_ms": message.durationMs }),
 				});
 			}
-		}));
+		}), end: () => {} });
 	}
 	flush(): void { this.telemetry.flush(); }
-	stop(): void { this.unsubscribe?.(); this.telemetry.stop(); }
+	stop(): void { this.observation?.detach(); this.telemetry.stop(); }
 	private capture(operation: () => void): void { try { operation(); } catch {} }
 }
 

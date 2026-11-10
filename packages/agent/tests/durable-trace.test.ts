@@ -6,7 +6,7 @@ import { test } from "node:test";
 import { fork } from "node:child_process";
 import { once } from "node:events";
 import { traceModels } from "../src/trace/trace-models.ts";
-import { Type } from "@earendil-works/pi-ai";
+import { Type } from "typebox";
 import { fauxProvider, fauxAssistantMessage as answer, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import {
 	BACKGROUND_CONTEXT as context, createModels, LibraryRuntime, DurableTrace, TraceStore,
@@ -355,9 +355,9 @@ test("sleeping deferred polls keep their trace open and recover after library re
 		};
 		let owner = await open();
 		const sleeping = Promise.withResolvers<void>();
-		const stopWatching = owner.harness.subscribeCommits((publication) => {
+		const stopWatching = owner.harness.observeCommits({ advance: (publication) => {
 			if (publication.changes.some((change) => change.type === "task" && change.value.state.status === "sleeping")) sleeping.resolve();
-		});
+		}, end: () => {} });
 		try {
 			faux.setResponses([answer("recovered deferred answer")]);
 			const conversation = await owner.createConversation({}, context);
@@ -368,7 +368,7 @@ test("sleeping deferred polls keep their trace open and recover after library re
 			assert.equal(before.status, "running");
 			assert.ok(before.spans.some((span) => span.name === "pi.durable.phase" && span.attributes.outcome === "sleeping"));
 			assert.equal(before.spans.filter((span) => span.name === "pi.ai.request").length, 1);
-			stopWatching();
+			stopWatching.detach();
 			await owner.close(context); trace!.stop();
 			owner = await open();
 			const inspection = await owner.harness.inspect(context);
@@ -382,7 +382,7 @@ test("sleeping deferred polls keep their trace open and recover after library re
 			assert.equal(record.spans.filter((span) => span.name === "pi.ai.poll").length, 2);
 			assert.ok(record.spans.every((span) => span.endedMs !== undefined));
 			assert.ok(record.spans.some((span) => span.attributes.resumed));
-		} finally { stopWatching(); await owner.close(context); trace!.stop(); }
+		} finally { stopWatching.detach(); await owner.close(context); trace!.stop(); }
 	});
 });
 

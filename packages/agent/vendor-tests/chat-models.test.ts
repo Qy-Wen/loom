@@ -13,8 +13,7 @@ import {
 	Harness,
 	openNodeSqliteStorage,
 	ProviderDoc,
-	watchEvents,
-	type AgentEvent,
+	type ConversationView,
 } from "@loom/agent/durable";
 import { createModels } from "@earendil-works/pi-ai/models";
 import { InMemoryCredentialStore } from "@earendil-works/pi-ai";
@@ -79,10 +78,10 @@ test("Loom Chat uses OpenAI SSE on SQLite, restores context, and deduplicates af
 		const { models, model } = await buildChatModels(endpoint);
 		harness = await Harness.open(await openNodeSqliteStorage(file), { models, registry: createRegistry(), settings: { retry: { maxRetries: 0 } } }, BACKGROUND_CONTEXT);
 		const root = await harness.root(BACKGROUND_CONTEXT, { agent: { model: { provider: model.provider, modelId: model.id } } });
-		const stream = await watchEvents(harness, root.id, BACKGROUND_CONTEXT);
-		const received: AgentEvent[] = [];
+		const stream = await root.watch(BACKGROUND_CONTEXT);
+		const received: ConversationView[] = [];
 		const ended = Promise.withResolvers<void>();
-		stream.start(async (events) => { received.push(...events); if (events.some((event) => event.type === "run_end")) ended.resolve(); });
+		stream.start(async (call) => { if (call.kind === "failed") throw call.error; received.push(call.value); if (call.value.entries.some(AssistantEntry.is) && !(call.value.docs["pi.live"] as { run?: unknown } | undefined)?.run) ended.resolve(); });
 		const draft = { type: "input", content: "hi", requestId: "greeting-1" } as const;
 		const submission = await root.submit(draft, BACKGROUND_CONTEXT);
 		try {
@@ -92,8 +91,8 @@ test("Loom Chat uses OpenAI SSE on SQLite, restores context, and deduplicates af
 		} finally {
 			await stream.stop();
 		}
-		assert.ok(received.some((event) => event.type === "message_end" && AssistantEntry.is(event.entry)));
-		assert.ok(received.some((event) => event.type === "usage_changed"));
+		assert.ok(received.some((view) => view.entries.some(AssistantEntry.is)));
+		assert.ok(received.some((view) => Object.keys((view.docs["pi.usage"] as { models?: object } | undefined)?.models ?? {}).length > 0));
 		const entries = (await root.entries({ order: "ascending" }, 20, undefined, BACKGROUND_CONTEXT)).items;
 		assert.deepEqual(entries.map((entry) => entry.kind), ["pi.user", "pi.assistant"]);
 		assert.deepEqual(entries.at(-1)?.model?.[0]?.content, [{ type: "text", text: "hello" }]);
