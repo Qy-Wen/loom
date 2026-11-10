@@ -91,7 +91,6 @@ export function DetailsPanel({
 							<dt>{t.details.type}</dt><dd>{assetTypeLabel(t, asset.type)}</dd>
 							<dt>{t.details.size}</dt><dd>{formatBytes(asset.size)}</dd>
 							<dt>{t.details.modified}</dt><dd>{new Date(asset.modifiedAt).toLocaleString()}</dd>
-							<dt>{t.details.assetId}</dt><dd data-tooltip={asset.assetId}>{asset.assetId}</dd>
 							<EnrichmentDetails enrichment={enrichment} />
 							<PropertySummary
 								assetId={asset.assetId}

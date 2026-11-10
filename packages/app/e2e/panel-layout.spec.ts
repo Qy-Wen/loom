@@ -578,7 +578,7 @@ for (const smallDetails of [false, true]) test(`detaching Chat keeps Details vis
 	await page.locator(".asset-row").filter({ hasText: "details.txt" }).click();
 	await page.locator('.panel-tabs button[data-tab="details"]').click();
 	const details = page.locator('.work-panel[data-panel="details"]');
-	await expect(details.locator("dt").filter({ hasText: /^Asset ID$/ })).toBeVisible();
+	await expect(details.locator("dt").filter({ hasText: /^Modified$/ })).toBeVisible();
 	const before = await details.locator(".details-content").innerText();
 	const tab = await page.locator('.panel-tabs button[data-tab="agent"]').boundingBox();
 	try {
@@ -590,7 +590,7 @@ for (const smallDetails of [false, true]) test(`detaching Chat keeps Details vis
 		const panelBox = await details.boundingBox();
 		const sidebarBox = await page.locator('.panel-region[data-region="dock"]').boundingBox();
 		expect(panelBox!.height, "the remaining Details panel must fill the sidebar, not keep a fraction of it").toBeCloseTo(sidebarBox!.height, 1);
-		for (const label of ["Modified", "Asset ID", "Tags", "Relations"]) {
+		for (const label of ["Modified", "Tags", "Relations"]) {
 			const field = details.getByText(label, { exact: true });
 			await expect(field).toBeVisible();
 			const box = await field.boundingBox();
