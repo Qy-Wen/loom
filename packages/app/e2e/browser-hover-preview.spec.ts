@@ -123,5 +123,8 @@ test("failed hover playback falls back to the still and context menus or rename 
 	await expect(browser.locator("video")).toHaveCount(0);
 	await browser.locator(".browser-tile-rename input").press("Escape");
 	await expect(browser.locator("video")).toHaveCount(0);
+	await browser.locator(".browser-bar").hover();
+	await clip.hover();
+	await expect.poll(() => clip.locator("video").evaluate(isPlaying)).toBe(true);
 	expect(errors).toEqual([]);
 });

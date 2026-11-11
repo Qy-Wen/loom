@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Asset, Tag } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
 import { BrowserAssetThumbnail } from "./browser-asset-thumbnail.tsx";
@@ -42,7 +42,10 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 	const selected = context.selectedKeys.has(key);
 	const renaming = context.renamingAssetId === asset.assetId;
 	const [hovered, setHovered] = useState(false);
-	useEffect(() => { if (renaming) setHovered(false); }, [renaming]);
+	const waitForPointerMove = useRef(false);
+	useEffect(() => {
+		if (renaming) { setHovered(false); waitForPointerMove.current = true; }
+	}, [renaming]);
 	const cut = context.cutAssetIds.includes(asset.assetId) || context.cutFolders.some((folder) => asset.relativePath.startsWith(`${folder}/`));
 	const hint = searching ? pathHint(asset.relativePath, base) : null;
 	const rename = useInlineRename(filenameStem(asset.filename), renaming, (stem) => context.onRenameAsset(asset, stem), context.onCancelRename);
@@ -71,8 +74,12 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 			data-key={key}
 			draggable
 			data-tooltip={asset.relativePath}
-			onPointerEnter={(event) => { if (event.pointerType !== "touch") setHovered(true); }}
-			onPointerLeave={() => setHovered(false)}
+			onPointerEnter={(event) => { if (event.pointerType !== "touch" && !waitForPointerMove.current) setHovered(true); }}
+			onPointerMove={(event) => {
+				// Replacing the rename input can emit pointerenter without any actual pointer movement.
+				if (event.pointerType !== "touch" && waitForPointerMove.current) { waitForPointerMove.current = false; setHovered(true); }
+			}}
+			onPointerLeave={() => { setHovered(false); waitForPointerMove.current = false; }}
 			onPointerCancel={() => setHovered(false)}
 			onClick={(event) => context.onSelect(key, clickMode(event))}
 			onDoubleClick={() => context.onOpenAsset(asset.assetId)}
