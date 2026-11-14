@@ -10,6 +10,7 @@ export const english = {
   "hero.line2": "creative thread.",
   "hero.description": "From scattered assets to connected ideas. Find a shot in your own words, work on it with AI, and keep track of where every creation began.",
   "hero.download": "Get Loom",
+  "hero.video": "Watch on Bilibili",
   "hero.explore": "Explore the workspace",
   "hero.platforms": "Made for macOS and Windows",
   "demo.heading": "YOUR ASSETS. YOUR WORKSPACE.",

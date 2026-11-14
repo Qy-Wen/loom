@@ -4,7 +4,7 @@
 
 A local-first AI workbench that turns your folders into an asset library you can browse, search, and work with through conversation.
 
-[Website](https://loom.sanzang.site) · [Quick start](#quick-start) · [Development](./docs/DEVELOPMENT.md)
+[Website](https://loom.sanzang.site) · [Video introduction (Bilibili)](https://www.bilibili.com/video/BV1dRWG64Ece/) · [Quick start](#quick-start) · [Development](./docs/DEVELOPMENT.md)
 
 Preview installers for macOS (Apple Silicon and Intel) and Windows x64 are available from the website. You can also run Loom from source using the steps below.
 

@@ -4,7 +4,7 @@
 
 本地优先的 AI 创意素材工作台，把你的文件夹变成可以浏览、检索和通过对话加工的素材库。
 
-[官网](https://loom.sanzang.site) · [快速开始](#快速开始) · [开发文档](./docs/DEVELOPMENT.zh-CN.md)
+[官网](https://loom.sanzang.site) · [B 站视频介绍](https://www.bilibili.com/video/BV1dRWG64Ece/) · [快速开始](#快速开始) · [开发文档](./docs/DEVELOPMENT.zh-CN.md)
 
 目前提供 macOS（Apple Silicon 与 Intel）和 Windows x64 的预发布安装包，可从官网获取；也可以按下方步骤从源码运行。
 
