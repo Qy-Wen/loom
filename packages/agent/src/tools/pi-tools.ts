@@ -57,9 +57,10 @@ export function toDurableTool(tool: LoomTool): ToolRegistration {
 					return { type: "text", text: JSON.stringify(part) };
 				});
 			// Match JSON object semantics for optional fields; still reject non-JSON values (Date, etc.).
+			const details = result.details === undefined ? result.data : result.details;
 			return {
 				output: content,
-				...(result.details === undefined ? {} : { details: copyJson(result.details as JsonValue, { omitUndefinedProperties: true }) }),
+				...(details === undefined ? {} : { details: copyJson(details as JsonValue, { omitUndefinedProperties: true }) }),
 			};
 		},
 	});

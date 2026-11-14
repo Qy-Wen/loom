@@ -1,5 +1,5 @@
 import type { LocalCore } from "@loom/core";
-import type { LoomTool, LoomToolResult } from "@loom/agent";
+import { jsonToolResult as jsonResult, type LoomTool } from "@loom/agent/tools";
 
 /**
  * Agent-facing tag and favorite tools. A tag is a library-wide label that goes on many files and is named by its
@@ -69,10 +69,6 @@ export function createTagTools(core: LocalCore): LoomTool[] {
 
 function objectSchema(properties: Record<string, unknown>, required: string[]) {
 	return { type: "object", properties, required, additionalProperties: false };
-}
-
-function jsonResult(details: unknown): LoomToolResult {
-	return { content: JSON.stringify(details), details };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

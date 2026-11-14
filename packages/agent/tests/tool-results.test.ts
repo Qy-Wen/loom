@@ -31,6 +31,24 @@ test("common tool adapter preserves text/images and serializes other blocks with
 	}
 });
 
+test("the Durable adapter projects business data without mixing UI details into shared data", async () => {
+	const tool = toDurableTool({
+		name: "structured", description: "Structured", parameters: Type.Object({}),
+		execute: () => ({ content: "done", data: { assetId: "asset-1" } }),
+	});
+	assert.deepEqual((await tool.execute({}, {} as ToolExecutionApi, context)).details, { assetId: "asset-1" });
+	const customized = toDurableTool({
+		name: "customized", description: "Customized", parameters: Type.Object({}),
+		execute: () => ({ content: "done", data: { assetId: "asset-1" }, details: { panel: "preview" } }),
+	});
+	assert.deepEqual((await customized.execute({}, {} as ToolExecutionApi, context)).details, { panel: "preview" });
+	const hidden = toDurableTool({
+		name: "hidden", description: "Hidden", parameters: Type.Object({}),
+		execute: () => ({ content: "done", data: { assetId: "asset-1" }, details: null }),
+	});
+	assert.equal((await hidden.execute({}, {} as ToolExecutionApi, context)).details, null);
+});
+
 for (const limit of ["bytes", "lines"] as const) {
 	test(`adapted and native tools share durable ${limit} limits without truncating image data`, { timeout: 10_000 }, async () => {
 		const text = limit === "bytes" ? "x".repeat(60 * 1024) : "line\n".repeat(2_100);

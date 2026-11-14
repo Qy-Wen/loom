@@ -66,7 +66,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await core.searchAssets(args, signal);
 				return {
 					content: JSON.stringify({ total: result.total, assets: result.assets }),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},
@@ -80,7 +80,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				"Returns asset IDs with the matching passage (and its parent passage for context), plus indexedCount, the number of searchable files. " +
 				"If indexedCount is 0 or small, tell the user that few files are indexed, fall back to search_assets, or index files first. " +
 				"Type and property filters apply. A query is required.",
-			parameters: searchParameters("What to look for. Words that appear in the passage, or a description of its meaning."),
+			parameters: { ...searchParameters("What to look for. Words that appear in the passage, or a description of its meaning."), required: ["query"] },
 			execute: async (rawArgs, signal) => {
 				const args = validateSearchArgs(rawArgs, "deep_search_assets");
 				if (!args.query?.trim()) throw new TypeError("deep_search_assets needs a non-empty query");
@@ -101,7 +101,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 					const result = await core.deepSearchAssets(query, provider, rerank, jobSignal);
 					return {
 						content: JSON.stringify({ total: result.total, indexedCount: result.indexedCount, assets: result.assets }),
-						details: result,
+						data: result,
 					} satisfies LoomToolResult;
 				}, signal);
 			},
@@ -125,7 +125,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await core.inspectAsset(args.assetId);
 				return {
 					content: JSON.stringify(result),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},
@@ -151,7 +151,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await options.embedAsset(args.assetId, signal, { force: args.force === true });
 				return {
 					content: JSON.stringify(result),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},
@@ -174,7 +174,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await options.describeImage(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},
@@ -198,7 +198,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await options.describeVideo(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},
@@ -222,7 +222,7 @@ export function createAssetTools(core: LocalCore, options: AssetToolOptions): Lo
 				const result = await options.describeAudio(args.assetId, signal);
 				return {
 					content: JSON.stringify(result),
-					details: result,
+					data: result,
 				} satisfies LoomToolResult;
 			},
 		},

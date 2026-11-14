@@ -159,6 +159,18 @@ export class LocalCore {
 		return this.tasks.run(work, signal);
 	}
 
+	/** A client binding belongs to one opening, even when the same path is reopened. */
+	bindLibraryTasks() {
+		const tasks = this.tasks;
+		if (!tasks?.active || this.transitions) throw new Error("Library is not accepting operations");
+		return {
+			run: <T>(work: (signal: AbortSignal) => Promise<T>, signal?: AbortSignal): Promise<T> => {
+				if (this.tasks !== tasks || !tasks.active || this.transitions) return Promise.reject(new Error("The bound library is no longer open"));
+				return tasks.run(work, signal);
+			},
+		};
+	}
+
 	/** Stop admission immediately, before application-owned tools are closed. */
 	async stopLibraryTasks(): Promise<void> {
 		const tasks = this.tasks;

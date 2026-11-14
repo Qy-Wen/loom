@@ -1,4 +1,4 @@
-import type { LoomTool } from "@loom/agent";
+import { jsonToolResult, type LoomTool } from "@loom/agent/tools";
 import { APP_LANGUAGE_CHOICES, type AppLanguageChoice } from "../../shared/general-settings.ts";
 import { chatSettingsPatchSchema, parseChatSettingsPatch, type ChatSettingsPatch, type publicChatSettings } from "./chat-settings-tools.ts";
 import { emptyMcpServerDraft, envToText, linesOf, type McpServerDraft } from "../../shared/mcp-settings.ts";
@@ -290,7 +290,7 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 				const args = asRecord(raw, "get_settings arguments must be an object");
 				if (Object.keys(args).some((key) => key !== "chatProvider")) throw new Error("Unknown get_settings argument");
 				const chatProvider = args.chatProvider === undefined ? undefined : needString(args.chatProvider, "chatProvider");
-				return JSON.stringify(await host.read(chatProvider), null, 2);
+				return jsonToolResult(await host.read(chatProvider), 2);
 			},
 		},
 		{
@@ -354,7 +354,7 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 			},
 			execute: async (raw) => {
 				const applied = await host.apply(parseSettingsPatch(raw));
-				return JSON.stringify({ notes: applied.notes, settings: applied.settings }, null, 2);
+				return jsonToolResult({ notes: applied.notes, settings: applied.settings }, 2);
 			},
 		},
 	];

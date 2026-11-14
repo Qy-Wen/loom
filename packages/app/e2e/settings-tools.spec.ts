@@ -35,6 +35,8 @@ test("Agent settings tools confirm language/Chat/key writes and synchronize the 
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		const sessionId = (await loomPage.evaluate(() => window.loom.listSessions())).find((row) => !before.some((prior) => prior.id === row.id))!.id;
 		createdSessionId = sessionId;
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 		const originalLanguage = await loomPage.evaluate(() => window.loom.getGeneralSettings());
 		async function send(name: string, args: unknown, approval = true, afterSend?: () => Promise<void>) {
 			action = { name, args };

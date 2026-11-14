@@ -48,31 +48,31 @@ test("asset tools return structured safe results", async () => {
 		assert.ok(search && inspect && describe && describeVideo && describeAudio);
 
 		const searchResult = await search.execute({ query: "hero", type: "image" }) as LoomToolResult;
-		assert.equal((searchResult.details as { kind: string }).kind, "asset_list");
+		assert.equal((searchResult.data as { kind: string }).kind, "asset_list");
 		assert.equal(typeof searchResult.content, "string");
 		assert.ok((searchResult.content as string).includes(hero.assetId));
 		assert.equal(JSON.stringify(searchResult).includes(root), false);
 
 		const detailResult = await inspect.execute({ assetId: hero.assetId }) as LoomToolResult;
-		assert.equal((detailResult.details as { kind: string }).kind, "asset_detail");
+		assert.equal((detailResult.data as { kind: string }).kind, "asset_detail");
 		assert.equal(JSON.stringify(detailResult).includes(root), false);
 
 		const described = await describe.execute({ assetId: hero.assetId }) as LoomToolResult;
-		assert.equal((described.details as { status: string }).status, "ready");
+		assert.equal((described.data as { status: string }).status, "ready");
 		const after = await inspect.execute({ assetId: hero.assetId }) as LoomToolResult;
-		assert.equal((after.details as { imageVlm: { status: string } }).imageVlm.status, "ready");
+		assert.equal((after.data as { imageVlm: { status: string } }).imageVlm.status, "ready");
 		assert.equal((await core.searchAssets({ query: "test image" })).total, 1);
 
 		const describedVideo = await describeVideo.execute({ assetId: clip.assetId }) as LoomToolResult;
-		assert.equal((describedVideo.details as { status: string }).status, "ready");
+		assert.equal((describedVideo.data as { status: string }).status, "ready");
 		const afterVideo = await inspect.execute({ assetId: clip.assetId }) as LoomToolResult;
-		assert.equal((afterVideo.details as { videoVlm: { status: string } }).videoVlm.status, "ready");
+		assert.equal((afterVideo.data as { videoVlm: { status: string } }).videoVlm.status, "ready");
 		assert.equal((await core.searchAssets({ query: "test clip" })).total, 1);
 
 		const describedAudio = await describeAudio.execute({ assetId: rain.assetId }) as LoomToolResult;
-		assert.equal((describedAudio.details as { status: string }).status, "ready");
+		assert.equal((describedAudio.data as { status: string }).status, "ready");
 		const afterAudio = await inspect.execute({ assetId: rain.assetId }) as LoomToolResult;
-		assert.equal((afterAudio.details as { audioWriteup: { status: string } }).audioWriteup.status, "ready");
+		assert.equal((afterAudio.data as { audioWriteup: { status: string } }).audioWriteup.status, "ready");
 		assert.equal((await core.searchAssets({ query: "Rain on a roof" })).total, 1);
 
 		const deep = tools.find((tool) => tool.name === "deep_search_assets");
@@ -128,7 +128,7 @@ test("embed_asset skips a current index unless force is set", async () => {
 		assert.equal(requests, 1);
 		const forced = await embed.execute({ assetId: note.assetId, force: true }) as LoomToolResult;
 		assert.equal(requests, 2);
-		assert.equal((forced.details as { status: string }).status, "ready");
+		assert.equal((forced.data as { status: string }).status, "ready");
 		await assert.rejects(Promise.resolve().then(() => embed.execute({ assetId: note.assetId, force: "yes" })), /boolean/);
 	} finally {
 		await core.close();

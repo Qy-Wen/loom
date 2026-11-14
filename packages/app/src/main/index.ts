@@ -44,14 +44,10 @@ import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from ".
 import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
 import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
 import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
-import { createAssetTools } from "./tools/asset-tools.ts";
-import { createFfmpegTools } from "./tools/ffmpeg-tools.ts";
-import { createPropertyTools } from "./tools/property-tools.ts";
-import { createRelationTools } from "./tools/relation-tools.ts";
-import { createTagTools } from "./tools/tag-tools.ts";
+import { ToolExecutor } from "@loom/agent/tools";
+import { createAppToolCatalog } from "./tools/catalog.ts";
 import { WebToolsService } from "./web/web-service.ts";
 import {
-	createSettingsTools,
 	mergeMcpServers,
 	modelChangeNotes,
 	publicMcpServer,
@@ -190,24 +186,22 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const localCore = new LocalCore();
-const BUILTIN_TOOLS = [
-	...createAssetTools(localCore, {
+const toolCatalog = createAppToolCatalog(localCore, {
+	assets: {
 		embedAsset: embedAssetWithSettings,
 		embeddingProvider: embeddingProviderFromSettings,
 		rerankProvider: rerankProviderFromSettings,
 		describeImage: describeImageWithSettings,
 		describeVideo: describeVideoWithSettings,
 		describeAudio: describeAudioWithSettings,
-	}),
-	...createFfmpegTools(localCore),
-	...createRelationTools(localCore),
-	...createPropertyTools(localCore),
-	...createTagTools(localCore),
-	...createSettingsTools({
+	},
+	settings: {
 		read: (chatProvider) => readPublicSettings(chatProvider),
 		apply: (patch) => applySettingsPatch(patch),
-	}),
-];
+	},
+});
+const toolExecutor = new ToolExecutor(toolCatalog);
+const BUILTIN_TOOLS = toolExecutor.agentTools(() => localCore.bindLibraryTasks());
 const AGENT_OPTIONS: LoomAgentOptions = {
 	systemPrompt: systemPromptForLibrary(null),
 	tools: [...BUILTIN_TOOLS],

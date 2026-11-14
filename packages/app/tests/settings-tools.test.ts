@@ -1,6 +1,7 @@
 import { applyModelSettingsPatch } from "../src/main/models/model-settings-store.ts";
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { LoomToolResult } from "@loom/agent/tools";
 import { emptySettingsFile } from "../src/shared/model-settings.ts";
 import { emptyMcpServerDraft } from "../src/shared/mcp-settings.ts";
 import {
@@ -100,14 +101,14 @@ describe("settings tools", () => {
 				return { notes: ["saved"], settings };
 			},
 		});
-		assert.equal(await getSettings?.execute({}), JSON.stringify(settings, null, 2));
+		assert.equal((await getSettings?.execute({}) as LoomToolResult).content, JSON.stringify(settings, null, 2));
 		await getSettings?.execute({ chatProvider: "openai" });
 		assert.equal(providerRead, "openai");
 		const raw = await updateSettings?.execute({ sandbox: false, models: { embedding: { model: "demo", apiKey: "sk-test" } } });
 		assert.equal(seen?.sandbox, false);
 		assert.equal(seen?.models?.embedding?.model, "demo");
 		assert.equal(seen?.models?.embedding?.apiKey, "sk-test");
-		assert.match(String(raw), /saved/);
-		assert.equal(String(raw).includes("sk-test"), false);
+		assert.match(String((raw as LoomToolResult).content), /saved/);
+		assert.equal(JSON.stringify(raw).includes("sk-test"), false);
 	});
 });

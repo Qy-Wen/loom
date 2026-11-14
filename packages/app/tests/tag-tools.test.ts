@@ -35,7 +35,7 @@ async function withLibrary(run: (setup: {
 	}
 }
 
-const details = async (tool: LoomTool, args: unknown) => (await tool.execute(args) as LoomToolResult).details as Record<string, unknown>;
+const details = async (tool: LoomTool, args: unknown) => (await tool.execute(args) as LoomToolResult).data as Record<string, unknown>;
 const assetNames = (result: Record<string, unknown>) =>
 	(result.assets as Array<{ relativePath: string }>).map((asset) => asset.relativePath).sort();
 
@@ -64,12 +64,12 @@ test("add_tag rejects an empty name, a long name, a missing file, and a non-stri
 
 test("list_tags counts files per tag, most used first", async () => {
 	await withLibrary(async ({ ids, tool }) => {
-		assert.deepEqual(await (await tool("list_tags").execute({}) as LoomToolResult).details, []);
+		assert.deepEqual(await (await tool("list_tags").execute({}) as LoomToolResult).data, []);
 		await tool("add_tag").execute({ assetId: ids["a.md"], name: "Rare" });
 		for (const name of ["a.md", "b.md", "c.md"]) await tool("add_tag").execute({ assetId: ids[name], name: "Common" });
 		await tool("add_tag").execute({ assetId: ids["b.md"], name: "Mid" });
 		await tool("add_tag").execute({ assetId: ids["c.md"], name: "Mid" });
-		assert.deepEqual((await tool("list_tags").execute({}) as LoomToolResult).details, [
+		assert.deepEqual((await tool("list_tags").execute({}) as LoomToolResult).data, [
 			{ name: "Common", count: 3 },
 			{ name: "Mid", count: 2 },
 			{ name: "Rare", count: 1 },

@@ -30,7 +30,7 @@ test("create_relation and remove_relation write and delete one edge", async () =
 			toAssetId: source.assetId,
 			type: "  derived from  ",
 		}) as LoomToolResult;
-		const relation = created.details as { relationId: string; type: string; fromAssetId: string; toAssetId: string };
+		const relation = created.data as { relationId: string; type: string; fromAssetId: string; toAssetId: string };
 		assert.equal(relation.type, "derived from");
 		assert.equal(relation.fromAssetId, frame.assetId);
 		assert.equal(relation.toAssetId, source.assetId);

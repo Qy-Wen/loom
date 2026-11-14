@@ -1,5 +1,5 @@
 import type { LocalCore, PropertyType, PropertyValue } from "@loom/core";
-import type { LoomTool, LoomToolResult } from "@loom/agent";
+import { jsonToolResult as jsonResult, type LoomTool } from "@loom/agent/tools";
 
 const PROPERTY_TYPES = ["text", "number", "boolean", "date"] as const;
 
@@ -107,10 +107,6 @@ export function createPropertyTools(core: LocalCore): LoomTool[] {
 
 function objectSchema(properties: Record<string, unknown>, required: string[]) {
 	return { type: "object", properties, required, additionalProperties: false };
-}
-
-function jsonResult(details: unknown): LoomToolResult {
-	return { content: JSON.stringify(details), details };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

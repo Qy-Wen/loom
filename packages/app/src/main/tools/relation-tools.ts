@@ -1,5 +1,5 @@
 import type { LocalCore } from "@loom/core";
-import type { LoomTool, LoomToolResult } from "@loom/agent";
+import { jsonToolResult as jsonResult, type LoomTool } from "@loom/agent/tools";
 
 /**
  * Agent-facing relation tools. Media tools do not write edges; the agent calls these.
@@ -45,10 +45,6 @@ export function createRelationTools(core: LocalCore): LoomTool[] {
 
 function objectSchema(properties: Record<string, unknown>, required: string[]) {
 	return { type: "object", properties, required, additionalProperties: false };
-}
-
-function jsonResult(details: unknown): LoomToolResult {
-	return { content: JSON.stringify(details), details };
 }
 
 function asRecord(value: unknown): Record<string, unknown> {

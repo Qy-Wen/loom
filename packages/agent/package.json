@@ -11,6 +11,7 @@
     "./attachments": "./src/context/attachments.ts",
     "./composer-asset": "./src/context/composer-asset.ts",
     "./tool-permission": "./src/tools/tool-permission.ts",
+    "./tools": "./src/tools/index.ts",
     "./trace-blob": "./src/trace/trace-blob.ts",
     "./durable": "./src/durable.ts"
   },

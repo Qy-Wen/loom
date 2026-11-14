@@ -1,6 +1,6 @@
 import type { LocalCore, MediaJobResult } from "@loom/core";
 import { normalizeImageGrade } from "@loom/core/grade";
-import type { LoomTool, LoomToolResult } from "@loom/agent";
+import { jsonToolResult as jsonResult, type LoomTool, type LoomToolResult } from "@loom/agent/tools";
 
 /**
  * Agent-facing FFmpeg tools. Paths are relative to the open library cwd, or absolute.
@@ -152,10 +152,6 @@ const curvePoints = {
 
 function objectSchema(properties: Record<string, unknown>, required: string[]) {
 	return { type: "object", properties, required, additionalProperties: false };
-}
-
-function jsonResult(details: unknown): LoomToolResult {
-	return { content: JSON.stringify(details), details };
 }
 
 function jobResult(result: MediaJobResult): LoomToolResult {

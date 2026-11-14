@@ -28,13 +28,13 @@ test("property tools add a column, write a cell, and delete the column", async (
 		await assert.rejects(Promise.resolve().then(() => create.execute({ name: "  ", type: "text" })), /name/);
 
 		const created = await create.execute({ name: "  Status  ", type: "text" }) as LoomToolResult;
-		const column = created.details as { propertyId: string; name: string; type: string };
+		const column = created.data as { propertyId: string; name: string; type: string };
 		assert.equal(column.name, "Status");
 		assert.equal(column.type, "text");
 		assert.equal(JSON.stringify(created).includes(root), false);
 
 		const listed = await list.execute({}) as LoomToolResult;
-		assert.deepEqual(listed.details, [{ propertyId: column.propertyId, name: "Status", type: "text" }]);
+		assert.deepEqual(listed.data, [{ propertyId: column.propertyId, name: "Status", type: "text" }]);
 
 		await set.execute({ assetId: clip.assetId, propertyId: column.propertyId, value: "Published" });
 		const detail = await core.inspectAsset(clip.assetId);
@@ -49,11 +49,11 @@ test("property tools add a column, write a cell, and delete the column", async (
 		assert.deepEqual((await core.inspectAsset(clip.assetId)).properties, []);
 
 		const renamed = await update.execute({ propertyId: column.propertyId, name: "Stage", type: "text" }) as LoomToolResult;
-		assert.deepEqual(renamed.details, { propertyId: column.propertyId, name: "Stage", type: "text" });
+		assert.deepEqual(renamed.data, { propertyId: column.propertyId, name: "Stage", type: "text" });
 
 		await remove.execute({ propertyId: column.propertyId });
 		const empty = await list.execute({}) as LoomToolResult;
-		assert.deepEqual(empty.details, []);
+		assert.deepEqual(empty.data, []);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

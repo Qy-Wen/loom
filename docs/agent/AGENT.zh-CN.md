@@ -70,13 +70,15 @@ git merge vendor-clean
 ## 4. 工具、specialist 与 prompt
 
 - `createWorkspaceTools()` 返回 durable `read`、`bash`、`edit`、`write`。env/cwd 按会话构建，bash preparation 接 core 进程沙箱；图像使用上游 Photon worker。
-- `toDurableTool()` 把 Loom `content` 转成 durable `output`，传递取消信号、验证 JSON `details`，外部副作用采用 `replay: "unsafe"`。
+- `main/tools/catalog.ts` 汇总应用工具；`@loom/agent/tools` 提供协议无关的 `ToolCatalog`、`ToolExecutor`、`ToolApprovals`。目录记录库级 / 应用级作用域及外部暴露状态，未确定的工具不对外列出。MCP / HTTP 服务尚未接入。
+- 内置应用工具通过共享执行入口校验参数、绑定当前库任务并处理取消。外部适配器须传入连接建立时的 `LocalCore.bindLibraryTasks()` 绑定和授权回调；同路径重开也会使旧绑定失效。动态第三方工具仍通过现有 Agent 装配接入。
+- 业务结果使用 `content + data`；`toDurableTool()` 把内容转成 durable `output`，将业务 `data` 或显式界面 `details` 转成 JSON `details`，外部副作用采用 `replay: "unsafe"`。
 - 主对话保留工作区、FFmpeg、describe/embed 等应用工具，所有已连接的 MCP 工具，以及（配置了 DeepSeek Key 且「通用」里没关时）`web_search` 和 `web_fetch`。主对话和检索专职共享 `search_assets`、`deep_search_assets`、`inspect_asset`，检索专职还有 `read`；任务给出 ID 时先 inspect，不再 search 同一素材；需要源文本时 read 返回的 `relativePath`。主 Agent 直接完成单项检索，包括多步任务；只有多项独立、可并行的检索任务才考虑委托检索专职，并传递各自的问题和所需素材 ID。创作专职使用 `read`、`edit`、`write`、`bash`、`inspect_asset`、FFmpeg 媒体工具（含 `run_ffmpeg`、`run_ffprobe`）和与主对话相同的 MCP 工具；没有 `search_assets`、`deep_search_assets`、describe/embed、属性、关系和设置工具。主 Agent 按任务选择直接调用 MCP 或委托创作专职。所有 Agent 经过同一道审批门；检索专职不接入 MCP。
 - 每次 specialist 调用创建一个归属工具任务的前台 conversation。独立调用并行；子代理只见任务和专职 prompt，不能再派生 specialist。父代理只收到摘要，不收到子 transcript。Stop 沿 ownership 取消；request ID 让安全重放复用子会话和 submission。
 - `createLibraryExtension()` 装配工具及 preamble/skills/memory sections。用户指令使用原生 `agent.instructions`。
 - Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.loom/agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。
 - Memory 使用创建时的 `LoomMemoryDoc` 快照，fork/重开保留。`auto_memory` 立即写 `.loom/agents/memory/MEMORY.md`，只影响以后新会话的 prompt。specialist 不选这个 extension。见 [MEMORY](./MEMORY.zh-CN.md)。
-- 权限使用可取消的 `ToolTask.beforeTool` hook 和 `LoomApprovalsDoc`，app 观察 pending rows。记住命令与沙箱策略见 [PERMISSION](./PERMISSION.zh-CN.md)。
+- `ToolApprovals` 管理共用策略与可取消的审批等待；内置 Agent 的 `ToolGate` 通过 `ToolTask.beforeTool` 和 `LoomApprovalsDoc` 适配，app 观察 pending rows，不重复审批。记住命令与沙箱策略见 [PERMISSION](./PERMISSION.zh-CN.md)。
 
 ## 5. 发送时上下文
 

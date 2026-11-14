@@ -43,10 +43,10 @@ test("run_ffmpeg writes a file when binaries are present", async (t) => {
 		const generated = await run.execute({
 			args: ["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", "clip.mp4"],
 		}) as LoomToolResult;
-		assert.equal((generated.details as { output?: string }).output, "clip.mp4");
+		assert.equal((generated.data as { output?: string }).output, "clip.mp4");
 
 		const frame = await run.execute({ args: ["-ss", "0", "-i", "clip.mp4", "-frames:v", "1", "outputs/frame.jpg"] }) as LoomToolResult;
-		assert.equal((frame.details as { output?: string }).output, "outputs/frame.jpg");
+		assert.equal((frame.data as { output?: string }).output, "outputs/frame.jpg");
 		const path = join(root, "outputs/frame.jpg");
 		const original = await readFile(path);
 		for (const flags of [[], ["-n"], ["-n", "-v", "quiet"], ["-nostdin", "-v", "quiet"]]) {
@@ -79,7 +79,7 @@ test("run_ffprobe returns stdout for a workspace-relative file", async (t) => {
 		const probe = tools.find((tool) => tool.name === "run_ffprobe")!;
 		await run.execute({ args: ["-y", "-f", "lavfi", "-i", "color=c=blue:s=64x64:d=1", "-pix_fmt", "yuv420p", "clip.mp4"] });
 		const result = await probe.execute({ args: ["-v", "error", "-of", "json", "-show_entries", "stream=width", "clip.mp4"] }) as LoomToolResult;
-		const details = result.details as { program: string; stdout?: string };
+		const details = result.data as { program: string; stdout?: string };
 		assert.equal(details.program, "ffprobe");
 		assert.equal(JSON.parse(details.stdout ?? "{}").streams[0].width, 64);
 	} finally {
