@@ -1,4 +1,6 @@
 import type { Asset } from "@loom/core";
+import type { ComposerReference } from "@loom/agent";
+import { parseComposerAssetInputs } from "@loom/agent/composer-asset";
 
 /** Drag payload for sticking a library file onto the composer. Keyed by asset id; path stays relative. */
 export const LOOM_ASSET_DRAG = "application/x-loom-asset";
@@ -43,8 +45,7 @@ export function writeAssetDrag(transfer: DataTransfer, asset: Asset): void {
 
 export function writeLibraryDrag(transfer: DataTransfer, item: LibraryDrag, asset?: Asset): void {
 	active = item;
-	const folders = item.kind === "folder" || (item.kind === "batch" && item.folders.length > 0);
-	transfer.effectAllowed = folders ? "move" : "copyMove";
+	transfer.effectAllowed = "copyMove";
 	transfer.setData(LOOM_LIBRARY_DRAG, JSON.stringify(item));
 	if (asset) writeAssetDrag(transfer, asset);
 }
@@ -72,6 +73,23 @@ export function readLibraryDrag(transfer: DataTransfer): LibraryDrag | undefined
 export function hasLibraryDrag(transfer: DataTransfer): boolean {
 	const types = [...transfer.types];
 	return types.includes(LOOM_LIBRARY_DRAG) || types.includes(LOOM_ASSET_DRAG);
+}
+
+/** Keep folder references intact; dragging a folder never attaches all of its files. */
+export function readComposerDrag(
+	transfer: DataTransfer,
+	assets: ReadonlyMap<string, { path: string; type: string }>,
+	folders: ReadonlySet<string>,
+): ComposerReference[] {
+	const item = readLibraryDrag(transfer);
+	if (!item) return [];
+	const folderPaths = item.kind === "folder" ? [item.relativePath] : item.kind === "batch" ? item.folders : [];
+	const references: unknown[] = folderPaths.filter((path) => folders.has(path)).map((path) => ({ type: "folder_ref", path }));
+	for (const assetId of draggedAssetIds(item)) {
+		const asset = assets.get(assetId);
+		if (asset) references.push({ type: "asset_ref", assetId, path: asset.path, assetType: asset.type });
+	}
+	return parseComposerAssetInputs(references);
 }
 
 /** A file drag from Explorer or Finder. Internal library drags win when both are present. */

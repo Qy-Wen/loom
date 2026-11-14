@@ -30,7 +30,7 @@ export const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentP
 					const current = readInlineEditor(node);
 					if (current === next || composerLayoutText(current) === next) return;
 					if (!next && current) return;
-					paintInlineEditor(node, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId), chipLabels.current);
+					paintInlineEditor(node, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openReference(assetId), chipLabels.current);
 				},
 			});
 		}
@@ -44,7 +44,7 @@ export const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentP
 		const current = readInlineEditor(editor);
 		if (current === next) return;
 		if (next && composerLayoutText(current) === next) return;
-		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openAsset(assetId), chipLabels.current);
+		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openReference(assetId), chipLabels.current);
 	}, [props.value]);
 	useEffect(() => {
 		const editor = editorRef.current;

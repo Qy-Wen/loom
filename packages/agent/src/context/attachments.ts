@@ -1,4 +1,5 @@
-import { assetRefBlocks, replaceAssetRefBlocks } from "./composer-asset.ts";
+import { assetRefBlocks, isRelativeLibraryPath, referenceKey, replaceAssetRefBlocks } from "./composer-asset.ts";
+export { referenceKey } from "./composer-asset.ts";
 
 /** Send-time context folded into durable model content before submit. */
 
@@ -20,7 +21,10 @@ export type AssetRefAttachment = UiSelectionFields & {
 	type: "asset_ref";
 };
 
-export type LoomUserAttachment = UiSelectionAttachment | AssetRefAttachment;
+/** Folders have no asset ID; their identity is the library-relative path. */
+export type FolderRefAttachment = { type: "folder_ref"; path: string };
+export type ComposerReference = AssetRefAttachment | FolderRefAttachment;
+export type LoomUserAttachment = UiSelectionAttachment | ComposerReference;
 
 const ASSET_TYPES = new Set<string>(["image", "video", "audio", "text", "other"]);
 
@@ -46,7 +50,13 @@ export function isAssetRefAttachment(value: unknown): value is AssetRefAttachmen
 }
 
 export function isLoomUserAttachment(value: unknown): value is LoomUserAttachment {
-	return isUiSelectionAttachment(value) || isAssetRefAttachment(value);
+	return isUiSelectionAttachment(value) || isAssetRefAttachment(value) || isFolderRefAttachment(value);
+}
+
+export function isFolderRefAttachment(value: unknown): value is FolderRefAttachment {
+	if (typeof value !== "object" || value === null) return false;
+	const row = value as Record<string, unknown>;
+	return row.type === "folder_ref" && typeof row.path === "string" && isRelativeLibraryPath(row.path);
 }
 
 export function parseUserAttachments(value: unknown): LoomUserAttachment[] {
@@ -95,12 +105,12 @@ export function uiSelectionToAttach(
  * Placed chips are stored already expanded inside the user text.
  * The library highlight is folded after the text before submit.
  */
-export function contentWithPlacedAssets(text: string, chips: readonly AssetRefAttachment[]): string {
-	const byId = new Map(chips.map((chip) => [chip.assetId, chip]));
+export function contentWithPlacedAssets(text: string, chips: readonly ComposerReference[]): string {
+	const byId = new Map(chips.map((chip) => [referenceKey(chip), chip]));
 	const refreshed = replaceAssetRefBlocks(text, (block) => {
-		const chip = byId.get(block.assetId);
-		if (!chip || (chip.path === block.path && chip.assetType === block.assetType)) return null;
-		return formatAssetRefBlock(chip);
+		const chip = byId.get(referenceKey(block));
+		if (!chip || (chip.path === block.path && (chip.type === "folder_ref" || (block.type === "asset_ref" && chip.assetType === block.assetType)))) return null;
+		return formatComposerReference(chip);
 	});
 	if (chips.length === 0) return refreshed;
 	return foldUserText(refreshed, chips);
@@ -108,24 +118,24 @@ export function contentWithPlacedAssets(text: string, chips: readonly AssetRefAt
 
 /** Same send rules as `promptAttachments`, keeping only the implicit library highlight. */
 export function implicitSelectionAttachments(
-	chips: readonly AssetRefAttachment[],
+	chips: readonly ComposerReference[],
 	selection: UiSelectionFields | null | undefined,
 	messages: readonly unknown[],
 ): LoomUserAttachment[] {
 	return promptAttachments(chips, selection, messages).filter((row) => row.type === "ui_selection");
 }
 
-/** Explicit composer chips (`asset_ref`), then the implicit library highlight (`ui_selection`) when it is not already included. */
+/** Explicit file/folder references, then the implicit library highlight when it is not already included. */
 export function promptAttachments(
-	chips: readonly AssetRefAttachment[],
+	chips: readonly ComposerReference[],
 	selection: UiSelectionFields | null | undefined,
 	messages: readonly unknown[],
 ): LoomUserAttachment[] {
 	const out: LoomUserAttachment[] = [];
 	const seen = new Set<string>();
 	for (const chip of chips) {
-		if (!isAssetRefAttachment(chip) || seen.has(chip.assetId)) continue;
-		seen.add(chip.assetId);
+		if ((!isAssetRefAttachment(chip) && !isFolderRefAttachment(chip)) || seen.has(referenceKey(chip))) continue;
+		seen.add(referenceKey(chip));
 		out.push(chip);
 	}
 	const implicit = uiSelectionToAttach(selection, messages);
@@ -155,6 +165,12 @@ export function formatAssetRefBlock(attachment: AssetRefAttachment): string {
 	return formatAssetBlock("asset_ref", attachment);
 }
 
+export function formatComposerReference(reference: ComposerReference): string {
+	return reference.type === "folder_ref"
+		? `<folder_ref>\npath: ${reference.path}\n</folder_ref>`
+		: formatAssetRefBlock(reference);
+}
+
 function formatAssetBlock(tag: LoomUserAttachment["type"], attachment: UiSelectionFields): string {
 	return (
 		`<${tag}>\n` +
@@ -166,9 +182,7 @@ function formatAssetBlock(tag: LoomUserAttachment["type"], attachment: UiSelecti
 }
 
 function formatAttachmentBlock(attachment: LoomUserAttachment): string {
-	return attachment.type === "asset_ref"
-		? formatAssetRefBlock(attachment)
-		: formatUiSelectionBlock(attachment);
+	return attachment.type === "ui_selection" ? formatUiSelectionBlock(attachment) : formatComposerReference(attachment);
 }
 
 function appendSelectionBlock(text: string, block: string): string {
@@ -189,16 +203,16 @@ function formatImplicitContext(rows: readonly LoomUserAttachment[]): string {
 
 /** Append a chip or library highlight the text does not already name. */
 export function foldUserText(text: string, attachments: readonly LoomUserAttachment[]): string {
-	const used = new Set(assetRefBlocks(text).map((row) => row.assetId));
+	const used = new Set(assetRefBlocks(text).map(referenceKey));
 	let out = text;
 	const implicit: LoomUserAttachment[] = [];
 	for (const row of attachments) {
-		if (used.has(row.assetId)) continue;
+		if (used.has(referenceKey(row))) continue;
 		if (row.type === "ui_selection") {
 			implicit.push(row);
 			continue;
 		}
-		used.add(row.assetId);
+		used.add(referenceKey(row));
 		out = appendSelectionBlock(out, formatAttachmentBlock(row));
 	}
 	if (implicit.length > 0) out = appendSelectionBlock(out, formatImplicitContext(implicit));

@@ -83,7 +83,7 @@ Sync requires `vendor-clean`, uses one temporary clone, excludes tests/testing/b
 
 ## 5. Send-time context
 
-Placed files become `<asset_ref>` blocks in user text. Implicit selection becomes `<ui_selection>` inside a `<system-reminder>` after the words. Fold once **before submit**, then persist the resulting model content unchanged; no attachment sidecar or provider-time conversion is required.
+Placed files become `<asset_ref>` blocks in user text; folders become `<folder_ref>` blocks containing only `path: library/relative/folder`. Folder references do not attach directory contents. Assistant replies use the same folder blocks. Clicking one preserves list/icon mode and locates and expands the folder in the sidebar. Implicit selection becomes `<ui_selection>` inside a `<system-reminder>` after the words. Fold once **before submit**, then persist the resulting model content unchanged; no attachment sidecar or provider-time conversion is required.
 
 `ChatService.prepareTurn()` consumes staged inputs, folds context, validates empty input, and initializes the title for both ordinary turns and queued follow-ups. Admission waits until the transport observer is attached. Replaying an existing request reuses its submission without consuming the next draft.
 

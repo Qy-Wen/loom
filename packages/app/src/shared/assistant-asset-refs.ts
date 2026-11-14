@@ -1,5 +1,5 @@
 /**
- * An assistant reply names a library file with the same `<asset_ref>` block the composer stores.
+ * Assistant replies use the same `<asset_ref>` / `<folder_ref>` blocks the composer stores.
  * A model that writes the attribute form (`<asset_ref path="…" asset_id="…" />`) is read the same way.
  * `asset_id` is looked up first. A miss falls back to `path`. Anything else stays visible and is not a link.
  * An unfinished block is split off so markdown does not drop it while it streams.
@@ -7,6 +7,7 @@
 export function prepareAssistantContent(
 	text: string,
 	library: ReadonlyMap<string, { path: string }>,
+	folders: ReadonlySet<string> = new Set(),
 ): { markdown: string; rawTail: string } {
 	const open = unclosedAssetBlock(text);
 	const head = open < 0 ? text : text.slice(0, open);
@@ -16,6 +17,11 @@ export function prepareAssistantContent(
 		if (!byPath.has(asset.path)) byPath.set(asset.path, assetId);
 	}
 	const linked = head
+		.replace(FOLDER_BLOCK, (_raw, path: string) => folderMention(path, folders))
+		.replace(FOLDER_TAG, (_raw, attributes: string) => {
+			const { path } = readAttributes(attributes);
+			return path === undefined ? _raw : folderMention(path, folders);
+		})
 		.replace(ASSET_BLOCK, (_raw, path: string, assetId: string | undefined) => mention(path, assetId, library, byPath))
 		.replace(ASSET_TAG, (_raw, attributes: string) => {
 			const { path, asset_id: assetId } = readAttributes(attributes);
@@ -27,6 +33,13 @@ export function prepareAssistantContent(
 const ASSET_BLOCK = /<asset_ref>\npath: ([^\n]*)\n(?:asset_id: ([^\n]*)\n)?(?:type: [^\n]*\n)?<\/asset_ref>/g;
 
 const ASSET_TAG = /<asset_ref\s+([^<>]*?)\s*(?:\/>|>\s*<\/asset_ref>)/g;
+const FOLDER_BLOCK = /<folder_ref>\npath: ([^\n]*)\n<\/folder_ref>/g;
+const FOLDER_TAG = /<folder_ref\s+([^<>]*?)\s*(?:\/>|>\s*<\/folder_ref>)/g;
+
+function folderMention(path: string, folders: ReadonlySet<string>): string {
+	const key = path.trim().replaceAll("\\", "/").replace(/\/+$/, "");
+	return link(key, folders.has(key) ? "loom-folder" : "loom-missing", key);
+}
 
 function readAttributes(text: string): Record<string, string> {
 	const found: Record<string, string> = {};
@@ -50,17 +63,18 @@ function mention(
 	return link(written || id, "loom-missing", written || id);
 }
 
-function link(label: string, kind: "loom-asset" | "loom-missing", value: string): string {
+function link(label: string, kind: "loom-asset" | "loom-folder" | "loom-missing", value: string): string {
 	return `[${linkLabel(label)}](#${kind}:${encodeURIComponent(value)})`;
 }
 
 function unclosedAssetBlock(text: string): number {
-	const open = text.lastIndexOf("<asset_ref");
+	const open = Math.max(text.lastIndexOf("<asset_ref"), text.lastIndexOf("<folder_ref"));
 	if (open < 0) return -1;
 	const end = text.indexOf(">", open);
 	if (end < 0) return open;
 	if (text[end - 1] === "/") return -1;
-	return text.indexOf("</asset_ref>", end) >= 0 ? -1 : open;
+	const closing = text.startsWith("<folder_ref", open) ? "</folder_ref>" : "</asset_ref>";
+	return text.indexOf(closing, end) >= 0 ? -1 : open;
 }
 
 function linkLabel(name: string): string {

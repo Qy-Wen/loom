@@ -1,4 +1,4 @@
-import type { LoomSessionModel, LoomUserAttachment } from "@loom/agent";
+import type { FolderRefAttachment, LoomAssetType, LoomSessionModel } from "@loom/agent";
 import { isComposerImagePath } from "@loom/agent/composer-image";
 import type { ChatModelView } from "../../shared/chat-models.ts";
 
@@ -17,6 +17,6 @@ export function modelLacksImageInput(
 }
 
 /** Whether any attached file is sent to the model as an image block (JPEG, PNG, GIF, WebP). */
-export function hasImageAsset(assets: readonly Pick<LoomUserAttachment, "assetType" | "path">[]): boolean {
-	return assets.some((asset) => asset.assetType === "image" && isComposerImagePath(asset.path));
+export function hasImageAsset(assets: readonly ({ assetType: LoomAssetType; path: string } | FolderRefAttachment)[]): boolean {
+	return assets.some((asset) => "assetType" in asset && asset.assetType === "image" && isComposerImagePath(asset.path));
 }

@@ -3,14 +3,14 @@ import { createPortal } from "react-dom";
 import type { Message } from "@ag-ui/core";
 import { CopilotChatInput, type CopilotChatInputProps } from "@copilotkit/react-core/v2";
 import type { LoomUserAttachment } from "@loom/agent";
-import { contentWithPlacedAssets } from "@loom/agent/attachments";
+import { contentWithPlacedAssets, referenceKey } from "@loom/agent/attachments";
 import { failureShownInHistory, formatChatError } from "../../shared/chat-error.ts";
 import type { ChatModelView } from "../../shared/chat-models.ts";
-import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineAssetIds, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
-import { LOOM_ASSET_DRAG, readAssetDrag } from "../assets/asset-drag.ts";
+import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineReferenceKeys, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
+import { endLibraryDrag, hasLibraryDrag, readComposerDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
-import { useOpenAsset } from "./asset-open.tsx";
+import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerActions, type PendingEdit } from "./chat-context.ts";
 import { editableText, placedChips } from "./chat-content.ts";
 import { AddFilesButton, ComposerTextArea, AssetSendButton } from "./chat-composer-input.tsx";
@@ -45,7 +45,9 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const valueRef = useRef(value);
 	valueRef.current = value;
 	const editorRef = useRef<HTMLDivElement | null>(null);
-	const openAsset = useOpenAsset();
+	const openReference = useOpenReference();
+	const libraryAssets = useLibraryAssets();
+	const libraryFolders = useLibraryFolders();
 	const slotRef = useRef<HTMLDivElement>(null);
 	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
 	useLayoutEffect(() => {
@@ -80,13 +82,13 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			const text = pendingEdit.text;
 			const chips = placedChips([
 				...assetRefBlocks(text),
-				...inlineAssetIds(text).flatMap((id) => {
+				...inlineReferenceKeys(text).flatMap((id) => {
 					const known = lookupComposerAsset(id);
-					return known && known.type === "asset_ref" ? [known] : [];
+					return known && known.type !== "ui_selection" ? [known] : [];
 				}),
 			]);
 			try {
-				await window.loom.stageComposerAssets(threadId, chips.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				await window.loom.stageComposerAssets(threadId, chips);
 				await onSubmitMessage(contentWithPlacedAssets(text, chips));
 			} catch (cause) {
 				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
@@ -106,18 +108,18 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				return;
 			}
 			setAttachmentError(null);
-			const assetId = composerAttach.assetId;
+			const key = referenceKey(composerAttach);
 			try {
 				rememberComposerAsset(composerAttach);
-				setAssets((current) => current.some((item) => item.assetId === assetId) ? current : [...current, composerAttach]);
-				const chip = appendChip(editor, composerAttach, openAsset, chipLabels.current);
+				setAssets((current) => current.some((item) => referenceKey(item) === key) ? current : [...current, composerAttach]);
+				const chip = appendChip(editor, composerAttach, openReference, chipLabels.current);
 				onChange?.(composerLayoutText(readInlineEditor(editor)));
 				const activate = () => {
 					const current = editorRef.current;
 					if (!current?.isConnected) return;
 					const node = chip && current.contains(chip)
 						? chip
-						: current.querySelector(`[data-asset-id="${CSS.escape(assetId)}"]`);
+						: current.querySelector(`[data-reference-key="${CSS.escape(key)}"]`);
 					focusInlineEditor(current, node);
 				};
 				requestAnimationFrame(() => {
@@ -142,7 +144,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		const editor = editorRef.current;
 		if (!editor) return;
 		if (!readInlineEditor(editor) && assetsRef.current.length === 0) {
-			paintInlineEditor(editor, draftRequest.text, [], (assetId) => openAsset(assetId), chipLabels.current);
+			paintInlineEditor(editor, draftRequest.text, [], (assetId) => openReference(assetId), chipLabels.current);
 			onChange?.(draftRequest.text);
 		}
 		draftApplied(draftRequest);
@@ -193,7 +195,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		void (async () => {
 			let queuedId: string | null = null;
 			try {
-				await window.loom.stageComposerAssets(threadId, assetPayload.map(({ assetId, path, assetType }) => ({ assetId, path, assetType })));
+				await window.loom.stageComposerAssets(threadId, placedChips(assetPayload));
 				if (activeThread.current !== threadId) return;
 				setAssets([]);
 				setAttachmentError(null);
@@ -253,12 +255,12 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		const editor = editorRef.current;
 		for (const asset of parsed) {
 			rememberComposerAsset(asset);
-			if (editor) appendChip(editor, asset, openAsset, chipLabels.current);
+			if (editor) appendChip(editor, asset, openReference, chipLabels.current);
 		}
 		setAssets((current) => {
 			const next = [...current];
 			for (const asset of parsed) {
-				if (!next.some((item) => item.assetId === asset.assetId)) next.push(asset);
+				if (!next.some((item) => referenceKey(item) === referenceKey(asset))) next.push(asset);
 			}
 			return next;
 		});
@@ -267,7 +269,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		const activate = () => {
 			const current = editorRef.current;
 			if (!current?.isConnected || !last) return;
-			const node = current.querySelector(`[data-asset-id="${CSS.escape(last.assetId)}"]`);
+			const node = current.querySelector(`[data-reference-key="${CSS.escape(referenceKey(last))}"]`);
 			focusInlineEditor(current, node);
 		};
 		requestAnimationFrame(() => {
@@ -321,11 +323,14 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			const asset = parseComposerAssetInputs([value])[0];
 			if (!asset) return;
 			rememberComposerAsset(asset);
-			setAssets((current) => current.some((item) => item.assetId === asset.assetId) ? current : [...current, asset]);
+			setAssets((current) => current.some((item) => referenceKey(item) === referenceKey(asset)) ? current : [...current, asset]);
 			const editor = editorRef.current;
-			const placed = editor ? insertChipAtPoint(editor, asset, x, y, openAsset, chipLabels.current) : false;
+			const placed = editor ? insertChipAtPoint(editor, asset, x, y, openReference, chipLabels.current) : false;
 			if (placed && editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
-			else onChange?.(`${valueRef.current ?? ""} `);
+			else if (editor) {
+				appendChip(editor, asset, openReference, chipLabels.current);
+				onChange?.(composerLayoutText(readInlineEditor(editor)));
+			}
 		} catch (cause) {
 			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 		}
@@ -341,7 +346,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		bindEditor: (editor) => {
 			editorRef.current = editor;
 		},
-		openAsset,
+		openReference,
 		syncAssets: () => {
 			const editor = editorRef.current;
 			if (!editor) {
@@ -350,8 +355,8 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			}
 			const next: LoomUserAttachment[] = [];
 			const seen = new Set<string>();
-			for (const node of editor.querySelectorAll<HTMLElement>("[data-asset-id]")) {
-				const id = node.dataset.assetId;
+			for (const node of editor.querySelectorAll<HTMLElement>("[data-reference-key]")) {
+				const id = node.dataset.referenceKey;
 				if (!id || seen.has(id)) continue;
 				seen.add(id);
 				const known = lookupComposerAsset(id);
@@ -371,11 +376,12 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				event.dataTransfer.dropEffect = "copy";
 			}}
 			onDrop={(event) => {
-				if ([...event.dataTransfer.types].includes(LOOM_ASSET_DRAG)) {
+				if (hasLibraryDrag(event.dataTransfer)) {
 					event.preventDefault();
 					try {
-						const dropped = readAssetDrag(event.dataTransfer);
-						if (dropped) placeAsset(dropped, event.clientX, event.clientY);
+						const dropped = readComposerDrag(event.dataTransfer, libraryAssets, libraryFolders);
+						endLibraryDrag();
+						for (const reference of dropped) placeAsset(reference, event.clientX, event.clientY);
 					} catch {
 						setAttachmentError(t.chat.attachFailed);
 					}

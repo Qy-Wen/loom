@@ -1,6 +1,17 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { canDropLibraryItem, draggedAssetIds } from "../src/renderer/assets/asset-drag.ts";
+import { canDropLibraryItem, draggedAssetIds, readComposerDrag, LOOM_LIBRARY_DRAG, type LibraryDrag } from "../src/renderer/assets/asset-drag.ts";
+
+describe("composer library drops", () => {
+	it("keeps mixed folder/file selections without recursively attaching files", () => {
+		const item: LibraryDrag = { kind: "batch", assets: [{ assetId: "a", path: "old.md" }], folders: ["notes", "notes", "gone"] };
+		const transfer = { getData: (type: string) => type === LOOM_LIBRARY_DRAG ? JSON.stringify(item) : "" } as DataTransfer;
+		assert.deepEqual(readComposerDrag(transfer, new Map([["a", { path: "live.md", type: "text" }]]), new Set(["notes"])), [
+			{ type: "folder_ref", path: "notes" },
+			{ type: "asset_ref", assetId: "a", path: "live.md", assetType: "text" },
+		]);
+	});
+});
 
 describe("canDropLibraryItem", () => {
 	it("moves a file into another folder", () => {

@@ -82,7 +82,7 @@ git merge vendor-clean
 
 ## 5. 发送时上下文
 
-放进输入框的文件成为 user text 的 `<asset_ref>`；隐式选区成为文字之后 `<system-reminder>` 中的 `<ui_selection>`。**submit 前折叠一次**，持久化后的 model content 不再改写；不需要 attachments 旁路字段或请求时转换。
+放进输入框的文件成为 user text 的 `<asset_ref>`；文件夹成为只含 `path: 库内/相对路径` 的 `<folder_ref>`，不附带目录内容。Agent 回复也使用相同的文件夹引用块；点击后保留列表／图标模式，在侧栏定位并展开文件夹。隐式选区成为文字之后 `<system-reminder>` 中的 `<ui_selection>`。**submit 前折叠一次**，持久化后的 model content 不再改写；不需要 attachments 旁路字段或请求时转换。
 
 普通消息与排队追加共用 `ChatService.prepareTurn()`，消费暂存输入、折叠上下文、检查空输入并初始化标题。传输层观察器接好之后才提交。重放已有 request 时复用原 submission，不消费下一份草稿。
 

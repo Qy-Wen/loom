@@ -2,7 +2,7 @@ import { useLayoutEffect, useRef, useState } from "react";
 import { CopilotChatInput } from "@copilotkit/react-core/v2";
 import type { LoomSessionModel, LoomUserAttachment } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
-import { useOpenAsset } from "./asset-open.tsx";
+import { useOpenReference } from "./asset-open.tsx";
 import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { ChatModelSelect } from "./chat-model-select.tsx";
 import { editableText } from "./chat-content.ts";
@@ -18,14 +18,14 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 	onSend: (text: string, model: LoomSessionModel | undefined) => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
-	const openAsset = useOpenAsset();
+	const openReference = useOpenReference();
 	const editor = useRef<HTMLDivElement>(null);
 	const [draft, setDraft] = useState(text);
 	const [draftModel, setDraftModel] = useState(model);
 	useLayoutEffect(() => {
 		const element = editor.current;
 		if (!element) return;
-		paintInlineEditor(element, text, assets, openAsset, { remove: t.common.remove, removeNamed: t.chat.removeNamed });
+		paintInlineEditor(element, text, assets, openReference, { remove: t.common.remove, removeNamed: t.chat.removeNamed });
 		element.focus({ preventScroll: true });
 		const range = document.createRange();
 		range.selectNodeContents(element);

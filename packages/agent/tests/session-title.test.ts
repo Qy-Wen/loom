@@ -7,6 +7,9 @@ describe("session titles", () => {
 		assert.equal(titleFromUserText("  clip   this  "), "clip this");
 		const block = "<asset_ref>\npath: clips/hero.mp4\nasset_id: asset-1\ntype: video\n</asset_ref>";
 		assert.equal(titleFromUserText(`看一下${block}这段`), "看一下这段");
+		const folder = "<folder_ref>\npath: notes\n</folder_ref>";
+		assert.equal(titleFromUserText(`整理${folder}这些`), "整理这些");
+		assert.equal(titleFromUserText(folder), DEFAULT_SESSION_TITLE);
 		assert.equal(titleFromUserText("x".repeat(50)).endsWith("…"), true);
 		assert.equal(titleFromUserText(" \n  "), DEFAULT_SESSION_TITLE);
 	});

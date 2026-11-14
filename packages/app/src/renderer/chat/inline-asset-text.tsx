@@ -1,9 +1,9 @@
 import type { LoomUserAttachment } from "@loom/agent";
-import { formatAssetRefBlock } from "@loom/agent/attachments";
+import { formatAssetRefBlock, formatComposerReference, referenceKey } from "@loom/agent/attachments";
 import { splitStoredAssetText } from "@loom/agent/composer-asset";
 import { AssetThumbnail, createAssetThumbnailElement } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
-import { useOpenAsset } from "./asset-open.tsx";
+import { useOpenReference } from "./asset-open.tsx";
 
 export interface ChipLabels {
 	remove: string;
@@ -13,7 +13,7 @@ export interface ChipLabels {
 const knownAssets = new Map<string, LoomUserAttachment>();
 
 export function rememberComposerAsset(asset: LoomUserAttachment): void {
-	knownAssets.set(asset.assetId, asset);
+	knownAssets.set(referenceKey(asset), asset);
 }
 
 export function lookupComposerAsset(assetId: string): LoomUserAttachment | undefined {
@@ -21,7 +21,7 @@ export function lookupComposerAsset(assetId: string): LoomUserAttachment | undef
 }
 
 export function resolveComposerAsset(assetId: string, assets: readonly LoomUserAttachment[]): LoomUserAttachment {
-	return assets.find((asset) => asset.assetId === assetId)
+	return assets.find((asset) => referenceKey(asset) === assetId)
 		?? knownAssets.get(assetId)
 		?? { type: "asset_ref", assetId, path: "file", assetType: "other" };
 }
@@ -30,18 +30,18 @@ function assetLabel(asset: LoomUserAttachment): string {
 	return asset.path.split("/").pop() || asset.path;
 }
 
-function chipPreview(asset: LoomUserAttachment) {
+function chipPreview(asset: Exclude<LoomUserAttachment, { type: "folder_ref" }>) {
 	return { assetId: asset.assetId, filename: assetLabel(asset), type: asset.assetType };
 }
 
 export function AssetChip({ asset, onRemove }: { asset: LoomUserAttachment; onRemove?: () => void }): React.JSX.Element {
-	const openAsset = useOpenAsset();
+	const openReference = useOpenReference();
 	const { t } = useLocale();
 	const label = assetLabel(asset);
 	return (
 		<span className="session-asset-chip" contentEditable={false}>
-			<AssetThumbnail asset={chipPreview(asset)} />
-			<button type="button" className="asset-ref" data-tooltip={asset.path} onClick={() => openAsset(asset.assetId)}>
+			{asset.type === "folder_ref" ? <span className="folder-symbol" aria-hidden="true" dangerouslySetInnerHTML={{ __html: FOLDER_ICON }} /> : <AssetThumbnail asset={chipPreview(asset)} />}
+			<button type="button" className="asset-ref" data-tooltip={asset.path} onClick={() => openReference(asset)}>
 				{label}
 			</button>
 			{onRemove && (
@@ -65,15 +65,16 @@ export function InlineMessageBody({ text, assets }: { text: string; assets: read
 			if (part.text) nodes.push(<span key={`t${index}`}>{part.text}</span>);
 			return;
 		}
-		used.add(part.assetId);
-		const asset = resolveComposerAsset(part.assetId, assets);
+		const key = referenceKey(part.reference);
+		used.add(key);
+		const asset = resolveComposerAsset(key, [...assets, part.reference]);
 		rememberComposerAsset(asset);
-		nodes.push(<AssetChip key={`${part.assetId}:${index}`} asset={asset} />);
+		nodes.push(<AssetChip key={`${key}:${index}`} asset={asset} />);
 	});
 	for (const asset of assets) {
-		if (used.has(asset.assetId)) continue;
+		if (used.has(referenceKey(asset))) continue;
 		rememberComposerAsset(asset);
-		nodes.push(<AssetChip key={asset.assetId} asset={asset} />);
+		nodes.push(<AssetChip key={referenceKey(asset)} asset={asset} />);
 	}
 	return <div className="session-user-text">{nodes}</div>;
 }
@@ -81,7 +82,7 @@ export function InlineMessageBody({ text, assets }: { text: string; assets: read
 export function readInlineEditor(root: HTMLElement): string {
 	const text = serializeInline(root).replace(/\n+$/, "").replaceAll("\u200b", "");
 	const parts = splitStoredAssetText(text);
-	if (!parts.some((part) => part.type === "asset" || part.text.trim())) return "";
+	if (!parts.some((part) => part.type === "reference" || part.text.trim())) return "";
 	return text;
 }
 
@@ -134,11 +135,17 @@ function serializeInline(node: Node): string {
 			continue;
 		}
 		if (!(child instanceof HTMLElement)) continue;
+		const folderPath = child.dataset.folderPath;
+		if (folderPath) {
+			out += formatComposerReference({ type: "folder_ref", path: folderPath });
+			lineStart = false;
+			continue;
+		}
 		const assetId = child.dataset.assetId;
 		if (assetId) {
 			const known = lookupComposerAsset(assetId);
 			const path = child.dataset.assetPath || known?.path;
-			const assetType = child.dataset.assetType || known?.assetType;
+			const assetType = child.dataset.assetType || (known?.type !== "folder_ref" ? known?.assetType : undefined);
 			if (path && (assetType === "image" || assetType === "video" || assetType === "audio" || assetType === "text" || assetType === "other")) {
 				out += formatAssetRefBlock({ type: "asset_ref", assetId, path, assetType });
 			}
@@ -177,15 +184,27 @@ export function rangeFromPoint(x: number, y: number): Range | null {
 	return doc.caretRangeFromPoint?.(x, y) ?? null;
 }
 
-function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => void, labels: ChipLabels): HTMLSpanElement {
+const FOLDER_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7.5A1.5 1.5 0 0 1 4.5 6h4.2c.5 0 .9.2 1.2.6l.9 1.2c.3.4.7.6 1.2.6H19.5A1.5 1.5 0 0 1 21 9.9v7.6a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5Z" /></svg>';
+
+function chipElement(asset: LoomUserAttachment, openReference: (reference: LoomUserAttachment) => void, labels: ChipLabels): HTMLSpanElement {
 	const chip = document.createElement("span");
 	chip.className = "session-asset-chip";
 	chip.contentEditable = "false";
-	chip.dataset.assetId = asset.assetId;
+	chip.dataset.referenceKey = referenceKey(asset);
 	chip.dataset.assetPath = asset.path;
-	chip.dataset.assetType = asset.assetType;
+	if (asset.type === "folder_ref") chip.dataset.folderPath = asset.path;
+	else {
+		chip.dataset.assetId = asset.assetId;
+		chip.dataset.assetType = asset.assetType;
+	}
 	const label = assetLabel(asset);
-	chip.append(createAssetThumbnailElement(chipPreview(asset)));
+	if (asset.type === "folder_ref") {
+		const icon = document.createElement("span");
+		icon.className = "folder-symbol";
+		icon.setAttribute("aria-hidden", "true");
+		icon.innerHTML = FOLDER_ICON;
+		chip.append(icon);
+	} else chip.append(createAssetThumbnailElement(chipPreview(asset)));
 	const name = document.createElement("button");
 	name.type = "button";
 	name.tabIndex = -1;
@@ -196,7 +215,7 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	name.addEventListener("click", (event) => {
 		event.preventDefault();
 		event.stopPropagation();
-		openAsset(asset.assetId);
+		openReference(asset);
 	});
 	const remove = document.createElement("button");
 	remove.type = "button";
@@ -217,8 +236,8 @@ function chipElement(asset: LoomUserAttachment, openAsset: (assetId: string) => 
 	return chip;
 }
 
-export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openAsset: (assetId: string) => void, labels: ChipLabels): void {
-	const chips = [...root.querySelectorAll<HTMLElement>("[data-asset-id]")];
+export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openReference: (reference: LoomUserAttachment) => void, labels: ChipLabels): void {
+	const chips = [...root.querySelectorAll<HTMLElement>("[data-reference-key]")];
 	root.replaceChildren();
 	for (const chip of chips) chip.remove();
 	for (const part of splitStoredAssetText(text)) {
@@ -226,25 +245,25 @@ export function paintInlineEditor(root: HTMLElement, text: string, assets: reado
 			if (part.text) root.append(document.createTextNode(part.text));
 			continue;
 		}
-		const asset = resolveComposerAsset(part.assetId, assets);
+		const asset = resolveComposerAsset(referenceKey(part.reference), [...assets, part.reference]);
 		rememberComposerAsset(asset);
-		root.append(chipElement(asset, openAsset, labels));
+		root.append(chipElement(asset, openReference, labels));
 	}
 	root.dataset.empty = text ? "false" : "true";
 	if (!text && root.contains(document.activeElement)) placeCaretAtStart(root);
 }
 
 /** Insert a chip at the drop point. Returns false when the point is outside the editor. */
-export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, x: number, y: number, openAsset: (assetId: string) => void, labels: ChipLabels): boolean {
+export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, x: number, y: number, openReference: (reference: LoomUserAttachment) => void, labels: ChipLabels): boolean {
 	const range = rangeFromPoint(x, y);
 	if (!range || (range.startContainer !== root && !root.contains(range.startContainer))) return false;
 	const host = range.startContainer instanceof Element ? range.startContainer : range.startContainer.parentElement;
-	const existing = host?.closest("[data-asset-id]");
+	const existing = host?.closest("[data-reference-key]");
 	if (existing && root.contains(existing)) {
 		range.setStartAfter(existing);
 		range.collapse(true);
 	}
-	const chip = chipElement(asset, openAsset, labels);
+	const chip = chipElement(asset, openReference, labels);
 	range.insertNode(chip);
 	range.setStartAfter(chip);
 	range.collapse(true);
@@ -256,14 +275,14 @@ export function insertChipAtPoint(root: HTMLElement, asset: LoomUserAttachment, 
 }
 
 /** Append a chip at the end of the editor. Returns false when that asset is already in the text. */
-export function appendChip(root: HTMLElement, asset: LoomUserAttachment, openAsset: (assetId: string) => void, labels: ChipLabels): HTMLElement | null {
-	const existing = root.querySelector<HTMLElement>(`[data-asset-id="${CSS.escape(asset.assetId)}"]`);
+export function appendChip(root: HTMLElement, asset: LoomUserAttachment, openReference: (reference: LoomUserAttachment) => void, labels: ChipLabels): HTMLElement | null {
+	const existing = root.querySelector<HTMLElement>(`[data-reference-key="${CSS.escape(referenceKey(asset))}"]`);
 	if (existing) {
 		focusInlineEditor(root, existing);
 		return existing;
 	}
 	rememberComposerAsset(asset);
-	const chip = chipElement(asset, openAsset, labels);
+	const chip = chipElement(asset, openReference, labels);
 	const last = root.lastChild;
 	if (last && last.nodeName === "BR") root.insertBefore(chip, last);
 	else root.append(chip);

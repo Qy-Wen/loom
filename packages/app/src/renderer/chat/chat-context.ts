@@ -54,7 +54,7 @@ export type ComposerActions = {
 	hasAssets: boolean;
 	assets: readonly LoomUserAttachment[];
 	bindEditor: (editor: HTMLDivElement | null) => void;
-	openAsset: (assetId: string) => void;
+	openReference: (reference: LoomUserAttachment) => void;
 	syncAssets: () => void;
 };
 export const ComposerActionsContext = createContext<ComposerActions | null>(null);

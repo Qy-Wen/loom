@@ -5,7 +5,7 @@ import {
 	DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
 	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
-import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type AssetRefAttachment, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
+import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type ComposerReference, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ChatSelection } from "@loom/agent/chat-models";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
@@ -18,7 +18,7 @@ export type ChatServiceOptions = LoomAgentOptions & {
 	composer?: {
 		getSelection?: () => UiSelectionFields | null;
 		takeImages?: (id: string) => Promise<ComposerImageInput[]>;
-		takeAssets?: (id: string) => Promise<AssetRefAttachment[]>;
+		takeAssets?: (id: string) => Promise<ComposerReference[]>;
 	};
 };
 export type PreparedChatTurn = {

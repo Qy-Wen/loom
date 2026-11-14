@@ -1,14 +1,15 @@
 import { CopilotChatAssistantMessage } from "@copilotkit/react-core/v2";
 import { useMemo } from "react";
 import { prepareAssistantContent } from "../../shared/assistant-asset-refs.ts";
-import { useLibraryAssets, useOpenAsset } from "./asset-open.tsx";
+import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 
 /** Assistant markdown. An `<asset_ref>` block links by asset id, then by path. */
 export const AssistantMarkdown: typeof CopilotChatAssistantMessage.MarkdownRenderer = ({ content, ...props }) => {
 	const library = useLibraryAssets();
+	const folders = useLibraryFolders();
 	const { markdown, rawTail } = useMemo(
-		() => prepareAssistantContent(content ?? "", library),
-		[content, library],
+		() => prepareAssistantContent(content ?? "", library, folders),
+		[content, library, folders],
 	);
 	return (
 		<>
@@ -25,8 +26,14 @@ export const AssistantMarkdown: typeof CopilotChatAssistantMessage.MarkdownRende
 };
 
 function AssistantAssetLink({ href, children }: { href?: string; children?: React.ReactNode }) {
-	const openAsset = useOpenAsset();
+	const openReference = useOpenReference();
 	const library = useLibraryAssets();
+	const folders = useLibraryFolders();
+	if (href?.startsWith("#loom-folder:")) {
+		const path = decodeHref(href.slice("#loom-folder:".length));
+		if (!folders.has(path)) return <span className="asset-path asset-path-missing">{children}</span>;
+		return <button type="button" className="asset-ref asset-path folder-ref" data-tooltip={path} onClick={() => openReference({ type: "folder_ref", path })}>{children}</button>;
+	}
 	if (href?.startsWith("#loom-missing:")) {
 		return <span className="asset-path asset-path-missing">{children}</span>;
 	}
@@ -35,7 +42,7 @@ function AssistantAssetLink({ href, children }: { href?: string; children?: Reac
 		const asset = library.get(assetId);
 		if (!asset) return <span className="asset-path asset-path-missing">{children}</span>;
 		return (
-			<button type="button" className="asset-ref asset-path" data-tooltip={asset.path} onClick={() => openAsset(assetId)}>
+			<button type="button" className="asset-ref asset-path" data-tooltip={asset.path} onClick={() => openReference({ type: "asset_ref", assetId, path: asset.path, assetType: asset.type })}>
 				{children}
 			</button>
 		);

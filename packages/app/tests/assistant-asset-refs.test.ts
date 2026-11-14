@@ -14,6 +14,21 @@ function block(path: string, assetId?: string, type?: string): string {
 }
 
 describe("prepareAssistantContent", () => {
+	it("links folder blocks and attribute tags only when the directory exists", () => {
+		const folders = new Set(["notes/资料"]);
+		for (const text of ["<folder_ref>\npath: notes/资料\n</folder_ref>", '<folder_ref path="notes\\资料/" />']) {
+			assert.equal(prepareAssistantContent(text, library, folders).markdown, "[notes/资料](#loom-folder:notes%2F%E8%B5%84%E6%96%99)");
+		}
+		assert.match(prepareAssistantContent('<folder_ref path="missing" />', library, folders).markdown, /#loom-missing:missing/);
+		assert.match(prepareAssistantContent('<folder_ref path="../notes" />', library, folders).markdown, /#loom-missing:/);
+	});
+
+	it("keeps streaming folder references visible until complete", () => {
+		for (const tail of ['<folder_ref path="notes', "<folder_ref>\npath: notes"]) {
+			assert.deepEqual(prepareAssistantContent(`整理 ${tail}`, library), { markdown: "整理 ", rawTail: tail });
+		}
+	});
+
 	it("links by asset id and shows the live path", () => {
 		const text = `见 ${block("clips/old.mp4", "asset-2", "video")}`;
 		const { markdown, rawTail } = prepareAssistantContent(text, library);

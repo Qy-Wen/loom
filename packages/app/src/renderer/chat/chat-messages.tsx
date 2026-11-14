@@ -1,13 +1,13 @@
 import { CopilotChatAssistantMessage, CopilotChatMessageView, CopilotChatUserMessage, type CopilotChatAssistantMessageProps, type CopilotChatMessageViewProps, type CopilotChatUserMessageProps } from "@copilotkit/react-core/v2";
 import type { LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets } from "@loom/agent/attachments";
-import { displayAssetRefs, inlineAssetIds, storedAssetRefs } from "@loom/agent/composer-asset";
+import { displayAssetRefs, inlineReferenceKeys, storedAssetRefs } from "@loom/agent/composer-asset";
 import { isChatErrorMessageId } from "../../shared/chat-error.ts";
 import { useLocale } from "../locale.tsx";
 import { AssistantMarkdown } from "./assistant-asset-text.tsx";
 import { InlineMessageBody } from "./inline-asset-text.tsx";
 import { HistoryMessageEditor } from "./history-message-editor.tsx";
-import { useContext, useMemo } from "react";
+import { createContext, useContext, useMemo } from "react";
 import { ChatViewContext, useChatSession } from "./chat-context.ts";
 import { editableText, messageText, placedChips } from "./chat-content.ts";
 import { turnEndReplyIds } from "./chat-turns.ts";
@@ -57,13 +57,21 @@ function messageAssets(entryId: string | undefined, transcript: readonly LoomTra
 	return storedAssetRefs(message && "attachments" in message ? message.attachments : undefined);
 }
 
+const InlineMessageContext = createContext<{ text: string; assets: readonly LoomUserAttachment[] }>({ text: "", assets: [] });
+
+/** Keep the renderer's component identity stable when focusing a panel on pointer down. */
+function InlineUserMessageRenderer({ content, className }: { content?: unknown; className?: string }) {
+	const { text, assets } = useContext(InlineMessageContext);
+	return <div className={`session-user-bubble${className ? ` ${className}` : ""}`}><InlineMessageBody text={typeof content === "string" ? content : text} assets={assets} /></div>;
+}
+
 const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 	const { t } = useLocale();
 	const { branch, stored, transcript, model } = useChatSession();
 	const text = messageText(props.message);
 	const entryId = stored.some((message) => message.role === "user" && message.id === props.message.id) ? props.message.id : undefined;
 	const assets = displayAssetRefs(text, messageAssets(entryId, transcript));
-	const inline = assets.length > 0 || inlineAssetIds(text).length > 0;
+	const inline = assets.length > 0 || inlineReferenceKeys(text).length > 0;
 	const canEdit = Boolean(branch && entryId && editableText(text) && !branch.busy);
 	if (branch && entryId && branch.editingId === entryId) {
 		return (
@@ -83,15 +91,13 @@ const SessionUserMessage = ((props: CopilotChatUserMessageProps) => {
 		);
 	}
 	return (
-		<CopilotChatUserMessage
-			{...props}
-			messageRenderer={inline ? ({ content, className }) => (
-				<div className={`session-user-bubble${className ? ` ${className}` : ""}`}>
-					<InlineMessageBody text={typeof content === "string" ? content : text} assets={assets} />
-				</div>
-			) : undefined}
-			onEditMessage={canEdit ? () => branch!.edit(entryId!) : undefined}
-		/>
+		<InlineMessageContext.Provider value={{ text, assets }}>
+			<CopilotChatUserMessage
+				{...props}
+				messageRenderer={inline ? InlineUserMessageRenderer : undefined}
+				onEditMessage={canEdit ? () => branch!.edit(entryId!) : undefined}
+			/>
+		</InlineMessageContext.Provider>
 	);
 }) as typeof CopilotChatUserMessage;
 

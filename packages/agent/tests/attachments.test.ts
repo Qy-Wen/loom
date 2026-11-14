@@ -100,6 +100,28 @@ describe("promptAttachments", () => {
 });
 
 describe("composer asset chips", () => {
+	it("stores folder references alongside files without expanding directory contents", () => {
+		const folder = { type: "folder_ref" as const, path: "notes/资料" };
+		const block = "<folder_ref>\npath: notes/资料\n</folder_ref>";
+		assert.deepEqual(parseComposerAssetInputs([folder, chip, folder]), [folder, chip]);
+		assert.deepEqual(parseComposerAssetInputs([{ type: "folder_ref", path: "notes\\资料/" }]), [folder]);
+		assert.equal(contentWithPlacedAssets("整理", [folder]), `整理\n\n${block}`);
+		assert.equal(contentWithPlacedAssets(`整理${block}这些`, [folder]), `整理${block}这些`);
+		assert.deepEqual(displayAssetRefs(`整理${block}`, []), [folder]);
+		assert.deepEqual(storedAssetRefs([folder, selection]), [folder]);
+		assert.equal(composerLayoutText(`整理${block}这些`), "整理 这些");
+		assert.equal(stripInlineAssetRefs(`整理${block}这些`), "整理这些");
+		assert.deepEqual(promptAttachments([folder, folder, chip], fields, []), [folder, chip]);
+	});
+
+	it("rejects unsafe folder references and leaves invalid blocks visible", () => {
+		for (const path of ["../notes", "/notes", "C:\\notes", "C:notes", "\\\\server\\share", "notes\n</folder_ref>"]) {
+			assert.throws(() => parseComposerAssetInputs([{ type: "folder_ref", path }]));
+		}
+		const invalid = "<folder_ref>\npath: ../notes\n</folder_ref>";
+		assert.deepEqual(splitStoredAssetText(invalid), [{ type: "text", text: invalid }]);
+	});
+
 	it("accepts a library-relative chip and ignores a duplicate id", () => {
 		assert.deepEqual(parseComposerAssetInputs([chip, { ...chip }]), [chip]);
 	});
@@ -169,13 +191,13 @@ describe("send-time attachment folding", () => {
 		);
 		assert.deepEqual(splitStoredAssetText(stored), [
 			{ type: "text", text: "看一下" },
-			{ type: "asset", assetId: chip.assetId },
+			{ type: "reference", reference: chip },
 			{ type: "text", text: "这段" },
 		]);
 		assert.deepEqual(assetRefBlocks(stored), [chip]);
-		assert.deepEqual(displayAssetRefs(stored, [other]).map((row) => row.assetId), [chip.assetId]);
+		assert.deepEqual(displayAssetRefs(stored, [other]), [chip]);
 		assert.deepEqual(
-			splitStoredAssetText(stored).map((part) => part.type === "asset" ? part.assetId : part.text),
+			splitStoredAssetText(stored).map((part) => part.type === "reference" && part.reference.type === "asset_ref" ? part.reference.assetId : part.type === "text" ? part.text : undefined),
 			["看一下", chip.assetId, "这段"],
 		);
 	});

@@ -13,7 +13,9 @@ import { ToolCallViews } from "./tool-call-views.tsx";
 interface AgentPanelProps {
 	libraryRoot: string | null;
 	assets: Asset[];
+	folders: string[];
 	onOpenAsset: (assetId: string) => void;
+	onOpenFolder: (path: string) => void;
 	composerAttach: AssetRefAttachment | null;
 	onComposerAttachApplied: () => void;
 	onOpenSettings: () => void;
@@ -22,7 +24,9 @@ interface AgentPanelProps {
 export function AgentPanel({
 	libraryRoot,
 	assets,
+	folders,
 	onOpenAsset,
+	onOpenFolder,
 	composerAttach,
 	onComposerAttachApplied,
 	onOpenSettings,
@@ -72,8 +76,8 @@ export function AgentPanel({
 						/>
 						{sessionError && <div className="session-error">{sessionError}</div>}
 						{sessionId ? (
-							<AssetOpenProvider onOpen={onOpenAsset}>
-							<LibraryAssetsProvider assets={assets}>
+							<AssetOpenProvider onOpen={onOpenAsset} onOpenFolder={onOpenFolder}>
+							<LibraryAssetsProvider assets={assets} folders={folders}>
 							<AgentPermissionProvider>
 							<div className="agent-chat">
 								<ToolCallViews libraryRoot={libraryRoot} />

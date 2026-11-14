@@ -22,6 +22,7 @@ export const RETRIEVE_SYSTEM_PROMPT =
 	"inspect_asset returns metadata and available write-ups, not the full text of a source file. If you need source text, use read on the relativePath returned by inspect_asset. " +
 	"Do not create, edit, or delete files, and do not call generation tools. " +
 	"When you name a library file, write an <asset_ref> block with path, asset_id, and type on their own lines, in that order, copied from the tool result. Omit asset_id when the result has none. Do not invent paths or ids. " +
+	"For a library folder, write <folder_ref>\npath: relative/folder\n</folder_ref>, copying the library-relative folder path from a tool result or user reference. A folder reference does not include its file contents. " +
 	"Search does not follow relations. When provenance matters, call inspect_asset on the important results: its links are connected files, so include their asset_ref and the relation type. " +
 	"Reply with those blocks and the passages that answer the task.";
 

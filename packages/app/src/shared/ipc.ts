@@ -1,4 +1,5 @@
 import type { ChatSettingsPatch } from "./chat-settings.ts";
+import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type { ProcessSandboxNotice } from "./agent-sandbox.ts";
@@ -276,7 +277,7 @@ export interface LoomApi {
 	/** Load full history initially, then only entries after the last committed ID. */
 	getSession: (id: string, afterEntryId?: string) => Promise<SessionRecord>;
 	/** Stage library chips and supported image bytes for the next prompt or follow-up. */
-	stageComposerAssets: (id: string, assets: Array<{ assetId: string; path: string; assetType: string }>) => Promise<void>;
+	stageComposerAssets: (id: string, assets: Array<ComposerReference | UiSelectionDraft>) => Promise<void>;
 	/** Open a file dialog inside the library and return indexed assets as composer chips. */
 	pickComposerLibraryAssets: () => Promise<UiSelectionDraft[]>;
 	/** Copy files into Inbox (or reuse if they are already in the library) and return composer chips. */

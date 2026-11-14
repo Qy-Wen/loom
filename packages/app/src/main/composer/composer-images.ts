@@ -15,7 +15,7 @@ export async function stageComposerInput(
 	const assets = parseComposerAssetInputs(value);
 	const images: ComposerImageInput[] = [];
 	for (const asset of assets) {
-		if (asset.assetType !== "image") continue;
+		if (asset.type !== "asset_ref" || asset.assetType !== "image") continue;
 		const path = await resolveAsset(asset.assetId);
 		if (!path) throw new Error(`${asset.path} is no longer in the library.`);
 		// Other image formats remain usable as library references.

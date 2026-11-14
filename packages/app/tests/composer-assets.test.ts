@@ -10,6 +10,10 @@ const chip = {
 };
 
 describe("composerAssetsAtSend", () => {
+	it("preserves folders without resolving a synthetic file id", () => {
+		const folder = { type: "folder_ref" as const, path: "clips" };
+		assert.deepEqual(composerAssetsAtSend([folder, chip], []), [folder, chip]);
+	});
 	it("rewrites path and type from the live library", () => {
 		assert.deepEqual(
 			composerAssetsAtSend([chip], [{ assetId: "asset-1", relativePath: "archive/hero.mp4", type: "video" }]),
