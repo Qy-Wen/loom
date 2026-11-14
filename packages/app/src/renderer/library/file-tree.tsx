@@ -67,22 +67,19 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 	);
 
 	function chooseFolder(event: React.MouseEvent): void {
-		if (tree.foldersOnly) {
-			// A modifier click edits the selection and leaves the browser where it is.
-			const double = isDoubleClick(event);
-			const mode = clickMode(event);
-			tree.onSelectFolder(folder.relativePath, mode);
-			if (mode !== "replace") {
-				return;
-			}
-			// A click opens the folder in the browser; a second one soon after folds it. The clicks are timed here
-			// instead of using `dblclick`, which fires once per run of clicks and so ignores a quick second double click.
-			if (double) tree.onToggleFolder(folder.relativePath);
-			return;
-		}
+		const double = isDoubleClick(event);
 		const mode = clickMode(event);
 		tree.onSelectFolder(folder.relativePath, mode);
-		if (mode === "replace") tree.onToggleFolder(folder.relativePath);
+		if (double) tree.onToggleFolder(folder.relativePath);
+	}
+
+	function toggleFolder(event: React.MouseEvent): void {
+		if (!tree.foldersOnly) {
+			const mode = clickMode(event);
+			tree.onSelectFolder(folder.relativePath, mode);
+			if (mode !== "replace") return;
+		}
+		tree.onToggleFolder(folder.relativePath);
 	}
 
 	return (
@@ -97,7 +94,7 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 						className={`folder-chevron${collapsed ? "" : " expanded"}`}
 						type="button"
 						aria-label={collapsed ? t.library.expandFolder : t.library.collapseFolder}
-						onClick={tree.foldersOnly ? () => tree.onToggleFolder(folder.relativePath) : chooseFolder}
+						onClick={toggleFolder}
 					>
 						<FolderChevronIcon />
 					</button>
