@@ -1,4 +1,4 @@
-import { copyFile, mkdir, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
@@ -299,4 +299,68 @@ test("the icon-mode tree supports multi-select without moving the browser", asyn
 	await row("three").locator(".folder-main").click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("three");
 	await expect(sidebar.locator(".folder-row.selected")).toHaveText("three");
+});
+
+test("the icon-mode tree replaces earlier picks when selecting the third through fifth folders", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	test.setTimeout(60_000);
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	for (const name of ["01", "02", "03", "04", "05"]) await mkdir(join(root, name));
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).folders.length).toBe(5);
+	const sidebar = loomPage.locator(".library-sidebar");
+	await sidebar.getByRole("group", { name: "File display", exact: true }).getByRole("button", { name: "Icons", exact: true }).click();
+	const browser = loomPage.locator(".folder-browser");
+	const row = (name: string) => sidebar.locator(".folder-row").filter({ hasText: new RegExp(`^${name}$`) }).locator(".folder-main");
+	const selected = sidebar.locator(".folder-row.selected");
+
+	await row("01").click();
+	await row("03").click();
+	await row("05").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText(["03", "04", "05"]);
+	expect(await loomPage.evaluate(() => window.getSelection()?.toString() ?? "")).toBe("");
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("03");
+
+	// A previous separate pick must be dropped when Shift replaces the selection.
+	await row("01").click();
+	await row("03").click({ modifiers: [process.platform === "darwin" ? "Meta" : "Control"] });
+	await expect(selected).toHaveText(["01", "03"]);
+	await row("05").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText(["03", "04", "05"]);
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("01");
+
+	// With no existing anchor, two Shift clicks start at the first clicked row.
+	await sidebar.locator(".library-root-button").click();
+	await row("03").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText("03");
+	await row("05").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText(["03", "04", "05"]);
+
+	// Folder timestamps must still determine range order when icon mode hides their files.
+	const newestFirst = ["02", "05", "01", "03", "04"];
+	for (const [index, name] of newestFirst.entries()) {
+		const path = join(root, name, "note.md");
+		await writeFile(path, "# note");
+		const modified = new Date(Date.now() - (index + 1) * 60_000);
+		await utimes(path, modified, modified);
+	}
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(5);
+	await browser.getByRole("button", { name: "Sort files", exact: true }).click();
+	await browser.getByRole("menuitemradio", { name: "Date modified", exact: true }).click();
+	await browser.getByRole("button", { name: "Ascending", exact: true }).click();
+	await expect(sidebar.locator(".folder-row .asset-name")).toHaveText(newestFirst);
+	await expect(sidebar.locator(".asset-row")).toHaveCount(0);
+	await row("01").click();
+	await row("04").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText(["01", "03", "04"]);
+	await sidebar.press("Shift+ArrowUp");
+	await expect(selected).toHaveText(["01", "03"]);
+	await row("01").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText("01");
+
+	await browser.getByRole("button", { name: "Descending", exact: true }).click();
+	await expect(sidebar.locator(".folder-row .asset-name")).toHaveText([...newestFirst].reverse());
+	await row("01").click();
+	await row("02").click({ modifiers: ["Shift"] });
+	await expect(selected).toHaveText(["01", "05", "02"]);
 });

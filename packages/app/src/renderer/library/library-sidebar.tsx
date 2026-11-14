@@ -113,11 +113,11 @@ export function LibrarySidebar({
 	const treeRows = useMemo(
 		() => visibleTreeRows(
 			visible.folders,
-			iconMode ? [] : visible.assets,
+			visible.assets,
 			queryActive ? new Set() : collapsedFolders,
 			fileSort,
 			fileSortDirection,
-		),
+		).filter((row) => !iconMode || row.kind === "folder"),
 		[visible, iconMode, queryActive, collapsedFolders, fileSort, fileSortDirection],
 	);
 	// The icon-mode tree lists folders only, so only the picked folders show in it.
