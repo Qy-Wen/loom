@@ -36,7 +36,7 @@ export class ToolApprovals {
 		if (level === "full") for (const pending of this.#waiting.values()) pending.resolve("approve");
 	}
 
-	/** External execution adapters can use this directly as their authorization callback. */
+	/** Await a decision and throw on rejection or cancellation. */
 	async authorize(root: string, call: PendingToolApproval, observer: ToolApprovalObserver, signal?: AbortSignal): Promise<void> {
 		const decision = await this.request(root, call, observer, signal);
 		signal?.throwIfAborted();

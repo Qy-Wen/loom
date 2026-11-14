@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { ToolApprovals, ToolCatalog, ToolExecutor, jsonToolResult, type LoomTool, type ToolLibraryBinding } from "../src/tools/index.ts";
+import { ToolCatalog, ToolExecutor, jsonToolResult, type LoomTool, type ToolLibraryBinding } from "../src/tools/index.ts";
 
 const direct: ToolLibraryBinding = { run: async (work, signal) => work(signal ?? new AbortController().signal) };
 const echo = (execute: LoomTool["execute"] = (args) => jsonToolResult(args)): LoomTool => ({
@@ -8,24 +8,22 @@ const echo = (execute: LoomTool["execute"] = (args) => jsonToolResult(args)): Lo
 });
 
 test("Agent and external calls share argument validation and business results", async () => {
-	let calls = 0, authorizations = 0;
+	let calls = 0;
 	const executor = new ToolExecutor(new ToolCatalog([{ tool: echo((args) => { calls++; return jsonToolResult(args); }), scope: "library", exposure: "external" }]));
 	const agent = executor.agentTools(() => direct)[0]!;
 	const args = { value: "hello" };
 	assert.deepEqual(await agent.execute(args), await executor.execute("echo", args, {
-		audience: "external", library: direct, authorize: async () => { authorizations++; },
+		audience: "external", library: direct,
 	}));
 	assert.equal(calls, 2);
-	assert.equal(authorizations, 1);
 	for (const invalid of [{}, { value: 42 }, { value: "ok", extra: true }]) {
 		await assert.rejects(() => Promise.resolve().then(() => agent.execute(invalid)), /Invalid arguments/);
-		await assert.rejects(executor.execute("echo", invalid, { audience: "external", library: direct, authorize: async () => { authorizations++; } }), /Invalid arguments/);
+		await assert.rejects(executor.execute("echo", invalid, { audience: "external", library: direct }), /Invalid arguments/);
 	}
 	assert.equal(calls, 2);
-	assert.equal(authorizations, 1);
 });
 
-test("external execution rejects internal, undecided, unknown and unauthorized tools", async () => {
+test("external execution rejects internal, undecided, and unknown tools", async () => {
 	let calls = 0;
 	const definitions = ["external", "internal", "undecided"] as const;
 	const executor = new ToolExecutor(new ToolCatalog(definitions.map((exposure) => ({
@@ -33,24 +31,23 @@ test("external execution rejects internal, undecided, unknown and unauthorized t
 	}))));
 	assert.deepEqual(executor.catalog.list("external").map(({ tool }) => tool.name), ["external"]);
 	for (const name of ["internal", "undecided", "unknown"]) {
-		await assert.rejects(executor.execute(name, { value: "ok" }, { audience: "external", library: direct, authorize: async () => {} }), /not available/);
+		await assert.rejects(executor.execute(name, { value: "ok" }, { audience: "external", library: direct }), /not available/);
 	}
-	await assert.rejects(executor.execute("external", { value: "ok" }, {
-		audience: "external", library: direct, authorize: async () => { throw new Error("Permission denied"); },
-	}), /Permission denied/);
-	await assert.rejects(executor.execute("external", { value: "ok" }, { audience: "external", library: direct } as never), /require authorization/);
 	assert.equal(calls, 0);
 	assert.throws(() => new ToolCatalog([executor.catalog.get("external", "agent"), executor.catalog.get("external", "agent")]), /Duplicate tool/);
 });
 
-test("cancelling during authorization prevents execution and a library is mandatory", async () => {
+test("cancelled calls never execute and library tools require a binding", async () => {
 	let calls = 0;
-	const executor = new ToolExecutor(new ToolCatalog([{ tool: echo(() => { calls++; return "executed"; }), scope: "library", exposure: "external" }]));
 	const cancel = new AbortController();
+	cancel.abort();
+	const executor = new ToolExecutor(new ToolCatalog([{
+		tool: echo(() => { calls++; return "executed"; }), scope: "library", exposure: "external",
+	}]));
 	await assert.rejects(executor.execute("echo", { value: "ok" }, {
-		audience: "external", library: direct, signal: cancel.signal, authorize: async () => { cancel.abort(); },
+		audience: "external", library: direct, signal: cancel.signal,
 	}), { name: "AbortError" });
-	await assert.rejects(executor.execute("echo", { value: "ok" }, { audience: "external", authorize: async () => {} }), /library binding/);
+	await assert.rejects(executor.execute("echo", { value: "ok" }, { audience: "external" }), /library binding/);
 	assert.equal(calls, 0);
 });
 
@@ -65,29 +62,14 @@ test("application tools work without opening a library and validation errors omi
 	});
 });
 
-for (const decision of ["approve", "reject", "abort"] as const) {
-	test(`an external adapter uses shared approvals before execution: ${decision}`, { timeout: 5_000 }, async () => {
-		let calls = 0, cleaned = false;
-		const tool = { ...echo(() => { calls++; return "executed"; }), name: "run_ffmpeg" };
-		const executor = new ToolExecutor(new ToolCatalog([{ tool, scope: "library", exposure: "external" }]));
-		const approvals = new ToolApprovals();
-		approvals.level = "basic";
-		const controller = new AbortController();
-		const ready = Promise.withResolvers<void>();
-		const running = executor.execute(tool.name, { value: "ok" }, {
-			audience: "external", library: direct, signal: controller.signal,
-			authorize: (call, signal) => approvals.authorize(process.cwd(), {
-				toolCallId: "client-1/request-1", toolName: call.name, args: call.args as { value: string },
-			}, { pending: async () => { ready.resolve(); }, settled: async () => { cleaned = true; } }, signal),
-		});
-		const failed = decision === "approve" ? undefined : assert.rejects(running, decision === "abort" ? { name: "AbortError" } : /skipped/);
-		await ready.promise;
-		assert.equal(calls, 0);
-		if (decision === "abort") controller.abort();
-		else approvals.resolve("client-1/request-1", decision);
-		if (decision === "approve") assert.equal(await running, "executed");
-		else await failed;
-		assert.equal(calls, decision === "approve" ? 1 : 0);
-		assert.equal(cleaned, true);
-	});
-}
+test("Agent and external calls discard results when cancelled during execution", async () => {
+	for (const audience of ["agent", "external"] as const) {
+		const cancel = new AbortController();
+		const executor = new ToolExecutor(new ToolCatalog([{
+			tool: echo(() => { cancel.abort(); return "executed"; }), scope: "library", exposure: "external",
+		}]));
+		await assert.rejects(executor.execute("echo", { value: "ok" }, {
+			audience, library: direct, signal: cancel.signal,
+		}), { name: "AbortError" });
+	}
+});

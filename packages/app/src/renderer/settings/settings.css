@@ -9,6 +9,11 @@
 	background: var(--lm-overlay-soft);
 }
 
+.external-call p { overflow-wrap: anywhere; }
+.external-call pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.external-call { padding: 12px 0; border-top: 1px solid var(--lm-border-default); }
+.external-call > span { float: right; }
+
 .settings-dialog {
 	display: flex;
 	flex-direction: column;
@@ -334,6 +339,59 @@
 	font-size: var(--lm-text-size-sm);
 }
 
+.settings-connection-info {
+	display: grid;
+	gap: var(--lm-space-4);
+	margin: var(--lm-space-6) 0 var(--lm-space-5);
+}
+
+.settings-access-token {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) auto;
+	align-items: end;
+	gap: var(--lm-space-4);
+	margin-bottom: var(--lm-space-4);
+}
+
+.settings-access-token > label,
+.settings-access-token .settings-actions {
+	margin: 0;
+}
+
+.settings-access-token .settings-actions button {
+	min-height: var(--lm-size-2xl);
+}
+
+.settings-connection-info > div {
+	display: grid;
+	grid-template-columns: 100px minmax(0, 1fr);
+	align-items: start;
+	gap: var(--lm-space-4);
+}
+
+.settings-connection-info dt {
+	padding-top: 3px;
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-xs);
+}
+
+.settings-connection-info dd {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--lm-space-3);
+	min-width: 0;
+	margin: 0;
+}
+
+.settings-connection-info code {
+	flex: 1;
+	min-width: 0;
+	color: var(--lm-text-primary);
+	font: 12px/1.6 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+	overflow-wrap: anywhere;
+	user-select: text;
+}
+
 .settings-agent {
 	flex: 1;
 	min-height: 0;
@@ -607,6 +665,11 @@
 
 .settings-actions button:hover:not(:disabled) {
 	background: var(--lm-surface-hover);
+}
+
+.settings-actions button.is-copied {
+	border-color: var(--lm-success);
+	color: var(--lm-success);
 }
 
 .settings-actions .primary-button {

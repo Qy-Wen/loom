@@ -133,6 +133,14 @@ const api: LoomApi = {
 		return () => ipcRenderer.removeListener(IPC.chatSettingsChanged, handler);
 	},
 	getMcpSettings: () => ipcRenderer.invoke(IPC.getMcpSettings),
+	getMcpService: () => ipcRenderer.invoke(IPC.getMcpService),
+	saveMcpService: (settings) => ipcRenderer.invoke(IPC.saveMcpService, settings),
+	onMcpServiceChanged: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, view: Parameters<typeof listener>[0]) => listener(view);
+		ipcRenderer.on(IPC.mcpServiceChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.mcpServiceChanged, handler);
+	},
+	cancelExternalTool: (id) => ipcRenderer.invoke(IPC.cancelExternalTool, id),
 	saveMcpSettings: (servers) => ipcRenderer.invoke(IPC.saveMcpSettings, servers),
 	setMcpServerLive: (server) => ipcRenderer.invoke(IPC.setMcpServerLive, server),
 	getAgentInstructions: () => ipcRenderer.invoke(IPC.getAgentInstructions),

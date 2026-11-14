@@ -56,6 +56,9 @@ import {
 	type SettingsPatch,
 } from "./tools/settings-tools.ts";
 import { McpHost } from "./mcp/host.ts";
+import { McpServiceController } from "./mcp-service/controller.ts";
+import { McpServiceStore } from "./mcp-service/store.ts";
+import { parseMcpServiceSettings } from "../shared/mcp-service.ts";
 import { McpSettingsStore } from "./mcp/store.ts";
 import { SerialQueue } from "./storage/serial-queue.ts";
 import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
@@ -218,6 +221,7 @@ let agentInstructions: AgentInstructionsStore | null = null;
 let agentSandbox: AgentSandboxStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
+let mcpService: McpServiceController | null = null;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
 let gradePreview: AbortController | null = null;
@@ -803,6 +807,12 @@ function registerIpc(): void {
 		return modelSettings.view();
 	});
 	ipcMain.handle(IPC.getMcpSettings, async () => mcpSettingsView());
+	ipcMain.handle(IPC.getMcpService, () => mcpService!.view());
+	ipcMain.handle(IPC.saveMcpService, (_event, settings: unknown) => mcpService!.save(parseMcpServiceSettings(settings)));
+	ipcMain.handle(IPC.cancelExternalTool, (_event, id: unknown) => {
+		if (typeof id !== "string" || !id.startsWith("external-")) throw new Error("Invalid external request");
+		return mcpService!.cancel(id);
+	});
 	ipcMain.handle(IPC.saveMcpSettings, async (_event, patch: McpSettingsPatch) => settingsWrites.run(async () => {
 		if (!mcpSettings) throw new Error("Settings store not started");
 		const configs = await mcpSettings.patch(patch);
@@ -1126,6 +1136,15 @@ app
 		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
+		mcpService = new McpServiceController(new McpServiceStore(join(app.getPath("userData"), "mcp-service.json"), electronSecretCipher), {
+			executor: toolExecutor,
+			bindLibrary: async () => {
+				if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
+				const library = localCore.bindLibraryTasks();
+				return library.run(async () => { const { rootPath } = await localCore.getLibrarySnapshot(); if (!rootPath) throw new Error("Open a library first"); return { library, root: rootPath }; });
+			},
+		}, (view) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(IPC.mcpServiceChanged, view); });
+		await mcpService.initialize();
 		requireChat().setTracePublisher(publishDevTrace);
 		registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
 			listTraces: (limit, before) => requireChat().listTraces(limit, before),
@@ -1170,7 +1189,7 @@ app.on("will-quit", (event) => {
 	agentServer = null;
 	const host = mcpHost;
 	mcpHost = null;
-	void localCore.stopLibraryTasks().then(() => libraryTransition).then(() => Promise.allSettled([
+	void Promise.resolve(mcpService?.close()).then(() => localCore.stopLibraryTasks()).then(() => libraryTransition).then(() => Promise.allSettled([
 		server?.close() ?? Promise.resolve(),
 		requireChat().close(),
 	])).then(() => Promise.allSettled([
@@ -1220,6 +1239,7 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 	await previous;
 	openingLibrary = true;
 	try {
+		await mcpService?.invalidate();
 		// Cancel Core jobs before awaiting tool shutdown, while storage still belongs to the old root.
 		await localCore.stopLibraryTasks();
 		await requireChat().close();

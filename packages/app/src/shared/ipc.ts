@@ -1,4 +1,5 @@
 import type { ChatSettingsPatch } from "./chat-settings.ts";
+import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
 /** Typed contract shared by Electron main, preload, and renderer. */
 import type { ProcessSandboxNotice } from "./agent-sandbox.ts";
 import type { ImageGrade } from "@loom/core/grade";
@@ -183,6 +184,10 @@ export const IPC = {
 	chatRefresh: "loom:chatRefresh",
 	chatSettingsChanged: "loom:chatSettingsChanged",
 	getMcpSettings: "loom:getMcpSettings",
+	getMcpService: "loom:getMcpService",
+	saveMcpService: "loom:saveMcpService",
+	mcpServiceChanged: "loom:mcpServiceChanged",
+	cancelExternalTool: "loom:cancelExternalTool",
 	saveMcpSettings: "loom:saveMcpSettings",
 	setMcpServerLive: "loom:setMcpServerLive",
 	getAgentInstructions: "loom:getAgentInstructions",
@@ -315,6 +320,10 @@ export interface LoomApi {
 	onChatLoginPrompt: (listener: (prompt: ChatLoginPrompt & { providerId: string; authType: "api_key" | "oauth" }) => void) => () => void;
 	onChatSettingsChanged: (listener: () => void) => () => void;
 	getMcpSettings: () => Promise<McpSettingsView>;
+	getMcpService: () => Promise<McpServiceView>;
+	saveMcpService: (settings: McpServiceSettings) => Promise<McpServiceView>;
+	onMcpServiceChanged: (listener: (view: McpServiceView) => void) => () => void;
+	cancelExternalTool: (id: string) => Promise<boolean>;
 	saveMcpSettings: (patch: McpSettingsPatch) => Promise<McpSettingsView>;
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
 	getAgentInstructions: () => Promise<string>;
