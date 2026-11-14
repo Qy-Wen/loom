@@ -26,6 +26,8 @@ for (const mode of ["List", "Icons"] as const) {
 		const video = stage.locator("video");
 		const state = () => video.evaluate((node: HTMLVideoElement) => ({ paused: node.paused, time: node.currentTime, volume: node.volume, muted: node.muted }));
 		await expect.poll(() => video.evaluate((node: HTMLVideoElement) => node.readyState)).toBeGreaterThanOrEqual(1);
+		// Selecting a file leaves focus with navigation; interacting with its preview enables video shortcuts.
+		await stage.locator(".media-viewport").click();
 		await expect(stage).toBeFocused();
 		await page.keyboard.press("Space");
 		await expect.poll(async () => (await state()).paused).toBe(false);

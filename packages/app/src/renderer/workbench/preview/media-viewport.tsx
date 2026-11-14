@@ -81,7 +81,6 @@ export function MediaViewport({
 	useEffect(() => {
 		if (kind !== "video") return;
 		const stage = stageRef.current;
-		stage?.focus({ preventScroll: true });
 		let fullscreen = false;
 		const onFullscreen = () => {
 			const active = stage !== null && document.fullscreenElement?.contains(stage) === true;

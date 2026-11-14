@@ -149,6 +149,14 @@ describe("treeMotion", () => {
 		assert.equal(treeMotion(open, { kind: "asset", assetId: "n", relativePath: "a/c/n.txt" }, "ArrowRight").type, "none");
 	});
 
+	it("moves directly to the parent of a leaf folder without an invisible collapse step", () => {
+		const leaves = visibleTreeRows(["a", "a/empty", "b"], [], new Set());
+		assert.deepEqual(treeMotion(leaves, { kind: "folder", relativePath: "a/empty" }, "ArrowLeft"), {
+			type: "select", cursor: { kind: "folder", relativePath: "a" },
+		});
+		assert.equal(treeMotion(leaves, { kind: "folder", relativePath: "b" }, "ArrowLeft").type, "none");
+	});
+
 	it("toggles the focused folder on enter", () => {
 		assert.deepEqual(treeMotion(rows, { kind: "folder", relativePath: "a/c" }, "Enter"), {
 			type: "expand",

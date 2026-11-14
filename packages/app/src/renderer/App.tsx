@@ -52,7 +52,6 @@ import {
 	withoutKey,
 	type FileDisplay,
 	type PointerMode,
-	type TreeCursor,
 	type TreeRow,
 	type TreeSelection,
 } from "./library/tree-nav.ts";
@@ -653,12 +652,15 @@ export function App(): React.JSX.Element {
 		setPicked(emptyTreeSelection);
 	}
 
-	function chooseTreeKey(key: string, mode: PointerMode, rows: readonly TreeRow[]): void {
-		// In the icon-mode tree the folder on screen counts as picked until the first modifier click, so ctrl/shift add to it.
-		const seeded = iconMode && !treeOwnsPick
+	/** The folder on screen is the tree cursor until the tree makes its own selection. */
+	function treeSelection(): TreeSelection {
+		return iconMode && !treeOwnsPick
 			? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
 			: picked;
-		const next = pointerSelect(seeded, rows, key, mode);
+	}
+
+	function chooseTreeKey(key: string, mode: PointerMode, rows: readonly TreeRow[]): void {
+		const next = pointerSelect(treeSelection(), rows, key, mode);
 		setPicked(next);
 		if (iconMode) setTreePicked(next);
 		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
@@ -940,12 +942,6 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	function libraryCursor(): TreeCursor | null {
-		if (selectedFolder) return { kind: "folder", relativePath: selectedFolder };
-		if (selectedAsset) return { kind: "asset", assetId: selectedAsset.assetId, relativePath: selectedAsset.relativePath };
-		return null;
-	}
-
 	async function duplicateSelection(selection: TreeSelection = picked): Promise<void> {
 		const { assetIds } = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
 		if (assetIds.length === 0) return;
@@ -1033,9 +1029,7 @@ export function App(): React.JSX.Element {
 
 	/** Change the selection by `edit`; made in the icon-mode tree, the tree then shows it. */
 	function pickRows(edit: (current: TreeSelection, rows: readonly TreeRow[]) => TreeSelection, rows: readonly TreeRow[], fromTree: boolean): void {
-		const base = fromTree && iconMode && !treeOwnsPick
-			? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
-			: picked;
+		const base = fromTree ? treeSelection() : picked;
 		const next = edit(base, rows);
 		setPicked(next);
 		if (fromTree && iconMode) setTreePicked(next);
@@ -1070,9 +1064,7 @@ export function App(): React.JSX.Element {
 			void duplicateSelection();
 		} else if (event.key === "F2") {
 			event.preventDefault();
-			const selection = fromTree && iconMode && !treeOwnsPick
-				? (location.kind === "folder" && location.path ? singleSelection(folderKey(location.path)) : emptyTreeSelection)
-				: picked;
+			const selection = fromTree ? treeSelection() : picked;
 			if (selection.keys.length !== 1) return;
 			if (selection.focus?.startsWith("folder:")) beginFolderRename(selection.focus.slice("folder:".length), fromTree);
 			else if (selection.focus?.startsWith("asset:")) setRenamingAssetId(selection.focus.slice("asset:".length));
@@ -1095,14 +1087,17 @@ export function App(): React.JSX.Element {
 			pickRows((current, all) => extendSelection(current, all, event.key as "ArrowUp" | "ArrowDown" | "Home" | "End"), rows, fromTree);
 		} else if (!mod && !event.altKey && !event.shiftKey && isTreeNavKey(event.key)) {
 			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
-			const motion = treeMotion(rows, libraryCursor(), event.key, folding);
+			const selection = fromTree ? treeSelection() : picked;
+			const cursor = cursorsForKeys(selection.focus ? [selection.focus] : [], library.assets)[0] ?? null;
+			const motion = treeMotion(rows, cursor, event.key, folding);
 			if (motion.type === "none") {
 				event.preventDefault();
 				return;
 			}
 			event.preventDefault();
 			if (motion.type === "select") {
-				if (motion.cursor.kind === "folder") selectFolder(motion.cursor.relativePath);
+				if (motion.cursor.kind === "folder" && fromTree && iconMode) browseTo({ kind: "folder", path: motion.cursor.relativePath });
+				else if (motion.cursor.kind === "folder") selectFolder(motion.cursor.relativePath);
 				else selectAsset(motion.cursor.assetId);
 			} else {
 				toggleFolder(motion.relativePath);

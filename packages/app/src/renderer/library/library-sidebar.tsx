@@ -13,7 +13,7 @@ import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
 import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
-import { isTreeNavKey, visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
+import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
 import type { LibraryDisplay } from "./use-library-display.ts";
 import { FileSortControl } from "./file-sort-control.tsx";
@@ -159,8 +159,8 @@ export function LibrarySidebar({
 			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => {
-				// In icon mode the browser handles arrow navigation; file shortcuts stay with the focused tree.
-				if (iconMode && !event.shiftKey && !event.metaKey && !event.ctrlKey && isTreeNavKey(event.key)) return;
+				// Keep native button activation while arrow keys navigate the focused folder tree.
+				if (iconMode && event.key === "Enter") return;
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>

@@ -219,7 +219,7 @@ export function treeMotion(
 	if (key === "ArrowLeft") {
 		const row = rows[index];
 		if (!row) return cursor ? visibleAncestor(rows, cursor.relativePath) : { type: "none" };
-		if (folding && row.kind === "folder" && !row.collapsed) {
+		if (folding && row.kind === "folder" && !row.collapsed && firstChild(rows, index).type === "select") {
 			return { type: "collapse", relativePath: row.relativePath };
 		}
 		return visibleAncestor(rows, row.relativePath);
