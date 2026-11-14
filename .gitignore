@@ -19,6 +19,9 @@ build/
 release/
 *.tsbuildinfo
 
+# Local generated assets and scratch files
+/output/
+
 # Personal notes for the agent package (local only)
 packages/agent/AGENTS.md
 
