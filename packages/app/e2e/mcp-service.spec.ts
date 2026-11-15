@@ -60,13 +60,20 @@ test("external MCP supports client-owned permissions, optional authentication, e
 		const probe = new Client({ name: "Auth verification", version: "1" });
 		try {
 			await probe.connect(new StreamableHTTPClientTransport(new URL(service.url), { requestInit: { headers: token ? { Authorization: `Bearer ${token}` } : {} } }));
-			expect((await probe.listTools()).tools).toHaveLength(29);
+			expect((await probe.listTools()).tools).toHaveLength(31);
 			expect((await probe.callTool({ name: "list_tags", arguments: {} })).isError).toBeUndefined();
 		} finally { await probe.close(); }
 	}
 	try {
 		await client.connect(transport);
-		expect((await client.listTools()).tools).toHaveLength(29);
+		const tools = (await client.listTools()).tools;
+		expect(tools).toHaveLength(31);
+		expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(["get_settings", "update_settings"]));
+		const instructions = "Configured through external MCP";
+		expect((await client.callTool({ name: "update_settings", arguments: { instructions } })).isError).toBeUndefined();
+		const current = await client.callTool({ name: "get_settings", arguments: {} });
+		expect(current.isError).toBeUndefined();
+		expect(current.structuredContent).toMatchObject({ instructions });
 		expect((await client.callTool({ name: "create_folder", arguments: { parentRelativePath: "", name: "From MCP" } }, undefined, { timeout: 5000 })).isError).toBeUndefined();
 		await expect(loomPage.getByRole("region", { name: "External tool approval", exact: true })).toHaveCount(0);
 		await expect(loomPage.locator(".library-sidebar")).toContainText("From MCP");
