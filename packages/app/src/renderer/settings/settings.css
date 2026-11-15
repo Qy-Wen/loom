@@ -10,8 +10,8 @@
 }
 
 .external-call p { overflow-wrap: anywhere; }
-.external-call pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
-.external-call { padding: 12px 0; border-top: 1px solid var(--lm-border-default); }
+.external-call pre { max-height: 180px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: var(--lm-text-size-sm); }
+.external-call { padding: var(--lm-space-6) 0; border-top: 1px solid var(--lm-border-default); }
 .external-call > span { float: right; }
 
 .settings-dialog {
