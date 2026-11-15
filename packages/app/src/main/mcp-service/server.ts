@@ -1,7 +1,7 @@
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { setImmediate as nextTurn } from "node:timers/promises";
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema, isInitializeRequest, type CallToolResult, type Tool } from "@modelcontextprotocol/sdk/types.js";
 import type { ToolExecutor, ToolLibraryBinding, LoomToolResult } from "@loom/agent/tools";
@@ -9,7 +9,7 @@ import type { ExternalToolTask } from "../../shared/mcp-service.ts";
 import { toolAnnotations } from "./tool-annotations.ts";
 
 interface Session {
-	server: Server;
+	server: McpServer;
 	transport: StreamableHTTPServerTransport;
 	controller: AbortController;
 	library: ToolLibraryBinding;
@@ -42,18 +42,20 @@ export async function startMcpService(host: McpServiceHost, options: { port: num
 	const createSession = async (): Promise<Session> => {
 		const bound = await host.bindLibrary();
 		if (closed) throw new Error("MCP service is stopping");
-		const server = new Server({ name: "loom", version: "1.0.0" }, { capabilities: { tools: {} }, instructions: "Tools operate only on the Loom library bound to this connection. Use get_library first. Reconnect after switching libraries. Files use asset IDs; media paths must stay inside the library. inspect_asset preview references are replaced by read_asset. Mutations are not automatically retried; inspect the library and Loom call history if a connection is interrupted." });
+		const server = new McpServer({ name: "loom", version: "1.0.0" }, { capabilities: { tools: {} }, instructions: "Library tools operate on the Loom library bound to this connection. Use get_library first. Reconnect after switching libraries. get_settings and update_settings operate on app-wide configuration shared by all libraries; external clients manage tool approvals. Files use asset IDs; media paths must stay inside the library. inspect_asset preview references are replaced by read_asset. Mutations are not automatically retried; inspect the library and Loom call history if a connection is interrupted." });
 		const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: randomUUID, maxRequestBodySize: 1024 * 1024, onsessionclosed: () => expire(session) });
 		const session: Session = { ...bound, server, transport, controller: new AbortController(), touched: Date.now(), running: new Set() };
-		server.setRequestHandler(ListToolsRequestSchema, async () => {
+		// Custom protocol handlers keep schemas and validation in the shared tool catalog/executor.
+		const protocol = server.server;
+		protocol.setRequestHandler(ListToolsRequestSchema, async () => {
 			await session.library.run(async () => {});
 			return { tools: host.executor.catalog.list("external").map(({ tool }) => ({ name: tool.name, description: tool.description + (["run_ffmpeg", "run_ffprobe", "grade_image"].includes(tool.name) ? " External access: visible library-relative file paths only. Outputs must be new single media files; no overwrite, protocols, playlists, file-loading filters, or arbitrary FFmpeg options. Simple scale/crop/fps/rotate/color/audio filters are supported through -vf/-af." : ""), inputSchema: tool.parameters as Tool["inputSchema"], annotations: toolAnnotations(tool.name) })) };
 		});
-		server.setRequestHandler(CallToolRequestSchema, async ({ params }, extra): Promise<CallToolResult> => {
+		protocol.setRequestHandler(CallToolRequestSchema, async ({ params }, extra): Promise<CallToolResult> => {
 			if ([...tasks.values()].filter(({ view }) => !view.finishedAt).length >= 16) throw new Error("Too many active tool calls");
 			const controller = new AbortController();
 			const signal = AbortSignal.any([controller.signal, extra.signal, session.controller.signal]);
-			const view: ExternalToolTask = { id: `external-${randomUUID()}`, client: server.getClientVersion()?.name.slice(0, 120) ?? "MCP client", library: session.root, tool: params.name, args: params.arguments ?? {}, status: "running", startedAt: Date.now() };
+			const view: ExternalToolTask = { id: `external-${randomUUID()}`, client: protocol.getClientVersion()?.name.slice(0, 120) ?? "MCP client", library: session.root, tool: params.name, args: params.arguments ?? {}, status: "running", startedAt: Date.now() };
 			tasks.set(view.id, { view, controller });
 			for (const [id, task] of tasks) { if (tasks.size <= 100) break; if (task.view.finishedAt) tasks.delete(id); }
 			publish();

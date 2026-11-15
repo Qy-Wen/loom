@@ -13,18 +13,21 @@ import { ToolExecutor } from "@loom/agent/tools";
 import { createAppToolCatalog } from "../src/main/tools/catalog.ts";
 import { encodeMcpResult, startMcpService } from "../src/main/mcp-service/server.ts";
 import { McpServiceStore } from "../src/main/mcp-service/store.ts";
+import { applyModelSettingsPatch } from "../src/main/models/model-settings-store.ts";
+import { publicModelSlot, type PublicSettings, type SettingsToolHost } from "../src/main/tools/settings-tools.ts";
+import { emptySettingsFile } from "../src/shared/model-settings.ts";
 import type { ExternalToolTask } from "../src/shared/mcp-service.ts";
 
 const token = "a".repeat(64);
 async function waitFor(condition: () => boolean) { const deadline = Date.now() + 5000; while (!condition()) { if (Date.now() > deadline) assert.fail("Timed out waiting for tool state"); await sleep(10); } }
-async function fixture(accessToken = token, options: { describeImage?: (assetId: string, signal?: AbortSignal) => Promise<never> } = {}) {
+async function fixture(accessToken = token, options: { describeImage?: (assetId: string, signal?: AbortSignal) => Promise<never>; settings?: SettingsToolHost } = {}) {
 	const root = await mkdtemp(join(tmpdir(), "loom-public-mcp-"));
 	const core = new LocalCore();
 	await writeFile(join(root, "note.md"), "one\ntwo\nthree\nfour\n");
 	await copyFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url), join(root, "still.png"));
 	await core.openLibrary(root);
 	const unused = async (): Promise<never> => { throw new Error("Provider not configured"); };
-	const executor = new ToolExecutor(createAppToolCatalog(core, { assets: { embedAsset: unused, describeImage: options.describeImage ?? unused, describeVideo: unused, describeAudio: unused }, settings: { read: unused, apply: unused } }));
+	const executor = new ToolExecutor(createAppToolCatalog(core, { assets: { embedAsset: unused, describeImage: options.describeImage ?? unused, describeVideo: unused, describeAudio: unused }, settings: options.settings ?? { read: unused, apply: unused } }));
 	let tasks: ExternalToolTask[] = [];
 	const service = await startMcpService({ executor, bindLibrary: async () => { const library = core.bindLibraryTasks(); return library.run(async () => ({ library, root: (await core.getLibrarySnapshot()).rootPath! })); }, onTasks: (value) => { tasks = value; } }, { port: 0, token: accessToken });
 	const clients: Client[] = [];
@@ -36,12 +39,17 @@ async function fixture(accessToken = token, options: { describeImage?: (assetId:
 	return { root, core, service, executor, connect, tasks: () => tasks, async close() { await service.close(); await Promise.allSettled(clients.map((client) => client.close())); await core.close(); await rm(root, { recursive: true, force: true }); } };
 }
 
-test("real MCP client discovers 29 shared tools, reads portable results, and organizes files by stable ID", { timeout: 30_000 }, async () => {
+test("real MCP client discovers 31 shared tools, reads portable results, and organizes files by stable ID", { timeout: 30_000 }, async () => {
 	const f = await fixture();
 	try {
 		const { client } = await f.connect();
 		const tools = (await client.listTools()).tools;
-		assert.equal(tools.length, 29);
+		assert.equal(tools.length, 31);
+		assert.equal(tools.find((tool) => tool.name === "get_settings")!.annotations?.readOnlyHint, true);
+		assert.equal(tools.find((tool) => tool.name === "get_settings")!.annotations?.destructiveHint, false);
+		assert.equal(tools.find((tool) => tool.name === "update_settings")!.annotations?.readOnlyHint, false);
+		assert.equal(tools.find((tool) => tool.name === "update_settings")!.annotations?.destructiveHint, true);
+		assert.equal(tools.find((tool) => tool.name === "update_settings")!.annotations?.openWorldHint, true);
 		assert.equal(tools.find((tool) => tool.name === "read_asset")!.annotations?.readOnlyHint, true);
 		assert.equal(tools.find((tool) => tool.name === "create_folder")!.annotations?.destructiveHint, false);
 		assert.equal(tools.find((tool) => tool.name === "rename_asset")!.annotations?.destructiveHint, true);
@@ -49,7 +57,7 @@ test("real MCP client discovers 29 shared tools, reads portable results, and org
 		assert.equal(tools.find((tool) => tool.name === "run_ffmpeg")!.annotations?.openWorldHint, true);
 		assert.equal(tools.find((tool) => tool.name === "run_ffmpeg")!.annotations?.destructiveHint, true);
 		assert.equal(tools.find((tool) => tool.name === "run_ffprobe")!.annotations?.openWorldHint, true);
-		for (const name of ["read", "write", "edit", "bash", "powershell", "auto_memory", "get_settings", "update_settings", "run_create_agent"]) assert.ok(!tools.some((tool) => tool.name === name));
+		for (const name of ["read", "write", "edit", "bash", "powershell", "auto_memory", "run_create_agent", "comfy__generate"]) assert.ok(!tools.some((tool) => tool.name === name));
 		const library = await client.callTool({ name: "get_library", arguments: {} });
 		assert.equal((library.structuredContent as { rootPath: string }).rootPath, f.root);
 		const note = (await f.core.getLibrarySnapshot()).assets.find((asset) => asset.filename === "note.md")!;
@@ -77,12 +85,63 @@ test("real MCP client discovers 29 shared tools, reads portable results, and org
 		assert.equal((await f.core.getAsset(note.assetId))!.relativePath, "Archive/Notes/renamed.md");
 		await client.callTool({ name: "add_tag", arguments: { assetId: note.assetId, name: "MCP" } });
 		assert.deepEqual(await f.core.listTagUsage(), [{ name: "MCP", count: 1 }]);
-		for (const [name, args] of [["read_asset", { assetId: note.assetId, offset: 0 }], ["rename_asset", { assetId: note.assetId, stem: "../escape" }], ["create_folder", { parentRelativePath: "", name: ".loom" }], ["deep_search_assets", {}], ["get_settings", {}]] as const) {
+		for (const [name, args] of [["read_asset", { assetId: note.assetId, offset: 0 }], ["rename_asset", { assetId: note.assetId, stem: "../escape" }], ["create_folder", { parentRelativePath: "", name: ".loom" }], ["deep_search_assets", {}], ["get_settings", { chatProvider: 42 }], ["update_settings", {}], ["comfy__generate", {}]] as const) {
 			assert.equal((await client.callTool({ name, arguments: args })).isError, true);
 		}
 		assert.ok(f.tasks().some((task) => task.status === "completed" && task.client === "test-external-agent"));
 		const internal = f.executor.agentTools(() => f.core.bindLibraryTasks()).find((tool) => tool.name === "read_asset")!;
 		assert.deepEqual((await internal.execute({ assetId: note.assetId, offset: 2, limit: 2 }) as { data: unknown }).data, read.structuredContent);
+	} finally { await f.close(); }
+});
+
+test("a real MCP client reads and updates app settings without returning model keys", { timeout: 15_000 }, async () => {
+	let models = emptySettingsFile();
+	models.embedding.apiKey = "original-private-key";
+	let language: PublicSettings["language"] = "en";
+	let instructions = "";
+	let providerRead: string | undefined;
+	const read = async (provider?: string): Promise<PublicSettings> => {
+		providerRead = provider;
+		return {
+			language, instructions, sandbox: true, mcp: [],
+			chat: { providers: [], models: [], catalog: [], refreshErrors: {} },
+			models: {
+				embedding: publicModelSlot(models.embedding), rerank: publicModelSlot(models.rerank),
+				vlm: publicModelSlot(models.vlm), audio: publicModelSlot(models.audio),
+			},
+		};
+	};
+	const f = await fixture(token, { settings: {
+		read,
+		apply: async (patch) => {
+			if (patch.language !== undefined) language = patch.language;
+			if (patch.instructions !== undefined) instructions = patch.instructions;
+			if (patch.models) models = applyModelSettingsPatch(models, patch.models);
+			return { notes: ["Saved"], settings: await read() };
+		},
+	} });
+	try {
+		const { client } = await f.connect();
+		const initial = await client.callTool({ name: "get_settings", arguments: { chatProvider: "openai" } });
+		assert.equal(initial.isError, undefined);
+		assert.equal(providerRead, "openai");
+		assert.equal((initial.structuredContent as unknown as PublicSettings).models.embedding.hasApiKey, true);
+		assert.ok(!JSON.stringify(initial).includes("original-private-key"));
+		const updated = await client.callTool({ name: "update_settings", arguments: {
+			language: "zh-CN", instructions: "Configured through external MCP",
+			models: { embedding: { model: "external-model", apiKey: "replacement-private-key" } },
+		} });
+		assert.equal(updated.isError, undefined, JSON.stringify(updated));
+		assert.equal(models.embedding.apiKey, "replacement-private-key");
+		assert.ok(!JSON.stringify(updated).includes("replacement-private-key"));
+		const current = await client.callTool({ name: "get_settings", arguments: {} });
+		const settings = current.structuredContent as unknown as PublicSettings;
+		assert.equal(settings.language, "zh-CN");
+		assert.equal(settings.instructions, "Configured through external MCP");
+		assert.equal(settings.models.embedding.model, "external-model");
+		assert.equal(settings.models.embedding.hasApiKey, true);
+		assert.ok(!JSON.stringify(current).includes("replacement-private-key"));
+		assert.ok(f.tasks().some((task) => task.tool === "update_settings" && task.status === "completed"));
 	} finally { await f.close(); }
 });
 
@@ -124,7 +183,7 @@ test("an empty token accepts a real MCP client without authorization headers", {
 	const f = await fixture("");
 	try {
 		const { client } = await f.connect();
-		assert.equal((await client.listTools()).tools.length, 29);
+		assert.equal((await client.listTools()).tools.length, 31);
 		assert.equal((await client.callTool({ name: "list_tags", arguments: {} })).isError, undefined);
 		assert.equal((await fetch(f.service.url, { headers: { Origin: "https://evil.example" } })).status, 403);
 	} finally { await f.close(); }

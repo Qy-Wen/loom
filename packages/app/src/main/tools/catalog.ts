@@ -19,6 +19,6 @@ export function createAppToolCatalog(core: LocalCore, host: { assets: AssetToolO
 	];
 	return new ToolCatalog([
 		...library.map((tool) => ({ tool, scope: "library" as const, exposure: "external" as const })),
-		...createSettingsTools(host.settings).map((tool) => ({ tool, scope: "application" as const, exposure: "undecided" as const })),
+		...createSettingsTools(host.settings).map((tool) => ({ tool, scope: "application" as const, exposure: "external" as const })),
 	]);
 }

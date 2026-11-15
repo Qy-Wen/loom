@@ -305,7 +305,7 @@ export function createSettingsTools(host: SettingsToolHost): LoomTool[] {
 				"sandbox and instructions match Settings → Agent. Instructions apply on the next message, not this one. " +
 				"mcp.upsert adds or updates a server by id (stdio needs command; http needs url). mcp.remove deletes by id. Enabled servers reconnect. " +
 				"Changing the embedding, VLM, or audio model leaves previous write-ups unused until those files are indexed again. " +
-				"Basic and Standard ask before this runs.",
+				"The built-in Agent asks before this runs in Basic and Standard. External clients manage their own approvals.",
 			parameters: {
 				type: "object",
 				properties: {

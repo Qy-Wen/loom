@@ -1,7 +1,7 @@
 import type { Tool } from "@modelcontextprotocol/sdk/types.js";
 
 const READ_ONLY = new Set([
-	"get_library", "read_asset", "search_assets", "deep_search_assets", "inspect_asset", "run_ffprobe", "list_tags", "list_properties",
+	"get_library", "read_asset", "search_assets", "deep_search_assets", "inspect_asset", "run_ffprobe", "list_tags", "list_properties", "get_settings",
 ]);
 const ADDITIVE = new Set(["create_folder", "add_tag", "create_relation", "create_property", "grade_image"]);
 const LOCAL = new Set([

@@ -16,11 +16,12 @@ function catalog(core: LocalCore) {
 	});
 }
 
-test("application catalog shares 29 external definitions and keeps settings unexposed", () => {
+test("application catalog shares 31 external definitions including app settings", () => {
 	const tools = catalog({} as LocalCore);
 	assert.equal(tools.list("agent").length, 31);
-	assert.equal(tools.list("external").length, 29);
-	for (const name of ["get_settings", "update_settings", "auto_memory", "run_retrieve_agent", "run_create_agent", "bash", "powershell"]) {
+	assert.equal(tools.list("external").length, 31);
+	for (const name of ["get_settings", "update_settings"]) assert.equal(tools.get(name, "external").scope, "application");
+	for (const name of ["auto_memory", "run_retrieve_agent", "run_create_agent", "bash", "powershell", "comfy__generate"]) {
 		assert.throws(() => tools.get(name, "external"), /not available/);
 	}
 	const search = tools.get("deep_search_assets", "external").tool.parameters as { required: string[] };
