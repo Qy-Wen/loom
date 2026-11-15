@@ -11,6 +11,7 @@ export interface ChoiceOptions {
 	description: string;
 	tone?: ConfirmationTone;
 	choices: readonly ConfirmationChoice[];
+	checkbox?: { label: string; onChange: (checked: boolean) => void };
 }
 
 export interface ConfirmOptions extends Omit<ChoiceOptions, "choices"> {

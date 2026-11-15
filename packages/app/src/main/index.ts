@@ -42,6 +42,7 @@ import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, 
 import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
 import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from "./dev-trace-window.ts";
 import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
+import { pasteConflictResolver, resolvePasteConflict } from "./desktop/paste-conflicts.ts";
 import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
 import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
 import { ToolExecutor } from "@loom/agent/tools";
@@ -506,6 +507,31 @@ function registerChatIpc(): void {
 	});
 }
 
+const activePastes = new Set<number>();
+
+async function pasteWithConflicts(event: IpcMainInvokeEvent, absolutePaths: string[], destFolder: string, move: boolean) {
+	const owner = BrowserWindow.fromWebContents(event.sender);
+	if (!owner || owner.isDestroyed()) throw new Error("Paste window is closed");
+	const senderId = event.sender.id;
+	if (activePastes.has(senderId)) throw new Error("A paste is already in progress");
+	activePastes.add(senderId);
+	const controller = new AbortController();
+	const cancel = () => controller.abort();
+	const unsubscribe = localCore.subscribeLibrary((change) => { if (change.type === "reset") cancel(); });
+	event.sender.once("destroyed", cancel);
+	event.sender.once("did-start-navigation", cancel);
+	try {
+		controller.signal.throwIfAborted();
+		return await localCore.pastePathsInto(absolutePaths, destFolder, move, pasteConflictResolver(event.sender, controller.signal), controller.signal);
+	} finally {
+		controller.abort();
+		unsubscribe();
+		event.sender.removeListener("destroyed", cancel);
+		event.sender.removeListener("did-start-navigation", cancel);
+		activePastes.delete(senderId);
+	}
+}
+
 function registerIpc(): void {
 	ipcMain.handle(IPC.getAgentEndpoint, (): AgentEndpoint => {
 		if (!agentServer) throw new Error("Agent server not started");
@@ -639,9 +665,23 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.readFileClipboard, () => readFileClipboard());
 
-	ipcMain.handle(IPC.placePathsInto, async (_event, absolutePaths: string[], destFolder: string, move: boolean) => {
-		const placed = await localCore.placePathsInto(absolutePaths, destFolder, move);
-		if (move) {
+	ipcMain.handle(IPC.resolvePasteConflict, (event, id: number, choice: import("@loom/core").PasteChoice, applyAll: boolean) => {
+		resolvePasteConflict(event.sender.id, id, choice, applyAll);
+	});
+
+	ipcMain.handle(IPC.pasteLibraryItems, async (event, assetIds: string[], folders: string[], destFolder: string, move: boolean) => {
+		const paths: string[] = [];
+		for (const assetId of assetIds) {
+			const path = await localCore.getAssetFilePath(assetId);
+			if (path) paths.push(path);
+		}
+		for (const folder of folders) paths.push(localCore.getFolderFilePath(folder));
+		return pasteWithConflicts(event, paths, destFolder, move);
+	});
+
+	ipcMain.handle(IPC.placePathsInto, async (event, absolutePaths: string[], destFolder: string, move: boolean) => {
+		const placed = await pasteWithConflicts(event, absolutePaths, destFolder, move);
+		if (move && !placed.cancelled) {
 			try {
 				clipboard.clear();
 			} catch {

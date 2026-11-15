@@ -13,6 +13,9 @@ import type {
 	AssetRelationsResult,
 	LibraryChange,
 	LibrarySnapshot,
+	PastedLibraryItems,
+	PasteConflict,
+	PasteChoice,
 	PropertyDefinition,
 	PropertySnapshot,
 	PropertyType,
@@ -130,6 +133,9 @@ export const IPC = {
 	copyLibraryPaths: "loom:copyLibraryPaths",
 	readFileClipboard: "loom:readFileClipboard",
 	placePathsInto: "loom:placePathsInto",
+	pasteLibraryItems: "loom:pasteLibraryItems",
+	pasteConflict: "loom:pasteConflict",
+	resolvePasteConflict: "loom:resolvePasteConflict",
 	getPropertySnapshot: "loom:getPropertySnapshot",
 	createProperty: "loom:createProperty",
 	updateProperty: "loom:updateProperty",
@@ -246,7 +252,10 @@ export interface LoomApi {
 	trashLibraryItems: (assetIds: string[], folders: string[]) => Promise<boolean>;
 	copyLibraryPaths: (assetIds: string[], folders: string[]) => Promise<void>;
 	readFileClipboard: () => Promise<{ paths: string[]; move: boolean } | null>;
-	placePathsInto: (absolutePaths: string[], destFolder: string, move: boolean) => Promise<{ assets: Asset[]; folders: string[] }>;
+	placePathsInto: (absolutePaths: string[], destFolder: string, move: boolean) => Promise<PastedLibraryItems>;
+	pasteLibraryItems: (assetIds: string[], folders: string[], destFolder: string, move: boolean) => Promise<PastedLibraryItems>;
+	onPasteConflict: (listener: (request: { id: number; conflict: PasteConflict | null }) => void) => () => void;
+	resolvePasteConflict: (id: number, choice: PasteChoice, applyAll: boolean) => Promise<void>;
 	getPropertySnapshot: () => Promise<PropertySnapshot>;
 	createProperty: (name: string, type: PropertyType) => Promise<PropertyDefinition>;
 	updateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<PropertyDefinition>;

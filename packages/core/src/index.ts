@@ -2,6 +2,8 @@
 // HTTP embedding, grading helpers, and process sandboxing have separate package entry points.
 export { LocalCore } from "./local-core.ts";
 export { LibraryPaths } from "./library/paths.ts";
+export type { PastedLibraryItems } from "./library/library.ts";
+export type { PasteConflict, PasteChoice, ResolvePasteConflict } from "./library/paste.ts";
 export { resolveMediaBinary, tryResolveMediaBinaries } from "./media/binaries.ts";
 export type { MediaProgram } from "./media/binaries.ts";
 

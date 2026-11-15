@@ -37,6 +37,13 @@ const api: LoomApi = {
 	copyLibraryPaths: (assetIds, folders) => ipcRenderer.invoke(IPC.copyLibraryPaths, assetIds, folders),
 	readFileClipboard: () => ipcRenderer.invoke(IPC.readFileClipboard),
 	placePathsInto: (absolutePaths, destFolder, move) => ipcRenderer.invoke(IPC.placePathsInto, absolutePaths, destFolder, move),
+	pasteLibraryItems: (assetIds, folders, destFolder, move) => ipcRenderer.invoke(IPC.pasteLibraryItems, assetIds, folders, destFolder, move),
+	onPasteConflict: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, request: Parameters<typeof listener>[0]) => listener(request);
+		ipcRenderer.on(IPC.pasteConflict, handler);
+		return () => ipcRenderer.removeListener(IPC.pasteConflict, handler);
+	},
+	resolvePasteConflict: (id, choice, applyAll) => ipcRenderer.invoke(IPC.resolvePasteConflict, id, choice, applyAll),
 	getPropertySnapshot: () => ipcRenderer.invoke(IPC.getPropertySnapshot),
 	createProperty: (name, type) => ipcRenderer.invoke(IPC.createProperty, name, type),
 	updateProperty: (propertyId, name, type) =>

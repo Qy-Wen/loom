@@ -20,6 +20,7 @@ import {
 	wouldNestInside,
 } from "./names.ts";
 import { LibraryPaths } from "./paths.ts";
+import { pastePaths, type ResolvePasteConflict } from "./paste.ts";
 import { reconcileOpenAssets, type ReconcileDiskFile } from "./reconcile.ts";
 import { releaseProcessSandbox, setProcessSandboxRoot } from "../sandbox/process-sandbox.ts";
 import { LibraryWatcher, type LibraryFileEvent } from "./watcher.ts";
@@ -29,6 +30,11 @@ type LibraryListener = (change: LibraryChange) => void;
 export interface PlacedLibraryItems {
 	assets: Asset[];
 	folders: string[];
+}
+
+export interface PastedLibraryItems extends PlacedLibraryItems {
+	cancelled: boolean;
+	movedFolders: { from: string; to: string }[];
 }
 
 type PlacedEntry =
@@ -331,6 +337,74 @@ export class Library {
 			return { assets, folders };
 		} finally {
 			if (watching) await this.resumeWatcher();
+		}
+	}
+
+	/** Interactive paste: merge directories and ask the caller about file conflicts. */
+	async pastePathsInto(absolutePaths: string[], destFolder: string, move: boolean, resolveConflict: ResolvePasteConflict, signal?: AbortSignal): Promise<PastedLibraryItems> {
+		const paths = this.requirePaths();
+		await this.requireDirectory(destFolder);
+		const watching = await this.pauseWatcher();
+		const checkActive = () => {
+			signal?.throwIfAborted();
+			if (this.paths !== paths) throw new Error("The library changed during paste");
+		};
+		const toRelative = (path: string): string | undefined => {
+			try { return paths.toRelativePath(path); } catch { return undefined; }
+		};
+		try {
+			const result = await pastePaths(rootAbsolutePaths(absolutePaths), this.folderAbsolute(destFolder), {
+				paths, move, resolveConflict, checkActive,
+				onPlaced: async (source, destination, directory, replacedDirectory) => {
+					checkActive();
+					const sourceRelative = toRelative(source);
+					const targetRelative = paths.toRelativePath(destination);
+					if (replacedDirectory) await this.forgetFolder(targetRelative);
+					else if (directory) {
+						const replaced = await this.metadata.getAssetByPath(targetRelative);
+						if (replaced) await this.forgetAsset(replaced.assetId);
+					}
+					if (move && sourceRelative) {
+						if (directory) await this.rewriteFolderPrefix(sourceRelative, targetRelative);
+						else {
+							const asset = await this.metadata.getAssetByPath(sourceRelative);
+							if (asset) await this.handlers.upsertAsset({ ...asset, relativePath: targetRelative, filename: basename(destination) });
+						}
+					}
+					if (directory) await this.indexTree(targetRelative);
+					else await this.indexFile(targetRelative);
+				},
+				onMerged: async (source) => {
+					checkActive();
+					const sourceRelative = toRelative(source);
+					if (sourceRelative) await this.forgetFolder(sourceRelative);
+				},
+			});
+			checkActive();
+			const assets: Asset[] = [];
+			const folders: string[] = [];
+			for (const path of result.placed) {
+				const relativePath = paths.toRelativePath(path);
+				if ((await stat(path)).isDirectory()) folders.push(relativePath);
+				else {
+					const asset = await this.metadata.getAssetByPath(relativePath);
+					if (asset) assets.push(asset);
+				}
+			}
+			return {
+				assets, folders, cancelled: result.cancelled,
+				movedFolders: result.moved.flatMap(({ from, to }) => {
+					const source = toRelative(from);
+					const target = paths.toRelativePath(to);
+					return source && folders.includes(target) ? [{ from: source, to: target }] : [];
+				}),
+			};
+		} finally {
+			if (this.paths === paths) {
+				// Includes partial completion and edits made outside Loom while a dialog was open.
+				try { await this.syncFromDisk(true); }
+				finally { if (watching) await this.resumeWatcher(); }
+			}
 		}
 	}
 

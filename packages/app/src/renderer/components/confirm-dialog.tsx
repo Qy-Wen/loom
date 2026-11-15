@@ -22,6 +22,7 @@ export function ConfirmationProvider({ children }: { children: ReactNode }): Rea
 export function useConfirmation(scope?: unknown): {
 	confirm: (options: ConfirmOptions) => Promise<boolean>;
 	choose: (options: ChoiceOptions) => Promise<string | null>;
+	cancel: () => void;
 } {
 	const queue = useContext(ConfirmationContext);
 	if (!queue) throw new Error("ConfirmationProvider is missing");
@@ -32,6 +33,7 @@ export function useConfirmation(scope?: unknown): {
 			await queue.request({ ...options, choices: [{ id: "confirm", label: confirmLabel, primary: true }] }, owner.current)
 		) === "confirm",
 		choose: (options: ChoiceOptions) => queue.request(options, owner.current),
+		cancel: () => queue.cancel(owner.current),
 	}), [queue]);
 }
 
@@ -47,6 +49,7 @@ function ConfirmationDialog({ request, onResult }: {
 	const titleId = useId();
 	const descriptionId = useId();
 	const tone = request.tone ?? "normal";
+	const [checked, setChecked] = useState(false);
 
 	useLayoutEffect(() => {
 		const dialog = dialogRef.current!;
@@ -61,8 +64,8 @@ function ConfirmationDialog({ request, onResult }: {
 				event.preventDefault();
 				resultRef.current(null);
 			} else if (event.key === "Tab") {
-				const buttons = dialog.querySelectorAll<HTMLButtonElement>("button");
-				const first = buttons[0]!, last = buttons[buttons.length - 1]!;
+				const controls = dialog.querySelectorAll<HTMLElement>("input, button");
+				const first = controls[0]!, last = controls[controls.length - 1]!;
 				if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
 				else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
 			} else if ((event.ctrlKey || event.metaKey) && !["c", "a"].includes(event.key.toLowerCase())) {
@@ -114,6 +117,15 @@ function ConfirmationDialog({ request, onResult }: {
 				<div className="confirmation-copy">
 					<h2 id={titleId}>{request.title}</h2>
 					<p id={descriptionId} className="confirmation-description">{request.description}</p>
+					{request.checkbox && (
+						<label className="confirmation-checkbox">
+							<input type="checkbox" checked={checked} onChange={(event) => {
+								setChecked(event.target.checked);
+								request.checkbox!.onChange(event.target.checked);
+							}} />
+							<span>{request.checkbox.label}</span>
+						</label>
+					)}
 				</div>
 			</div>
 			<div className="confirmation-actions">

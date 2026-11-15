@@ -65,6 +65,31 @@
 	margin-top: var(--lm-space-7);
 }
 
+.confirmation-checkbox {
+	display: flex;
+	align-items: flex-start;
+	gap: var(--lm-space-3);
+	margin-top: var(--lm-space-6);
+	color: var(--lm-text-body);
+	font-size: var(--lm-text-size-sm);
+	line-height: 1.6;
+	cursor: pointer;
+}
+
+.confirmation-checkbox input {
+	flex: 0 0 auto;
+	width: 14px;
+	height: 14px;
+	margin: 3px 0 0;
+	accent-color: var(--lm-accent-solid);
+	cursor: pointer;
+}
+
+.confirmation-checkbox input:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 2px;
+}
+
 .confirmation-actions button {
 	min-width: 72px;
 	padding: var(--lm-space-3) var(--lm-space-6);

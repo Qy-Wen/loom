@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { isGradeableVideo } from "./grade/types.ts";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
+import type { ResolvePasteConflict } from "./library/paste.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
@@ -290,6 +291,10 @@ export class LocalCore {
 
 	placePathsInto(absolutePaths: string[], destFolder: string, move: boolean) {
 		return this.library.placePathsInto(absolutePaths, destFolder, move);
+	}
+
+	pastePathsInto(absolutePaths: string[], destFolder: string, move: boolean, resolveConflict: ResolvePasteConflict, signal?: AbortSignal) {
+		return this.library.pastePathsInto(absolutePaths, destFolder, move, resolveConflict, signal);
 	}
 
 	getFolderFilePath(relativePath: string): string {

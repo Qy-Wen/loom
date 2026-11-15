@@ -21,6 +21,7 @@ import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import type { AgentEndpoint } from "../shared/ipc.ts";
 import { useLocale } from "./locale.tsx";
 import { useConfirmation } from "./components/confirm-dialog.tsx";
+import { usePasteConflicts } from "./library/use-paste-conflicts.ts";
 import { useChatTooltips } from "./chat/use-chat-tooltips.ts";
 import type { AssetRefAttachment } from "@loom/agent";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
@@ -144,6 +145,7 @@ export function App(): React.JSX.Element {
 	const [endpoint, setEndpoint] = useState<AgentEndpoint | null>(null);
 	const [library, setLibrary] = useState<LibrarySnapshot>(EMPTY_LIBRARY);
 	const { confirm } = useConfirmation(library.rootPath);
+	usePasteConflicts(library.rootPath);
 	const [picked, setPicked] = useState<TreeSelection>(emptyTreeSelection);
 	// The icon-mode tree shows `picked` only while it made that selection itself; a tile click in the browser replaces it.
 	const [treePicked, setTreePicked] = useState<TreeSelection | null>(null);
@@ -765,7 +767,8 @@ export function App(): React.JSX.Element {
 		if (absolutePaths.length === 0) return;
 		setError(null);
 		try {
-			showPlaced(destFolder, await window.loom.placePathsInto(absolutePaths, destFolder, move));
+			const placed = await window.loom.placePathsInto(absolutePaths, destFolder, move);
+			if (placed.assets.length || placed.folders.length) showPlaced(destFolder, placed);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -777,18 +780,10 @@ export function App(): React.JSX.Element {
 				setError(null);
 				try {
 					const move = libraryClipboard.mode === "cut";
-					const next = libraryClipboard.assetIds.length > 0
-						? await (move ? window.loom.moveAssetsInto : window.loom.copyAssetsInto)(libraryClipboard.assetIds, destFolder)
-						: [];
-					const folders: string[] = [];
-					const placeFolder = move ? window.loom.moveFolderInto : window.loom.copyFolderInto;
-					for (const folder of libraryClipboard.folders) {
-						const placed = await placeFolder(folder, destFolder);
-						folders.push(placed);
-						if (move) followFolder(folder, placed);
-					}
-					showPlaced(destFolder, { assets: next, folders });
-					if (move) setLibraryClipboard(null);
+					const placed = await window.loom.pasteLibraryItems(libraryClipboard.assetIds, libraryClipboard.folders, destFolder, move);
+					for (const folder of placed.movedFolders) followFolder(folder.from, folder.to);
+					if (placed.assets.length || placed.folders.length) showPlaced(destFolder, placed);
+					if (move && !placed.cancelled) setLibraryClipboard(null);
 				} catch (cause) {
 					setError(cause instanceof Error ? cause.message : String(cause));
 				}
