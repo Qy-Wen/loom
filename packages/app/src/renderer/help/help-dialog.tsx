@@ -44,7 +44,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }): React.JSX.Elem
 				pressedBackdrop.current = false;
 			}}
 		>
-			<div ref={dialogRef} className="settings-dialog help-dialog" role="dialog" aria-modal="true" aria-labelledby="help-title">
+			<div ref={dialogRef} className="settings-dialog help-dialog thin-scroll" role="dialog" aria-modal="true" aria-labelledby="help-title">
 				<div className="settings-header">
 					<h2 id="help-title">{t.help.title}</h2>
 					<button className="icon-button" type="button" onClick={onClose} aria-label={t.help.close}>×</button>
@@ -53,7 +53,7 @@ export function HelpDialog({ onClose }: { onClose: () => void }): React.JSX.Elem
 					<nav className="help-nav" aria-label={t.help.topics}>
 						{t.help.groups.map((group) => (
 							<div key={group.title} className="help-group">
-								<div className="help-group-title" id={`help-group-${group.sections[0]?.id}`}>{group.title}</div>
+								<h3 className="help-group-title" id={`help-group-${group.sections[0]?.id}`}>{group.title}</h3>
 								<div role="tablist" aria-orientation="vertical" aria-labelledby={`help-group-${group.sections[0]?.id}`}>
 									{group.sections.map((item) => (
 										<button
@@ -75,7 +75,12 @@ export function HelpDialog({ onClose }: { onClose: () => void }): React.JSX.Elem
 												setSelected(next.id); bodyRef.current?.scrollTo({ top: 0 });
 												dialogRef.current?.querySelector<HTMLElement>(`#help-tab-${next.id}`)?.focus();
 											}}
-										>{item.title}</button>
+										>
+											<span className="help-topic-title">{item.title}</span>
+											<svg className="help-topic-arrow" width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+												<path d="m6 4 4 4-4 4" />
+											</svg>
+										</button>
 									))}
 								</div>
 							</div>
