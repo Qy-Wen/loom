@@ -159,8 +159,8 @@ export function LibrarySidebar({
 			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => {
-				// Keep native button activation while arrow keys navigate the focused folder tree.
-				if (iconMode && event.key === "Enter") return;
+				// Toolbar buttons keep native Enter activation; folder rows use tree keyboard navigation.
+				if (event.key === "Enter" && event.target instanceof Element && event.target.closest("button") && !event.target.closest(".folder-row .folder-main")) return;
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>

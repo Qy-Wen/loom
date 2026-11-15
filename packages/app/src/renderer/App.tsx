@@ -676,8 +676,8 @@ export function App(): React.JSX.Element {
 		setRenamingFolder({ relativePath, view: fromTree || !iconMode ? "tree" : "browser" });
 	}
 
-	function pasteDestination(selection: TreeSelection = picked): string {
-		if (iconMode) return browsedPath();
+	function pasteDestination(selection: TreeSelection, fromTree: boolean): string {
+		if (iconMode && !fromTree) return browsedPath();
 		const focus = selection.focus;
 		if (!focus) return "";
 		if (focus.startsWith("folder:")) return focus.slice("folder:".length);
@@ -901,10 +901,9 @@ export function App(): React.JSX.Element {
 	}
 
 	async function showFolderContextMenu(relativePath: string, fromTree = false): Promise<void> {
-		const next = contextSelection(picked, folderKey(relativePath));
+		const next = contextSelection(fromTree ? treeSelection() : picked, folderKey(relativePath));
 		setPicked(next);
-		// Right-clicking inside the tree's own selection keeps the tree showing it.
-		if (treeOwnsPick && picked.keys.includes(folderKey(relativePath))) setTreePicked(next);
+		if (iconMode && fromTree) setTreePicked(next);
 		setError(null);
 		try {
 			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
@@ -1006,11 +1005,12 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function revealSelected(): Promise<void> {
+	async function revealSelected(selection: TreeSelection): Promise<void> {
 		setError(null);
 		try {
-			if (selectedFolder) await window.loom.revealFolder(selectedFolder);
-			else if (selectedAssetId) await window.loom.revealAsset(selectedAssetId);
+			const cursor = cursorsForKeys(selection.focus ? [selection.focus] : [], library.assets)[0];
+			if (cursor?.kind === "folder") await window.loom.revealFolder(cursor.relativePath);
+			else if (cursor?.kind === "asset") await window.loom.revealAsset(cursor.assetId);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -1038,43 +1038,43 @@ export function App(): React.JSX.Element {
 	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean, fromTree = false): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
 		if (!library.rootPath) return;
+		const selection = fromTree ? treeSelection() : picked;
 		const mod = event.metaKey || event.ctrlKey;
 		const key = event.key.toLowerCase();
 		const mac = uiPlatform(navigator.userAgent) === "mac";
 		if (event.altKey && mod && event.code === "KeyC") {
 			event.preventDefault();
-			void copySelectionPaths();
+			void copySelectionPaths(selection);
 		} else if (event.altKey && mod && event.code === "KeyR") {
 			event.preventDefault();
-			void revealSelected();
+			void revealSelected(selection);
 		} else if (mod && !event.altKey && !event.shiftKey && key === "a") {
 			event.preventDefault();
 			pickRows(selectVisible, rows, fromTree);
 		} else if (mod && !event.altKey && key === "c") {
 			event.preventDefault();
-			copySelection();
+			copySelection(selection);
 		} else if (mod && !event.altKey && key === "x") {
 			event.preventDefault();
-			cutSelection();
+			cutSelection(selection);
 		} else if (mod && !event.altKey && key === "v") {
 			event.preventDefault();
-			void pasteInto(pasteDestination());
+			void pasteInto(pasteDestination(selection, fromTree));
 		} else if (mod && !event.altKey && !event.shiftKey && key === "d") {
 			event.preventDefault();
-			void duplicateSelection();
+			void duplicateSelection(selection);
 		} else if (event.key === "F2") {
 			event.preventDefault();
-			const selection = fromTree ? treeSelection() : picked;
 			if (selection.keys.length !== 1) return;
 			if (selection.focus?.startsWith("folder:")) beginFolderRename(selection.focus.slice("folder:".length), fromTree);
 			else if (selection.focus?.startsWith("asset:")) setRenamingAssetId(selection.focus.slice("asset:".length));
 		} else if (mod && event.shiftKey && key === "n") {
 			event.preventDefault();
-			void createFolderIn(pasteDestination(), fromTree);
+			void createFolderIn(pasteDestination(selection, fromTree), fromTree);
 		} else if (isLibraryTrashKey(event, mac)) {
 			event.preventDefault();
 			setError(null);
-			void trashSelection()
+			void trashSelection(selection)
 				.then((removed) => {
 					if (removed) clearLibrarySelection();
 				})
@@ -1087,7 +1087,6 @@ export function App(): React.JSX.Element {
 			pickRows((current, all) => extendSelection(current, all, event.key as "ArrowUp" | "ArrowDown" | "Home" | "End"), rows, fromTree);
 		} else if (!mod && !event.altKey && !event.shiftKey && isTreeNavKey(event.key)) {
 			if (event.currentTarget instanceof HTMLElement) event.currentTarget.focus();
-			const selection = fromTree ? treeSelection() : picked;
 			const cursor = cursorsForKeys(selection.focus ? [selection.focus] : [], library.assets)[0] ?? null;
 			const motion = treeMotion(rows, cursor, event.key, folding);
 			if (motion.type === "none") {
