@@ -248,7 +248,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 			if (event.target === event.currentTarget && closeOnBackdrop.current) void close();
 			closeOnBackdrop.current = false;
 		}}>
-			<div className="settings-dialog" role="dialog" aria-labelledby="settings-title">
+			<div className="settings-dialog thin-scroll" role="dialog" aria-labelledby="settings-title">
 				<div className="settings-header">
 					<h2 id="settings-title">{t.settings.title}</h2>
 					<button className="icon-button" type="button" onClick={() => void close()} aria-label={t.settings.close}>×</button>
