@@ -89,7 +89,6 @@ Everything Loom writes to the system temp directory lives under one root, never 
 
 ```
 <os.tmpdir()>/loom/
-├── grade/run-*/{preview,frames}/   -- ffmpeg stills for the grade panel; one run-* per media service
 ├── vlm-frames/run-*/               -- video frames sent to the VLM; removed after each asset
 ├── audio/run-*/                    -- compressed audio for transcription; removed after each asset
 ├── composer/run-*/                 -- staging for clipboard images bound for Inbox/; removed after import
@@ -97,7 +96,7 @@ Everything Loom writes to the system temp directory lives under one root, never 
 └── e2e/<pid>/                      -- Electron userData while Playwright runs
 ```
 
-Only `core/src/temp.ts` builds these paths, and none is hard-coded to `/tmp` (the process sandbox may write only the library and `os.tmpdir()`). At startup the app deletes anything older than 24 hours.
+Only `core/src/temp.ts` builds these paths, and none is hard-coded to `/tmp` (the process sandbox may write only the library and `os.tmpdir()`). At startup the app deletes anything older than 24 hours. Grading previews use a lossless decoded-frame cache in memory (up to four frames and 96 MiB of pixel data), invalidated when a source changes or the library closes. FFmpeg pipes JPEG bytes directly to the app; preview IPC uses binary data.
 
 - The user owns asset names, locations, and nesting.
 - **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. `.loom/` is user data, not a cache, except `.loom/thumbnails/`, which can be deleted at any time. Tags, favorites, properties, relations, chat sessions, memory, and skills exist only there, with no backup or export, and each asset's id is stored there too. If `.loom/` is lost or damaged, search indexes and write-ups can be rebuilt, but the rest is gone; asset files are unaffected. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).

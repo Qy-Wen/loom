@@ -85,9 +85,9 @@ test("grade preview works when TMPDIR points at a missing directory, and leaves 
 			const id = snapshot.assets.find((asset) => asset.relativePath === "still.png")!.assetId;
 			const preview = await core.previewImageGrade(id, { exposure: 1 });
 			assert.ok(preview && preview.length > 100);
-			assert.deepEqual(await readdir(join(missing, TEMP_ROOT_NAME, "grade")).then((names) => names.length), 1);
+			assert.deepEqual(await readdir(join(missing, TEMP_ROOT_NAME, "grade")).catch(() => []), []);
 			await core.close();
-			assert.deepEqual(await readdir(join(missing, TEMP_ROOT_NAME, "grade")), []);
+			assert.deepEqual(await readdir(join(missing, TEMP_ROOT_NAME, "grade")).catch(() => []), []);
 			assert.equal((await readdir(join(missing, TEMP_ROOT_NAME))).some((name) => name.startsWith("loom-")), false);
 		});
 	} finally {

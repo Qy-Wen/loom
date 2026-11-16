@@ -10,6 +10,9 @@ export interface RunMediaProcessOptions {
 	cwd?: string;
 	timeoutMs?: number;
 	signal?: AbortSignal;
+	/** Binary stdin, used for in-memory preview frames. */
+	input?: Uint8Array;
+	maxOutputBytes?: number;
 }
 
 export interface RunMediaProcessResult {
@@ -17,11 +20,28 @@ export interface RunMediaProcessResult {
 	stderr: string;
 }
 
+export interface RunMediaProcessBufferResult {
+	stdout: Buffer;
+	stderr: string;
+}
+
+export class MediaOutputLimitError extends Error {
+	constructor() {
+		super("Media process output exceeds its memory limit");
+		this.name = "MediaOutputLimitError";
+	}
+}
+
 /**
  * Single process entry for bundled ffmpeg/ffprobe. A turned-on sandbox wraps the
  * child. Callers do not change.
  */
-export function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+export async function runMediaProcess(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+	const result = await runMediaProcessBuffer(options);
+	return { stdout: result.stdout.toString("utf8"), stderr: result.stderr };
+}
+
+export function runMediaProcessBuffer(options: RunMediaProcessOptions): Promise<RunMediaProcessBufferResult> {
 	const signal = options.signal;
 	if (signal?.aborted) return Promise.reject(abortError(options.program));
 	// sandboxedArgv also gates direct execution while fallback is settling.
@@ -42,14 +62,14 @@ function keepFatalLogs(args: string[]): string[] {
 	return prepared;
 }
 
-function runDirect(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+function runDirect(options: RunMediaProcessOptions): Promise<RunMediaProcessBufferResult> {
 	const binary = resolveMediaBinary(options.program);
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
-	const child = spawnProgram(binary, options.args, { cwd: options.cwd });
+	const child = spawnProgram(binary, options.args, { cwd: options.cwd, input: options.input !== undefined });
 	return watchChild(child, options, timeoutMs);
 }
 
-async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaProcessResult> {
+async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaProcessBufferResult> {
 	const signal = options.signal;
 	const binary = resolveMediaBinary(options.program);
 	const timeoutMs = options.timeoutMs ?? (options.program === "ffprobe" ? 20_000 : 10 * 60_000);
@@ -70,7 +90,7 @@ async function runSandboxed(options: RunMediaProcessOptions): Promise<RunMediaPr
 		env: wrapped.env,
 		shell: false,
 		detached: process.platform !== "win32",
-		stdio: ["ignore", "pipe", "pipe"],
+		stdio: [options.input === undefined ? "ignore" : "pipe", "pipe", "pipe"],
 		windowsHide: true,
 	});
 	return watchChild(child, options, timeoutMs);
@@ -80,7 +100,7 @@ function watchChild(
 	child: ChildProcess,
 	options: RunMediaProcessOptions,
 	timeoutMs: number,
-): Promise<RunMediaProcessResult> {
+): Promise<RunMediaProcessBufferResult> {
 	const signal = options.signal;
 	const stdoutStream = child.stdout;
 	const stderrStream = child.stderr;
@@ -89,7 +109,8 @@ function watchChild(
 		return Promise.reject(new Error(`${options.program} produced no output pipes`));
 	}
 	return new Promise((resolve, reject) => {
-		let stdout = "";
+		const stdout: Buffer[] = [];
+		let outputBytes = 0;
 		let stderr = "";
 		let settled = false;
 
@@ -104,7 +125,7 @@ function watchChild(
 			signal?.removeEventListener("abort", onAbort);
 			if (signal?.aborted) reject(abortError(options.program));
 			else if (error) reject(error);
-			else resolve({ stdout, stderr });
+			else resolve({ stdout: Buffer.concat(stdout, outputBytes), stderr });
 		};
 
 		const timer = setTimeout(() => {
@@ -117,10 +138,16 @@ function watchChild(
 			else signal.addEventListener("abort", onAbort, { once: true });
 		}
 
-		stdoutStream.setEncoding("utf8");
 		stderrStream.setEncoding("utf8");
-		stdoutStream.on("data", (chunk: string) => {
-			stdout += chunk;
+		stdoutStream.on("data", (chunk: Buffer) => {
+			if (settled) return;
+			outputBytes += chunk.length;
+			if (options.maxOutputBytes !== undefined && outputBytes > options.maxOutputBytes) {
+				stopChild(child);
+				finish(new MediaOutputLimitError());
+				return;
+			}
+			stdout.push(chunk);
 		});
 		stderrStream.on("data", (chunk: string) => {
 			stderr += chunk;
@@ -139,13 +166,19 @@ function watchChild(
 			if (refused) finish(new Error(`ffmpeg refused to overwrite existing file: ${refused[1]}. Choose a new filename or pass -y to overwrite.`));
 			else finish();
 		});
+		if (child.stdin) {
+			// FFmpeg may stop after one frame before consuming the container trailer.
+			// Its exit status and stderr report failures; an early EPIPE is harmless.
+			child.stdin.on("error", () => {});
+			child.stdin.end(options.input);
+		}
 	});
 }
 
 function spawnProgram(
 	binary: string,
 	args: string[],
-	options: { cwd?: string; env?: NodeJS.ProcessEnv; detached?: boolean },
+	options: { cwd?: string; env?: NodeJS.ProcessEnv; detached?: boolean; input?: boolean },
 ): ChildProcess {
 	// Node refuses to CreateProcess a .cmd/.bat (EINVAL). cmd.exe can run them.
 	if (process.platform === "win32" && /\.(?:cmd|bat)$/i.test(binary)) {
@@ -155,7 +188,7 @@ function spawnProgram(
 			cwd: options.cwd,
 			env: options.env,
 			detached: options.detached,
-			stdio: ["ignore", "pipe", "pipe"],
+			stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
 			windowsHide: true,
 		});
 	}
@@ -163,7 +196,7 @@ function spawnProgram(
 		cwd: options.cwd,
 		env: options.env,
 		detached: options.detached,
-		stdio: ["ignore", "pipe", "pipe"],
+		stdio: [options.input ? "pipe" : "ignore", "pipe", "pipe"],
 		windowsHide: true,
 	});
 }

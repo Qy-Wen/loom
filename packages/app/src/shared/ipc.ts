@@ -351,11 +351,11 @@ export interface LoomApi {
 	getCommandAllows: () => Promise<CommandAllowView>;
 	onCommandAllowsChanged: (listener: (view: CommandAllowView) => void) => () => void;
 	/** JPEG bytes, base64. Null when the grade leaves the image unchanged. */
-	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
+	previewImageGrade: (assetId: string, grade: ImageGrade, lut?: string, force?: boolean) => Promise<Uint8Array | null>;
 	saveImageGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;
 	getVideoGradeInfo: (assetId: string) => Promise<{ duration: number }>;
 	/** JPEG bytes of one graded frame, base64. Null when the grade leaves the frame unchanged. */
-	previewVideoGrade: (assetId: string, timeSeconds: number, grade: ImageGrade, lut?: string, force?: boolean) => Promise<string | null>;
+	previewVideoGrade: (assetId: string, timeSeconds: number, grade: ImageGrade, lut?: string, force?: boolean) => Promise<Uint8Array | null>;
 	saveVideoGrade: (assetId: string, grade: ImageGrade, lut?: string, output?: string) => Promise<{ assetId: string; path: string }>;
 	/** Library-relative path, or null when the dialog is canceled. */
 	pickGradeOutput: (assetId: string) => Promise<string | null>;

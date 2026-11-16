@@ -252,10 +252,10 @@ test("gradeVideo writes a new movie from the current recipe", async (t) => {
 		assert.equal(await core.previewVideoGrade(source.assetId, 0, {}), null);
 
 		const plain = await core.previewVideoGrade(source.assetId, 0, {}, undefined, true);
-		assert.ok(plain && plain.startsWith("/9j/"));
+		assert.ok(plain && Buffer.from(plain.subarray(0, 3)).toString("hex") === "ffd8ff");
 		const gradedPreview = await core.previewVideoGrade(source.assetId, 0, { exposure: 1 });
-		assert.ok(gradedPreview && gradedPreview.startsWith("/9j/"));
-		assert.notEqual(gradedPreview, plain);
+		assert.ok(gradedPreview && Buffer.from(gradedPreview.subarray(0, 3)).toString("hex") === "ffd8ff");
+		assert.notDeepEqual(gradedPreview, plain);
 
 		const graded = await core.gradeVideo({
 			path: "clip.mp4",
@@ -279,7 +279,7 @@ function pngSize(bytes: Buffer): { w: number; h: number } {
 	return { w: bytes.readUInt32BE(16), h: bytes.readUInt32BE(20) };
 }
 
-test("grade scratch files live outside the library and are removed when the library closes", async (t) => {
+test("grade previews stay in memory and leave no scratch files", async (t) => {
 	if (!tryResolveMediaBinaries()) {
 		t.skip("bundled ffmpeg is not installed; run pnpm vendor:ffmpeg");
 		return;
@@ -301,7 +301,7 @@ test("grade scratch files live outside the library and are removed when the libr
 		const preview = await core.previewImageGrade(source.assetId, { exposure: 1 });
 		assert.ok(preview && preview.length > 100);
 		const created = (await scratchDirs()).filter((name) => !before.has(name));
-		assert.equal(created.length, 1);
+		assert.equal(created.length, 0);
 		await assert.rejects(stat(join(root, ".loom", "cache")), { code: "ENOENT" });
 
 		await writeFile(join(outside, "look.cube"), "LUT_3D_SIZE 2\n0 0 0\n1 0 0\n0 1 0\n1 1 0\n0 0 1\n1 0 1\n0 1 1\n1 1 1\n");

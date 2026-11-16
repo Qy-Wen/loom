@@ -1,10 +1,8 @@
-import { randomUUID } from "node:crypto";
-import { access, mkdir, readFile, rm } from "node:fs/promises";
+import { access, mkdir } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import {
 	buildGradeImageArgs,
 	buildGradeVideoArgs,
-	buildGradeVideoFrameArgs,
 	buildImageGradeFilter,
 	gradeExportExtension,
 	gradeSiblingRelative,
@@ -28,15 +26,12 @@ import { buildProbeArgs } from "./operations.ts";
 import { parseFfprobeJson } from "./probe.ts";
 import { prepareFfmpegArgs, resolveMediaPath } from "./policy.ts";
 import { runMediaProcess } from "./run.ts";
-import { makeTempDir } from "../temp.ts";
+import { GradePreview } from "./grade-preview.ts";
 
 export class MediaService {
 	private readonly library: Library;
 	private readonly run: typeof runMediaProcess;
-	/** One decoded preview frame per source, so a slider move does not seek again. */
-	private readonly gradeFrames = new Map<string, { timeMs: number; file: string }>();
-	/** Private scratch directory under the OS temp dir, so a crash never leaves files in the library. Created on first use. */
-	private scratch: Promise<string> | undefined;
+	private readonly previews = new GradePreview();
 
 	constructor(library: Library, run: typeof runMediaProcess = runMediaProcess) {
 		this.library = library;
@@ -108,32 +103,13 @@ export class MediaService {
 	async previewVideoGrade(args: PreviewVideoGradeArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
 		const prepared = this.prepareVideoGrade(args);
 		if (!prepared.filter && !force) return null;
-		const timeSeconds = clampGradeTime(args.timeSeconds);
-		const frame = await this.gradeFrame(prepared.input.absolutePath, timeSeconds, signal);
-		if (!prepared.filter) return readFile(frame);
-		return this.previewImageGrade({
-			path: frame,
-			grade: args.grade,
-			lut: args.lut,
-		}, signal, force);
+		return this.previews.render(prepared.input.absolutePath, prepared.filter, this.cwd(), signal, clampGradeTime(args.timeSeconds));
 	}
 
 	async previewImageGrade(args: GradeImageArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {
 		const prepared = this.prepareGrade(args);
 		if (!prepared.filter && !force) return null;
-		const file = join(await this.scratchDir("preview"), `${randomUUID()}.jpg`);
-		try {
-			await this.run({
-				program: "ffmpeg",
-				args: buildGradeImageArgs(prepared.input.absolutePath, file, prepared.filter, true),
-				cwd: this.cwd(),
-				signal,
-				timeoutMs: 30_000,
-			});
-			return await readFile(file);
-		} finally {
-			await rm(file, { force: true }).catch(() => undefined);
-		}
+		return this.previews.render(prepared.input.absolutePath, prepared.filter, this.cwd(), signal);
 	}
 
 	async runFfmpeg(input: RunFfmpegArgs, signal?: AbortSignal): Promise<MediaJobResult> {
@@ -192,56 +168,9 @@ export class MediaService {
 		return { input, grade, lut: lut?.path, filter: buildImageGradeFilter(grade, lut?.absolutePath) };
 	}
 
-	private async gradeFrame(absolutePath: string, timeSeconds: number, signal?: AbortSignal): Promise<string> {
-		const timeMs = Math.round(timeSeconds * 1000);
-		const hit = this.gradeFrames.get(absolutePath);
-		if (hit?.timeMs === timeMs) return hit.file;
-		const file = join(await this.scratchDir("frames"), `${randomUUID()}.jpg`);
-		try {
-			await this.run({
-				program: "ffmpeg",
-				args: buildGradeVideoFrameArgs(absolutePath, file, timeSeconds),
-				cwd: this.cwd(),
-				signal,
-				timeoutMs: 30_000,
-			});
-		} catch (error) {
-			await rm(file, { force: true }).catch(() => undefined);
-			throw error;
-		}
-		const previous = this.gradeFrames.get(absolutePath);
-		this.gradeFrames.set(absolutePath, { timeMs, file });
-		if (previous) await rm(previous.file, { force: true }).catch(() => undefined);
-		this.forgetOldGradeFrames(absolutePath);
-		return file;
-	}
-
-	private async scratchDir(name: "preview" | "frames"): Promise<string> {
-		this.scratch ??= makeTempDir("grade");
-		const root = await this.scratch.catch((error) => { this.scratch = undefined; throw error; });
-		const dir = join(root, name);
-		await mkdir(dir, { recursive: true });
-		return dir;
-	}
-
-	/** Remove the scratch directory and forget cached frames. A later preview creates a new one. */
-	async releaseScratch(): Promise<void> {
-		const scratch = this.scratch;
-		this.scratch = undefined;
-		this.gradeFrames.clear();
-		if (!scratch) return;
-		const root = await scratch.catch(() => undefined);
-		if (root) await rm(root, { recursive: true, force: true }).catch(() => undefined);
-	}
-
-	private forgetOldGradeFrames(keep: string): void {
-		while (this.gradeFrames.size > 4) {
-			const oldest = [...this.gradeFrames.keys()].find((path) => path !== keep);
-			if (!oldest) return;
-			const frame = this.gradeFrames.get(oldest);
-			this.gradeFrames.delete(oldest);
-			if (frame) void rm(frame.file, { force: true }).catch(() => undefined);
-		}
+	/** Drop decoded frames when the library closes or changes. */
+	releasePreviews(): void {
+		this.previews.clear();
 	}
 
 	private resolveLut(lut: string | undefined): { path: string; absolutePath: string } | undefined {

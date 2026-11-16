@@ -88,7 +88,6 @@ Loom 写到系统临时目录的内容都放在同一个根下，不进素材库
 
 ```
 <os.tmpdir()>/loom/
-├── grade/run-*/{preview,frames}/   -- 调色面板用的 ffmpeg 静帧；每个媒体服务一个 run-*
 ├── vlm-frames/run-*/               -- 送给 VLM 的视频帧；每个素材处理完就删
 ├── audio/run-*/                    -- 转写用的压缩音频；每个素材处理完就删
 ├── composer/run-*/                 -- 剪贴板图片进入 Inbox/ 的中转；导入后就删
@@ -96,7 +95,7 @@ Loom 写到系统临时目录的内容都放在同一个根下，不进素材库
 └── e2e/<pid>/                      -- Playwright 运行时 Electron 的 userData
 ```
 
-路径只由 `core/src/temp.ts` 构造，不写死 `/tmp`（进程沙盒只能写素材库和 `os.tmpdir()`）。应用启动时清掉超过 24 小时的残留。
+路径只由 `core/src/temp.ts` 构造，不写死 `/tmp`（进程沙盒只能写素材库和 `os.tmpdir()`）。应用启动时清掉超过 24 小时的残留。 调色预览使用内存中的无损解码帧缓存（最多四帧、96 MiB 像素数据），源文件变更或素材库关闭时失效。FFmpeg 通过管道直接返回 JPEG，预览 IPC 传递二进制数据。
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
 - **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存，只有可随时删除的 `.loom/thumbnails/` 例外：标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。

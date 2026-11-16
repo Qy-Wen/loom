@@ -193,7 +193,7 @@ export class LocalCore {
 		await this.tasks?.drain();
 		await this.library.close();
 		await this.graphStore.close();
-		await this.media.releaseScratch();
+		await this.media.releasePreviews();
 		this.tasks = undefined;
 	}
 
@@ -734,7 +734,7 @@ export class LocalCore {
 		lut?: string,
 		force = false,
 		signal?: AbortSignal,
-	): Promise<string | null> {
+	): Promise<Uint8Array | null> {
 		return this.runLibraryTask(async (jobSignal) => {
 			const asset = await this.metadataStore.getAsset(assetId);
 			if (!asset) throw new Error("Asset not found");
@@ -744,7 +744,7 @@ export class LocalCore {
 				grade,
 				lut,
 			}, jobSignal, force);
-			return bytes ? bytes.toString("base64") : null;
+			return bytes;
 		}, signal);
 	}
 
@@ -754,7 +754,7 @@ export class LocalCore {
 		lut?: string,
 		force = false,
 		signal?: AbortSignal,
-	): Promise<string | null> {
+	): Promise<Uint8Array | null> {
 		return this.runLibraryTask(async (jobSignal) => {
 			const asset = await this.metadataStore.getAsset(assetId);
 			if (!asset) throw new Error("Asset not found");
@@ -763,7 +763,7 @@ export class LocalCore {
 				grade,
 				lut,
 			}, jobSignal, force);
-			return bytes ? bytes.toString("base64") : null;
+			return bytes;
 		}, signal);
 	}
 

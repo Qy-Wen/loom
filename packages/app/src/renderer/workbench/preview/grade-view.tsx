@@ -109,6 +109,11 @@ export function GradeView({
 	useEffect(() => {
 		let stopped = false;
 		let busy = false;
+		setProxyUrl(replaceBlob(proxyRef, null));
+		// Decode while the original image is already visible, before the first drag.
+		if (!liveRef.current.video && liveRef.current.showOriginal) {
+			void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).catch(() => undefined);
+		}
 
 		async function drain(): Promise<void> {
 			if (stopped || busy) return;
@@ -132,12 +137,16 @@ export function GradeView({
 							: await window.loom.previewImageGrade(shot.sourceId, previewGrade, shot.lut);
 						if (stopped || liveRef.current.sourceId !== shot.sourceId) return;
 						if (!shot.video && liveRef.current.showOriginal) return;
-						if (previewKey(liveRef.current) !== key) continue;
-						setProxyUrl(replaceBlob(proxyRef, bytes));
-						if (shot.video) setLoadingFrame(false);
-						if (bytes) setError(null);
-						return;
+						// Keep completed color adjustments visible during a drag. Geometry,
+						// frame time and Before/After must still match the current view.
+						if (bytes && previewPresentationKey(liveRef.current) === previewPresentationKey(shot)) {
+							setProxyUrl(replaceBlob(proxyRef, bytes));
+							if (shot.video) setLoadingFrame(false);
+							setError(null);
+						}
+						if (previewKey(liveRef.current) === key) return;
 					} catch (cause) {
+						if (!stopped && previewKey(liveRef.current) !== key) continue;
 						if (!stopped) {
 							if (shot.video) setLoadingFrame(false);
 							setError(cause instanceof Error ? cause.message : shot.previewFailed);
@@ -158,7 +167,7 @@ export function GradeView({
 			stopped = true;
 			drainRef.current = () => undefined;
 		};
-	}, [sourceId]);
+	}, [sourceId, source.modifiedAt]);
 
 	const previewSignature = previewKey({ sourceId, grade, lut, cropping, video, time, showOriginal });
 	useEffect(() => {
@@ -240,7 +249,7 @@ export function GradeView({
 									if (video || triedFallback.current || !showOriginal) return;
 									triedFallback.current = true;
 									void window.loom.previewImageGrade(sourceId, IDENTITY_IMAGE_GRADE, undefined, true).then((bytes) => {
-										if (bytes) setFallbackUrl(base64ToObjectUrl(bytes));
+										if (bytes) setFallbackUrl(previewBytesToObjectUrl(bytes));
 									}).catch(() => undefined);
 								}}
 							/>
@@ -432,6 +441,12 @@ function previewKey(shot: { sourceId: string; grade: ImageGrade; lut?: string; c
 	return `${base}|${time}|${shot.showOriginal ? 1 : 0}`;
 }
 
+function previewPresentationKey(shot: Parameters<typeof previewKey>[0]): string {
+	const { rotation, flipH, flipV, crop } = shot.grade;
+	return JSON.stringify([shot.sourceId, shot.video, shot.time, shot.showOriginal, shot.cropping,
+		rotation, flipH, flipV, shot.cropping ? undefined : crop]);
+}
+
 function formatClock(seconds: number): string {
 	const total = Math.max(0, Math.floor(seconds));
 	const minutes = Math.floor(total / 60);
@@ -439,9 +454,9 @@ function formatClock(seconds: number): string {
 	return `${minutes}:${String(rest).padStart(2, "0")}`;
 }
 
-function replaceBlob(slot: React.MutableRefObject<string | null>, bytes: string | null): string | null {
+function replaceBlob(slot: React.MutableRefObject<string | null>, bytes: Uint8Array | null): string | null {
 	if (slot.current) URL.revokeObjectURL(slot.current);
-	slot.current = bytes ? base64ToObjectUrl(bytes) : null;
+	slot.current = bytes ? previewBytesToObjectUrl(bytes) : null;
 	return slot.current;
 }
 
@@ -562,9 +577,6 @@ function FlipVerticalIcon(): React.JSX.Element {
 	);
 }
 
-function base64ToObjectUrl(bytes: string): string {
-	const binary = atob(bytes);
-	const buffer = new Uint8Array(binary.length);
-	for (let index = 0; index < binary.length; index += 1) buffer[index] = binary.charCodeAt(index);
-	return URL.createObjectURL(new Blob([buffer], { type: "image/jpeg" }));
+function previewBytesToObjectUrl(bytes: Uint8Array): string {
+	return URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: "image/jpeg" }));
 }

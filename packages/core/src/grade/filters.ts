@@ -53,6 +53,16 @@ export function buildGradeImageArgs(
 	return args;
 }
 
+/** JPEG preview bytes go straight to the parent process. */
+export function buildGradePreviewArgs(inputPath: string, filter: string | null, sourceFilter?: string): string[] {
+	const chain = [
+		sourceFilter,
+		"scale='min(1280,iw)':'min(1280,ih)':force_original_aspect_ratio=decrease",
+		filter,
+	].filter(Boolean).join(",");
+	return ["-i", inputPath, "-vf", chain, "-frames:v", "1", "-c:v", "mjpeg", "-q:v", "4", "-f", "image2pipe", "pipe:1"];
+}
+
 /** One scaled frame. Later slider moves reuse this still instead of seeking again. */
 export function buildGradeVideoFrameArgs(inputPath: string, outputPath: string, timeSeconds: number): string[] {
 	return [
