@@ -1,4 +1,4 @@
-import type { CloudBackupView, CloudConfigDraft, CloudJob } from "./cloud-backup.ts";
+import type { CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId } from "./cloud-backup.ts";
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
@@ -233,7 +233,7 @@ export const IPC = {
 export interface LoomApi {
 	getCloudBackup: () => Promise<CloudBackupView>;
 	/** Load saved credentials only for the cloud settings form; inputs mask them by default. */
-	getCloudBackupConfig: () => Promise<CloudConfigDraft>;
+	getCloudBackupConfig: (provider?: CloudProviderId) => Promise<CloudConfigDraft>;
 	openRestoredCloudBackup: () => Promise<void>;
 	saveCloudBackup: (config: CloudConfigDraft) => Promise<CloudBackupView>;
 	startCloudBackup: (operation: CloudJob["operation"], libraryId?: string) => Promise<void>;

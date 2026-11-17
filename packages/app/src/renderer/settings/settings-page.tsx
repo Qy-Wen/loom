@@ -254,29 +254,41 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 					<h2 id="settings-title">{t.settings.title}</h2>
 					<button className="icon-button" type="button" onClick={() => void close()} aria-label={t.settings.close}>×</button>
 				</div>
-				<div className="settings-tabs" role="tablist" aria-label={t.settings.sections}>
-					{TAB_IDS.map((id) => <button key={id} type="button" role="tab" aria-selected={tab === id} className={tab === id ? "is-active" : undefined} onClick={() => {
-						void saveInstructions(); setTab(id);
-					}}>{t.settings.tabs[id]}</button>)}
-				</div>
-				<p className="settings-lead">{t.settings.leads[tab]}</p>
-				{error && <div className="session-error" role="alert">{error}</div>}
-				<div className="settings-pane-form">
-					<div className="settings-pane">
-						{tab === "access" && <SettingsAccess />}
-						{tab === "cloud" && <SettingsCloud />}
-						{tab === "general" && (general ? <SettingsGeneral value={general} onChange={patchGeneral} /> : <div className="empty">{t.common.loading}</div>)}
-						{tab === "models" && <div className="settings-models-scroll">
-							<SettingsChat />
-							{draft ? <SettingsModels draft={draft} onChange={patchModel} onCommit={commitModel} /> : <div className="empty">{t.common.loading}</div>}
-						</div>}
-						{tab === "mcp" && (mcp ? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} onSave={commitMcp} onRemove={removeMcp} /> : <div className="empty">{t.common.loading}</div>)}
-						{tab === "agent" && (instructions !== null && sandboxEnabled !== null ? <SettingsAgent sandboxEnabled={sandboxEnabled} instructions={instructions} onSandboxChange={patchSandbox} onInstructionsChange={patchInstructions} /> : <div className="empty">{t.common.loading}</div>)}
-						{tab === "stats" && (stats ? <SettingsStats stats={stats} resetting={resetting} onReset={() => void resetStats()} /> : <div className="empty">{t.common.loading}</div>)}
+				<div className="settings-body">
+					<div className="settings-tabs thin-scroll" role="tablist" aria-label={t.settings.sections} aria-orientation="vertical" onKeyDown={(event) => {
+						const index = TAB_IDS.indexOf(tab);
+						const next = event.key === "ArrowDown" ? TAB_IDS[(index + 1) % TAB_IDS.length]
+							: event.key === "ArrowUp" ? TAB_IDS[(index - 1 + TAB_IDS.length) % TAB_IDS.length]
+							: event.key === "Home" ? TAB_IDS[0] : event.key === "End" ? TAB_IDS.at(-1) : undefined;
+						if (!next) return;
+						event.preventDefault(); event.stopPropagation(); void saveInstructions(); setTab(next);
+						event.currentTarget.querySelector<HTMLButtonElement>(`#settings-tab-${next}`)?.focus();
+					}}>
+						{TAB_IDS.map((id) => <button key={id} id={`settings-tab-${id}`} type="button" role="tab" aria-selected={tab === id} aria-controls="settings-panel" tabIndex={tab === id ? 0 : -1} className={tab === id ? "is-active" : undefined} onClick={() => {
+							void saveInstructions(); setTab(id);
+						}}>{t.settings.tabs[id]}</button>)}
 					</div>
-					{tab === "mcp" && <div className="settings-actions settings-dialog-actions">
-						<button type="button" onClick={() => { mcpIdentities.current.push(undefined); mcpBaselines.current.push(emptyMcpServerDraft()); patchMcp([...mcpDraft.current, emptyMcpServerDraft()]); }}>{t.settings.addServer}</button>
-					</div>}
+					<div className="settings-content" id="settings-panel" role="tabpanel" aria-labelledby={`settings-tab-${tab}`}>
+						<div className="settings-content-header"><h3>{t.settings.tabs[tab]}</h3><p className="settings-lead">{t.settings.leads[tab]}</p></div>
+						{error && <div className="session-error" role="alert">{error}</div>}
+						<div className="settings-pane-form">
+							<div className="settings-pane">
+								{tab === "access" && <SettingsAccess />}
+								{tab === "cloud" && <SettingsCloud />}
+								{tab === "general" && (general ? <SettingsGeneral value={general} onChange={patchGeneral} /> : <div className="empty">{t.common.loading}</div>)}
+								{tab === "models" && <div className="settings-models-scroll">
+									<SettingsChat />
+									{draft ? <SettingsModels draft={draft} onChange={patchModel} onCommit={commitModel} /> : <div className="empty">{t.common.loading}</div>}
+								</div>}
+								{tab === "mcp" && (mcp ? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} onSave={commitMcp} onRemove={removeMcp} /> : <div className="empty">{t.common.loading}</div>)}
+								{tab === "agent" && (instructions !== null && sandboxEnabled !== null ? <SettingsAgent sandboxEnabled={sandboxEnabled} instructions={instructions} onSandboxChange={patchSandbox} onInstructionsChange={patchInstructions} /> : <div className="empty">{t.common.loading}</div>)}
+								{tab === "stats" && (stats ? <SettingsStats stats={stats} resetting={resetting} onReset={() => void resetStats()} /> : <div className="empty">{t.common.loading}</div>)}
+							</div>
+							{tab === "mcp" && <div className="settings-actions settings-dialog-actions">
+								<button type="button" onClick={() => { mcpIdentities.current.push(undefined); mcpBaselines.current.push(emptyMcpServerDraft()); patchMcp([...mcpDraft.current, emptyMcpServerDraft()]); }}>{t.settings.addServer}</button>
+							</div>}
+						</div>
+					</div>
 				</div>
 			</div>
 		</div>

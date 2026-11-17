@@ -353,7 +353,8 @@ test("COS settings encrypt credentials, preserve them on edits and never return 
 	try {
 		const store = new CloudConfigStore(path, cipher);
 		await store.save(config);
-		assert.deepEqual((await new CloudConfigStore(path, cipher).configuration()).credentials, config.credentials);
+		const editable = await new CloudConfigStore(path, cipher).configuration();
+		assert.deepEqual("credentials" in editable ? editable.credentials : undefined, config.credentials);
 		assert.ok(!(await readFile(path, "utf8")).includes("private-"));
 		assert.ok(!JSON.stringify(await store.view()).includes("private-"));
 		await store.save({ ...config, prefix: "other/v1", credentials: { secretId: "", secretKey: "" } });
@@ -378,7 +379,8 @@ test("controller serializes jobs, tests read/write/delete access, cancels safely
 		return (await controller.view()).job!;
 	}
 	try {
-		assert.deepEqual((await controller.configuration()).credentials, { secretId: "id", secretKey: "key" });
+		const editable = await controller.configuration();
+		assert.deepEqual("credentials" in editable ? editable.credentials : undefined, { secretId: "id", secretKey: "key" });
 		await controller.start("test"); await assert.rejects(controller.start("test"), /already running/);
 		assert.equal((await wait()).status, "completed");
 		await controller.start("backup"); assert.equal((await wait()).status, "completed");

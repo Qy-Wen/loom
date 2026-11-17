@@ -2,7 +2,7 @@ import { hostname, tmpdir } from "node:os";
 import { join } from "node:path";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import type { CloudLibrary, CloudBackupView, CloudConfigDraft, CloudJob } from "../../shared/cloud-backup.ts";
+import type { CloudLibrary, CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId } from "../../shared/cloud-backup.ts";
 import type { CloudConfigStore } from "./config.ts";
 import type { ObjectStoreFactory } from "./providers.ts";
 import type { ObjectStore } from "./object-store.ts";
@@ -33,15 +33,17 @@ export class CloudBackupController {
 	async view(): Promise<CloudBackupView> { return { ...await this.#settings.view(), libraries: this.#libraries.map((r) => ({ ...r })), localLibrary: this.#local?.view(), job: this.#job && { ...this.#job } }; }
 	async openLibrary(root: string | null): Promise<void> {
 		if (root) root = await realpath(root);
-		if (this.#closed || !this.#local || this.#local.view()?.rootPath === root) return;
-		await this.#local.open(root, (await this.#settings.view()).config);
+		await this.#settingsQueue.run(async () => {
+			if (this.#closed || !this.#local || this.#local.rootPath === root) return;
+			await this.#local.open(root, (await this.#settings.view()).config);
+		});
 	}
-	configuration(): Promise<CloudConfigDraft> { return this.#settings.configuration(); }
+	configuration(provider?: CloudProviderId): Promise<CloudConfigDraft> { return this.#settings.configuration(provider); }
 	async save(draft: CloudConfigDraft): Promise<CloudBackupView> {
 		return this.#settingsQueue.run(async () => {
 			this.#assertIdle();
 			await this.#settings.save(draft); this.#libraries = []; this.#job = undefined;
-			if (this.#local) await this.#local.open(this.#local.view()?.rootPath ?? null, (await this.#settings.view()).config);
+			if (this.#local) await this.#local.open(this.#local.rootPath, (await this.#settings.view()).config);
 			const view = await this.view(); this.#changed(view); return view;
 		});
 	}

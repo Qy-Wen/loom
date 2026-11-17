@@ -6,6 +6,8 @@ Loom connects directly to your cloud account, without a Loom server or account. 
 
 ## Set up
 
+Cloud storage defaults to **None (local only)**. No credentials are needed and cloud backup jobs and change tracking stay off. Save this option to disable an existing connection; local libraries and cloud copies stay intact. Encrypted provider settings remain on this computer and are restored when you select that provider again.
+
 1. Create a **private, standard-storage** COS bucket. Note its full name, including APPID, and region, such as `ap-shanghai`. Keep bucket versioning off. If already enabled, suspend it; existing historical versions need separate cleanup. See [versioning configuration](https://cloud.tencent.com/document/product/436/19884).
 2. Create a dedicated CAM API key scoped to this bucket. It needs `GetBucket`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, `InitiateMultipartUpload`, `UploadPart`, `CompleteMultipartUpload`, `ListMultipartUploads` and `ListParts`. See the [authorization guide](https://cloud.tencent.com/document/practice/436/31923) and [Node upload guide](https://cloud.tencent.com/document/product/436/64980). ACL modification permission is unnecessary.
 3. Open **Settings → Cloud backup**, select Tencent COS and enter the bucket, region and keys. The default prefix `loom/v1` is only a storage path and can be changed. Save and test listing, upload, read and delete access.

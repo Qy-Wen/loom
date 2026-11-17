@@ -100,51 +100,61 @@ export function SettingsCloud(): React.JSX.Element {
 	const local = view?.localLibrary;
 	const disabled = busy || dirty || !view?.hasCredentials;
 	const job = view?.job;
+	const enabled = view?.config.provider !== "none" && config?.provider !== "none";
 	const progress = job && !(job.operation === "preview" && job.status === "completed") && <JobProgress job={job} busy={!!busy} onCancel={() => void run(() => window.loom.cancelCloudBackup())} onOpen={() => void run(() => window.loom.openRestoredCloudBackup())} />;
 	return <div className="settings-form cloud-settings">
 		{error && <p role="alert" className="session-error">{error}</p>}
 		{view && savedConfig && config ? <>
-			<section className="settings-slot cloud-panel cloud-local" aria-label={text.localLibrary}>
-				<div className="cloud-panel-heading"><h3>{text.localLibrary}</h3>{local && <span className="cloud-state" data-state={local.status} role="status" aria-label={text.localStatus[local.status]} data-tooltip={text.localStatus[local.status]}><span className="cloud-state-dot" />{text.localBadge[local.status]}</span>}</div>
-				{local ? <>
-					<div className="cloud-library-identity"><span className="cloud-icon-tile"><CloudGlyph kind="folder" /></span><div><strong>{local.libraryName}</strong><div className="cloud-root-path"><TooltipText text={local.rootPath} tooltip={local.rootPath} /></div></div></div>
-					<div className="cloud-backup-meta"><span>{text.lastBackup}</span>{local.lastBackupAt ? <time dateTime={local.lastBackupAt}>{new Date(local.lastBackupAt).toLocaleString()}</time> : <span>{text.neverBackedUp}</span>}</div>
-					{local.error && <p role="alert" className="session-error cloud-local-error">{local.error}</p>}
-					{(!view.hasCredentials || dirty) && <p className="cloud-notice">{dirty ? text.unsavedConfig : text.configureFirst}</p>}
-					<div className="settings-actions cloud-backup-actions">
-						<button type="button" disabled={disabled} onClick={() => void start("preview")}><CloudGlyph kind="scan" />{text.preview}</button>
-						{local.status === "failed" && <button type="button" disabled={disabled} onClick={() => void start(local.retryOperation ?? "preview")}><CloudGlyph kind="refresh" />{text.retry}</button>}
-						<button type="button" className="primary-button" disabled={disabled} onClick={() => void start("backup")}><CloudGlyph kind="upload" />{text.backup}</button>
-					</div>
-					{job && job.operation !== "test" && job.operation !== "list" && progress}
-					{local.preview && <ChangePreview preview={local.preview} />}
-				</> : <div className="cloud-empty"><CloudGlyph kind="folder" /><p>{text.noLibrary}</p></div>}
-				<details className="cloud-help"><summary><CloudGlyph kind="chevron" />{text.backupDetails}</summary><p>{text.snapshotNote}</p><p>{text.previewNote}</p></details>
-			</section>
-			<section className="settings-slot cloud-panel" aria-label={text.libraries}>
-				<div className="cloud-panel-heading"><h3>{text.libraries}</h3><button className="settings-button cloud-quiet-button" type="button" disabled={disabled} onClick={() => void start("list")}><CloudGlyph kind="refresh" />{text.refresh}</button></div>
-				{job?.operation === "list" && progress}
-				{view.libraries.length === 0 && <div className="cloud-empty"><CloudGlyph kind="cloud" /><p>{text.empty}</p></div>}
-				{view.libraries.map((library) => <article className="cloud-library" key={library.libraryId}>
-					<span className="cloud-icon-tile"><CloudGlyph kind="folder" /></span>
-					<div className="cloud-library-info"><strong>{library.libraryName}</strong><time dateTime={library.updatedAt}>{new Date(library.updatedAt).toLocaleString()}</time><span>{library.deviceName} · {library.fileCount} {text.files} · {size(library.totalBytes)}</span>{library.state !== "ready" && <span className="cloud-incomplete">{text.incomplete}</span>}</div>
-					<button className="settings-button" type="button" disabled={busy || dirty || library.state !== "ready"} onClick={() => void start("restore", library.libraryId)}><CloudGlyph kind="download" />{text.restore}</button>
-				</article>)}
-			</section>
+			{enabled && <>
+				<section className="settings-slot cloud-panel cloud-local" aria-label={text.localLibrary}>
+					<div className="cloud-panel-heading"><h3>{text.localLibrary}</h3>{local && <span className="cloud-state" data-state={local.status} role="status" aria-label={text.localStatus[local.status]} data-tooltip={text.localStatus[local.status]}><span className="cloud-state-dot" />{text.localBadge[local.status]}</span>}</div>
+					{local ? <>
+						<div className="cloud-library-identity"><span className="cloud-icon-tile"><CloudGlyph kind="folder" /></span><div><strong>{local.libraryName}</strong><div className="cloud-root-path"><TooltipText text={local.rootPath} tooltip={local.rootPath} /></div></div></div>
+						<div className="cloud-backup-meta"><span>{text.lastBackup}</span>{local.lastBackupAt ? <time dateTime={local.lastBackupAt}>{new Date(local.lastBackupAt).toLocaleString()}</time> : <span>{text.neverBackedUp}</span>}</div>
+						{local.error && <p role="alert" className="session-error cloud-local-error">{local.error}</p>}
+						{(!view.hasCredentials || dirty) && <p className="cloud-notice">{dirty ? text.unsavedConfig : text.configureFirst}</p>}
+						<div className="settings-actions cloud-backup-actions">
+							<button type="button" disabled={disabled} onClick={() => void start("preview")}><CloudGlyph kind="scan" />{text.preview}</button>
+							{local.status === "failed" && <button type="button" disabled={disabled} onClick={() => void start(local.retryOperation ?? "preview")}><CloudGlyph kind="refresh" />{text.retry}</button>}
+							<button type="button" className="primary-button" disabled={disabled} onClick={() => void start("backup")}><CloudGlyph kind="upload" />{text.backup}</button>
+						</div>
+						{job && job.operation !== "test" && job.operation !== "list" && progress}
+						{local.preview && <ChangePreview preview={local.preview} />}
+					</> : <div className="cloud-empty"><CloudGlyph kind="folder" /><p>{text.noLibrary}</p></div>}
+					<details className="cloud-help"><summary><CloudGlyph kind="chevron" />{text.backupDetails}</summary><p>{text.snapshotNote}</p><p>{text.previewNote}</p></details>
+				</section>
+				<section className="settings-slot cloud-panel" aria-label={text.libraries}>
+					<div className="cloud-panel-heading"><h3>{text.libraries}</h3><button className="settings-button cloud-quiet-button" type="button" disabled={disabled} onClick={() => void start("list")}><CloudGlyph kind="refresh" />{text.refresh}</button></div>
+					{job?.operation === "list" && progress}
+					{view.libraries.length === 0 && <div className="cloud-empty"><CloudGlyph kind="cloud" /><p>{text.empty}</p></div>}
+					{view.libraries.map((library) => <article className="cloud-library" key={library.libraryId}>
+						<span className="cloud-icon-tile"><CloudGlyph kind="folder" /></span>
+						<div className="cloud-library-info"><strong>{library.libraryName}</strong><time dateTime={library.updatedAt}>{new Date(library.updatedAt).toLocaleString()}</time><span>{library.deviceName} · {library.fileCount} {text.files} · {size(library.totalBytes)}</span>{library.state !== "ready" && <span className="cloud-incomplete">{text.incomplete}</span>}</div>
+						<button className="settings-button" type="button" disabled={busy || dirty || library.state !== "ready"} onClick={() => void start("restore", library.libraryId)}><CloudGlyph kind="download" />{text.restore}</button>
+					</article>)}
+				</section>
+			</>}
 			<section className="settings-slot cloud-panel cloud-connection" aria-label={text.title}>
-				<div className="cloud-panel-heading"><h3>{text.title}</h3>{view.hasCredentials && <span className="cloud-configured">{text.configured}</span>}</div>
+				<div className="cloud-panel-heading"><h3>{text.title}</h3>{view.hasCredentials && config.provider !== "none" && <span className="cloud-configured">{text.configured}</span>}</div>
 				<div className="cloud-connection-grid">
 					<label>{text.provider}<select value={config.provider} disabled={busy} onChange={(event) => {
 						const provider = event.target.value as CloudProviderId;
-						if (provider !== config.provider) setDraft(provider === savedConfig.provider ? { ...savedConfig } : defaultCloudConfig(provider));
+						if (provider !== config.provider) void run(async () => {
+							if (provider === savedConfig.provider) setDraft({ ...savedConfig });
+							else {
+								setDraft(defaultCloudConfig(provider));
+								if (provider !== "none") setDraft(await window.loom.getCloudBackupConfig(provider));
+							}
+						});
 					}}>{CLOUD_PROVIDER_IDS.map((id) => <option key={id} value={id}>{text.providers[id]}</option>)}</select></label>
 					<CloudProviderFields config={config} disabled={busy} onChange={setDraft} />
+					{config.provider === "none" && <p className="cloud-field-help">{dirty ? text.disableOnSave : text.disabledNote}</p>}
 				</div>
-				<div className="cloud-connection-footer"><p><CloudGlyph kind="shield" />{text.note}</p><div className="settings-actions">
-					<button type="button" disabled={disabled} onClick={() => void start("test")}>{text.test}</button>
+				<div className="cloud-connection-footer">{config.provider !== "none" && <p><CloudGlyph kind="shield" />{text.note}</p>}<div className="settings-actions">
+					{config.provider !== "none" && <button type="button" disabled={disabled} onClick={() => void start("test")}>{text.test}</button>}
 					<button type="button" className="primary-button" disabled={busy || !dirty} onClick={() => void save()}>{text.save}</button>
 				</div></div>
-				{job?.operation === "test" && progress}
+				{enabled && job?.operation === "test" && progress}
 			</section>
 		</> : <div className="empty">{t.common.loading}</div>}
 	</div>;

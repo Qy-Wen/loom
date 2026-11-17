@@ -533,7 +533,8 @@ export const messages = defineLocale(
 			},
 			addServer: "Add server",
 			cloud: {
-				title: "Cloud storage", provider: "Storage provider", providers: { cos: "Tencent COS" }, note: "Credentials are encrypted on this computer and are never included in backups.",
+				title: "Cloud storage", provider: "Storage provider", providers: { none: "None (local only)", cos: "Tencent COS" }, note: "Credentials are encrypted on this computer and are never included in backups.",
+				disabledNote: "Cloud backup is off. Your libraries stay on this computer. Saved storage settings are kept for later use; existing cloud copies are left in place.", disableOnSave: "Save to turn off cloud backup. Your libraries, existing cloud copies and saved storage settings will be kept.",
 				cos: { bucket: "Bucket", region: "Region", prefix: "Backup prefix", note: "Use a private COS bucket and a dedicated API key." }, save: "Save", test: "Test connection", backup: "Update cloud copy",
 				snapshotNote: "Updates the cloud copy to match this library, including deletions. Only the latest copy is kept. Preparation pauses library and Agent tasks; uploads then run in the background. Includes original files, metadata and chat history; excludes caches and local permissions.",
 				libraries: "Cloud libraries", incomplete: "Update incomplete. Retry from the source library before restoring.", refresh: "Refresh", empty: "Refresh to load cloud libraries, or update the current library’s cloud copy.", restore: "Restore to new folder", cancel: "Cancel", files: "files", progress: "Cloud backup progress",
@@ -1210,7 +1211,8 @@ export const messages = defineLocale(
 			},
 			addServer: "添加服务器",
 			cloud: {
-				title: "云存储", provider: "云服务厂商", providers: { cos: "腾讯云 COS" }, note: "凭证在本机加密保存，不进入云备份。",
+				title: "云存储", provider: "云服务厂商", providers: { none: "不使用云存储", cos: "腾讯云 COS" }, note: "凭证在本机加密保存，不进入云备份。",
+				disabledNote: "云端备份未启用，素材库保留在本机。已保存的云存储配置会保留，便于以后重新启用；已有云端副本不会删除。", disableOnSave: "保存后将停用云端备份，本地素材库、已有云端副本及已保存的云存储配置都会保留。",
 				cos: { bucket: "存储桶", region: "地域", prefix: "备份前缀", note: "使用私有 COS 存储桶和专用 API 密钥。" }, save: "保存", test: "测试连接", backup: "更新云端副本",
 				snapshotNote: "将云端副本更新为当前素材库的状态，本地已删除的文件也会从云端删除。每个素材库只保留最新一份。准备时暂停素材库和 Agent 任务，随后后台上传。包含原始文件、元数据和聊天记录，不包含缓存和本机授权。",
 				libraries: "云端素材库", incomplete: "更新未完成，请从原素材库重新备份后再恢复。", refresh: "刷新", empty: "刷新以加载云端素材库，或更新当前素材库的云端副本。", restore: "恢复到新目录", cancel: "取消", files: "个文件", progress: "云备份进度",

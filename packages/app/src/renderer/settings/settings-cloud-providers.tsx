@@ -6,10 +6,11 @@ import { SettingsSecretInput } from "./settings-secret-input.tsx";
 type Props = { config: CloudConfigDraft; disabled: boolean; onChange(config: CloudConfigDraft): void };
 
 /** Provider forms own their fields; the settings page owns save/jobs/cloud copies. */
-export function CloudProviderFields(props: Props): React.JSX.Element {
+export function CloudProviderFields(props: Props): React.JSX.Element | null {
 	const config = props.config;
 	const provider = config.provider;
 	switch (provider) {
+		case "none": return null;
 		case "cos": return <CosFields {...props} config={config} />;
 		default: return unsupportedCloudProvider(provider);
 	}

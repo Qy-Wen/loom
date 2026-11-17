@@ -7,7 +7,7 @@ import { IPC, type LoomApi } from "../shared/ipc.ts";
 
 const api: LoomApi = {
 	getCloudBackup: () => ipcRenderer.invoke(IPC.getCloudBackup),
-	getCloudBackupConfig: () => ipcRenderer.invoke(IPC.getCloudBackupConfig),
+	getCloudBackupConfig: (provider) => ipcRenderer.invoke(IPC.getCloudBackupConfig, provider),
 	openRestoredCloudBackup: () => ipcRenderer.invoke(IPC.openRestoredCloudBackup),
 	saveCloudBackup: (config) => ipcRenderer.invoke(IPC.saveCloudBackup, config),
 	startCloudBackup: (operation, libraryId) => ipcRenderer.invoke(IPC.startCloudBackup, operation, libraryId),

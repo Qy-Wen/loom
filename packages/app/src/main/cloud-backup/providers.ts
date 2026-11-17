@@ -1,4 +1,4 @@
-import { unsupportedCloudProvider, type CloudConfig, type CloudProviderId } from "../../shared/cloud-backup.ts";
+import { unsupportedCloudProvider, type ActiveCloudConfig, type CloudConfig, type CloudProviderId } from "../../shared/cloud-backup.ts";
 import type { CosCloudConnection, CosCloudCredentials } from "../../shared/cloud-providers/cos.ts";
 import { parseCosConfig, parseCosCredentialDraft, parseCosCredentials } from "./cos-config.ts";
 import { CosObjectStore } from "./cos-store.ts";
@@ -16,19 +16,20 @@ function record(input: unknown): Record<string, unknown> {
 export function parseCloudConfig(input: unknown): CloudConfig {
 	const value = record(input);
 	switch (value.provider) {
+		case "none": return { provider: "none" };
 		case "cos": return parseCosConfig(value);
 		default: throw new Error("Unsupported cloud provider");
 	}
 }
 
-export function parseCloudCredentialDraft(provider: CloudProviderId, input: unknown): CloudCredentials | undefined {
+export function parseCloudCredentialDraft(provider: Exclude<CloudProviderId, "none">, input: unknown): CloudCredentials | undefined {
 	switch (provider) {
 		case "cos": return parseCosCredentialDraft(input);
 		default: return unsupportedCloudProvider(provider);
 	}
 }
 
-export function cloudConnection(config: CloudConfig, credentials: unknown): CloudConnection {
+export function cloudConnection(config: ActiveCloudConfig, credentials: unknown): CloudConnection {
 	const provider = config.provider;
 	switch (provider) {
 		case "cos": return { ...config, credentials: parseCosCredentials(credentials) };
@@ -36,7 +37,7 @@ export function cloudConnection(config: CloudConfig, credentials: unknown): Clou
 	}
 }
 
-export function storedCloudConnection(config: CloudConfig, payload: unknown): CloudConnection {
+export function storedCloudConnection(config: ActiveCloudConfig, payload: unknown): CloudConnection {
 	if (payload && typeof payload === "object" && "provider" in payload) {
 		if (payload.provider !== config.provider || !("credentials" in payload)) throw new Error("Cloud credentials do not match the selected provider");
 		return cloudConnection(config, payload.credentials);

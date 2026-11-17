@@ -6,6 +6,8 @@ Loom 直接访问你自己的云存储，不需要 Loom 服务器或账号。当
 
 ## 配置
 
+云存储默认为「不使用云存储」，无需密钥，不启动云端备份任务和变更跟踪。保存此选项可停用已配置的连接，本地素材库和已有云端副本均保留。厂商配置及加密凭证仍保存在本机，重新选择该厂商即可恢复填写内容。
+
 1. 创建一个**私有、标准存储**的 COS 桶，记下完整桶名（包含 APPID）和地域，例如 `ap-shanghai`。桶的版本控制保持关闭；已开启的桶可暂停版本控制，但已有历史版本仍需单独清理，见[版本控制配置](https://cloud.tencent.com/document/product/436/19884)。
 2. 创建专用 CAM 子用户 API 密钥，只授权该桶。需要 `GetBucket`、`HeadObject`、`GetObject`、`PutObject`、`DeleteObject`、`InitiateMultipartUpload`、`UploadPart`、`CompleteMultipartUpload`、`ListMultipartUploads`、`ListParts`。见 [COS 授权指南](https://cloud.tencent.com/document/practice/436/31923)和 [Node 上传指南](https://cloud.tencent.com/document/product/436/64980)。无需修改 ACL 的权限。
 3. 打开「设置 → 云备份」，选择腾讯云 COS，填写桶名、地域及密钥。前缀默认 `loom/v1`，只是存放路径，可自行修改。保存后测试连接，测试会验证列举、上传、读取及删除权限。

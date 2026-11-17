@@ -53,16 +53,19 @@ export class LocalBackupState {
 	#watcher?: FSWatcher;
 	#timer?: ReturnType<typeof setTimeout>;
 	#view?: LocalCloudLibrary;
+	#root: string | null = null;
 	constructor(path: string, changed: () => void) { this.#cache = new JsonFile(path, parseCache, { recoverCorrupt: true }); this.#changed = changed; }
 	view(): LocalCloudLibrary | undefined { return this.#view && structuredClone(this.#view); }
 	get generation(): number { return this.#generation; }
+	get rootPath(): string | null { return this.#root; }
 	async open(root: string | null, config: CloudConfig): Promise<void> {
 		this.#watcher?.close(); this.#watcher = undefined; clearTimeout(this.#timer);
 		const epoch = ++this.#epoch;
 		this.#scope = destination(config); this.#generation++;
-		this.#view = root ? { rootPath: root, libraryName: basename(root), status: "never" } : undefined;
+		this.#root = root;
+		this.#view = root && config.provider !== "none" ? { rootPath: root, libraryName: basename(root), status: "never" } : undefined;
 		this.#changed();
-		if (!root) return;
+		if (!root || config.provider === "none") return;
 		try {
 			this.#watcher = watch(root, { recursive: true }, (_event, filename) => {
 				if (epoch !== this.#epoch) return;
