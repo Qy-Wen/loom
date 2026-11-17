@@ -1,3 +1,4 @@
+import type { CloudBackupView, CloudConfigDraft, CloudJob } from "./cloud-backup.ts";
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
@@ -104,6 +105,13 @@ export interface UiSelectionDraft {
 }
 
 export const IPC = {
+	getCloudBackup: "loom:getCloudBackup",
+	getCloudBackupConfig: "loom:getCloudBackupConfig",
+	openRestoredCloudBackup: "loom:openRestoredCloudBackup",
+	saveCloudBackup: "loom:saveCloudBackup",
+	startCloudBackup: "loom:startCloudBackup",
+	cancelCloudBackup: "loom:cancelCloudBackup",
+	cloudBackupChanged: "loom:cloudBackupChanged",
 	getAgentEndpoint: "loom:getAgentEndpoint",
 	openLibrary: "loom:openLibrary",
 	getLibrarySnapshot: "loom:getLibrarySnapshot",
@@ -223,6 +231,14 @@ export const IPC = {
 } as const;
 
 export interface LoomApi {
+	getCloudBackup: () => Promise<CloudBackupView>;
+	/** Load saved credentials only for the cloud settings form; inputs mask them by default. */
+	getCloudBackupConfig: () => Promise<CloudConfigDraft>;
+	openRestoredCloudBackup: () => Promise<void>;
+	saveCloudBackup: (config: CloudConfigDraft) => Promise<CloudBackupView>;
+	startCloudBackup: (operation: CloudJob["operation"], libraryId?: string) => Promise<void>;
+	cancelCloudBackup: () => Promise<void>;
+	onCloudBackupChanged: (listener: (view: CloudBackupView) => void) => () => void;
 	getAgentEndpoint: () => Promise<AgentEndpoint>;
 	openLibrary: () => Promise<LibrarySnapshot | null>;
 	getLibrarySnapshot: () => Promise<LibrarySnapshot>;

@@ -1,0 +1,115 @@
+import { readFile, rm, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
+import { expect, test } from "./loom.ts";
+
+test("COS settings, latest cloud copy, deletion and restore work through Electron IPC", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(45_000);
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBeTruthy();
+	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	await writeFile(join(root, "cloud-note.md"), "keep my library metadata");
+	await writeFile(join(root, "obsolete.md"), "delete this on the next update");
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(2);
+	const assetId = (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.find((asset) => asset.filename === "cloud-note.md")!.assetId;
+	await page.evaluate(async (id) => { await window.loom.setFavorite(id, true); await window.loom.addAssetTag(id, "cloud-test"); }, assetId);
+	// Replace only the provider boundary; lifecycle, filesystem, encryption and IPC remain real.
+	await electronApp!.evaluate(async ({ app, dialog }, parent) => {
+		const { createRequire } = process.getBuiltinModule("node:module");
+		const require = createRequire(`${app.getAppPath()}/package.json`);
+		const { readFile } = require("node:fs/promises") as typeof import("node:fs/promises");
+		const COS = require("cos-nodejs-sdk-v5");
+		const { createHash } = require("node:crypto") as typeof import("node:crypto");
+		const objects = new Map<string, Buffer>();
+		(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects = objects;
+		COS.prototype.headObject = async ({ Key }: { Key: string }) => { const bytes = objects.get(Key); if (!bytes) throw { statusCode: 404 }; return { headers: { "content-length": String(bytes.length), etag: createHash("sha256").update(bytes).digest("hex") } }; };
+		COS.prototype.deleteObject = async ({ Key }: { Key: string }) => { objects.delete(Key); return {}; };
+		COS.prototype.uploadFile = ({ Key, FilePath, onProgress }: { Key: string; FilePath: string; onProgress?: (value: { loaded: number }) => void }, callback: (error: null, result: object) => void) => {
+			void readFile(FilePath).then((bytes) => { objects.set(Key, bytes); onProgress?.({ loaded: bytes.length }); callback(null, {}); });
+		};
+		COS.prototype.getBucket = async ({ Prefix }: { Prefix: string }) => ({ Contents: [...objects.keys()].filter((Key) => Key.startsWith(Prefix)).map((Key) => ({ Key })), IsTruncated: "false" });
+		COS.prototype.getObjectUrl = ({ Key }: { Key: string }, callback: (error: null, result: { Url: string }) => void) => { callback(null, { Url: `https://loom-cos.test/${encodeURIComponent(Key)}` }); return ""; };
+		const originalFetch = globalThis.fetch;
+		globalThis.fetch = (async (input: string | URL | Request, options?: RequestInit) => {
+			if (typeof input === "string" && input.startsWith("https://loom-cos.test/")) {
+				const bytes = objects.get(decodeURIComponent(new URL(input).pathname.slice(1)));
+				return new Response(bytes ? new Uint8Array(bytes) : null, { status: bytes ? 200 : 404 });
+			}
+			return originalFetch(input, options);
+		}) as typeof fetch;
+		dialog.showOpenDialog = (async () => ({ canceled: false, filePaths: [parent] })) as typeof dialog.showOpenDialog;
+	}, dirname(root));
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	const settings = page.locator(".settings-dialog");
+	await settings.getByRole("tab", { name: "Cloud backup", exact: true }).click();
+	await expect(settings.getByRole("combobox", { name: "Storage provider", exact: true })).toHaveValue("cos");
+	await settings.getByLabel("Bucket", { exact: true }).fill("my-loom-1250000000");
+	await settings.getByLabel("SecretId", { exact: true }).fill("e2e-secret-id");
+	await settings.getByLabel("SecretKey", { exact: true }).fill("e2e-secret-key");
+	await settings.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(settings.getByRole("button", { name: "Test connection", exact: true })).toBeEnabled();
+	await expect(settings.getByLabel("SecretId", { exact: true })).toHaveValue("e2e-secret-id");
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveValue("e2e-secret-key");
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveAttribute("type", "password");
+	await settings.getByRole("button", { name: "Show SecretKey", exact: true }).click();
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveAttribute("type", "text");
+	await settings.getByRole("button", { name: "Hide SecretKey", exact: true }).click();
+	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	await settings.getByRole("tab", { name: "Cloud backup", exact: true }).click();
+	await expect(settings.getByLabel("SecretId", { exact: true })).toHaveValue("e2e-secret-id");
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveValue("e2e-secret-key");
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveAttribute("type", "password");
+	// Editing one field retains the saved value of the other field.
+	await settings.getByLabel("SecretKey", { exact: true }).fill("e2e-secret-key-updated");
+	await settings.getByRole("button", { name: "Save", exact: true }).click();
+	await expect(settings.getByRole("button", { name: "Test connection", exact: true })).toBeEnabled();
+	const userData = await electronApp!.evaluate(({ app }) => app.getPath("userData"));
+	expect(await readFile(join(userData, "cloud-backup.json"), "utf8")).not.toContain("e2e-secret");
+	expect(JSON.parse(await readFile(join(userData, "cloud-backup.json"), "utf8")).provider).toBe("cos");
+	expect((await page.evaluate(() => window.loom.getCloudBackup())).config.provider).toBe("cos");
+	await settings.getByRole("button", { name: "Test connection", exact: true }).click();
+	await expect(settings.getByRole("region", { name: "Cloud backup progress" })).toContainText("Completed");
+	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
+	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	await settings.getByRole("tab", { name: "Cloud backup", exact: true }).click();
+	await expect(settings.getByLabel("SecretId", { exact: true })).toHaveValue("e2e-secret-id");
+	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveValue("e2e-secret-key-updated");
+	const previous = (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]!;
+	const remoteRoot = `loom/v1/libraries/${previous.libraryId}/`;
+	let keys = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
+	expect(keys).toContain(`${remoteRoot}cloud-note.md`);
+	expect(keys).toContain(`${remoteRoot}obsolete.md`);
+	expect(keys.some((key) => key.startsWith("loom/v1/objects/") || key.startsWith("loom/v1/records/"))).toBe(false);
+	await rm(join(root, "obsolete.md"));
+	await writeFile(join(root, "cloud-note.md"), "latest cloud copy");
+	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]?.revision).not.toBe(previous.revision);
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	keys = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
+	expect(keys).not.toContain(`${remoteRoot}obsolete.md`);
+	await settings.getByRole("button", { name: "Refresh", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	await expect(settings.locator(".cloud-library")).toHaveCount(1);
+	await settings.getByRole("button", { name: "Restore to new folder", exact: true }).click();
+	await expect(settings.getByRole("button", { name: "Open restored library", exact: true })).toBeVisible();
+	const restored = (await page.evaluate(() => window.loom.getCloudBackup())).job!.restoredPath!;
+	expect(restored).not.toBe(root);
+	expect(await readFile(join(restored, "cloud-note.md"), "utf8")).toBe("latest cloud copy");
+	await settings.getByRole("button", { name: "Open restored library", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
+	const snapshot = await page.evaluate(() => window.loom.getLibrarySnapshot());
+	expect(snapshot.favoriteAssetIds).toContain(assetId);
+	expect(snapshot.tags.map((tag) => tag.name)).toContain("cloud-test");
+	// A snapshot error must reopen both databases and leave the current library usable.
+	const identity = join(restored, ".loom/backup/identity.json");
+	const originalIdentity = await readFile(identity);
+	await writeFile(identity, '{"id":"invalid"}');
+	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("failed");
+	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
+	await page.evaluate((id) => window.loom.setFavorite(id, false), assetId);
+	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).favoriteAssetIds).not.toContain(assetId);
+	await writeFile(identity, originalIdentity);
+});

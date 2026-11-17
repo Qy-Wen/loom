@@ -11,13 +11,14 @@ import { SettingsAgent } from "./settings-agent.tsx";
 import { SettingsGeneral } from "./settings-general.tsx";
 import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsAccess } from "./settings-access.tsx";
+import { SettingsCloud } from "./settings-cloud.tsx";
 import { SettingsChat } from "./settings-chat.tsx";
 import { SettingsModels } from "./settings-models.tsx";
 import { SettingsStats } from "./settings-stats.tsx";
 import { SettingsSaveQueue } from "./settings-save-queue.ts";
 
-type SettingsTab = "general" | "models" | "mcp" | "access" | "agent" | "stats";
-const TAB_IDS: SettingsTab[] = ["general", "models", "mcp", "access", "agent", "stats"];
+type SettingsTab = "general" | "models" | "cloud" | "mcp" | "access" | "agent" | "stats";
+const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "agent", "stats"];
 
 export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.Element {
 	const { t, commitLanguage } = useLocale();
@@ -263,6 +264,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 				<div className="settings-pane-form">
 					<div className="settings-pane">
 						{tab === "access" && <SettingsAccess />}
+						{tab === "cloud" && <SettingsCloud />}
 						{tab === "general" && (general ? <SettingsGeneral value={general} onChange={patchGeneral} /> : <div className="empty">{t.common.loading}</div>)}
 						{tab === "models" && <div className="settings-models-scroll">
 							<SettingsChat />

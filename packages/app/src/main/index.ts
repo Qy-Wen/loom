@@ -1,7 +1,7 @@
 import { createReadStream } from "node:fs";
 import { existsSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { stat } from "node:fs/promises";
+import { realpath, rm, stat } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
@@ -33,6 +33,11 @@ import {
 } from "@loom/agent";
 import { appendAppLog, appLogDirectory } from "./desktop/app-log.ts";
 import { ChatService } from "./chat/chat-service.ts";
+import { CloudBackupController } from "./cloud-backup/controller.ts";
+import { CloudConfigStore } from "./cloud-backup/config.ts";
+import { createObjectStore } from "./cloud-backup/providers.ts";
+import { captureSnapshot, type Snapshot as BackupSnapshot } from "./cloud-backup/snapshot.ts";
+import { publishCloudBackup, registerCloudBackupIpc } from "./cloud-backup/ipc.ts";
 import { chatRecord } from "./chat/chat-record.ts";
 import { composerAssetsAtSend, takeComposerAssets } from "./composer/composer-assets.ts";
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer/composer-library-pick.ts";
@@ -229,6 +234,7 @@ let gradePreview: AbortController | null = null;
 // Keep the library agent owner and LocalCore on the same root across overlapping open requests.
 let libraryTransition: Promise<void> = Promise.resolve();
 let openingLibrary = false;
+let cloudBackup: CloudBackupController | undefined;
 let pendingLibraryChanges: LibraryChange[] = [];
 let chat: ChatService | null = null;
 
@@ -1185,6 +1191,36 @@ app
 			},
 		}, (view) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(IPC.mcpServiceChanged, view); });
 		await mcpService.initialize();
+		cloudBackup = new CloudBackupController(new CloudConfigStore(join(app.getPath("userData"), "cloud-backup.json"), electronSecretCipher), {
+			capture: async (signal) => {
+				let snapshot: BackupSnapshot | undefined;
+				let failure: unknown;
+				try {
+					await applyOpenedLibrary(undefined, async (rootPath) => {
+						try { signal.throwIfAborted(); await localCore.close(); snapshot = await captureSnapshot(rootPath, signal); }
+						catch (error) { failure = error; }
+					});
+					if (failure) throw failure;
+					return snapshot!;
+				} catch (error) {
+					if (snapshot) await rm(snapshot.temporary, { recursive: true, force: true });
+					throw error;
+				}
+			},
+			pickRestoreParent: async () => {
+				const result = await dialog.showOpenDialog({ properties: ["openDirectory", "createDirectory"] });
+				if (result.canceled || !result.filePaths[0]) return undefined;
+				const parent = await realpath(result.filePaths[0]);
+				const { rootPath } = await localCore.getLibrarySnapshot();
+				if (rootPath) {
+					const inside = relative(await realpath(rootPath), parent);
+					if (!inside || (inside !== ".." && !inside.startsWith(`..${sep}`) && !isAbsolute(inside))) throw new Error("Choose a restore location outside the open library");
+				}
+				return parent;
+			},
+			openRestored: async (path) => { await applyOpenedLibrary(path); },
+		}, publishCloudBackup, createObjectStore);
+		registerCloudBackupIpc(cloudBackup);
 		requireChat().setTracePublisher(publishDevTrace);
 		registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
 			listTraces: (limit, before) => requireChat().listTraces(limit, before),
@@ -1229,7 +1265,7 @@ app.on("will-quit", (event) => {
 	agentServer = null;
 	const host = mcpHost;
 	mcpHost = null;
-	void Promise.resolve(mcpService?.close()).then(() => localCore.stopLibraryTasks()).then(() => libraryTransition).then(() => Promise.allSettled([
+	void Promise.resolve(cloudBackup?.close()).then(() => mcpService?.close()).then(() => localCore.stopLibraryTasks()).then(() => libraryTransition).then(() => Promise.allSettled([
 		server?.close() ?? Promise.resolve(),
 		requireChat().close(),
 	])).then(() => Promise.allSettled([
@@ -1271,7 +1307,7 @@ async function rerankProviderFromSettings(): Promise<RerankProvider | undefined>
 	return createHttpRerankProvider(slot);
 }
 
-async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
+async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (rootPath: string) => Promise<void>): Promise<LibrarySnapshot> {
 	if (shutdownStarted) throw new Error("App is shutting down");
 	const previous = libraryTransition;
 	let releaseTransition!: () => void;
@@ -1279,10 +1315,17 @@ async function applyOpenedLibrary(rootPath: string): Promise<LibrarySnapshot> {
 	await previous;
 	openingLibrary = true;
 	try {
+		if (shutdownStarted) throw new Error("App is shutting down");
+		// Backup resolves the current root on the transition line, after any earlier open request.
+		if (rootPath === undefined) {
+			rootPath = (await localCore.getLibrarySnapshot()).rootPath ?? undefined;
+			if (!rootPath) throw new Error("Open a library before creating a backup");
+		}
 		await mcpService?.invalidate();
 		// Cancel Core jobs before awaiting tool shutdown, while storage still belongs to the old root.
 		await localCore.stopLibraryTasks();
 		await requireChat().close();
+		await beforeOpen?.(rootPath);
 		const snapshot = await localCore.openLibrary(rootPath);
 		if (snapshot.rootPath) {
 			requireChat().setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));

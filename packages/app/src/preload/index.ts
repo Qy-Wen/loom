@@ -6,6 +6,17 @@ import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import { IPC, type LoomApi } from "../shared/ipc.ts";
 
 const api: LoomApi = {
+	getCloudBackup: () => ipcRenderer.invoke(IPC.getCloudBackup),
+	getCloudBackupConfig: () => ipcRenderer.invoke(IPC.getCloudBackupConfig),
+	openRestoredCloudBackup: () => ipcRenderer.invoke(IPC.openRestoredCloudBackup),
+	saveCloudBackup: (config) => ipcRenderer.invoke(IPC.saveCloudBackup, config),
+	startCloudBackup: (operation, libraryId) => ipcRenderer.invoke(IPC.startCloudBackup, operation, libraryId),
+	cancelCloudBackup: () => ipcRenderer.invoke(IPC.cancelCloudBackup),
+	onCloudBackupChanged: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, view: Parameters<typeof listener>[0]) => listener(view);
+		ipcRenderer.on(IPC.cloudBackupChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.cloudBackupChanged, handler);
+	},
 	getAgentEndpoint: () => ipcRenderer.invoke(IPC.getAgentEndpoint),
 	openLibrary: () => ipcRenderer.invoke(IPC.openLibrary),
 	getLibrarySnapshot: () => ipcRenderer.invoke(IPC.getLibrarySnapshot),

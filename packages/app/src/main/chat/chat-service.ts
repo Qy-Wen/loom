@@ -9,6 +9,7 @@ import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, ti
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ChatSelection } from "@loom/agent/chat-models";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
+import { clearRestoreMarker, readRestoreMarker, relocatedCwd } from "../cloud-backup/snapshot.ts";
 
 export type ChatServiceOptions = LoomAgentOptions & {
 	/** The app owns the execution collection; this service never builds Providers. */
@@ -131,6 +132,26 @@ export class ChatService {
 			catch { this.#trace.stop(); this.#trace = undefined; }
 		}
 		await clearPendingApprovals(this.runtime.harness);
+		const restored = await readRestoreMarker(root);
+		if (restored) {
+			// Still paused: withdraw every saved input and mark saved tasks before the scheduler starts.
+			const harness = this.runtime.harness;
+			const pending = await harness.inspect(context);
+			for (const submission of pending.submissions) await harness.abortSubmission(submission.id, context);
+			for (const task of pending.tasks) await harness.abortTask(task.record.id, context);
+			await harness.commit(async (tx) => {
+				let cursor: Cursor | undefined;
+				do {
+					const page = await tx.scanConversations({}, 256, cursor);
+					for (const row of page.items) {
+						const agent = await tx.doc(AgentDoc, row.id);
+						await configure(tx, row.id, { cwd: relocatedCwd(agent.cwd, restored.sourceRoot, root, restored.sourceAliases) });
+					}
+					cursor = page.next;
+				} while (cursor !== undefined);
+			}, context);
+			await clearRestoreMarker(root);
+		}
 		this.#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 		const baseline = await this.runtime.harness.usage(context);
 		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];

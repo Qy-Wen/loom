@@ -20,6 +20,7 @@ Loom is for anyone who works with images, video, audio, and documents: AI artist
 - **Find years of references in a sentence.** Keep your folders as they are. Describe and index the assets you want, then search by meaning, for example "warm tones, a backlit street scene".
 - **Track every asset in one table.** Add text, number, checkbox, and date columns for status, ratings, clients, and more. Edit them yourself or ask the agent to update many at once.
 - **Connect your own agent.** External MCP clients can search and organize Loom's library, including tags, properties, and relationships. Enable the local MCP service in **Settings → External access** and copy the connection configuration; keep Loom and a library open while connected.
+- **Back up to your own cloud.** Configure Tencent COS in **Settings → Cloud backup** to keep one latest copy with original paths, including metadata and chat history, and restore it into a new folder. Updates include local deletions. See [cloud backup setup](./docs/CLOUD-BACKUP.md).
 
 Also included: browse and preview images, video, audio, PDFs, and Markdown in your own folder layout; organize with tags and favorites; connect creative tools such as ComfyUI through MCP (separate setup and authentication required; available features depend on the server).
 
