@@ -64,6 +64,9 @@ export interface CloudJob {
 	totalFiles: number;
 	completedBytes: number;
 	totalBytes: number;
+	/** File payload progress excludes request overhead/retransmissions; completedBytes also includes skipped files. */
+	uploadedBytes?: number;
+	skippedFiles?: number;
 	currentFile?: string;
 	error?: string;
 	restoredPath?: string;

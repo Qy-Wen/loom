@@ -1,5 +1,5 @@
 import { hostname, tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { mkdtemp, readFile, realpath, rm, writeFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import type { CloudLibrary, CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId } from "../../shared/cloud-backup.ts";
@@ -10,6 +10,7 @@ import { snapshotSourcesUnchanged, type Snapshot } from "./snapshot.ts";
 import { listCloudLibraries, restoreMirror, updateMirror, type MirrorManifest } from "./mirror.ts";
 import { previewMirror } from "./preview.ts";
 import { LocalBackupState } from "./local-state.ts";
+import { uploadJournalPath } from "./upload-journal.ts";
 import { SerialQueue } from "../storage/serial-queue.ts";
 
 type Host = { capture(signal: AbortSignal): Promise<Snapshot>; pickRestoreParent(): Promise<string | undefined>; openRestored(path: string): Promise<void> };
@@ -21,6 +22,7 @@ export class CloudBackupController {
 	readonly #factory: ObjectStoreFactory;
 	readonly #settingsQueue = new SerialQueue();
 	readonly #local?: LocalBackupState;
+	readonly #progressDirectory?: string;
 	#libraries: CloudLibrary[] = [];
 	#job?: CloudJob;
 	#abort?: AbortController;
@@ -28,6 +30,7 @@ export class CloudBackupController {
 	#closed = false;
 	constructor(settings: CloudConfigStore, host: Host, changed: (view: CloudBackupView) => void, factory: ObjectStoreFactory, statePath?: string) {
 		this.#settings = settings; this.#host = host; this.#changed = changed; this.#factory = factory;
+		if (statePath) this.#progressDirectory = join(dirname(statePath), "cloud-backup-progress");
 		if (statePath) this.#local = new LocalBackupState(statePath, () => { void this.view().then((view) => { if (!this.#closed) this.#changed(view); }).catch(() => {}); });
 	}
 	async view(): Promise<CloudBackupView> { return { ...await this.#settings.view(), libraries: this.#libraries.map((r) => ({ ...r })), localLibrary: this.#local?.view(), job: this.#job && { ...this.#job } }; }
@@ -84,7 +87,7 @@ export class CloudBackupController {
 							let manifest: MirrorManifest | undefined;
 							await updateMirror(snapshot, store, hostname(), abort.signal, progress, (next) => {
 								this.#libraries = [next, ...this.#libraries.filter((item) => item.libraryId !== next.libraryId)]; publish(true);
-							}, (next) => { manifest = next; });
+							}, (next) => { manifest = next; }, { resumeFile: this.#progressDirectory ? uploadJournalPath(this.#progressDirectory, config.config, snapshot.libraryId) : undefined });
 							if (!await snapshotSourcesUnchanged(snapshot, abort.signal) && this.#local?.view()?.rootPath === snapshot.root) this.#local.invalidate();
 							await this.#local?.backedUp(snapshot, manifest!, generation, config.config);
 						}

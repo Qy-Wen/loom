@@ -86,15 +86,19 @@ export async function captureSnapshot(root: string, signal: AbortSignal): Promis
 	} catch (error) { await rm(temporary, { recursive: true, force: true }); throw error; }
 }
 
-export async function hashFile(file: string, signal: AbortSignal): Promise<{ hash: string; size: number }> {
+export async function hashFile(file: string, signal: AbortSignal, maximumBytes = Number.MAX_SAFE_INTEGER): Promise<{ hash: string; size: number }> {
 	const hash = createHash("sha256"); let size = 0;
-	for await (const chunk of createReadStream(file, { signal })) { hash.update(chunk); size += chunk.length; }
+	for await (const chunk of createReadStream(file, { signal })) {
+		size += chunk.length;
+		if (size > maximumBytes) throw new Error(`File changed while reading: ${file}`);
+		hash.update(chunk);
+	}
 	return { hash: hash.digest("hex"), size };
 }
 export async function hashSnapshotFile(file: Snapshot["files"][number], signal: AbortSignal): Promise<{ hash: string; size: number }> {
 	const before = await lstat(file.source);
 	if (!before.isFile() || !same(file, before)) throw new Error(`File changed during preview. Retry: ${file.path}`);
-	const result = await hashFile(file.source, signal);
+	const result = await hashFile(file.source, signal, file.size);
 	if (result.size !== file.size || !same(file, await lstat(file.source))) throw new Error(`File changed during preview. Retry: ${file.path}`);
 	return result;
 }
@@ -122,7 +126,11 @@ export async function stageSnapshotFile(file: Snapshot["files"][number], target:
 	const stat = await lstat(file.source);
 	if (!stat.isFile() || !same(file, stat)) throw new Error(`File changed during backup. Retry: ${file.path}`);
 	const hash = createHash("sha256"); let size = 0;
-	await pipeline(createReadStream(file.source), new Transform({ transform(chunk, _encoding, callback) { hash.update(chunk); size += chunk.length; callback(null, chunk); } }), createWriteStream(target, { mode: 0o600 }), { signal });
+	await pipeline(createReadStream(file.source), new Transform({ transform(chunk, _encoding, callback) {
+		size += chunk.length;
+		if (size > file.size) { callback(new Error(`File changed during backup. Retry: ${file.path}`)); return; }
+		hash.update(chunk); callback(null, chunk);
+	} }), createWriteStream(target, { mode: 0o600 }), { signal });
 	if (size !== file.size || !same(file, await lstat(file.source))) throw new Error(`File changed during backup. Retry: ${file.path}`);
 	return { path: file.path, size, mtimeMs: file.mtimeMs, hash: hash.digest("hex") };
 }

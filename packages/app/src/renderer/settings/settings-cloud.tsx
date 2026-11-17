@@ -52,6 +52,7 @@ function JobProgress({ job, busy, onCancel, onOpen }: { job: CloudJob; busy: boo
 	return <section className="cloud-progress" data-status={job.status} aria-label={text.progress} aria-live="polite">
 		<div className="cloud-progress-heading"><span className="cloud-state-dot" /><strong>{text.operations[job.operation]}</strong><span>{job.status === "running" ? text.phases[job.phase] : text.status[job.status]}</span>{job.status === "running" && <button className="settings-button" type="button" onClick={onCancel}>{text.cancel}</button>}</div>
 		{job.status === "running" && job.totalFiles > 0 && <><progress max={job.totalBytes || job.totalFiles} value={job.totalBytes ? job.completedBytes : job.completedFiles} /><span className="cloud-progress-amount">{job.completedFiles} / {job.totalFiles} · {size(job.completedBytes)} / {size(job.totalBytes)}</span></>}
+		{job.operation === "backup" && job.uploadedBytes !== undefined && <span className="cloud-progress-amount">{text.uploaded}: {size(job.uploadedBytes)} · {text.skippedFiles(job.skippedFiles ?? 0)}</span>}
 		{job.status === "running" && job.rootPath && <code className="cloud-job-path">{job.rootPath}</code>}
 		{(job.status === "running" || job.status === "failed") && job.currentFile && <code className="cloud-job-path">{job.currentFile}</code>}
 		{job.error && <p role="alert" className="session-error">{job.error}</p>}

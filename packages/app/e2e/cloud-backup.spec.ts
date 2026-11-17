@@ -1,8 +1,8 @@
-import { readFile, rm, writeFile } from "node:fs/promises";
+import { readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { expect, test } from "./loom.ts";
 
-test("COS settings, latest cloud copy, deletion and restore work through Electron IPC", async ({ loomPage: page, electronApp }) => {
+test("COS settings, latest cloud copy, interrupted retry, deletion and restore work through Electron IPC", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(45_000);
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBeTruthy();
@@ -21,10 +21,13 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 		const { createHash } = require("node:crypto") as typeof import("node:crypto");
 		const objects = new Map<string, Buffer>();
 		(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects = objects;
+		const control: { suffix?: string; fail?: () => void; uploaded: string[] } = { uploaded: [] };
+		(globalThis as typeof globalThis & { cloudUploadControl: typeof control }).cloudUploadControl = control;
 		COS.prototype.headObject = async ({ Key }: { Key: string }) => { const bytes = objects.get(Key); if (!bytes) throw { statusCode: 404 }; return { headers: { "content-length": String(bytes.length), etag: createHash("sha256").update(bytes).digest("hex") } }; };
 		COS.prototype.deleteObject = async ({ Key }: { Key: string }) => { objects.delete(Key); return {}; };
-		COS.prototype.uploadFile = ({ Key, FilePath, onProgress }: { Key: string; FilePath: string; onProgress?: (value: { loaded: number }) => void }, callback: (error: null, result: object) => void) => {
-			void readFile(FilePath).then((bytes) => { objects.set(Key, bytes); onProgress?.({ loaded: bytes.length }); callback(null, {}); });
+		COS.prototype.uploadFile = ({ Key, FilePath, onProgress }: { Key: string; FilePath: string; onProgress?: (value: { loaded: number }) => void }, callback: (error: { code: string; statusCode: number } | null, result: object) => void) => {
+			if (control.suffix && Key.endsWith(control.suffix)) { control.fail = () => callback({ code: "AccessDenied", statusCode: 403 }, {}); return; }
+			void readFile(FilePath).then((bytes) => { objects.set(Key, bytes); control.uploaded.push(Key); onProgress?.({ loaded: bytes.length }); callback(null, {}); });
 		};
 		COS.prototype.getBucket = async ({ Prefix }: { Prefix: string }) => ({ Contents: [...objects.keys()].filter((Key) => Key.startsWith(Prefix)).map((Key) => ({ Key })), IsTruncated: "false" });
 		COS.prototype.getObjectUrl = ({ Key }: { Key: string }, callback: (error: null, result: { Url: string }) => void) => { callback(null, { Url: `https://loom-cos.test/${encodeURIComponent(Key)}` }); return ""; };
@@ -105,9 +108,27 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	expect(await electronApp!.evaluate((_electron, key) => (globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.has(key), `${remoteRoot}obsolete.md`)).toBe(true);
 	await writeFile(join(root, "after-preview.txt"), "written after checking");
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).localLibrary?.preview?.stale).toBe(true);
+	await electronApp!.evaluate(() => { (globalThis as typeof globalThis & { cloudUploadControl: { suffix?: string } }).cloudUploadControl.suffix = "/cloud-note.md"; });
 	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
+	// Hold one provider request until another file is durably checkpointed, then fail it.
+	await expect.poll(async () => {
+		const directory = join(userData, "cloud-backup-progress");
+		const names = await readdir(directory, { recursive: true });
+		for (const name of names.filter((name) => name.endsWith(".jsonl"))) {
+			const log = await readFile(join(directory, name), "utf8");
+			if (log.includes('"path":"after-preview.txt"') && log.endsWith("\n")) return true;
+		}
+		return false;
+	}).toBe(true);
+	await expect.poll(async () => electronApp!.evaluate(() => typeof (globalThis as typeof globalThis & { cloudUploadControl: { fail?: () => void } }).cloudUploadControl.fail === "function")).toBe(true);
+	await electronApp!.evaluate(() => { (globalThis as typeof globalThis & { cloudUploadControl: { fail: () => void } }).cloudUploadControl.fail(); });
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("failed");
+	expect((await page.evaluate(() => window.loom.getCloudBackup())).job?.error).toContain("cloud-note.md");
+	await electronApp!.evaluate(() => { (globalThis as typeof globalThis & { cloudUploadControl: { suffix?: string } }).cloudUploadControl.suffix = undefined; });
+	await localStatus.getByRole("button", { name: "Retry", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]?.revision).not.toBe(previous.revision);
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	expect(await electronApp!.evaluate(() => (globalThis as typeof globalThis & { cloudUploadControl: { uploaded: string[] } }).cloudUploadControl.uploaded.filter((key) => key.endsWith("/after-preview.txt")).length)).toBe(1);
 	keys = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
 	expect(keys).not.toContain(`${remoteRoot}obsolete.md`);
 	await settings.getByRole("button", { name: "Refresh", exact: true }).click();

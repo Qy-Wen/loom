@@ -4,10 +4,13 @@ import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { CloudLibrary } from "../../shared/cloud-backup.ts";
 import type { ObjectStore } from "./object-store.ts";
-import { hashFile, stageSnapshotFile, validateBackupPath, validateRelativePath, type Progress, type Snapshot } from "./snapshot.ts";
+import { hashFile, hashSnapshotFile, stageSnapshotFile, validateBackupPath, validateRelativePath, type Progress, type Snapshot } from "./snapshot.ts";
+
+import { withUploadJournal, type UploadedFile, type UploadJournal } from "./upload-journal.ts";
+import { parallelFiles, StagingBudget } from "./upload-pool.ts";
 
 type LibrarySummary = Omit<CloudLibrary, "state" | "manifestHash">;
-type MirrorFile = { path: string; size: number; mtimeMs: number; hash: string; etag: string };
+type MirrorFile = UploadedFile;
 export type MirrorManifest = { format: 1; library: LibrarySummary; sourceRoot: string; sourceAliases: string[]; directories: string[]; files: MirrorFile[] };
 const HASH = /^[a-f0-9]{64}$/;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -83,74 +86,122 @@ async function assertCurrent(library: CloudLibrary, store: ObjectStore, temporar
 	if (!current || current.revision !== library.revision || current.state !== library.state) throw new Error("The cloud library changed on another device. Refresh and retry.");
 }
 
+class FileTransferError extends Error {
+	readonly path: string;
+	constructor(path: string, error: unknown) { super(`${path}: ${error instanceof Error ? error.message : "Cloud transfer failed"}`); this.path = path; }
+}
+
+export type MirrorUpdateOptions = { resumeFile?: string; concurrency?: number };
+
 /** One mutable copy per library. An incomplete update is explicitly unavailable for restore. */
-export async function updateMirror(snapshot: Snapshot, store: ObjectStore, deviceName: string, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void = () => {}, completed: (manifest: MirrorManifest) => void = () => {}): Promise<CloudLibrary> {
+export async function updateMirror(snapshot: Snapshot, store: ObjectStore, deviceName: string, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void = () => {}, completed: (manifest: MirrorManifest) => void = () => {}, options: MirrorUpdateOptions = {}): Promise<CloudLibrary> {
+	try {
+		const concurrency = options.concurrency ?? 3;
+		if (!Number.isInteger(concurrency) || concurrency < 1 || concurrency > 4) throw new Error("Backup concurrency must be between 1 and 4");
+		const run = (journal?: UploadJournal) => performUpdate(snapshot, store, deviceName, signal, progress, changed, completed, concurrency, journal);
+		return options.resumeFile ? await withUploadJournal(options.resumeFile, snapshot.libraryId, signal, run) : await run();
+	} finally { await rm(snapshot.temporary, { recursive: true, force: true, maxRetries: 3 }); }
+}
+
+async function performUpdate(snapshot: Snapshot, store: ObjectStore, deviceName: string, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void, completed: (manifest: MirrorManifest) => void, concurrency: number, journal?: UploadJournal): Promise<CloudLibrary> {
 	const base = mirrorRoot(snapshot.libraryId);
 	const totalBytes = snapshot.files.reduce((sum, file) => sum + file.size, 0);
 	const summary: LibrarySummary = { format: 1, libraryId: snapshot.libraryId, libraryName: basename(snapshot.root), revision: randomUUID(), updatedAt: new Date().toISOString(), deviceName, fileCount: snapshot.files.length, totalBytes };
 	const updating: CloudLibrary = { ...summary, state: "updating" };
-	try {
-		const previous = await readLibrary(snapshot.libraryId, store, snapshot.temporary, signal);
-		// A failed update may already have overwritten files: only trust a completed copy's hashes.
-		let oldManifest: MirrorManifest | undefined;
-		if (previous?.state === "ready") {
-			try { oldManifest = await readManifest(previous, store, snapshot.temporary, signal); }
-			catch { signal.throwIfAborted(); /* Rebuild a missing/damaged manifest from the authoritative local copy. */ }
-		}
-		const oldFiles = new Map(oldManifest?.files.map((file) => [file.path, file]));
-		await writeJson(store, libraryCatalogKey(snapshot.libraryId), updating, snapshot.temporary, signal);
-		changed(updating);
-		const files: MirrorFile[] = [];
-		let completedBytes = 0, completedFiles = 0;
-		for (const file of snapshot.files) {
-			signal.throwIfAborted();
-			progress({ phase: "upload", totalBytes, totalFiles: snapshot.files.length, completedBytes, completedFiles, currentFile: file.path });
-			const staged = join(snapshot.temporary, "upload");
-			const contents = await stageSnapshotFile(file, staged, signal);
-			const key = `${base}${file.path}`, old = oldFiles.get(file.path);
-			let info = old?.hash === contents.hash ? await store.head(key, signal) : undefined;
-			if (!info || info.size !== file.size || info.etag !== old?.etag) {
-				await store.upload(key, staged, signal, (bytes) => progress({ completedBytes: completedBytes + bytes }));
-				info = await store.head(key, signal);
+	const previous = await readLibrary(snapshot.libraryId, store, snapshot.temporary, signal);
+	let oldManifest: MirrorManifest | undefined;
+	if (previous?.state === "ready") {
+		try { oldManifest = await readManifest(previous, store, snapshot.temporary, signal); }
+		catch { signal.throwIfAborted(); /* Rebuild a missing/damaged manifest from the authoritative local copy. */ }
+	}
+	// Incomplete remote manifests cannot establish integrity. Locally verified progress is tied to that exact revision.
+	const resumed = previous?.state === "updating" && journal ? await journal.read(previous.revision) : [];
+	const wantedPaths = new Set(snapshot.files.map((file) => file.path));
+	const oldFiles = new Map([...(oldManifest?.files ?? []), ...resumed].filter((file) => wantedPaths.has(file.path)).map((file) => [file.path, file]));
+	await journal?.begin(updating.revision, oldFiles.values());
+	signal.throwIfAborted(); journal?.check();
+	await writeJson(store, libraryCatalogKey(snapshot.libraryId), updating, snapshot.temporary, signal);
+	changed(updating);
+	const files = new Array<MirrorFile>(snapshot.files.length), budget = new StagingBudget(64 * 1024 * 1024);
+	const inFlight = new Map<number, number>();
+	let completedBytes = 0, completedFiles = 0, uploadedBytes = 0, skippedFiles = 0;
+	const report = (currentFile?: string) => {
+		const sending = [...inFlight.values()].reduce((sum, bytes) => sum + bytes, 0);
+		progress({ phase: "upload", totalBytes, totalFiles: snapshot.files.length, completedFiles, completedBytes: completedBytes + sending, uploadedBytes: uploadedBytes + sending, skippedFiles, currentFile });
+	};
+	await parallelFiles(snapshot.files, concurrency, signal, async (file, index, worker, transfer) => {
+		try {
+			journal?.check(); report(file.path);
+			const key = `${base}${file.path}`, old = oldFiles.get(file.path), immutable = file.path.startsWith(".loom/");
+			let staged: string | undefined, release: (() => void) | undefined;
+			let uploaded = false;
+			try {
+				// Attributes choose the cheaper read path; they never replace content verification.
+				// Likely edits are hashed while staging, avoiding a second source read for large changed files.
+				const stageFirst = !immutable && (!old || old.size !== file.size || Math.abs(old.mtimeMs - file.mtimeMs) >= 1);
+				if (stageFirst) { release = await budget.acquire(file.size, transfer); staged = join(snapshot.temporary, `upload-${worker}`); }
+				let contents = staged ? await stageSnapshotFile(file, staged, transfer) : await hashSnapshotFile(file, transfer);
+				let info = old?.hash === contents.hash ? await store.head(key, transfer) : undefined;
+				if (!info || info.size !== file.size || info.etag !== old?.etag) {
+					if (!immutable && !staged) {
+						release = await budget.acquire(file.size, transfer);
+						staged = join(snapshot.temporary, `upload-${worker}`);
+						contents = await stageSnapshotFile(file, staged, transfer);
+					}
+					journal?.check();
+					let tracking = true;
+					try {
+						await store.upload(key, staged ?? file.source, transfer, (bytes) => {
+							if (!tracking) return;
+							inFlight.set(index, Math.max(inFlight.get(index) ?? 0, Math.min(file.size, Math.max(0, bytes)))); report(file.path);
+						});
+					} finally { tracking = false; }
+					uploaded = true;
+					info = await store.head(key, transfer);
+				}
+				if (!contents || !info || info.size !== file.size) throw new Error(`Cloud file verification failed: ${file.path}`);
+				const entry: MirrorFile = { path: file.path, size: file.size, mtimeMs: file.mtimeMs, hash: contents.hash, etag: info.etag };
+				await journal?.record(entry);
+				files[index] = entry; inFlight.delete(index);
+				if (uploaded) uploadedBytes += file.size; else skippedFiles++;
+				completedBytes += file.size; completedFiles++; report(file.path);
+			} finally {
+				try { if (staged) await rm(staged, { force: true, maxRetries: 3 }); }
+				finally { release?.(); }
 			}
-			if (!info || info.size !== file.size) throw new Error(`Cloud file verification failed: ${file.path}`);
-			files.push({ ...contents, etag: info.etag });
-			completedBytes += file.size; completedFiles++;
-			progress({ completedBytes, completedFiles });
-			await rm(staged, { force: true });
+		} catch (error) { throw new FileTransferError(file.path, error); }
+	}).catch((error) => { if (error instanceof FileTransferError) progress({ currentFile: error.path }); throw error; });
+	const empty = join(snapshot.temporary, "empty"); await writeFile(empty, "");
+	// Independent HEAD/PUT requests overlap, while large file staging stays within the shared byte budget.
+	await parallelFiles(snapshot.directories, concurrency, signal, async (path, _index, _worker, transfer) => {
+		journal?.check();
+		const key = `${base}${path}/`, info = await store.head(key, transfer);
+		if (!info || info.size !== 0) await store.upload(key, empty, transfer);
+	});
+	journal?.check();
+	await assertCurrent(updating, store, snapshot.temporary, signal);
+	const manifest: MirrorManifest = { format: 1, library: summary, sourceRoot: snapshot.root, sourceAliases: [snapshot.sourceRoot], directories: snapshot.directories, files };
+	const manifestHash = await writeJson(store, mirrorManifestKey(snapshot.libraryId), manifest, snapshot.temporary, signal);
+	await assertCurrent(updating, store, snapshot.temporary, signal);
+	const wanted = new Set([base, mirrorManifestKey(snapshot.libraryId), ...files.map((file) => `${base}${file.path}`), ...snapshot.directories.map((path) => `${base}${path}/`)]);
+	progress({ phase: "delete", currentFile: undefined });
+	// All workers have settled successfully before deletion can start.
+	for await (const key of store.list(base, signal)) {
+		signal.throwIfAborted(); journal?.check();
+		if (!key.startsWith(base)) throw new Error("Refusing to delete outside the current cloud library");
+		if (!wanted.has(key)) {
+			const path = key.slice(base.length);
+			validateRelativePath(path.replace(/\/$/, ""), false);
+			progress({ currentFile: path }); await store.remove(key, signal);
 		}
-		const empty = join(snapshot.temporary, "empty"); await writeFile(empty, "");
-		// Explicit zero-byte folder markers also keep empty directories visible in COS.
-		for (const path of snapshot.directories) {
-			signal.throwIfAborted();
-			const key = `${base}${path}/`, info = await store.head(key, signal);
-			if (!info || info.size !== 0) await store.upload(key, empty, signal);
-		}
-		await assertCurrent(updating, store, snapshot.temporary, signal);
-		const manifest: MirrorManifest = { format: 1, library: summary, sourceRoot: snapshot.root, sourceAliases: [snapshot.sourceRoot], directories: snapshot.directories, files };
-		const manifestHash = await writeJson(store, mirrorManifestKey(snapshot.libraryId), manifest, snapshot.temporary, signal);
-		await assertCurrent(updating, store, snapshot.temporary, signal);
-		const wanted = new Set([base, mirrorManifestKey(snapshot.libraryId), ...files.map((file) => `${base}${file.path}`), ...snapshot.directories.map((path) => `${base}${path}/`)]);
-		progress({ phase: "delete", currentFile: undefined });
-		// Uploads must all succeed before deletion. The fixed library prefix bounds every removal.
-		for await (const key of store.list(base, signal)) {
-			signal.throwIfAborted();
-			if (!key.startsWith(base)) throw new Error("Refusing to delete outside the current cloud library");
-			if (!wanted.has(key)) {
-				const path = key.slice(base.length);
-				// Providers may normalize dot segments/backslashes; never let an untrusted listing escape.
-				validateRelativePath(path.replace(/\/$/, ""), false);
-				progress({ currentFile: path });
-				progress({ currentFile: path }); await store.remove(key, signal);
-			}
-		}
-		await assertCurrent(updating, store, snapshot.temporary, signal);
-		const ready: CloudLibrary = { ...summary, state: "ready", manifestHash };
-		await writeJson(store, libraryCatalogKey(snapshot.libraryId), ready, snapshot.temporary, signal);
-		changed(ready);
-		completed(manifest);
-		return ready;
-	} finally { await rm(snapshot.temporary, { recursive: true, force: true, maxRetries: 3 }); }
+	}
+	journal?.check();
+	await assertCurrent(updating, store, snapshot.temporary, signal);
+	const ready: CloudLibrary = { ...summary, state: "ready", manifestHash };
+	await writeJson(store, libraryCatalogKey(snapshot.libraryId), ready, snapshot.temporary, signal);
+	changed(ready); completed(manifest);
+	await journal?.clear();
+	return ready;
 }
 
 /** A completed cloud manifest is a comparison baseline, never an upload history. */

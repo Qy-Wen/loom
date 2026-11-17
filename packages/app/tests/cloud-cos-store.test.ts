@@ -69,6 +69,9 @@ test("official SDK signs requests, selects multipart for large files, paginates 
 		assert.deepEqual(objects.get("loom/v1/large-video"), video);
 		assert.equal(seen.filter((value) => value.endsWith(" part")).length, 2);
 		assert.ok(!seen.some((value) => value.startsWith("POST loom/v1/records/a")), "small files use simple PUT");
+		const parallel = ["parallel/a", "parallel/b", "parallel/c"];
+		await Promise.all(parallel.map((key) => store.upload(key, file, signal)));
+		for (const key of parallel) assert.deepEqual(objects.get(`loom/v1/${key}`), video, "parallel SDK tasks preserve distinct objects");
 		const output = join(directory, "download");
 		await store.download("large-video", output, signal, video.length);
 		assert.deepEqual(await readFile(output), video);

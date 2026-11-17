@@ -17,7 +17,7 @@ export class CosObjectStore implements ObjectStore {
 	readonly #config: CosCloudConfig;
 	constructor(config: CosCloudConnection, client?: COS) {
 		this.#config = config;
-		this.#client = client ?? new COS({ SecretId: config.credentials.secretId, SecretKey: config.credentials.secretKey, Protocol: "https:", Timeout: 30_000, ChunkRetryTimes: 3, ChunkParallelLimit: 3, FileParallelLimit: 1, UploadCheckContentMd5: true });
+		this.#client = client ?? new COS({ SecretId: config.credentials.secretId, SecretKey: config.credentials.secretKey, Protocol: "https:", Timeout: 30_000, ChunkRetryTimes: 3, ChunkParallelLimit: 3, FileParallelLimit: 3, UploadCheckContentMd5: true });
 	}
 	#params(key: string) { return { Bucket: this.#config.bucket, Region: this.#config.region, Key: `${this.#config.prefix}/${key}` }; }
 	async head(key: string, signal: AbortSignal): Promise<ObjectInfo | undefined> {
