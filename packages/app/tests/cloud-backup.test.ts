@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -161,6 +161,39 @@ test("real SQLite, graph and durable chat round-trip preserves IDs, properties, 
 		assert.equal((await (await chat.conversation(session.id)).agent(context)).cwd, join(restored, "notes"));
 		assert.equal(await readRestoreMarker(restored), undefined);
 	} finally { await chat.close(); await core.close(); await rm(root, { recursive: true, force: true }); await rm(parent, { recursive: true, force: true }); }
+});
+
+test("restore uses the original root name directly and preserves existing files and empty folders", async () => {
+	const root = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-restore-name-")), store = new MemoryStore();
+	try {
+		const record = await updateMirror(await captureSnapshot(root, signal()), store, "device", signal(), () => {});
+		const name = basename(root), destination = await realpath(parent);
+		const restored = await restoreMirror(record.libraryId, parent, store, signal(), () => {});
+		assert.equal(restored, join(destination, name));
+		assert.deepEqual(await readdir(parent), [name], "there is no wrapper folder");
+		assert.equal(await readFile(join(restored, "notes/one.md"), "utf8"), "hello backup");
+		await put(restored, "keep.txt", "existing library");
+		await mkdir(join(parent, `${name} 2`));
+		await writeFile(join(parent, `${name} 3`), "existing file");
+		const second = await restoreMirror(record.libraryId, parent, store, signal(), () => {});
+		assert.equal(second, join(destination, `${name} 4`));
+		assert.equal(await readFile(join(second, "notes/one.md"), "utf8"), "hello backup");
+		assert.equal(await readFile(join(restored, "keep.txt"), "utf8"), "existing library");
+		assert.deepEqual(await readdir(join(parent, `${name} 2`)), []);
+		assert.equal(await readFile(join(parent, `${name} 3`), "utf8"), "existing file");
+	} finally { await rm(root, { recursive: true, force: true }); await rm(parent, { recursive: true, force: true }); }
+});
+
+test("restore rejects unsafe root names before publishing a directory", async () => {
+	const root = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-restore-unsafe-name-")), store = new MemoryStore();
+	try {
+		const record = await updateMirror(await captureSnapshot(root, signal()), store, "device", signal(), () => {});
+		for (const libraryName of ["../escape", "nested/library", "nested\\library", "", ".", "..", "/absolute", "C:/Users/test"]) {
+			store.objects.set(libraryCatalogKey(record.libraryId), Buffer.from(JSON.stringify({ ...record, libraryName })));
+			await assert.rejects(restoreMirror(record.libraryId, parent, store, signal(), () => {}), /Unsafe/);
+			assert.deepEqual(await readdir(parent), []);
+		}
+	} finally { await rm(root, { recursive: true, force: true }); await rm(parent, { recursive: true, force: true }); }
 });
 
 test("latest mirrors retain paths, skip unchanged uploads and remove files only in their own library", async () => {

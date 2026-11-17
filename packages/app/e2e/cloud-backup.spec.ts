@@ -1,5 +1,5 @@
-import { readFile, readdir, rm, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile, readdir, realpath, rm, writeFile } from "node:fs/promises";
+import { basename, dirname, join } from "node:path";
 import { expect, test } from "./loom.ts";
 
 test("COS settings, latest cloud copy, interrupted retry, deletion and restore work through Electron IPC", async ({ loomPage: page, electronApp }) => {
@@ -140,7 +140,8 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	await settings.getByRole("button", { name: "Restore to new folder", exact: true }).click();
 	await expect(settings.getByRole("button", { name: "Open restored library", exact: true })).toBeVisible();
 	const restored = (await page.evaluate(() => window.loom.getCloudBackup())).job!.restoredPath!;
-	expect(restored).not.toBe(root);
+	expect(restored).toBe(join(await realpath(dirname(root)), `${basename(root)} 2`));
+	expect(await readFile(join(root, "cloud-note.md"), "utf8")).toBe("latest cloud copy");
 	expect(await readFile(join(restored, "cloud-note.md"), "utf8")).toBe("latest cloud copy");
 	expect(await readFile(join(restored, "after-preview.txt"), "utf8")).toBe("written after checking");
 	await settings.getByRole("button", { name: "Open restored library", exact: true }).click();

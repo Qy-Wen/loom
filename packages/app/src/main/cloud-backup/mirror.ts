@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { mkdir, mkdtemp, open, readFile, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
+import { lstat, mkdir, mkdtemp, open, readFile, realpath, rename, rm, utimes, writeFile } from "node:fs/promises";
 import { basename, dirname, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { CloudLibrary } from "../../shared/cloud-backup.ts";
@@ -8,6 +8,7 @@ import { hashFile, hashSnapshotFile, stageSnapshotFile, validateBackupPath, vali
 
 import { withUploadJournal, type UploadedFile, type UploadJournal } from "./upload-journal.ts";
 import { parallelFiles, StagingBudget } from "./upload-pool.ts";
+import { retryWindowsFileOperation } from "@loom/core/fs";
 
 type LibrarySummary = Omit<CloudLibrary, "state" | "manifestHash">;
 type MirrorFile = UploadedFile;
@@ -233,10 +234,13 @@ export async function listCloudLibraries(store: ObjectStore, signal: AbortSignal
 
 /** Verify a complete current copy, and publish only a new local directory. */
 export async function restoreMirror(libraryId: string, parent: string, store: ObjectStore, signal: AbortSignal, progress: Progress, completed: (manifest: MirrorManifest) => void = () => {}): Promise<string> {
-	const temporary = await mkdtemp(join(await realpath(parent), ".loom-restore-"));
+	parent = await realpath(parent);
+	const temporary = await mkdtemp(join(parent, ".loom-restore-"));
 	try {
 		const library = await readLibrary(libraryId, store, temporary, signal);
 		if (!library || library.state !== "ready") throw new Error("Cloud copy is incomplete. Update it from the source library before restoring.");
+		validateRelativePath(library.libraryName);
+		if (library.libraryName.includes("/")) throw new Error("Unsafe library name in backup");
 		const manifest = await readManifest(library, store, temporary, signal);
 		const output = join(temporary, "library"); await mkdir(output);
 		for (const path of [...manifest.directories].sort((a, b) => a.split("/").length - b.split("/").length)) { signal.throwIfAborted(); await mkdir(join(output, path)); }
@@ -257,9 +261,25 @@ export async function restoreMirror(libraryId: string, parent: string, store: Ob
 		const marker = join(output, ".loom/backup/restore.json"); await mkdir(dirname(marker), { recursive: true });
 		await writeFile(marker, JSON.stringify({ version: 1, sourceRoot: manifest.sourceRoot, sourceAliases: manifest.sourceAliases }));
 		signal.throwIfAborted();
-		const container = await mkdtemp(join(parent, "Loom-restored-")), destination = join(container, "Library");
-		try { await rename(output, destination); }
-		catch (error) { await rm(container, { recursive: true, force: true }); throw error; }
+		const destination = await publishRestored(output, parent, library.libraryName, signal);
 		completed(manifest); return destination;
 	} finally { await rm(temporary, { recursive: true, force: true, maxRetries: 3 }); }
+}
+
+/** Use the original root name, following the library's existing numeric collision convention. */
+async function publishRestored(output: string, parent: string, name: string, signal: AbortSignal): Promise<string> {
+	for (let index = 0; ; index++) {
+		signal.throwIfAborted();
+		const destination = join(parent, index === 0 ? name : `${name} ${index + 1}`);
+		try { await lstat(destination); continue; }
+		catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+		try {
+			await retryWindowsFileOperation(() => rename(output, destination), { beforeAttempt: () => signal.throwIfAborted() });
+			return destination;
+		} catch (error) {
+			// A destination created since the check must remain intact.
+			if (["EEXIST", "ENOTEMPTY"].includes((error as NodeJS.ErrnoException).code ?? "")) continue;
+			throw error;
+		}
+	}
 }
