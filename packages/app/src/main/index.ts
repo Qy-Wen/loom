@@ -1219,7 +1219,7 @@ app
 				return parent;
 			},
 			openRestored: async (path) => { await applyOpenedLibrary(path); },
-		}, publishCloudBackup, createObjectStore);
+		}, publishCloudBackup, createObjectStore, join(app.getPath("userData"), "cloud-backup-state.json"));
 		registerCloudBackupIpc(cloudBackup);
 		requireChat().setTracePublisher(publishDevTrace);
 		registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
@@ -1327,6 +1327,7 @@ async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (ro
 		await requireChat().close();
 		await beforeOpen?.(rootPath);
 		const snapshot = await localCore.openLibrary(rootPath);
+		await cloudBackup?.openLibrary(snapshot.rootPath);
 		if (snapshot.rootPath) {
 			requireChat().setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));
 			await requireChat().openLibrary(snapshot.rootPath);

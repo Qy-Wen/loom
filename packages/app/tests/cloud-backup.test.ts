@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { createHash, randomUUID } from "node:crypto";
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -16,6 +16,7 @@ import type { ObjectStore } from "../src/main/cloud-backup/object-store.ts";
 import { listCloudLibraries, restoreMirror, updateMirror, mirrorRoot, mirrorManifestKey, libraryCatalogKey, type MirrorManifest } from "../src/main/cloud-backup/mirror.ts";
 import type { CloudLibrary } from "../src/shared/cloud-backup.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
+import { previewMirror } from "../src/main/cloud-backup/preview.ts";
 
 class MemoryStore implements ObjectStore {
 	objects = new Map<string, Buffer>();
@@ -50,6 +51,99 @@ async function workspace() {
 	await mkdir(join(root, "empty"));
 	return root;
 }
+
+test("preview is read-only and detects content changes, deletions, empty folders and cloud damage", async () => {
+	const root = await workspace(), store = new MemoryStore();
+	async function preview() {
+		const snapshot = await captureSnapshot(root, signal());
+		try { return (await previewMirror(snapshot, store, signal(), () => {})).preview; }
+		finally { await rm(snapshot.temporary, { recursive: true, force: true }); }
+	}
+	try {
+		const initial = await preview();
+		assert.ok(initial.changes.some((file) => file.path === "notes/one.md" && file.kind === "added"));
+		assert.equal(store.objects.size, 0, "preview does not create a cloud copy");
+		const library = await updateMirror(await captureSnapshot(root, signal()), store, "device", signal(), () => {});
+		const uploads = store.uploads.length, removals = store.removed.length;
+		const timestamp = new Date(Date.now() + 10_000);
+		await utimes(join(root, "notes/one.md"), timestamp, timestamp);
+		assert.deepEqual((await preview()).changes, [], "touching a file does not change its content");
+		await put(root, "notes/one.md", "edited"); await put(root, "new.txt", "new");
+		await rm(join(root, "empty"), { recursive: true }); await mkdir(join(root, "new-empty"));
+		await put(root, ".loom/agents/memory/MEMORY.md", "updated memory");
+		const base = mirrorRoot(library.libraryId);
+		store.objects.set(`${base}remote-only.txt`, Buffer.from("delete me"));
+		const result = await preview();
+		for (const [path, kind] of [["notes/one.md", "modified"], ["new.txt", "added"], ["empty", "deleted"], ["new-empty", "added"], ["remote-only.txt", "deleted"], [".loom/agents/memory/MEMORY.md", "modified"]]) assert.ok(result.changes.some((change) => change.path === path && change.kind === kind), `${path}: ${kind}`);
+		assert.equal(result.uploadBytes, Buffer.byteLength("editednewupdated memory"));
+		assert.equal(store.uploads.length, uploads); assert.equal(store.removed.length, removals);
+		await put(root, "notes/one.md", "hello backup");
+		assert.ok(!(await preview()).changes.some((change) => change.path === "notes/one.md"), "reverting content removes the modification");
+		store.objects.set(`${base}notes/one.md`, Buffer.from("cloud changed"));
+		assert.ok((await preview()).changes.some((change) => change.path === "notes/one.md"), "remote ETag drift requires repair even if local content matches the manifest");
+		const manifestKey = mirrorManifestKey(library.libraryId), manifest = store.objects.get(manifestKey)!;
+		store.objects.delete(manifestKey); assert.equal((await preview()).repair, true); store.objects.set(manifestKey, manifest);
+		store.afterDownload = (key) => { if (key === manifestKey) store.objects.set(libraryCatalogKey(library.libraryId), Buffer.from(JSON.stringify({ ...library, revision: randomUUID() }))); };
+		await assert.rejects(preview(), /changed during preview/);
+		store.afterDownload = undefined;
+		const snapshot = await captureSnapshot(root, signal()), abort = new AbortController();
+		try { await assert.rejects(previewMirror(snapshot, store, abort.signal, () => abort.abort()), { name: "AbortError" }); }
+		finally { await rm(snapshot.temporary, { recursive: true, force: true }); }
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("local status survives restart, separates libraries and destinations, and keeps edits during upload pending", async () => {
+	const first = await workspace(), second = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-cloud-state-"));
+	const settings = new CloudConfigStore(join(parent, "settings.json"), testChatCipher());
+	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", prefix: "loom/v1", credentials: { secretId: "id", secretKey: "key" } };
+	await settings.save(config);
+	const store = new MemoryStore(); let current = first;
+	const host = { capture: (signal: AbortSignal) => captureSnapshot(current, signal), pickRestoreParent: async () => parent, openRestored: async () => {} };
+	const statePath = join(parent, "state.json");
+	let controller = new CloudBackupController(settings, host, () => {}, () => store, statePath);
+	async function waitUntil(predicate: () => Promise<boolean>) {
+		const deadline = Date.now() + 5000;
+		while (!await predicate()) { if (Date.now() > deadline) throw new Error("State did not settle"); await new Promise((resolve) => setTimeout(resolve, 10)); }
+	}
+	async function run(operation: "backup" | "preview") { await controller.start(operation); await waitUntil(async () => (await controller.view()).job?.status !== "running"); const view = await controller.view(); assert.equal(view.job?.status, "completed", view.job?.error); return view.localLibrary!; }
+	try {
+		await controller.openLibrary(first); assert.equal((await controller.view()).localLibrary?.status, "never");
+		assert.ok((await run("preview")).preview!.changes.length > 0); assert.equal(store.uploads.length, 0);
+		const backedUp = await run("backup"); assert.ok(backedUp.lastBackupAt);
+		await controller.close(); controller = new CloudBackupController(settings, host, () => {}, () => store, statePath);
+		await controller.openLibrary(first);
+		assert.equal((await controller.view()).localLibrary?.lastBackupAt, backedUp.lastBackupAt);
+		assert.equal((await controller.view()).localLibrary?.status, "unchecked", "matching stat attributes alone do not prove content equality");
+		assert.equal((await run("preview")).preview!.changes.length, 0);
+		assert.equal((await controller.view()).localLibrary?.status, "current");
+		await put(first, ".loom/thumbnails/a.webp", "new cache");
+		await new Promise((resolve) => setTimeout(resolve, 100));
+		assert.equal((await controller.view()).localLibrary?.status, "current", "cache edits do not invalidate backups");
+		await put(first, ".loom/agents/memory/MEMORY.md", "new memory");
+		await waitUntil(async () => (await controller.view()).localLibrary?.preview?.stale === true);
+		assert.equal((await controller.view()).localLibrary?.status, "changed", "persistent metadata is watched too");
+		current = second; await controller.openLibrary(second); assert.equal((await controller.view()).localLibrary?.status, "never");
+		current = first; await controller.openLibrary(first); assert.equal((await controller.view()).localLibrary?.lastBackupAt, backedUp.lastBackupAt);
+		store.fail = (key) => key.startsWith("libraries/"); await controller.start("backup"); await waitUntil(async () => (await controller.view()).job?.status !== "running");
+		assert.equal((await controller.view()).localLibrary?.status, "failed");
+		await controller.close(); controller = new CloudBackupController(settings, host, () => {}, () => store, statePath);
+		await controller.openLibrary(first); assert.equal((await controller.view()).localLibrary?.status, "failed");
+		assert.equal((await controller.view()).localLibrary?.retryOperation, "backup");
+		assert.equal((await controller.view()).localLibrary?.lastBackupAt, backedUp.lastBackupAt, "a failed update does not advance the baseline");
+		store.fail = undefined;
+		assert.equal((await run("preview")).preview?.repair, true);
+		await controller.close(); controller = new CloudBackupController(settings, host, () => {}, () => store, statePath);
+		await controller.openLibrary(first); assert.notEqual((await controller.view()).localLibrary?.status, "failed", "a successful repair preview clears the previous check error");
+		const upload = store.upload.bind(store); let editDuringUpload = true;
+		store.upload = async (...args) => { await upload(...args); if (editDuringUpload) { editDuringUpload = false; await put(first, "during-upload.txt", "new pending file"); } };
+		assert.equal((await run("backup")).status, "changed", "files created during backup must remain pending");
+		assert.ok((await run("preview")).preview!.changes.some((change) => change.path === "during-upload.txt"));
+		await controller.save({ ...config, prefix: "different" });
+		assert.equal((await controller.view()).localLibrary?.lastBackupAt, undefined, "a new destination has its own baseline");
+		assert.equal((await controller.view()).localLibrary?.status, "unchecked", "no local record does not prove that the cloud has no backup");
+		await controller.save(config); assert.ok((await controller.view()).localLibrary?.lastBackupAt);
+	} finally { await controller.close(); await Promise.all([first, second, parent].map((path) => rm(path, { recursive: true, force: true }))); }
+});
 
 test("real SQLite, graph and durable chat round-trip preserves IDs, properties, relations and cwd", { timeout: 40_000 }, async () => {
 	const root = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-cloud-restore-"));

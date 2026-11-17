@@ -13,10 +13,13 @@ export type Progress = (patch: Partial<CloudJob>) => void;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const RESTORE_MARKER = ".loom/backup/restore.json";
 
-function included(path: string): boolean {
+export function included(path: string): boolean {
 	if (path.split("/").at(-1) === ".DS_Store") return false;
 	if (!path.startsWith(".loom/")) return true;
 	return [".loom/metadata-db", ".loom/graph-db", ".loom/grades", ".loom/agents/sessions", ".loom/agents/skills", ".loom/agents/memory", ".loom/agents/tool-results", ".loom/backup/identity.json"].some((base) => path === base || path.startsWith(`${base}/`) || base.startsWith(`${path}/`));
+}
+export function trackedBackupPath(path: string): boolean {
+	return included(path) && !(path.startsWith(".loom/") && (path.endsWith("-shm") || path.endsWith(".lock")));
 }
 function fingerprint(value: Fingerprint): Fingerprint { return { size: value.size, mtimeMs: value.mtimeMs, ctimeMs: value.ctimeMs, ino: value.ino, dev: value.dev }; }
 function same(a: Fingerprint, b: Fingerprint): boolean { return Object.keys(fingerprint(a)).every((key) => a[key as keyof Fingerprint] === b[key as keyof Fingerprint]); }
@@ -87,6 +90,31 @@ export async function hashFile(file: string, signal: AbortSignal): Promise<{ has
 	const hash = createHash("sha256"); let size = 0;
 	for await (const chunk of createReadStream(file, { signal })) { hash.update(chunk); size += chunk.length; }
 	return { hash: hash.digest("hex"), size };
+}
+export async function hashSnapshotFile(file: Snapshot["files"][number], signal: AbortSignal): Promise<{ hash: string; size: number }> {
+	const before = await lstat(file.source);
+	if (!before.isFile() || !same(file, before)) throw new Error(`File changed during preview. Retry: ${file.path}`);
+	const result = await hashFile(file.source, signal);
+	if (result.size !== file.size || !same(file, await lstat(file.source))) throw new Error(`File changed during preview. Retry: ${file.path}`);
+	return result;
+}
+/** Metadata is an immutable capture; check the still-live original files and directory inventory. */
+export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: AbortSignal): Promise<boolean> {
+	const files = new Map(snapshot.files.filter((file) => !file.path.startsWith(".loom/")).map((file) => [file.path, file]));
+	const directories = new Set(snapshot.directories.filter((path) => path !== ".loom" && !path.startsWith(".loom/")));
+	async function walk(parent: string): Promise<boolean> {
+		for (const entry of await readdir(join(snapshot.root, parent), { withFileTypes: true })) {
+			signal.throwIfAborted();
+			const path = parent ? `${parent}/${entry.name}` : entry.name;
+			if (path === ".loom" || !included(path)) continue;
+			if (entry.isSymbolicLink()) return false;
+			if (entry.isDirectory()) { if (!directories.delete(path) || !await walk(path)) return false; }
+			else { const file = files.get(path); if (!file || !same(file, await lstat(join(snapshot.root, path)))) return false; files.delete(path); }
+		}
+		return true;
+	}
+	try { return await walk("") && files.size === 0 && directories.size === 0; }
+	catch { signal.throwIfAborted(); return false; }
 }
 /** Stage one stable file so the provider uploads exactly the bytes whose hash was calculated. */
 export async function stageSnapshotFile(file: Snapshot["files"][number], target: string, signal: AbortSignal): Promise<{ path: string; size: number; mtimeMs: number; hash: string }> {

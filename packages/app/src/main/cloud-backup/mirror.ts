@@ -84,7 +84,7 @@ async function assertCurrent(library: CloudLibrary, store: ObjectStore, temporar
 }
 
 /** One mutable copy per library. An incomplete update is explicitly unavailable for restore. */
-export async function updateMirror(snapshot: Snapshot, store: ObjectStore, deviceName: string, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void = () => {}): Promise<CloudLibrary> {
+export async function updateMirror(snapshot: Snapshot, store: ObjectStore, deviceName: string, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void = () => {}, completed: (manifest: MirrorManifest) => void = () => {}): Promise<CloudLibrary> {
 	const base = mirrorRoot(snapshot.libraryId);
 	const totalBytes = snapshot.files.reduce((sum, file) => sum + file.size, 0);
 	const summary: LibrarySummary = { format: 1, libraryId: snapshot.libraryId, libraryName: basename(snapshot.root), revision: randomUUID(), updatedAt: new Date().toISOString(), deviceName, fileCount: snapshot.files.length, totalBytes };
@@ -140,6 +140,7 @@ export async function updateMirror(snapshot: Snapshot, store: ObjectStore, devic
 				const path = key.slice(base.length);
 				// Providers may normalize dot segments/backslashes; never let an untrusted listing escape.
 				validateRelativePath(path.replace(/\/$/, ""), false);
+				progress({ currentFile: path });
 				progress({ currentFile: path }); await store.remove(key, signal);
 			}
 		}
@@ -147,8 +148,22 @@ export async function updateMirror(snapshot: Snapshot, store: ObjectStore, devic
 		const ready: CloudLibrary = { ...summary, state: "ready", manifestHash };
 		await writeJson(store, libraryCatalogKey(snapshot.libraryId), ready, snapshot.temporary, signal);
 		changed(ready);
+		completed(manifest);
 		return ready;
 	} finally { await rm(snapshot.temporary, { recursive: true, force: true, maxRetries: 3 }); }
+}
+
+/** A completed cloud manifest is a comparison baseline, never an upload history. */
+export async function readMirrorReference(snapshot: Snapshot, store: ObjectStore, signal: AbortSignal): Promise<{ library?: CloudLibrary; manifest?: MirrorManifest }> {
+	const library = await readLibrary(snapshot.libraryId, store, snapshot.temporary, signal);
+	if (!library || library.state !== "ready") return { library };
+	try { return { library, manifest: await readManifest(library, store, snapshot.temporary, signal) }; }
+	catch { signal.throwIfAborted(); return { library }; }
+}
+
+export async function assertMirrorReference(snapshot: Snapshot, library: CloudLibrary | undefined, store: ObjectStore, signal: AbortSignal): Promise<void> {
+	const current = await readLibrary(snapshot.libraryId, store, snapshot.temporary, signal);
+	if (current?.revision !== library?.revision || current?.state !== library?.state) throw new Error("The cloud library changed during preview. Refresh and retry.");
 }
 
 export async function listCloudLibraries(store: ObjectStore, signal: AbortSignal): Promise<CloudLibrary[]> {

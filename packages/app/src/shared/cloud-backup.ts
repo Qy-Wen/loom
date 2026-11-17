@@ -27,9 +27,34 @@ export interface CloudLibrary {
 	revision: string;
 	manifestHash?: string;
 }
+export interface CloudFileChange {
+	path: string;
+	kind: "added" | "modified" | "deleted";
+	type: "file" | "directory";
+	size: number;
+}
+export interface CloudPreview {
+	checkedAt: string;
+	stale: boolean;
+	repair: boolean;
+	uploadBytes: number;
+	changes: CloudFileChange[];
+}
+export interface LocalCloudLibrary {
+	rootPath: string;
+	libraryId?: string;
+	libraryName: string;
+	status: "never" | "unchecked" | "changed" | "current" | "checking" | "failed";
+	lastBackupAt?: string;
+	preview?: CloudPreview;
+	error?: string;
+	retryOperation?: "backup" | "preview";
+}
 export type BackupPhase = "snapshot" | "upload" | "delete" | "download" | "verify" | "list" | "test";
 export interface CloudJob {
-	operation: "backup" | "restore" | "list" | "test";
+	operation: "backup" | "preview" | "restore" | "list" | "test";
+	rootPath?: string;
+	libraryId?: string;
 	status: "running" | "completed" | "failed" | "cancelled";
 	phase: BackupPhase;
 	completedFiles: number;
@@ -44,5 +69,6 @@ export interface CloudBackupView {
 	config: CloudConfig;
 	hasCredentials: boolean;
 	libraries: CloudLibrary[];
+	localLibrary?: LocalCloudLibrary;
 	job?: CloudJob;
 }

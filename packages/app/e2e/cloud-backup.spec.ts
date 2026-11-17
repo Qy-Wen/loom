@@ -69,6 +69,12 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	expect((await page.evaluate(() => window.loom.getCloudBackup())).config.provider).toBe("cos");
 	await settings.getByRole("button", { name: "Test connection", exact: true }).click();
 	await expect(settings.getByRole("region", { name: "Cloud backup progress" })).toContainText("Completed");
+	const localStatus = settings.getByRole("region", { name: "Current library backup", exact: true });
+	await expect(localStatus).toContainText("No successful backup recorded on this computer");
+	await settings.getByRole("button", { name: "Preview changes", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	await expect(localStatus.locator(".cloud-change-list li").filter({ hasText: "cloud-note.md" })).toContainText("Added");
+	expect(await electronApp!.evaluate(() => (globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.size)).toBe(0);
 	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
 	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
@@ -77,6 +83,7 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	await expect(settings.getByLabel("SecretId", { exact: true })).toHaveValue("e2e-secret-id");
 	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveValue("e2e-secret-key-updated");
 	const previous = (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]!;
+	expect((await page.evaluate(() => window.loom.getCloudBackup())).localLibrary?.lastBackupAt).toBe(previous.updatedAt);
 	const remoteRoot = `loom/v1/libraries/${previous.libraryId}/`;
 	let keys = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
 	expect(keys).toContain(`${remoteRoot}cloud-note.md`);
@@ -84,6 +91,15 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	expect(keys.some((key) => key.startsWith("loom/v1/objects/") || key.startsWith("loom/v1/records/"))).toBe(false);
 	await rm(join(root, "obsolete.md"));
 	await writeFile(join(root, "cloud-note.md"), "latest cloud copy");
+	await settings.getByRole("button", { name: "Preview changes", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	await expect(localStatus.locator(".cloud-change-list li").filter({ hasText: "cloud-note.md" })).toContainText("Modified");
+	await expect(localStatus.locator(".cloud-change-list li").filter({ hasText: "obsolete.md" })).toContainText("Deleted");
+	await localStatus.scrollIntoViewIfNeeded();
+	await page.screenshot({ path: test.info().outputPath("cloud-preview.png") });
+	expect(await electronApp!.evaluate((_electron, key) => (globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.has(key), `${remoteRoot}obsolete.md`)).toBe(true);
+	await writeFile(join(root, "after-preview.txt"), "written after checking");
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).localLibrary?.preview?.stale).toBe(true);
 	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]?.revision).not.toBe(previous.revision);
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
@@ -97,6 +113,7 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	const restored = (await page.evaluate(() => window.loom.getCloudBackup())).job!.restoredPath!;
 	expect(restored).not.toBe(root);
 	expect(await readFile(join(restored, "cloud-note.md"), "utf8")).toBe("latest cloud copy");
+	expect(await readFile(join(restored, "after-preview.txt"), "utf8")).toBe("written after checking");
 	await settings.getByRole("button", { name: "Open restored library", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
 	const snapshot = await page.evaluate(() => window.loom.getLibrarySnapshot());
@@ -108,6 +125,7 @@ test("COS settings, latest cloud copy, deletion and restore work through Electro
 	await writeFile(identity, '{"id":"invalid"}');
 	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("failed");
+	await expect(localStatus.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
 	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
 	await page.evaluate((id) => window.loom.setFavorite(id, false), assetId);
 	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).favoriteAssetIds).not.toContain(assetId);

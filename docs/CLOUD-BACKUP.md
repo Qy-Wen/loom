@@ -30,6 +30,9 @@ File names, relative paths and empty directories are preserved. IDs isolate libr
 
 ## Update and restore
 
+- Current library backup shows the last successful backup, detected changes and failures. The local cache is scoped by library ID and cloud destination and survives library switches and restarts. Opening a library compares file attributes; matching attributes still require a content preview for verification.
+- Preview changes lists added, modified and deleted files and empty folders, plus estimated upload bytes. Metadata and chat changes are collapsed separately. It only reads cloud storage. Preparation briefly pauses library and Agent tasks, then hashes every local file; large libraries take time. Estimates exclude manifests and request overhead.
+- File watching covers original files and persistent `.loom` data while excluding caches and local permissions. Changes during or after checking mark the preview as potentially stale; background metadata writes can trigger this too. Updates capture the latest local state; edits during upload remain pending. Offline status does not detect other devices changing the cloud copy; previews refresh the cloud manifest.
 - Includes regular files, metadata and graph databases, grade LUTs, chat history, skills, memory and tool results. Excludes preview caches, traces and local command permissions. Links and special files are rejected.
 - Preparation stops library/Agent tasks, closes storage, copies persistent metadata and inventories files, then reopens the library. Upload runs in the background. A source file changed before staging causes failure and can be retried.
 - Each update reads and hashes files, using remote ETags to upload only new, changed or missing content. Temporary disk usage is approximately persistent metadata plus the largest file. Files over 8 MiB use multipart upload with SDK retries.

@@ -1018,10 +1018,110 @@
 	cursor: pointer;
 }
 
-.cloud-progress { display: flex; flex-direction: column; gap: var(--lm-space-3); }
-.cloud-progress progress { width: 100%; }
-.cloud-progress code { overflow-wrap: anywhere; }
-.cloud-progress > .settings-button { align-self: flex-end; }
-.cloud-library { display: flex; align-items: center; justify-content: space-between; gap: var(--lm-space-5); padding: var(--lm-space-5) 0; border-top: 1px solid var(--lm-border-default); }
-.cloud-library > div { display: flex; flex-direction: column; gap: var(--lm-space-2); min-width: 0; overflow-wrap: anywhere; }
-.cloud-library time, .cloud-library span { color: var(--lm-text-secondary); font-size: var(--lm-text-size-sm); }
+/* Cloud backup: library actions first, with quiet supporting configuration. */
+.cloud-settings { container-type: inline-size; align-content: start; gap: var(--lm-space-7); min-width: 0; }
+.cloud-panel { padding: var(--lm-space-7); min-width: 0; }
+.cloud-panel-heading { display: flex; align-items: center; justify-content: space-between; gap: var(--lm-space-4); margin-bottom: var(--lm-space-7); }
+.cloud-panel-heading h3 { margin: 0; font-size: var(--lm-text-size-md); font-weight: var(--lm-weight-semibold); }
+.cloud-glyph { flex-shrink: 0; width: var(--lm-size-xs); height: var(--lm-size-xs); }
+.cloud-settings .settings-button,
+.cloud-settings .settings-actions button { display: inline-flex; align-items: center; justify-content: center; gap: var(--lm-space-3); white-space: nowrap; }
+.cloud-settings button:focus-visible,
+.cloud-settings summary:focus-visible { outline: 2px solid var(--lm-ring-accent); outline-offset: 2px; }
+.cloud-state { display: inline-flex; align-items: center; gap: var(--lm-space-3); padding: var(--lm-space-2) var(--lm-space-4); border-radius: var(--lm-radius-pill); background: var(--lm-surface-subtle); color: var(--lm-text-secondary); font-size: var(--lm-text-size-xs); white-space: nowrap; }
+.cloud-state-dot { display: inline-block; flex-shrink: 0; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.cloud-state[data-state="current"] { color: var(--lm-text-success); background: var(--lm-surface-success); }
+.cloud-state[data-state="changed"] { color: var(--lm-text-warning); background: var(--lm-surface-warning); }
+.cloud-state[data-state="checking"] { color: var(--lm-text-accent); background: var(--lm-surface-accent); }
+.cloud-state[data-state="failed"] { color: var(--lm-text-danger); background: var(--lm-surface-danger); }
+.cloud-library-identity { display: flex; align-items: center; gap: var(--lm-space-6); min-width: 0; }
+.cloud-icon-tile { display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; width: var(--lm-size-3xl); height: var(--lm-size-3xl); border: 1px solid var(--lm-border-subtle); border-radius: var(--lm-radius-md); background: var(--lm-surface-subtle); color: var(--lm-text-secondary); }
+.cloud-icon-tile .cloud-glyph { width: var(--lm-size-sm); height: var(--lm-size-sm); }
+.cloud-library-identity > div { min-width: 0; }
+.cloud-library-identity strong { display: block; margin-bottom: var(--lm-space-2); font-size: var(--lm-text-size-xl); font-weight: var(--lm-weight-semibold); }
+.cloud-root-path { display: flex; min-width: 0; color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-root-path > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cloud-backup-meta { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--lm-space-3) var(--lm-space-5); margin-top: var(--lm-space-7); color: var(--lm-text-secondary); font-size: var(--lm-text-size-xs); }
+.cloud-backup-meta > :first-child { color: var(--lm-text-muted); }
+.cloud-backup-actions { justify-content: flex-start; flex-wrap: wrap; margin-top: var(--lm-space-7); }
+.cloud-panel .cloud-local-error { margin: var(--lm-space-6) 0 0; }
+.cloud-panel .cloud-notice { margin: var(--lm-space-6) 0 0; padding: var(--lm-space-4) var(--lm-space-5); border-radius: var(--lm-radius-sm); color: var(--lm-text-secondary); background: var(--lm-surface-subtle); }
+.cloud-help { margin-top: var(--lm-space-7); padding-top: var(--lm-space-6); border-top: 1px solid var(--lm-border-subtle); }
+.cloud-help summary { display: flex; align-items: center; gap: var(--lm-space-2); width: fit-content; color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); cursor: pointer; list-style: none; }
+.cloud-help summary::-webkit-details-marker,
+.cloud-change-group summary::-webkit-details-marker { display: none; }
+.cloud-help[open] > summary .cloud-glyph,
+.cloud-change-group[open] > summary .cloud-glyph { transform: rotate(90deg); }
+.cloud-help p { margin: var(--lm-space-5) 0 0; }
+.cloud-preview { margin-top: var(--lm-space-7); padding-top: var(--lm-space-7); border-top: 1px solid var(--lm-border-subtle); }
+.cloud-preview-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: var(--lm-space-3); }
+.cloud-preview-heading h4 { margin: 0; font-size: var(--lm-text-size-sm); font-weight: var(--lm-weight-medium); }
+.cloud-preview-heading time { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-change-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)) minmax(0, 1.4fr); margin: var(--lm-space-6) 0; border: 1px solid var(--lm-border-subtle); border-radius: var(--lm-radius-md); background: var(--lm-surface-subtle); }
+.cloud-change-summary > div { padding: var(--lm-space-6); min-width: 0; }
+.cloud-change-summary > div + div { border-left: 1px solid var(--lm-border-subtle); }
+.cloud-change-summary dt { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-change-summary dd { margin: var(--lm-space-3) 0 0; font-size: var(--lm-text-size-xl); font-weight: var(--lm-weight-medium); font-variant-numeric: tabular-nums; }
+.cloud-change-summary [data-kind="added"] dd { color: var(--lm-text-success); }
+.cloud-change-summary [data-kind="deleted"] dd { color: var(--lm-text-danger); }
+.cloud-change-group { border-top: 1px solid var(--lm-border-subtle); }
+.cloud-change-group > summary { display: flex; align-items: center; gap: var(--lm-space-3); padding: var(--lm-space-5) 0; list-style: none; cursor: pointer; font-size: var(--lm-text-size-xs); color: var(--lm-text-secondary); }
+.cloud-change-group > summary > .cloud-glyph { color: var(--lm-graphic); }
+.cloud-count { margin-left: auto; padding: var(--lm-space-1) var(--lm-space-3); border-radius: var(--lm-radius-sm); background: var(--lm-surface-subtle); color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); font-variant-numeric: tabular-nums; }
+.cloud-change-list { list-style: none; margin: 0; padding: 0; max-height: 240px; overflow: auto; }
+.cloud-change-list li { display: grid; grid-template-columns: 62px minmax(0, 1fr) auto; align-items: baseline; gap: var(--lm-space-4); padding: var(--lm-space-4) 0; border-top: 1px solid var(--lm-border-subtle); font-size: var(--lm-text-size-xs); }
+.cloud-change-list code { min-width: 0; overflow-wrap: anywhere; color: var(--lm-text-secondary); font-family: var(--lm-font-mono); font-size: var(--lm-text-size-xs); }
+.cloud-change-list small { color: var(--lm-text-muted); font-size: inherit; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.cloud-change-kind { color: var(--lm-text-secondary); }
+.cloud-change-kind[data-kind="added"] { color: var(--lm-text-success); }
+.cloud-change-kind[data-kind="deleted"] { color: var(--lm-text-danger); }
+.cloud-show-more { margin: var(--lm-space-4) 0 !important; }
+.cloud-panel .cloud-no-changes { margin: var(--lm-space-6) 0 0; color: var(--lm-text-success); }
+.cloud-progress { display: grid; gap: var(--lm-space-3); margin-top: var(--lm-space-6); padding: var(--lm-space-5) var(--lm-space-6); border: 1px solid var(--lm-border-subtle); border-radius: var(--lm-radius-sm); background: var(--lm-surface-subtle); font-size: var(--lm-text-size-xs); }
+.cloud-progress-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lm-space-3); color: var(--lm-text-muted); }
+.cloud-progress-heading strong { font-size: inherit; font-weight: var(--lm-weight-medium); color: var(--lm-text-secondary); }
+.cloud-progress-heading > .settings-button { margin-left: auto; min-height: var(--lm-size-md); padding: var(--lm-space-2) var(--lm-space-4); font-size: var(--lm-text-size-xs); }
+.cloud-progress[data-status="completed"] .cloud-state-dot { color: var(--lm-text-success); }
+.cloud-progress[data-status="failed"] { border-color: var(--lm-border-danger); background: var(--lm-surface-danger); }
+.cloud-progress[data-status="failed"] .cloud-state-dot { color: var(--lm-text-danger); }
+.cloud-progress progress { width: 100%; height: 4px; accent-color: var(--lm-text-secondary); }
+.cloud-progress-amount { color: var(--lm-text-muted); font-variant-numeric: tabular-nums; }
+.cloud-job-path { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-progress .session-error { margin: 0; }
+.cloud-restored { display: grid; gap: var(--lm-space-4); }
+.cloud-restored p { margin: 0; }
+.cloud-restored code { overflow-wrap: anywhere; color: var(--lm-text-secondary); }
+.cloud-restored > .settings-button { justify-self: start; }
+.cloud-empty { display: flex; align-items: center; gap: var(--lm-space-5); padding: var(--lm-space-6) 0; color: var(--lm-graphic); }
+.cloud-empty > .cloud-glyph { width: var(--lm-size-md); height: var(--lm-size-md); }
+.cloud-panel .cloud-empty p { margin: 0; max-width: 440px; color: var(--lm-text-muted); }
+.cloud-quiet-button { min-height: var(--lm-size-lg); padding: var(--lm-space-2) var(--lm-space-4); }
+.cloud-library { display: flex; align-items: center; gap: var(--lm-space-5); padding: var(--lm-space-6) 0; border-top: 1px solid var(--lm-border-subtle); }
+.cloud-library:last-child { padding-bottom: 0; }
+.cloud-library .cloud-icon-tile { width: var(--lm-size-2xl); height: var(--lm-size-2xl); }
+.cloud-library-info { display: flex; flex: 1; flex-direction: column; gap: var(--lm-space-2); min-width: 0; overflow-wrap: anywhere; }
+.cloud-library-info strong { font-size: var(--lm-text-size-sm); font-weight: var(--lm-weight-medium); }
+.cloud-library-info time,
+.cloud-library-info > span { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-library-info > .cloud-incomplete { color: var(--lm-text-warning); }
+.cloud-library > .settings-button { min-height: var(--lm-size-lg); padding: var(--lm-space-3) var(--lm-space-4); font-size: var(--lm-text-size-xs); }
+.cloud-connection-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--lm-space-6); }
+.cloud-connection-grid label { margin: 0; min-width: 0; }
+.cloud-connection-grid input,
+.cloud-connection-grid select { box-sizing: border-box; width: 100%; min-height: var(--lm-size-xl); color: var(--lm-text-primary); }
+.cloud-connection-grid .settings-secret-input { min-height: var(--lm-size-xl); box-sizing: border-box; }
+.cloud-connection-grid .settings-secret-input input { min-height: 0; }
+.cloud-connection-grid .cloud-field-help { grid-column: 1 / -1; margin: 0; }
+.cloud-configured { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-connection-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--lm-space-6); margin-top: var(--lm-space-7); padding-top: var(--lm-space-6); border-top: 1px solid var(--lm-border-subtle); }
+.cloud-connection-footer > p { display: flex; align-items: flex-start; gap: var(--lm-space-3); flex: 1 1 200px; margin: 0; }
+.cloud-connection-footer > p .cloud-glyph { color: var(--lm-graphic); }
+.cloud-connection-footer .settings-actions { margin: 0; }
+@container (max-width: 460px) {
+	.cloud-change-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.cloud-change-summary .cloud-upload-estimate { grid-column: 1 / -1; border-left: 0; border-top: 1px solid var(--lm-border-subtle); }
+	.cloud-upload-estimate dd { font-size: var(--lm-text-size-md); }
+	.cloud-backup-meta { flex-direction: column; }
+	.cloud-library { flex-wrap: wrap; }
+	.cloud-library > .settings-button { margin-left: auto; }
+}
