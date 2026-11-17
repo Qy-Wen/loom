@@ -57,7 +57,7 @@ test("official SDK signs requests, selects multipart for large files, paginates 
 	const directory = await mkdtemp(join(tmpdir(), "loom-cos-sdk-"));
 	const credentials = { secretId: "test-id", secretKey: "test-key" };
 	const client = new COS({ SecretId: credentials.secretId, SecretKey: credentials.secretKey, Domain: `127.0.0.1:${port}`, Protocol: "http:", Timeout: 2000, ChunkRetryTimes: 0 });
-	const store = new CosObjectStore({ provider: "cos", credentials, bucket: "test-1250000000", region: "ap-shanghai", prefix: "loom/v1" }, client);
+	const store = new CosObjectStore({ provider: "cos", credentials, bucket: "test-1250000000", region: "ap-shanghai" }, client);
 	const signal = new AbortController().signal;
 	try {
 		assert.equal(await store.head("missing", signal), undefined);
@@ -66,25 +66,27 @@ test("official SDK signs requests, selects multipart for large files, paginates 
 		assert.equal((await store.head("records/a", signal))!.size, Buffer.byteLength("small object"));
 		const video = Buffer.alloc(8 * 1024 * 1024 + 1, 7);
 		await writeFile(file, video); await store.upload("large-video", file, signal);
-		assert.deepEqual(objects.get("loom/v1/large-video"), video);
+		assert.deepEqual(objects.get("loom/large-video"), video);
 		assert.equal(seen.filter((value) => value.endsWith(" part")).length, 2);
-		assert.ok(!seen.some((value) => value.startsWith("POST loom/v1/records/a")), "small files use simple PUT");
+		assert.ok(!seen.some((value) => value.startsWith("POST loom/records/a")), "small files use simple PUT");
 		const parallel = ["parallel/a", "parallel/b", "parallel/c"];
 		await Promise.all(parallel.map((key) => store.upload(key, file, signal)));
-		for (const key of parallel) assert.deepEqual(objects.get(`loom/v1/${key}`), video, "parallel SDK tasks preserve distinct objects");
+		for (const key of parallel) assert.deepEqual(objects.get(`loom/${key}`), video, "parallel SDK tasks preserve distinct objects");
 		const output = join(directory, "download");
 		await store.download("large-video", output, signal, video.length);
 		assert.deepEqual(await readFile(output), video);
 		await assert.rejects(store.download("large-video", output, signal, 1), /size is invalid/);
-		objects.set("loom/v1/records/b", Buffer.from("b")); objects.set("loom/v1/records/c", Buffer.from("c"));
+		objects.set("loom/records/b", Buffer.from("b")); objects.set("loom/records/c", Buffer.from("c"));
+		objects.set("unrelated/records/b", Buffer.from("outside Loom")); objects.set("loom/v1/records/b", Buffer.from("previous location"));
 		const listed: string[] = []; for await (const key of store.list("records/", signal)) listed.push(key);
 		assert.deepEqual(listed, ["records/a", "records/b", "records/c"]);
 		await store.remove("records/b", signal);
 		assert.equal(await store.head("records/b", signal), undefined);
+		assert.ok(objects.has("unrelated/records/b")); assert.ok(objects.has("loom/v1/records/b"), "deletion is scoped to the fixed Loom directory");
 		await store.remove("missing", signal);
 		denyDelete = true;
 		await assert.rejects(store.remove("records/a", signal), { message: "COS DeleteObject: AccessDenied (HTTP 403)" });
-		assert.ok(objects.has("loom/v1/records/a"), "failed deletion leaves the object intact");
+		assert.ok(objects.has("loom/records/a"), "failed deletion leaves the object intact");
 		const abort = new AbortController();
 		await assert.rejects(store.download("large-video", output, abort.signal, video.length, () => abort.abort()));
 	} finally {

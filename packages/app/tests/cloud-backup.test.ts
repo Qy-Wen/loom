@@ -73,7 +73,7 @@ test("preview is read-only and detects content changes, deletions, empty folders
 test("local status survives restart, separates libraries and destinations, and keeps edits during upload pending", async () => {
 	const first = await workspace(), second = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-cloud-state-"));
 	const settings = new CloudConfigStore(join(parent, "settings.json"), testChatCipher());
-	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", prefix: "loom/v1", credentials: { secretId: "id", secretKey: "key" } };
+	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", credentials: { secretId: "id", secretKey: "key" } };
 	await settings.save(config);
 	const store = new MemoryStore(); let current = first;
 	const host = { capture: (signal: AbortSignal) => captureSnapshot(current, signal), pickRestoreParent: async () => parent, openRestored: async () => {} };
@@ -116,7 +116,7 @@ test("local status survives restart, separates libraries and destinations, and k
 		store.upload = async (...args) => { await upload(...args); if (editDuringUpload) { editDuringUpload = false; await put(first, "during-upload.txt", "new pending file"); } };
 		assert.equal((await run("backup")).status, "changed", "files created during backup must remain pending");
 		assert.ok((await run("preview")).preview!.changes.some((change) => change.path === "during-upload.txt"));
-		await controller.save({ ...config, prefix: "different" });
+		await controller.save({ ...config, bucket: "other-1250000000" });
 		assert.equal((await controller.view()).localLibrary?.lastBackupAt, undefined, "a new destination has its own baseline");
 		assert.equal((await controller.view()).localLibrary?.status, "unchecked", "no local record does not prove that the cloud has no backup");
 		await controller.save(config); assert.ok((await controller.view()).localLibrary?.lastBackupAt);
@@ -327,7 +327,7 @@ test("links are rejected instead of uploading files outside the library", { skip
 test("COS settings encrypt credentials, preserve them on edits and never return secrets in views", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "loom-cloud-config-"));
 	const path = join(directory, "cloud.json"), cipher = testChatCipher();
-	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", prefix: "loom/v1", credentials: { secretId: "private-id", secretKey: "private-key" } };
+	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", credentials: { secretId: "private-id", secretKey: "private-key" } };
 	try {
 		const store = new CloudConfigStore(path, cipher);
 		await store.save(config);
@@ -335,7 +335,7 @@ test("COS settings encrypt credentials, preserve them on edits and never return 
 		assert.deepEqual("credentials" in editable ? editable.credentials : undefined, config.credentials);
 		assert.ok(!(await readFile(path, "utf8")).includes("private-"));
 		assert.ok(!JSON.stringify(await store.view()).includes("private-"));
-		await store.save({ ...config, prefix: "other/v1", credentials: { secretId: "", secretKey: "" } });
+		await store.save({ ...config, region: "ap-beijing", credentials: { secretId: "", secretKey: "" } });
 		assert.equal((await store.load()).credentials.secretKey, "private-key");
 		await assert.rejects(new CloudConfigStore(path, { ...cipher, available: () => false }).save(config), /unavailable/);
 		await assert.rejects(store.save({ ...config, bucket: "no-appid" }), /APPID/);
@@ -347,7 +347,7 @@ test("controller serializes jobs, tests read/write/delete access, cancels safely
 	const root = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-cloud-controller-"));
 	const store = new MemoryStore();
 	const settings = new CloudConfigStore(join(parent, "settings.json"), testChatCipher());
-	await settings.save({ provider: "cos", bucket: "loom-1250000000", region: "ap-shanghai", prefix: "loom/v1", credentials: { secretId: "id", secretKey: "key" } });
+	await settings.save({ provider: "cos", bucket: "loom-1250000000", region: "ap-shanghai", credentials: { secretId: "id", secretKey: "key" } });
 	let restoredPath: string | undefined;
 	const events: unknown[] = [];
 	const controller = new CloudBackupController(settings, { capture: (signal) => captureSnapshot(root, signal), pickRestoreParent: async () => parent, openRestored: async (path) => { restoredPath = path; } }, (view) => events.push(view), () => store);

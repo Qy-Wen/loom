@@ -10,17 +10,17 @@ Loom 直接访问你自己的云存储，不需要 Loom 服务器或账号。当
 
 1. 创建一个**私有、标准存储**的 COS 桶，记下完整桶名（包含 APPID）和地域，例如 `ap-shanghai`。桶的版本控制保持关闭；已开启的桶可暂停版本控制，但已有历史版本仍需单独清理，见[版本控制配置](https://cloud.tencent.com/document/product/436/19884)。
 2. 创建专用 CAM 子用户 API 密钥，只授权该桶。需要 `GetBucket`、`HeadObject`、`GetObject`、`PutObject`、`DeleteObject`、`InitiateMultipartUpload`、`UploadPart`、`CompleteMultipartUpload`、`ListMultipartUploads`、`ListParts`。见 [COS 授权指南](https://cloud.tencent.com/document/practice/436/31923)和 [Node 上传指南](https://cloud.tencent.com/document/product/436/64980)。无需修改 ACL 的权限。
-3. 打开「设置 → 云备份」，选择腾讯云 COS，填写桶名、地域及密钥。前缀默认 `loom/v1`，只是存放路径，可自行修改。保存后测试连接，测试会验证列举、上传、读取及删除权限。
-4. 打开素材库，点击「更新云端副本」。换电脑后配置相同的桶和前缀，刷新「云端素材库」，选择一份已完成的副本恢复，再打开恢复的素材库。
+3. 打开「设置 → 云备份」，选择腾讯云 COS，填写桶名、地域及密钥。数据统一存放在桶内固定的 `loom/` 目录，无需配置前缀。保存后测试连接，测试会验证列举、上传、读取及删除权限。
+4. 打开素材库，点击「更新云端副本」。换电脑后配置相同的桶，刷新「云端素材库」，选择一份已完成的副本恢复，再打开恢复的素材库。
 
 请求在 Electron 主进程中发起，无需配置桶的 CORS。凭证通过系统加密保存在应用数据目录，不进入素材库。保存后的凭证保留在输入框中，默认遮罩，可查看或修改；每台电脑单独配置凭证和模型。
 
-连接测试错误会显示失败的 COS 操作。若出现 `COS DeleteObject: AccessDenied (HTTP 403)`，检查专用子用户的 CAM 策略及桶策略是否允许在配置前缀下执行 `cos:DeleteObject`（包括 `connection-test/` 中的临时探针）。没有需要清理的远端文件时，更新可能成功，但不代表具有删除权限。
+连接测试错误会显示失败的 COS 操作。若出现 `COS DeleteObject: AccessDenied (HTTP 403)`，检查专用子用户的 CAM 策略及桶策略是否允许在 `loom/` 下执行 `cos:DeleteObject`（包括 `loom/connection-test/` 中的临时探针）。没有需要清理的远端文件时，更新可能成功，但不代表具有删除权限。
 
 ## 存储结构
 
 ```text
-<备份前缀>/
+loom/
   libraries/<素材库ID>/
     照片/旅行/a.jpg
     文档/笔记.md
@@ -28,7 +28,7 @@ Loom 直接访问你自己的云存储，不需要 Loom 服务器或账号。当
   .loom/libraries/<素材库ID>.json   每个库一条当前状态
 ```
 
-云端使用原文件名和相对路径，空目录也会保留。素材库 ID 区分不同的库，根文件夹改名后仍更新同一副本。哈希只用于检查内容变化与恢复校验，不作为文件名。没有按备份时间不断增加的目录；每次覆盖当前状态。
+云端使用原文件名和相对路径，空目录也会保留。已有 `loom/v1/` 或其他自定义路径中的副本保留，新操作统一使用 `loom/`，不会自动迁移这些副本。素材库 ID 区分不同的库，根文件夹改名后仍更新同一副本。哈希只用于检查内容变化与恢复校验，不作为文件名。没有按备份时间不断增加的目录；每次覆盖当前状态。
 
 ## 更新和恢复
 

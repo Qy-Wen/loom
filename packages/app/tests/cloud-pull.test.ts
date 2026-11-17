@@ -14,7 +14,7 @@ import type { CloudPullChoice } from "../src/shared/cloud-backup.ts";
 import { MemoryStore } from "./fixtures/cloud-store.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 
-const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", prefix: "loom/v1" };
+const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai" };
 const signal = () => new AbortController().signal;
 async function put(root: string, path: string, text: string) { await mkdir(dirname(join(root, path)), { recursive: true }); await writeFile(join(root, path), text); }
 async function setup() {

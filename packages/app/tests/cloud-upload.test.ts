@@ -14,7 +14,7 @@ import { StagingBudget } from "../src/main/cloud-backup/upload-pool.ts";
 import { MemoryStore } from "./fixtures/cloud-store.ts";
 
 const signal = () => new AbortController().signal;
-const config = { provider: "cos" as const, bucket: "test-1250000000", region: "ap-shanghai", prefix: "loom/v1" };
+const config = { provider: "cos" as const, bucket: "test-1250000000", region: "ap-shanghai" };
 async function fixture() {
 	const parent = await mkdtemp(join(tmpdir(), "loom-upload-")), root = join(parent, "library"); await mkdir(root);
 	for (const path of ["a.txt", "b.txt", "c.txt", "deleted.txt"]) await writeFile(join(root, path), `original ${path}`);
@@ -63,7 +63,7 @@ test("retry reuses completed files and baseline candidates, survives a torn log 
 		store.objects.set(key, Buffer.from(JSON.stringify({ ...catalog, revision: randomUUID() })));
 		store.fail = undefined; store.uploads = []; await update();
 		assert.ok(store.uploads.includes(`${base}a.txt`), "a revision mismatch discards stale progress");
-		assert.notEqual(uploadJournalPath(parent, config, first.libraryId), uploadJournalPath(parent, { ...config, prefix: "other" }, first.libraryId));
+		assert.notEqual(uploadJournalPath(parent, config, first.libraryId), uploadJournalPath(parent, { ...config, bucket: "other-1250000000" }, first.libraryId));
 	} finally { await rm(parent, { recursive: true, force: true }); }
 });
 

@@ -10,17 +10,17 @@ Cloud storage defaults to **None (local only)**. No credentials are needed and c
 
 1. Create a **private, standard-storage** COS bucket. Note its full name, including APPID, and region, such as `ap-shanghai`. Keep bucket versioning off. If already enabled, suspend it; existing historical versions need separate cleanup. See [versioning configuration](https://cloud.tencent.com/document/product/436/19884).
 2. Create a dedicated CAM API key scoped to this bucket. It needs `GetBucket`, `HeadObject`, `GetObject`, `PutObject`, `DeleteObject`, `InitiateMultipartUpload`, `UploadPart`, `CompleteMultipartUpload`, `ListMultipartUploads` and `ListParts`. See the [authorization guide](https://cloud.tencent.com/document/practice/436/31923) and [Node upload guide](https://cloud.tencent.com/document/product/436/64980). ACL modification permission is unnecessary.
-3. Open **Settings → Cloud backup**, select Tencent COS and enter the bucket, region and keys. The default prefix `loom/v1` is only a storage path and can be changed. Save and test listing, upload, read and delete access.
-4. Open a library and select **Update cloud copy**. On another computer, configure the same bucket and prefix, refresh **Cloud libraries**, restore a completed copy, then open the restored library.
+3. Open **Settings → Cloud backup**, select Tencent COS and enter the bucket, region and keys. All data is stored under the fixed `loom/` directory in the bucket; no prefix configuration is needed. Save and test listing, upload, read and delete access.
+4. Open a library and select **Update cloud copy**. On another computer, configure the same bucket, refresh **Cloud libraries**, restore a completed copy, then open the restored library.
 
 Requests run in Electron Main, so bucket CORS configuration is unnecessary. Credentials are encrypted in app user data and excluded from libraries. Saved values stay in their inputs, masked by default, and can be revealed or edited. Configure credentials and models separately on each computer.
 
-Connection test errors identify the failed COS operation. For `COS DeleteObject: AccessDenied (HTTP 403)`, check that the dedicated user's CAM policy and bucket policy allow `cos:DeleteObject` under the configured prefix, including temporary probes in `connection-test/`. An update with no obsolete remote files can succeed without exercising deletion permission.
+Connection test errors identify the failed COS operation. For `COS DeleteObject: AccessDenied (HTTP 403)`, check that the dedicated user's CAM policy and bucket policy allow `cos:DeleteObject` under `loom/`, including temporary probes in `loom/connection-test/`. An update with no obsolete remote files can succeed without exercising deletion permission.
 
 ## Layout
 
 ```text
-<backup prefix>/
+loom/
   libraries/<library ID>/
     Photos/Travel/a.jpg
     Documents/note.md
@@ -28,7 +28,7 @@ Connection test errors identify the failed COS operation. For `COS DeleteObject:
   .loom/libraries/<library ID>.json   one current status per library
 ```
 
-File names, relative paths and empty directories are preserved. IDs isolate libraries and survive root folder renames. Hashes detect content changes and verify restored files; they are not object names. Updates overwrite the current copy instead of creating dated backup directories.
+File names, relative paths and empty directories are preserved. Existing copies under `loom/v1/` or other custom paths are left in place; new operations use `loom/` and do not migrate those copies. IDs isolate libraries and survive root folder renames. Hashes detect content changes and verify restored files; they are not object names. Updates overwrite the current copy instead of creating dated backup directories.
 
 ## Update and restore
 

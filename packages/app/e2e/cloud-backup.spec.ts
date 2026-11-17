@@ -50,6 +50,7 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	await expect(settings.getByRole("button", { name: "Update cloud copy", exact: true })).toHaveCount(0);
 	await expect(settings.getByRole("button", { name: "Test connection", exact: true })).toHaveCount(0);
 	await provider.selectOption("cos");
+	await expect(settings.getByLabel("Backup prefix", { exact: true })).toHaveCount(0);
 	await settings.getByLabel("Bucket", { exact: true }).fill("my-loom-1250000000");
 	await settings.getByLabel("SecretId", { exact: true }).fill("e2e-secret-id");
 	await settings.getByLabel("SecretKey", { exact: true }).fill("e2e-secret-key");
@@ -74,6 +75,7 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	const userData = await electronApp!.evaluate(({ app }) => app.getPath("userData"));
 	expect(await readFile(join(userData, "cloud-backup.json"), "utf8")).not.toContain("e2e-secret");
 	expect(JSON.parse(await readFile(join(userData, "cloud-backup.json"), "utf8")).provider).toBe("cos");
+	expect(JSON.parse(await readFile(join(userData, "cloud-backup.json"), "utf8"))).not.toHaveProperty("prefix");
 	expect((await page.evaluate(() => window.loom.getCloudBackup())).config.provider).toBe("cos");
 	await settings.getByRole("button", { name: "Test connection", exact: true }).click();
 	await expect(settings.getByRole("region", { name: "Cloud backup progress" })).toContainText("Completed");
@@ -92,11 +94,11 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	await expect(settings.getByLabel("SecretKey", { exact: true })).toHaveValue("e2e-secret-key-updated");
 	const previous = (await page.evaluate(() => window.loom.getCloudBackup())).libraries[0]!;
 	expect((await page.evaluate(() => window.loom.getCloudBackup())).localLibrary?.lastBackupAt).toBe(previous.updatedAt);
-	const remoteRoot = `loom/v1/libraries/${previous.libraryId}/`;
+	const remoteRoot = `loom/libraries/${previous.libraryId}/`;
 	let keys = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
 	expect(keys).toContain(`${remoteRoot}cloud-note.md`);
 	expect(keys).toContain(`${remoteRoot}obsolete.md`);
-	expect(keys.some((key) => key.startsWith("loom/v1/objects/") || key.startsWith("loom/v1/records/"))).toBe(false);
+	expect(keys.some((key) => key.startsWith("loom/objects/") || key.startsWith("loom/records/"))).toBe(false);
 	await electronApp!.evaluate(() => { const g = globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer>; cloudSavedCopy: Map<string, Buffer> }; g.cloudSavedCopy = new Map(g.cloudObjects); });
 	await rm(join(root, "obsolete.md"));
 	await writeFile(join(root, "cloud-note.md"), "latest cloud copy");
@@ -177,7 +179,7 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 		}
 		current.library = { ...current.library, revision: randomUUID(), fileCount: current.files.length, totalBytes: current.files.reduce((sum: number, file: { size: number }) => sum + file.size, 0), updatedAt: new Date().toISOString() };
 		const bytes = Buffer.from(JSON.stringify(current)); g.cloudObjects.set(key, bytes);
-		g.cloudObjects.set(`loom/v1/.loom/libraries/${current.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...current.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
+		g.cloudObjects.set(`loom/.loom/libraries/${current.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...current.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
 	}, remoteRoot);
 	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
 	const pull = settings.getByRole("region", { name: "Changes to apply locally", exact: true });
@@ -210,7 +212,7 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 		g.cloudObjects.set(`${remoteRoot}${file.path}`, invalid);
 		manifest.library = { ...manifest.library, revision: randomUUID(), totalBytes: manifest.files.reduce((sum: number, file: { size: number }) => sum + file.size, 0) };
 		const bytes = Buffer.from(JSON.stringify(manifest)); g.cloudObjects.set(key, bytes);
-		g.cloudObjects.set(`loom/v1/.loom/libraries/${manifest.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...manifest.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
+		g.cloudObjects.set(`loom/.loom/libraries/${manifest.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...manifest.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
 	}, remoteRoot);
 	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
 	await expect(pull).toBeVisible();

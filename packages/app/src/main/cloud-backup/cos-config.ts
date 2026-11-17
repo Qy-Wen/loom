@@ -1,11 +1,10 @@
 import type { CosCloudConfig, CosCloudCredentials } from "../../shared/cloud-providers/cos.ts";
 
 export function parseCosConfig(input: Record<string, unknown>): CosCloudConfig {
-	const { bucket, region, prefix } = input;
+	const { bucket, region } = input;
 	if (typeof bucket !== "string" || !/^[a-z0-9][a-z0-9-]{0,61}-\d+$/.test(bucket.trim())) throw new Error("Enter the full COS bucket name, including APPID");
 	if (typeof region !== "string" || !/^[a-z]{2}-[a-z0-9-]+$/.test(region.trim())) throw new Error("Invalid COS region");
-	if (typeof prefix !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9/_-]{0,127}$/.test(prefix.trim()) || prefix.includes("//")) throw new Error("Invalid backup prefix");
-	return { provider: "cos", bucket: bucket.trim(), region: region.trim(), prefix: prefix.trim().replace(/\/+$/, "") };
+	return { provider: "cos", bucket: bucket.trim(), region: region.trim() };
 }
 
 /** An omitted/blank pair keeps the saved credentials for this provider. Partial pairs are errors. */

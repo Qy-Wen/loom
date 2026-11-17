@@ -1,5 +1,8 @@
 import { DEFAULT_COS_CONFIG, type CosCloudConfig, type CosCloudConfigDraft } from "./cloud-providers/cos.ts";
 
+/** All providers keep Loom data under the same app-owned directory. */
+export const CLOUD_STORAGE_PREFIX = "loom";
+
 /** Add each supported provider to these discriminated unions and the provider registries. */
 export type DisabledCloudConfig = { provider: "none" };
 export type ActiveCloudConfig = CosCloudConfig;

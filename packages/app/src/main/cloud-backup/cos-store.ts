@@ -3,6 +3,7 @@ import { createWriteStream } from "node:fs";
 import { Readable, Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { CosCloudConfig, CosCloudConnection } from "../../shared/cloud-providers/cos.ts";
+import { CLOUD_STORAGE_PREFIX } from "../../shared/cloud-backup.ts";
 import type { ObjectInfo, ObjectStore } from "./object-store.ts";
 
 /** Do not surface SDK error bodies/URLs: they can contain signed request credentials. */
@@ -19,7 +20,7 @@ export class CosObjectStore implements ObjectStore {
 		this.#config = config;
 		this.#client = client ?? new COS({ SecretId: config.credentials.secretId, SecretKey: config.credentials.secretKey, Protocol: "https:", Timeout: 30_000, ChunkRetryTimes: 3, ChunkParallelLimit: 3, FileParallelLimit: 3, UploadCheckContentMd5: true });
 	}
-	#params(key: string) { return { Bucket: this.#config.bucket, Region: this.#config.region, Key: `${this.#config.prefix}/${key}` }; }
+	#params(key: string) { return { Bucket: this.#config.bucket, Region: this.#config.region, Key: `${CLOUD_STORAGE_PREFIX}/${key}` }; }
 	async head(key: string, signal: AbortSignal): Promise<ObjectInfo | undefined> {
 		signal.throwIfAborted();
 		try {
@@ -93,7 +94,7 @@ export class CosObjectStore implements ObjectStore {
 	}
 	async *list(prefix: string, signal: AbortSignal): AsyncIterable<string> {
 		let marker: string | undefined;
-		const base = `${this.#config.prefix}/`;
+		const base = `${CLOUD_STORAGE_PREFIX}/`;
 		do {
 			signal.throwIfAborted();
 			let result: COS.GetBucketResult;

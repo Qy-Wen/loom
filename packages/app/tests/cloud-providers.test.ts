@@ -16,7 +16,7 @@ test("local-only is the default, needs no encryption, blocks cloud jobs and reta
 	let unlocked = false, decryptions = 0, factories = 0, captures = 0;
 	const store = new CloudConfigStore(path, { ...baseCipher, available: () => unlocked, decrypt(bytes) { decryptions++; if (!unlocked) throw new Error("Keychain unavailable"); return baseCipher.decrypt(bytes); } });
 	const controller = new CloudBackupController(store, { capture: async () => { captures++; throw new Error("Must not capture"); }, pickRestoreParent: async () => undefined, openRestored: async () => {} }, () => {}, () => { factories++; throw new Error("Must not create cloud clients"); }, join(directory, "state.json"));
-	const config = { provider: "cos" as const, bucket: "example-1250000000", region: "ap-shanghai", prefix: "loom/v1", credentials: { secretId: "retained-id", secretKey: "retained-key" } };
+	const config = { provider: "cos" as const, bucket: "example-1250000000", region: "ap-shanghai", credentials: { secretId: "retained-id", secretKey: "retained-key" } };
 	try {
 		assert.deepEqual(defaultCloudConfig(), { provider: "none" });
 		assert.deepEqual((await store.view()).config, { provider: "none" });
@@ -53,7 +53,7 @@ test("local-only is the default, needs no encryption, blocks cloud jobs and reta
 test("config requires an explicit supported provider; unknown providers never fall back to COS", async () => {
 	const directory = await mkdtemp(join(tmpdir(), "loom-cloud-provider-"));
 	const path = join(directory, "cloud.json"), cipher = testChatCipher();
-	const config = { provider: "cos" as const, bucket: "example-1250000000", region: "ap-shanghai", prefix: "loom/v1" };
+	const config = { provider: "cos" as const, bucket: "example-1250000000", region: "ap-shanghai" };
 	try {
 		const store = new CloudConfigStore(path, cipher);
 		const credentials = { secretId: "new-id", secretKey: "new-key" };
@@ -61,6 +61,8 @@ test("config requires an explicit supported provider; unknown providers never fa
 		assert.ok(createObjectStore(await store.load()) instanceof CosObjectStore);
 		const before = await readFile(path, "utf8");
 		const saved = JSON.parse(before);
+		assert.ok(!("prefix" in saved), "the storage prefix is not a configurable setting");
+		assert.deepEqual(parseCloudConfig({ ...config, prefix: "another-directory" }), config);
 		assert.deepEqual(JSON.parse(cipher.decrypt(Buffer.from(saved.credentials, "base64"))), { provider: "cos", credentials });
 		assert.throws(() => parseCloudConfig({ ...config, provider: "unknown" }), /Unsupported/);
 		assert.throws(() => parseCloudConfig({ ...config, provider: undefined }), /Unsupported/);
