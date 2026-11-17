@@ -1113,6 +1113,17 @@
 .cloud-change-kind[data-kind="added"] { color: var(--lm-text-success); }
 .cloud-change-kind[data-kind="deleted"] { color: var(--lm-text-danger); }
 .cloud-show-more { margin: var(--lm-space-4) 0 !important; }
+.cloud-pull-bulk { justify-content: flex-start; flex-wrap: wrap; margin-top: var(--lm-space-5); }
+.cloud-pull-list { list-style: none; margin: var(--lm-space-5) 0; padding: 0; max-height: 360px; overflow: auto; }
+.cloud-pull-list > li { display: grid; gap: var(--lm-space-4); padding: var(--lm-space-5) 0; border-bottom: 1px solid var(--lm-border-subtle); }
+.cloud-pull-file { display: flex; align-items: baseline; justify-content: space-between; gap: var(--lm-space-4); }
+.cloud-pull-file code { min-width: 0; overflow-wrap: anywhere; font-size: var(--lm-text-size-xs); color: var(--lm-text-secondary); }
+.cloud-pull-file .cloud-incomplete { color: var(--lm-text-warning); font-size: var(--lm-text-size-xs); flex-shrink: 0; }
+.cloud-pull-list .cloud-field-help { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
+.cloud-pull-choices { display: flex; flex-wrap: wrap; gap: var(--lm-space-5); border: 0; padding: 0; margin: 0; }
+.cloud-pull-choices label { display: inline-flex; flex-direction: row; align-items: center; gap: var(--lm-space-3); margin: 0; cursor: pointer; font-size: var(--lm-text-size-xs); }
+.cloud-pull-choices input { width: auto; margin: 0; accent-color: var(--lm-text-accent); }
+.cloud-pull-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--lm-space-5); margin-top: var(--lm-space-6); color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
 .cloud-panel .cloud-no-changes { margin: var(--lm-space-6) 0 0; color: var(--lm-text-success); }
 .cloud-progress { display: grid; gap: var(--lm-space-3); margin-top: var(--lm-space-6); padding: var(--lm-space-5) var(--lm-space-6); border: 1px solid var(--lm-border-subtle); border-radius: var(--lm-radius-sm); background: var(--lm-surface-subtle); font-size: var(--lm-text-size-xs); }
 .cloud-progress-heading { display: flex; flex-wrap: wrap; align-items: center; gap: var(--lm-space-3); color: var(--lm-text-muted); }

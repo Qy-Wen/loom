@@ -7,16 +7,17 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { CloudJob } from "../../shared/cloud-backup.ts";
 type Fingerprint = { size: number; mtimeMs: number; ctimeMs: number; ino: number; dev: number };
-type SourceFile = Fingerprint & { path: string; source: string };
+type SourceFile = Fingerprint & { path: string; source: string; original?: Fingerprint };
 export type Snapshot = { root: string; sourceRoot: string; temporary: string; libraryId: string; directories: string[]; files: SourceFile[] };
 export type Progress = (patch: Partial<CloudJob>) => void;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 const RESTORE_MARKER = ".loom/backup/restore.json";
+export const PERSISTENT_ROOTS = [".loom/metadata-db", ".loom/graph-db", ".loom/grades", ".loom/agents/sessions", ".loom/agents/skills", ".loom/agents/memory", ".loom/agents/tool-results", ".loom/backup/identity.json"];
 
 export function included(path: string): boolean {
 	if (path.split("/").at(-1) === ".DS_Store") return false;
 	if (!path.startsWith(".loom/")) return true;
-	return [".loom/metadata-db", ".loom/graph-db", ".loom/grades", ".loom/agents/sessions", ".loom/agents/skills", ".loom/agents/memory", ".loom/agents/tool-results", ".loom/backup/identity.json"].some((base) => path === base || path.startsWith(`${base}/`) || base.startsWith(`${path}/`));
+	return PERSISTENT_ROOTS.some((base) => path === base || path.startsWith(`${base}/`) || base.startsWith(`${path}/`));
 }
 export function trackedBackupPath(path: string): boolean {
 	return included(path) && !(path.startsWith(".loom/") && (path.endsWith("-shm") || path.endsWith(".lock")));
@@ -77,7 +78,7 @@ export async function captureSnapshot(root: string, signal: AbortSignal): Promis
 					if (!same(stat, await lstat(source))) throw new Error(`Metadata changed during backup. Retry: ${path}`);
 					await utimes(staged, stat.atime, stat.mtime);
 					const copied = await lstat(staged);
-					files.push({ path, source: staged, ...fingerprint(copied) });
+					files.push({ path, source: staged, ...fingerprint(copied), original: fingerprint(stat) });
 				} else files.push({ path, source, ...fingerprint(stat) });
 			}
 		}
@@ -103,17 +104,17 @@ export async function hashSnapshotFile(file: Snapshot["files"][number], signal: 
 	return result;
 }
 /** Metadata is an immutable capture; check the still-live original files and directory inventory. */
-export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: AbortSignal): Promise<boolean> {
-	const files = new Map(snapshot.files.filter((file) => !file.path.startsWith(".loom/")).map((file) => [file.path, file]));
-	const directories = new Set(snapshot.directories.filter((path) => path !== ".loom" && !path.startsWith(".loom/")));
+export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: AbortSignal, includeMetadata = false): Promise<boolean> {
+	const files = new Map(snapshot.files.filter((file) => includeMetadata || !file.path.startsWith(".loom/")).map((file) => [file.path, file]));
+	const directories = new Set(snapshot.directories.filter((path) => includeMetadata || (path !== ".loom" && !path.startsWith(".loom/"))));
 	async function walk(parent: string): Promise<boolean> {
 		for (const entry of await readdir(join(snapshot.root, parent), { withFileTypes: true })) {
 			signal.throwIfAborted();
 			const path = parent ? `${parent}/${entry.name}` : entry.name;
-			if (path === ".loom" || !included(path)) continue;
+			if ((!includeMetadata && path === ".loom") || !included(path)) continue;
 			if (entry.isSymbolicLink()) return false;
 			if (entry.isDirectory()) { if (!directories.delete(path) || !await walk(path)) return false; }
-			else { const file = files.get(path); if (!file || !same(file, await lstat(join(snapshot.root, path)))) return false; files.delete(path); }
+			else if (trackedBackupPath(path)) { const file = files.get(path); if (!file || !same(includeMetadata ? file.original ?? file : file, await lstat(join(snapshot.root, path)))) return false; files.delete(path); }
 		}
 		return true;
 	}

@@ -43,6 +43,27 @@ export interface CloudPreview {
 	uploadBytes: number;
 	changes: CloudFileChange[];
 }
+export type CloudPullChoice = "local" | "remote";
+export interface CloudPullChange {
+	id: string;
+	path: string;
+	type: "file" | "directory" | "metadata";
+	conflict: boolean;
+	choice?: CloudPullChoice;
+	localExists: boolean;
+	remoteExists: boolean;
+	localBytes: number;
+	remoteBytes: number;
+	downloadBytes: number;
+}
+export interface CloudPullPreview {
+	id: string;
+	libraryId: string;
+	rootPath: string;
+	checkedAt: string;
+	changes: CloudPullChange[];
+	firstSync: boolean;
+}
 export interface LocalCloudLibrary {
 	rootPath: string;
 	libraryId?: string;
@@ -53,9 +74,9 @@ export interface LocalCloudLibrary {
 	error?: string;
 	retryOperation?: "backup" | "preview";
 }
-export type BackupPhase = "snapshot" | "upload" | "delete" | "download" | "verify" | "list" | "test";
+export type BackupPhase = "snapshot" | "upload" | "delete" | "download" | "verify" | "list" | "test" | "conflicts" | "apply";
 export interface CloudJob {
-	operation: "backup" | "preview" | "restore" | "list" | "test";
+	operation: "backup" | "preview" | "restore" | "list" | "test" | "pull";
 	rootPath?: string;
 	libraryId?: string;
 	status: "running" | "completed" | "failed" | "cancelled";
@@ -77,4 +98,5 @@ export interface CloudBackupView {
 	libraries: CloudLibrary[];
 	localLibrary?: LocalCloudLibrary;
 	job?: CloudJob;
+	pull?: CloudPullPreview;
 }

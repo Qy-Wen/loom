@@ -4,7 +4,7 @@ import { expect, test } from "./loom.ts";
 
 test("COS settings, latest cloud copy, interrupted retry, deletion and restore work through Electron IPC", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	test.setTimeout(45_000);
+	test.setTimeout(65_000);
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBeTruthy();
 	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
 	await writeFile(join(root, "cloud-note.md"), "keep my library metadata");
@@ -97,6 +97,7 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	expect(keys).toContain(`${remoteRoot}cloud-note.md`);
 	expect(keys).toContain(`${remoteRoot}obsolete.md`);
 	expect(keys.some((key) => key.startsWith("loom/v1/objects/") || key.startsWith("loom/v1/records/"))).toBe(false);
+	await electronApp!.evaluate(() => { const g = globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer>; cloudSavedCopy: Map<string, Buffer> }; g.cloudSavedCopy = new Map(g.cloudObjects); });
 	await rm(join(root, "obsolete.md"));
 	await writeFile(join(root, "cloud-note.md"), "latest cloud copy");
 	await settings.getByRole("button", { name: "Preview changes", exact: true }).click();
@@ -156,6 +157,78 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	await page.evaluate((id) => window.loom.setFavorite(id, false), assetId);
 	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).favoriteAssetIds).not.toContain(assetId);
 	await writeFile(identity, originalIdentity);
+	// Simulate another computer advancing the same library, including a different metadata set.
+	await page.evaluate((id) => window.loom.addAssetTag(id, "local-only"), assetId);
+	await writeFile(join(restored, "cloud-note.md"), "keep this local edit");
+	await electronApp!.evaluate((_electron, remoteRoot) => {
+		const { createHash, randomUUID } = process.getBuiltinModule("node:crypto");
+		const g = globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer>; cloudSavedCopy: Map<string, Buffer> };
+		const key = `${remoteRoot}.loom/backup/manifest.json`;
+		const current = JSON.parse(g.cloudObjects.get(key)!.toString()), saved = JSON.parse(g.cloudSavedCopy.get(key)!.toString());
+		current.files = current.files.filter((file: { path: string }) => !file.path.startsWith(".loom/") && file.path !== "after-preview.txt");
+		current.files.push(...saved.files.filter((file: { path: string }) => file.path.startsWith(".loom/")));
+		current.directories = [...current.directories.filter((path: string) => path !== ".loom" && !path.startsWith(".loom/")), ...saved.directories.filter((path: string) => path === ".loom" || path.startsWith(".loom/"))];
+		for (const file of saved.files.filter((file: { path: string }) => file.path.startsWith(".loom/"))) g.cloudObjects.set(`${remoteRoot}${file.path}`, g.cloudSavedCopy.get(`${remoteRoot}${file.path}`)!);
+		g.cloudObjects.delete(`${remoteRoot}after-preview.txt`);
+		for (const [path, content] of [["cloud-note.md", "changed on other device"], ["cloud-added.txt", "new from cloud"]]) {
+			const bytes = Buffer.from(content!), hash = createHash("sha256").update(bytes).digest("hex");
+			current.files = current.files.filter((file: { path: string }) => file.path !== path);
+			current.files.push({ path, size: bytes.length, hash, etag: hash, mtimeMs: Date.now() }); g.cloudObjects.set(`${remoteRoot}${path}`, bytes);
+		}
+		current.library = { ...current.library, revision: randomUUID(), fileCount: current.files.length, totalBytes: current.files.reduce((sum: number, file: { size: number }) => sum + file.size, 0), updatedAt: new Date().toISOString() };
+		const bytes = Buffer.from(JSON.stringify(current)); g.cloudObjects.set(key, bytes);
+		g.cloudObjects.set(`loom/v1/.loom/libraries/${current.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...current.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
+	}, remoteRoot);
+	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
+	const pull = settings.getByRole("region", { name: "Changes to apply locally", exact: true });
+	await expect(pull).toBeVisible();
+	const apply = pull.getByRole("button", { name: "Apply to current library", exact: true });
+	await expect(apply).toBeDisabled();
+	await pull.getByRole("button", { name: "Use cloud for all conflicts", exact: true }).click();
+	await pull.locator("li").filter({ hasText: "cloud-note.md" }).getByRole("radio", { name: "Keep local", exact: true }).check();
+	await expect(apply).toBeEnabled();
+	await page.screenshot({ path: test.info().outputPath("cloud-pull-conflicts.png") });
+	await apply.click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("completed");
+	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
+	expect(await readFile(join(restored, "cloud-note.md"), "utf8")).toBe("keep this local edit");
+	expect(await readFile(join(restored, "cloud-added.txt"), "utf8")).toBe("new from cloud");
+	expect(await readdir(restored)).not.toContain("after-preview.txt");
+	const pulled = await page.evaluate(() => window.loom.getLibrarySnapshot());
+	expect(pulled.favoriteAssetIds).toContain(assetId);
+	expect(pulled.tags.map((tag) => tag.name)).toContain("cloud-test");
+	expect(pulled.tags.map((tag) => tag.name)).not.toContain("local-only");
+	// A valid transfer containing an unusable database must roll the directory back.
+	await electronApp!.evaluate((_electron, remoteRoot) => {
+		const { createHash, randomUUID } = process.getBuiltinModule("node:crypto");
+		const g = globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer>; cloudValidCopy: Map<string, Buffer> };
+		g.cloudValidCopy = new Map(g.cloudObjects);
+		const key = `${remoteRoot}.loom/backup/manifest.json`, manifest = JSON.parse(g.cloudObjects.get(key)!.toString());
+		const file = manifest.files.find((file: { path: string }) => file.path === ".loom/metadata-db/metadata.db");
+		const invalid = Buffer.from("an invalid SQLite database");
+		Object.assign(file, { hash: createHash("sha256").update(invalid).digest("hex"), size: invalid.length, mtimeMs: Date.now() }); file.etag = file.hash;
+		g.cloudObjects.set(`${remoteRoot}${file.path}`, invalid);
+		manifest.library = { ...manifest.library, revision: randomUUID(), totalBytes: manifest.files.reduce((sum: number, file: { size: number }) => sum + file.size, 0) };
+		const bytes = Buffer.from(JSON.stringify(manifest)); g.cloudObjects.set(key, bytes);
+		g.cloudObjects.set(`loom/v1/.loom/libraries/${manifest.library.libraryId}.json`, Buffer.from(JSON.stringify({ ...manifest.library, state: "ready", manifestHash: createHash("sha256").update(bytes).digest("hex") })));
+	}, remoteRoot);
+	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
+	await expect(pull).toBeVisible();
+	await pull.getByRole("button", { name: "Use cloud for all conflicts", exact: true }).click();
+	await apply.click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("failed");
+	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(restored);
+	expect(await readFile(join(restored, "cloud-note.md"), "utf8")).toBe("keep this local edit");
+	expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).favoriteAssetIds).toContain(assetId);
+	await electronApp!.evaluate(() => { const g = globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer>; cloudValidCopy: Map<string, Buffer> }; g.cloudObjects.clear(); for (const [key, bytes] of g.cloudValidCopy) g.cloudObjects.set(key, bytes); });
+	// Leaving an awaiting pull cancels it and resumes the current library.
+	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
+	await expect(pull).toBeVisible();
+	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("cancelled");
+	await page.evaluate((id) => window.loom.setFavorite(id, false), assetId);
+	await page.getByRole("button", { name: "Settings", exact: true }).click();
+	await settings.getByRole("tab", { name: "Cloud backup", exact: true }).click();
 	const objectsBeforeDisable = await electronApp!.evaluate(() => [...(globalThis as typeof globalThis & { cloudObjects: Map<string, Buffer> }).cloudObjects.keys()]);
 	await provider.selectOption("none");
 	await settings.getByRole("button", { name: "Save", exact: true }).click();

@@ -37,6 +37,7 @@ import { CloudBackupController } from "./cloud-backup/controller.ts";
 import { CloudConfigStore } from "./cloud-backup/config.ts";
 import { createObjectStore } from "./cloud-backup/providers.ts";
 import { captureSnapshot, type Snapshot as BackupSnapshot } from "./cloud-backup/snapshot.ts";
+import { recoverPull, type PullInstallation } from "./cloud-backup/pull-install.ts";
 import { publishCloudBackup, registerCloudBackupIpc } from "./cloud-backup/ipc.ts";
 import { chatRecord } from "./chat/chat-record.ts";
 import { composerAssetsAtSend, takeComposerAssets } from "./composer/composer-assets.ts";
@@ -1192,6 +1193,28 @@ app
 		}, (view) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(IPC.mcpServiceChanged, view); });
 		await mcpService.initialize();
 		cloudBackup = new CloudBackupController(new CloudConfigStore(join(app.getPath("userData"), "cloud-backup.json"), electronSecretCipher), {
+			updateCurrent: async (signal, action) => {
+				let snapshot: BackupSnapshot | undefined, installation: PullInstallation | undefined;
+				let root: string | undefined, failure: unknown;
+				try {
+					try {
+						await applyOpenedLibrary(undefined, async (rootPath) => {
+							root = rootPath;
+							try { signal.throwIfAborted(); await localCore.close(); snapshot = await captureSnapshot(rootPath, signal); installation = await action(snapshot); }
+							catch (error) { failure = error; await recoverPull(rootPath); }
+						});
+					} catch (error) {
+						if (installation) {
+							await requireChat().close(); await localCore.close();
+							await installation.rollback();
+							await applyOpenedLibrary(root, async () => {});
+						}
+						throw error;
+					}
+					await installation?.finish();
+					if (failure) throw failure;
+				} finally { if (snapshot) await rm(snapshot.temporary, { recursive: true, force: true, maxRetries: 3 }); }
+			},
 			capture: async (signal) => {
 				let snapshot: BackupSnapshot | undefined;
 				let failure: unknown;
@@ -1326,6 +1349,10 @@ async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (ro
 		await localCore.stopLibraryTasks();
 		await requireChat().close();
 		await beforeOpen?.(rootPath);
+		if (!beforeOpen) {
+			const recovered = await recoverPull(rootPath);
+			if (recovered) appLog(`Interrupted cloud update recovered; installed files retained at ${recovered}`);
+		}
 		const snapshot = await localCore.openLibrary(rootPath);
 		await cloudBackup?.openLibrary(snapshot.rootPath);
 		if (snapshot.rootPath) {
@@ -1356,8 +1383,12 @@ async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (ro
 }
 
 async function restoreLastLibrary(): Promise<void> {
-	if (generalSettings && !(await generalSettings.load()).reopenLastLibrary) return;
 	const rootPath = await lastLibrary?.load();
+	if (rootPath) {
+		try { const recovered = await recoverPull(rootPath); if (recovered) appLog(`Interrupted cloud update recovered; installed files retained at ${recovered}`); }
+		catch (error) { appLog(`Cloud update recovery failed: ${logErrorText(error)}`); return; }
+	}
+	if (generalSettings && !(await generalSettings.load()).reopenLastLibrary) return;
 	if (!rootPath || !(await lastLibraryStillOpenable(rootPath))) return;
 	try {
 		await applyOpenedLibrary(rootPath);

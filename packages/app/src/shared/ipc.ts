@@ -1,4 +1,4 @@
-import type { CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId } from "./cloud-backup.ts";
+import type { CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId, CloudPullChoice } from "./cloud-backup.ts";
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
@@ -111,6 +111,7 @@ export const IPC = {
 	saveCloudBackup: "loom:saveCloudBackup",
 	startCloudBackup: "loom:startCloudBackup",
 	cancelCloudBackup: "loom:cancelCloudBackup",
+	resolveCloudPull: "loom:resolveCloudPull",
 	cloudBackupChanged: "loom:cloudBackupChanged",
 	getAgentEndpoint: "loom:getAgentEndpoint",
 	openLibrary: "loom:openLibrary",
@@ -238,6 +239,7 @@ export interface LoomApi {
 	saveCloudBackup: (config: CloudConfigDraft) => Promise<CloudBackupView>;
 	startCloudBackup: (operation: CloudJob["operation"], libraryId?: string) => Promise<void>;
 	cancelCloudBackup: () => Promise<void>;
+	resolveCloudPull: (id: string, choices: Record<string, CloudPullChoice>) => Promise<void>;
 	onCloudBackupChanged: (listener: (view: CloudBackupView) => void) => () => void;
 	getAgentEndpoint: () => Promise<AgentEndpoint>;
 	openLibrary: () => Promise<LibrarySnapshot | null>;

@@ -3,6 +3,7 @@ import { CLOUD_PROVIDER_IDS, defaultCloudConfig, type CloudBackupView, type Clou
 import { useLocale } from "../locale.tsx";
 import { CloudProviderFields } from "./settings-cloud-providers.tsx";
 import { TooltipText } from "../components/tooltip-text.tsx";
+import { CloudPullPreviewPanel } from "./settings-cloud-pull.tsx";
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1024 ** 3 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
@@ -78,7 +79,11 @@ export function SettingsCloud(): React.JSX.Element {
 			const failure = status.status === "rejected" ? status.reason : configuration.status === "rejected" ? configuration.reason : undefined;
 			if (failure) setError(failure instanceof Error ? failure.message : String(failure));
 		});
-		return () => { alive = false; unsubscribe(); };
+		return () => {
+			alive = false; unsubscribe();
+			// Pull keeps this library paused while choices are pending.
+			void window.loom.getCloudBackup().then((current) => { if (current.job?.operation === "pull" && current.job.status === "running") return window.loom.cancelCloudBackup(); }).catch(() => {});
+		};
 	}, []);
 	const busy = pending || view?.job?.status === "running";
 	const config = draft ?? savedConfig;
@@ -116,11 +121,12 @@ export function SettingsCloud(): React.JSX.Element {
 						{(!view.hasCredentials || dirty) && <p className="cloud-notice">{dirty ? text.unsavedConfig : text.configureFirst}</p>}
 						<div className="settings-actions cloud-backup-actions">
 							<button type="button" disabled={disabled} onClick={() => void start("preview")}><CloudGlyph kind="scan" />{text.preview}</button>
+							<button type="button" disabled={disabled || !local.libraryId} onClick={() => void start("pull")}><CloudGlyph kind="download" />{text.pull}</button>
 							{local.status === "failed" && <button type="button" disabled={disabled} onClick={() => void start(local.retryOperation ?? "preview")}><CloudGlyph kind="refresh" />{text.retry}</button>}
 							<button type="button" className="primary-button" disabled={disabled} onClick={() => void start("backup")}><CloudGlyph kind="upload" />{text.backup}</button>
 						</div>
 						{job && job.operation !== "test" && job.operation !== "list" && progress}
-						{local.preview && <ChangePreview preview={local.preview} />}
+						{view.pull && job?.status === "running" && job.phase === "conflicts" ? <CloudPullPreviewPanel preview={view.pull} disabled={pending} onApply={(choices) => void run(() => window.loom.resolveCloudPull(view.pull!.id, choices))} /> : local.preview && <ChangePreview preview={local.preview} />}
 					</> : <div className="cloud-empty"><CloudGlyph kind="folder" /><p>{text.noLibrary}</p></div>}
 					<details className="cloud-help"><summary><CloudGlyph kind="chevron" />{text.backupDetails}</summary><p>{text.snapshotNote}</p><p>{text.previewNote}</p></details>
 				</section>

@@ -12,6 +12,7 @@ const api: LoomApi = {
 	saveCloudBackup: (config) => ipcRenderer.invoke(IPC.saveCloudBackup, config),
 	startCloudBackup: (operation, libraryId) => ipcRenderer.invoke(IPC.startCloudBackup, operation, libraryId),
 	cancelCloudBackup: () => ipcRenderer.invoke(IPC.cancelCloudBackup),
+	resolveCloudPull: (id, choices) => ipcRenderer.invoke(IPC.resolveCloudPull, id, choices),
 	onCloudBackupChanged: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, view: Parameters<typeof listener>[0]) => listener(view);
 		ipcRenderer.on(IPC.cloudBackupChanged, handler);

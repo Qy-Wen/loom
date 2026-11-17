@@ -40,7 +40,7 @@ async function readJson(store: ObjectStore, key: string, directory: string, sign
 		return { value: JSON.parse(bytes.toString("utf8")), hash: sha256(bytes) };
 	} finally { await rm(path, { force: true }); }
 }
-async function readLibrary(id: string, store: ObjectStore, temporary: string, signal: AbortSignal): Promise<CloudLibrary | undefined> {
+export async function readLibrary(id: string, store: ObjectStore, temporary: string, signal: AbortSignal): Promise<CloudLibrary | undefined> {
 	const key = libraryCatalogKey(id);
 	if (!await store.head(key, signal)) return undefined;
 	const library = parseLibrary((await readJson(store, key, temporary, signal, 16 * 1024)).value);
@@ -69,7 +69,7 @@ function validateManifest(input: unknown, library: CloudLibrary): MirrorManifest
 	if (bytes !== library.totalBytes) throw new Error("Cloud library size does not match metadata");
 	return m;
 }
-async function readManifest(library: CloudLibrary, store: ObjectStore, temporary: string, signal: AbortSignal): Promise<MirrorManifest> {
+export async function readManifest(library: CloudLibrary, store: ObjectStore, temporary: string, signal: AbortSignal): Promise<MirrorManifest> {
 	const json = await readJson(store, mirrorManifestKey(library.libraryId), temporary, signal);
 	if (json.hash !== library.manifestHash) throw new Error("Cloud manifest checksum mismatch");
 	return validateManifest(json.value, library);
@@ -232,7 +232,7 @@ export async function listCloudLibraries(store: ObjectStore, signal: AbortSignal
 }
 
 /** Verify a complete current copy, and publish only a new local directory. */
-export async function restoreMirror(libraryId: string, parent: string, store: ObjectStore, signal: AbortSignal, progress: Progress): Promise<string> {
+export async function restoreMirror(libraryId: string, parent: string, store: ObjectStore, signal: AbortSignal, progress: Progress, completed: (manifest: MirrorManifest) => void = () => {}): Promise<string> {
 	const temporary = await mkdtemp(join(await realpath(parent), ".loom-restore-"));
 	try {
 		const library = await readLibrary(libraryId, store, temporary, signal);
@@ -260,6 +260,6 @@ export async function restoreMirror(libraryId: string, parent: string, store: Ob
 		const container = await mkdtemp(join(parent, "Loom-restored-")), destination = join(container, "Library");
 		try { await rename(output, destination); }
 		catch (error) { await rm(container, { recursive: true, force: true }); throw error; }
-		return destination;
+		completed(manifest); return destination;
 	} finally { await rm(temporary, { recursive: true, force: true, maxRetries: 3 }); }
 }

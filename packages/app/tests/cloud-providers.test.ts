@@ -34,7 +34,7 @@ test("local-only is the default, needs no encryption, blocks cloud jobs and reta
 		assert.deepEqual(await controller.configuration(), { provider: "none" });
 		assert.equal(decryptions, 0, "disabled configuration never decrypts the retained secret");
 		assert.ok(!(await readFile(path, "utf8")).includes("retained-"));
-		for (const operation of ["test", "backup", "preview", "list", "restore"] as const) await assert.rejects(controller.start(operation), /disabled/);
+		for (const operation of ["test", "backup", "preview", "pull", "list", "restore"] as const) await assert.rejects(controller.start(operation), /disabled/);
 		assert.equal(factories, 0); assert.equal(captures, 0);
 		const reopened = new CloudConfigStore(path, { ...baseCipher, available: () => false });
 		assert.deepEqual(await reopened.configuration(), { provider: "none" });
