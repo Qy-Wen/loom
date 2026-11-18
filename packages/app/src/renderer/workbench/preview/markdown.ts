@@ -2,7 +2,7 @@ import type { Asset } from "@loom/core";
 import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
 import katex from "katex";
-import { createAssetLookup, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
+import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 
 export { resolveLibraryHref };
@@ -161,18 +161,12 @@ function assetForHref(context: MarkdownRenderContext, src: string): Asset | unde
  */
 markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	const { src, pos } = state;
-	const embed = src.charCodeAt(pos) === 0x21; // !
-	const open = embed ? pos + 1 : pos;
-	if (src.charCodeAt(open) !== 0x5b || src.charCodeAt(open + 1) !== 0x5b) return false;
-	const close = src.indexOf("]]", open + 2);
-	if (close === -1) return false;
-	const inner = src.slice(open + 2, close);
-	if (!inner.trim() || /[[\]\n]/.test(inner)) return false;
+	const found = matchWikiLink(src, pos);
+	if (!found) return false;
 	if (silent) return true;
 
-	const [target, ...rest] = inner.split("|");
-	const label = rest.join("|").trim();
-	const written = target.trim();
+	const { embed, target: written, label } = found;
+	const close = found.end - 2;
 	const context = state.env as unknown as MarkdownRenderContext | undefined;
 	const hash = written.indexOf("#");
 	const anchor = hash === -1 ? undefined : anchorOf(written.slice(hash + 1));

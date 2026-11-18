@@ -41,9 +41,52 @@ const markdown = new MarkdownIt({ html: false, linkify: false });
 // Keep escaped characters as separate tokens so `\[\[x\]\]` is not mistaken for a wiki link.
 markdown.disable("text_join");
 
-const WIKI_LINK = /!?\[\[([^[\]\n]+?)\]\]/g;
+const WIKI_LINK = /!?\[\[([^[\]\n]+?)\]\]/y;
 const FRONT_MATTER = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 const EXTERNAL_SCHEME = /^(?:[a-z][a-z0-9+.-]+:|\/\/)/i;
+
+/** A wiki link or embed found in text. `from` and `end` are offsets into that text. */
+export interface WikiLinkMatch {
+	embed: boolean;
+	/** The path and optional `#heading`, as written and trimmed. */
+	target: string;
+	/** The `|display name`, or an empty string. */
+	label: string;
+	from: number;
+	end: number;
+}
+
+/**
+ * The wiki link or embed that starts exactly at `position`, or `undefined`. The one place that says what
+ * counts as one, so the preview, the reference scan and the editor agree. It does not know about code or
+ * escapes: the caller only asks at positions where Markdown allows inline syntax.
+ */
+export function matchWikiLink(text: string, position: number): WikiLinkMatch | undefined {
+	WIKI_LINK.lastIndex = position;
+	const match = WIKI_LINK.exec(text);
+	if (!match || !match[1].trim()) return undefined;
+	const [target, ...rest] = match[1].split("|");
+	return {
+		embed: match[0].startsWith("!"),
+		target: target.trim(),
+		label: rest.join("|").trim(),
+		from: position,
+		end: position + match[0].length,
+	};
+}
+
+/** Every wiki link in a piece of text. Used on text that is already known to be outside code. */
+export function findWikiLinks(text: string): WikiLinkMatch[] {
+	const found: WikiLinkMatch[] = [];
+	for (let at = text.indexOf("[["); at !== -1; at = text.indexOf("[[", at + 1)) {
+		const from = at > 0 && text[at - 1] === "!" ? at - 1 : at;
+		const match = matchWikiLink(text, from);
+		if (!match) continue;
+		found.push(match);
+		at = match.end - 1;
+	}
+	return found;
+}
 
 /** A reference as written in a source file, before it is matched to an asset. */
 export type RawReference =
@@ -69,7 +112,7 @@ export function extractMarkdownReferences(source: string): RawReference[] {
 			if (token.type === "link_open") found.push({ kind: "link", target: String(token.attrGet("href") ?? "") });
 			else if (token.type === "image") found.push({ kind: "link", target: String(token.attrGet("src") ?? "") });
 			else if (token.type === "text") {
-				for (const match of token.content.matchAll(WIKI_LINK)) found.push({ kind: "wiki", target: match[1] });
+				for (const match of findWikiLinks(token.content)) found.push({ kind: "wiki", target: match.target });
 			}
 		}
 	}

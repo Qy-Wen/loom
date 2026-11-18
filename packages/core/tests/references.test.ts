@@ -172,3 +172,25 @@ describe("resolveCanvasReferences", () => {
 		assert.deepEqual(resolveCanvasReferences("{}"), { targetAssetIds: [], unresolved: [] });
 	});
 });
+
+describe("wiki link matching", () => {
+	it("matches a link or an embed at a position", async () => {
+		const { matchWikiLink } = await import("../src/library/references.ts");
+		assert.deepEqual(matchWikiLink("a [[x/y#h|别名]] b", 2), { embed: false, target: "x/y#h", label: "别名", from: 2, end: 14 });
+		assert.deepEqual(matchWikiLink("![[a.png]]", 0), { embed: true, target: "a.png", label: "", from: 0, end: 10 });
+		assert.equal(matchWikiLink("[[ ]]", 0), undefined);
+		assert.equal(matchWikiLink("[[a\nb]]", 0), undefined);
+		assert.equal(matchWikiLink("[[a]]", 1), undefined);
+	});
+
+	it("finds every link in a text, embeds included, without overlap", async () => {
+		const { findWikiLinks } = await import("../src/library/references.ts");
+		const text = "[[a]] 中 ![[b.png]] [[c|d]] [[[e]]] [[ ]] [[f";
+		assert.deepEqual(findWikiLinks(text).map((link) => [link.embed, link.target, text.slice(link.from, link.end)]), [
+			[false, "a", "[[a]]"],
+			[true, "b.png", "![[b.png]]"],
+			[false, "c", "[[c|d]]"],
+			[false, "e", "[[e]]"],
+		]);
+	});
+});
