@@ -4,9 +4,9 @@ import { constants } from "node:fs";
 import { dirname, join } from "node:path";
 import type { Connection, Database, QueryResult } from "@ladybugdb/wasm-core";
 import type { LibraryPaths } from "../library/paths.ts";
-import type { AssetRelation } from "../model/relation.ts";
+import { referenceRelationId, REFERENCE_TYPE, type AssetRelation, type ReferenceSource } from "../model/relation.ts";
 import { retryWindowsFileOperation } from "../fs-retry.ts";
-import { RELATED, type GraphStore } from "./types.ts";
+import { REFERENCE, RELATED, type GraphStore } from "./types.ts";
 const require = createRequire(import.meta.url);
 
 interface WasmModule {
@@ -60,6 +60,7 @@ export class LadybugGraphStore implements GraphStore {
 		}
 		await this.run("CREATE NODE TABLE IF NOT EXISTS Asset(asset_id STRING, PRIMARY KEY (asset_id))");
 		await this.run(`CREATE REL TABLE IF NOT EXISTS ${RELATED}(FROM Asset TO Asset, relation_id STRING, type STRING)`);
+		await this.run(`CREATE REL TABLE IF NOT EXISTS ${REFERENCE}(FROM Asset TO Asset, source STRING)`);
 	}
 
 	async close(): Promise<void> {
@@ -102,24 +103,55 @@ export class LadybugGraphStore implements GraphStore {
 	}
 
 	async listRelations(assetId: string): Promise<AssetRelation[]> {
-		const rows = await this.run(`
+		const params = { id: assetId };
+		const manual = await this.run(`
 			MATCH (a:Asset)-[r:${RELATED}]->(b:Asset)
 			WHERE a.asset_id = $id OR b.asset_id = $id
 			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id, r.type AS rel_type
-		`, { id: assetId });
-		return toRelations(rows);
+		`, params);
+		const references = await this.run(`
+			MATCH (a:Asset)-[r:${REFERENCE}]->(b:Asset)
+			WHERE a.asset_id = $id OR b.asset_id = $id
+			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.source AS source
+		`, params);
+		return [...toRelations(manual), ...toReferences(references)].sort(compareRelations);
 	}
 
 	async listAllRelations(): Promise<AssetRelation[]> {
-		const rows = await this.run(`
+		const manual = await this.run(`
 			MATCH (a:Asset)-[r:${RELATED}]->(b:Asset)
 			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.relation_id AS relation_id, r.type AS rel_type
 		`);
-		return toRelations(rows);
+		const references = await this.run(`
+			MATCH (a:Asset)-[r:${REFERENCE}]->(b:Asset)
+			RETURN a.asset_id AS from_id, b.asset_id AS to_id, r.source AS source
+		`);
+		return [...toRelations(manual), ...toReferences(references)].sort(compareRelations);
 	}
 
 	async removeRelation(relationId: string): Promise<void> {
-		await this.run("MATCH ()-[r]->() WHERE r.relation_id = $id DELETE r", { id: relationId });
+		await this.run(`MATCH ()-[r:${RELATED}]->() WHERE r.relation_id = $id DELETE r`, { id: relationId });
+		await this.persist();
+	}
+
+	async replaceReferences(fromAssetId: string, source: ReferenceSource, targetAssetIds: string[]): Promise<void> {
+		const targets = [...new Set(targetAssetIds)].filter((id) => id !== fromAssetId);
+		const existing = await this.run(`
+			MATCH (a:Asset {asset_id: $from})-[r:${REFERENCE}]->(b:Asset)
+			RETURN b.asset_id AS to_id, r.source AS source
+		`, { from: fromAssetId });
+		const unchanged = existing.length === targets.length
+			&& existing.every((row) => row.source === source && targets.includes(String(row.to_id)));
+		if (unchanged) return;
+		await this.run(`MATCH (a:Asset {asset_id: $from})-[r:${REFERENCE}]->() DELETE r`, { from: fromAssetId });
+		if (targets.length > 0) await this.run("MERGE (a:Asset {asset_id: $id})", { id: fromAssetId });
+		for (const to of targets) {
+			await this.run("MERGE (a:Asset {asset_id: $id})", { id: to });
+			await this.run(`
+				MATCH (a:Asset {asset_id: $from}), (b:Asset {asset_id: $to})
+				CREATE (a)-[:${REFERENCE} {source: $source}]->(b)
+			`, { from: fromAssetId, to, source });
+		}
 		await this.persist();
 	}
 
@@ -166,6 +198,27 @@ export class LadybugGraphStore implements GraphStore {
 	}
 }
 
+function compareRelations(a: AssetRelation, b: AssetRelation): number {
+	return a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId);
+}
+
+function toReferences(rows: Record<string, unknown>[]): AssetRelation[] {
+	return rows
+		.map((row) => {
+			const fromAssetId = String(row.from_id ?? "");
+			const toAssetId = String(row.to_id ?? "");
+			const source: ReferenceSource = row.source === "canvas" ? "canvas" : "markdown";
+			return {
+				relationId: referenceRelationId(fromAssetId, toAssetId),
+				fromAssetId,
+				toAssetId,
+				type: REFERENCE_TYPE,
+				source,
+			};
+		})
+		.filter((relation) => relation.fromAssetId && relation.toAssetId);
+}
+
 function toRelations(rows: Record<string, unknown>[]): AssetRelation[] {
 	return rows
 		.map((row) => ({
@@ -173,9 +226,9 @@ function toRelations(rows: Record<string, unknown>[]): AssetRelation[] {
 			fromAssetId: String(row.from_id ?? ""),
 			toAssetId: String(row.to_id ?? ""),
 			type: String(row.rel_type ?? ""),
+			source: "manual" as const,
 		}))
-		.filter((relation) => relation.relationId && relation.fromAssetId && relation.toAssetId && relation.type)
-		.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
+		.filter((relation) => relation.relationId && relation.fromAssetId && relation.toAssetId && relation.type);
 }
 
 async function collect(result: QueryResult): Promise<Record<string, unknown>[]> {

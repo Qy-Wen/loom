@@ -9,7 +9,7 @@ import type { ResolvePasteConflict } from "./library/paste.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
 import type { Asset, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
-import type { AssetRelation } from "./model/relation.ts";
+import { isReferenceRelationId, type AssetRelation } from "./model/relation.ts";
 import type { AssetEnrichment } from "./model/enrichment.ts";
 import type { ChunkHit } from "./model/hybrid.ts";
 import type { EmbeddingProvider, TextEmbedStatus } from "./model/text-embed.ts";
@@ -580,6 +580,7 @@ export class LocalCore {
 			fromAssetId,
 			toAssetId,
 			type: relationType,
+			source: "manual",
 		};
 		await this.graphStore.upsertRelation(relation);
 		return relation;
@@ -587,6 +588,7 @@ export class LocalCore {
 
 	async removeRelation(relationId: string): Promise<void> {
 		if (!relationId.trim()) throw new Error("Relation not found");
+		if (isReferenceRelationId(relationId)) throw new Error("This link comes from a file's content. Edit the source file to remove it.");
 		await this.graphStore.removeRelation(relationId);
 	}
 
@@ -601,6 +603,7 @@ export class LocalCore {
 			links.push({
 				relationId: relation.relationId,
 				relationType: relation.type,
+				source: relation.source,
 				direction: outgoing ? "out" : "in",
 				asset: toRelationView(other),
 			});

@@ -5,6 +5,7 @@ import type { ImageVlmStatus } from "./image-vlm.ts";
 import type { TextEmbedStatus } from "./text-embed.ts";
 import type { VideoVlmStatus } from "./video-vlm.ts";
 import type { AudioWriteupStatus } from "./audio-writeup.ts";
+import type { RelationSource } from "./relation.ts";
 
 export type PropertyFilterOperator = "eq" | "contains" | "gte" | "lte";
 
@@ -73,6 +74,8 @@ export interface AssetRelationView {
 export interface AssetLinkView {
 	relationId: string;
 	relationType: string;
+	/** `manual` links can be removed; the others come from file contents. */
+	source: RelationSource;
 	direction: "out" | "in";
 	asset: AssetRelationView;
 }

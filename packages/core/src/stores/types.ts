@@ -1,5 +1,5 @@
 import type { Asset } from "../model/asset.ts";
-import type { AssetRelation } from "../model/relation.ts";
+import type { AssetRelation, ReferenceSource } from "../model/relation.ts";
 import type { AssetTag, Tag } from "../model/tag.ts";
 import type { AssetEnrichment } from "../model/enrichment.ts";
 import type { AssetPropertyValue, PropertyDefinition } from "../model/property.ts";
@@ -68,8 +68,11 @@ export interface MetadataStore {
 	searchChunksFts(query: string, limit: number): Promise<ChunkHit[]>;
 }
 
-/** Ladybug table for every edge. Not a user-facing type. */
+/** Ladybug table for user-made edges. Not a user-facing type. */
 export const RELATED = "RELATED";
+
+/** Ladybug table for edges derived from file contents. Rebuilt from the files, never edited by hand. */
+export const REFERENCE = "REFERENCE";
 
 const MAX_RELATION_TYPE_LENGTH = 64;
 
@@ -91,5 +94,8 @@ export interface GraphStore {
 	upsertRelation(relation: AssetRelation): Promise<void>;
 	listRelations(assetId: string): Promise<AssetRelation[]>;
 	listAllRelations(): Promise<AssetRelation[]>;
+	/** Removes a user-made edge. Derived references are not removable here. */
 	removeRelation(relationId: string): Promise<void>;
+	/** Replaces every reference edge that starts at `fromAssetId` with edges to `targetAssetIds`. */
+	replaceReferences(fromAssetId: string, source: ReferenceSource, targetAssetIds: string[]): Promise<void>;
 }

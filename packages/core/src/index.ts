@@ -9,7 +9,7 @@ export type { MediaProgram } from "./media/binaries.ts";
 
 export type { Asset, AssetType, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 export type { AssetTag, Tag } from "./model/tag.ts";
-export type { AssetRelation } from "./model/relation.ts";
+export type { AssetRelation, RelationSource } from "./model/relation.ts";
 export type {
 	AssetPropertyValue,
 	PropertyDefinition,

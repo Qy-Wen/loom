@@ -20,7 +20,7 @@ import type { ChunkHit } from "../model/hybrid.ts";
 import { cosineDistance } from "../retrieval/rrf.ts";
 import { searchDocument } from "../retrieval/text.ts";
 import { documentMatchesQuery } from "../retrieval/tokenize.ts";
-import type { AssetRelation } from "../model/relation.ts";
+import { referenceRelationId, REFERENCE_TYPE, type AssetRelation, type ReferenceSource } from "../model/relation.ts";
 import type { GraphStore, MetadataStore } from "./types.ts";
 
 /** Volatile MetadataStore used by focused tests and explicit dependency injection. */
@@ -512,21 +512,26 @@ function normalizePropertyName(name: string): string {
 /** Volatile GraphStore used by focused tests and explicit dependency injection. */
 export class InMemoryGraphStore implements GraphStore {
 	private readonly relations = new Map<string, AssetRelation>();
+	private readonly references = new Map<string, AssetRelation>();
 
 	async open(): Promise<void> {
 		this.relations.clear();
+		this.references.clear();
 	}
 
 	async close(): Promise<void> {
 		this.relations.clear();
+		this.references.clear();
 	}
 
 	async ensureAsset(): Promise<void> {}
 
 	async removeAsset(assetId: string): Promise<void> {
-		for (const [relationId, relation] of this.relations) {
-			if (relation.fromAssetId === assetId || relation.toAssetId === assetId) {
-				this.relations.delete(relationId);
+		for (const edges of [this.relations, this.references]) {
+			for (const [relationId, relation] of edges) {
+				if (relation.fromAssetId === assetId || relation.toAssetId === assetId) {
+					edges.delete(relationId);
+				}
 			}
 		}
 	}
@@ -541,21 +546,36 @@ export class InMemoryGraphStore implements GraphStore {
 				this.relations.delete(relationId);
 			}
 		}
-		this.relations.set(relation.relationId, relation);
+		this.relations.set(relation.relationId, { ...relation, source: "manual" });
 	}
 
 	async listRelations(assetId: string): Promise<AssetRelation[]> {
-		return [...this.relations.values()]
+		return this.allEdges()
 			.filter((relation) => relation.fromAssetId === assetId || relation.toAssetId === assetId)
 			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
 	}
 
 	async listAllRelations(): Promise<AssetRelation[]> {
-		return [...this.relations.values()]
+		return this.allEdges()
 			.sort((a, b) => a.type.localeCompare(b.type) || a.relationId.localeCompare(b.relationId));
 	}
 
 	async removeRelation(relationId: string): Promise<void> {
 		this.relations.delete(relationId);
+	}
+
+	async replaceReferences(fromAssetId: string, source: ReferenceSource, targetAssetIds: string[]): Promise<void> {
+		for (const [relationId, edge] of this.references) {
+			if (edge.fromAssetId === fromAssetId) this.references.delete(relationId);
+		}
+		for (const toAssetId of new Set(targetAssetIds)) {
+			if (toAssetId === fromAssetId) continue;
+			const relationId = referenceRelationId(fromAssetId, toAssetId);
+			this.references.set(relationId, { relationId, fromAssetId, toAssetId, type: REFERENCE_TYPE, source });
+		}
+	}
+
+	private allEdges(): AssetRelation[] {
+		return [...this.relations.values(), ...this.references.values()];
 	}
 }

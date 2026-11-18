@@ -81,9 +81,9 @@ describe("InMemoryGraphStore", () => {
 	it("lists relations touching an asset", async () => {
 		const store = new InMemoryGraphStore();
 		await store.open();
-		await store.upsertRelation({ relationId: "r1", fromAssetId: "a", toAssetId: "b", type: "source" });
-		await store.upsertRelation({ relationId: "r2", fromAssetId: "c", toAssetId: "a", type: "reference" });
-		await store.upsertRelation({ relationId: "r3", fromAssetId: "c", toAssetId: "d", type: "other" });
+		await store.upsertRelation({ relationId: "r1", fromAssetId: "a", toAssetId: "b", type: "source", source: "manual" });
+		await store.upsertRelation({ relationId: "r2", fromAssetId: "c", toAssetId: "a", type: "reference", source: "manual" });
+		await store.upsertRelation({ relationId: "r3", fromAssetId: "c", toAssetId: "d", type: "other", source: "manual" });
 
 		assert.deepEqual((await store.listRelations("a")).map((item) => item.relationId).sort(), ["r1", "r2"]);
 		await store.removeRelation("r1");
