@@ -1,3 +1,4 @@
+import { isImeComposing } from "../../components/ime-composition.ts";
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Asset, AssetRelation, AssetType } from "@loom/core";
 import {
@@ -333,6 +334,7 @@ export function GraphView({
 
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
+			if (isImeComposing(event)) return;
 			if (event.key === "Escape" && pendingLink) {
 				setPendingLink(null);
 				setTypeError(null);
@@ -583,7 +585,10 @@ export function GraphView({
 					role="dialog"
 					aria-label={t.graph.createRelation}
 					onKeyDown={(event) => {
-						if (event.key === "Enter") void confirmLink();
+						if (event.key === "Enter" && event.target instanceof HTMLInputElement && !isImeComposing(event.nativeEvent)) {
+							event.preventDefault();
+							void confirmLink();
+						}
 					}}
 				>
 					<div className="graph-type-dialog-title">

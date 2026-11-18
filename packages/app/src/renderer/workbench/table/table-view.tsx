@@ -1,3 +1,4 @@
+import { isImeComposing } from "../../components/ime-composition.ts";
 import { type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
 import type {
 	Asset,
@@ -194,6 +195,7 @@ export function TableView({
 						value={fieldForm.name}
 						onChange={(event) => setFieldForm({ ...fieldForm, name: event.target.value })}
 						onKeyDown={(event) => {
+							if (isImeComposing(event.nativeEvent)) return;
 							if (event.key === "Enter") void saveField().catch(() => undefined);
 							if (event.key === "Escape") setFieldForm(null);
 						}}
@@ -430,7 +432,7 @@ function PropertyCell({
 				onChange={(event) => setDraft(event.target.value)}
 				onBlur={() => void commit().catch(() => undefined)}
 				onKeyDown={(event) => {
-					if (event.key === "Enter") event.currentTarget.blur();
+					if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) event.currentTarget.blur();
 				}}
 			/>
 		</td>

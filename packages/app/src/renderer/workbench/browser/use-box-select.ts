@@ -14,6 +14,7 @@ interface Drag {
 	add: boolean;
 	base: TreeSelection;
 	started: boolean;
+	pending: boolean;
 	clientX: number;
 	clientY: number;
 }
@@ -56,6 +57,7 @@ export function useBoxSelect({ scrollRef, contentRef, selection, onSelection }: 
 		if (!active) return;
 		drag.current = null;
 		cancelAnimationFrame(frame.current);
+		frame.current = 0;
 		const scroller = scrollRef.current;
 		if (scroller?.hasPointerCapture(active.pointer)) scroller.releasePointerCapture(active.pointer);
 		setBox(null);
@@ -63,6 +65,7 @@ export function useBoxSelect({ scrollRef, contentRef, selection, onSelection }: 
 
 	// Near the top or bottom edge the view scrolls on its own, so a box can reach tiles that are off screen.
 	const tick = useCallback(() => {
+		frame.current = 0;
 		const active = drag.current;
 		const scroller = scrollRef.current;
 		if (!active?.started || !scroller) return;
@@ -70,12 +73,14 @@ export function useBoxSelect({ scrollRef, contentRef, selection, onSelection }: 
 		const above = bounds.top + EDGE - active.clientY;
 		const below = active.clientY - (bounds.bottom - EDGE);
 		const step = above > 0 ? -Math.min(MAX_SCROLL_STEP, above / 2 + 1) : below > 0 ? Math.min(MAX_SCROLL_STEP, below / 2 + 1) : 0;
-		if (step !== 0) {
-			const before = scroller.scrollTop;
-			scroller.scrollTop += step;
-			if (scroller.scrollTop !== before) update();
+		const before = scroller.scrollTop;
+		if (step !== 0) scroller.scrollTop = before + step;
+		const scrolled = scroller.scrollTop !== before;
+		if (active.pending || scrolled) {
+			active.pending = false;
+			update();
 		}
-		frame.current = requestAnimationFrame(tick);
+		if (scrolled) frame.current = requestAnimationFrame(tick);
 	}, [scrollRef, update]);
 
 	useEffect(() => {
@@ -92,14 +97,22 @@ export function useBoxSelect({ scrollRef, contentRef, selection, onSelection }: 
 				if (Math.hypot(event.clientX - origin.left - active.startX, event.clientY - origin.top - active.startY) < DRAG_THRESHOLD) return;
 				active.started = true;
 				scroller.setPointerCapture(active.pointer);
-				frame.current = requestAnimationFrame(tick);
 			}
-			update();
+			active.pending = true;
+			if (!frame.current) frame.current = requestAnimationFrame(tick);
 		};
 		const up = (event: PointerEvent) => {
 			const active = drag.current;
 			if (!active || event.pointerId !== active.pointer) return;
-			if (!active.started && !active.add) live.current.onSelection(emptyTreeSelection);
+			if (active.started) {
+				if (active.pending || active.clientX !== event.clientX || active.clientY !== event.clientY) {
+					active.clientX = event.clientX;
+					active.clientY = event.clientY;
+					update();
+				}
+			} else if (!active.add) {
+				live.current.onSelection(emptyTreeSelection);
+			}
 			stop();
 		};
 		scroller.addEventListener("pointermove", move);
@@ -132,6 +145,7 @@ export function useBoxSelect({ scrollRef, contentRef, selection, onSelection }: 
 			add: mode !== "replace",
 			base: live.current.selection,
 			started: false,
+			pending: false,
 			clientX: event.clientX,
 			clientY: event.clientY,
 		};

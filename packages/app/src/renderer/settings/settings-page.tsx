@@ -6,6 +6,7 @@ import { changedFields } from "../../shared/settings-changes.ts";
 import { modelRequestUrl } from "../../shared/model-request-url.ts";
 import { instructionCharacterCount, INSTRUCTIONS_CHAR_LIMIT } from "../../shared/agent-instructions.ts";
 import type { GeneralSettings } from "../../shared/general-settings.ts";
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useLocale } from "../locale.tsx";
 import { SettingsAgent } from "./settings-agent.tsx";
 import { SettingsGeneral } from "./settings-general.tsx";
@@ -90,7 +91,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
-			if (event.key === "Escape" && !document.querySelector(".settings-login-overlay")) void close();
+			if (event.key === "Escape" && !isImeComposing(event) && !document.querySelector(".settings-login-overlay")) void close();
 		};
 		window.addEventListener("keydown", onKey);
 		return () => window.removeEventListener("keydown", onKey);

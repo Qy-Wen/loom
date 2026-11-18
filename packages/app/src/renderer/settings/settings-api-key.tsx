@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useLocale } from "../locale.tsx";
@@ -73,7 +74,7 @@ export function SettingsApiKey({ label, value, placeholder, onConfirm }: {
 							autoFocus
 							onChange={(event) => setInput(event.target.value)}
 							onKeyDown={(event) => {
-								if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); void confirm(); }
+								if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) { event.preventDefault(); event.stopPropagation(); void confirm(); }
 							}}
 						/>
 						{error && <p className="settings-status-error" role="alert">{t.settings.apiKeySaveFailed}</p>}

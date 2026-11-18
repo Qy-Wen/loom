@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useLayoutEffect, useRef, useState } from "react";
 import { CopilotChatInput } from "@copilotkit/react-core/v2";
 import type { LoomSessionModel, LoomUserAttachment } from "@loom/agent";
@@ -60,7 +61,7 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 						document.execCommand("insertText", false, pasted);
 					}}
 					onKeyDown={(event) => {
-						if (event.nativeEvent.isComposing) return;
+						if (isImeComposing(event.nativeEvent)) return;
 						if (event.key === "Escape") { event.preventDefault(); if (!busy) onCancel(); }
 						if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); }
 					}}

@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { forwardRef, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { CopilotChatInput } from "@copilotkit/react-core/v2";
 import { composerLayoutText, stripInlineAssetRefs } from "@loom/agent/composer-asset";
@@ -98,12 +99,14 @@ export const ComposerTextArea = forwardRef<HTMLTextAreaElement, React.ComponentP
 				document.execCommand("insertText", false, pasted);
 			}}
 			onKeyDown={(event) => {
-				const words = stripInlineAssetRefs(readInlineEditor(event.currentTarget)).trim();
-				const hasAssets = event.currentTarget.querySelector("[data-asset-id]") !== null;
-				if (event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing && actions && hasAssets && !words) {
-					event.preventDefault();
-					actions.sendAssets();
-					return;
+				if (composing.current || isImeComposing(event.nativeEvent)) return;
+				if (event.key === "Enter" && !event.shiftKey && actions && event.currentTarget.querySelector("[data-asset-id]")) {
+					const words = stripInlineAssetRefs(readInlineEditor(event.currentTarget)).trim();
+					if (!words) {
+						event.preventDefault();
+						actions.sendAssets();
+						return;
+					}
 				}
 				props.onKeyDown?.(event as unknown as React.KeyboardEvent<HTMLTextAreaElement>);
 			}}

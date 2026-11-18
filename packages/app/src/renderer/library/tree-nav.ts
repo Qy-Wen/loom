@@ -312,7 +312,8 @@ export function pointerSelect(
 export function boxSelectKeys(selection: TreeSelection, boxed: readonly string[], add: boolean): TreeSelection {
 	if (!add) return keysSelection(boxed);
 	if (boxed.length === 0) return selection;
-	const keys = [...selection.keys, ...boxed.filter((key) => !selection.keys.includes(key))];
+	const previous = new Set(selection.keys);
+	const keys = [...selection.keys, ...boxed.filter((key) => !previous.has(key))];
 	return { keys, anchor: selection.anchor ?? boxed[0]!, focus: boxed.at(-1)! };
 }
 

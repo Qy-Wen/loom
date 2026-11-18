@@ -1,3 +1,4 @@
+import { isImeComposing } from "../../components/ime-composition.ts";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import { endLibraryDrag, hasLibraryDrag, hasOsFileDrag, readLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
@@ -124,7 +125,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 
 	function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-		if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+		if (isImeComposing(event.nativeEvent)) return;
 		const mod = event.metaKey || event.ctrlKey;
 		if (location.kind === "tags") {
 			if (mod || event.altKey) return;

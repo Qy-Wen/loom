@@ -95,14 +95,7 @@ export function SessionScrollView({
 		};
 	}, [follow]);
 
-	let lastUserId = "";
-	for (let index = visible.length - 1; index >= 0; index--) {
-		const message = visible[index];
-		if (message?.role === "user") {
-			lastUserId = message.id;
-			break;
-		}
-	}
+	const lastUserId = visible.findLast((message) => message?.role === "user")?.id;
 	const seenUserId = useRef<string | null>(null);
 	useLayoutEffect(() => {
 		if (!lastUserId) return;

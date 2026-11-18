@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useEffect, useRef, useState } from "react";
 import { MODEL_REQUEST_PLACEHOLDERS, MODEL_SLOTS, type ModelSettingsDraft, type ModelSlotDraft, type ModelSlotId } from "../../shared/model-settings.ts";
 import { useLocale } from "../locale.tsx";
@@ -92,7 +93,7 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 							value={draft[id].requestUrl}
 							onChange={(event) => patchField(id, "requestUrl", event.target.value)}
 							onBlur={() => void commitSlot(id)}
-							onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+							onKeyDown={(event) => { if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) event.currentTarget.blur(); }}
 							placeholder={MODEL_REQUEST_PLACEHOLDERS[id]}
 							autoComplete="off"
 						/>
@@ -103,7 +104,7 @@ export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProp
 							value={draft[id].model}
 							onChange={(event) => patchField(id, "model", event.target.value)}
 							onBlur={() => void commitSlot(id)}
-							onKeyDown={(event) => { if (event.key === "Enter") event.currentTarget.blur(); }}
+							onKeyDown={(event) => { if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) event.currentTarget.blur(); }}
 							placeholder="model id"
 							autoComplete="off"
 						/>

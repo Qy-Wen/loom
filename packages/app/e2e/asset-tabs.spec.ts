@@ -76,7 +76,9 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		// Two open files with the same name show their folder.
 		const same = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.filter((asset) => asset.filename === "same.png");
 		expect(same).toHaveLength(2);
-		for (const folder of ["one", "two"]) await tree.locator(".folder-main").filter({ hasText: folder }).first().click();
+		for (const folder of ["one", "two"]) {
+			await tree.locator(".folder-row").filter({ hasText: folder }).locator(".folder-chevron").click();
+		}
 		await tree.locator(".asset-row").filter({ hasText: "same.png" }).nth(0).click({ button: "middle" });
 		await tree.locator(".asset-row").filter({ hasText: "same.png" }).nth(1).click({ button: "middle" });
 		await expect(strip.getByRole("tab", { name: "same.png · one" })).toHaveCount(1);
@@ -85,6 +87,7 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 
 		await file("notes.md").click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(5);
+		await expect(loomPage.locator(".workbench").getByRole("heading", { name: "hello", exact: true })).toBeVisible();
 
 		// Dragging a tab reorders it; the active tab stays active.
 		const names = () => strip.getByRole("tab");

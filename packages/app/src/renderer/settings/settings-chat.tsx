@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChatLoginPrompt, ChatProviderCatalogEntry, ChatSettingsView } from "../../shared/ipc.ts";
 import type { ChatCustomProviderConfig } from "@loom/agent/chat-models";
@@ -357,7 +358,7 @@ export function SettingsChat(): React.JSX.Element {
 								autoComplete="off"
 								autoFocus
 								onChange={(event) => setLoginInput(event.target.value)}
-								onKeyDown={(event) => { if (event.key === "Enter") { event.preventDefault(); event.stopPropagation(); void answerLogin(loginInput); } }}
+								onKeyDown={(event) => { if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) { event.preventDefault(); event.stopPropagation(); void answerLogin(loginInput); } }}
 							/>
 						)}
 						{(login.prompt.type === "text" || login.prompt.type === "manual_code") && (
@@ -369,7 +370,7 @@ export function SettingsChat(): React.JSX.Element {
 								autoComplete="off"
 								autoFocus
 								onChange={(event) => setLoginInput(event.target.value)}
-								onKeyDown={(event) => { if (event.key === "Enter") void answerLogin(loginInput); }}
+								onKeyDown={(event) => { if (event.key === "Enter" && !isImeComposing(event.nativeEvent)) void answerLogin(loginInput); }}
 							/>
 						)}
 						{login.prompt.type === "select" && (

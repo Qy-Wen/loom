@@ -1,5 +1,6 @@
+import { isImeComposing } from "./components/ime-composition.ts";
 import { DetailRequestScope } from "./details/request-scope.ts";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
@@ -65,16 +66,17 @@ import { runActivityRenderers } from "./chat/run-activity.tsx";
 import { AgentPanel } from "./chat/agent-panel.tsx";
 import { DetailsPanel } from "./details/details-panel.tsx";
 import { HelpDialog } from "./help/help-dialog.tsx";
-import { SettingsPage } from "./settings/settings-page.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/preview/asset-preview.tsx";
 import { FolderBrowser } from "./workbench/browser/folder-browser.tsx";
 import { PreviewOverlay } from "./workbench/browser/preview-overlay.tsx";
 import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type BrowseLocation } from "./workbench/browser/folder-browser-model.ts";
 import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-display.ts";
-import { GraphView } from "./workbench/graph/graph-view.tsx";
 import { TableView } from "./workbench/table/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
 import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, showInTab, type AssetTabs } from "./workbench/asset-tabs.ts";
+
+const SettingsPage = lazy(() => import("./settings/settings-page.tsx").then(({ SettingsPage }) => ({ default: SettingsPage })));
+const GraphView = lazy(() => import("./workbench/graph/graph-view.tsx").then(({ GraphView }) => ({ default: GraphView })));
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -1047,7 +1049,7 @@ export function App(): React.JSX.Element {
 
 	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean, fromTree = false): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-		if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
+		if (isImeComposing(event.nativeEvent)) return;
 		if (!library.rootPath) return;
 		const selection = fromTree ? treeSelection() : picked;
 		const mod = event.metaKey || event.ctrlKey;
@@ -1537,19 +1539,21 @@ export function App(): React.JSX.Element {
 								}}
 							/>
 						) : workbenchView === "graph" ? (
-							<GraphView
-								assets={library.assets}
-								edges={graphEdges}
-								selectedAssetIds={selectedAssetIds}
-								relationTypes={relationTypes}
-								onSelectAsset={(assetId) => {
-									selectAsset(assetId);
-									panels.focus("details");
-								}}
-								onBoxSelect={boxSelectAssets}
-								onCreateRelation={createRelation}
-								onRemoveRelation={removeRelation}
-							/>
+							<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
+								<GraphView
+									assets={library.assets}
+									edges={graphEdges}
+									selectedAssetIds={selectedAssetIds}
+									relationTypes={relationTypes}
+									onSelectAsset={(assetId) => {
+										selectAsset(assetId);
+										panels.focus("details");
+									}}
+									onBoxSelect={boxSelectAssets}
+									onCreateRelation={createRelation}
+									onRemoveRelation={removeRelation}
+								/>
+							</Suspense>
 						) : iconMode ? (
 							library.rootPath ? (
 								<FolderBrowser
@@ -1639,7 +1643,7 @@ export function App(): React.JSX.Element {
 					<PanelWorkspace layout={panels} panels={panelViews} />
 				</div>
 				{helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
-				{settingsOpen && <SettingsPage onClose={() => setSettingsOpen(false)} />}
+				{settingsOpen && <Suspense fallback={null}><SettingsPage onClose={() => setSettingsOpen(false)} /></Suspense>}
 			</div>
 		</CopilotKitProvider>
 	);

@@ -1,3 +1,4 @@
+import { isImeComposing } from "../../components/ime-composition.ts";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useLocale } from "../../locale.tsx";
 import {
@@ -41,7 +42,7 @@ export function FindBar({
 		function onKeyDown(event: KeyboardEvent): void {
 			const target = event.target;
 			const inFind = target === inputRef.current;
-			if (target instanceof HTMLTextAreaElement) return;
+			if (isImeComposing(event) || target instanceof HTMLTextAreaElement) return;
 			if (target instanceof HTMLInputElement && !inFind) return;
 
 			const mod = event.metaKey || event.ctrlKey;

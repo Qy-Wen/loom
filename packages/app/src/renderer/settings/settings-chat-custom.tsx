@@ -1,3 +1,4 @@
+import { isImeComposing } from "../components/ime-composition.ts";
 import { useRef, useState } from "react";
 import { CHAT_APIS, validateChatBaseUrl, type ChatApi, type ChatCustomProviderConfig } from "@loom/agent/chat-models";
 import { useLocale } from "../locale.tsx";
@@ -60,7 +61,7 @@ export function SettingsChatCustom({ id, provider, busy, onSave, onCancel }: {
 	return (
 		<div className="settings-chat-custom" role="group" aria-label={provider ? t.settings.chat.editCustom : t.settings.chat.addCustom} onKeyDown={(event) => {
 			// This editor is inside the dialog's outer form, not a nested HTML form.
-			if (event.key === "Enter" && event.target instanceof HTMLInputElement && event.target.type !== "checkbox") {
+			if (event.key === "Enter" && !isImeComposing(event.nativeEvent) && event.target instanceof HTMLInputElement && event.target.type !== "checkbox") {
 				event.preventDefault(); void submit();
 			}
 		}}>

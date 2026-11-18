@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@loom/core";
 import { useLocale } from "../../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import { FindBar } from "./find-bar.tsx";
-import { GradeView } from "./grade-view.tsx";
-import { MarkdownPreview } from "./markdown-preview.tsx";
 import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
+
+const GradeView = lazy(() => import("./grade-view.tsx").then(({ GradeView }) => ({ default: GradeView })));
+const MarkdownPreview = lazy(() => import("./markdown-preview.tsx").then(({ MarkdownPreview }) => ({ default: MarkdownPreview })));
 
 const TEXT_EXTENSIONS = new Set([
 	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log",
@@ -115,7 +116,11 @@ export function AssetPreview({
 	useEffect(() => setFailed(false), [asset.assetId]);
 
 	if (grading && ((asset.type === "image" && isGradeableImage(asset.filename)) || (asset.type === "video" && isGradeableVideo(asset.filename)))) {
-		return <GradeView asset={asset} assets={assets} onGraded={onGraded} panelHost={gradeHost} actions={actions} />;
+		return (
+			<Suspense fallback={<div className="preview-loading" role="status">{t.common.loading}</div>}>
+				<GradeView asset={asset} assets={assets} onGraded={onGraded} panelHost={gradeHost} actions={actions} />
+			</Suspense>
+		);
 	}
 	if (asset.type === "video") {
 		return <VideoPreview key={asset.assetId} asset={asset} url={url} actions={actions} />;
@@ -153,7 +158,13 @@ export function AssetPreview({
 	if (extension === ".pdf") {
 		return <iframe className="pdf-preview" src={url} title={t.preview.title(asset.filename)} />;
 	}
-	if (extension === ".md") return <MarkdownPreview asset={asset} assets={assets} url={url} />;
+	if (extension === ".md") {
+		return (
+			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
+				<MarkdownPreview asset={asset} assets={assets} url={url} />
+			</Suspense>
+		);
+	}
 	if (TEXT_EXTENSIONS.has(extension)) return <TextPreview asset={asset} url={url} actions={actions} />;
 	return <PreviewFallback asset={asset} message={t.preview.unavailable} actions={actions} />;
 }

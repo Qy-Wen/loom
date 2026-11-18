@@ -147,6 +147,10 @@ test("a stale settings form preserves independent model and MCP changes from Mai
 			embedding: { requestUrl: "https://example.com/from-agent", apiKey: "agent-key" },
 			audio: { model: "agent-audio" },
 		}));
+		await model.dispatchEvent("keydown", { key: "Enter", isComposing: true });
+		await expect(model).toBeFocused();
+		await model.dispatchEvent("keydown", { key: "Enter", keyCode: 229 });
+		await expect(model).toBeFocused();
 		await model.press("Enter");
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getModelSettings())).embedding.model).toBe("from-ui");
 		const saved = await loomPage.evaluate(() => window.loom.getModelSettings());

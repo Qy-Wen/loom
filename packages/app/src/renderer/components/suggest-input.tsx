@@ -1,4 +1,5 @@
 import { useEffect, useRef } from "react";
+import { isImeComposing } from "./ime-composition.ts";
 
 interface SuggestInputProps {
 	value: string;
@@ -66,6 +67,7 @@ export function SuggestInput({
 					if (!autoFocusing.current) showSuggestions();
 				}}
 				onKeyDown={(event) => {
+					if (isImeComposing(event.nativeEvent)) return;
 					if (event.key === "ArrowDown" && suggestions.length > 0) {
 						event.preventDefault();
 						showSuggestions();

@@ -111,6 +111,8 @@ test("the Add link dialog starts empty and closes on a press outside it, not ins
 	await options.click();
 	await expect(input).toHaveValue("BETA");
 	await expect(options).toHaveCount(0);
+	await input.dispatchEvent("keydown", { key: "Enter", isComposing: true });
+	await expect(dialog).toBeVisible();
 
 	// Presses inside the dialog keep it open.
 	await input.click();
