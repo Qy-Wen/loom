@@ -157,7 +157,7 @@ export function MarkdownPreview({
 					</div>
 				</>
 			) : (
-				<MarkdownSourceEditor assetId={asset.assetId} filename={asset.filename} modifiedAt={asset.modifiedAt} />
+				<MarkdownSourceEditor asset={asset} assets={assets} onOpenAsset={onOpenAsset} />
 			)}
 		</div>
 	);

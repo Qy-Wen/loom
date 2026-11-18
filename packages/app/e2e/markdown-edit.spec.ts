@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
@@ -174,6 +174,68 @@ test("live rendering hides Markdown symbols away from the cursor and never chang
 		// Looking, moving and clicking changed nothing on disk.
 		await new Promise((resolve) => setTimeout(resolve, 1500));
 		expect(await readFile(file, "utf8")).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("wiki links and pictures render live, flag missing targets and open with a modifier click", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-wiki-e2e-"));
+	const source = join(root, "脚本.md");
+	const text = [
+		"见 [[产品/说明]]、[[产品/说明#结尾|别名]] 和 [[待调研]]。",
+		"",
+		"![[图/封面.png]]",
+		"",
+		"![](图/封面.png) ![[没有.png]]",
+		"",
+		"末行",
+		"",
+	].join("\n");
+	await mkdir(join(root, "产品"));
+	await mkdir(join(root, "图"));
+	await copyFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url), join(root, "图", "封面.png"));
+	await writeFile(source, text);
+	await writeFile(join(root, "产品", "说明.md"), ["# 说明正文", "", ...Array.from({ length: 80 }, (_, index) => `填充 ${index}\n`), "## 结尾"].join("\n"));
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		const tree = loomPage.locator(".library-sidebar, aside").first();
+		await tree.locator(".asset-row").filter({ hasText: "脚本.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 脚本.md" });
+		await box.click();
+		await box.press("ControlOrMeta+End");
+
+		await expect(box.locator("a, .cm-live-wiki")).toHaveCount(3);
+		await expect(box.locator(".cm-live-wiki.cm-live-broken")).toHaveText("待调研");
+		// Both ways of writing a picture show it, and the missing one is flagged instead.
+		await expect(box.locator("img.cm-live-image")).toHaveCount(2);
+		await expect.poll(() => box.locator("img.cm-live-image").first().evaluate((image: HTMLImageElement) => image.naturalWidth > 0)).toBe(true);
+		await expect(box.locator(".cm-live-broken")).toHaveCount(2);
+		await expect.poll(() => box.locator("img.cm-live-image").first().evaluate((image) => image.getBoundingClientRect().height)).toBeLessThanOrEqual(360);
+
+		// A plain click only edits: the brackets come back and nothing opens.
+		await box.locator(".cm-live-wiki").first().click();
+		await expect(box).toContainText("[[产品/说明]]");
+		await expect(loomPage.getByRole("tab", { name: "脚本.md" })).toBeVisible();
+		await box.press("ControlOrMeta+End");
+
+		// A modifier click opens the file at the heading the link names.
+		await box.locator(".cm-live-wiki", { hasText: "别名" }).click({ modifiers: ["ControlOrMeta"] });
+		await expect(loomPage.locator(".markdown-preview-body").getByRole("heading", { name: "结尾" })).toBeInViewport({ timeout: 10_000 });
+
+		// Looking and clicking left the file as it was.
+		expect(await readFile(source, "utf8")).toBe(text);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

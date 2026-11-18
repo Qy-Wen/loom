@@ -5,7 +5,7 @@ import { search, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { liveMarkdown, liveMarkdownTheme } from "./live-markdown.ts";
+import { liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -13,6 +13,8 @@ export interface MarkdownEditorEvents {
 	onChange(text: string): void;
 	onBlur(): void;
 	onSave(): void;
+	/** A link was opened with ⌘/Ctrl+click. */
+	onOpenAsset(assetId: string, anchor: string | undefined): void;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
@@ -69,13 +71,15 @@ const highlight = HighlightStyle.define([
 
 export interface MarkdownEditor {
 	view: EditorView;
+	/** Tell the editor which library its references are checked against. */
+	setLibrary(library: LiveLibrary): void;
 	/** Replace the whole text without reporting it as a user edit. */
 	setText(text: string): void;
 	focus(): void;
 	destroy(): void;
 }
 
-export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string): MarkdownEditor {
+export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary): MarkdownEditor {
 	let replacing = false;
 	const extensions: Extension[] = [
 		history(),
@@ -83,8 +87,11 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		EditorView.lineWrapping,
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
+		liveLibrary,
+		liveHandlers({ openAsset: events.onOpenAsset } satisfies LiveHandlers),
 		liveMarkdown,
 		liveMarkdownTheme,
+		liveClicks,
 		search({ top: false }),
 		theme,
 		EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" }),
@@ -101,8 +108,10 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		EditorView.domEventHandlers({ blur: () => { events.onBlur(); } }),
 	];
 	const view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
+	view.dispatch({ effects: updateLibrary(library) });
 	return {
 		view,
+		setLibrary: (next) => view.dispatch({ effects: updateLibrary(next) }),
 		setText(next) {
 			if (view.state.doc.toString() === next) return;
 			replacing = true;

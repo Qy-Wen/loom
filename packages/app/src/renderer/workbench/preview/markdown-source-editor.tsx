@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
+import type { Asset } from "@loom/core";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor } from "./codemirror-markdown.ts";
+import { requestHeading } from "./heading-anchor.ts";
 import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
 
 const files: MarkdownFiles = {
@@ -16,13 +18,24 @@ const sessions = new Map<string, MarkdownSave>();
  * and before the window closes. A change made to the file elsewhere is taken in at once when nothing here is
  * unsaved, and otherwise shown as a choice when the save finds it.
  */
-export function MarkdownSourceEditor({ assetId, filename, modifiedAt }: { assetId: string; filename: string; modifiedAt: number }): React.JSX.Element {
+export function MarkdownSourceEditor({ asset, assets, onOpenAsset }: {
+	asset: Asset;
+	assets: Asset[];
+	onOpenAsset?: (assetId: string) => void;
+}): React.JSX.Element {
+	const { assetId, filename, modifiedAt, relativePath } = asset;
 	const { t } = useLocale();
 	const [save, setSave] = useState<MarkdownSave | null>(sessions.get(assetId) ?? null);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [, rerender] = useState(0);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const editorRef = useRef<MarkdownEditor | null>(null);
+	// The editor is rebuilt only for another file; a change to the asset list updates it in place.
+	const library = { fromRelativePath: relativePath, assets };
+	const libraryRef = useRef(library);
+	libraryRef.current = library;
+	const openRef = useRef(onOpenAsset);
+	openRef.current = onOpenAsset;
 
 	// Open the session, or reuse one that still holds unsaved text.
 	useEffect(() => {
@@ -75,13 +88,21 @@ export function MarkdownSourceEditor({ assetId, filename, modifiedAt }: { assetI
 			onChange: (text) => save.edit(text),
 			onBlur: () => { void save.flush().catch(() => undefined); },
 			onSave: () => { void save.flush().catch(() => undefined); },
-		}, t.preview.editorLabel(filename));
+			onOpenAsset: (target, anchor) => {
+				if (anchor) requestHeading(target, anchor);
+				openRef.current?.(target);
+			},
+		}, t.preview.editorLabel(filename), libraryRef.current);
 		editorRef.current = editor;
 		return () => {
 			editorRef.current = null;
 			editor.destroy();
 		};
 	}, [save, filename, t]);
+
+	useEffect(() => {
+		editorRef.current?.setLibrary({ fromRelativePath: relativePath, assets });
+	}, [relativePath, assets]);
 
 	// The session took in new text (a reload, or a change from outside): show it.
 	const text = save?.text;

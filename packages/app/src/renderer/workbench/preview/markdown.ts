@@ -4,8 +4,10 @@ import texmath from "markdown-it-texmath";
 import katex from "katex";
 import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
+import { anchorOf, headingKey } from "./heading-key.ts";
 
 export { resolveLibraryHref };
+export { headingKey } from "./heading-key.ts";
 
 export interface MarkdownRenderContext {
 	fromRelativePath: string;
@@ -24,27 +26,6 @@ export const ASSET_LINK_ATTRIBUTE = "data-asset-id";
 export const HEADING_ATTRIBUTE = "data-heading";
 /** Set on a link: the heading it points to, reduced by {@link headingKey}. */
 export const ANCHOR_ATTRIBUTE = "data-anchor";
-
-/**
- * Headings and anchors compare by this key: case, punctuation and the choice between spaces and hyphens
- * do not matter, so `[[笔记#Q&A 总结]]` and `笔记.md#q-a-总结` both find "Q&A 总结".
- */
-export function headingKey(text: string): string {
-	return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
-}
-
-/** The heading a written target points to. Block IDs (`#^id`) are not supported and give no anchor. */
-function anchorOf(fragment: string): string | undefined {
-	let text = fragment;
-	try {
-		text = decodeURIComponent(fragment);
-	} catch {
-		// Keep the text as written.
-	}
-	const last = text.split("#").pop() ?? "";
-	if (last.startsWith("^")) return undefined;
-	return headingKey(last) || undefined;
-}
 
 function lookupOf(context: MarkdownRenderContext): AssetLookup {
 	context.lookup ??= createAssetLookup(context.assets);
