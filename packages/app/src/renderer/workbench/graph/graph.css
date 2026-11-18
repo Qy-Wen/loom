@@ -190,6 +190,10 @@
 	cursor: pointer;
 }
 
+.graph-edge-group.derived .graph-edge {
+	stroke-dasharray: 5 4;
+}
+
 .graph-edge-group.selected .graph-edge {
 	stroke: var(--lm-text-primary);
 	stroke-width: 2.5;
@@ -342,4 +346,9 @@
 	stroke-width: 1;
 	vector-effect: non-scaling-stroke;
 	pointer-events: none;
+}
+
+.graph-caption-note {
+	color: var(--lm-text-muted);
+	font-size: var(--lm-text-size-xs);
 }

@@ -189,6 +189,12 @@ export const messages = defineLocale(
 		graph: {
 			canvas: "Asset relationship graph",
 			caption: (assets: number, relations: number) => `${assets} assets · ${relations} relations`,
+			removeRelation: (type: string) => `Remove ${type}`,
+			relationSource: {
+				manual: "Added manually",
+				markdown: "From a Markdown link. Edit the file to remove it.",
+				canvas: "From a canvas card. Edit the canvas to remove it.",
+			},
 			help: {
 				title: "Graph controls",
 				close: "Close graph help",
@@ -446,6 +452,11 @@ export const messages = defineLocale(
 			noRelations: "No relations yet.",
 			selectForRelations: "Select an asset to see its relations.",
 			removeRelation: "Remove relation",
+			relationSource: {
+				manual: "Added manually",
+				markdown: "From a Markdown link. Edit the file to remove it.",
+				canvas: "From a canvas card. Edit the canvas to remove it.",
+			},
 			tags: "Tags",
 			removeTag: (name: string) => `Remove ${name}`,
 			addTag: "Add a tag",
@@ -914,6 +925,12 @@ export const messages = defineLocale(
 		graph: {
 			canvas: "素材关系图",
 			caption: (assets, relations) => `${assets} 个素材 · ${relations} 条关系`,
+			removeRelation: (type) => `移除 ${type}`,
+			relationSource: {
+				manual: "手动添加",
+				markdown: "来自 Markdown 链接，修改文件即可移除。",
+				canvas: "来自画板卡片，修改画板即可移除。",
+			},
 			help: {
 				title: "图谱操作指南",
 				close: "关闭图谱帮助",
@@ -1170,6 +1187,11 @@ export const messages = defineLocale(
 			noRelations: "还没有关系。",
 			selectForRelations: "选择一个素材以查看关系。",
 			removeRelation: "移除关系",
+			relationSource: {
+				manual: "手动添加",
+				markdown: "来自 Markdown 链接，修改文件即可移除。",
+				canvas: "来自画板卡片，修改画板即可移除。",
+			},
 			tags: "标签",
 			removeTag: (name) => `移除 ${name}`,
 			addTag: "添加标签",

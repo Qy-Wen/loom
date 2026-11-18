@@ -171,6 +171,11 @@
 	min-width: 0;
 }
 
+.relation-list li.relation-derived::after {
+	flex: 0 0 var(--lm-size-md);
+	content: "";
+}
+
 .relation-list li > .icon-button {
 	display: inline-flex;
 	flex: 0 0 var(--lm-size-md);

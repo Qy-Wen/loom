@@ -30,7 +30,8 @@ export function createRelationTools(core: LocalCore): LoomTool[] {
 		{
 			name: "remove_relation",
 			description:
-				"Delete one relation by the relationId that create_relation or inspect_asset returned.",
+				"Delete one manual relation by the relationId that create_relation or inspect_asset returned. " +
+				"A link whose source is not \"manual\" comes from a Markdown or canvas file and cannot be deleted here; edit that file instead.",
 			parameters: objectSchema({
 				relationId: { type: "string", description: "relationId from create_relation or inspect_asset." },
 			}, ["relationId"]),

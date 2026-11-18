@@ -369,19 +369,21 @@ function RelationGroup({
 			<div className="relation-group-label">{label}</div>
 			<ul className="relation-list">
 				{items.map((item) => (
-					<li key={item.relationId}>
-						<button type="button" onClick={() => onSelect(item.asset.assetId)}>
+					<li key={item.relationId} className={item.source === "manual" ? undefined : "relation-derived"}>
+						<button type="button" data-tooltip={t.details.relationSource[item.source]} onClick={() => onSelect(item.asset.assetId)}>
 							<span className="relation-filename">
 								{showDirection ? `${item.direction === "out" ? "→" : "←"} ` : ""}
 								{item.asset.filename}
 							</span>
 						</button>
-						<button
-							className="icon-button"
-							type="button"
-							data-tooltip={t.details.removeRelation}
-							onClick={() => void onRemove(item.relationId)}
-						>×</button>
+						{item.source === "manual" && (
+							<button
+								className="icon-button"
+								type="button"
+								data-tooltip={t.details.removeRelation}
+								onClick={() => void onRemove(item.relationId)}
+							>×</button>
+						)}
 					</li>
 				))}
 			</ul>

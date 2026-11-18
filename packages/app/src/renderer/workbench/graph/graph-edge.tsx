@@ -3,6 +3,8 @@ import { memo } from "react";
 interface GraphEdgeProps {
 	relationId: string;
 	type: string;
+	/** Edges derived from file contents are drawn dashed. */
+	derived: boolean;
 	x1: number;
 	y1: number;
 	x2: number;
@@ -16,6 +18,7 @@ interface GraphEdgeProps {
 export const GraphEdge = memo(function GraphEdge({
 	relationId,
 	type,
+	derived,
 	x1,
 	y1,
 	x2,
@@ -26,7 +29,7 @@ export const GraphEdge = memo(function GraphEdge({
 }: GraphEdgeProps): React.JSX.Element {
 	return (
 		<g
-			className={`graph-edge-group${selected ? " selected" : ""}`}
+			className={`graph-edge-group${selected ? " selected" : ""}${derived ? " derived" : ""}`}
 			data-tooltip={type}
 			aria-label={type}
 			onPointerDown={(event) => {

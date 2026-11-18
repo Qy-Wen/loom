@@ -434,14 +434,17 @@ export function GraphView({
 					<span>{t.graph.caption(assets.length, visibleEdges.length)}</span>
 					<GraphHelp />
 				</div>
-				{selectedEdge && (
+				{selectedEdge?.source === "manual" && (
 					<button
 						className="text-button"
 						type="button"
 						onClick={() => void onRemoveRelation(selectedEdge.relationId).then(() => setSelectedEdgeId(null))}
 					>
-						Remove {selectedEdge.type}
+						{t.graph.removeRelation(selectedEdge.type)}
 					</button>
+				)}
+				{selectedEdge && selectedEdge.source !== "manual" && (
+					<span className="graph-caption-note">{t.graph.relationSource[selectedEdge.source]}</span>
 				)}
 			</div>
 			<div
@@ -497,6 +500,7 @@ export function GraphView({
 									key={edge.relationId}
 									relationId={edge.relationId}
 									type={edge.type}
+									derived={edge.source !== "manual"}
 									x1={start.x}
 									y1={start.y}
 									x2={end.x}
