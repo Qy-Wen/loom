@@ -97,6 +97,7 @@ export function AssetPreview({
 	asset,
 	assets,
 	onGraded,
+	onOpenAsset,
 	gradeHost = null,
 	grading = false,
 	actions = null,
@@ -104,6 +105,8 @@ export function AssetPreview({
 	asset: Asset;
 	assets: Asset[];
 	onGraded?: (assetId: string) => void;
+	/** Opens another library file, for links inside a Markdown preview. */
+	onOpenAsset?: (assetId: string) => void;
 	gradeHost?: HTMLElement | null;
 	grading?: boolean;
 	actions?: ReactNode;
@@ -161,7 +164,7 @@ export function AssetPreview({
 	if (extension === ".md") {
 		return (
 			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
-				<MarkdownPreview asset={asset} assets={assets} url={url} />
+				<MarkdownPreview asset={asset} assets={assets} url={url} onOpenAsset={onOpenAsset} />
 			</Suspense>
 		);
 	}

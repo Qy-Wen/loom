@@ -2,12 +2,27 @@ import type { Asset } from "@loom/core";
 import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
 import katex from "katex";
+import { createAssetLookup, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
+
+export { resolveLibraryHref };
 
 export interface MarkdownRenderContext {
 	fromRelativePath: string;
 	assets: Asset[];
 	lazyImages?: boolean;
+	/** Built from `assets` when absent. Pass one to share it across renders of the same library. */
+	lookup?: AssetLookup;
+}
+
+/** Marks a reference whose target is not in the library. */
+export const BROKEN_REFERENCE_CLASS = "markdown-broken-reference";
+/** Carries the asset ID of a link to another library file, for the click handler. */
+export const ASSET_LINK_ATTRIBUTE = "data-asset-id";
+
+function lookupOf(context: MarkdownRenderContext): AssetLookup {
+	context.lookup ??= createAssetLookup(context.assets);
+	return context.lookup;
 }
 
 const markdown = new MarkdownIt({ html: false, breaks: true, linkify: true });
@@ -21,15 +36,33 @@ const defaultLinkOpen = markdown.renderer.rules.link_open ?? ((tokens, idx, opti
 	return self.renderToken(tokens, idx, options);
 });
 markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
-	const href = String(tokens[idx].attrGet("href") ?? "");
-	if (/^(javascript|data|vbscript):/i.test(href.trim())) {
-		tokens[idx].attrSet("href", "#");
+	const token = tokens[idx];
+	const href = String(token.attrGet("href") ?? "");
+	const context = env as MarkdownRenderContext | undefined;
+	if (token.meta?.wiki) {
+		// Already resolved by the wiki_link rule.
+	} else if (/^(javascript|data|vbscript):/i.test(href.trim())) {
+		token.attrSet("href", "#");
+	} else if (context?.fromRelativePath && !isPassthroughHref(href)) {
+		markInternalLink(token, resolveLinkTarget(context.fromRelativePath, href, lookupOf(context)));
 	} else {
-		tokens[idx].attrSet("target", "_blank");
-		tokens[idx].attrSet("rel", "noreferrer noopener");
+		token.attrSet("target", "_blank");
+		token.attrSet("rel", "noreferrer noopener");
 	}
 	return defaultLinkOpen(tokens, idx, options, env, self);
 };
+
+/** A link to a library file opens that file in the app. A link to a missing one is flagged, not followed. */
+function markInternalLink(token: { attrSet(name: string, value: string): void }, target: Asset | undefined | null): void {
+	if (target === null) {
+		token.attrSet("target", "_blank");
+		token.attrSet("rel", "noreferrer noopener");
+		return;
+	}
+	token.attrSet("href", "#");
+	if (target) token.attrSet(ASSET_LINK_ATTRIBUTE, target.assetId);
+	else token.attrSet("class", BROKEN_REFERENCE_CLASS);
+}
 
 const defaultFence = markdown.renderer.rules.fence ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
@@ -50,11 +83,16 @@ markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
 	const src = String(token.attrGet("src") ?? "");
 	const context = env as MarkdownRenderContext | undefined;
 	if (context?.lazyImages) token.attrSet("loading", "lazy");
-	if (src && /^(javascript|vbscript|data):/i.test(src.trim())) {
+	if (token.meta?.wiki) {
+		// Already resolved by the wiki_link rule.
+	} else if (src && /^(javascript|vbscript|data):/i.test(src.trim())) {
 		token.attrSet("src", "");
 	} else if (context && src && !isPassthroughHref(src)) {
 		const asset = assetForHref(context, src);
 		if (asset) token.attrSet("src", assetPreviewUrl(asset));
+		else if (context.fromRelativePath && resolveLinkTarget(context.fromRelativePath, src, lookupOf(context)) === undefined) {
+			token.attrSet("class", BROKEN_REFERENCE_CLASS);
+		}
 	}
 	return defaultImage(tokens, idx, options, env, self);
 };
@@ -63,59 +101,59 @@ export function isPassthroughHref(href: string): boolean {
 	return /^(https?:|loom-asset:|mailto:|blob:|#)/i.test(href.trim());
 }
 
-function parentOf(relativePath: string): string {
-	const index = relativePath.lastIndexOf("/");
-	return index === -1 ? "" : relativePath.slice(0, index);
-}
-
-/** Resolve a markdown href to a library-relative POSIX path, or `undefined` if it leaves the library. */
-export function resolveLibraryHref(fromFile: string, href: string): string | undefined {
-	const trimmed = href.trim().replaceAll("\\", "/");
-	if (!trimmed || isPassthroughHref(trimmed)) return undefined;
-	const pathOnly = trimmed.split(/[?#]/)[0];
-	let decoded = pathOnly;
-	try {
-		decoded = decodeURIComponent(pathOnly);
-	} catch {
-		return undefined;
-	}
-	const rooted = decoded.startsWith("/");
-	const rest = decoded.replace(/^\/+/, "");
-	const parts = rooted ? [] : parentOf(fromFile).split("/").filter(Boolean);
-	for (const part of rest.split("/")) {
-		if (!part || part === ".") continue;
-		if (part === "..") {
-			if (parts.length === 0) return undefined;
-			parts.pop();
-			continue;
-		}
-		if (part === ".loom" || part.includes("\0")) return undefined;
-		parts.push(part);
-	}
-	return parts.join("/") || undefined;
-}
-
 function assetForHref(context: MarkdownRenderContext, src: string): Asset | undefined {
-	const relative = resolveLibraryHref(context.fromRelativePath, src);
-	const rooted = src.startsWith("/") || src.startsWith(".")
-		? undefined
-		: resolveLibraryHref(context.fromRelativePath, `/${src}`);
-	for (const path of [relative, rooted]) {
-		if (!path) continue;
-		const asset = context.assets.find((item) => item.relativePath === path);
-		if (asset) return asset;
-	}
+	const target = resolveLinkTarget(context.fromRelativePath, src, lookupOf(context));
+	return target ?? undefined;
 }
 
-function expandWikiImages(source: string): string {
-	return source.replace(/!\[\[([^\]|#\n]+)(?:\|[^\]]*)?\]\]/g, (match, path: string) => {
-		const target = String(path).trim().replaceAll("\\", "/");
-		if (!target) return match;
-		const href = target.startsWith("/") || target.startsWith(".") ? target : `/${target}`;
-		return `![](${href})`;
-	});
-}
+/**
+ * `[[target]]` and `![[target]]` as an inline rule, so code spans, code blocks and escaped text are left alone.
+ * An embed becomes an image token and a link becomes a link, then both render like their Markdown forms.
+ */
+markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
+	const { src, pos } = state;
+	const embed = src.charCodeAt(pos) === 0x21; // !
+	const open = embed ? pos + 1 : pos;
+	if (src.charCodeAt(open) !== 0x5b || src.charCodeAt(open + 1) !== 0x5b) return false;
+	const close = src.indexOf("]]", open + 2);
+	if (close === -1) return false;
+	const inner = src.slice(open + 2, close);
+	if (!inner.trim() || /[[\]\n]/.test(inner)) return false;
+	if (silent) return true;
+
+	const [target, ...rest] = inner.split("|");
+	const label = rest.join("|").trim();
+	const written = target.trim();
+	const context = state.env as unknown as MarkdownRenderContext | undefined;
+	// Without a library (a loose snippet) nothing can be resolved, so nothing is flagged either.
+	const asset = context?.assets ? resolveWikiTarget(written, lookupOf(context)) : null;
+	if (asset === null) {
+		const text = state.push("text", "", 0);
+		text.content = src.slice(pos, close + 2);
+		state.pos = close + 2;
+		return true;
+	}
+	if (embed) {
+		const image = state.push("image", "img", 0);
+		image.attrs = [["src", asset ? assetPreviewUrl(asset) : ""], ["alt", label || written]];
+		image.children = [];
+		image.content = label || written;
+		image.meta = { wiki: true };
+		if (!asset) image.attrSet("class", BROKEN_REFERENCE_CLASS);
+		else if (context?.lazyImages) image.attrSet("loading", "lazy");
+	} else {
+		const link = state.push("link_open", "a", 1);
+		link.attrs = [["href", "#"]];
+		if (asset) link.attrSet(ASSET_LINK_ATTRIBUTE, asset.assetId);
+		else link.attrSet("class", BROKEN_REFERENCE_CLASS);
+		link.meta = { wiki: true };
+		state.push("text", "", 0).content = label || written.split("#")[0];
+		state.push("link_close", "a", -1);
+	}
+	state.pos = close + 2;
+	return true;
+});
 
 export function renderMarkdown(source: string, context?: MarkdownRenderContext): string {
-	return markdown.render(expandWikiImages(source), context as never);
+	return markdown.render(source, context as never);
 }

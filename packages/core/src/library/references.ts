@@ -144,8 +144,11 @@ export function resolveLibraryHref(fromFile: string, href: string): string | und
 	return joinLibraryPath(decoded.startsWith("/") ? [] : parentOf(fromFile), decoded);
 }
 
-/** Wiki target: directories start from the library root. Anchors and display names are dropped. */
-function resolveWikiTarget(written: string, lookup: AssetLookup): Asset | undefined | null {
+/**
+ * Wiki target: directories start from the library root. Anchors and display names are dropped.
+ * `null` means the text is not a reference; `undefined` means it is one but no asset matches.
+ */
+export function resolveWikiTarget(written: string, lookup: AssetLookup): Asset | undefined | null {
 	const target = written.split("|")[0].split("#")[0].trim().replaceAll("\\", "/");
 	if (!target) return null;
 	const path = joinLibraryPath([], target);
@@ -153,7 +156,8 @@ function resolveWikiTarget(written: string, lookup: AssetLookup): Asset | undefi
 	return lookup.byPath(path) ?? (/\.md$/i.test(path) ? undefined : lookup.byPath(`${path}.md`));
 }
 
-function resolveLinkTarget(fromFile: string, written: string, lookup: AssetLookup): Asset | undefined | null {
+/** Markdown link or image address, with the same `null` / `undefined` meaning as {@link resolveWikiTarget}. */
+export function resolveLinkTarget(fromFile: string, written: string, lookup: AssetLookup): Asset | undefined | null {
 	if (!written || written.startsWith("#") || EXTERNAL_SCHEME.test(written)) return null;
 	const relative = resolveLibraryHref(fromFile, written);
 	// Match the preview: an address that is neither `/`- nor `.`-prefixed may also start at the library root.

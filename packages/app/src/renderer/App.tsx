@@ -1448,6 +1448,7 @@ export function App(): React.JSX.Element {
 				asset={asset}
 				assets={library.assets}
 				onGraded={selectAsset}
+				onOpenAsset={selectAsset}
 				gradeHost={gradeHost}
 				grading={grading && asset.assetId === viewedAssetId}
 				actions={(

@@ -2,7 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { useLocale } from "../../locale.tsx";
 import { FindBar } from "./find-bar.tsx";
-import { renderMarkdown } from "./markdown.ts";
+import { ASSET_LINK_ATTRIBUTE, renderMarkdown } from "./markdown.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 
 type MarkdownMode = "preview" | "source";
@@ -10,9 +10,11 @@ type MarkdownMode = "preview" | "source";
 const MarkdownRenderedBody = memo(function MarkdownRenderedBody({
 	html,
 	onHydrated,
+	onOpenAsset,
 }: {
 	html: string;
 	onHydrated: () => void;
+	onOpenAsset?: (assetId: string) => void;
 }): React.JSX.Element {
 	const bodyRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
@@ -26,17 +28,32 @@ const MarkdownRenderedBody = memo(function MarkdownRenderedBody({
 			cancelled = true;
 		};
 	}, [html, onHydrated]);
-	return <div className="markdown-preview-body" ref={bodyRef} dangerouslySetInnerHTML={{ __html: html }} />;
+	return (
+		<div
+			className="markdown-preview-body"
+			ref={bodyRef}
+			onClick={(event) => {
+				const link = (event.target as HTMLElement).closest<HTMLElement>("a");
+				if (!link || !bodyRef.current?.contains(link) || link.getAttribute("href") !== "#") return;
+				event.preventDefault();
+				const assetId = link.getAttribute(ASSET_LINK_ATTRIBUTE);
+				if (assetId) onOpenAsset?.(assetId);
+			}}
+			dangerouslySetInnerHTML={{ __html: html }}
+		/>
+	);
 });
 
 export function MarkdownPreview({
 	asset,
 	assets,
 	url,
+	onOpenAsset,
 }: {
 	asset: Asset;
 	assets: Asset[];
 	url: string;
+	onOpenAsset?: (assetId: string) => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const [content, setContent] = useState<string | null>(null);
@@ -113,7 +130,7 @@ export function MarkdownPreview({
 				className={mode === "preview" ? "markdown-preview thin-scroll" : "text-preview thin-scroll"}
 				ref={contentRef}
 			>
-				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} /> : content}
+				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} onOpenAsset={onOpenAsset} /> : content}
 			</div>
 		</div>
 	);

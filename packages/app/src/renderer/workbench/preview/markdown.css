@@ -167,6 +167,18 @@
 	color: var(--lm-text-accent);
 }
 
+.markdown-preview-body a.markdown-broken-reference {
+	color: var(--lm-text-danger);
+	text-decoration: underline wavy;
+	text-underline-offset: 3px;
+	cursor: default;
+}
+
+.markdown-preview-body img.markdown-broken-reference {
+	outline: 1px solid var(--lm-border-danger);
+	outline-offset: 2px;
+}
+
 .markdown-preview-body code {
 	padding: 0.1em 0.35em;
 	border-radius: var(--lm-radius-sm);

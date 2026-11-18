@@ -107,3 +107,81 @@ test("renderMarkdown leaves mermaid fences for client hydration", () => {
 	assert.match(html, /A\[&quot;x &lt; y&quot;\] --&gt; B/);
 	assert.equal(html.includes("language-mermaid"), false);
 });
+
+function libraryAsset(assetId: string, relativePath: string): Asset {
+	return {
+		assetId,
+		relativePath,
+		filename: relativePath.split("/").pop() ?? relativePath,
+		type: relativePath.endsWith(".png") ? "image" : "text",
+		size: 5,
+		createdAt: 1,
+		modifiedAt: 2,
+	};
+}
+
+const library = [
+	libraryAsset("notes", "产品说明.md"),
+	libraryAsset("deep", "产品/说明.md"),
+	libraryAsset("diagram", "图/架构图.png"),
+];
+
+function render(source: string, from = "脚本.md"): string {
+	return renderMarkdown(source, { fromRelativePath: from, assets: library });
+}
+
+test("renderMarkdown turns wiki links into links that open the asset", () => {
+	const html = render("[[产品说明]] [[产品/说明|别名]] [[产品说明#标题]]");
+	assert.match(html, /<a href="#" data-asset-id="notes">产品说明<\/a>/);
+	assert.match(html, /<a href="#" data-asset-id="deep">别名<\/a>/);
+	assert.equal(html.match(/data-asset-id="notes"/g)?.length, 2);
+	assert.equal(html.includes("markdown-broken-reference"), false);
+});
+
+test("renderMarkdown opens Markdown links to library files in the app", () => {
+	const html = render("[a](%E4%BA%A7%E5%93%81%E8%AF%B4%E6%98%8E.md) [b](产品/说明.md) [web](https://example.com)");
+	assert.match(html, /data-asset-id="notes"/);
+	assert.match(html, /data-asset-id="deep"/);
+	assert.match(html, /href="https:\/\/example.com" target="_blank"/);
+});
+
+test("renderMarkdown marks references to missing files as errors", () => {
+	const html = render("[[待调研]] [x](missing.md) ![[missing.png]] ![](gone.png) [ok](#top)");
+	assert.equal(html.match(/markdown-broken-reference/g)?.length, 4);
+	assert.equal(html.includes("data-asset-id"), false);
+	assert.equal(/<a [^>]*#top/.test(html), true);
+	assert.equal(/<a [^>]*#top[^>]*markdown-broken-reference/.test(html), false);
+});
+
+test("renderMarkdown does not treat a bare name as a library search", () => {
+	const html = render("[[说明]]");
+	assert.match(html, /markdown-broken-reference/);
+	assert.equal(html.includes("data-asset-id"), false);
+});
+
+test("renderMarkdown leaves wiki syntax in code and escapes alone", () => {
+	const html = render("`[[产品说明]]` \\[\\[产品说明\\]\\]\n\n```\n[[产品说明]]\n```");
+	assert.equal(html.includes("data-asset-id"), false);
+	assert.equal(html.includes("markdown-broken-reference"), false);
+	assert.equal(html.includes("[[产品说明]]"), true);
+});
+
+test("renderMarkdown embeds wiki images by their full library path", () => {
+	const html = render("![[图/架构图.png]]");
+	assert.match(html, /src="loom-asset:\/\/asset\/diagram\?v=2-5"/);
+	assert.equal(html.includes("markdown-broken-reference"), false);
+});
+
+test("renderMarkdown shows a loose snippet without a library as written", () => {
+	assert.match(renderMarkdown("see [[产品说明]]"), /\[\[产品说明\]\]/);
+});
+
+test("the preview and the graph index resolve the same links to the same files", async () => {
+	const { extractMarkdownReferences, resolveReferences, createAssetLookup } = await import("@loom/core/references");
+	const source = "[[产品说明]] [[产品/说明]] [[说明]] ![[图/架构图.png]] [x](产品/说明.md) [y](missing.md)";
+	const indexed = resolveReferences("脚本.md", extractMarkdownReferences(source), createAssetLookup(library));
+	const previewed = [...render(source).matchAll(/data-asset-id="([^"]+)"|src="loom-asset:\/\/asset\/([^?"]+)/g)]
+		.map((match) => match[1] ?? match[2]);
+	assert.deepEqual([...new Set(previewed)].sort(), [...indexed.targetAssetIds].sort());
+	assert.equal(render(source).match(/markdown-broken-reference/g)?.length, indexed.unresolved.length);
+});
