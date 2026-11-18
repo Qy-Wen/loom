@@ -53,6 +53,8 @@ import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
 import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
 import { ToolExecutor } from "@loom/agent/tools";
 import { createAppToolCatalog } from "./tools/catalog.ts";
+import { CanvasStore } from "./canvas/store.ts";
+import { saveCanvasBeforeWindowClose } from "./canvas/window-close.ts";
 import { WebToolsService } from "./web/web-service.ts";
 import {
 	mergeMcpServers,
@@ -196,6 +198,7 @@ protocol.registerSchemesAsPrivileged([
 ]);
 
 const localCore = new LocalCore();
+const canvasStore = new CanvasStore(localCore);
 const toolCatalog = createAppToolCatalog(localCore, {
 	assets: {
 		embedAsset: embedAssetWithSettings,
@@ -209,7 +212,7 @@ const toolCatalog = createAppToolCatalog(localCore, {
 		read: (chatProvider) => readPublicSettings(chatProvider),
 		apply: (patch) => applySettingsPatch(patch),
 	},
-});
+}, canvasStore);
 const toolExecutor = new ToolExecutor(toolCatalog);
 const BUILTIN_TOOLS = toolExecutor.agentTools(() => localCore.bindLibraryTasks());
 const AGENT_OPTIONS: LoomAgentOptions = {
@@ -382,6 +385,7 @@ function createWindow(): void {
 		onBlocked: (reason, url) => appLog(`${reason}: ${url.slice(0, 200)}`),
 	});
 	watchRenderer(win, appLog);
+	saveCanvasBeforeWindowClose(win);
 
 	if (process.env.ELECTRON_RENDERER_URL) {
 		void win.loadURL(process.env.ELECTRON_RENDERER_URL);
@@ -612,6 +616,7 @@ function registerIpc(): void {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
+				{ label: t.canvas.newCanvas, enabled: single, click: () => "new_canvas" },
 				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ type: "separator" },
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
@@ -634,6 +639,7 @@ function registerIpc(): void {
 			return popupContextMenu<LibraryContextAction>(event, [
 				{ label: t.menu.newFolder, click: () => "new_folder" },
 				{ label: t.menu.newMdFile, click: () => "new_md_file" },
+				{ label: t.canvas.newCanvas, click: () => "new_canvas" },
 				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 			]);
 		},
@@ -662,6 +668,11 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.createMarkdownFile, (_event, parentRelativePath: string) => {
 		return localCore.runLibraryTask(() => localCore.createMarkdownFile(parentRelativePath));
 	});
+
+	ipcMain.handle(IPC.createCanvasFile, (_event, folder: unknown) => localCore.runLibraryTask(() => canvasStore.create(folder)));
+	ipcMain.handle(IPC.readCanvas, (_event, id: string) => localCore.runLibraryTask(() => canvasStore.read(id)));
+	ipcMain.handle(IPC.saveCanvas, (_event, id: string, document: unknown, revision: string) =>
+		localCore.runLibraryTask(() => canvasStore.save(id, document, revision)));
 
 	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {
 		return localCore.renameFolder(relativePath, name);

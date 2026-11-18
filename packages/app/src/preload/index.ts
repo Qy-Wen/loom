@@ -35,6 +35,15 @@ const api: LoomApi = {
 	moveAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.moveAssetsInto, assetIds, destFolder),
 	createFolder: (parentRelativePath) => ipcRenderer.invoke(IPC.createFolder, parentRelativePath),
 	createMarkdownFile: (parentRelativePath) => ipcRenderer.invoke(IPC.createMarkdownFile, parentRelativePath),
+	createCanvasFile: (parentRelativePath) => ipcRenderer.invoke(IPC.createCanvasFile, parentRelativePath),
+	readCanvas: (assetId) => ipcRenderer.invoke(IPC.readCanvas, assetId),
+	saveCanvas: (assetId, document, revision) => ipcRenderer.invoke(IPC.saveCanvas, assetId, document, revision),
+	setCanvasDirty: (dirty) => ipcRenderer.send(IPC.canvasDirtyChanged, dirty),
+	onFlushCanvasBeforeClose: (flush) => {
+		const handler = () => { void flush().then((ok) => ipcRenderer.send(IPC.canvasCloseReady, ok), () => ipcRenderer.send(IPC.canvasCloseReady, false)); };
+		ipcRenderer.on(IPC.flushCanvasBeforeClose, handler);
+		return () => ipcRenderer.off(IPC.flushCanvasBeforeClose, handler);
+	},
 	renameFolder: (relativePath, name) => ipcRenderer.invoke(IPC.renameFolder, relativePath, name),
 	copyFolderInto: (sourceFolder, destFolder) =>
 		ipcRenderer.invoke(IPC.copyFolderInto, sourceFolder, destFolder),

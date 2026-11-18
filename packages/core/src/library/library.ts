@@ -236,21 +236,31 @@ export class Library {
 		return relativePath;
 	}
 
-	async createMarkdownFile(parentRelativePath: string): Promise<Asset> {
+	createMarkdownFile(parentRelativePath: string): Promise<Asset> {
+		return this.createLibraryFile(parentRelativePath, "Untitled", ".md", "");
+	}
+
+	createCanvasFile(parentRelativePath: string, name?: string): Promise<Asset> {
+		return this.createLibraryFile(parentRelativePath, name === undefined ? "Untitled" : assertEntryName(name),
+			".canvas", '{\n\t"nodes": [],\n\t"edges": []\n}\n', name !== undefined);
+	}
+
+	private async createLibraryFile(parentRelativePath: string, stem: string, extension: string, contents: string, exactName = false): Promise<Asset> {
 		await this.requireDirectory(parentRelativePath);
 		let relativePath: string;
 		for (let index = 1; ; index++) {
-			const filename = index === 1 ? "Untitled.md" : `Untitled ${index}.md`;
+			const filename = index === 1 ? `${stem}${extension}` : `${stem} ${index}${extension}`;
 			relativePath = joinRelative(parentRelativePath, filename);
 			try {
-				await writeFile(this.folderAbsolute(relativePath), "", { flag: "wx" });
+				await writeFile(this.folderAbsolute(relativePath), contents, { flag: "wx" });
 				break;
 			} catch (error) {
 				if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+				if (exactName) throw new Error(`A file named “${filename}” already exists`);
 			}
 		}
 		const asset = await this.indexFile(relativePath);
-		if (!asset) throw new Error("Failed to create markdown file");
+		if (!asset) throw new Error(`Failed to create ${relativePath}`);
 		return asset;
 	}
 

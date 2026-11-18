@@ -7,10 +7,13 @@ import { createRelationTools } from "./relation-tools.ts";
 import { createTagTools } from "./tag-tools.ts";
 import { createSettingsTools, type SettingsToolHost } from "./settings-tools.ts";
 import { createLibraryTools } from "./library-tools.ts";
+import { CanvasStore } from "../canvas/store.ts";
+import { createCanvasTools } from "./canvas-tools.ts";
 
-export function createAppToolCatalog(core: LocalCore, host: { assets: AssetToolOptions; settings: SettingsToolHost }): ToolCatalog {
+export function createAppToolCatalog(core: LocalCore, host: { assets: AssetToolOptions; settings: SettingsToolHost }, canvases = new CanvasStore(core)): ToolCatalog {
 	const library = [
 		...createLibraryTools(core),
+		...createCanvasTools(core, canvases),
 		...createAssetTools(core, host.assets),
 		...createFfmpegTools(core),
 		...createRelationTools(core),

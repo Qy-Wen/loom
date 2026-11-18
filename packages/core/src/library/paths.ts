@@ -1,5 +1,9 @@
 import { basename, isAbsolute, relative, resolve, sep } from "node:path";
 
+export function isCanvasTemporaryFile(path: string): boolean {
+	return /(?:^|[/\\])\.loom-canvas\.[\da-f-]{36}\.tmp$/i.test(path);
+}
+
 /**
  * Owns all path conversion and containment checks for one portable library.
  * Core code stores POSIX-style relative paths and resolves absolute paths only
@@ -65,6 +69,6 @@ export class LibraryPaths {
 
 	/** Files that are implementation/OS metadata rather than user assets. */
 	isIgnoredPath(absolutePath: string): boolean {
-		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store";
+		return this.isLoomPath(absolutePath) || basename(absolutePath) === ".DS_Store" || isCanvasTemporaryFile(absolutePath);
 	}
 }

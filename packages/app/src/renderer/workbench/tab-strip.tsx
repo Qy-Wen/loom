@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { Asset } from "@loom/core";
+import { isCanvasFile } from "../../shared/canvas.ts";
 import { draggedAssetIds, endLibraryDrag, hasLibraryDrag, readLibraryDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { tabLabels, type AssetTabs } from "./asset-tabs.ts";
@@ -21,6 +22,8 @@ export function TabStrip({
 	onClose,
 	onMove,
 	onDropFiles,
+	onBrowse,
+	onDropOnCanvas,
 }: {
 	tabs: AssetTabs;
 	assets: readonly Asset[];
@@ -29,10 +32,13 @@ export function TabStrip({
 	onMove: (assetId: string, beforeId: string | null) => void;
 	/** Library files dropped on the strip: open them as tabs before `beforeId`, or at the end when null. */
 	onDropFiles: (assetIds: string[], beforeId: string | null) => void;
+	onBrowse?: () => void;
+	onDropOnCanvas?: (assetIds: string[], canvasId: string) => void;
 }): React.JSX.Element | null {
 	const { t } = useLocale();
 	const [dragging, setDragging] = useState<string | null>(null);
 	const [slot, setSlot] = useState<DropSlot>(null);
+	const [canvasTarget, setCanvasTarget] = useState<string | null>(null);
 	const files = tabs.ids.flatMap((id) => assets.find((asset) => asset.assetId === id) ?? []);
 	if (files.length === 0) return null;
 	const labels = tabLabels(files);
@@ -40,6 +46,7 @@ export function TabStrip({
 	function end(): void {
 		setDragging(null);
 		setSlot(null);
+		setCanvasTarget(null);
 	}
 
 	/** A tab being reordered, or a library file being carried in. Anything else is not ours. */
@@ -80,10 +87,14 @@ export function TabStrip({
 					event.preventDefault();
 					event.dataTransfer.dropEffect = dragging ? "move" : "copy";
 					setSlot({ beforeId: null });
+					setCanvasTarget(null);
 				}
 			}}
 			onDragLeave={(event) => {
-				if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setSlot(null);
+				if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+					setSlot(null);
+					setCanvasTarget(null);
+				}
 			}}
 			onDrop={(event) => {
 				if (!accepts(event.dataTransfer)) return;
@@ -91,6 +102,13 @@ export function TabStrip({
 				if (slot) drop(slot.beforeId, event.dataTransfer);
 			}}
 		>
+			{onBrowse && (
+				<div className={`asset-tab${files.some((file) => file.assetId === tabs.active) ? "" : " active"}`}>
+					<button type="button" role="tab" aria-selected={!files.some((file) => file.assetId === tabs.active)} onClick={onBrowse}>
+						<span>{t.canvas.browse}</span>
+					</button>
+				</div>
+			)}
 			{files.map((asset, index) => {
 				const selected = asset.assetId === tabs.active;
 				const label = labels.get(asset.assetId) ?? asset.filename;
@@ -98,10 +116,11 @@ export function TabStrip({
 					&& files[index - 1]?.assetId !== dragging;
 				const markedEnd = slot !== null && slot.beforeId === null && index === files.length - 1
 					&& asset.assetId !== dragging;
+				const ontoCanvas = onDropOnCanvas && isCanvasFile(asset.filename);
 				return (
 					<div
 						key={asset.assetId}
-						className={`asset-tab${selected ? " active" : ""}${dragging === asset.assetId ? " dragging" : ""}${marked ? " drop-before" : ""}${markedEnd ? " drop-after" : ""}`}
+						className={`asset-tab${selected ? " active" : ""}${dragging === asset.assetId ? " dragging" : ""}${marked ? " drop-before" : ""}${markedEnd ? " drop-after" : ""}${canvasTarget === asset.assetId ? " canvas-drop-target" : ""}`}
 						data-tooltip={asset.relativePath}
 						draggable
 						onDragStart={(event) => {
@@ -115,6 +134,12 @@ export function TabStrip({
 							event.preventDefault();
 							event.stopPropagation();
 							event.dataTransfer.dropEffect = dragging ? "move" : "copy";
+							if (ontoCanvas && !dragging && hasLibraryDrag(event.dataTransfer)) {
+								setCanvasTarget(asset.assetId);
+								setSlot(null);
+								return;
+							}
+							setCanvasTarget(null);
 							const next = slotFor(event, index);
 							if (next?.beforeId !== slot?.beforeId) setSlot(next);
 						}}
@@ -122,6 +147,13 @@ export function TabStrip({
 							if (!accepts(event.dataTransfer)) return;
 							event.preventDefault();
 							event.stopPropagation();
+							if (ontoCanvas && !dragging && hasLibraryDrag(event.dataTransfer)) {
+								const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
+								endLibraryDrag();
+								end();
+								if (ids.length) onDropOnCanvas(ids, asset.assetId);
+								return;
+							}
 							const target = slotFor(event, index);
 							if (target) drop(target.beforeId, event.dataTransfer);
 						}}

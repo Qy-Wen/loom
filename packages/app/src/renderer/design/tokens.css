@@ -103,6 +103,7 @@
 	--lm-surface-raised: var(--lm-palette-paper-0);
 	--lm-surface-subtle: var(--lm-palette-paper-2);
 	--lm-surface-sunken: var(--lm-palette-paper-3);
+	--lm-surface-canvas: var(--lm-surface-raised);
 	--lm-surface-hover: var(--lm-palette-line-1);
 	--lm-surface-active: var(--lm-palette-paper-4);
 	--lm-surface-track: var(--lm-palette-line-3);
@@ -295,6 +296,7 @@
 		--lm-surface-raised: var(--lm-palette-night-4);
 		--lm-surface-subtle: var(--lm-palette-night-2);
 		--lm-surface-sunken: var(--lm-palette-night-0);
+		--lm-surface-canvas: var(--lm-surface-sunken);
 		--lm-surface-hover: var(--lm-palette-night-5);
 		--lm-surface-active: var(--lm-palette-night-6);
 		--lm-surface-track: var(--lm-palette-night-7);

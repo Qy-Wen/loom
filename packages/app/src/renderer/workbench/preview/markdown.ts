@@ -7,6 +7,7 @@ import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 export interface MarkdownRenderContext {
 	fromRelativePath: string;
 	assets: Asset[];
+	lazyImages?: boolean;
 }
 
 const markdown = new MarkdownIt({ html: false, breaks: true, linkify: true });
@@ -48,6 +49,7 @@ markdown.renderer.rules.image = (tokens, idx, options, env, self) => {
 	const token = tokens[idx];
 	const src = String(token.attrGet("src") ?? "");
 	const context = env as MarkdownRenderContext | undefined;
+	if (context?.lazyImages) token.attrSet("loading", "lazy");
 	if (src && /^(javascript|vbscript|data):/i.test(src.trim())) {
 		token.attrSet("src", "");
 	} else if (context && src && !isPassthroughHref(src)) {

@@ -20,6 +20,7 @@ import type {
 } from "@loom/core";
 import type { ProcessSandboxNotice } from "../shared/agent-sandbox.ts";
 import type { AgentEndpoint } from "../shared/ipc.ts";
+import { isCanvasFile } from "../shared/canvas.ts";
 import { useLocale } from "./locale.tsx";
 import { useConfirmation } from "./components/confirm-dialog.tsx";
 import { usePasteConflicts } from "./library/use-paste-conflicts.ts";
@@ -69,6 +70,7 @@ import { HelpDialog } from "./help/help-dialog.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/preview/asset-preview.tsx";
 import { FolderBrowser } from "./workbench/browser/folder-browser.tsx";
 import { PreviewOverlay } from "./workbench/browser/preview-overlay.tsx";
+import { flushCanvasSaves, pruneCanvasSaves } from "./workbench/canvas/canvas-saves.ts";
 import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type BrowseLocation } from "./workbench/browser/folder-browser-model.ts";
 import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-display.ts";
 import { TableView } from "./workbench/table/table-view.tsx";
@@ -77,6 +79,7 @@ import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTa
 
 const SettingsPage = lazy(() => import("./settings/settings-page.tsx").then(({ SettingsPage }) => ({ default: SettingsPage })));
 const GraphView = lazy(() => import("./workbench/graph/graph-view.tsx").then(({ GraphView }) => ({ default: GraphView })));
+const CanvasEditor = lazy(() => import("./workbench/canvas/canvas-editor.tsx").then(({ CanvasEditor }) => ({ default: CanvasEditor })));
 
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const NO_KEYS: ReadonlySet<string> = new Set();
@@ -164,8 +167,14 @@ export function App(): React.JSX.Element {
 	// The workbench shows the active tab, not the tree focus. Only actions that mean "look at this file"
 	// change tabs (selectAsset, clicking a file). Right-click, select all, and drops move the focus and leave tabs alone.
 	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
+	const [canvasDrop, setCanvasDrop] = useState<{ id: string; assets: string[] } | null>(null);
+	const [canvasPreviewId, setCanvasPreviewId] = useState<string | null>(null);
+	const canvasIds = useMemo(() => new Set(library.assets.filter((asset) => isCanvasFile(asset.filename)).map((asset) => asset.assetId)), [library.assets]);
+	const activeCanvas = useMemo(() => library.assets.find((asset) => asset.assetId === tabs.active && canvasIds.has(asset.assetId)), [library.assets, tabs.active, canvasIds]);
+	const canvasPreview = useMemo(() => library.assets.find((asset) => asset.assetId === canvasPreviewId), [library.assets, canvasPreviewId]);
+	const visibleTabs = iconMode ? { ...tabs, ids: tabs.ids.filter((id) => canvasIds.has(id)) } : tabs;
 	// List mode follows the active tab. Icon mode follows the previewed file, else the focused tile.
-	const viewedAssetId = iconMode ? (previewAssetId ?? selectedAssetId) : tabs.active;
+	const viewedAssetId = activeCanvas?.assetId ?? (iconMode ? (previewAssetId ?? selectedAssetId) : tabs.active);
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<FolderRename | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
@@ -262,6 +271,17 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		if (!iconMode || workbenchView !== "library") setPreviewAssetId(null);
 	}, [iconMode, workbenchView]);
+	useEffect(() => setCanvasPreviewId(null), [activeCanvas?.assetId, workbenchView]);
+	useEffect(() => pruneCanvasSaves(canvasIds), [canvasIds]);
+	useEffect(() => window.loom.onFlushCanvasBeforeClose(async () => {
+		try {
+			await flushCanvasSaves();
+			return true;
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+			return false;
+		}
+	}), []);
 	// The sidebar tree follows the browser: the folders above it are open so it is visible. The folder itself keeps its
 	// fold state, since the browser shows its contents. Clicking a tree row only moves the browser and leaves
 	// the row's fold state to the arrow and the double click, so that one move skips this.
@@ -530,12 +550,17 @@ export function App(): React.JSX.Element {
 	 */
 	function selectAsset(assetId: string): void {
 		setPicked(singleSelection(assetKey(assetId)));
+		const asset = library.assets.find((item) => item.assetId === assetId);
+		if (asset && isCanvasFile(asset.filename)) {
+			openAssetInNewTab(assetId);
+			return;
+		}
 		if (!iconMode) {
-			setTabs((current) => showInTab(current, assetId));
+			setTabs((current) => activeCanvas ? openInNewTab(current, assetId) : showInTab(current, assetId));
 			return;
 		}
 		if (workbenchView !== "library") return;
-		const asset = library.assets.find((item) => item.assetId === assetId);
+		if (activeCanvas) setTabs((current) => ({ ...current, active: null }));
 		// Stay on a favorites or tag view that already lists it; otherwise browse to its folder.
 		if (asset && !(location.kind !== "folder" && browseHolds(location, assetId))) {
 			setLocation({ kind: "folder", path: parentFolder(asset.relativePath) });
@@ -579,6 +604,7 @@ export function App(): React.JSX.Element {
 
 	/** Move the browser. What was selected is no longer on screen, so the selection is dropped. */
 	function browseTo(next: BrowseLocation): void {
+		if (iconMode && activeCanvas) setTabs((current) => ({ ...current, active: null }));
 		setLocation(next);
 		setPicked(emptyTreeSelection);
 	}
@@ -614,6 +640,10 @@ export function App(): React.JSX.Element {
 	function openAssetInNewTab(assetId: string): void {
 		setTabs((current) => openInNewTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
+		if (canvasIds.has(assetId)) {
+			setPreviewAssetId(null);
+			setWorkbenchView("library");
+		}
 	}
 
 	/** Library files dropped on the tab strip become tabs; the first one is shown and selected. */
@@ -626,6 +656,7 @@ export function App(): React.JSX.Element {
 	}
 
 	function activateAssetTab(assetId: string): void {
+		setPreviewAssetId(null);
 		setTabs((current) => activateTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
 	}
@@ -669,7 +700,12 @@ export function App(): React.JSX.Element {
 		setPicked(next);
 		if (iconMode) setTreePicked(next);
 		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
-		if (!iconMode && next.focus?.startsWith("asset:")) setTabs((current) => showInTab(current, next.focus!.slice("asset:".length)));
+		if (!iconMode && next.focus?.startsWith("asset:") && (!activeCanvas || mode === "replace")) {
+			const id = next.focus.slice("asset:".length);
+			const canvas = canvasIds.has(id);
+			setTabs((current) => canvas || activeCanvas ? openInNewTab(current, id) : showInTab(current, id));
+			if (canvas) setWorkbenchView("library");
+		}
 	}
 
 	function cancelRename(): void {
@@ -915,6 +951,8 @@ export function App(): React.JSX.Element {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
 				await createFolderIn(relativePath, fromTree);
+			} else if (action === "new_canvas") {
+				await createCanvasIn(relativePath);
 			} else if (action === "copy_path") {
 				await copySelectionPaths(next);
 			} else if (action === "reveal") {
@@ -936,6 +974,7 @@ export function App(): React.JSX.Element {
 			if (!sameLibrary()) return;
 			if (action === "new_folder") await createFolderIn(relativePath, fromTree);
 			else if (action === "paste") await pasteInto(relativePath);
+			else if (action === "new_canvas") await createCanvasIn(relativePath);
 			else if (action === "new_md_file") {
 				const asset = await window.loom.createMarkdownFile(relativePath);
 				if (!sameLibrary()) return;
@@ -951,6 +990,24 @@ export function App(): React.JSX.Element {
 		} catch (cause) {
 			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		}
+	}
+
+	async function createCanvasIn(relativePath: string): Promise<void> {
+		const sameLibrary = detailRequests.current.libraryGuard();
+		const asset = await window.loom.createCanvasFile(relativePath);
+		if (!sameLibrary()) return;
+		setLibrary((current) => applyLibraryChange(current, { type: "upsert", asset }));
+		setWorkbenchView("library");
+		setPicked(singleSelection(assetKey(asset.assetId)));
+		if (iconMode) {
+			setTabs((current) => ({ ...current, active: null }));
+			setLocation({ kind: "folder", path: relativePath });
+			setPreviewAssetId(null);
+		} else {
+			revealFolders(ancestorFolders(asset.relativePath));
+			setTabs((current) => openInNewTab(current, asset.assetId));
+		}
+		setRenamingAssetId(asset.assetId);
 	}
 
 	async function duplicateSelection(selection: TreeSelection = picked): Promise<void> {
@@ -1314,6 +1371,7 @@ export function App(): React.JSX.Element {
 		setOpening(true);
 		setError(null);
 		try {
+			await flushCanvasSaves();
 			const snapshot = await window.loom.openLibrary();
 			if (snapshot) {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
@@ -1511,14 +1569,19 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{workbenchView === "library" && !iconMode && (
+						{workbenchView === "library" && (!iconMode || visibleTabs.ids.length > 0) && (
 							<TabStrip
-								tabs={tabs}
+								tabs={visibleTabs}
 								assets={library.assets}
 								onActivate={activateAssetTab}
 								onClose={closeAssetTab}
 								onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
 								onDropFiles={openDroppedFiles}
+								onBrowse={iconMode ? () => setTabs((current) => ({ ...current, active: null })) : undefined}
+								onDropOnCanvas={(assets, id) => {
+									activateAssetTab(id);
+									setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
+								}}
 							/>
 						)}
 						{workbenchView === "table" ? (
@@ -1554,6 +1617,19 @@ export function App(): React.JSX.Element {
 									onRemoveRelation={removeRelation}
 								/>
 							</Suspense>
+						) : activeCanvas ? (
+							<div className="canvas-workbench" key={activeCanvas.assetId}>
+								<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
+									<CanvasEditor asset={activeCanvas} assets={library.assets}
+										incoming={canvasDrop?.id === activeCanvas.assetId ? canvasDrop.assets : undefined}
+										onConsume={() => setCanvasDrop(null)}
+										onError={setError}
+										onPreview={(asset) => isCanvasFile(asset.filename) ? selectAsset(asset.assetId) : setCanvasPreviewId(asset.assetId)} />
+								</Suspense>
+								{canvasPreview && <PreviewOverlay title={canvasPreview.relativePath} onClose={() => setCanvasPreviewId(null)}>
+									<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets} />
+								</PreviewOverlay>}
+							</div>
 						) : iconMode ? (
 							library.rootPath ? (
 								<FolderBrowser

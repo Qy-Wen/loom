@@ -1,0 +1,199 @@
+import { copyFile, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import type { CanvasDocument } from "../src/shared/canvas.ts";
+import { expect, test } from "./loom.ts";
+
+const still = new URL("../../core/tests/fixtures/media/still.png", import.meta.url);
+const readBoard = async (path: string) => JSON.parse(await readFile(path, "utf8")) as CanvasDocument;
+
+test("a library canvas saves cards, groups and connections, and follows references by asset ID", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await copyFile(still, join(root, "参考.png"));
+	await expect.poll(async () => (await snapshot()).assets.length).toBe(1);
+	const reference = (await snapshot()).assets[0]!;
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "New Canvas" && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+
+	const sidebar = page.locator(".library-sidebar");
+	const blank = sidebar.locator(".asset-list");
+	const bounds = (await blank.boundingBox())!;
+	await blank.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
+	const rename = sidebar.locator(".rename-editor input");
+	await expect(rename).toBeFocused();
+	await rename.fill("分镜");
+	await rename.press("Enter");
+	const tab = page.getByRole("tab", { name: "分镜.canvas", exact: true });
+	await expect(tab).toHaveAttribute("aria-selected", "true");
+
+	const board = page.getByRole("region", { name: "Canvas 分镜.canvas" });
+	await board.getByRole("button", { name: "Text", exact: true }).click();
+	await board.getByRole("textbox", { name: "Markdown text" }).fill("## 开场");
+	await board.getByRole("button", { name: "Done", exact: true }).click();
+	await expect(board.getByRole("heading", { name: "开场" })).toBeVisible();
+
+	const surface = board.locator(".canvas-surface");
+	await sidebar.locator(".asset-row").filter({ hasText: "参考.png" }).dragTo(surface, { targetPosition: { x: 58, y: 45 } });
+	const fileCard = board.locator(".canvas-card.type-file");
+	await expect(fileCard).toHaveCount(1);
+	const openPreview = fileCard.getByRole("button", { name: "Open preview 参考.png" });
+	const preview = page.getByRole("dialog", { name: "File preview" });
+	await openPreview.click();
+	await expect(fileCard).toHaveClass(/selected/);
+	await expect(preview).toHaveCount(0);
+
+	const before = (await fileCard.boundingBox())!;
+	const thumbnail = (await openPreview.boundingBox())!;
+	const x = thumbnail.x + thumbnail.width / 2, y = thumbnail.y + thumbnail.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x + 20, y + 16, { steps: 4 });
+	await page.mouse.up();
+	await expect.poll(async () => (await fileCard.boundingBox())!.x).toBeGreaterThan(before.x);
+	await expect(preview).toHaveCount(0);
+
+	await openPreview.dblclick();
+	await expect(preview.locator("img")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
+	await openPreview.press("Enter");
+	await expect(preview.locator("img")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
+
+	await board.getByRole("button", { name: "Group", exact: true }).click();
+	await board.getByRole("textbox", { name: "Group title" }).fill("素材");
+	await board.getByRole("button", { name: "Done", exact: true }).click();
+	await fileCard.locator(".canvas-handle").click();
+	await board.locator(".type-text .canvas-handle").click({ modifiers: ["Shift"] });
+	await board.getByRole("button", { name: "Connect", exact: true }).click();
+	await board.getByRole("textbox", { name: "Connection label" }).fill("接演示");
+	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+	await board.getByRole("button", { name: "Undo", exact: true }).click();
+	await expect(board.locator(".canvas-edge-label")).toHaveText("↗");
+	await board.getByRole("button", { name: "Redo", exact: true }).click();
+	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+
+	const path = join(root, "分镜.canvas");
+	await expect.poll(async () => (await readBoard(path)).edges[0]?.label).toBe("接演示");
+	expect((await readBoard(path)).nodes.find((node) => node.type === "file")).toMatchObject({
+		file: "参考.png", loom: { assetId: reference.assetId },
+	});
+	expect((await readdir(root)).sort()).toEqual([".loom", "参考.png", "分镜.canvas"].sort());
+
+	await page.getByRole("button", { name: "Close 分镜.canvas" }).click();
+	await sidebar.locator(".asset-row").filter({ hasText: "分镜.canvas" }).click();
+	await expect(board.getByRole("heading", { name: "开场" })).toBeVisible();
+	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+
+	const fileBefore = (await readBoard(path)).nodes.find((node) => node.type === "file")!;
+	await fileCard.locator(".canvas-handle").press("ArrowRight");
+	await fileCard.locator(".canvas-resize").press("ArrowDown");
+	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.type === "file")?.height).toBe(fileBefore.height + 8);
+	expect((await readBoard(path)).nodes.find((node) => node.type === "file")?.x).toBe(fileBefore.x + 8);
+	await page.evaluate((id) => window.loom.renameAsset(id, "参考改名"), reference.assetId);
+	await expect(fileCard.getByRole("button", { name: "Open preview 参考改名.png" })).toBeVisible();
+	await unlink(join(root, "参考改名.png"));
+	await expect(fileCard.getByText("Missing asset", { exact: true })).toBeVisible();
+	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+});
+
+test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens the full preview on double-click", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "项目"));
+	const scriptPath = join(root, "项目", "文案.md");
+	await writeFile(scriptPath, `# 文案\n\n**开场**\n\n${"Scene direction.\n\n".repeat(920)}## 最后一幕`);
+	await expect.poll(async () => (await snapshot()).folders).toContain("项目");
+	await page.evaluate(() => window.loom.createCanvasFile("项目"));
+	const sidebar = page.locator(".library-sidebar");
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await sidebar.locator(".folder-main").filter({ hasText: /^项目$/ }).click();
+	const browser = page.locator(".folder-browser");
+	const tile = (name: string) => browser.locator(".browser-tile").filter({ hasText: name });
+	await tile("Untitled.canvas").dblclick();
+	const canvasTab = page.getByRole("tab", { name: "Untitled.canvas" });
+	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
+	await page.getByRole("tab", { name: "Files", exact: true }).click();
+	await tile("文案.md").dragTo(canvasTab);
+	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
+	const card = page.locator(".canvas-editor .canvas-file-markdown");
+	const heading = card.getByRole("heading", { name: "文案", exact: true });
+	await expect(heading).toBeVisible();
+	await expect(card.locator("strong")).toHaveText("开场");
+	await expect(card.getByText("Double-click to read the full file.")).toBeAttached();
+	await expect(card.getByRole("heading", { name: "最后一幕" })).toHaveCount(0);
+	await card.hover();
+	await page.mouse.wheel(0, 160);
+	await expect.poll(() => card.evaluate((element) => element.scrollTop)).toBeGreaterThan(0);
+	await page.mouse.wheel(0, -320);
+	await expect.poll(() => card.evaluate((element) => element.scrollTop)).toBe(0);
+	const preview = page.getByRole("dialog", { name: "File preview" });
+	await heading.click();
+	await expect(preview).toHaveCount(0);
+	await heading.dblclick();
+	await expect(preview.getByRole("heading", { name: "最后一幕" })).toBeAttached();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
+
+	await writeFile(scriptPath, "# 改过的文案");
+	await expect(card.getByRole("heading", { name: "改过的文案" })).toBeVisible();
+	await expect.poll(async () => (await readBoard(join(root, "项目", "Untitled.canvas"))).nodes[0]?.file).toBe("项目/文案.md");
+});
+
+test("closing the workspace flushes the latest canvas edit", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await page.evaluate(() => window.loom.createCanvasFile(""));
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "Untitled.canvas" }).click();
+	const board = page.locator(".canvas-editor");
+	await board.getByRole("button", { name: "Text", exact: true }).click();
+	await board.getByRole("textbox", { name: "Markdown text" }).fill("Last edit");
+	await electronApp!.evaluate(({ BrowserWindow }) => { BrowserWindow.getAllWindows()[0]?.close(); });
+	await expect.poll(async () => (await readBoard(join(root, "Untitled.canvas"))).nodes[0]?.text).toBe("Last edit");
+});
+
+test("box selection moves multiple canvas cards together", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const path = join((await snapshot()).rootPath!, "Selection.canvas");
+	await writeFile(path, JSON.stringify({
+		nodes: [
+			{ id: "first", type: "text", text: "First", x: 0, y: 0, width: 150, height: 100 },
+			{ id: "second", type: "text", text: "Second", x: 200, y: 0, width: 150, height: 100 },
+		],
+	}));
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "Selection.canvas" }).click();
+	const cards = page.locator(".canvas-editor .canvas-card");
+	await expect(cards).toHaveCount(2);
+	const first = (await cards.first().boundingBox())!;
+	const second = (await cards.last().boundingBox())!;
+	await page.mouse.move(first.x - 12, first.y - 12);
+	await page.mouse.down();
+	await page.mouse.move(second.x + second.width + 8, second.y + second.height + 8, { steps: 5 });
+	await expect(page.locator(".canvas-marquee")).toBeVisible();
+	await page.mouse.up();
+	await expect(page.locator(".canvas-card.selected")).toHaveCount(2);
+
+	const body = (await cards.first().locator(".canvas-note").boundingBox())!;
+	const x = body.x + body.width / 2, y = body.y + body.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	await page.mouse.move(x + 28, y + 22, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(async () => (await readBoard(path)).nodes[0]?.x).toBeGreaterThan(0);
+	const [a, b] = (await readBoard(path)).nodes;
+	expect(b!.x - a!.x).toBe(200);
+	expect(a!.y).toBe(b!.y);
+});

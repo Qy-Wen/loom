@@ -39,12 +39,14 @@ async function fixture(accessToken = token, options: { describeImage?: (assetId:
 	return { root, core, service, executor, connect, tasks: () => tasks, async close() { await service.close(); await Promise.allSettled(clients.map((client) => client.close())); await core.close(); await rm(root, { recursive: true, force: true }); } };
 }
 
-test("real MCP client discovers 31 shared tools, reads portable results, and organizes files by stable ID", { timeout: 30_000 }, async () => {
+test("real MCP client discovers shared tools, reads portable results, and organizes files by stable ID", { timeout: 30_000 }, async () => {
 	const f = await fixture();
 	try {
 		const { client } = await f.connect();
 		const tools = (await client.listTools()).tools;
-		assert.equal(tools.length, 31);
+		assert.equal(tools.length, 35);
+		assert.equal(tools.find((tool) => tool.name === "read_canvas")!.annotations?.readOnlyHint, true);
+		assert.equal(tools.find((tool) => tool.name === "edit_canvas")!.annotations?.openWorldHint, false);
 		assert.equal(tools.find((tool) => tool.name === "get_settings")!.annotations?.readOnlyHint, true);
 		assert.equal(tools.find((tool) => tool.name === "get_settings")!.annotations?.destructiveHint, false);
 		assert.equal(tools.find((tool) => tool.name === "update_settings")!.annotations?.readOnlyHint, false);
@@ -183,7 +185,7 @@ test("an empty token accepts a real MCP client without authorization headers", {
 	const f = await fixture("");
 	try {
 		const { client } = await f.connect();
-		assert.equal((await client.listTools()).tools.length, 31);
+		assert.equal((await client.listTools()).tools.length, 35);
 		assert.equal((await client.callTool({ name: "list_tags", arguments: {} })).isError, undefined);
 		assert.equal((await fetch(f.service.url, { headers: { Origin: "https://evil.example" } })).status, 403);
 	} finally { await f.close(); }

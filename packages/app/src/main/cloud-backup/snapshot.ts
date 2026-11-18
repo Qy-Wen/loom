@@ -5,6 +5,7 @@ import { dirname, join, win32 } from "node:path";
 import { tmpdir } from "node:os";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { isCanvasTemporaryFile } from "@loom/core/paths";
 import type { CloudJob } from "../../shared/cloud-backup.ts";
 type Fingerprint = { size: number; mtimeMs: number; ctimeMs: number; ino: number; dev: number };
 type SourceFile = Fingerprint & { path: string; source: string; original?: Fingerprint };
@@ -15,7 +16,7 @@ const RESTORE_MARKER = ".loom/backup/restore.json";
 export const PERSISTENT_ROOTS = [".loom/metadata-db", ".loom/graph-db", ".loom/grades", ".loom/agents/sessions", ".loom/agents/skills", ".loom/agents/memory", ".loom/agents/tool-results", ".loom/backup/identity.json"];
 
 export function included(path: string): boolean {
-	if (path.split("/").at(-1) === ".DS_Store") return false;
+	if (path.split("/").at(-1) === ".DS_Store" || isCanvasTemporaryFile(path)) return false;
 	if (!path.startsWith(".loom/")) return true;
 	return PERSISTENT_ROOTS.some((base) => path === base || path.startsWith(`${base}/`) || base.startsWith(`${path}/`));
 }

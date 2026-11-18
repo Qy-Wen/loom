@@ -20,9 +20,9 @@ export function decodeJson(text: string): unknown {
 }
 
 /** Replace, never unlink the destination first; temporary files contain only the supplied safe payload. */
-export async function atomicWrite(path: string, contents: string | Uint8Array, beforeCommit: () => void = () => {}): Promise<void> {
+export async function atomicWrite(path: string, contents: string | Uint8Array, beforeCommit: () => void = () => {}, temporaryStem = basename(path)): Promise<void> {
 	await mkdir(dirname(path), { recursive: true, mode: 0o700 });
-	const temporary = join(dirname(path), `.${basename(path)}.${randomUUID()}.tmp`);
+	const temporary = join(dirname(path), `.${temporaryStem}.${randomUUID()}.tmp`);
 	try {
 		const file = await open(temporary, "wx", 0o600);
 		try { await file.writeFile(contents); await file.sync(); } finally { await file.close(); }

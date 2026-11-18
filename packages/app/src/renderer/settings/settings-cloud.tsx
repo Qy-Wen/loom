@@ -4,6 +4,7 @@ import { useLocale } from "../locale.tsx";
 import { CloudProviderFields } from "./settings-cloud-providers.tsx";
 import { TooltipText } from "../components/tooltip-text.tsx";
 import { CloudPullPreviewPanel } from "./settings-cloud-pull.tsx";
+import { flushCanvasSaves } from "../workbench/canvas/canvas-saves.ts";
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1024 ** 3 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
@@ -102,12 +103,18 @@ export function SettingsCloud(): React.JSX.Element {
 			setView(next); setSavedConfig(saved); setDraft(null);
 		});
 	}
-	const start = (operation: CloudJob["operation"], id?: string) => run(() => window.loom.startCloudBackup(operation, id));
+	const start = (operation: CloudJob["operation"], id?: string) => run(async () => {
+		if (operation === "backup" || operation === "preview" || operation === "pull") await flushCanvasSaves();
+		await window.loom.startCloudBackup(operation, id);
+	});
 	const local = view?.localLibrary;
 	const disabled = busy || dirty || !view?.hasCredentials;
 	const job = view?.job;
 	const enabled = view?.config.provider !== "none" && config?.provider !== "none";
-	const progress = job && !(job.operation === "preview" && job.status === "completed") && <JobProgress job={job} busy={!!busy} onCancel={() => void run(() => window.loom.cancelCloudBackup())} onOpen={() => void run(() => window.loom.openRestoredCloudBackup())} />;
+	const progress = job && !(job.operation === "preview" && job.status === "completed") && <JobProgress job={job} busy={!!busy} onCancel={() => void run(() => window.loom.cancelCloudBackup())} onOpen={() => void run(async () => {
+		await flushCanvasSaves();
+		await window.loom.openRestoredCloudBackup();
+	})} />;
 	return <div className="settings-form cloud-settings">
 		{error && <p role="alert" className="session-error">{error}</p>}
 		{view && savedConfig && config ? <>
@@ -126,7 +133,10 @@ export function SettingsCloud(): React.JSX.Element {
 							<button type="button" className="primary-button" disabled={disabled} onClick={() => void start("backup")}><CloudGlyph kind="upload" />{text.backup}</button>
 						</div>
 						{job && job.operation !== "test" && job.operation !== "list" && progress}
-						{view.pull && job?.status === "running" && job.phase === "conflicts" ? <CloudPullPreviewPanel preview={view.pull} disabled={pending} onApply={(choices) => void run(() => window.loom.resolveCloudPull(view.pull!.id, choices))} /> : local.preview && <ChangePreview preview={local.preview} />}
+						{view.pull && job?.status === "running" && job.phase === "conflicts" ? <CloudPullPreviewPanel preview={view.pull} disabled={pending} onApply={(choices) => void run(async () => {
+							await flushCanvasSaves();
+							await window.loom.resolveCloudPull(view.pull!.id, choices);
+						})} /> : local.preview && <ChangePreview preview={local.preview} />}
 					</> : <div className="cloud-empty"><CloudGlyph kind="folder" /><p>{text.noLibrary}</p></div>}
 					<details className="cloud-help"><summary><CloudGlyph kind="chevron" />{text.backupDetails}</summary><p>{text.snapshotNote}</p><p>{text.previewNote}</p></details>
 				</section>

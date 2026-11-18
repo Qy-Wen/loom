@@ -19,7 +19,7 @@ import { workspaceWriteNeedsApproval } from "../src/tools/workspace-path.ts";
 test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(parseAgentPermissionLevel("nope"), DEFAULT_AGENT_PERMISSION);
 	assert.deepEqual([...gatedToolNames("standard")].sort(), ["edit", "update_settings", "web_fetch", "write"]);
-	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "create_folder", "edit", "grade_image", "move_assets", "move_folder", "powershell", "rename_asset", "rename_folder", "run_ffmpeg", "update_settings", "web_fetch", "write"]);
+	assert.deepEqual([...gatedToolNames("basic")].sort(), ["bash", "create_canvas", "create_folder", "edit", "edit_canvas", "grade_image", "move_assets", "move_folder", "powershell", "rename_asset", "rename_folder", "run_ffmpeg", "update_settings", "web_fetch", "write"]);
 	assert.equal(gatedToolNames("full").size, 0);
 	assert.equal(toolNeedsApproval("standard", "write"), true);
 	assert.equal(toolNeedsApproval("standard", "bash"), false);
@@ -29,6 +29,8 @@ test("permission levels gate write, then bash, then nothing", () => {
 	assert.equal(toolNeedsApproval("basic", "bash"), true);
 	assert.equal(toolNeedsApproval("basic", "grade_image"), true);
 	assert.equal(toolNeedsApproval("basic", "run_ffprobe"), false);
+	assert.equal(toolNeedsApproval("basic", "read_canvas"), false);
+	assert.equal(toolNeedsApproval("standard", "edit_canvas"), false);
 	assert.equal(toolNeedsApproval("standard", "grade_image"), false);
 	assert.equal(toolNeedsApproval("standard", "run_ffmpeg"), false);
 	assert.equal(toolNeedsApproval("full", "write"), false);

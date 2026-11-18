@@ -13,7 +13,7 @@ export function createLibraryTools(core: LocalCore): LoomTool[] {
 	return [
 		{
 			name: "get_library", description: "Get the open library identity, root path, folders, and available capabilities. Connect again after switching libraries.", parameters: schema({}),
-			execute: async () => { const snapshot = await core.getLibrarySnapshot(); const rootPath = await root(); return jsonToolResult({ libraryId: rootPath, name: basename(rootPath), rootPath, folders: snapshot.folders, capabilities: ["search", "read", "organize", "metadata", "media"] }); },
+			execute: async () => { const snapshot = await core.getLibrarySnapshot(); const rootPath = await root(); return jsonToolResult({ libraryId: rootPath, name: basename(rootPath), rootPath, folders: snapshot.folders, capabilities: ["search", "read", "organize", "metadata", "media", "canvas"] }); },
 		},
 		{
 			name: "read_asset", description: "Read a text asset by ID (1-based line offset, default 200 lines, at most 50 KiB UTF-8). Read supported static images up to 5 MiB, or an image/video thumbnail. GIF and large images use a static thumbnail. Audio and whole videos are not returned. Text input is limited to 32 MiB.",

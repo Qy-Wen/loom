@@ -265,6 +265,14 @@ export class LocalCore {
 		return this.library.createMarkdownFile(parentRelativePath);
 	}
 
+	createCanvasFile(parentRelativePath: string, name?: string): Promise<Asset> {
+		return this.library.createCanvasFile(parentRelativePath, name);
+	}
+
+	getLibraryRoot(): string {
+		return this.library.getPaths().root;
+	}
+
 	renameFolder(relativePath: string, name: string): Promise<string> {
 		return this.library.renameFolder(relativePath, name);
 	}

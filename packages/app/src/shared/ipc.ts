@@ -1,4 +1,5 @@
 import type { CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId, CloudPullChoice } from "./cloud-backup.ts";
+import type { CanvasDocument, CanvasSnapshot } from "./canvas.ts";
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
@@ -88,10 +89,11 @@ export type FolderContextAction =
 	| "copy"
 	| "paste"
 	| "new_folder"
+	| "new_canvas"
 	| "copy_path"
 	| "reveal"
 	| "trash";
-export type LibraryContextAction = "paste" | "new_folder" | "new_md_file";
+export type LibraryContextAction = "paste" | "new_folder" | "new_md_file" | "new_canvas";
 
 export interface AgentEndpoint {
 	runtimeUrl: string;
@@ -130,6 +132,12 @@ export const IPC = {
 	moveAssetsInto: "loom:moveAssetsInto",
 	createFolder: "loom:createFolder",
 	createMarkdownFile: "loom:createMarkdownFile",
+	createCanvasFile: "loom:createCanvasFile",
+	readCanvas: "loom:readCanvas",
+	saveCanvas: "loom:saveCanvas",
+	canvasDirtyChanged: "loom:canvasDirtyChanged",
+	flushCanvasBeforeClose: "loom:flushCanvasBeforeClose",
+	canvasCloseReady: "loom:canvasCloseReady",
 	renameFolder: "loom:renameFolder",
 	copyFolderInto: "loom:copyFolderInto",
 	moveFolderInto: "loom:moveFolderInto",
@@ -260,6 +268,11 @@ export interface LoomApi {
 	moveAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
 	createFolder: (parentRelativePath: string) => Promise<string>;
 	createMarkdownFile: (parentRelativePath: string) => Promise<Asset>;
+	createCanvasFile: (parentRelativePath: string) => Promise<Asset>;
+	readCanvas: (assetId: string) => Promise<CanvasSnapshot>;
+	saveCanvas: (assetId: string, document: CanvasDocument, revision: string) => Promise<CanvasSnapshot | null>;
+	setCanvasDirty: (dirty: boolean) => void;
+	onFlushCanvasBeforeClose: (flush: () => Promise<boolean>) => () => void;
 	renameFolder: (relativePath: string, name: string) => Promise<string>;
 	copyFolderInto: (sourceFolder: string, destFolder: string) => Promise<string>;
 	moveFolderInto: (sourceFolder: string, destFolder: string) => Promise<string>;

@@ -16,11 +16,12 @@ function catalog(core: LocalCore) {
 	});
 }
 
-test("application catalog shares 31 external definitions including app settings", () => {
+test("application catalog shares external definitions including app settings and canvas operations", () => {
 	const tools = catalog({} as LocalCore);
-	assert.equal(tools.list("agent").length, 31);
-	assert.equal(tools.list("external").length, 31);
+	assert.equal(tools.list("agent").length, 35);
+	assert.equal(tools.list("external").length, 35);
 	for (const name of ["get_settings", "update_settings"]) assert.equal(tools.get(name, "external").scope, "application");
+	for (const name of ["list_canvases", "create_canvas", "read_canvas", "edit_canvas"]) assert.equal(tools.get(name, "external").scope, "library");
 	for (const name of ["auto_memory", "run_retrieve_agent", "run_create_agent", "bash", "powershell", "comfy__generate"]) {
 		assert.throws(() => tools.get(name, "external"), /not available/);
 	}

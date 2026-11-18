@@ -33,7 +33,7 @@ const WEB_TOOLS = ["web_fetch"] as const;
 const STANDARD_TOOLS = ["write", "edit", ...SETTINGS_TOOLS, ...WEB_TOOLS] as const;
 /** Child processes that can write. `run_ffprobe` only reads, so it is not here. */
 const PROCESS_TOOLS = ["bash", "powershell", "grade_image", "run_ffmpeg"] as const;
-const BASIC_TOOLS = ["write", "edit", "rename_asset", "move_assets", "create_folder", "rename_folder", "move_folder", ...SETTINGS_TOOLS, ...WEB_TOOLS, ...PROCESS_TOOLS] as const;
+const BASIC_TOOLS = ["write", "edit", "rename_asset", "move_assets", "create_folder", "rename_folder", "move_folder", "create_canvas", "edit_canvas", ...SETTINGS_TOOLS, ...WEB_TOOLS, ...PROCESS_TOOLS] as const;
 
 export function parseAgentPermissionLevel(value: unknown): AgentPermissionLevel {
 	if (value === "basic" || value === "standard" || value === "full") return value;
