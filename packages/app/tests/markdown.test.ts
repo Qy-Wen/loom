@@ -29,7 +29,7 @@ test("preferVisibleRect falls back when a range reports an empty box", () => {
 
 test("renderMarkdown turns headings and lists into HTML", () => {
 	const html = renderMarkdown("# Title\n\n- one\n- two");
-	assert.match(html, /<h1>Title<\/h1>/);
+	assert.match(html, /<h1 data-heading="title">Title<\/h1>/);
 	assert.match(html, /<ul>/);
 	assert.match(html, /<li>one<\/li>/);
 });
@@ -149,8 +149,7 @@ test("renderMarkdown marks references to missing files as errors", () => {
 	const html = render("[[待调研]] [x](missing.md) ![[missing.png]] ![](gone.png) [ok](#top)");
 	assert.equal(html.match(/markdown-broken-reference/g)?.length, 4);
 	assert.equal(html.includes("data-asset-id"), false);
-	assert.equal(/<a [^>]*#top/.test(html), true);
-	assert.equal(/<a [^>]*#top[^>]*markdown-broken-reference/.test(html), false);
+	assert.match(html, /<a href="#" data-anchor="top">ok<\/a>/);
 });
 
 test("renderMarkdown does not treat a bare name as a library search", () => {
@@ -184,4 +183,18 @@ test("the preview and the graph index resolve the same links to the same files",
 		.map((match) => match[1] ?? match[2]);
 	assert.deepEqual([...new Set(previewed)].sort(), [...indexed.targetAssetIds].sort());
 	assert.equal(render(source).match(/markdown-broken-reference/g)?.length, indexed.unresolved.length);
+});
+
+test("renderMarkdown tags headings and carries link anchors for in-file jumps", () => {
+	const html = render("# Q&A 总结\n\n## `code` Part\n\n[[产品说明#q-a 总结]] [[产品/说明#Part|跳转]] [x](产品/说明.md#%E6%80%BB%E7%BB%93) [[#Q&A 总结]] [top](#q-a-总结) [[产品说明#^block]]");
+	assert.match(html, /<h1 data-heading="q a 总结">/);
+	assert.match(html, /<h2 data-heading="code part">/);
+	assert.match(html, /data-asset-id="notes" data-anchor="q a 总结">产品说明 &gt; q-a 总结<\/a>/);
+	assert.match(html, /data-asset-id="deep" data-anchor="part">跳转/);
+	assert.match(html, /data-asset-id="deep" data-anchor="总结"/);
+	assert.match(html, /<a href="#" data-anchor="q a 总结">Q&amp;A 总结<\/a>/);
+	assert.match(html, /<a href="#" data-anchor="q a 总结">top<\/a>/);
+	// A block ID has no heading to jump to, but the link still opens the file.
+	assert.match(html, /<a href="#" data-asset-id="notes">产品说明 &gt; \^block<\/a><\/p>/);
+	assert.equal(html.includes("markdown-broken-reference"), false);
 });

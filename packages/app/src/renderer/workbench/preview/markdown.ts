@@ -20,6 +20,32 @@ export const BROKEN_REFERENCE_CLASS = "markdown-broken-reference";
 /** Carries the asset ID of a link to another library file, for the click handler. */
 export const ASSET_LINK_ATTRIBUTE = "data-asset-id";
 
+/** Set on a heading: its text reduced by {@link headingKey}, which a link anchor is matched against. */
+export const HEADING_ATTRIBUTE = "data-heading";
+/** Set on a link: the heading it points to, reduced by {@link headingKey}. */
+export const ANCHOR_ATTRIBUTE = "data-anchor";
+
+/**
+ * Headings and anchors compare by this key: case, punctuation and the choice between spaces and hyphens
+ * do not matter, so `[[笔记#Q&A 总结]]` and `笔记.md#q-a-总结` both find "Q&A 总结".
+ */
+export function headingKey(text: string): string {
+	return text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+}
+
+/** The heading a written target points to. Block IDs (`#^id`) are not supported and give no anchor. */
+function anchorOf(fragment: string): string | undefined {
+	let text = fragment;
+	try {
+		text = decodeURIComponent(fragment);
+	} catch {
+		// Keep the text as written.
+	}
+	const last = text.split("#").pop() ?? "";
+	if (last.startsWith("^")) return undefined;
+	return headingKey(last) || undefined;
+}
+
 function lookupOf(context: MarkdownRenderContext): AssetLookup {
 	context.lookup ??= createAssetLookup(context.assets);
 	return context.lookup;
@@ -43,8 +69,13 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 		// Already resolved by the wiki_link rule.
 	} else if (/^(javascript|data|vbscript):/i.test(href.trim())) {
 		token.attrSet("href", "#");
+	} else if (context?.fromRelativePath && href.startsWith("#") && href.length > 1) {
+		// A heading in this same file.
+		const anchor = anchorOf(href.slice(1));
+		token.attrSet("href", "#");
+		if (anchor) token.attrSet(ANCHOR_ATTRIBUTE, anchor);
 	} else if (context?.fromRelativePath && !isPassthroughHref(href)) {
-		markInternalLink(token, resolveLinkTarget(context.fromRelativePath, href, lookupOf(context)));
+		markInternalLink(token, resolveLinkTarget(context.fromRelativePath, href, lookupOf(context)), href);
 	} else {
 		token.attrSet("target", "_blank");
 		token.attrSet("rel", "noreferrer noopener");
@@ -53,16 +84,34 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 };
 
 /** A link to a library file opens that file in the app. A link to a missing one is flagged, not followed. */
-function markInternalLink(token: { attrSet(name: string, value: string): void }, target: Asset | undefined | null): void {
+function markInternalLink(token: { attrSet(name: string, value: string): void }, target: Asset | undefined | null, written: string): void {
 	if (target === null) {
 		token.attrSet("target", "_blank");
 		token.attrSet("rel", "noreferrer noopener");
 		return;
 	}
 	token.attrSet("href", "#");
-	if (target) token.attrSet(ASSET_LINK_ATTRIBUTE, target.assetId);
-	else token.attrSet("class", BROKEN_REFERENCE_CLASS);
+	if (!target) {
+		token.attrSet("class", BROKEN_REFERENCE_CLASS);
+		return;
+	}
+	token.attrSet(ASSET_LINK_ATTRIBUTE, target.assetId);
+	const hash = written.indexOf("#");
+	const anchor = hash === -1 ? undefined : anchorOf(written.slice(hash + 1));
+	if (anchor) token.attrSet(ANCHOR_ATTRIBUTE, anchor);
 }
+
+const defaultHeadingOpen = markdown.renderer.rules.heading_open ?? ((tokens, idx, options, _env, self) => {
+	return self.renderToken(tokens, idx, options);
+});
+markdown.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
+	const text = (tokens[idx + 1]?.children ?? [])
+		.filter((child) => child.type === "text" || child.type === "code_inline")
+		.map((child) => child.content)
+		.join("");
+	tokens[idx].attrSet(HEADING_ATTRIBUTE, headingKey(text));
+	return defaultHeadingOpen(tokens, idx, options, env, self);
+};
 
 const defaultFence = markdown.renderer.rules.fence ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
@@ -125,8 +174,20 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	const label = rest.join("|").trim();
 	const written = target.trim();
 	const context = state.env as unknown as MarkdownRenderContext | undefined;
+	const hash = written.indexOf("#");
+	const anchor = hash === -1 ? undefined : anchorOf(written.slice(hash + 1));
 	// Without a library (a loose snippet) nothing can be resolved, so nothing is flagged either.
 	const asset = context?.assets ? resolveWikiTarget(written, lookupOf(context)) : null;
+	if (!embed && context?.assets && anchor && !written.slice(0, hash).trim()) {
+		// `[[#Heading]]`: a heading in this same file.
+		const link = state.push("link_open", "a", 1);
+		link.attrs = [["href", "#"], [ANCHOR_ATTRIBUTE, anchor]];
+		link.meta = { wiki: true };
+		state.push("text", "", 0).content = label || written.slice(hash + 1).split("#").pop() || written;
+		state.push("link_close", "a", -1);
+		state.pos = close + 2;
+		return true;
+	}
 	if (asset === null) {
 		const text = state.push("text", "", 0);
 		text.content = src.slice(pos, close + 2);
@@ -146,8 +207,9 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 		link.attrs = [["href", "#"]];
 		if (asset) link.attrSet(ASSET_LINK_ATTRIBUTE, asset.assetId);
 		else link.attrSet("class", BROKEN_REFERENCE_CLASS);
+		if (asset && anchor) link.attrSet(ANCHOR_ATTRIBUTE, anchor);
 		link.meta = { wiki: true };
-		state.push("text", "", 0).content = label || written.split("#")[0];
+		state.push("text", "", 0).content = label || written.replaceAll("#", " > ");
 		state.push("link_close", "a", -1);
 	}
 	state.pos = close + 2;

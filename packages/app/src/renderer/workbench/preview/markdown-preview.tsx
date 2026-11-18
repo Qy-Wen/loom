@@ -2,7 +2,8 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { useLocale } from "../../locale.tsx";
 import { FindBar } from "./find-bar.tsx";
-import { ASSET_LINK_ATTRIBUTE, renderMarkdown } from "./markdown.ts";
+import { requestHeading, scrollToHeading, takePendingHeading } from "./heading-anchor.ts";
+import { ANCHOR_ATTRIBUTE, ASSET_LINK_ATTRIBUTE, renderMarkdown } from "./markdown.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 
 type MarkdownMode = "preview" | "source";
@@ -11,12 +12,19 @@ const MarkdownRenderedBody = memo(function MarkdownRenderedBody({
 	html,
 	onHydrated,
 	onOpenAsset,
+	assetId,
 }: {
 	html: string;
 	onHydrated: () => void;
 	onOpenAsset?: (assetId: string) => void;
+	/** The file being shown, so a link can tell whether it points back into it. */
+	assetId: string;
 }): React.JSX.Element {
 	const bodyRef = useRef<HTMLDivElement>(null);
+	// A link from another file may have asked for a heading here.
+	useEffect(() => {
+		if (bodyRef.current) takePendingHeading(assetId, bodyRef.current);
+	}, [assetId, html]);
 	useEffect(() => {
 		const root = bodyRef.current;
 		if (!root) return;
@@ -36,8 +44,15 @@ const MarkdownRenderedBody = memo(function MarkdownRenderedBody({
 				const link = (event.target as HTMLElement).closest<HTMLElement>("a");
 				if (!link || !bodyRef.current?.contains(link) || link.getAttribute("href") !== "#") return;
 				event.preventDefault();
-				const assetId = link.getAttribute(ASSET_LINK_ATTRIBUTE);
-				if (assetId) onOpenAsset?.(assetId);
+				const target = link.getAttribute(ASSET_LINK_ATTRIBUTE);
+				const anchor = link.getAttribute(ANCHOR_ATTRIBUTE);
+				if (!target || target === assetId) {
+					// A heading in this file.
+					if (anchor && bodyRef.current) scrollToHeading(bodyRef.current, anchor);
+					return;
+				}
+				if (anchor) requestHeading(target, anchor);
+				onOpenAsset?.(target);
 			}}
 			dangerouslySetInnerHTML={{ __html: html }}
 		/>
@@ -130,7 +145,7 @@ export function MarkdownPreview({
 				className={mode === "preview" ? "markdown-preview thin-scroll" : "text-preview thin-scroll"}
 				ref={contentRef}
 			>
-				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} onOpenAsset={onOpenAsset} /> : content}
+				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} onOpenAsset={onOpenAsset} assetId={asset.assetId} /> : content}
 			</div>
 		</div>
 	);
