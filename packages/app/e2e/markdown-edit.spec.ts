@@ -8,7 +8,7 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 	test.setTimeout(60000);
 	const root = await mkdtemp(join(tmpdir(), "loom-md-edit-e2e-"));
 	const file = join(root, "笔记.md");
-	await writeFile(file, "# 标题\n\n* 原文\n");
+	await writeFile(file, "# 标题\n\n原文\n");
 	try {
 		await electronApp!.evaluate(({ dialog }, path) => {
 			const original = dialog.showOpenDialog;
@@ -25,18 +25,18 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		// CodeMirror keeps one `.cm-line` per line; read the document back by joining them.
 		const box = loomPage.getByRole("textbox", { name: "Edit 笔记.md" });
 		const editorText = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => line.textContent ?? "").join("\n"));
-		await expect.poll(editorText).toBe("# 标题\n\n* 原文\n");
+		await expect.poll(editorText).toBe("# 标题\n\n原文\n");
 		const status = loomPage.locator(".markdown-editor-status");
 
 		// Opening and leaving without typing writes nothing.
-		expect(await readFile(file, "utf8")).toBe("# 标题\n\n* 原文\n");
+		expect(await readFile(file, "utf8")).toBe("# 标题\n\n原文\n");
 
 		// Typing saves after a pause, and the untouched text stays as it was.
 		await box.click();
 		await box.press("ControlOrMeta+End");
 		await box.pressSequentially("新增一行\n");
 		await expect(status).toContainText("Unsaved changes");
-		await expect.poll(() => readFile(file, "utf8"), { timeout: 10_000 }).toBe("# 标题\n\n* 原文\n新增一行\n");
+		await expect.poll(() => readFile(file, "utf8"), { timeout: 10_000 }).toBe("# 标题\n\n原文\n新增一行\n");
 		await expect(status).toContainText("Saved");
 
 		// The preview shows what was saved.
@@ -236,6 +236,47 @@ test("wiki links and pictures render live, flag missing targets and open with a 
 
 		// Looking and clicking left the file as it was.
 		expect(await readFile(source, "utf8")).toBe(text);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("lists, task boxes, quotes and rules render live and a task box click edits the text", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-blocks-e2e-"));
+	const file = join(root, "块.md");
+	const original = "- 苹果\n  - 红的\n- [ ] 买菜\n- [x] 做饭\n\n1. 第一\n2. 第二\n\n> 引用一\n> > 嵌套\n\n---\n\n末行\n";
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "块.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 块.md" });
+		await box.click();
+		await box.press("ControlOrMeta+End");
+
+		await expect(box.locator(".cm-live-bullet")).toHaveCount(2);
+		await expect(box.locator(".cm-live-checkbox")).toHaveCount(2);
+		await expect(box.locator(".cm-live-checkbox-checked")).toHaveCount(1);
+		await expect(box.locator(".cm-live-rule")).toHaveCount(1);
+		await expect(box.locator(".cm-live-quote")).toHaveCount(2);
+		await expect(box).toContainText("1. 第一");
+
+		// Ticking a box rewrites one character and saves like any other edit.
+		await box.locator(".cm-live-checkbox").first().click();
+		await expect(box.locator(".cm-live-checkbox-checked")).toHaveCount(2);
+		await expect.poll(() => readFile(file, "utf8")).toBe(original.replace("- [ ] 买菜", "- [x] 买菜"));
+		await box.locator(".cm-live-checkbox").nth(1).click();
+		await expect.poll(() => readFile(file, "utf8")).toBe(original.replace("- [ ] 买菜", "- [x] 买菜").replace("- [x] 做饭", "- [ ] 做饭"));
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

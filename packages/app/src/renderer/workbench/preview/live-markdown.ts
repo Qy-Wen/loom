@@ -71,6 +71,56 @@ class ImageWidget extends WidgetType {
 	}
 }
 
+/** A bullet in place of the `-`, `*` or `+` that starts a list item. */
+class BulletWidget extends WidgetType {
+	eq(): boolean {
+		return true;
+	}
+	toDOM(): HTMLElement {
+		const bullet = document.createElement("span");
+		bullet.className = "cm-live-bullet";
+		bullet.textContent = "•";
+		return bullet;
+	}
+}
+
+/** A checkbox in place of `[ ]` or `[x]`. A click is handled by {@link liveClicks}, which edits the text. */
+class CheckboxWidget extends WidgetType {
+	readonly checked: boolean;
+	constructor(checked: boolean) {
+		super();
+		this.checked = checked;
+	}
+	eq(other: CheckboxWidget): boolean {
+		return other.checked === this.checked;
+	}
+	toDOM(): HTMLElement {
+		const box = document.createElement("span");
+		box.className = this.checked ? "cm-live-checkbox cm-live-checkbox-checked" : "cm-live-checkbox";
+		box.setAttribute("role", "checkbox");
+		box.setAttribute("aria-checked", String(this.checked));
+		return box;
+	}
+	ignoreEvent(): boolean {
+		return false;
+	}
+}
+
+/** A thin line in place of `---`. */
+class RuleWidget extends WidgetType {
+	eq(): boolean {
+		return true;
+	}
+	toDOM(): HTMLElement {
+		const rule = document.createElement("div");
+		rule.className = "cm-live-rule";
+		return rule;
+	}
+}
+
+const bullet = Decoration.replace({ widget: new BulletWidget() });
+const rule = Decoration.replace({ widget: new RuleWidget() });
+
 /** Inline elements: a mark on the whole element, and the symbols hidden while the cursor is elsewhere. */
 const INLINE: Record<string, { class: string; marks: readonly string[] }> = {
 	StrongEmphasis: { class: "cm-live-strong", marks: ["EmphasisMark"] },
@@ -97,10 +147,49 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 	const found: Range<Decoration>[] = [];
 	const line = (position: number, className: string) => found.push(Decoration.line({ class: className }).range(state.doc.lineAt(position).from));
 
+	const quotes = new Map<number, { depth: number; marks: { from: number; to: number }[] }>();
+	/** True when a selection touches the line: block marks (`>`, `-`, `[ ]`, `---`) show their text then. */
+	const onLine = (position: number) => {
+		const text = state.doc.lineAt(position);
+		return touched(state, text.from, text.to);
+	};
+
 	syntaxTree(state).iterate({
 		from,
 		to,
 		enter(node) {
+			if (node.name === "QuoteMark") {
+				const text = state.doc.lineAt(node.from);
+				const entry = quotes.get(text.from) ?? { depth: 0, marks: [] };
+				entry.depth += 1;
+				entry.marks.push({ from: node.from, to: state.doc.sliceString(node.to, node.to + 1) === " " ? node.to + 1 : node.to });
+				quotes.set(text.from, entry);
+				return;
+			}
+			if (node.name === "HorizontalRule") {
+				if (!onLine(node.from)) found.push(rule.range(node.from, node.to));
+				return;
+			}
+			if (node.name === "ListMark") {
+				const item = node.node.parent;
+				if (item?.parent?.name !== "BulletList") return;
+				const text = state.doc.lineAt(node.from);
+				const indent = state.doc.sliceString(text.from, node.from);
+				// Nested items are indented with spaces, which are narrow in a proportional font: widen them.
+				if (indent.length > 0 && /^ +$/.test(indent)) found.push(Decoration.mark({ class: "cm-live-indent", attributes: { style: `letter-spacing:${(indent.length * 0.45).toFixed(2)}em` } }).range(text.from, node.from));
+				if (onLine(node.from)) return;
+				const task = item.getChild("Task")?.getChild("TaskMarker");
+				if (task) found.push(hidden.range(node.from, Math.min(task.from, node.to + 1)));
+				else found.push(bullet.range(node.from, node.to));
+				return;
+			}
+			if (node.name === "TaskMarker") {
+				const written = state.doc.sliceString(node.from, node.to);
+				if (!/^\[[ xX]\]$/.test(written)) return;
+				found.push(Decoration.line({ class: written === "[ ]" ? "cm-live-task" : "cm-live-task cm-live-task-done" }).range(state.doc.lineAt(node.from).from));
+				if (!onLine(node.from)) found.push(Decoration.replace({ widget: new CheckboxWidget(written !== "[ ]") }).range(node.from, node.to));
+				return;
+			}
 			const heading = HEADINGS[node.name];
 			if (heading) {
 				for (let at = node.from; at <= node.to; ) {
@@ -141,6 +230,12 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 			}
 		},
 	});
+	for (const [start, quote] of quotes) {
+		// One bar for each level of nesting, drawn as a background so the line's own text stays untouched.
+		const bars = Array.from({ length: quote.depth }, (_, level) => `linear-gradient(var(--lm-border-strong), var(--lm-border-strong)) ${level * 16}px 0 / 3px 100% no-repeat`).join(", ");
+		found.push(Decoration.line({ class: "cm-live-quote", attributes: { style: `padding-left:${quote.depth * 16}px;background:${bars}` } }).range(start));
+		if (!onLine(start)) for (const mark of quote.marks) found.push(hidden.range(mark.from, mark.to));
+	}
 	wikiLinks(state, from, to, found);
 	markdownImages(state, from, to, found);
 	const builder = new RangeSetBuilder<Decoration>();
@@ -286,6 +381,27 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-broken": { whiteSpace: "nowrap", color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
 	".cm-live-wiki": { cursor: "text" },
 	".cm-live-image": { maxWidth: "100%", maxHeight: "360px", width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
+	".cm-live-quote": { color: "var(--lm-text-secondary)" },
+	".cm-live-bullet": { display: "inline-block", width: "1em", textAlign: "center", color: "var(--lm-text-secondary)" },
+	".cm-live-checkbox": {
+		display: "inline-block",
+		boxSizing: "border-box",
+		width: "1em",
+		height: "1em",
+		margin: "0 0.35em 0 0.1em",
+		verticalAlign: "-0.12em",
+		border: "1.5px solid var(--lm-border-strong)",
+		borderRadius: "var(--lm-radius-sm)",
+		cursor: "pointer",
+	},
+	".cm-live-checkbox-checked": {
+		borderColor: "var(--lm-text-accent)",
+		backgroundColor: "var(--lm-text-accent)",
+		backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M3.5 8.5l3 3 6-7' fill='none' stroke='white' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E\")",
+		backgroundSize: "100% 100%",
+	},
+	".cm-live-task-done": { color: "var(--lm-text-secondary)" },
+	".cm-live-rule": { height: "0", margin: "0.6em 0", borderTop: "1px solid var(--lm-border-default)" },
 	".cm-live-link": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
 	".cm-live-h1, .cm-live-h2, .cm-live-h3, .cm-live-h4, .cm-live-h5, .cm-live-h6": {
 		fontWeight: "var(--lm-weight-semibold)",
@@ -303,6 +419,17 @@ export const liveMarkdownTheme = EditorView.theme({
  */
 export const liveClicks = EditorView.domEventHandlers({
 	mousedown(event, view) {
+		const box = (event.target as HTMLElement | null)?.closest<HTMLElement>(".cm-live-checkbox");
+		if (box && event.button === 0) {
+			// Tick or untick by rewriting the one character between the brackets.
+			const at = view.posAtDOM(box);
+			if (/^\[[ xX]\]$/.test(view.state.doc.sliceString(at, at + 3))) {
+				event.preventDefault();
+				const checked = view.state.doc.sliceString(at + 1, at + 2) !== " ";
+				view.dispatch({ changes: { from: at + 1, to: at + 2, insert: checked ? " " : "x" } });
+				return true;
+			}
+		}
 		if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return false;
 		const handlers = view.state.facet(handlersFacet);
 		const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id]");

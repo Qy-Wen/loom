@@ -32,7 +32,7 @@ function decorate(text: string, cursor = text.length, anchor = cursor, library =
 	liveDecorations(state).between(0, state.doc.length, (from, to, value) => {
 		const spec = value.spec as { class?: string; widget?: { src?: string }; attributes?: Record<string, string> };
 		const name = spec.class ?? spec.attributes?.class ?? "";
-		if (spec.widget) widgets.push(`${text.slice(from, to)}=>${spec.widget.src}`);
+		if (spec.widget) widgets.push(`${text.slice(from, to)}=>${spec.widget.src ?? spec.widget.constructor.name}`);
 		else if (name === "cm-live-hidden") hidden.push(text.slice(from, to));
 		else if (from === to) lines.push(`${name}@${state.doc.lineAt(from).number}`);
 		else {
@@ -174,4 +174,43 @@ test("the editor and the preview agree on which wiki links resolve", async () =>
 		...widgets.map((entry) => entry.split("/asset/")[1].split("?")[0])];
 	assert.equal(editorBroken, previewBroken);
 	assert.deepEqual([...new Set(editorResolved)].sort(), [...new Set(previewResolved)].sort());
+});
+
+
+test("list markers become bullets and checkboxes away from the cursor", () => {
+	const text = "- 一\n  - 二\n* 三\n- [ ] 待办\n- [x] 完成\n1. 有序\n\n末";
+	const away = decorate(text, text.length);
+	assert.deepEqual(away.widgets, [
+		"-=>BulletWidget", "-=>BulletWidget", "*=>BulletWidget", "[ ]=>CheckboxWidget", "[x]=>CheckboxWidget",
+	]);
+	assert.deepEqual(away.hidden, ["- ", "- "]);
+	assert.deepEqual(away.lines, ["cm-live-task@4", "cm-live-task cm-live-task-done@5"]);
+	// Ordered lists keep their numbers.
+	assert.equal(away.hidden.some((entry) => entry.startsWith("1.")), false);
+});
+
+test("a list line shows its own text while the cursor is on it", () => {
+	const text = "- 一\n- [ ] 待办\n\n末";
+	const on = decorate(text, text.indexOf("待办"));
+	assert.deepEqual(on.widgets, ["-=>BulletWidget"]);
+	assert.deepEqual(on.hidden, []);
+});
+
+test("quotes hide the > marks, one bar per level, until the cursor is on the line", () => {
+	const text = "> 一\n> > 二\n\n末";
+	const away = decorate(text, text.length);
+	assert.deepEqual(away.hidden, ["> ", "> ", "> "]);
+	assert.deepEqual(away.lines, ["cm-live-quote@1", "cm-live-quote@2"]);
+	assert.deepEqual(decorate(text, 1).hidden, ["> ", "> "]);
+});
+
+test("a horizontal rule becomes a line away from the cursor and shows its dashes on it", () => {
+	const text = "上\n\n---\n\n***\n\n末";
+	assert.deepEqual(decorate(text, text.length).widgets, ["---=>RuleWidget", "***=>RuleWidget"]);
+	assert.deepEqual(decorate(text, text.indexOf("---") + 1).widgets, ["***=>RuleWidget"]);
+});
+
+test("a table row of dashes or a setext underline is not taken for a rule", () => {
+	const text = "标题\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n末";
+	assert.deepEqual(decorate(text, text.length).widgets, []);
 });
