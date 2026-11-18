@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { isImeComposing } from "../../components/ime-composition.ts";
 import { useLocale } from "../../locale.tsx";
+import { createMarkdownEditor, type MarkdownEditor } from "./codemirror-markdown.ts";
 import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
 
 const files: MarkdownFiles = {
@@ -21,7 +21,8 @@ export function MarkdownSourceEditor({ assetId, filename, modifiedAt }: { assetI
 	const [save, setSave] = useState<MarkdownSave | null>(sessions.get(assetId) ?? null);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [, rerender] = useState(0);
-	const boxRef = useRef<HTMLTextAreaElement>(null);
+	const hostRef = useRef<HTMLDivElement>(null);
+	const editorRef = useRef<MarkdownEditor | null>(null);
 
 	// Open the session, or reuse one that still holds unsaved text.
 	useEffect(() => {
@@ -66,6 +67,28 @@ export function MarkdownSourceEditor({ assetId, filename, modifiedAt }: { assetI
 		return () => { cancelled = true; };
 	}, [save, assetId, modifiedAt]);
 
+	// One CodeMirror view per open session. It reports typing to the session, which owns the text.
+	useEffect(() => {
+		const host = hostRef.current;
+		if (!save || !host) return;
+		const editor = createMarkdownEditor(host, save.text, {
+			onChange: (text) => save.edit(text),
+			onBlur: () => { void save.flush().catch(() => undefined); },
+			onSave: () => { void save.flush().catch(() => undefined); },
+		}, t.preview.editorLabel(filename));
+		editorRef.current = editor;
+		return () => {
+			editorRef.current = null;
+			editor.destroy();
+		};
+	}, [save, filename, t]);
+
+	// The session took in new text (a reload, or a change from outside): show it.
+	const text = save?.text;
+	useEffect(() => {
+		if (text !== undefined) editorRef.current?.setText(text);
+	}, [text]);
+
 	if (failure) return <div className="preview-placeholder"><strong>{filename}</strong><span>{failure}</span></div>;
 	if (!save) return <div className="preview-loading">{t.preview.loadingMarkdown}</div>;
 
@@ -75,21 +98,7 @@ export function MarkdownSourceEditor({ assetId, filename, modifiedAt }: { assetI
 		: null;
 	return (
 		<div className="markdown-source-editor">
-			<textarea
-				ref={boxRef}
-				className="text-preview markdown-source-input thin-scroll"
-				aria-label={t.preview.editorLabel(filename)}
-				spellCheck={false}
-				value={save.text}
-				onChange={(event) => save.edit(event.target.value)}
-				onBlur={() => { void save.flush().catch(() => undefined); }}
-				onKeyDown={(event) => {
-					if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "s" && !isImeComposing(event.nativeEvent)) {
-						event.preventDefault();
-						void save.flush().catch(() => undefined);
-					}
-				}}
-			/>
+			<div className="markdown-source-input" ref={hostRef} />
 			<div className="markdown-editor-status" role="status">
 				{status && <span>{status}</span>}
 				{save.state === "error" && (

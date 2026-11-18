@@ -310,12 +310,16 @@
 }
 
 .markdown-source-input {
-	width: 100%;
-	box-sizing: border-box;
-	resize: none;
-	border: 0;
-	outline: none;
-	white-space: pre-wrap;
+	min-height: 0;
+	flex: 1;
+	overflow: hidden;
+	background: var(--lm-surface-app);
+	/* Fill the workbench's 5px side padding under the resize handles. */
+	box-shadow: -5px 0 var(--lm-surface-app), 5px 0 var(--lm-surface-app);
+}
+
+.markdown-source-input .cm-editor {
+	height: 100%;
 }
 
 .markdown-editor-status {

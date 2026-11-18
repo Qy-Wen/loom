@@ -22,8 +22,10 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "笔记.md" }).first().click();
 		await loomPage.getByRole("tab", { name: "Source" }).click();
+		// CodeMirror keeps one `.cm-line` per line; read the document back by joining them.
 		const box = loomPage.getByRole("textbox", { name: "Edit 笔记.md" });
-		await expect(box).toHaveValue("# 标题\n\n* 原文\n");
+		const editorText = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => line.textContent ?? "").join("\n"));
+		await expect.poll(editorText).toBe("# 标题\n\n* 原文\n");
 		const status = loomPage.locator(".markdown-editor-status");
 
 		// Opening and leaving without typing writes nothing.
@@ -44,7 +46,7 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 
 		// A change from outside with nothing unsaved is taken in.
 		await writeFile(file, "# 标题\n\n外部修改\n");
-		await expect(box).toHaveValue("# 标题\n\n外部修改\n", { timeout: 15_000 });
+		await expect.poll(editorText, { timeout: 15_000 }).toBe("# 标题\n\n外部修改\n");
 
 		// A change from outside while there is unsaved text is not applied, and saving asks.
 		await box.click();
@@ -52,11 +54,11 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		await box.pressSequentially("我的修改");
 		await writeFile(file, "# 标题\n\n第二次外部修改\n");
 		await expect(status.getByRole("button", { name: "Overwrite" })).toBeVisible({ timeout: 15_000 });
-		await expect(box).toHaveValue("# 标题\n\n外部修改\n我的修改");
+		await expect.poll(editorText).toBe("# 标题\n\n外部修改\n我的修改");
 		expect(await readFile(file, "utf8")).toBe("# 标题\n\n第二次外部修改\n");
 
 		await status.getByRole("button", { name: "Reload" }).click();
-		await expect(box).toHaveValue("# 标题\n\n第二次外部修改\n");
+		await expect.poll(editorText).toBe("# 标题\n\n第二次外部修改\n");
 		await expect(status.getByRole("button", { name: "Overwrite" })).toHaveCount(0);
 
 		// Overwrite writes the editor's text.
@@ -67,6 +69,62 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		await expect(status.getByRole("button", { name: "Overwrite" })).toBeVisible({ timeout: 15_000 });
 		await status.getByRole("button", { name: "Overwrite" }).click();
 		await expect.poll(() => readFile(file, "utf8")).toBe("# 标题\n\n第二次外部修改\n甲");
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("the Markdown editor undoes, finds, keeps composition intact and saves with the shortcut", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-cm-e2e-"));
+	const file = join(root, "a.md");
+	await writeFile(file, "alpha beta\nbeta gamma\n");
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const original = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = original;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "a.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit a.md" });
+		const editorText = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => line.textContent ?? "").join("\n"));
+		await expect.poll(editorText).toBe("alpha beta\nbeta gamma\n");
+
+		// Undo reverts typing, and saving again after it leaves the file as it was.
+		await box.click();
+		await box.press("ControlOrMeta+Home");
+		await box.pressSequentially("X");
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe("Xalpha beta\nbeta gamma\n");
+		await box.press("ControlOrMeta+z");
+		await expect.poll(editorText).toBe("alpha beta\nbeta gamma\n");
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe("alpha beta\nbeta gamma\n");
+
+		// Find is the editor's own panel and counts every match.
+		await box.press("ControlOrMeta+f");
+		const find = loomPage.locator(".cm-search");
+		await expect(find).toBeVisible();
+		await find.locator("input[name=search]").pressSequentially("beta");
+		await expect(loomPage.locator(".cm-searchMatch")).toHaveCount(2);
+		await loomPage.keyboard.press("Escape");
+		await expect(find).toHaveCount(0);
+
+		// Text typed through an input method is not saved half-composed, and arrives whole.
+		await box.click();
+		await box.press("ControlOrMeta+End");
+		const client = await loomPage.context().newCDPSession(loomPage);
+		await client.send("Input.imeSetComposition", { text: "ni", selectionStart: 2, selectionEnd: 2 });
+		await client.send("Input.imeSetComposition", { text: "你", selectionStart: 1, selectionEnd: 1 });
+		await client.send("Input.insertText", { text: "你" });
+		await expect.poll(editorText).toBe("alpha beta\nbeta gamma\n你");
+		await expect.poll(() => readFile(file, "utf8"), { timeout: 10_000 }).toBe("alpha beta\nbeta gamma\n你");
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
