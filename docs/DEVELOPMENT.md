@@ -47,7 +47,7 @@ The live model/tool and SQLite reopen smoke test is `pnpm --filter @loom/agent t
 
 `pnpm dist` runs on a Mac and builds macOS arm64/x64 DMGs and a Windows x64 installer. It downloads FFmpeg for all three targets before building; `pnpm vendor:ffmpeg --all` can also prepare those binaries separately.
 
-For versioned builds, COS/GitHub uploads, and website updates, follow [releasing](./RELEASING.md). Website preview and server deployment are documented in [`website/README.md`](../website/README.md).
+For versioned builds, COS/GitHub uploads, and website updates, follow [packaging and releasing](./PACKAGING.md#releasing). Website preview and server deployment are documented in [`website/README.md`](../website/README.md).
 
 ## Vendored pi engine
 

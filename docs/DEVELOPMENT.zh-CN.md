@@ -47,7 +47,7 @@ pnpm test:e2e:attach
 
 `pnpm dist` 在 Mac 上构建 macOS arm64/x64 的 DMG 和 Windows x64 安装包，构建前自动下载三种目标平台的 FFmpeg；也可用 `pnpm vendor:ffmpeg --all` 单独准备这些二进制文件。
 
-带版本号的构建、COS/GitHub 上传和网站更新见[一键发布说明](./RELEASING.zh-CN.md)。网站预览和服务器部署见 [`website/README.md`](../website/README.md)。
+带版本号的构建、COS/GitHub 上传和网站更新见[打包与发布](./PACKAGING.zh-CN.md#发布)。网站预览和服务器部署见 [`website/README.md`](../website/README.md)。
 
 ## Vendored pi 引擎
 

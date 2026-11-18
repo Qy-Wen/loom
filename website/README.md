@@ -18,7 +18,7 @@ Optional port / 自定义端口：`npm run website:dev -- --port 4174`.
 
 ## Release configuration / 发布配置
 
-For automatic installer uploads and download-link generation, see [one-command releases](../docs/RELEASING.md) / 安装包自动上传和下载地址自动生成见[一键发布说明](../docs/RELEASING.zh-CN.md)。
+For automatic installer uploads and download-link generation, see [packaging and releasing](../docs/PACKAGING.md#releasing) / 安装包自动上传和下载地址自动生成见[打包与发布](../docs/PACKAGING.zh-CN.md#发布)。
 
 Edit `release-config.js`. Use `null` for unpublished installers; the page displays “Coming soon”. Set HTTPS links only. `domestic` is the independent download URL, prioritized over the optional `github` mirror. Version and download availability update in both languages.
 
