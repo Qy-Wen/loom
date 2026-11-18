@@ -25,6 +25,7 @@ export function useInlineRename(
 		onChange: (event) => setValue(event.target.value),
 		onFocus: (event) => event.currentTarget.select(),
 		onKeyDown: (event) => {
+			if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
 			if (event.key === "Enter") event.currentTarget.blur();
 			if (event.key === "Escape") {
 				cancelled.current = true;

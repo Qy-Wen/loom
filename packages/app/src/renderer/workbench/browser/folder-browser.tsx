@@ -5,7 +5,8 @@ import { FileSortControl } from "../../library/file-sort-control.tsx";
 import { FolderChevronIcon } from "../../library/file-tree.tsx";
 import { folderDropProps, useDropFolder } from "../../library/folder-drop.ts";
 import type { LibraryDisplay } from "../../library/use-library-display.ts";
-import { assetKey, folderKey, parentFolder, rowKey, selectRange, singleSelection, type PointerMode, type TreeRow, type TreeSelection } from "../../library/tree-nav.ts";
+import { assetKey, folderKey, isLibraryRenameKey, parentFolder, rowKey, selectRange, singleSelection, type PointerMode, type TreeRow, type TreeSelection } from "../../library/tree-nav.ts";
+import { uiPlatform } from "../../../shared/locale.ts";
 import { useLocale } from "../../locale.tsx";
 import { AssetTile, FolderTile, TagTile, type TileContext } from "./browser-tiles.tsx";
 import { browserRows, browseListing, folderCrumbs, gridMove, isGridKey, type BrowseLocation } from "./folder-browser-model.ts";
@@ -123,6 +124,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 
 	function onKeyDown(event: React.KeyboardEvent<HTMLDivElement>): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+		if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
 		const mod = event.metaKey || event.ctrlKey;
 		if (location.kind === "tags") {
 			if (mod || event.altKey) return;
@@ -138,6 +140,10 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 				event.preventDefault();
 				goUp();
 			}
+			return;
+		}
+		if (isLibraryRenameKey(event, uiPlatform(navigator.userAgent) === "mac")) {
+			props.onKeyDown(event, rows, false);
 			return;
 		}
 		if (!mod && !event.altKey) {

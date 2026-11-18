@@ -108,7 +108,7 @@ test("folder tiles keep their own rename editor and list mode still renames in t
 	await expect.poll(folders).toContain("tile-renamed/child");
 	await expect(tile("tile-renamed")).toBeVisible();
 
-	await tile("tile-renamed").press("F2");
+	await tile("tile-renamed").press(process.platform === "darwin" ? "Enter" : "F2");
 	await expect(editor).toBeFocused();
 	await expect(sidebar.locator(".rename-editor")).toHaveCount(0);
 	await editor.fill("cancelled");

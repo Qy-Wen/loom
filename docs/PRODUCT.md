@@ -303,12 +303,12 @@ The layout is a left asset library, a central workbench, and separate Chat and D
 
 **Files: list and icon mode**
 
-A switch in the sidebar header picks how files are shown. The choice is remembered.
+A switch in the sidebar header picks how files are shown. The choice is remembered. With one file or folder selected, Return renames on macOS; F2 renames on both macOS and Windows. Enter confirms the name, and Escape cancels.
 - **List** (default): the sidebar is the full tree of folders and files, and the workbench has the file tabs above.
 - **Icons**: the sidebar shows folders only, and the workbench is a folder browser with no tabs. It shows the open folder's subfolders and files as tiles, a path bar to jump back up, a sort control, and a search box.
   - Click a folder in the sidebar, or double-click a folder tile, to open it. Backspace goes up a level. The sidebar highlights the open folder and opens the folders above it.
   - Search covers the open folder and everything under it; each hit shows the folder it sits in. Favorites and each tag appear in the sidebar as places, and the browser lists their files.
-  - Double-click a file, or press Enter on it, to preview it in an overlay on top of the folder; Escape closes it. The overlay can go full screen. The side panels stay usable, and Details and the Agent follow the previewed file, or the focused tile when no preview is open.
+  - Double-click a file (or press Enter on Windows) to preview it in an overlay on top of the folder; Escape closes it. The overlay can go full screen. The side panels stay usable, and Details and the Agent follow the previewed file, or the focused tile when no preview is open.
   - Selection works as in the tree: click, Shift for a range, ⌘/Ctrl to toggle, ⌘/Ctrl+A for all. Arrow keys move by tile, Shift extends. Dragging on empty space draws a box that selects the tiles it touches (Shift or ⌘/Ctrl adds to the selection), and the view scrolls near its top and bottom edge. Copy, cut, paste, rename, duplicate, drag-and-drop, and delete work on tiles, and a paste, new folder, or new file goes to the open folder.
 
 **Favorites, tags, and properties**

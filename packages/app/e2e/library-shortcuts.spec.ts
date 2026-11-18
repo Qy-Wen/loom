@@ -25,6 +25,48 @@ async function prepare(page: Page, mode: "List" | "Icons") {
 }
 
 for (const mode of ["List", "Icons"] as const) {
+	test(`file rename shortcuts preserve extensions and input composition in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
+		test.skip(!electronApp, "isolated library required");
+		const { root, sidebar } = await prepare(page, mode);
+		const browser = page.locator(".folder-browser");
+		const area = mode === "List" ? sidebar : browser;
+		const row = (filename: string) => area.locator(mode === "List" ? ".asset-row" : ".browser-tile").filter({ has: page.locator(mode === "List" ? ".asset-name" : ".browser-tile-name", { hasText: new RegExp(`^${filename.replaceAll(".", "\\.")}$`) }) });
+		const filename = mode === "List" ? "outside.md" : "note.md";
+		await row(filename).click();
+		// Return also works when the selected button, rather than its container, has focus.
+		await row(filename).focus();
+		await page.keyboard.press(process.platform === "darwin" ? "Enter" : "F2");
+		const editor = area.locator(mode === "List" ? ".rename-editor input" : ".browser-tile-rename input");
+		await expect(editor).toBeFocused();
+		await expect(editor).toHaveValue(filename.slice(0, -3));
+		await editor.dispatchEvent("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+		await expect(editor).toBeFocused();
+		await editor.fill("新名字");
+		await editor.press("Enter");
+		await expect(editor).toHaveCount(0);
+		const relativePath = mode === "List" ? "新名字.md" : "source/新名字.md";
+		await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.map((asset) => asset.relativePath)).toContain(relativePath);
+		expect(await readFile(join(root, relativePath), "utf8")).toBe(mode === "List" ? "outside note" : "source note");
+		await row("新名字.md").click();
+		await row("新名字.md").press("F2");
+		await expect(editor).toBeFocused();
+		await editor.fill("cancelled");
+		await editor.press("Escape");
+		await expect(editor).toHaveCount(0);
+		await expect(row("新名字.md")).toBeVisible();
+		if (mode === "List") await sidebar.focus();
+		else await browser.locator(".browser-scroll").focus();
+		await page.keyboard.press("ControlOrMeta+a");
+		await page.keyboard.press(process.platform === "darwin" ? "Enter" : "F2");
+		if (mode === "List") await expect(editor).toHaveCount(0);
+		else { // The current folder contains a single file, so select-all still permits its rename.
+			await expect(editor).toBeFocused(); await editor.press("Escape");
+			const search = browser.getByRole("searchbox");
+			await search.fill("新名字"); await search.press("Enter");
+			await expect(editor).toHaveCount(0); await expect(search).toBeFocused();
+		}
+	});
+
 	test(`tree action shortcuts use the focused folder in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
 		test.skip(!electronApp, "isolated library required");
 		test.setTimeout(90_000);
@@ -55,7 +97,7 @@ for (const mode of ["List", "Icons"] as const) {
 		await folder("source").click();
 		// Duplicate is file-only in both modes; a stale tile must not be duplicated here.
 		await page.keyboard.press("ControlOrMeta+d");
-		await page.keyboard.press("F2");
+		await page.keyboard.press(process.platform === "darwin" ? "Enter" : "F2");
 		const rename = sidebar.locator(".rename-editor input");
 		await expect(rename).toHaveValue("source");
 		await rename.fill("renamed");
@@ -83,9 +125,9 @@ for (const mode of ["List", "Icons"] as const) {
 		await expect(sidebar.locator(".folder-row.selected .asset-name")).toHaveText(["browse", "renamed", "child", "target"]);
 		await page.keyboard.press("Home");
 		await page.keyboard.press("ArrowDown");
-		await page.keyboard.press("Enter");
+		await page.keyboard.press(process.platform === "darwin" ? "ArrowLeft" : "Enter");
 		await expect(folder("child")).toHaveCount(0);
-		await page.keyboard.press("Enter");
+		await page.keyboard.press(process.platform === "darwin" ? "ArrowRight" : "Enter");
 		await expect(folder("child")).toBeVisible();
 		expect((await page.evaluate(() => window.loom.getLibrarySnapshot())).assets).toHaveLength(2);
 

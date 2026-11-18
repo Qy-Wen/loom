@@ -41,6 +41,7 @@ import {
 	extendSelection,
 	folderKey,
 	isExtendKey,
+	isLibraryRenameKey,
 	isLibraryTrashKey,
 	isTreeNavKey,
 	parentFolder,
@@ -1032,6 +1033,7 @@ export function App(): React.JSX.Element {
 
 	function onLibraryKeyDown(event: React.KeyboardEvent, rows: readonly TreeRow[], folding: boolean, fromTree = false): void {
 		if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
+		if (event.nativeEvent.isComposing || event.nativeEvent.keyCode === 229) return;
 		if (!library.rootPath) return;
 		const selection = fromTree ? treeSelection() : picked;
 		const mod = event.metaKey || event.ctrlKey;
@@ -1058,7 +1060,7 @@ export function App(): React.JSX.Element {
 		} else if (mod && !event.altKey && !event.shiftKey && key === "d") {
 			event.preventDefault();
 			void duplicateSelection(selection);
-		} else if (event.key === "F2") {
+		} else if (isLibraryRenameKey(event, mac)) {
 			event.preventDefault();
 			if (selection.keys.length !== 1) return;
 			if (selection.focus?.startsWith("folder:")) beginFolderRename(selection.focus.slice("folder:".length), fromTree);

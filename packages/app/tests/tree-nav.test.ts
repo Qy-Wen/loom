@@ -9,6 +9,7 @@ import {
 	emptyTreeSelection,
 	extendSelection,
 	folderKey,
+	isLibraryRenameKey,
 	isLibraryTrashKey,
 	parentFolder,
 	pointerMode,
@@ -223,6 +224,18 @@ describe("pointer selection", () => {
 			{ kind: "asset", assetId: "m", relativePath: "m.txt" },
 		];
 		assert.deepEqual(rootLibraryItems(cursors), { assetIds: ["m"], folders: ["a"] });
+	});
+});
+
+describe("isLibraryRenameKey", () => {
+	it("uses Return on macOS and keeps F2 available on both platforms", () => {
+		const event = { key: "Enter", metaKey: false, ctrlKey: false, altKey: false, shiftKey: false };
+		assert.equal(isLibraryRenameKey(event, true), true);
+		assert.equal(isLibraryRenameKey(event, false), false);
+		for (const mac of [true, false]) assert.equal(isLibraryRenameKey({ ...event, key: "F2" }, mac), true);
+		for (const key of ["Enter", "F2"]) for (const modifier of ["metaKey", "ctrlKey", "altKey", "shiftKey"]) {
+			assert.equal(isLibraryRenameKey({ ...event, key, [modifier]: true }, true), false);
+		}
 	});
 });
 

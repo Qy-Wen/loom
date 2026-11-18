@@ -421,6 +421,15 @@ export function withoutFolder(selection: TreeSelection, relativePath: string): T
 	return { keys, focus, anchor };
 }
 
+/** Finder uses Return. F2 is also available on both platforms. */
+export function isLibraryRenameKey(
+	event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },
+	mac: boolean,
+): boolean {
+	if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return false;
+	return event.key === "F2" || (mac && event.key === "Enter");
+}
+
 /** Finder uses ⌘⌫. Explorer uses Delete. */
 export function isLibraryTrashKey(
 	event: { key: string; metaKey: boolean; ctrlKey: boolean; altKey: boolean; shiftKey: boolean },

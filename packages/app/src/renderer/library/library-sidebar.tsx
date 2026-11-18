@@ -160,7 +160,7 @@ export function LibrarySidebar({
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => {
 				// Toolbar buttons keep native Enter activation; folder rows use tree keyboard navigation.
-				if (event.key === "Enter" && event.target instanceof Element && event.target.closest("button") && !event.target.closest(".folder-row .folder-main")) return;
+				if (event.key === "Enter" && event.target instanceof Element && event.target.closest("button") && !event.target.closest(".folder-row .folder-main, .asset-row.selected")) return;
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>
