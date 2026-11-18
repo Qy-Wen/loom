@@ -39,6 +39,8 @@ class RecordingGraph implements GraphHandlers {
 	async handleUpdated(value: Asset): Promise<void> {
 		this.events.push(`updated:${value.assetId}`);
 	}
+
+	async handleSettled(): Promise<void> {}
 }
 
 describe("diffLibraryAssets", () => {

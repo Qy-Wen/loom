@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import type { Asset } from "../model/asset.ts";
+import type { ReferenceSource } from "../model/relation.ts";
 
 /** Finds assets by ID or library-relative path. Built once per scan from the asset list. */
 export interface AssetLookup {
@@ -44,18 +45,25 @@ const WIKI_LINK = /!?\[\[([^[\]\n]+?)\]\]/g;
 const FRONT_MATTER = /^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/;
 const EXTERNAL_SCHEME = /^(?:[a-z][a-z0-9+.-]+:|\/\/)/i;
 
-interface RawMarkdownReference {
-	kind: "wiki" | "link";
-	target: string;
+/** A reference as written in a source file, before it is matched to an asset. */
+export type RawReference =
+	| { kind: "wiki" | "link"; target: string }
+	| { kind: "card"; assetId: string; path: string };
+
+/** Files whose contents are read for references. */
+export function referenceSourceKind(relativePath: string): ReferenceSource | undefined {
+	if (/\.md$/i.test(relativePath)) return "markdown";
+	if (/\.canvas$/i.test(relativePath)) return "canvas";
+	return undefined;
 }
 
 /**
  * Wiki links, embeds, Markdown links and images in the body of a Markdown file.
  * Code, front matter and escaped text are skipped, so examples in code never become references.
  */
-export function extractMarkdownReferences(source: string): RawMarkdownReference[] {
+export function extractMarkdownReferences(source: string): RawReference[] {
 	const body = source.replace(FRONT_MATTER, "");
-	const found: RawMarkdownReference[] = [];
+	const found: RawReference[] = [];
 	for (const block of markdown.parse(body, {})) {
 		for (const token of block.children ?? []) {
 			if (token.type === "link_open") found.push({ kind: "link", target: String(token.attrGet("href") ?? "") });
@@ -68,27 +76,11 @@ export function extractMarkdownReferences(source: string): RawMarkdownReference[
 	return found;
 }
 
-/** Resolve the references of one Markdown file. `fromPath` is library-relative and uses `/`. */
-export function resolveMarkdownReferences(fromPath: string, source: string, lookup: AssetLookup): ResolvedReferences {
-	const result = newResult();
-	for (const reference of extractMarkdownReferences(source)) {
-		const written = reference.target.trim();
-		const asset = reference.kind === "wiki"
-			? resolveWikiTarget(written, lookup)
-			: resolveLinkTarget(fromPath, written, lookup);
-		if (asset === null) continue;
-		if (asset === undefined) addUnresolved(result, written);
-		else if (asset.relativePath !== fromPath) addTarget(result, asset.assetId);
-	}
-	return result;
-}
-
 /**
- * Resolve the file cards of a `.canvas` document. A card with `loom.assetId` resolves by that ID only,
- * so a missing asset stays unresolved instead of silently matching another file at the same path.
- * Returns `undefined` when the text is not a readable canvas, so the caller keeps the previous result.
+ * File cards of a `.canvas` document. Returns `undefined` when the text is not a readable canvas,
+ * so the caller keeps the previous result instead of clearing it.
  */
-export function resolveCanvasReferences(text: string, lookup: AssetLookup): ResolvedReferences | undefined {
+export function extractCanvasReferences(text: string): RawReference[] | undefined {
 	let document: unknown;
 	try {
 		document = JSON.parse(text);
@@ -98,15 +90,39 @@ export function resolveCanvasReferences(text: string, lookup: AssetLookup): Reso
 	if (typeof document !== "object" || document === null || Array.isArray(document)) return undefined;
 	const nodes = (document as { nodes?: unknown }).nodes;
 	if (nodes !== undefined && !Array.isArray(nodes)) return undefined;
-	const result = newResult();
+	const found: RawReference[] = [];
 	for (const node of nodes ?? []) {
 		if (typeof node !== "object" || node === null || (node as { type?: unknown }).type !== "file") continue;
 		const { file, loom } = node as { file?: unknown; loom?: { assetId?: unknown } | null };
 		const assetId = typeof loom?.assetId === "string" ? loom.assetId.trim() : "";
 		const path = typeof file === "string" ? file.trim().replaceAll("\\", "/") : "";
-		const asset = assetId ? lookup.byId(assetId) : path ? lookup.byPath(path) : undefined;
-		if (asset) addTarget(result, asset.assetId);
-		else if (assetId || path) addUnresolved(result, path || assetId);
+		if (assetId || path) found.push({ kind: "card", assetId, path });
+	}
+	return found;
+}
+
+/**
+ * Match references to assets. `fromPath` is the source file's library-relative path, using `/`.
+ * A canvas card with `loom.assetId` resolves by that ID only, so a missing asset stays unresolved
+ * instead of silently matching another file at the same path.
+ */
+export function resolveReferences(fromPath: string, references: readonly RawReference[], lookup: AssetLookup): ResolvedReferences {
+	const result: ResolvedReferences = { targetAssetIds: [], unresolved: [] };
+	for (const reference of references) {
+		let written: string;
+		let asset: Asset | undefined | null;
+		if (reference.kind === "card") {
+			written = reference.path || reference.assetId;
+			asset = reference.assetId ? lookup.byId(reference.assetId) : lookup.byPath(reference.path);
+		} else {
+			written = reference.target.trim();
+			asset = reference.kind === "wiki"
+				? resolveWikiTarget(written, lookup)
+				: resolveLinkTarget(fromPath, written, lookup);
+		}
+		if (asset === null) continue;
+		if (asset === undefined) addUnresolved(result, written);
+		else if (asset.relativePath !== fromPath) addTarget(result, asset.assetId);
 	}
 	return result;
 }
@@ -168,10 +184,6 @@ function parentOf(relativePath: string): string[] {
 	const parts = relativePath.split("/").filter(Boolean);
 	parts.pop();
 	return parts;
-}
-
-function newResult(): ResolvedReferences {
-	return { targetAssetIds: [], unresolved: [] };
 }
 
 function addTarget(result: ResolvedReferences, assetId: string): void {

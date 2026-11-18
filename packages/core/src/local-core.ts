@@ -5,6 +5,7 @@ import { basename, join } from "node:path";
 import { isGradeableVideo } from "./grade/types.ts";
 import { EnrichmentService } from "./enrichment/service.ts";
 import { Library } from "./library/library.ts";
+import { ReferenceIndex } from "./library/reference-index.ts";
 import type { ResolvePasteConflict } from "./library/paste.ts";
 import { LibraryHandlers, StoreGraphHandlers } from "./library/handlers.ts";
 import { LibraryPaths } from "./library/paths.ts";
@@ -78,6 +79,7 @@ export class LocalCore {
 	private readonly metadataStore: MetadataStore;
 	private readonly graphStore: GraphStore;
 	private readonly library: Library;
+	private readonly references: ReferenceIndex;
 	private readonly enrichment: EnrichmentService;
 	private readonly textEmbed: TextEmbedService;
 	private readonly imageVlm: ImageVlmService;
@@ -92,7 +94,11 @@ export class LocalCore {
 	constructor(options: LocalCoreOptions = {}) {
 		this.metadataStore = options.metadataStore ?? new SqliteMetadataStore();
 		this.graphStore = options.graphStore ?? new LadybugGraphStore();
-		this.library = new Library(new LibraryHandlers(this.metadataStore, new StoreGraphHandlers(this.graphStore)));
+		this.references = new ReferenceIndex(
+			this.graphStore,
+			(relativePath) => readFile(this.library.getPaths().toAbsolutePath(relativePath), "utf8"),
+		);
+		this.library = new Library(new LibraryHandlers(this.metadataStore, new StoreGraphHandlers(this.graphStore, this.references)));
 		this.enrichment = new EnrichmentService(
 			this.metadataStore,
 			(assetId) => this.library.getAssetFilePath(assetId),
@@ -144,6 +150,7 @@ export class LocalCore {
 			try {
 				if (!(await stat(rootPath)).isDirectory()) throw new Error("Library path is not a directory");
 				await this.graphStore.open(new LibraryPaths(rootPath));
+				this.references.reset();
 				const snapshot = await this.library.open(rootPath);
 				void this.thumbnails.prune(snapshot.assets.map((asset) => asset.assetId)).catch(() => undefined);
 				return snapshot;

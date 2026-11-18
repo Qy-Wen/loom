@@ -3,10 +3,11 @@ import { describe, it } from "node:test";
 import type { Asset } from "../src/model/asset.ts";
 import {
 	createAssetLookup,
+	extractCanvasReferences,
 	extractMarkdownReferences,
-	resolveCanvasReferences,
+	referenceSourceKind,
 	resolveLibraryHref,
-	resolveMarkdownReferences,
+	resolveReferences,
 } from "../src/library/references.ts";
 
 function asset(assetId: string, relativePath: string): Asset {
@@ -31,10 +32,28 @@ const lookup = createAssetLookup([
 	asset("canvas", "分镜.canvas"),
 ]);
 
+function resolveMarkdownReferences(fromPath: string, source: string, assets = lookup) {
+	return resolveReferences(fromPath, extractMarkdownReferences(source), assets);
+}
+
+function resolveCanvasReferences(text: string, assets = lookup) {
+	const raw = extractCanvasReferences(text);
+	return raw && resolveReferences("分镜.canvas", raw, assets);
+}
+
+describe("referenceSourceKind", () => {
+	it("reads only Markdown and canvas files", () => {
+		assert.equal(referenceSourceKind("a/脚本.MD"), "markdown");
+		assert.equal(referenceSourceKind("分镜.canvas"), "canvas");
+		assert.equal(referenceSourceKind("a.txt"), undefined);
+		assert.equal(referenceSourceKind("a.md.png"), undefined);
+	});
+});
+
 describe("extractMarkdownReferences", () => {
 	it("finds wiki links, embeds, links and images in the body", () => {
 		const found = extractMarkdownReferences("[[a]] and ![[b.png]] and [c](c.md) and ![d](d.png)");
-		assert.deepEqual(found.map((item) => item.target), ["a", "b.png", "c.md", "d.png"]);
+		assert.deepEqual(found.map((item) => (item.kind === "card" ? "" : item.target)), ["a", "b.png", "c.md", "d.png"]);
 	});
 
 	it("skips code, front matter and escaped text", () => {
@@ -52,25 +71,25 @@ describe("extractMarkdownReferences", () => {
 			"",
 			"[[real]]",
 		].join("\n");
-		assert.deepEqual(extractMarkdownReferences(source).map((item) => item.target), ["real"]);
+		assert.deepEqual(extractMarkdownReferences(source).map((item) => (item.kind === "card" ? "" : item.target)), ["real"]);
 	});
 });
 
 describe("resolveMarkdownReferences", () => {
 	it("resolves wiki links from the library root without searching by name", () => {
-		const result = resolveMarkdownReferences("脚本.md", "[[产品说明]] [[产品/说明]] [[说明]]", lookup);
+		const result = resolveMarkdownReferences("脚本.md", "[[产品说明]] [[产品/说明]] [[说明]]");
 		assert.deepEqual(result.targetAssetIds, ["notes", "deep"]);
 		assert.deepEqual(result.unresolved, ["说明"]);
 	});
 
 	it("drops display names and anchors", () => {
-		const result = resolveMarkdownReferences("脚本.md", "[[产品说明#标题|显示]] [[产品说明#^block]]", lookup);
+		const result = resolveMarkdownReferences("脚本.md", "[[产品说明#标题|显示]] [[产品说明#^block]]");
 		assert.deepEqual(result.targetAssetIds, ["notes"]);
 		assert.deepEqual(result.unresolved, []);
 	});
 
 	it("resolves embeds and images with their extension", () => {
-		const result = resolveMarkdownReferences("脚本.md", "![[图/架构图.png]] ![](图/架构图.png) ![](素材/演示.mp4)", lookup);
+		const result = resolveMarkdownReferences("脚本.md", "![[图/架构图.png]] ![](图/架构图.png) ![](素材/演示.mp4)");
 		assert.deepEqual(result.targetAssetIds, ["diagram", "demo"]);
 	});
 
@@ -95,7 +114,7 @@ describe("resolveMarkdownReferences", () => {
 	});
 
 	it("reports missing targets as unresolved and does not throw on links leaving the library", () => {
-		const result = resolveMarkdownReferences("脚本.md", "[[待调研]] [x](../../outside.md) [y](missing.md)", lookup);
+		const result = resolveMarkdownReferences("脚本.md", "[[待调研]] [x](../../outside.md) [y](missing.md)");
 		assert.deepEqual(result.targetAssetIds, []);
 		assert.deepEqual(result.unresolved, ["待调研", "../../outside.md", "missing.md"]);
 	});
@@ -131,7 +150,7 @@ describe("resolveCanvasReferences", () => {
 			],
 			edges: [{ id: "e", fromNode: "1", toNode: "3" }],
 		});
-		const result = resolveCanvasReferences(text, lookup);
+		const result = resolveCanvasReferences(text);
 		assert.deepEqual(result?.targetAssetIds, ["demo", "diagram"]);
 		assert.deepEqual(result?.unresolved, []);
 	});
@@ -141,15 +160,15 @@ describe("resolveCanvasReferences", () => {
 			nodes: [{ id: "1", type: "file", file: "素材/演示.mp4", loom: { assetId: "gone" } }],
 			edges: [],
 		});
-		const result = resolveCanvasReferences(text, lookup);
+		const result = resolveCanvasReferences(text);
 		assert.deepEqual(result?.targetAssetIds, []);
 		assert.deepEqual(result?.unresolved, ["素材/演示.mp4"]);
 	});
 
 	it("returns undefined for unreadable canvases", () => {
-		assert.equal(resolveCanvasReferences("{", lookup), undefined);
-		assert.equal(resolveCanvasReferences("[]", lookup), undefined);
-		assert.equal(resolveCanvasReferences('{"nodes":1}', lookup), undefined);
-		assert.deepEqual(resolveCanvasReferences("{}", lookup), { targetAssetIds: [], unresolved: [] });
+		assert.equal(resolveCanvasReferences("{"), undefined);
+		assert.equal(resolveCanvasReferences("[]"), undefined);
+		assert.equal(resolveCanvasReferences('{"nodes":1}'), undefined);
+		assert.deepEqual(resolveCanvasReferences("{}"), { targetAssetIds: [], unresolved: [] });
 	});
 });

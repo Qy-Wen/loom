@@ -1,5 +1,6 @@
 import type { Asset } from "../model/asset.ts";
 import type { GraphStore, MetadataStore } from "../stores/types.ts";
+import type { ReferenceIndex } from "./reference-index.ts";
 
 export type LibrarySituation =
 	| { type: "added"; asset: Asset }
@@ -13,14 +14,21 @@ export interface GraphHandlers {
 	handleRemoved(asset: Asset): Promise<void>;
 	handleMoved(asset: Asset, previousPath: string): Promise<void>;
 	handleUpdated(asset: Asset, previous: Asset): Promise<void>;
+	/** After every situation of one change is handled, with the full asset list as it now stands. */
+	handleSettled(assets: Asset[], situations: LibrarySituation[]): Promise<void>;
 }
 
-/** Keeps graph nodes in sync with library add/remove. Path changes stay on SQLite. */
+/**
+ * Keeps graph nodes in sync with library add/remove, and reference edges with file contents.
+ * Path changes stay on SQLite.
+ */
 export class StoreGraphHandlers implements GraphHandlers {
 	private readonly graph: GraphStore;
+	private readonly references: ReferenceIndex;
 
-	constructor(graph: GraphStore) {
+	constructor(graph: GraphStore, references: ReferenceIndex) {
 		this.graph = graph;
+		this.references = references;
 	}
 
 	handleAdded(asset: Asset): Promise<void> {
@@ -34,6 +42,10 @@ export class StoreGraphHandlers implements GraphHandlers {
 	async handleMoved(): Promise<void> {}
 
 	async handleUpdated(): Promise<void> {}
+
+	handleSettled(assets: Asset[], situations: LibrarySituation[]): Promise<void> {
+		return this.references.sync(assets, situations);
+	}
 }
 
 export function diffLibraryAssets(previous: Asset[], next: Asset[]): LibrarySituation[] {
@@ -83,7 +95,10 @@ export class LibraryHandlers {
 
 	async applyOpenReconcile(previous: Asset[], next: Asset[]): Promise<void> {
 		await this.metadata.replaceAssets(next);
-		await this.dispatch(diffLibraryAssets(previous, next));
+		const situations = diffLibraryAssets(previous, next);
+		await this.dispatch(situations);
+		// Always, even with no situations: the first call after opening reads every source file.
+		await this.graph.handleSettled(next, situations);
 	}
 
 	async upsertAsset(asset: Asset): Promise<void> {
@@ -102,11 +117,14 @@ export class LibraryHandlers {
 			situations.push({ type: "updated", asset, previous });
 		}
 		await this.dispatch(situations);
+		await this.graph.handleSettled(await this.metadata.listAssets(), situations);
 	}
 
 	async removeAsset(asset: Asset): Promise<void> {
 		await this.metadata.removeAsset(asset.assetId);
-		await this.dispatch([{ type: "removed", asset }]);
+		const situations: LibrarySituation[] = [{ type: "removed", asset }];
+		await this.dispatch(situations);
+		await this.graph.handleSettled(await this.metadata.listAssets(), situations);
 	}
 
 	private async dispatch(situations: LibrarySituation[]): Promise<void> {
