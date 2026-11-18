@@ -1,5 +1,6 @@
 import type { CloudBackupView, CloudConfigDraft, CloudJob, CloudProviderId, CloudPullChoice } from "./cloud-backup.ts";
 import type { CanvasDocument, CanvasSnapshot } from "./canvas.ts";
+import type { MarkdownSaveResult, MarkdownSnapshot } from "./markdown-file.ts";
 import type { ChatSettingsPatch } from "./chat-settings.ts";
 import type { ComposerReference } from "@loom/agent";
 import type { McpServiceSettings, McpServiceView } from "./mcp-service.ts";
@@ -135,6 +136,8 @@ export const IPC = {
 	createCanvasFile: "loom:createCanvasFile",
 	readCanvas: "loom:readCanvas",
 	saveCanvas: "loom:saveCanvas",
+	readMarkdown: "loom:readMarkdown",
+	saveMarkdown: "loom:saveMarkdown",
 	canvasDirtyChanged: "loom:canvasDirtyChanged",
 	flushCanvasBeforeClose: "loom:flushCanvasBeforeClose",
 	canvasCloseReady: "loom:canvasCloseReady",
@@ -271,6 +274,8 @@ export interface LoomApi {
 	createCanvasFile: (parentRelativePath: string) => Promise<Asset>;
 	readCanvas: (assetId: string) => Promise<CanvasSnapshot>;
 	saveCanvas: (assetId: string, document: CanvasDocument, revision: string) => Promise<CanvasSnapshot | null>;
+	readMarkdown: (assetId: string) => Promise<MarkdownSnapshot>;
+	saveMarkdown: (assetId: string, text: string, revision: string) => Promise<MarkdownSaveResult>;
 	setCanvasDirty: (dirty: boolean) => void;
 	onFlushCanvasBeforeClose: (flush: () => Promise<boolean>) => () => void;
 	renameFolder: (relativePath: string, name: string) => Promise<string>;

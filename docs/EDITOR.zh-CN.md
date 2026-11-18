@@ -30,7 +30,7 @@ Loom 采用第一种：基于原文的实时预览。
 
 使用 [CodeMirror 6](https://codemirror.net/)，它直接编辑文本，并提供装饰、折叠、输入法和撤销栈。Markdown 语法树来自 `@codemirror/lang-markdown`。实时渲染由语法树上的装饰实现，Wiki 链接作为扩展语法单独识别，规则与 `references.ts` 保持一致。
 
-编辑器只放在渲染进程，不进入 `@loom/core`。核心只提供保存。
+编辑器只放在渲染进程，不进入 `@loom/core`。保存在应用主进程的 `MarkdownStore` 里，与画板的 `CanvasStore` 同级，核心不参与。
 
 ### 与现有解析的分工
 

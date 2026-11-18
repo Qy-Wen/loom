@@ -30,7 +30,7 @@ Notion-style block interaction such as block dragging, block toolbars and column
 
 Use [CodeMirror 6](https://codemirror.net/). It edits text directly and provides decorations, folding, input method support and an undo stack. The Markdown syntax tree comes from `@codemirror/lang-markdown`. Live rendering is done with decorations on the syntax tree, and wiki links are recognized as an extension of the syntax, with rules kept in line with `references.ts`.
 
-The editor lives only in the renderer process and does not enter `@loom/core`. The core provides saving only.
+The editor lives only in the renderer process and does not enter `@loom/core`. Saving is in `MarkdownStore` in the app main process, next to the canvas `CanvasStore`, and the core is not involved.
 
 ### Division with Existing Parsing
 

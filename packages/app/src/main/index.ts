@@ -55,6 +55,7 @@ import { ToolExecutor } from "@loom/agent/tools";
 import { createAppToolCatalog } from "./tools/catalog.ts";
 import { CanvasStore } from "./canvas/store.ts";
 import { saveCanvasBeforeWindowClose } from "./canvas/window-close.ts";
+import { MarkdownStore } from "./markdown/store.ts";
 import { WebToolsService } from "./web/web-service.ts";
 import {
 	mergeMcpServers,
@@ -199,6 +200,7 @@ protocol.registerSchemesAsPrivileged([
 
 const localCore = new LocalCore();
 const canvasStore = new CanvasStore(localCore);
+const markdownStore = new MarkdownStore(localCore);
 const toolCatalog = createAppToolCatalog(localCore, {
 	assets: {
 		embedAsset: embedAssetWithSettings,
@@ -673,6 +675,9 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.readCanvas, (_event, id: string) => localCore.runLibraryTask(() => canvasStore.read(id)));
 	ipcMain.handle(IPC.saveCanvas, (_event, id: string, document: unknown, revision: string) =>
 		localCore.runLibraryTask(() => canvasStore.save(id, document, revision)));
+	ipcMain.handle(IPC.readMarkdown, (_event, id: string) => localCore.runLibraryTask(() => markdownStore.read(id)));
+	ipcMain.handle(IPC.saveMarkdown, (_event, id: string, text: unknown, revision: unknown) =>
+		localCore.runLibraryTask(() => markdownStore.save(id, text, revision)));
 
 	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {
 		return localCore.renameFolder(relativePath, name);
