@@ -238,9 +238,17 @@ export class Library {
 
 	async createMarkdownFile(parentRelativePath: string): Promise<Asset> {
 		await this.requireDirectory(parentRelativePath);
-		const filename = await this.uniqueFilename(parentRelativePath, "Untitled", ".md");
-		const relativePath = joinRelative(parentRelativePath, filename);
-		await writeFile(this.folderAbsolute(relativePath), "");
+		let relativePath: string;
+		for (let index = 1; ; index++) {
+			const filename = index === 1 ? "Untitled.md" : `Untitled ${index}.md`;
+			relativePath = joinRelative(parentRelativePath, filename);
+			try {
+				await writeFile(this.folderAbsolute(relativePath), "", { flag: "wx" });
+				break;
+			} catch (error) {
+				if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+			}
+		}
 		const asset = await this.indexFile(relativePath);
 		if (!asset) throw new Error("Failed to create markdown file");
 		return asset;

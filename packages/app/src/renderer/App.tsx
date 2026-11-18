@@ -927,13 +927,27 @@ export function App(): React.JSX.Element {
 
 	async function showLibraryContextMenu(relativePath: string, fromTree = false): Promise<void> {
 		if (!library.rootPath) return;
+		const sameLibrary = detailRequests.current.libraryGuard();
 		setError(null);
 		try {
 			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
+			if (!sameLibrary()) return;
 			if (action === "new_folder") await createFolderIn(relativePath, fromTree);
 			else if (action === "paste") await pasteInto(relativePath);
+			else if (action === "new_md_file") {
+				const asset = await window.loom.createMarkdownFile(relativePath);
+				if (!sameLibrary()) return;
+				if (iconMode) {
+					setWorkbenchView("library");
+					setLocation({ kind: "folder", path: relativePath });
+					setPicked(singleSelection(assetKey(asset.assetId)));
+				} else {
+					selectAsset(asset.assetId);
+				}
+				setRenamingAssetId(asset.assetId);
+			}
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
 

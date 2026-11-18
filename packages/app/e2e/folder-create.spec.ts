@@ -1,6 +1,49 @@
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
+
+test("blank-area menus create and name Markdown files in the sidebar root and browsed folder", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "notes"));
+	await writeFile(join(root, "Untitled.md"), "keep the existing note");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("Untitled.md");
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "New Markdown File" && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+
+	const sidebar = page.locator(".library-sidebar");
+	const blank = sidebar.locator(".asset-list");
+	const bounds = (await blank.boundingBox())!;
+	await blank.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
+	const listEditor = sidebar.locator(".rename-editor input");
+	await expect(listEditor).toBeFocused();
+	await expect(listEditor).toHaveValue("Untitled 2");
+	await listEditor.fill("root note");
+	await listEditor.press("Enter");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("root note.md");
+	expect(await readFile(join(root, "Untitled.md"), "utf8")).toBe("keep the existing note");
+	expect(await readFile(join(root, "root note.md"), "utf8")).toBe("");
+
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await sidebar.locator(".folder-main").filter({ hasText: /^notes$/ }).click();
+	const browser = page.locator(".folder-browser");
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("notes");
+	await browser.locator(".browser-empty").click({ button: "right" });
+	const tileEditor = browser.locator(".browser-tile-rename input");
+	await expect(tileEditor).toBeFocused();
+	await expect(tileEditor).toHaveValue("Untitled");
+	await tileEditor.fill("folder note");
+	await tileEditor.press("Enter");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/folder note.md");
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("notes");
+	expect(await readFile(join(root, "notes", "folder note.md"), "utf8")).toBe("");
+});
 
 for (const display of ["Icons", "List"] as const) {
 	test(`${display.toLowerCase()} mode creates folders at the library root from the sidebar blank area`, async ({ loomPage: page, electronApp }) => {
