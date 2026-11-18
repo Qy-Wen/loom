@@ -5,6 +5,7 @@ import { search, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import { liveMarkdown, liveMarkdownTheme } from "./live-markdown.ts";
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -20,11 +21,11 @@ const theme = EditorView.theme({
 		height: "100%",
 		color: "var(--lm-text-body)",
 		backgroundColor: "var(--lm-surface-app)",
-		fontSize: "13px",
+		fontSize: "15px",
 	},
 	"&.cm-focused": { outline: "none" },
-	".cm-scroller": { fontFamily: "var(--lm-font-mono)", lineHeight: "1.65", padding: "18px 0" },
-	".cm-content": { padding: "0 26px", caretColor: "var(--lm-text-primary)" },
+	".cm-scroller": { fontFamily: '"Segoe UI", system-ui, sans-serif', lineHeight: "1.65", padding: "28px 0 64px" },
+	".cm-content": { maxWidth: "720px", margin: "0 auto", padding: "0 32px", caretColor: "var(--lm-text-primary)" },
 	".cm-line": { padding: 0 },
 	".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lm-text-primary)" },
 	"&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
@@ -56,14 +57,13 @@ const theme = EditorView.theme({
 	".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--lm-surface-active)" },
 });
 
-/** Markdown syntax shown as plain colored text for now. Live rendering replaces most of this. */
+/**
+ * Colors for what live rendering leaves visible as syntax: the symbols of the element under the cursor,
+ * addresses, quote and list markers. The look of rendered text comes from `live-markdown.ts`.
+ */
 const highlight = HighlightStyle.define([
-	{ tag: tags.heading, fontWeight: "var(--lm-weight-semibold)", color: "var(--lm-text-primary)" },
-	{ tag: tags.strong, fontWeight: "var(--lm-weight-semibold)" },
-	{ tag: tags.emphasis, fontStyle: "italic" },
-	{ tag: tags.strikethrough, textDecoration: "line-through" },
-	{ tag: [tags.link, tags.url], color: "var(--lm-text-accent)" },
-	{ tag: [tags.monospace, tags.quote], color: "var(--lm-text-secondary)" },
+	{ tag: [tags.url, tags.link], color: "var(--lm-text-secondary)" },
+	{ tag: tags.quote, color: "var(--lm-text-secondary)" },
 	{ tag: [tags.processingInstruction, tags.contentSeparator, tags.meta], color: "var(--lm-text-muted)" },
 ]);
 
@@ -83,6 +83,8 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		EditorView.lineWrapping,
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
+		liveMarkdown,
+		liveMarkdownTheme,
 		search({ top: false }),
 		theme,
 		EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" }),

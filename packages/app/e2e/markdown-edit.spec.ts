@@ -129,3 +129,52 @@ test("the Markdown editor undoes, finds, keeps composition intact and saves with
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("live rendering hides Markdown symbols away from the cursor and never changes the file", async ({ loomPage, electronApp }, testInfo) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-live-e2e-"));
+	const file = join(root, "live.md");
+	const original = "# 大标题\n\n正文有 **粗体**、*斜体*、`代码` 和 [链接](https://example.com)。\n\n## 二级\n\n末行\n";
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "live.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit live.md" });
+		await expect(box).toBeVisible();
+
+		// The cursor goes to the last line, away from everything else. What is visible is the rendered text.
+		await box.click();
+		await box.press("ControlOrMeta+End");
+		const shown = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => {
+			const copy = line.cloneNode(true) as HTMLElement;
+			copy.querySelectorAll(".cm-live-hidden").forEach((hiddenNode) => hiddenNode.remove());
+			return copy.textContent ?? "";
+		}).join("\n"));
+		await expect.poll(shown).toBe("大标题\n\n正文有 粗体、斜体、代码 和 链接。\n\n二级\n\n末行\n");
+		await expect(box.locator(".cm-live-strong")).toHaveText("粗体");
+		await expect(box.locator(".cm-live-h1")).toHaveCSS("font-size", /^2[0-9.]+px$/);
+		await testInfo.attach("away", { body: await loomPage.screenshot(), contentType: "image/png" });
+
+		// Moving into the bold text brings its symbols back.
+		await box.locator(".cm-live-strong").click();
+		await expect.poll(shown).toContain("**粗体**");
+		await expect.poll(shown).toContain("大标题");
+		await testInfo.attach("inside", { body: await loomPage.screenshot(), contentType: "image/png" });
+
+		// Looking, moving and clicking changed nothing on disk.
+		await new Promise((resolve) => setTimeout(resolve, 1500));
+		expect(await readFile(file, "utf8")).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
