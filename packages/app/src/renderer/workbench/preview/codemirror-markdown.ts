@@ -5,7 +5,7 @@ import { search, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { liveBlocks, liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -90,6 +90,7 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		liveLibrary,
 		liveHandlers({ openAsset: events.onOpenAsset } satisfies LiveHandlers),
 		liveMarkdown,
+		liveBlocks,
 		liveMarkdownTheme,
 		liveClicks,
 		search({ top: false }),

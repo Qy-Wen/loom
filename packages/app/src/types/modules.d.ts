@@ -11,6 +11,19 @@ declare module "markdown-it-texmath" {
 		outerSpace?: boolean;
 	}
 
+	interface TexmathRule {
+		name: string;
+		rex: RegExp;
+		tag: string;
+		displayMode?: boolean;
+		outerSpace?: boolean;
+		pre?(str: string, outerSpace: boolean, position: number): boolean;
+		post?(str: string, outerSpace: boolean, end: number): boolean;
+	}
+
 	function texmath(md: MarkdownIt, options?: TexmathOptions): void;
+	namespace texmath {
+		function mergeDelimiters(delimiters: string | string[]): { inline: TexmathRule[]; block: TexmathRule[] };
+	}
 	export default texmath;
 }

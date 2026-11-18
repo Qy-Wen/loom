@@ -4,7 +4,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import type { Asset } from "@loom/core";
-import { liveDecorations, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
+import { liveBlockDecorations, liveDecorations, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
 
 const asset = (assetId: string, relativePath: string): Asset => ({
 	assetId, relativePath, filename: relativePath.split("/").pop()!, type: relativePath.endsWith(".png") ? "image" : "text",
@@ -16,6 +16,21 @@ const LIBRARY = {
 };
 
 /** The decorations of `text` with the cursor at `cursor` (end of the text by default), as plain facts. */
+/** What the block layer replaces, as `text=>Widget`. */
+function blocks(text: string, cursor = text.length) {
+	const state = EditorState.create({
+		doc: text,
+		selection: EditorSelection.single(cursor),
+		extensions: [markdown({ base: markdownLanguage })],
+	});
+	ensureSyntaxTree(state, state.doc.length, 5000);
+	const out: string[] = [];
+	liveBlockDecorations(state).between(0, state.doc.length, (from, to, value) => {
+		out.push(`${text.slice(from, to)}=>${(value.spec as { widget: { constructor: { name: string } } }).widget.constructor.name}`);
+	});
+	return out;
+}
+
 function decorate(text: string, cursor = text.length, anchor = cursor, library = LIBRARY) {
 	let state = EditorState.create({
 		doc: text,
@@ -92,7 +107,8 @@ test("an unfinished element is left as typed", () => {
 test("code blocks and escaped text are not treated as Markdown", () => {
 	const text = "```\n**no** `x` # no\n```\n\n\\*\\*no\\*\\*";
 	const { hidden, classes } = decorate(text, text.length);
-	assert.deepEqual(hidden, []);
+	// Only the fence lines collapse; nothing inside the block or the escapes is read as Markdown.
+	assert.deepEqual(hidden, ["```", "```"]);
 	assert.deepEqual(classes, []);
 });
 
@@ -213,4 +229,72 @@ test("a horizontal rule becomes a line away from the cursor and shows its dashes
 test("a table row of dashes or a setext underline is not taken for a rule", () => {
 	const text = "标题\n---\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n末";
 	assert.deepEqual(decorate(text, text.length).widgets, []);
+});
+
+
+test("a fenced block gets a code background on every line and collapses its fence lines away from the cursor", () => {
+	const text = "```ts\nlet a = 1;\nlet b = 2;\n```\n\n末";
+	const away = decorate(text, text.length);
+	assert.deepEqual(away.lines, [
+		"cm-live-codeblock cm-live-codeblock-first cm-live-fence@1",
+		"cm-live-codeblock@2",
+		"cm-live-codeblock@3",
+		"cm-live-codeblock cm-live-codeblock-last cm-live-fence@4",
+	]);
+	assert.deepEqual(away.hidden, ["```ts", "```"]);
+	const inside = decorate(text, text.indexOf("let b"));
+	assert.deepEqual(inside.hidden, []);
+	assert.equal(inside.lines.some((entry) => entry.includes("cm-live-fence")), false);
+});
+
+test("an unclosed fence collapses only its opening line, and the cursor inside it brings the line back", () => {
+	const text = "前文\n\n```\n未闭合";
+	assert.deepEqual(decorate(text, 0).hidden, ["```"]);
+	assert.deepEqual(decorate(text, text.length).hidden, []);
+});
+
+test("an indented code block is styled as code", () => {
+	assert.deepEqual(decorate("    缩进\n\n末").lines, ["cm-live-codeblock@1"]);
+});
+
+test("inline formulas are drawn by KaTeX away from the cursor and show their source on it", () => {
+	const text = "能量 $E=mc^2$ 与 \\(a+b\\) 和 $$x$$ 行内\n\n末";
+	assert.deepEqual(decorate(text, text.length).widgets, ["$E=mc^2$=>MathWidget", "\\(a+b\\)=>MathWidget", "$$x$$=>MathWidget"]);
+	const inside = decorate(text, text.indexOf("mc"));
+	assert.deepEqual(inside.widgets, ["\\(a+b\\)=>MathWidget", "$$x$$=>MathWidget"]);
+	assert.deepEqual(inside.classes, ["cm-live-math-source:$E=mc^2$"]);
+});
+
+test("a dollar sign that does not open a formula is left alone", () => {
+	const text = "价格 $5 到 $10\n\n行内代码 `$x$`\n\n转义 \\$y\\$\n\n末";
+	assert.deepEqual(decorate(text, text.length).widgets, []);
+});
+
+test("a formula on its own lines is drawn as a block and not twice", () => {
+	const text = "上\n\n$$\na^2 + b^2\n$$\n\n末";
+	assert.deepEqual(blocks(text), ["$$\na^2 + b^2\n$$=>MathWidget"]);
+	assert.deepEqual(decorate(text, text.length).widgets, []);
+	assert.deepEqual(blocks(text, text.indexOf("a^2")), []);
+	assert.deepEqual(blocks("\\[x\\]\n\n末"), ["\\[x\\]=>MathWidget"]);
+});
+
+test("a mermaid fence is drawn as a diagram away from the cursor, other fences are not", () => {
+	const text = "```mermaid\ngraph TD; A-->B\n```\n\n```ts\nlet a;\n```\n\n末";
+	assert.deepEqual(blocks(text), ["```mermaid\ngraph TD; A-->B\n```=>MermaidWidget"]);
+	assert.deepEqual(blocks(text, 14), []);
+});
+
+test("the editor and the preview agree on which formulas are formulas", async () => {
+	const { renderMarkdown } = await import("../src/renderer/workbench/preview/markdown.ts");
+	const samples = [
+		"$E=mc^2$", "价格 $5 到 $10", "$$x$$", "\\(a+b\\)", "`$x$`", "\\$y\\$", "$ a $", "a$b$c", "3$x$", "$x$4",
+		"$$\na\n$$", "\\[\nb\n\\]", "```\n$x$\n```", "$x\\$", "$$", "$",
+	];
+	for (const sample of samples) {
+		const text = `${sample}\n\n末`;
+		const html = renderMarkdown(text, { fromRelativePath: "a.md", assets: [] });
+		const preview = (html.match(/class="katex"/g) ?? []).length;
+		const editor = decorate(text, text.length).widgets.filter((entry) => entry.endsWith("MathWidget")).length + blocks(text).filter((entry) => entry.endsWith("MathWidget")).length;
+		assert.equal(editor, preview, `${JSON.stringify(sample)}: editor drew ${editor}, preview ${preview}`);
+	}
 });

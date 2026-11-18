@@ -281,3 +281,63 @@ test("lists, task boxes, quotes and rules render live and a task box click edits
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("code blocks, formulas and diagrams render live and give the source back under the cursor", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-rich-e2e-"));
+	const file = join(root, "富.md");
+	const original = [
+		"# 富内容", "", "能量 $E=mc^2$ 守恒。", "", "$$", "a^2 + b^2 = c^2", "$$", "", "```ts", "const answer = 42;", "```", "",
+		"```mermaid", "graph TD; A-->B", "```", "",
+		"```mermaid", "flowchart LR", "  A[输入 Markdown] --> B{是不是围栏} --> C[画成代码块或图表] --> D[按普通段落排版]", "```", "", "末行", "",
+	].join("\n");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "富.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 富.md" });
+		await box.click();
+		await box.press("ControlOrMeta+End");
+
+		await expect(box.locator(".cm-live-math:not(.cm-live-math-block) .katex")).toHaveCount(1);
+		await expect(box.locator(".cm-live-math-block .katex-display")).toHaveCount(1);
+		await expect(box.locator(".cm-live-codeblock")).toHaveCount(3);
+		await expect(box.locator(".cm-live-mermaid svg")).toHaveCount(2, { timeout: 20_000 });
+		// A wide diagram scales to the page, as it does in the preview: not collapsed to a fraction of it.
+		await expect.poll(async () => {
+			const widths = await box.locator(".cm-live-mermaid svg").evaluateAll((all) => all.map((svg) => svg.getBoundingClientRect().width));
+			const page = (await box.locator(".cm-live-mermaid").last().boundingBox())!.width;
+			return widths[1] / page;
+		}).toBeGreaterThan(0.9);
+		// Once the diagram is drawn, the cursor at the end of the file sits on the last line, not where the
+		// placeholder used to end.
+		await expect.poll(async () => {
+			const cursor = await loomPage.locator(".cm-cursor").first().boundingBox();
+			const line = await box.locator(".cm-line").last().boundingBox();
+			return cursor && line ? Math.abs(cursor.y + cursor.height / 2 - (line.y + line.height / 2)) : 999;
+		}).toBeLessThan(10);
+
+		// A click on the diagram brings its text back, and a click on a formula does the same.
+		await box.locator(".cm-live-mermaid").first().click();
+		await expect(box.locator(".cm-live-mermaid")).toHaveCount(1);
+		await expect(box).toContainText("graph TD; A-->B");
+		await box.press("ControlOrMeta+End");
+		await expect(box.locator(".cm-live-mermaid svg")).toHaveCount(2, { timeout: 20_000 });
+		await box.locator(".cm-live-math-block").click();
+		await expect(box).toContainText("a^2 + b^2 = c^2");
+
+		expect(await readFile(file, "utf8")).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

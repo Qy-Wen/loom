@@ -5,6 +5,8 @@ import type { Asset } from "@loom/core";
 import { createAssetLookup, matchWikiLink, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf } from "./heading-key.ts";
+import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
+import { hydrateMermaid } from "./mermaid.ts";
 
 /**
  * Live rendering: Markdown shown in its final look while it is edited. The text itself never changes; only
@@ -61,13 +63,18 @@ class ImageWidget extends WidgetType {
 	eq(other: ImageWidget): boolean {
 		return other.src === this.src && other.alt === this.alt;
 	}
-	toDOM(): HTMLElement {
+	toDOM(view: EditorView): HTMLElement {
 		const image = document.createElement("img");
 		image.className = "cm-live-image";
 		image.src = this.src;
 		image.alt = this.alt;
 		image.draggable = false;
+		enterOnClick(image, view);
+		remeasureOnResize(image, view);
 		return image;
+	}
+	destroy(dom: HTMLElement): void {
+		stopRemeasuring(dom);
 	}
 }
 
@@ -115,6 +122,125 @@ class RuleWidget extends WidgetType {
 		const rule = document.createElement("div");
 		rule.className = "cm-live-rule";
 		return rule;
+	}
+}
+
+const observers = new WeakMap<HTMLElement, ResizeObserver>();
+
+/**
+ * A widget changes size after it is in the page: a picture finishes loading, a diagram is drawn, a font arrives.
+ * CodeMirror has to measure again then, or the cursor and the lines below are drawn at the old height.
+ */
+function remeasureOnResize(dom: HTMLElement, view: EditorView): void {
+	if (typeof ResizeObserver === "undefined") return;
+	const observer = new ResizeObserver(() => view.requestMeasure());
+	observer.observe(dom);
+	observers.set(dom, observer);
+}
+
+function stopRemeasuring(dom: HTMLElement): void {
+	observers.get(dom)?.disconnect();
+	observers.delete(dom);
+}
+
+/** Clicking a rendered widget puts the cursor in its text, which brings the source back for editing. */
+function enterOnClick(dom: HTMLElement, view: EditorView): void {
+	dom.addEventListener("mousedown", (event) => {
+		if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+		event.preventDefault();
+		view.dispatch({ selection: { anchor: view.posAtDOM(dom) }, scrollIntoView: false });
+		view.focus();
+	});
+}
+
+/** A formula, inline or on its own, rendered by KaTeX. */
+class MathWidget extends WidgetType {
+	readonly tex: string;
+	readonly display: boolean;
+	constructor(tex: string, display: boolean) {
+		super();
+		this.tex = tex;
+		this.display = display;
+	}
+	eq(other: MathWidget): boolean {
+		return other.tex === this.tex && other.display === this.display;
+	}
+	toDOM(view: EditorView): HTMLElement {
+		const node = document.createElement(this.display ? "div" : "span");
+		node.className = this.display ? "cm-live-math cm-live-math-block" : "cm-live-math";
+		node.innerHTML = renderMath(this.tex, this.display);
+		enterOnClick(node, view);
+		remeasureOnResize(node, view);
+		return node;
+	}
+	destroy(dom: HTMLElement): void {
+		stopRemeasuring(dom);
+	}
+	/** A block widget needs a height to be measured at all; CodeMirror ignores the measured height of one without. */
+	get estimatedHeight(): number {
+		return this.display ? 56 : -1;
+	}
+	ignoreEvent(): boolean {
+		return true;
+	}
+}
+
+/** Diagrams already drawn, by source. A diagram that comes back is built with its picture, so its height is right at once. */
+const drawnDiagrams = new Map<string, { html: string; failed: boolean; height: number }>();
+const MAX_DRAWN_DIAGRAMS = 50;
+
+/** Asks the block layer to rebuild. Sent once a diagram has been drawn, because its height is only known then. */
+const redrawBlocks = StateEffect.define<null>();
+
+/**
+ * A Mermaid diagram. It is drawn after the node is in the page. CodeMirror does not re-measure a block widget that
+ * grows afterwards, so once drawn, the picture is kept and the block is rebuilt around it.
+ */
+class MermaidWidget extends WidgetType {
+	readonly source: string;
+	readonly drawn: boolean;
+	constructor(source: string) {
+		super();
+		this.source = source;
+		this.drawn = drawnDiagrams.has(source);
+	}
+	eq(other: MermaidWidget): boolean {
+		return other.source === this.source && other.drawn === this.drawn;
+	}
+	get estimatedHeight(): number {
+		return drawnDiagrams.get(this.source)?.height ?? 160;
+	}
+	toDOM(view: EditorView): HTMLElement {
+		const node = document.createElement("div");
+		node.className = "cm-live-mermaid";
+		const diagram = document.createElement("pre");
+		diagram.className = "mermaid";
+		node.append(diagram);
+		enterOnClick(node, view);
+		const cached = drawnDiagrams.get(this.source);
+		if (cached) {
+			diagram.setAttribute("data-processed", "true");
+			if (cached.failed) diagram.classList.add("mermaid-failed");
+			diagram.innerHTML = cached.html;
+			return node;
+		}
+		diagram.textContent = this.source;
+		requestAnimationFrame(() => {
+			void hydrateMermaid(node).then(() => {
+				if (!node.isConnected || drawnDiagrams.has(this.source)) return;
+				if (drawnDiagrams.size >= MAX_DRAWN_DIAGRAMS) drawnDiagrams.delete(drawnDiagrams.keys().next().value!);
+				drawnDiagrams.set(this.source, {
+					html: diagram.innerHTML,
+					failed: diagram.classList.contains("mermaid-failed"),
+					height: Math.round(node.getBoundingClientRect().height),
+				});
+				view.dispatch({ effects: redrawBlocks.of(null) });
+			});
+		});
+		return node;
+	}
+	ignoreEvent(): boolean {
+		return true;
 	}
 }
 
@@ -190,6 +316,18 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				if (!onLine(node.from)) found.push(Decoration.replace({ widget: new CheckboxWidget(written !== "[ ]") }).range(node.from, node.to));
 				return;
 			}
+			if (node.name === "FencedCode") {
+				fencedCode(state, node.node, found);
+				return false;
+			}
+			if (node.name === "CodeBlock") {
+				for (let at = node.from; at <= node.to; ) {
+					const text = state.doc.lineAt(at);
+					found.push(Decoration.line({ class: "cm-live-codeblock" }).range(text.from));
+					at = text.to + 1;
+				}
+				return false;
+			}
 			const heading = HEADINGS[node.name];
 			if (heading) {
 				for (let at = node.from; at <= node.to; ) {
@@ -238,11 +376,125 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 	}
 	wikiLinks(state, from, to, found);
 	markdownImages(state, from, to, found);
+	inlineMath(state, from, to, found);
 	const builder = new RangeSetBuilder<Decoration>();
 	found.sort((a, b) => a.from - b.from || a.value.startSide - b.value.startSide || a.to - b.to);
 	for (const range of found) builder.add(range.from, range.to, range.value);
 	return builder.finish();
 }
+
+type SyntaxNodeRef = ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]>;
+
+/**
+ * A fenced block: every line gets the code background. The fence lines (``` and the language) collapse to a thin
+ * strip until the cursor is in the block. Diagrams are drawn in their place by {@link liveBlockDecorations}.
+ */
+function fencedCode(state: EditorState, node: SyntaxNodeRef, found: Range<Decoration>[]): void {
+	const first = state.doc.lineAt(node.from).number;
+	const last = state.doc.lineAt(node.to).number;
+	const marks = node.getChildren("CodeMark");
+	const closed = marks.length > 1;
+	const reveal = touched(state, node.from, node.to);
+	for (let number = first; number <= last; number++) {
+		const text = state.doc.line(number);
+		const fence = number === first || (closed && number === last);
+		const classes = ["cm-live-codeblock"];
+		if (number === first) classes.push("cm-live-codeblock-first");
+		if (number === last) classes.push("cm-live-codeblock-last");
+		if (fence && !reveal) classes.push("cm-live-fence");
+		found.push(Decoration.line({ class: classes.join(" ") }).range(text.from));
+		if (fence && !reveal) {
+			const start = Math.max(text.from, number === first ? node.from : marks[marks.length - 1].from);
+			if (start < text.to) found.push(hidden.range(start, text.to));
+		}
+	}
+}
+
+/** Formulas written on one line: `$x$`, `$$x$$` and `\(x\)`. Found with the same rules the preview runs. */
+function inlineMath(state: EditorState, from: number, to: number, found: Range<Decoration>[]): void {
+	const tree = syntaxTree(state);
+	const first = state.doc.lineAt(from).from;
+	const last = state.doc.lineAt(to).to;
+	for (let at = first; at <= last; ) {
+		const line = state.doc.lineAt(at);
+		at = line.to + 1;
+		if (!line.text.includes("$") && !line.text.includes("\\(")) continue;
+		for (let offset = 0; offset < line.text.length; offset++) {
+			const char = line.text[offset];
+			if (char !== "$" && !(char === "\\" && line.text[offset + 1] === "(")) continue;
+			const match = matchInlineMath(line.text, offset);
+			if (!match) continue;
+			const start = line.from + offset;
+			const end = line.from + match.end;
+			offset = match.end - 1; // Whatever sits inside a formula is not another one.
+			if (insideCode(tree, start)) continue;
+			// A formula that makes up a whole paragraph is the block's, which draws it.
+			let paragraph: SyntaxNodeRef | null = tree.resolveInner(start, 1);
+			while (paragraph && paragraph.name !== "Paragraph") paragraph = paragraph.parent;
+			if (paragraph && mathBlock(state, paragraph)) continue;
+			if (touched(state, start, end)) {
+				found.push(Decoration.mark({ class: "cm-live-math-source" }).range(start, end));
+			} else {
+				found.push(Decoration.replace({ widget: new MathWidget(match.tex, match.display) }).range(start, end));
+			}
+		}
+	}
+}
+
+/** True when `position` is in code, where nothing is Markdown. Unlike {@link insideLiteral}, an escape does not count. */
+function insideCode(tree: ReturnType<typeof syntaxTree>, position: number): boolean {
+	for (let node: SyntaxNodeRef | null = tree.resolveInner(position, 1); node; node = node.parent) {
+		if (node.name === "InlineCode" || node.name === "FencedCode" || node.name === "CodeBlock" || node.name === "CodeText" || node.name === "URL") return true;
+	}
+	return false;
+}
+
+/** The formula a paragraph consists of, when it is a block of its own (`$$ … $$` over one or more lines). */
+function mathBlock(state: EditorState, paragraph: SyntaxNodeRef): { tex: string } | null {
+	if (paragraph.parent?.name !== "Document") return null;
+	const text = state.doc.sliceString(paragraph.from, paragraph.to);
+	const match = matchBlockMath(text);
+	return match && match.end === text.length ? { tex: match.tex } : null;
+}
+
+/**
+ * Whole blocks drawn in place of their text: a formula on its own lines, and a Mermaid diagram. A replacement
+ * that spans lines may only come from a state field, so this is kept apart from {@link liveDecorations}.
+ */
+export function liveBlockDecorations(state: EditorState): DecorationSet {
+	const builder = new RangeSetBuilder<Decoration>();
+	syntaxTree(state).iterate({
+		enter(node) {
+			if (node.name === "Document") return;
+			if (node.name === "Paragraph") {
+				const math = mathBlock(state, node.node);
+				if (math && !touched(state, node.from, node.to)) {
+					builder.add(node.from, node.to, Decoration.replace({ widget: new MathWidget(math.tex, true), block: true }));
+				}
+			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
+				const info = node.node.getChild("CodeInfo");
+				const language = info ? state.doc.sliceString(info.from, info.to).trim().split(/\s+/)[0]?.toLowerCase() : "";
+				const code = node.node.getChild("CodeText");
+				if (language === "mermaid" && code && node.node.getChildren("CodeMark").length > 1 && !touched(state, node.from, node.to)) {
+					builder.add(node.from, node.to, Decoration.replace({ widget: new MermaidWidget(state.doc.sliceString(code.from, code.to)), block: true }));
+				}
+			}
+			return false;
+		},
+	});
+	return builder.finish();
+}
+
+/** Draws {@link liveBlockDecorations}. Add it next to {@link liveMarkdown}. */
+export const liveBlocks = StateField.define<DecorationSet>({
+	create: (state) => liveBlockDecorations(state),
+	update(value, transaction) {
+		const treeChanged = syntaxTree(transaction.startState) !== syntaxTree(transaction.state);
+		const redraw = transaction.effects.some((effect) => effect.is(redrawBlocks));
+		return transaction.docChanged || transaction.selection || treeChanged || redraw ? liveBlockDecorations(transaction.state) : value;
+	},
+	provide: (field) => EditorView.decorations.from(field),
+});
 
 /** Node types whose text is never read as Markdown inline syntax. */
 const LITERAL = new Set(["InlineCode", "FencedCode", "CodeBlock", "CommentBlock", "HTMLBlock", "HTMLTag", "Escape", "URL", "Autolink", "LinkReference", "CodeText"]);
@@ -381,6 +633,28 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-broken": { whiteSpace: "nowrap", color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
 	".cm-live-wiki": { cursor: "text" },
 	".cm-live-image": { maxWidth: "100%", maxHeight: "360px", width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
+	".cm-live-codeblock": {
+		backgroundColor: "var(--lm-surface-hover)",
+		fontFamily: "var(--lm-font-mono)",
+		fontSize: "0.88em",
+		padding: "0 14px",
+	},
+	".cm-live-codeblock-first": { borderTopLeftRadius: "var(--lm-radius-sm)", borderTopRightRadius: "var(--lm-radius-sm)" },
+	".cm-live-codeblock-last": { borderBottomLeftRadius: "var(--lm-radius-sm)", borderBottomRightRadius: "var(--lm-radius-sm)" },
+	".cm-live-fence": { height: "0.7em", lineHeight: "0.7em", overflow: "hidden" },
+	".cm-live-math": { cursor: "text" },
+	".cm-live-math-block": { margin: "0.4em 0", overflowX: "auto", textAlign: "center" },
+	".cm-live-math-source": { fontFamily: "var(--lm-font-mono)", fontSize: "0.9em", color: "var(--lm-text-secondary)" },
+	// A block, not a flex row: the SVG is `width: 100%`, which a shrink-to-fit parent would collapse to a few hundred pixels.
+	".cm-live-mermaid": { margin: "0.4em 0", textAlign: "center", cursor: "text" },
+	".cm-live-mermaid pre.mermaid": { margin: "0", padding: "var(--lm-space-4) 0", overflow: "visible", background: "transparent" },
+	".cm-live-mermaid pre.mermaid:not([data-processed]), .cm-live-mermaid pre.mermaid.mermaid-failed": {
+		color: "var(--lm-text-muted)",
+		fontSize: "var(--lm-text-size-sm)",
+		textAlign: "left",
+		whiteSpace: "pre-wrap",
+	},
+	".cm-live-mermaid svg": { maxWidth: "100%", height: "auto" },
 	".cm-live-quote": { color: "var(--lm-text-secondary)" },
 	".cm-live-bullet": { display: "inline-block", width: "1em", textAlign: "center", color: "var(--lm-text-secondary)" },
 	".cm-live-checkbox": {

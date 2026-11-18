@@ -5,6 +5,7 @@ import katex from "katex";
 import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf, headingKey } from "./heading-key.ts";
+import { KATEX_OPTIONS, MATH_DELIMITERS } from "./math.ts";
 
 export { resolveLibraryHref };
 export { headingKey } from "./heading-key.ts";
@@ -35,8 +36,8 @@ function lookupOf(context: MarkdownRenderContext): AssetLookup {
 const markdown = new MarkdownIt({ html: false, breaks: true, linkify: true });
 markdown.use(texmath, {
 	engine: katex,
-	delimiters: ["dollars", "brackets"],
-	katexOptions: { throwOnError: false },
+	delimiters: MATH_DELIMITERS,
+	katexOptions: { ...KATEX_OPTIONS },
 });
 
 const defaultLinkOpen = markdown.renderer.rules.link_open ?? ((tokens, idx, options, _env, self) => {
