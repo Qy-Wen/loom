@@ -1,4 +1,5 @@
 import type { CanvasDocument } from "../../../shared/canvas.ts";
+import { addPendingSave, removePendingSave } from "../pending-saves.ts";
 
 const pendingSaves = new Map<string, CanvasSave>();
 const SAVE_DELAY = 240;
@@ -25,7 +26,7 @@ export class CanvasSave {
 
 	enqueue(document: CanvasDocument): void {
 		this.pending = document;
-		if (!pendingSaves.size) window.loom.setCanvasDirty(true);
+		addPendingSave(this);
 		pendingSaves.set(this.id, this);
 		if (this.error) return;
 		clearTimeout(this.timer);
@@ -79,16 +80,12 @@ export class CanvasSave {
 	}
 
 	private clearPending(): void {
-		if (pendingSaves.get(this.id) === this && pendingSaves.delete(this.id) && !pendingSaves.size) window.loom.setCanvasDirty(false);
+		if (pendingSaves.get(this.id) === this && pendingSaves.delete(this.id)) removePendingSave(this);
 	}
 }
 
 export function pendingCanvasSave(id: string): CanvasSave | undefined {
 	return pendingSaves.get(id);
-}
-
-export async function flushCanvasSaves(): Promise<void> {
-	await Promise.all([...pendingSaves.values()].map((save) => save.flush()));
 }
 
 export function pruneCanvasSaves(canvasIds: ReadonlySet<string>): void {

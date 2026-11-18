@@ -301,3 +301,47 @@
 	font-size: var(--lm-text-size-2xl);
 	font-weight: var(--lm-weight-semibold);
 }
+
+.markdown-source-editor {
+	display: flex;
+	min-height: 0;
+	flex: 1;
+	flex-direction: column;
+}
+
+.markdown-source-input {
+	width: 100%;
+	box-sizing: border-box;
+	resize: none;
+	border: 0;
+	outline: none;
+	white-space: pre-wrap;
+}
+
+.markdown-editor-status {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--lm-space-4);
+	min-height: var(--lm-size-lg);
+	padding: 0 var(--lm-space-5);
+	border-top: 1px solid var(--lm-border-default);
+	color: var(--lm-text-muted);
+	background: var(--lm-surface-subtle);
+	font-size: var(--lm-text-size-sm);
+}
+
+.markdown-editor-status button {
+	height: var(--lm-size-md);
+	padding: 0 var(--lm-space-4);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-primary);
+	background: var(--lm-surface-app);
+	cursor: pointer;
+	font-size: var(--lm-text-size-sm);
+}
+
+.markdown-editor-problem {
+	color: var(--lm-text-danger);
+}

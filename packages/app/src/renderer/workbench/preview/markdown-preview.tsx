@@ -4,6 +4,7 @@ import { useLocale } from "../../locale.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { requestHeading, scrollToHeading, takePendingHeading } from "./heading-anchor.ts";
 import { ANCHOR_ATTRIBUTE, ASSET_LINK_ATTRIBUTE, renderMarkdown } from "./markdown.ts";
+import { MarkdownSourceEditor } from "./markdown-source-editor.tsx";
 import { hydrateMermaid } from "./mermaid.ts";
 
 type MarkdownMode = "preview" | "source";
@@ -83,12 +84,17 @@ export function MarkdownPreview({
 	const [diagramsKey, setDiagramsKey] = useState(0);
 	const onHydrated = useCallback(() => setDiagramsKey((key) => key + 1), []);
 
+	// Another file starts from a blank view; the same file refreshes in place, so saving from the editor
+	// (which changes its size and address) does not tear the view down.
 	useEffect(() => {
-		const controller = new AbortController();
 		setContent(null);
 		setFailure(null);
-		setTooLarge(false);
 		setMode("preview");
+	}, [asset.assetId]);
+
+	useEffect(() => {
+		const controller = new AbortController();
+		setTooLarge(false);
 		if (asset.size > 2 * 1_024 * 1_024) {
 			setTooLarge(true);
 			return () => controller.abort();
@@ -98,7 +104,10 @@ export function MarkdownPreview({
 				if (!response.ok) throw new Error(`Preview request failed (${response.status})`);
 				return response.text();
 			})
-			.then(setContent)
+			.then((text) => {
+				setFailure(null);
+				setContent(text);
+			})
 			.catch((cause) => {
 				if (!controller.signal.aborted) {
 					setFailure(cause instanceof Error ? cause.message : String(cause));
@@ -140,13 +149,16 @@ export function MarkdownPreview({
 					{t.preview.source}
 				</button>
 			</div>
-			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${mode}:${html}:${diagramsKey}`} />
-			<div
-				className={mode === "preview" ? "markdown-preview thin-scroll" : "text-preview thin-scroll"}
-				ref={contentRef}
-			>
-				{mode === "preview" ? <MarkdownRenderedBody html={html} onHydrated={onHydrated} onOpenAsset={onOpenAsset} assetId={asset.assetId} /> : content}
-			</div>
+			{mode === "preview" ? (
+				<>
+					<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={`${html}:${diagramsKey}`} />
+					<div className="markdown-preview thin-scroll" ref={contentRef}>
+						<MarkdownRenderedBody html={html} onHydrated={onHydrated} onOpenAsset={onOpenAsset} assetId={asset.assetId} />
+					</div>
+				</>
+			) : (
+				<MarkdownSourceEditor assetId={asset.assetId} filename={asset.filename} modifiedAt={asset.modifiedAt} />
+			)}
 		</div>
 	);
 }

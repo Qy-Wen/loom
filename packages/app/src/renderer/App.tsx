@@ -70,7 +70,8 @@ import { HelpDialog } from "./help/help-dialog.tsx";
 import { AssetPreview, PreviewActions } from "./workbench/preview/asset-preview.tsx";
 import { FolderBrowser } from "./workbench/browser/folder-browser.tsx";
 import { PreviewOverlay } from "./workbench/browser/preview-overlay.tsx";
-import { flushCanvasSaves, pruneCanvasSaves } from "./workbench/canvas/canvas-saves.ts";
+import { pruneCanvasSaves } from "./workbench/canvas/canvas-saves.ts";
+import { flushPendingSaves } from "./workbench/pending-saves.ts";
 import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type BrowseLocation } from "./workbench/browser/folder-browser-model.ts";
 import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-display.ts";
 import { TableView } from "./workbench/table/table-view.tsx";
@@ -275,7 +276,7 @@ export function App(): React.JSX.Element {
 	useEffect(() => pruneCanvasSaves(canvasIds), [canvasIds]);
 	useEffect(() => window.loom.onFlushCanvasBeforeClose(async () => {
 		try {
-			await flushCanvasSaves();
+			await flushPendingSaves();
 			return true;
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
@@ -1371,7 +1372,7 @@ export function App(): React.JSX.Element {
 		setOpening(true);
 		setError(null);
 		try {
-			await flushCanvasSaves();
+			await flushPendingSaves();
 			const snapshot = await window.loom.openLibrary();
 			if (snapshot) {
 				const propertySnapshot = await window.loom.getPropertySnapshot();

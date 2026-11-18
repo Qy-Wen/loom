@@ -4,7 +4,7 @@ import { useLocale } from "../locale.tsx";
 import { CloudProviderFields } from "./settings-cloud-providers.tsx";
 import { TooltipText } from "../components/tooltip-text.tsx";
 import { CloudPullPreviewPanel } from "./settings-cloud-pull.tsx";
-import { flushCanvasSaves } from "../workbench/canvas/canvas-saves.ts";
+import { flushPendingSaves } from "../workbench/pending-saves.ts";
 
 const size = (bytes: number) => bytes < 1024 ? `${bytes} B` : bytes < 1024 ** 2 ? `${(bytes / 1024).toFixed(1)} KB` : bytes < 1024 ** 3 ? `${(bytes / 1024 ** 2).toFixed(1)} MB` : `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 
@@ -104,7 +104,7 @@ export function SettingsCloud(): React.JSX.Element {
 		});
 	}
 	const start = (operation: CloudJob["operation"], id?: string) => run(async () => {
-		if (operation === "backup" || operation === "preview" || operation === "pull") await flushCanvasSaves();
+		if (operation === "backup" || operation === "preview" || operation === "pull") await flushPendingSaves();
 		await window.loom.startCloudBackup(operation, id);
 	});
 	const local = view?.localLibrary;
@@ -112,7 +112,7 @@ export function SettingsCloud(): React.JSX.Element {
 	const job = view?.job;
 	const enabled = view?.config.provider !== "none" && config?.provider !== "none";
 	const progress = job && !(job.operation === "preview" && job.status === "completed") && <JobProgress job={job} busy={!!busy} onCancel={() => void run(() => window.loom.cancelCloudBackup())} onOpen={() => void run(async () => {
-		await flushCanvasSaves();
+		await flushPendingSaves();
 		await window.loom.openRestoredCloudBackup();
 	})} />;
 	return <div className="settings-form cloud-settings">
@@ -134,7 +134,7 @@ export function SettingsCloud(): React.JSX.Element {
 						</div>
 						{job && job.operation !== "test" && job.operation !== "list" && progress}
 						{view.pull && job?.status === "running" && job.phase === "conflicts" ? <CloudPullPreviewPanel preview={view.pull} disabled={pending} onApply={(choices) => void run(async () => {
-							await flushCanvasSaves();
+							await flushPendingSaves();
 							await window.loom.resolveCloudPull(view.pull!.id, choices);
 						})} /> : local.preview && <ChangePreview preview={local.preview} />}
 					</> : <div className="cloud-empty"><CloudGlyph kind="folder" /><p>{text.noLibrary}</p></div>}
