@@ -1,0 +1,102 @@
+**English** | [简体中文](./EDITOR.zh-CN.md)
+
+# Markdown Editing
+
+Edit the `.md` files of a library directly in Loom. A file is always plain Markdown text. Agents, external editors, cloud backup and [file references](./GRAPH-LINKS.md) all read it directly, so the editor introduces no storage format of its own.
+
+## Reference
+
+| Product | Approach |
+| --- | --- |
+| Typora, Obsidian live preview | Edit the Markdown source directly and use decorations to show headings, bold text and links in their final look, with the raw symbols shown on the line under the cursor. The text is the only data, so nothing is rewritten on a round trip. |
+| Notion | The document is a tree of blocks, and Markdown is only for import and export. Every save regenerates the text from the block tree and normalizes the original formatting, which does not suit a case where the file itself is the data. |
+| VS Code | Manual save by default, with the tab marking unsaved changes, and optional delayed or on-blur auto save. When the file on disk changes externally, an editor with no unsaved content reloads silently, and one with unsaved content prompts at save time. |
+
+Loom takes the first: live preview over the source text.
+
+## First Version
+
+1. **Edit directly in the preview tab.** The existing Preview and Source tabs become one editing view plus Source as a fallback, so there is no switching of modes before editing.
+2. **Live rendering.** Headings, bold, italic, inline code, links, lists, quotes, task lists and rules show in their final look while editing. When the cursor enters an element, its Markdown symbols are shown.
+3. **Reuse existing rendering.** Path resolution for wiki links and `![[embeds]]`, red error marks, click-through and heading anchors reuse the one resolver from [file references](./GRAPH-LINKS.md). Formulas, Mermaid, tables and images show as rendered output and expand to source when the cursor enters them.
+4. **Auto save.** Save about one second after typing stops, and immediately on blur or when switching tabs. The tab shows an unsaved mark.
+5. **No change, no write.** The file is written only when its content really changed. The editor never reflows text the user did not touch.
+6. **Slash commands.** Typing `/` at the start of a line opens a menu that inserts headings, lists, tasks, code blocks, tables, quotes, rules, formulas and Mermaid, and links to other assets. The menu only inserts Markdown text.
+7. **Undo and redo.** The undo stack of the editing session is kept, and saving does not clear it.
+
+Notion-style block interaction such as block dragging, block toolbars and columns needs a block-tree data model, which conflicts with the file being the only data, so the first version does not include it.
+
+## Editor
+
+Use [CodeMirror 6](https://codemirror.net/). It edits text directly and provides decorations, folding, input method support and an undo stack. The Markdown syntax tree comes from `@codemirror/lang-markdown`. Live rendering is done with decorations on the syntax tree, and wiki links are recognized as an extension of the syntax, with rules kept in line with `references.ts`.
+
+The editor lives only in the renderer process and does not enter `@loom/core`. The core provides saving only.
+
+### Division with Existing Parsing
+
+The project will have two Markdown parsers, each doing its own job and never calling the other:
+
+| Parser | Responsible for |
+| --- | --- |
+| markdown-it (with texmath, KaTeX and Mermaid) | Rendering HTML: the read-only preview, chat and canvas cards; and the reference extraction in the core. |
+| Lezer (`@codemirror/lang-markdown`) | Only in the editing view, producing a syntax tree with source offsets for decorations. The inline tokens of markdown-it carry no offsets, so they cannot do this. |
+
+They are not unified. Lezer does not produce HTML, so unifying would require a rendering layer written from scratch, and the risk outweighs the gain. Swapping only the reference extraction to Lezer would remove the guarantee that the file opened from the preview matches the graph.
+
+Because the same syntax is recognized in two places, drift is contained as follows:
+
+1. **Wiki links have one rule:** `matchWikiLink` and `findWikiLinks` in `references.ts`. The preview's inline rule, the reference extraction and the editor decorations all call it, and none writes its own regular expression. Path resolution is shared as well.
+2. **Formulas and Mermaid are not reimplemented:** when the cursor is outside them, the editor calls the existing KaTeX and Mermaid rendering, and the `$` delimiter rules match texmath.
+3. **Ordinary syntax is held by sample tests:** the same set of Markdown snippets is checked for the links that the preview, the reference extraction and the editor each recognize, covering code blocks, inline code, escapes and tables.
+4. **Lazy loading:** the editing view loads on demand like `MarkdownPreview`, so CodeMirror does not affect startup size.
+
+## Saving and Conflicts
+
+Follow what the canvas `CanvasStore` does, without a separate mechanism:
+
+1. A read returns the text and a revision (a content hash).
+2. A save carries the revision from the read. If the content on disk has changed, it returns a conflict and writes nothing.
+3. The write is atomic, and file identity and timestamps are checked again before the commit, so a change between the read and the write by an outside program is detected.
+4. A serial queue runs saves for one file in order.
+5. The size limit matches the preview (2 MiB). A larger file is read-only and says so.
+
+After a write, the library watcher triggers a [reference update](./GRAPH-LINKS.md#reference-extraction-and-updates) and the graph follows, so the save path needs no extra handling.
+
+Encoding and line endings: read and write UTF-8, keep the file's existing line-ending style and leading BOM, and use `\n` for new content.
+
+## External Changes
+
+The rules match VS Code:
+
+| Editor state | When the file on disk changes |
+| --- | --- |
+| No unsaved content | Reload silently and keep the scroll position. |
+| Unsaved content | Do not interrupt typing. A conflict is found at save time and the user is told "The file was modified on disk" and chooses Overwrite or Reload. |
+
+Agent writes, external editors and cloud pulls are all treated as external changes. Renaming or moving the asset does not affect editing. If it is deleted, the editing content is kept and the user is prompted to save it elsewhere.
+
+## Relation to Other Features
+
+- **File references:** After a save, the existing reference extraction updates the graph. A missing target shows a red mark in the editor, the same as in the preview.
+- **Find:** The existing preview find keeps working.
+- **Canvas:** A Markdown card on a canvas is still a read-only excerpt, and the editing view opened by double-click can modify it.
+- **Chat preview:** Chat and canvas cards keep the existing read-only rendering, and the editor does not replace it.
+
+## Verification
+
+- Open a file, type nothing, and switch away: the bytes and modification time of the file on disk do not change.
+- After editing one paragraph, the rest of the text is byte-for-byte unchanged, including `*` versus `-` list markers, table alignment spaces and trailing blank lines.
+- A file with a BOM or `\r\n` keeps its style after saving.
+- Change the same file externally during editing: with no unsaved content the new content loads automatically, and with unsaved content the save reports a conflict. After Overwrite the disk holds the editor's content, and after Reload the edits are discarded.
+- With Chinese pinyin and Japanese input methods, composition does not trigger a save and does not lose characters.
+- Edit the path of `[[Product/Notes]]` and save: the edge in the graph changes accordingly, and when the target is missing the red mark matches the preview.
+- A file over 2 MiB is read-only with a notice.
+- Saving, external changes and line endings pass the same tests on Windows and macOS.
+
+## Not Included
+
+- Block dragging, block toolbars, columns and database views.
+- Multi-user collaborative editing.
+- Comments and revision history.
+- A YAML properties panel, in line with the scope of the first version of file references.
+- Pasting an image and saving it into the library automatically, which can be evaluated later as a separate feature.
