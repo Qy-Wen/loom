@@ -44,7 +44,7 @@ import { composerAssetsAtSend, takeComposerAssets } from "./composer/composer-as
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer/composer-library-pick.ts";
 import { stageComposerInput, takeComposerImages } from "./composer/composer-images.ts";
 import { importComposerFiles } from "./composer/composer-import.ts";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from "electron";
 import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
 import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from "./dev-trace-window.ts";
 import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
@@ -75,7 +75,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
@@ -149,6 +149,7 @@ app.on("second-instance", () => { BrowserWindow.getAllWindows()[0]?.focus(); });
 
 type ContextMenuItem<T extends string> =
 	| { type: "separator" }
+	| { label: string; submenu: ContextMenuItem<T>[] }
 	| { label: string; enabled?: boolean; checked?: boolean; click: () => T };
 
 async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
@@ -173,6 +174,25 @@ function editorMenuItems(t: Messages, state: EditorContextState): ContextMenuIte
 	];
 }
 
+function markdownMenuItems(t: Messages, state: MarkdownContextState): ContextMenuItem<MarkdownContextAction>[] {
+	const items: ContextMenuItem<MarkdownContextAction>[] = editorMenuItems(t, state);
+	if (state.readOnly) return items;
+	const labels = { ...t.preview.insertCommands, ...t.menu.format };
+	const group = (formats: readonly MarkdownFormat[]): ContextMenuItem<MarkdownFormat>[] => formats.flatMap((format) => {
+		const checked = state.formats[format];
+		return checked === undefined ? [] : [{ label: labels[format], checked, click: () => format }];
+	});
+	const inline = group(markdownFormats.inline);
+	const block = group(markdownFormats.block);
+	if (inline.length || block.length) {
+		const submenu: ContextMenuItem<MarkdownFormat>[] = [...inline];
+		if (inline.length && block.length) submenu.push({ type: "separator" });
+		submenu.push(...block);
+		items.push({ type: "separator" }, { label: t.menu.format.label, submenu });
+	}
+	return items;
+}
+
 function popupContextMenu<T extends string>(
 	event: IpcMainInvokeEvent,
 	items: ContextMenuItem<T>[],
@@ -180,21 +200,17 @@ function popupContextMenu<T extends string>(
 	const owner = BrowserWindow.fromWebContents(event.sender) ?? undefined;
 	return new Promise((resolveAction) => {
 		let chosen: T | null = null;
-		const menu = Menu.buildFromTemplate(
-			items.map((item) => {
-				if ("label" in item) {
-					return {
-						label: item.label,
-						enabled: item.enabled,
-						...(item.checked === undefined ? {} : { type: "checkbox" as const, checked: item.checked }),
-						click: () => {
-							chosen = item.click();
-						},
-					};
-				}
-				return { type: "separator" as const };
-			}),
-		);
+		const toTemplate = (item: ContextMenuItem<T>): MenuItemConstructorOptions => {
+			if (!("label" in item)) return { type: "separator" };
+			if ("submenu" in item) return { label: item.label, submenu: item.submenu.map(toTemplate) };
+			return {
+				label: item.label,
+				enabled: item.enabled,
+				...(item.checked === undefined ? {} : { type: "checkbox", checked: item.checked }),
+				click: () => { chosen = item.click(); },
+			};
+		};
+		const menu = Menu.buildFromTemplate(items.map(toTemplate));
 		menu.popup({
 			window: owner,
 			callback: () => {
@@ -662,9 +678,9 @@ function registerIpc(): void {
 		},
 	);
 
-	ipcMain.handle(IPC.showEditorContextMenu, async (event, state: EditorContextState): Promise<EditorContextAction | null> => {
+	ipcMain.handle(IPC.showEditorContextMenu, async (event, state: MarkdownContextState): Promise<MarkdownContextAction | null> => {
 		const { t } = await uiCopy();
-		return popupContextMenu(event, editorMenuItems(t, state));
+		return popupContextMenu(event, markdownMenuItems(t, state));
 	});
 	// The renderer restores the exact editor/cell focus before asking Chromium to send a real clipboard event.
 	ipcMain.handle(IPC.runEditorClipboard, (event, action: EditorClipboardAction) => {

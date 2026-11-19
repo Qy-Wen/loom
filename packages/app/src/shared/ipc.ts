@@ -103,6 +103,18 @@ export interface EditorContextState {
 	canRedo: boolean;
 	canCopy: boolean;
 }
+export const markdownFormats = {
+	inline: ["bold", "italic", "strikethrough", "inlineCode"],
+	block: ["paragraph", "heading1", "heading2", "heading3", "bullet", "ordered", "task", "quote"],
+} as const;
+export type MarkdownInlineFormat = typeof markdownFormats.inline[number];
+export type MarkdownBlockFormat = typeof markdownFormats.block[number];
+export type MarkdownFormat = MarkdownInlineFormat | MarkdownBlockFormat;
+export type MarkdownContextAction = EditorContextAction | MarkdownFormat;
+export interface MarkdownContextState extends EditorContextState {
+	/** Available formatting actions and whether the full selection already has each format. */
+	formats: Partial<Record<MarkdownFormat, boolean>>;
+}
 /** A table menu includes text editing and the row/column operations allowed by its selection. */
 export type TableContextAction = EditorContextAction | "add_row_above" | "add_row_below" | "add_column_left" | "add_column_right" | "delete_row" | "delete_column" | "align_left" | "align_center" | "align_right";
 export interface TableContextState extends EditorContextState {
@@ -285,7 +297,7 @@ export interface LoomApi {
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
-	showEditorContextMenu: (state: EditorContextState) => Promise<EditorContextAction | null>;
+	showEditorContextMenu: (state: MarkdownContextState) => Promise<MarkdownContextAction | null>;
 	/** Use Chromium's clipboard events, including CodeMirror and table-specific formats. */
 	runEditorClipboard: (action: EditorClipboardAction) => Promise<void>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;

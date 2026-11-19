@@ -1,5 +1,5 @@
 import { closeCompletion, completionStatus } from "@codemirror/autocomplete";
-import { defaultKeymap, history, historyKeymap, indentWithTab, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { closeSearchPanel, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
@@ -9,9 +9,10 @@ import { tags } from "@lezer/highlight";
 import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
+import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
-import type { EditorClipboardAction, EditorContextAction, EditorContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
+import type { EditorClipboardAction, MarkdownContextAction, MarkdownContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
 import type { Messages } from "../../../shared/locale.ts";
 
 export type MarkdownMode = "edit" | "read" | "source";
@@ -40,7 +41,7 @@ export interface MarkdownEditorLabels {
 /** What the editor asks the window for. */
 export interface MarkdownEditorHost {
 	chooseTableAction: TableHooks["chooseAction"];
-	chooseTextAction(state: EditorContextState): Promise<EditorContextAction | null>;
+	chooseTextAction(state: MarkdownContextState): Promise<MarkdownContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
 	pickAssets(): Promise<UiSelectionDraft[]>;
 }
@@ -199,16 +200,22 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		event.preventDefault();
 		view.focus();
 		const state = view.state;
+		const plans = markdownFormatPlans(state);
 		void host.chooseTextAction({
 			readOnly: state.readOnly, canUndo: undoDepth(state) > 0, canRedo: redoDepth(state) > 0,
 			canCopy: state.selection.ranges.some((range) => !range.empty || !!state.doc.lineAt(range.head).text),
+			formats: Object.fromEntries([...plans].map(([format, plan]) => [format, plan.checked])),
 		}).then(async (action) => {
 			if (!action || !view.dom.isConnected || (view.state.readOnly && action !== "copy" && action !== "select_all")) return;
 			view.focus();
 			if (action === "undo") undo(view);
 			else if (action === "redo") redo(view);
 			else if (action === "select_all") selectAll(view);
-			else await host.clipboard(action);
+			else if (action === "cut" || action === "copy" || action === "paste") await host.clipboard(action);
+			else if (view.state.doc === state.doc && view.state.selection.eq(state.selection)) {
+				const edit = plans.get(action)?.transaction();
+				if (edit) view.dispatch({ ...edit, annotations: isolateHistory.of("full"), userEvent: "input.format", scrollIntoView: true });
+			}
 		});
 	});
 	return {

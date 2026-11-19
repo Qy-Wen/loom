@@ -5,7 +5,7 @@ import type { ElectronApplication, Page } from "playwright";
 import type { Locator } from "@playwright/test";
 import { expect, test } from "./loom.ts";
 
-type MenuItem = { label: string; enabled: boolean };
+type MenuItem = { label: string; enabled: boolean; checked: boolean; submenu?: MenuItem[] };
 async function openFile(page: Page, app: ElectronApplication, root: string): Promise<void> {
 	await app.evaluate(({ dialog }, path) => {
 		const original = dialog.showOpenDialog;
@@ -23,11 +23,22 @@ async function openFile(page: Page, app: ElectronApplication, root: string): Pro
 /** Exercise the real menu items and their IPC callbacks without leaving a native menu open in automation. */
 async function menu(app: ElectronApplication, target: Locator, label?: string, x?: number): Promise<MenuItem[]> {
 	await app.evaluate(({ Menu }, wanted) => {
-		const state = globalThis as unknown as { contextMenuItems: { label: string; enabled: boolean }[] | null };
+		const state = globalThis as unknown as { contextMenuItems: MenuItem[] | null };
+		const describe = (items: Electron.MenuItem[]): MenuItem[] => items.filter((item) => !!item.label).map((item) => ({
+			label: item.label, enabled: item.enabled, checked: item.checked,
+			submenu: item.submenu ? describe(item.submenu.items) : undefined,
+		}));
+		const find = (items: Electron.MenuItem[]): Electron.MenuItem | undefined => {
+			for (const item of items) {
+				if (!item.enabled) continue;
+				const match = item.label === wanted ? item : item.submenu && find(item.submenu.items);
+				if (match) return match;
+			}
+		};
 		state.contextMenuItems = null;
 		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
-			state.contextMenuItems = this.items.filter((item) => !!item.label).map((item) => ({ label: item.label, enabled: item.enabled }));
-			this.items.find((item) => item.label === wanted && item.enabled)?.click();
+			state.contextMenuItems = describe(this.items);
+			find(this.items)?.click();
 			options?.callback?.();
 		};
 	}, label);
@@ -72,6 +83,38 @@ test("the Markdown text menu copies, cuts, pastes, selects all and uses the edit
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
+test("the Format submenu toggles inline styles and converts selected paragraphs with one undo", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await mkdtemp(join(tmpdir(), "loom-md-context-format-"));
+	const file = join(root, "a.md");
+	const text = "alpha beta\n\nsecond line\n";
+	await writeFile(file, text);
+	try {
+		await openFile(page, electronApp!, root);
+		const box = page.getByRole("textbox", { name: "Edit a.md" });
+		const first = box.locator(".cm-line").first();
+		await first.click({ clickCount: 2, position: { x: 20, y: 10 } });
+		const items = await menu(electronApp!, first, "Bold", 20);
+		const formats = items.find((item) => item.label === "Format")?.submenu;
+		expect(formats?.find((item) => item.label === "Bold")?.checked).toBe(false);
+		expect(formats?.find((item) => item.label === "Heading 2")?.enabled).toBe(true);
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe("**alpha** beta\n\nsecond line\n");
+		await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe("alpha");
+		const bold = await menu(electronApp!, first, "Bold", 20);
+		expect(bold.find((item) => item.label === "Format")?.submenu?.find((item) => item.label === "Bold")?.checked).toBe(true);
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe(text);
+		await box.press("ControlOrMeta+a");
+		await menu(electronApp!, first, "Numbered list", 20);
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe("1. alpha beta\n2. second line\n");
+		await box.press("ControlOrMeta+z");
+		await box.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe(text);
+	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
 test("reading offers copy and select all but disables clipboard mutations and history", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await mkdtemp(join(tmpdir(), "loom-md-context-read-"));
@@ -90,7 +133,8 @@ test("reading offers copy and select all but disables clipboard mutations and hi
 		await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("forbidden"));
 		const items = await menu(electronApp!, first, "Select All", 20);
 		for (const label of ["Undo", "Redo", "Cut", "Paste"]) expect(items.find((item) => item.label === label)?.enabled).toBe(false);
-		await menu(electronApp!, first, "Copy", 20);
+		const selectedItems = await menu(electronApp!, first, "Copy", 20);
+		expect(selectedItems.some((item) => item.label === "Format")).toBe(false);
 		await expect.poll(() => clipboardText(electronApp!)).toBe("alpha beta\n!");
 		await menu(electronApp!, first, "Paste", 20);
 		await expect(box).toHaveAttribute("aria-readonly", "true");
