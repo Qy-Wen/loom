@@ -52,6 +52,7 @@ const theme = EditorView.theme({
 		color: "var(--lm-text-body)",
 		backgroundColor: "var(--lm-surface-raised)",
 		fontSize: "15px",
+		"--markdown-selection-bg": "color-mix(in srgb, var(--lm-text-accent) 25%, var(--lm-surface-raised))",
 	},
 	"&.cm-focused": { outline: "none" },
 	// The side gutter belongs to the scroller, not the content: a selection is drawn out to the content box's edges
@@ -68,7 +69,7 @@ const theme = EditorView.theme({
 	"&.cm-markdown-read .cm-live-math, &.cm-markdown-read .cm-live-mermaid": { cursor: "default" },
 	".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lm-text-primary)" },
 	"&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
-		backgroundColor: "var(--lm-surface-active)",
+		backgroundColor: "var(--markdown-selection-bg)",
 	},
 	".cm-panels": {
 		color: "var(--lm-text-body)",

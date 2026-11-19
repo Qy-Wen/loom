@@ -342,6 +342,39 @@ test("code blocks, formulas and diagrams render live and give the source back un
 	}
 });
 
+test("dragging across code paints the selection above the code block background", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const file = join((await library())!, "code.md");
+	const original = "```js\nconst    alpha = 1;\nconst    beta = 2;\n```\n";
+	await writeFile(file, original);
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "code.md" }).click();
+	const editor = loomPage.locator(".markdown-editor-input");
+	const firstLine = editor.locator(".cm-live-codeblock").filter({ hasText: "alpha" });
+	const lastLine = editor.locator(".cm-live-codeblock").filter({ hasText: "beta" });
+	await firstLine.click({ position: { x: 16, y: 8 } });
+	const first = (await firstLine.boundingBox())!;
+	const last = (await lastLine.boundingBox())!;
+	// Sample the spaces after `const`, away from both the text and the caret.
+	const clip = { x: Math.floor(first.x + 68), y: Math.floor(first.y + first.height / 2), width: 2, height: 2 };
+	const sampledPixels = async () => {
+		const png = await loomPage.screenshot({ clip, scale: "css" });
+		return electronApp!.evaluate(({ nativeImage }, encoded) =>
+			nativeImage.createFromBuffer(Buffer.from(encoded, "base64")).toBitmap().toString("hex"), png.toString("base64"));
+	};
+	const unselected = await sampledPixels();
+	await loomPage.mouse.move(first.x + 16, first.y + first.height / 2);
+	await loomPage.mouse.down();
+	await loomPage.mouse.move(last.x + 116, last.y + last.height / 2, { steps: 10 });
+	await expect(editor.locator(".cm-selectionBackground").first()).toBeVisible();
+	await expect.poll(sampledPixels).not.toBe(unselected);
+	await loomPage.mouse.up();
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toContain("alpha = 1;\nconst    beta");
+	await expect.poll(sampledPixels).not.toBe(unselected);
+	expect(await readFile(file, "utf8")).toBe(original);
+});
+
 test("tables render as tables, edit in their cells and write back only the cell that changed", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(90000);

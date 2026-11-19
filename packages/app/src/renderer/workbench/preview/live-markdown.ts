@@ -961,10 +961,20 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-wiki": { cursor: "text" },
 	".cm-live-image": { maxWidth: "100%", maxHeight: "360px", width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
 	".cm-live-codeblock": {
-		backgroundColor: "var(--lm-surface-hover)",
+		position: "relative",
 		fontFamily: "var(--lm-font-mono)",
 		fontSize: "0.88em",
 		padding: "0 14px",
+	},
+	// CodeMirror draws selection at -2 in the scroller. Paint the code background below it and the text above it.
+	".cm-live-codeblock::before": {
+		content: '""',
+		position: "absolute",
+		inset: "0",
+		zIndex: "-3",
+		backgroundColor: "var(--lm-surface-hover)",
+		borderRadius: "inherit",
+		pointerEvents: "none",
 	},
 	".cm-live-codeblock-first": { borderTopLeftRadius: "var(--lm-radius-sm)", borderTopRightRadius: "var(--lm-radius-sm)" },
 	".cm-live-codeblock-last": { borderBottomLeftRadius: "var(--lm-radius-sm)", borderBottomRightRadius: "var(--lm-radius-sm)" },
@@ -989,7 +999,7 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-table-scroll": { overflowX: "auto" },
 	// A table that a selection covers has the selection's own colour, as the lines around it do.
 	// Written with the table's own class as well, so that it outweighs the header's background.
-	".cm-live-table.cm-live-table-selected table": { backgroundColor: "var(--lm-surface-active)" },
+	".cm-live-table.cm-live-table-selected table": { backgroundColor: "var(--markdown-selection-bg)" },
 	".cm-live-table.cm-live-table-selected th, .cm-live-table.cm-live-table-selected td": { backgroundColor: "transparent" },
 	// The table is marked as a whole: the browser's own highlight on the text inside it would paint over that, piece by piece.
 	".cm-content .cm-live-table-selected ::selection": { backgroundColor: "transparent" },
