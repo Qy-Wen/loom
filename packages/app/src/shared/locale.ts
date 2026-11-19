@@ -265,6 +265,13 @@ export const messages = defineLocale(
 			editMode: "Edit mode",
 			readingMode: "Reading mode",
 			sourceMode: "Source mode",
+			insertLabel: "Insert",
+			insertCommands: {
+				heading1: "Heading 1", heading2: "Heading 2", heading3: "Heading 3",
+				bullet: "Bulleted list", ordered: "Numbered list", task: "Task list", quote: "Quote",
+				table: "Table", code: "Code block", divider: "Divider", formula: "Formula",
+				diagram: "Mermaid diagram", asset: "Link to a library file",
+			},
 			searchPhrases: {
 				"Find": "Find", "Replace": "Replace", "next": "next", "previous": "previous", "all": "all",
 				"match case": "match case", "regexp": "regexp", "by word": "by word", "replace": "replace", "replace all": "replace all", "close": "close",
@@ -1033,6 +1040,13 @@ export const messages = defineLocale(
 			editMode: "编辑模式",
 			readingMode: "阅读模式",
 			sourceMode: "源码模式",
+			insertLabel: "插入",
+			insertCommands: {
+				heading1: "一级标题", heading2: "二级标题", heading3: "三级标题",
+				bullet: "无序列表", ordered: "有序列表", task: "任务列表", quote: "引用",
+				table: "表格", code: "代码块", divider: "分隔线", formula: "公式",
+				diagram: "Mermaid 图表", asset: "链接到素材库文件",
+			},
 			searchPhrases: {
 				"Find": "查找", "Replace": "替换", "next": "下一处", "previous": "上一处", "all": "全部",
 				"match case": "区分大小写", "regexp": "正则表达式", "by word": "全字匹配", "replace": "替换", "replace all": "全部替换", "close": "关闭",

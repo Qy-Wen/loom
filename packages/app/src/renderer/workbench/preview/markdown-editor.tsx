@@ -24,6 +24,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 	const { t } = useLocale();
 	const [save, setSave] = useState<MarkdownSave | null>(sessions.get(assetId) ?? null);
 	const [failure, setFailure] = useState<string | null>(null);
+	const [insertIssue, setInsertIssue] = useState<string | null>(null);
 	const [reading, setReading] = useState(false);
 	const [source, setSource] = useState(false);
 	const [, rerender] = useState(0);
@@ -43,6 +44,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 		let cancelled = false;
 		const existing = sessions.get(assetId);
 		setFailure(null);
+		setInsertIssue(null);
 		if (existing) { setSave(existing); return; }
 		window.loom.readMarkdown(assetId).then((snapshot) => {
 			if (cancelled) return;
@@ -94,10 +96,19 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 			addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn,
 			moveRow: t.preview.tableMoveRow, moveColumn: t.preview.tableMoveColumn,
 			searchPhrases: t.preview.searchPhrases,
+			insertCommands: t.preview.insertCommands,
 		}, {
 			chooseTableAction: (state) => window.loom.showTableContextMenu(state),
 			chooseTextAction: (state) => window.loom.showEditorContextMenu(state),
 			clipboard: (action) => window.loom.runEditorClipboard(action),
+			pickAssets: async () => {
+				setInsertIssue(null);
+				try { return await window.loom.pickComposerLibraryAssets(); }
+				catch (cause) {
+					setInsertIssue(cause instanceof Error ? cause.message : String(cause));
+					return [];
+				}
+			},
 		}, modeRef.current);
 		editorRef.current = editor;
 		const anchor = takePendingHeading(assetId);
@@ -150,10 +161,20 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 					onClick={() => { flush(); setSource((on) => !on); }}>
 					<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><path d="m8 6-6 6 6 6m8-12 6 6-6 6m-3-15-2 18" /></svg>
 				</button>}
+				{mode !== "read" && <button type="button" aria-label={t.preview.insertLabel} data-tooltip={t.preview.insertLabel}
+					onMouseDown={(event) => event.preventDefault()} onClick={() => editorRef.current?.insert()}>
+					<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round">
+						<path d="M12 5v14M5 12h14" />
+					</svg>
+				</button>}
 			</div>
 			{access !== "live" && <div className="markdown-mode-notice" role="note">{access === "read" ? t.preview.editorReadOnly : t.preview.editorLargeSource}</div>}
 			<div className="markdown-editor-body">
 				<div className="markdown-editor-input" ref={hostRef} />
+				{insertIssue && <div className="markdown-editor-status" role="alert">
+					<span className="markdown-editor-problem">{insertIssue}</span>
+					<button type="button" onClick={() => setInsertIssue(null)}>{t.app.dismiss}</button>
+				</div>}
 				{(save.state === "error" || save.state === "conflict") && <div className="markdown-editor-status" role="status">
 					{save.state === "error" && <><span className="markdown-editor-problem">{t.preview.editorFailed(save.error ?? "")}</span><button type="button" onClick={flush}>{t.preview.editorRetry}</button></>}
 					{save.state === "conflict" && <>

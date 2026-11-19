@@ -1,3 +1,4 @@
+import { closeCompletion, completionStatus } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
@@ -8,7 +9,10 @@ import { tags } from "@lezer/highlight";
 import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
-import type { EditorClipboardAction, EditorContextAction, EditorContextState } from "../../../shared/ipc.ts";
+import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
+import { isImeComposing } from "../../components/ime-composition.ts";
+import type { EditorClipboardAction, EditorContextAction, EditorContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
+import type { Messages } from "../../../shared/locale.ts";
 
 export type MarkdownMode = "edit" | "read" | "source";
 const replaceText = Annotation.define<boolean>();
@@ -30,6 +34,7 @@ export interface MarkdownEditorLabels {
 	moveRow: string;
 	moveColumn: string;
 	searchPhrases: Record<string, string>;
+	insertCommands: Messages["preview"]["insertCommands"];
 }
 
 /** What the editor asks the window for. */
@@ -37,6 +42,7 @@ export interface MarkdownEditorHost {
 	chooseTableAction: TableHooks["chooseAction"];
 	chooseTextAction(state: EditorContextState): Promise<EditorContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
+	pickAssets(): Promise<UiSelectionDraft[]>;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
@@ -110,6 +116,7 @@ export interface MarkdownEditor {
 	/** Switch in place, preserving the document, history, selection and scroll position. */
 	setMode(mode: MarkdownMode): void;
 	find(): void;
+	insert(): void;
 	scrollToHeading(anchor: string): void;
 	focus(): void;
 	destroy(): void;
@@ -151,6 +158,7 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		// readOnly protects commands; this also protects widget and clipboard transactions. External reloads are allowed.
 		EditorState.transactionFilter.of((transaction) => transaction.docChanged && transaction.startState.readOnly && !transaction.annotation(replaceText) ? [] : transaction),
 		search({ top: false }),
+		markdownInsert(labels.insertCommands, host.pickAssets),
 		EditorState.phrases.of(labels.searchPhrases),
 		theme,
 		accessible.of(EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" })),
@@ -178,6 +186,10 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		}),
 	];
 	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
+	view.contentDOM.addEventListener("keydown", (event) => {
+		// Let the IME confirm its candidate before CodeMirror handles Enter as a menu selection.
+		if (event.key === "Enter" && isImeComposing(event) && completionStatus(view.state)) event.stopImmediatePropagation();
+	}, true);
 	view.dispatch({ effects: updateLibrary(library) });
 	// Listen on the outer DOM too, so rendered images/formulas can open the same menu as plain text.
 	view.dom.addEventListener("contextmenu", (event) => {
@@ -213,6 +225,7 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		},
 		setMode(next) {
 			if (next === mode) return;
+			closeCompletion(view);
 			const searching = searchPanelOpen(view.state) && (next === "read") !== (mode === "read");
 			if (searching) closeSearchPanel(view);
 			const hadCellFocus = leaveCell(view);
@@ -225,6 +238,10 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 			if (searching) openSearchPanel(view);
 		},
 		find: () => { openSearchPanel(view); },
+		insert: () => {
+			leaveCell(view);
+			openMarkdownInsert(view);
+		},
 		scrollToHeading(anchor) {
 			const position = findEditorHeading(view.state, anchor);
 			if (position !== null) view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: "start" }) });

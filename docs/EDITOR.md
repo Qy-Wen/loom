@@ -21,7 +21,7 @@ Loom takes the first: live preview over the source text.
 3. **Reuse existing rendering.** Path resolution for wiki links and `![[embeds]]`, red error marks, click-through and heading anchors reuse the one resolver from [file references](./GRAPH-LINKS.md). Formulas, Mermaid and images show as rendered output and expand to source under the cursor. Tables always stay rendered, with editing inside their cells.
 4. **Auto save.** Save about one second after typing stops, and immediately on blur or when switching tabs. No persistent save status bar; only failures and conflicts show a notice with actions.
 5. **No change, no write.** The file is written only when its content really changed. The editor never reflows text the user did not touch.
-6. **Slash commands.** Typing `/` at the start of a line opens a menu that inserts headings, lists, tasks, code blocks, tables, quotes, rules, formulas and Mermaid, and links to other assets. The menu only inserts Markdown text.
+6. **Slash commands.** Type `/` at the start of a line or click Insert in the toolbar. Search in English or Chinese for headings, lists, tasks, code blocks, tables, quotes, rules, formulas, Mermaid diagrams, or links to library files. Pick an option with the keyboard or pointer. The insertion writes Markdown text and can be undone.
 7. **Undo and redo.** The undo stack of the editing session is kept, and saving does not clear it.
 
 Notion-style block interaction such as block dragging, block toolbars and columns needs a block-tree data model, which conflicts with the file being the only data, so the first version does not include it.

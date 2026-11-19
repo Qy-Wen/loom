@@ -89,8 +89,8 @@
 }
 
 .markdown-toolbar button svg {
-	width: 16px;
-	height: 16px;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
 }
 
 .markdown-toolbar button:hover:not(:disabled) {
@@ -105,6 +105,78 @@
 .markdown-toolbar button:disabled {
 	opacity: 0.5;
 	cursor: default;
+}
+
+.markdown-editor-input .cm-tooltip.cm-markdown-insert {
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-lg);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	box-shadow: var(--lm-shadow-md);
+	overflow: hidden;
+}
+
+/* Match CodeMirror's tooltip selectors so its default list padding and row spacing do not win. */
+.markdown-editor-input .cm-tooltip.cm-markdown-insert > ul {
+	width: min(17rem, 94vw);
+	min-width: 0;
+	max-height: min(22rem, 56vh);
+	padding: var(--lm-space-3);
+	overscroll-behavior-y: contain;
+	scrollbar-width: thin;
+	font-family: var(--lm-font-sans);
+	font-size: var(--lm-text-size-lg);
+}
+
+.markdown-editor-input .cm-tooltip.cm-markdown-insert > ul > li[role="option"] {
+	display: flex;
+	align-items: center;
+	min-height: var(--lm-size-3xl);
+	gap: var(--lm-space-5);
+	padding: var(--lm-space-3) var(--lm-space-4);
+	border-radius: var(--lm-radius-md);
+	line-height: 1.4;
+	cursor: pointer;
+}
+
+.cm-markdown-insert > ul > li + li {
+	margin-block-start: var(--lm-space-1);
+}
+
+.markdown-insert-icon {
+	flex: none;
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
+	padding: var(--lm-space-2);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-sunken);
+	color: var(--lm-text-secondary);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.cm-markdown-insert .cm-completionLabel {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.cm-markdown-insert li[role="option"]:hover {
+	background: var(--lm-surface-hover);
+}
+
+.markdown-editor-input .cm-tooltip.cm-markdown-insert li[aria-selected="true"] {
+	background: var(--lm-surface-accent);
+	color: var(--lm-text-primary);
+	font-weight: var(--lm-weight-medium);
+}
+
+.cm-markdown-insert li[aria-selected="true"] .markdown-insert-icon {
+	background: var(--lm-surface-accent-strong);
+	color: var(--lm-text-accent);
 }
 
 .markdown-mode-notice {

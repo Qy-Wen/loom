@@ -54,6 +54,10 @@ const libraryField = StateField.define<LiveContext | null>({
 /** The transaction effect that gives the editor a new library. Dispatch it when the asset list changes. */
 export const updateLibrary = (library: LiveLibrary) => setLibrary.of(library);
 
+export function markdownFilePath(state: EditorState): string | undefined {
+	return state.field(libraryField, false)?.fromRelativePath;
+}
+
 /** Opens a reference: plain click while reading, ⌘/Ctrl+click while editing. */
 export interface LiveHandlers {
 	openAsset(assetId: string, anchor: string | undefined): void;
