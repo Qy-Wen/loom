@@ -342,12 +342,12 @@ test("code blocks, formulas and diagrams render live and give the source back un
 	}
 });
 
-test("dragging across code paints the selection above the code block background", async ({ loomPage, electronApp }) => {
+test("dragging across block and inline code keeps the selection visible", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(library).toBeTruthy();
 	const file = join((await library())!, "code.md");
-	const original = "```js\nconst    alpha = 1;\nconst    beta = 2;\n```\n";
+	const original = "```js\nconst    alpha = 1;\nconst    beta = 2;\n```\n\nBefore `alpha    beta` after\n";
 	await writeFile(file, original);
 	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "code.md" }).click();
 	const editor = loomPage.locator(".markdown-editor-input");
@@ -358,20 +358,43 @@ test("dragging across code paints the selection above the code block background"
 	const last = (await lastLine.boundingBox())!;
 	// Sample the spaces after `const`, away from both the text and the caret.
 	const clip = { x: Math.floor(first.x + 68), y: Math.floor(first.y + first.height / 2), width: 2, height: 2 };
-	const sampledPixels = async () => {
+	const sampledPixels = async (clip: { x: number; y: number; width: number; height: number }) => {
 		const png = await loomPage.screenshot({ clip, scale: "css" });
 		return electronApp!.evaluate(({ nativeImage }, encoded) =>
 			nativeImage.createFromBuffer(Buffer.from(encoded, "base64")).toBitmap().toString("hex"), png.toString("base64"));
 	};
-	const unselected = await sampledPixels();
+	const unselected = await sampledPixels(clip);
 	await loomPage.mouse.move(first.x + 16, first.y + first.height / 2);
 	await loomPage.mouse.down();
 	await loomPage.mouse.move(last.x + 116, last.y + last.height / 2, { steps: 10 });
 	await expect(editor.locator(".cm-selectionBackground").first()).toBeVisible();
-	await expect.poll(sampledPixels).not.toBe(unselected);
+	await expect.poll(() => sampledPixels(clip)).not.toBe(unselected);
 	await loomPage.mouse.up();
 	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toContain("alpha = 1;\nconst    beta");
-	await expect.poll(sampledPixels).not.toBe(unselected);
+	await expect.poll(() => sampledPixels(clip)).not.toBe(unselected);
+
+	const inline = editor.locator(".cm-live-code");
+	const pointInCode = (offset: number) => inline.evaluate((element, offset) => {
+		const range = document.createRange();
+		range.setStart(element.firstChild!, offset);
+		range.collapse(true);
+		const { x, y, height } = range.getBoundingClientRect();
+		return { x, y: y + height / 2 };
+	}, offset);
+	const inlinePixels = async () => {
+		const { x, y } = await pointInCode(7);
+		return sampledPixels({ x: Math.floor(x), y: Math.floor(y), width: 2, height: 2 });
+	};
+	const inlineUnselected = await inlinePixels();
+	const start = await pointInCode(1);
+	const end = await pointInCode(12);
+	await loomPage.mouse.move(start.x, start.y);
+	await loomPage.mouse.down();
+	await loomPage.mouse.move(end.x, end.y, { steps: 10 });
+	await expect.poll(inlinePixels).not.toBe(inlineUnselected);
+	await loomPage.mouse.up();
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toBe("lpha    bet");
+	await expect.poll(inlinePixels).not.toBe(inlineUnselected);
 	expect(await readFile(file, "utf8")).toBe(original);
 });
 

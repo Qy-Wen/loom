@@ -966,7 +966,8 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-code": {
 		padding: "0.1em 0.35em",
 		borderRadius: "var(--lm-radius-sm)",
-		backgroundColor: "var(--lm-surface-hover)",
+		// Keep the selection layer behind the text visible through the inline code tint.
+		backgroundColor: "color-mix(in srgb, var(--lm-text-primary) 7%, transparent)",
 		fontFamily: "var(--lm-font-mono)",
 		fontSize: "0.86em",
 	},
