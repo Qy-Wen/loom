@@ -6,6 +6,7 @@ import { createAssetLookup, matchWikiLink, resolveLinkTarget, resolveWikiTarget,
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
+import { searchSelection } from "./markdown-find-widgets.ts";
 import { enterTable, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
@@ -178,17 +179,20 @@ function enterOnClick(dom: HTMLElement, view: EditorView): void {
 class MathWidget extends WidgetType {
 	readonly tex: string;
 	readonly display: boolean;
-	constructor(tex: string, display: boolean) {
+	readonly sourceLength: number;
+	constructor(tex: string, display: boolean, sourceLength: number) {
 		super();
 		this.tex = tex;
 		this.display = display;
+		this.sourceLength = sourceLength;
 	}
 	eq(other: MathWidget): boolean {
-		return other.tex === this.tex && other.display === this.display;
+		return other.tex === this.tex && other.display === this.display && other.sourceLength === this.sourceLength;
 	}
 	toDOM(view: EditorView): HTMLElement {
 		const node = document.createElement(this.display ? "div" : "span");
 		node.className = this.display ? "cm-live-math cm-live-math-block" : "cm-live-math";
+		node.dataset.length = String(this.sourceLength);
 		node.innerHTML = renderMath(this.tex, this.display);
 		enterOnClick(node, view);
 		remeasureOnResize(node, view);
@@ -219,14 +223,16 @@ const redrawBlocks = StateEffect.define<null>();
  */
 class MermaidWidget extends WidgetType {
 	readonly source: string;
+	readonly sourceLength: number;
 	readonly drawn: boolean;
-	constructor(source: string) {
+	constructor(source: string, sourceLength: number) {
 		super();
 		this.source = source;
+		this.sourceLength = sourceLength;
 		this.drawn = drawnDiagrams.has(source);
 	}
 	eq(other: MermaidWidget): boolean {
-		return other.source === this.source && other.drawn === this.drawn;
+		return other.source === this.source && other.drawn === this.drawn && other.sourceLength === this.sourceLength;
 	}
 	get estimatedHeight(): number {
 		return drawnDiagrams.get(this.source)?.height ?? 160;
@@ -234,6 +240,7 @@ class MermaidWidget extends WidgetType {
 	toDOM(view: EditorView): HTMLElement {
 		const node = document.createElement("div");
 		node.className = "cm-live-mermaid";
+		node.dataset.length = String(this.sourceLength);
 		const diagram = document.createElement("pre");
 		diagram.className = "mermaid";
 		node.append(diagram);
@@ -290,6 +297,10 @@ const HEADINGS: Record<string, string> = {
 /** True when any selection range touches `from..to`, edges included, so a cursor next to a symbol reveals it. */
 function touched(state: EditorState, from: number, to: number): boolean {
 	return revealRanges(state).some((range) => range.from <= to && range.to >= from);
+}
+
+function revealWidgetSource(state: EditorState, from: number, to: number): boolean {
+	return !state.field(searchSelection, false) && touched(state, from, to);
 }
 
 /**
@@ -569,10 +580,10 @@ function inlineMath(state: EditorState, from: number, to: number, found: Range<D
 			let paragraph: SyntaxNodeRef | null = tree.resolveInner(start, 1);
 			while (paragraph && paragraph.name !== "Paragraph") paragraph = paragraph.parent;
 			if (paragraph && mathBlock(state, paragraph)) continue;
-			if (touched(state, start, end)) {
+			if (revealWidgetSource(state, start, end)) {
 				found.push(Decoration.mark({ class: "cm-live-math-source" }).range(start, end));
 			} else {
-				found.push(Decoration.replace({ widget: new MathWidget(match.tex, match.display) }).range(start, end));
+				found.push(Decoration.replace({ widget: new MathWidget(match.tex, match.display, end - start) }).range(start, end));
 			}
 		}
 	}
@@ -605,8 +616,8 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 			if (node.name === "Document") return;
 			if (node.name === "Paragraph") {
 				const math = mathBlock(state, node.node);
-				if (math && !touched(state, node.from, node.to)) {
-					builder.add(node.from, node.to, Decoration.replace({ widget: new MathWidget(math.tex, true), block: true }));
+				if (math && !revealWidgetSource(state, node.from, node.to)) {
+					builder.add(node.from, node.to, Decoration.replace({ widget: new MathWidget(math.tex, true, node.to - node.from), block: true }));
 				}
 			} else if (node.name === "Table" && node.node.parent?.name === "Document") {
 				const text = state.doc.sliceString(node.from, node.to);
@@ -620,8 +631,8 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				const info = node.node.getChild("CodeInfo");
 				const language = info ? state.doc.sliceString(info.from, info.to).trim().split(/\s+/)[0]?.toLowerCase() : "";
 				const code = node.node.getChild("CodeText");
-				if (language === "mermaid" && code && node.node.getChildren("CodeMark").length > 1 && !touched(state, node.from, node.to)) {
-					builder.add(node.from, node.to, Decoration.replace({ widget: new MermaidWidget(state.doc.sliceString(code.from, code.to)), block: true }));
+				if (language === "mermaid" && code && node.node.getChildren("CodeMark").length > 1 && !revealWidgetSource(state, node.from, node.to)) {
+					builder.add(node.from, node.to, Decoration.replace({ widget: new MermaidWidget(state.doc.sliceString(code.from, code.to), node.to - node.from), block: true }));
 				}
 			}
 			return false;
@@ -638,8 +649,9 @@ const blockDecorations = StateField.define<DecorationSet>({
 		const redraw = transaction.effects.some((effect) => effect.is(redrawBlocks));
 		const dragChanged = transaction.startState.field(pressState, false) !== transaction.state.field(pressState, false)
 			|| transaction.startState.field(focusState, false) !== transaction.state.field(focusState, false);
+		const searchChanged = transaction.startState.field(searchSelection, false) !== transaction.state.field(searchSelection, false);
 		const accessChanged = transaction.startState.readOnly !== transaction.state.readOnly;
-		return transaction.docChanged || treeChanged || redraw || accessChanged || (!transaction.state.readOnly && (transaction.selection || dragChanged)) ? liveBlockDecorations(transaction.state) : value;
+		return transaction.docChanged || treeChanged || redraw || accessChanged || (!transaction.state.readOnly && (transaction.selection || dragChanged || searchChanged)) ? liveBlockDecorations(transaction.state) : value;
 	},
 	provide: (field) => EditorView.decorations.from(field),
 });
@@ -932,6 +944,7 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 		if (update.docChanged || update.selectionSet || update.viewportChanged || update.startState.readOnly !== update.state.readOnly || syntaxTree(update.startState) !== syntaxTree(update.state)
 			|| update.startState.field(pressState, false) !== update.state.field(pressState, false)
 			|| update.startState.field(focusState, false) !== update.state.field(focusState, false)
+			|| update.startState.field(searchSelection, false) !== update.state.field(searchSelection, false)
 			|| update.startState.field(libraryField, false) !== update.state.field(libraryField, false)) {
 			this.decorations = this.build(update.view);
 		}

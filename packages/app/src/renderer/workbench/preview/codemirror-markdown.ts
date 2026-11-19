@@ -10,6 +10,7 @@ import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibr
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
 import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
+import { markdownFindWidgets, searchSelection } from "./markdown-find-widgets.ts";
 import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
@@ -83,10 +84,17 @@ const theme = EditorView.theme({
 	},
 	".cm-panels-bottom": { borderTop: "1px solid var(--lm-border-default)" },
 	".cm-panels-top": { borderBottom: "1px solid var(--lm-border-default)" },
-	".cm-searchMatch": { backgroundColor: "var(--lm-surface-warning)", borderRadius: "var(--lm-radius-line)" },
-	".cm-searchMatch.cm-searchMatch-selected": {
+	".cm-searchMatch .cm-live-code": { backgroundColor: "transparent" },
+	".cm-searchMatch, .cm-content .cm-live-find-match": {
+		backgroundColor: "var(--lm-surface-warning)",
+		borderRadius: "var(--lm-radius-line)",
+	},
+	".cm-searchMatch.cm-searchMatch-selected, .cm-content .cm-live-find-match.cm-live-find-current": {
 		backgroundColor: "color-mix(in srgb, var(--lm-warning) 38%, var(--lm-surface-raised))",
 		outline: "1px solid var(--lm-warning)",
+	},
+	".cm-live-find-current": {
+		outlineOffset: "-1px",
 	},
 });
 
@@ -152,6 +160,8 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		// readOnly protects commands; this also protects widget and clipboard transactions. External reloads are allowed.
 		EditorState.transactionFilter.of((transaction) => transaction.docChanged && transaction.startState.readOnly && !transaction.annotation(replaceText) ? [] : transaction),
 		search({ createPanel: (editor) => new MarkdownFindPanel(editor, labels.find) }),
+		searchSelection,
+		markdownFindWidgets,
 		panels({ topContainer: findContainer }),
 		markdownInsert(labels.insertCommands, host.pickAssets),
 		EditorState.phrases.of(labels.searchPhrases),

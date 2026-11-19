@@ -115,3 +115,72 @@ test("Markdown find shows results and replacement feedback with advanced control
 	await expect(findButton).toHaveAttribute("aria-expanded", "false");
 	await expect(editor).toBeFocused();
 });
+
+test("Markdown find highlights rendered cells, diagrams, formulas and inline code", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(root).toBeTruthy();
+	const file = join((await root())!, "find-widgets.md");
+	await writeFile(file, [
+		"Some `left needle right` inline code",
+		"",
+		"| A | B |",
+		"| --- | --- |",
+		"| Ignore | **needle** |",
+		"",
+		"Inline $\\text{needle}$.",
+		"",
+		"$$",
+		"\\frac{\\text{needle}}{2}",
+		"$$",
+		"",
+		"```mermaid",
+		"flowchart LR",
+		"A[needle] --> B[other]",
+		"```",
+	].join("\n"));
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "find-widgets.md" }).click();
+	const editor = page.getByRole("textbox", { name: "Edit find-widgets.md" });
+	await editor.press("ControlOrMeta+f");
+	const bar = page.locator(".markdown-find");
+	const field = bar.getByRole("textbox", { name: "Find in document" });
+	const status = bar.getByRole("status");
+	await field.fill("needle");
+	await expect(status).toHaveText("Match 1 of 5");
+
+	const code = editor.locator(".cm-live-code").filter({ hasText: "needle" });
+	const selectedText = editor.locator(".cm-searchMatch-selected");
+	await expect(selectedText).toHaveText("needle");
+	const highlightBackground = await selectedText.evaluate((element) => getComputedStyle(element).backgroundColor);
+	await expect(code).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+
+	const cell = editor.locator(".cm-live-table td").filter({ hasText: "needle" });
+	const inlineMath = editor.locator(".cm-live-math:not(.cm-live-math-block)");
+	const blockMath = editor.locator(".cm-live-math-block");
+	const diagram = editor.locator(".cm-live-mermaid");
+	const current = editor.locator(".cm-live-find-current");
+	await expect(editor.locator(".cm-live-table .cm-live-find-match")).toHaveCount(1);
+	for (const [index, widget] of [cell, inlineMath, blockMath, diagram].entries()) {
+		await expect(widget).toHaveClass(/cm-live-find-match/);
+		await field.press("Enter");
+		await expect(status).toHaveText(`Match ${index + 2} of 5`);
+		await expect(current).toHaveCount(1);
+		await expect(widget).toHaveClass(/cm-live-find-current/);
+		await expect(widget).toHaveCSS("background-color", highlightBackground);
+	}
+	await expect(diagram.locator("svg")).toBeVisible();
+
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await field.fill("frac");
+	await expect(status).toHaveText("Match 1 of 1");
+	await expect(blockMath).toHaveClass(/cm-live-find-current/);
+	await expect(diagram).not.toHaveClass(/cm-live-find-match/);
+	await page.getByRole("button", { name: "Edit mode", exact: true }).click();
+	await page.getByRole("button", { name: "Source mode", exact: true }).click();
+	await expect(selectedText).toHaveText("frac");
+	await expect(current).toHaveCount(0);
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect(blockMath).toHaveClass(/cm-live-find-current/);
+	await field.press("Escape");
+	await expect(editor.locator(".cm-live-find-match")).toHaveCount(0);
+});
