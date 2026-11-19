@@ -811,3 +811,26 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	flex: 0 0 8px;
 	width: 8px;
 }
+.asset-drag-preview {
+	position: fixed;
+	top: 0;
+	left: 0;
+	z-index: -1;
+	width: max-content;
+	max-width: min(240px, 100vw);
+	padding-top: 24px;
+	pointer-events: none;
+}
+
+.asset-drag-preview-label {
+	padding: var(--lm-space-3) var(--lm-space-4);
+	overflow: hidden;
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-sm);
+	line-height: 1.3;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}

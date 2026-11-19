@@ -697,7 +697,7 @@ function showCell(cell: HTMLElement, source: string, context: TableContext | nul
 }
 
 /** The part of the document the table occupies, found from its drawing. */
-function tableRange(view: EditorView, wrap: HTMLElement): { from: number; to: number } | null {
+export function tableRange(view: EditorView, wrap: HTMLElement): { from: number; to: number } | null {
 	const at = view.posAtDOM(wrap);
 	for (let node: ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]> | null = syntaxTree(view.state).resolveInner(at, 1); node; node = node.parent) {
 		if (node.name === "Table") return { from: node.from, to: node.to };

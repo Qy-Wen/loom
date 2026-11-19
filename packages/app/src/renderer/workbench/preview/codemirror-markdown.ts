@@ -13,6 +13,7 @@ import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
 import { markdownFindWidgets, searchSelection } from "./markdown-find-widgets.ts";
 import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
+import { markdownFileDrop } from "./markdown-file-drop.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import type { EditorClipboardAction, MarkdownContextAction, MarkdownContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
 import type { Messages } from "../../../shared/locale.ts";
@@ -48,6 +49,8 @@ export interface MarkdownEditorHost {
 	chooseTextAction(state: MarkdownContextState): Promise<MarkdownContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
 	pickAssets(): Promise<UiSelectionDraft[]>;
+	importFiles(files: readonly File[]): Promise<UiSelectionDraft[]>;
+	onDropError(error: unknown): void;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
@@ -164,6 +167,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		markdownFindWidgets,
 		panels({ topContainer: findContainer }),
 		markdownInsert(labels.insertCommands, host.pickAssets),
+		markdownFileDrop(host),
 		EditorState.phrases.of(labels.searchPhrases),
 		theme,
 		accessible.of(EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" })),

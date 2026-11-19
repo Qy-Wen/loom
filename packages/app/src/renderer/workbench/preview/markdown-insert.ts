@@ -88,7 +88,7 @@ function insert(view: EditorView, completion: Completion, from: number, to: numb
 	return start + before.length;
 }
 
-function assetLink(from: string, path: string): string {
+export function markdownAssetLink(from: string, path: string): string {
 	const directory = from.split("/").slice(0, -1);
 	const target = path.split("/");
 	const name = target.at(-1)!.replace(/[\r\n]/g, " ").replace(/[\\\[\]`*_<>~&|]/g, "\\$&");
@@ -120,7 +120,7 @@ export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelec
 					if (!picked.length || !view.dom.isConnected || view.state.doc !== original || view.state.readOnly) return;
 					const sourcePath = markdownFilePath(view.state);
 					if (!sourcePath) return;
-					const text = picked.map((asset) => assetLink(sourcePath, asset.path)).join("\n\n");
+					const text = picked.map((asset) => markdownAssetLink(sourcePath, asset.path)).join("\n\n");
 					insert(view, completion, from, to, { text, cursor: text.length }, typedSlash);
 					view.focus();
 				}).catch(() => undefined);

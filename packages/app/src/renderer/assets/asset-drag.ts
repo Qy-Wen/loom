@@ -48,6 +48,23 @@ export function writeLibraryDrag(transfer: DataTransfer, item: LibraryDrag, asse
 	transfer.effectAllowed = "copyMove";
 	transfer.setData(LOOM_LIBRARY_DRAG, JSON.stringify(item));
 	if (asset) writeAssetDrag(transfer, asset);
+	const files = item.kind === "asset" ? [item] : item.kind === "batch" ? item.assets : [];
+	const first = files[0];
+	if (first) setFileDragPreview(transfer, asset?.filename ?? first.path.split("/").at(-1)!, files.length);
+}
+
+function setFileDragPreview(transfer: DataTransfer, filename: string, count: number): void {
+	const preview = document.createElement("div");
+	preview.className = "asset-drag-preview";
+	preview.setAttribute("aria-hidden", "true");
+	const label = document.createElement("div");
+	label.className = "asset-drag-preview-label";
+	label.textContent = count > 1 ? `${filename} +${count - 1}` : filename;
+	preview.append(label);
+	document.body.append(preview);
+	// Anchor the pointer to the top edge of the transparent space above the label.
+	transfer.setDragImage(preview, Math.round(preview.offsetWidth / 2), 0);
+	requestAnimationFrame(() => preview.remove());
 }
 
 export function readAssetDrag(transfer: DataTransfer): unknown {

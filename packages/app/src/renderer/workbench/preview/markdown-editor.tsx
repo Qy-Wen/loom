@@ -116,6 +116,13 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 					return [];
 				}
 			},
+			importFiles: async (files) => {
+				setInsertIssue(null);
+				const paths = files.map((file) => window.loom.pathForFile(file)).filter(Boolean);
+				if (!paths.length) throw new Error(t.library.importFailed);
+				return window.loom.importComposerFiles(paths);
+			},
+			onDropError: (cause) => setInsertIssue(cause instanceof Error ? cause.message : t.library.importFailed),
 		}, modeRef.current);
 		editorRef.current = editor;
 		const anchor = takePendingHeading(assetId);
