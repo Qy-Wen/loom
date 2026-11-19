@@ -1018,6 +1018,17 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-table-drop": { position: "absolute", backgroundColor: "var(--lm-text-accent)", pointerEvents: "none", zIndex: "2" },
 	".cm-live-table-drop[hidden]": { display: "none" },
 	// A frame over the row or column being moved, drawn over the cells without taking the pointer from them.
+	".cm-live-table-range": {
+		position: "absolute",
+		boxSizing: "border-box",
+		border: "2px solid var(--lm-text-accent)",
+		backgroundColor: "color-mix(in srgb, var(--lm-text-accent) 12%, transparent)",
+		pointerEvents: "none",
+		zIndex: "1",
+	},
+	".cm-live-table:focus": { outline: "none" },
+	// While cells are being picked by dragging, the text under the pointer is not selected as it goes.
+	".cm-live-table-picking, .cm-live-table-picking *": { userSelect: "none", cursor: "default" },
 	".cm-live-table-frame": {
 		position: "absolute",
 		boxSizing: "border-box",

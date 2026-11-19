@@ -1336,3 +1336,190 @@ test("rows and columns of a table move by their grips", async ({ loomPage, elect
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("dragging from one cell into another picks a block of cells that the menu, Delete and copy act on", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-pick-e2e-"));
+	const rows = ["| 名称 | 数量 | 备注 | 价格 |", "| :--- | ---: | :-: | --- |", "| 苹果 | 3 | 红 | 5 |", "| 梨 | 12 | 黄 | 6 |", "| 桃 | 7 | 粉 | 8 |", "| 李 | 9 | 紫 | 4 |"];
+	const original = `上文\n\n${rows.join("\n")}\n\n下文\n`;
+	const file = join(root, "选.md");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "选.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 选.md" });
+		const onDisk = () => readFile(file, "utf8");
+		const cell = (row: number, column: number) => box.locator(`.cm-live-table [data-row="${row}"][data-column="${column}"]`);
+		const range = box.locator(".cm-live-table-range");
+		const choose = (label: string) => electronApp!.evaluate(({ Menu }, wanted) => {
+			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+				(globalThis as unknown as { __menu: string }).__menu = this.items.filter((item) => item.enabled).map((item) => item.label).join("|");
+				this.items.find((item) => item.label === wanted && item.enabled)?.click();
+				options?.callback?.();
+			};
+		}, label);
+		const center = async (target: import("@playwright/test").Locator) => {
+			const at = (await target.boundingBox())!;
+			return { x: at.x + at.width / 2, y: at.y + at.height / 2 };
+		};
+		const dragTo = async (from: import("@playwright/test").Locator, to: import("@playwright/test").Locator) => {
+			const start = await center(from);
+			const end = await center(to);
+			await loomPage.mouse.move(start.x, start.y);
+			await loomPage.mouse.down();
+			await loomPage.mouse.move(end.x, end.y, { steps: 8 });
+			await loomPage.mouse.up();
+		};
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+
+		// A drag inside one cell is a text selection and picks nothing.
+		const one = (await cell(2, 0).boundingBox())!;
+		await loomPage.mouse.move(one.x + 8, one.y + one.height / 2);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(one.x + one.width - 8, one.y + one.height / 2, { steps: 6 });
+		await loomPage.mouse.up();
+		await expect(range).toHaveCount(0);
+
+		// Dragged into another cell, the block from one to the other is framed, and the frame is that block's size.
+		await dragTo(cell(2, 1), cell(3, 2));
+		await expect(range).toHaveCount(1);
+		const frame = (await range.boundingBox())!;
+		const first = (await cell(2, 1).boundingBox())!;
+		const last = (await cell(3, 2).boundingBox())!;
+		expect(Math.abs(frame.x - first.x)).toBeLessThan(2);
+		expect(Math.abs(frame.y - first.y)).toBeLessThan(2);
+		expect(Math.abs(frame.x + frame.width - (last.x + last.width))).toBeLessThan(2);
+		expect(Math.abs(frame.y + frame.height - (last.y + last.height))).toBeLessThan(2);
+		// No caret is left in a cell, and the file is untouched.
+		await expect(box.locator(".cm-live-table td:focus, .cm-live-table th:focus")).toHaveCount(0);
+		await expect.poll(onDisk).toBe(original);
+		// Dragging back the other way picks the same kind of block.
+		await dragTo(cell(3, 2), cell(2, 1));
+		const back = (await range.boundingBox())!;
+		expect(Math.abs(back.width - frame.width)).toBeLessThan(2);
+
+		// Alignment from the menu is set on every column of the block.
+		await choose("Align right");
+		await cell(2, 1).click({ button: "right" });
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | --- |"));
+		// The menu on a cell outside the block is for that cell's column alone, and drops the block.
+		await dragTo(cell(1, 0), cell(2, 1));
+		await choose("Align center");
+		await cell(4, 3).click({ button: "right" });
+		await expect(range).toHaveCount(0);
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |"));
+
+		// Rows and columns are added as many as the block covers, and deleted with it.
+		await dragTo(cell(2, 0), cell(3, 1));
+		await choose("Insert row above");
+		await cell(2, 0).click({ button: "right" });
+		await expect(box.locator(".cm-live-table tr")).toHaveCount(7);
+		await dragTo(cell(2, 0), cell(3, 1));
+		await choose("Delete row");
+		await cell(2, 0).click({ button: "right" });
+		await expect(box.locator(".cm-live-table tr")).toHaveCount(5);
+		await dragTo(cell(1, 1), cell(1, 2));
+		await choose("Insert column to the left");
+		await cell(1, 1).click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(6);
+		await dragTo(cell(1, 1), cell(1, 2));
+		await choose("Delete column");
+		await cell(1, 1).click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(4);
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |"));
+		// Taking every column at once is not offered.
+		await dragTo(cell(1, 0), cell(2, 3));
+		await choose("Delete column");
+		await cell(1, 0).click({ button: "right" });
+		expect(await electronApp!.evaluate(() => (globalThis as unknown as { __menu: string }).__menu)).not.toContain("Delete column");
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |"));
+
+		// Copying gives the block as a Markdown table of its own, with the header of those columns on top.
+		await dragTo(cell(3, 1), cell(4, 2));
+		await loomPage.keyboard.press("ControlOrMeta+c");
+		const copied = await electronApp!.evaluate(({ clipboard }) => clipboard.readText());
+		expect(copied).toBe("| 数量 | 备注 |\n| ---: | ---: |\n| 7 | 粉 |\n| 9 | 紫 |");
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |"));
+
+		// Delete empties the block's cells and nothing else. Undo brings them back in one step.
+		await loomPage.keyboard.press("Delete");
+		await expect.poll(onDisk).toBe(`上文\n\n| 名称 | 数量 | 备注 | 价格 |\n| :--- | ---: | ---: | :-: |\n| 苹果 | 3 | 红 | 5 |\n| 梨 | 12 | 黄 | 6 |\n| 桃 |  |  | 8 |\n| 李 |  |  | 4 |\n\n下文\n`);
+		await expect(range).toHaveCount(0);
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |"));
+
+		// Pasting: the copied cells go in with the top left at the cell that is pasted on, to the right and down.
+		const base = original.replace("| :--- | ---: | :-: | --- |", "| :--- | ---: | ---: | :-: |");
+		await dragTo(cell(1, 0), cell(2, 1));
+		await loomPage.keyboard.press("ControlOrMeta+c");
+		await cell(3, 2).click();
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(base.replace("| 桃 | 7 | 粉 | 8 |", "| 桃 | 7 | 苹果 | 3 |").replace("| 李 | 9 | 紫 | 4 |", "| 李 | 9 | 梨 | 12 |"));
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+		// Past the edge, the table grows: here by a column and a row.
+		await cell(4, 3).click();
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(`上文\n\n| 名称 | 数量 | 备注 | 价格 |  |\n| :--- | ---: | ---: | :-: | --- |\n| 苹果 | 3 | 红 | 5 |  |\n| 梨 | 12 | 黄 | 6 |  |\n| 桃 | 7 | 粉 | 8 |  |\n| 李 | 9 | 紫 | 苹果 | 3 |\n|  |  |  | 梨 | 12 |\n\n下文\n`);
+		await expect(box.locator(".cm-live-table tr")).toHaveCount(6);
+		await expect(cell(0, 4)).toBeVisible();
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+		await expect(box.locator(".cm-live-table tr")).toHaveCount(5);
+		// Pasted on a block of cells, they go in from its top left.
+		await dragTo(cell(3, 1), cell(4, 2));
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(base.replace("| 桃 | 7 | 粉 | 8 |", "| 桃 | 苹果 | 3 | 8 |").replace("| 李 | 9 | 紫 | 4 |", "| 李 | 梨 | 12 | 4 |"));
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+		// Text from elsewhere, with tabs and line breaks, is cells too.
+		await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("a\tb\nc\td"));
+		await cell(1, 0).click();
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(base.replace("| 苹果 | 3 |", "| a | b |").replace("| 梨 | 12 |", "| c | d |"));
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+		// A single word pasted into a cell is text at the caret, not a cell.
+		await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("新"));
+		await cell(1, 0).click();
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(base.replace("| 苹果 |", "| 苹果新 |"));
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+		// A single word pasted over a block fills it.
+		await dragTo(cell(1, 0), cell(2, 1));
+		await loomPage.keyboard.press("ControlOrMeta+v");
+		await expect.poll(onDisk).toBe(base.replace("| 苹果 | 3 |", "| 新 | 新 |").replace("| 梨 | 12 |", "| 新 | 新 |"));
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(base);
+
+		// Escape ends the pick and puts the caret back in the cell it began in.
+		await dragTo(cell(2, 0), cell(3, 1));
+		await expect(range).toHaveCount(1);
+		await loomPage.keyboard.press("Escape");
+		await expect(range).toHaveCount(0);
+		await expect(cell(2, 0)).toBeFocused();
+		// A click elsewhere ends it as well.
+		await dragTo(cell(2, 0), cell(3, 1));
+		await cell(4, 3).click();
+		await expect(range).toHaveCount(0);
+		// A drag that leaves the table picks as far as the edge it left from.
+		await dragTo(cell(2, 0), box.locator(".cm-line").filter({ hasText: "下文" }));
+		await expect(range).toHaveCount(1);
+		const out = (await range.boundingBox())!;
+		const bottom = (await cell(4, 0).boundingBox())!;
+		expect(Math.abs(out.y + out.height - (bottom.y + bottom.height))).toBeLessThan(2);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

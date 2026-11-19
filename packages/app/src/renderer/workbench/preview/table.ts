@@ -165,14 +165,14 @@ export function cellChange(table: ParsedTable, row: number, column: number, text
 }
 
 /** A new empty row after the last one. `end` is where the table ends, in the table's own offsets. */
-export function appendRow(table: ParsedTable, end: number): TextChange {
-	return { from: end, to: end, insert: `\n|${"  |".repeat(table.columns)}` };
+export function appendRow(table: ParsedTable, end: number, count = 1): TextChange {
+	return { from: end, to: end, insert: `\n|${"  |".repeat(table.columns)}`.repeat(count) };
 }
 
 /** A new empty column after the last one, on every line that is as wide as the table. */
-export function appendColumn(table: ParsedTable): TextChange[] {
+export function appendColumn(table: ParsedTable, count = 1): TextChange[] {
 	const changes: TextChange[] = [];
-	const add = (to: number, pipe: boolean, cell: string) => changes.push({ from: to, to, insert: pipe ? cell : ` |${cell}` });
+	const add = (to: number, pipe: boolean, cell: string) => changes.push({ from: to, to, insert: pipe ? cell.repeat(count) : ` |${cell.repeat(count)}` });
 	table.rows.forEach((row, index) => {
 		if (row.cells.length === table.columns) add(row.to, row.endsWithPipe, "  |");
 		if (index === 0) add(table.delimiter.to, table.delimiter.endsWithPipe, " --- |");
@@ -184,16 +184,17 @@ export function appendColumn(table: ParsedTable): TextChange[] {
  * The edit that removes body row `row` and its line break. The header, row 0, stays: without it there is no table.
  * Rows are told apart by their lines in `text`, the text of the table.
  */
-export function removeRow(table: ParsedTable, row: number, text: string): TextChange | null {
-	if (row <= 0 || row >= table.rows.length) return null;
+export function removeRow(table: ParsedTable, row: number, text: string, last = row): TextChange | null {
+	if (row <= 0 || row >= table.rows.length || last < row) return null;
+	last = Math.min(last, table.rows.length - 1);
 	// Row 0 is line 0 and the delimiter is line 1, so body row `n` is line `n + 1`.
 	const starts = [0];
 	for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) starts.push(at + 1);
 	const index = row + 1;
 	const from = starts[index];
 	if (from === undefined) return null;
-	const next = starts[index + 1];
-	// A line in the middle takes its own break; the last one takes the break in front of it.
+	const next = starts[last + 2];
+	// Lines in the middle take their own breaks; the last one takes the break in front of it.
 	return next === undefined ? { from: from - 1, to: text.length, insert: "" } : { from, to: next, insert: "" };
 }
 
@@ -201,21 +202,135 @@ export function removeRow(table: ParsedTable, row: number, text: string): TextCh
  * The edit that removes column `column` from the header, the delimiter row and every row that has it. A table of one
  * column keeps it. A row that is shorter than the column is left alone.
  */
-export function removeColumn(table: ParsedTable, column: number): TextChange[] | null {
-	if (table.columns <= 1 || column < 0 || column >= table.columns) return null;
+export function removeColumn(table: ParsedTable, column: number, last = column): TextChange[] | null {
+	last = Math.min(last, table.columns - 1);
+	if (column < 0 || last < column || last - column + 1 >= table.columns) return null;
 	const changes: TextChange[] = [];
 	const cut = (cells: { segFrom: number; segTo: number }[], pipe: boolean) => {
 		const cell = cells[column];
 		if (!cell) return;
-		// The pipe that closes the cell goes with it. The last cell of a row without a closing pipe takes the one before.
-		if (column < cells.length - 1 || pipe) changes.push({ from: cell.segFrom, to: cell.segTo + 1, insert: "" });
-		else changes.push({ from: cells[column - 1] ? cells[column - 1].segTo : cell.segFrom - 1, to: cell.segTo, insert: "" });
+		const end = cells[Math.min(last, cells.length - 1)];
+		// The pipe that closes the cells goes with them. A row without a closing pipe whose last cell goes takes the one before.
+		if (last < cells.length - 1 || pipe) changes.push({ from: cell.segFrom, to: end.segTo + 1, insert: "" });
+		else changes.push({ from: cells[column - 1] ? cells[column - 1].segTo : cell.segFrom - 1, to: end.segTo, insert: "" });
 	};
 	table.rows.forEach((row, index) => {
 		cut(row.cells, row.endsWithPipe);
 		if (index === 0) cut(table.delimiter.cells, table.delimiter.endsWithPipe);
 	});
 	return changes.sort((a, b) => a.from - b.from);
+}
+
+/** A block of cells, as the rows and columns it runs from and to, both ends included. The header is row 0. */
+export interface CellRect {
+	row1: number;
+	column1: number;
+	row2: number;
+	column2: number;
+}
+
+/**
+ * The cells of a block as the Markdown table they make: the header of the table's own columns over the block's rows,
+ * and the alignment of each column. When the block does not take in the header row, the table's header is put on top
+ * so that what is copied is a table of its own.
+ */
+export function rectText(table: ParsedTable, rect: CellRect): string {
+	const columns = Array.from({ length: rect.column2 - rect.column1 + 1 }, (_, index) => rect.column1 + index);
+	const line = (row: number) => `| ${columns.map((column) => table.rows[row]?.cells[column]?.text ?? "").join(" | ")} |`;
+	const delimiter = `| ${columns.map((column) => delimiterFor(table.aligns[column] ?? "")).join(" | ")} |`;
+	const lines = [line(0), delimiter];
+	for (let row = Math.max(rect.row1, 1); row <= rect.row2; row++) lines.push(line(row));
+	return lines.join("\n");
+}
+
+/** What the cells of a block hold, row by row, as written in the file. A cell a short row lacks holds nothing. */
+export function cellTexts(table: ParsedTable, rect: CellRect): string[][] {
+	const result: string[][] = [];
+	for (let row = rect.row1; row <= rect.row2; row++) {
+		const line: string[] = [];
+		for (let column = rect.column1; column <= rect.column2; column++) line.push(table.rows[row]?.cells[column]?.text ?? "");
+		result.push(line);
+	}
+	return result;
+}
+
+/**
+ * The edits that write `values` into the cells from (`row`, `column`) on, one value to a cell. What would fall outside
+ * the table is left out: the table keeps its shape. Several cells that a short row lacks are written by a single edit.
+ */
+export function setCells(table: ParsedTable, row: number, column: number, values: string[][]): TextChange[] {
+	const changes: TextChange[] = [];
+	values.forEach((line, offset) => {
+		const index = row + offset;
+		const target = table.rows[index];
+		if (!target || index >= table.rows.length) return;
+		const missing: string[] = [];
+		line.forEach((value, step) => {
+			const at = column + step;
+			if (at >= table.columns) return;
+			if (at < target.cells.length) {
+				const change = cellChange(table, index, at, value);
+				if (change) changes.push(change);
+			} else {
+				while (target.cells.length + missing.length < at) missing.push("");
+				missing.push(escapeCell(value));
+			}
+		});
+		// Empty cells at the end need no writing.
+		while (missing.length && !missing[missing.length - 1]) missing.pop();
+		if (missing.length) changes.push({ from: target.to, to: target.to, insert: `${target.endsWithPipe ? "" : " |"}${missing.map((value) => (value ? ` ${value} |` : " |")).join("")}` });
+	});
+	return changes.sort((a, b) => a.from - b.from);
+}
+
+function applyChanges(text: string, changes: TextChange[]): string {
+	let result = text;
+	for (const change of [...changes].sort((a, b) => b.from - a.from)) result = result.slice(0, change.from) + change.insert + result.slice(change.to);
+	return result;
+}
+
+/**
+ * The edit that pastes `values` into the table with its top left cell at (`row`, `column`), as a table in a spreadsheet
+ * takes them: what lies beyond the last column or row is added to the table first. The header row is a row like the
+ * others to write into, but never one that is added. Returns one edit, from the first character that changes to the
+ * last, or null when nothing does.
+ */
+export function pasteCells(text: string, row: number, column: number, values: string[][]): TextChange | null {
+	let table = parseTable(text);
+	if (!table || !values.length || row < 0 || column < 0 || row >= table.rows.length || column >= table.columns) return null;
+	let next = text;
+	const width = Math.max(...values.map((line) => line.length));
+	const extraColumns = column + width - table.columns;
+	if (extraColumns > 0) {
+		next = applyChanges(next, appendColumn(table, extraColumns));
+		table = parseTable(next);
+	}
+	const extraRows = table ? row + values.length - table.rows.length : 0;
+	if (table && extraRows > 0) {
+		next = applyChanges(next, [appendRow(table, next.length, extraRows)]);
+		table = parseTable(next);
+	}
+	if (!table) return null;
+	next = applyChanges(next, setCells(table, row, column, values));
+	if (next === text) return null;
+	// Only the stretch that differs, so that what the paste did not touch is not written again.
+	let from = 0;
+	while (from < text.length && from < next.length && text[from] === next[from]) from++;
+	let end = 0;
+	while (end < text.length - from && end < next.length - from && text[text.length - 1 - end] === next[next.length - 1 - end]) end++;
+	return { from, to: text.length - end, insert: next.slice(from, next.length - end) };
+}
+
+/** The edits that empty every cell of a block, the header's included. Cells that are empty already are left out. */
+export function clearCells(table: ParsedTable, rect: CellRect): TextChange[] {
+	const changes: TextChange[] = [];
+	for (let row = rect.row1; row <= rect.row2; row++) {
+		for (let column = rect.column1; column <= rect.column2; column++) {
+			const change = cellChange(table, row, column, "");
+			if (change) changes.push(change);
+		}
+	}
+	return changes;
 }
 
 /** The delimiter cell that stands for an alignment: `---`, `:---`, `:-:` or `---:`. */
@@ -303,15 +418,15 @@ export function moveColumn(table: ParsedTable, from: number, to: number, text: s
 }
 
 /** A new empty row at body position `row` (1 is right under the header). The same as {@link appendRow} when it is past the end. */
-export function insertRow(table: ParsedTable, row: number, text: string): TextChange {
-	if (row >= table.rows.length) return appendRow(table, text.length);
+export function insertRow(table: ParsedTable, row: number, text: string, count = 1): TextChange {
+	if (row >= table.rows.length) return appendRow(table, text.length, count);
 	// Before the line that is row `row`: row 0 is line 0 and the delimiter is line 1, so row `n` is line `n + 1`.
 	let at = 0;
 	for (let line = 0; line < row + 1; line++) at = text.indexOf("\n", at) + 1;
 	// Empty cells, in the form the table is written in: with the outer pipes, or without.
 	const outer = table.rows.every((r) => r.cells.length === 0 || r.endsWithPipe);
 	const empty = Array(table.columns).fill("  ").join("|");
-	return { from: at, to: at, insert: `${outer ? `|${empty}|` : empty}\n` };
+	return { from: at, to: at, insert: `${outer ? `|${empty}|` : empty}\n`.repeat(count) };
 }
 
 /**
@@ -320,18 +435,18 @@ export function insertRow(table: ParsedTable, row: number, text: string): TextCh
  * would start with `|`, which the preview takes for an outer pipe and so for one column fewer. Such a line gets its
  * outer pipes first, which changes how it is written and not what it says.
  */
-export function insertColumn(table: ParsedTable, column: number, text: string): TextChange[] {
-	if (column >= table.columns) return appendColumn(table);
+export function insertColumn(table: ParsedTable, column: number, text: string, count = 1): TextChange[] {
+	if (column >= table.columns) return appendColumn(table, count);
 	const changes: TextChange[] = [];
 	const add = (cells: { segFrom: number; segTo: number }[], pipe: boolean, filler: string) => {
 		const cell = cells[column];
 		if (!cell) return;
 		const startsLine = column === 0 && (cell.segFrom === 0 || text[cell.segFrom - 1] === "\n");
 		if (startsLine && !leadingPipe(text, cell.segFrom)) {
-			changes.push({ from: cell.segFrom, to: cell.segFrom, insert: `|${filler}|` });
+			changes.push({ from: cell.segFrom, to: cell.segFrom, insert: `|${filler}|${`${filler}|`.repeat(count - 1)}` });
 			if (!pipe) changes.push({ from: cells[cells.length - 1].segTo, to: cells[cells.length - 1].segTo, insert: " |" });
 		} else {
-			changes.push({ from: cell.segFrom, to: cell.segFrom, insert: `${filler}|` });
+			changes.push({ from: cell.segFrom, to: cell.segFrom, insert: `${filler}|`.repeat(count) });
 		}
 	};
 	table.rows.forEach((row, index) => {

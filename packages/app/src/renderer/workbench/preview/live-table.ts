@@ -5,7 +5,7 @@ import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
 import { renderInlineMarkdown } from "./markdown.ts";
 import type { TableContextAction, TableContextState } from "../../../shared/ipc.ts";
-import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, removeColumn, removeRow, setAlign, type ParsedTable, type TableAlign } from "./table.ts";
+import { appendColumn, appendRow, cellChange, cellTexts, clearCells, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, rectText, removeColumn, pasteCells, removeRow, setAlign, type CellRect, type ParsedTable, type TableAlign } from "./table.ts";
 
 /**
  * A table drawn as a table, with cells that are edited in place. Every edit is written back as a change to that
@@ -69,6 +69,8 @@ export class TableWidget extends WidgetType {
 		const table = parseTable(this.text)!;
 		const wrap = document.createElement("div");
 		wrap.className = "cm-live-table";
+		// Focusable, so that the keys go to the table while a block of cells is picked and no cell holds the caret.
+		wrap.tabIndex = -1;
 		// How much of the document the table covers, which tells a selection that spans it from one that does not.
 		wrap.dataset.length = String(this.text.length);
 		const scroll = document.createElement("div");
@@ -106,6 +108,7 @@ export class TableWidget extends WidgetType {
 			const hit = cells.find((cell) => event.clientX < cell.getBoundingClientRect().right) ?? cells[cells.length - 1];
 			if (hit) focusCell(wrap, Number(hit.dataset.row), Number(hit.dataset.column), "end");
 		});
+		this.listenPicked(wrap, view);
 		wrap.append(scroll, this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
 
 		this.attachHandles(view, wrap, scroll, element);
@@ -353,6 +356,9 @@ export class TableWidget extends WidgetType {
 				this.hooks(view)?.openAsset(link.dataset.assetId!, link.dataset.anchor);
 				return;
 			}
+			// A press in a cell ends a block that was picked, and may start a new one by being dragged into another cell.
+			dropPick(wrap);
+			trackPress(wrap, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
 			// A cell that is not being edited shows its result. A click turns it into its text first.
 			if (cell !== cell.ownerDocument.activeElement) {
 				event.preventDefault();
@@ -376,6 +382,15 @@ export class TableWidget extends WidgetType {
 			if (!(event as InputEvent).isComposing) commit(view, wrap, cell);
 		});
 		cell.addEventListener("compositionend", () => commit(view, wrap, cell));
+		// Cells copied from a table go into the cells from this one on, to the right and down, and the table grows to hold
+		// them. Text that has no cells in it is put in at the caret, as text is.
+		cell.addEventListener("paste", (event) => {
+			event.stopPropagation();
+			const values = readCells(event, false);
+			if (!values) return;
+			event.preventDefault();
+			editTable(view, wrap, { kind: "paste", row: Number(cell.dataset.row), column: Number(cell.dataset.column), values });
+		});
 		cell.addEventListener("keydown", (event) => keyInCell(event, view, wrap, cell, this.hooks(view)));
 		cell.addEventListener("contextmenu", (event) => {
 			const hooks = this.hooks(view);
@@ -385,14 +400,208 @@ export class TableWidget extends WidgetType {
 			event.stopPropagation();
 			const row = Number(cell.dataset.row);
 			const column = Number(cell.dataset.column);
-			const align = found.table.aligns[column] ?? "";
-			void hooks.chooseAction({ canDeleteRow: row > 0, canDeleteColumn: found.table.columns > 1, align }).then((action) => {
+			// A menu opened on a cell of the picked block is for the block; anywhere else it is for that cell alone.
+			let rect = pickedRect(wrap);
+			if (!rect || row < rect.row1 || row > rect.row2 || column < rect.column1 || column > rect.column2) {
+				dropPick(wrap);
+				rect = { row1: row, column1: column, row2: row, column2: column };
+			}
+			const block = rect;
+			const aligns = found.table.aligns.slice(block.column1, block.column2 + 1);
+			// The columns are marked as aligned when they all are, and the same way.
+			const align = aligns.every((one) => one === aligns[0]) ? aligns[0] ?? "" : "";
+			const columns = block.column2 - block.column1 + 1;
+			void hooks.chooseAction({ canDeleteRow: block.row2 > 0, canDeleteColumn: found.table.columns > columns, align }).then((action) => {
 				if (!action) return;
-				const edit = editFor(action, row, column, align);
+				const edit = editFor(action, block, align);
 				if (edit) editTable(view, wrap, edit);
 			});
 		});
 	}
+
+	/** The keys, copy and paste of a table while a block of its cells is picked. */
+	private listenPicked(wrap: HTMLElement, view: EditorView): void {
+		wrap.addEventListener("focusout", (event) => {
+			// Focus moving on ends the pick. Not when the whole window loses it, as the native menu does.
+			if (!wrap.contains(event.relatedTarget as Node | null) && wrap.ownerDocument.hasFocus()) dropPick(wrap);
+		});
+		wrap.addEventListener("keydown", (event) => {
+			const picked = picks.get(wrap);
+			if (!picked || event.target !== wrap) return;
+			// Nothing reaches the editor's key bindings, which would act on the whole document.
+			event.stopPropagation();
+			const mod = event.metaKey || event.ctrlKey;
+			const key = event.key.toLowerCase();
+			const handled = () => event.preventDefault();
+			if (mod && key === "a") {
+				handled();
+				const state = shown.get(wrap);
+				if (state) pickCells(wrap, { row: 0, column: 0 }, { row: state.rows - 1, column: state.columns - 1 });
+			} else if (mod && key === "s") {
+				handled();
+				this.hooks(view)?.save();
+			} else if (mod && (key === "z" || key === "y")) {
+				handled();
+				(key === "y" || event.shiftKey ? redo : undo)(view);
+			} else if (mod || event.altKey) {
+				return;
+			} else if (event.key === "Delete" || event.key === "Backspace") {
+				handled();
+				editTable(view, wrap, { kind: "clear", rect: picked.rect });
+			} else {
+				// Escape, the arrows, Enter and Tab end the pick and put the caret where it began; a letter does nothing.
+				handled();
+				if (!["Escape", "Enter", "Tab", "ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)) return;
+				dropPick(wrap);
+				focusCell(wrap, picked.anchor.row, picked.anchor.column, "end");
+			}
+		});
+		const copy = (event: ClipboardEvent, cut: boolean) => {
+			const picked = picks.get(wrap);
+			if (!picked) return;
+			event.stopPropagation();
+			event.preventDefault();
+			const found = currentTable(view, wrap);
+			if (!found) return;
+			event.clipboardData?.setData("text/plain", rectText(found.table, picked.rect));
+			// The cells alone, for pasting into cells: the text above has a header put on top, which is not one of them.
+			event.clipboardData?.setData(CELLS_TYPE, JSON.stringify(cellTexts(found.table, picked.rect)));
+			if (cut) editTable(view, wrap, { kind: "clear", rect: picked.rect });
+		};
+		wrap.addEventListener("copy", (event) => copy(event, false));
+		wrap.addEventListener("cut", (event) => copy(event, true));
+		// Pasted over a block of cells, the cells go in from its top left. One cell pasted over a larger block fills it.
+		wrap.addEventListener("paste", (event) => {
+			const picked = picks.get(wrap);
+			if (!picked) return;
+			event.stopPropagation();
+			event.preventDefault();
+			let values = readCells(event, true);
+			if (!values) return;
+			const { rect } = picked;
+			if (values.length === 1 && values[0].length === 1) {
+				values = Array.from({ length: rect.row2 - rect.row1 + 1 }, () => Array<string>(rect.column2 - rect.column1 + 1).fill(values![0][0]));
+			}
+			editTable(view, wrap, { kind: "paste", row: rect.row1, column: rect.column1, values });
+		});
+	}
+}
+
+/** A block of cells picked by dragging from one cell into another, and the frame drawn round it. */
+interface Pick {
+	rect: CellRect;
+	anchor: { row: number; column: number };
+	frame: HTMLElement;
+}
+
+const picks = new WeakMap<HTMLElement, Pick>();
+
+/** What a copy of cells carries besides its text: the cells themselves, row by row. */
+const CELLS_TYPE = "application/x-loom-table-cells";
+
+/**
+ * The cells on the clipboard: those a copy from a table left, or text with tabs and line breaks in it, which is how
+ * other tables put cells on it. Plain one-line text counts as one cell only when `single` says so.
+ */
+function readCells(event: ClipboardEvent, single: boolean): string[][] | null {
+	const data = event.clipboardData;
+	if (!data) return null;
+	const own = data.getData(CELLS_TYPE);
+	if (own) {
+		try {
+			const parsed: unknown = JSON.parse(own);
+			if (Array.isArray(parsed) && parsed.every((line) => Array.isArray(line) && line.every((value) => typeof value === "string"))) return parsed as string[][];
+		} catch {
+			// Not ours after all; the text is read instead.
+		}
+	}
+	const text = data.getData("text/plain").replace(/\r\n?/g, "\n").replace(/\n$/, "");
+	if (!text) return null;
+	if (!single && !/[\t\n]/.test(text)) return null;
+	return text.split("\n").map((line) => line.split("\t"));
+}
+
+/** The cell under a point, or the nearest one when the point is outside the table, so a drag may leave it. */
+function cellAt(wrap: HTMLElement, x: number, y: number): { row: number; column: number } | null {
+	const rows = Array.from(wrap.querySelector("table")?.rows ?? []);
+	if (!rows.length) return null;
+	let row = rows.findIndex((line) => y < line.getBoundingClientRect().bottom);
+	if (row === -1) row = rows.length - 1;
+	const cells = Array.from(rows[row].cells);
+	let column = cells.findIndex((cell) => x < cell.getBoundingClientRect().right);
+	if (column === -1) column = cells.length - 1;
+	return { row, column };
+}
+
+function pickedRect(wrap: HTMLElement): CellRect | null {
+	return picks.get(wrap)?.rect ?? null;
+}
+
+/** Picks the block of cells between two cells and draws a frame round it. */
+function pickCells(wrap: HTMLElement, anchor: { row: number; column: number }, to: { row: number; column: number }): void {
+	const rect: CellRect = {
+		row1: Math.min(anchor.row, to.row),
+		column1: Math.min(anchor.column, to.column),
+		row2: Math.max(anchor.row, to.row),
+		column2: Math.max(anchor.column, to.column),
+	};
+	let pick = picks.get(wrap);
+	if (!pick) {
+		const frame = document.createElement("div");
+		frame.className = "cm-live-table-range";
+		wrap.append(frame);
+		pick = { rect, anchor, frame };
+		picks.set(wrap, pick);
+	}
+	pick.rect = rect;
+	pick.anchor = anchor;
+	const first = wrap.querySelector<HTMLElement>(`[data-row="${rect.row1}"][data-column="${rect.column1}"]`)?.getBoundingClientRect();
+	const last = wrap.querySelector<HTMLElement>(`[data-row="${rect.row2}"][data-column="${rect.column2}"]`)?.getBoundingClientRect();
+	if (!first || !last) return;
+	const box = wrap.getBoundingClientRect();
+	pick.frame.style.left = `${first.left - box.left}px`;
+	pick.frame.style.top = `${first.top - box.top}px`;
+	pick.frame.style.width = `${last.right - first.left}px`;
+	pick.frame.style.height = `${last.bottom - first.top}px`;
+}
+
+function dropPick(wrap: HTMLElement): void {
+	picks.get(wrap)?.frame.remove();
+	picks.delete(wrap);
+}
+
+/**
+ * Follows the mouse from a press in a cell. Dragged into another cell, it stops being a text selection in the cell
+ * and becomes a block of cells, from the one that was pressed to the one under the pointer.
+ */
+function trackPress(wrap: HTMLElement, anchor: { row: number; column: number }): void {
+	let picking = false;
+	const end = () => {
+		document.removeEventListener("mousemove", move, true);
+		document.removeEventListener("mouseup", end, true);
+		window.removeEventListener("blur", end);
+		wrap.classList.remove("cm-live-table-picking");
+	};
+	const move = (event: MouseEvent) => {
+		if (event.buttons === 0) return end();
+		const at = cellAt(wrap, event.clientX, event.clientY);
+		if (!at) return;
+		if (!picking) {
+			if (at.row === anchor.row && at.column === anchor.column) return;
+			picking = true;
+			wrap.classList.add("cm-live-table-picking");
+			// The caret leaves the cell, and the table itself takes the keys.
+			const active = wrap.ownerDocument.activeElement;
+			if (active instanceof HTMLElement && active !== wrap && wrap.contains(active)) active.blur();
+			window.getSelection()?.removeAllRanges();
+			wrap.focus({ preventScroll: true });
+		}
+		event.preventDefault();
+		pickCells(wrap, anchor, at);
+	};
+	document.addEventListener("mousemove", move, true);
+	document.addEventListener("mouseup", end, true);
+	window.addEventListener("blur", end);
 }
 
 /**
@@ -462,11 +671,13 @@ function commit(view: EditorView, wrap: HTMLElement, cell: HTMLElement): void {
 
 /** What can be done to a table at a cell. */
 export type TableEdit =
-	| { kind: "insert-row"; at: number }
-	| { kind: "insert-column"; at: number }
-	| { kind: "delete-row"; at: number }
-	| { kind: "delete-column"; at: number }
-	| { kind: "align"; at: number; align: TableAlign }
+	| { kind: "insert-row"; at: number; count?: number }
+	| { kind: "insert-column"; at: number; count?: number }
+	| { kind: "delete-row"; at: number; last?: number }
+	| { kind: "delete-column"; at: number; last?: number }
+	| { kind: "align"; at: number; last?: number; align: TableAlign }
+	| { kind: "clear"; rect: CellRect }
+	| { kind: "paste"; row: number; column: number; values: string[][] }
 	| { kind: "move-row"; from: number; to: number }
 	| { kind: "move-column"; from: number; to: number };
 
@@ -474,6 +685,7 @@ export type TableEdit =
 function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
 	const found = currentTable(view, wrap);
 	if (!found) return;
+	dropPick(wrap);
 	const { range, table } = found;
 	const text = view.state.doc.sliceString(range.from, range.to);
 	const shift = (change: { from: number; to: number; insert: string }) => ({ from: range.from + change.from, to: range.from + change.to, insert: change.insert });
@@ -482,25 +694,27 @@ function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
 	switch (edit.kind) {
 		case "insert-row": {
 			const at = Math.min(Math.max(edit.at, 1), table.rows.length);
-			changes = [shift(at >= table.rows.length ? appendRow(table, text.length) : insertRow(table, at, text))];
+			changes = [shift(insertRow(table, at, text, edit.count ?? 1))];
 			focus = { row: at, column: 0 };
 			break;
 		}
 		case "insert-column": {
 			const at = Math.min(Math.max(edit.at, 0), table.columns);
-			changes = insertColumn(table, at, text).map(shift);
+			changes = insertColumn(table, at, text, edit.count ?? 1).map(shift);
 			focus = { row: 0, column: at };
 			break;
 		}
 		case "delete-row": {
-			const change = removeRow(table, edit.at, text);
+			const last = edit.last ?? edit.at;
+			const change = removeRow(table, edit.at, text, last);
 			changes = change ? [shift(change)] : null;
-			focus = { row: Math.min(edit.at, table.rows.length - 2), column: 0 };
+			focus = { row: Math.max(0, Math.min(edit.at, table.rows.length - 1 - (Math.min(last, table.rows.length - 1) - edit.at + 1))), column: 0 };
 			break;
 		}
 		case "delete-column": {
-			changes = removeColumn(table, edit.at)?.map(shift) ?? null;
-			focus = { row: 0, column: Math.min(edit.at, table.columns - 2) };
+			const last = edit.last ?? edit.at;
+			changes = removeColumn(table, edit.at, last)?.map(shift) ?? null;
+			focus = { row: 0, column: Math.max(0, Math.min(edit.at, table.columns - 1 - (Math.min(last, table.columns - 1) - edit.at + 1))) };
 			break;
 		}
 		case "move-row": {
@@ -515,28 +729,55 @@ function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
 			break;
 		}
 		case "align": {
-			const change = setAlign(table, edit.at, edit.align, text);
-			changes = change ? [shift(change)] : null;
+			const found: { from: number; to: number; insert: string }[] = [];
+			for (let column = edit.at; column <= (edit.last ?? edit.at); column++) {
+				const change = setAlign(table, column, edit.align, text);
+				if (change) found.push(shift(change));
+			}
+			changes = found.length ? found : null;
 			focus = { row: 0, column: edit.at };
+			break;
+		}
+		case "paste": {
+			const change = pasteCells(text, edit.row, edit.column, edit.values);
+			changes = change ? [shift(change)] : null;
+			focus = { row: edit.row, column: edit.column };
+			break;
+		}
+		case "clear": {
+			const found = clearCells(table, edit.rect).map(shift);
+			changes = found.length ? found : null;
+			focus = { row: edit.rect.row1, column: edit.rect.column1 };
 			break;
 		}
 	}
 	if (!changes) return;
 	pendingFocus = { from: range.from, ...focus };
 	view.dispatch({ changes, userEvent: "input" });
+	// A table that kept its shape is carried over, not drawn again, so the caret is put in its cell from here.
+	requestAnimationFrame(() => {
+		if (pendingFocus?.from !== range.from || !wrap.isConnected) return;
+		const { row, column } = pendingFocus;
+		pendingFocus = null;
+		focusCell(wrap, row, column, "start");
+	});
 }
 
 /** The edit a menu choice stands for at a cell, or null when the choice is not an edit. */
-function editFor(action: TableContextAction, row: number, column: number, current: TableAlign): TableEdit | null {
-	// Choosing the alignment a column already has takes it off.
-	const align = (to: TableAlign): TableEdit => ({ kind: "align", at: column, align: current === to ? "" : to });
+function editFor(action: TableContextAction, rect: CellRect, current: TableAlign): TableEdit | null {
+	// Choosing the alignment the columns already have takes it off.
+	const align = (to: TableAlign): TableEdit => ({ kind: "align", at: rect.column1, last: rect.column2, align: current === to ? "" : to });
+	// As many rows or columns are added as the block covers. The header is not a row that is added beside.
+	const firstRow = Math.max(rect.row1, 1);
+	const rows = Math.max(1, rect.row2 - firstRow + 1);
+	const columns = rect.column2 - rect.column1 + 1;
 	switch (action) {
-		case "add_row_above": return { kind: "insert-row", at: Math.max(row, 1) };
-		case "add_row_below": return { kind: "insert-row", at: row + 1 };
-		case "add_column_left": return { kind: "insert-column", at: column };
-		case "add_column_right": return { kind: "insert-column", at: column + 1 };
-		case "delete_row": return { kind: "delete-row", at: row };
-		case "delete_column": return { kind: "delete-column", at: column };
+		case "add_row_above": return { kind: "insert-row", at: firstRow, count: rows };
+		case "add_row_below": return { kind: "insert-row", at: rect.row2 + 1, count: rows };
+		case "add_column_left": return { kind: "insert-column", at: rect.column1, count: columns };
+		case "add_column_right": return { kind: "insert-column", at: rect.column2 + 1, count: columns };
+		case "delete_row": return { kind: "delete-row", at: firstRow, last: rect.row2 };
+		case "delete_column": return { kind: "delete-column", at: rect.column1, last: rect.column2 };
 		case "align_left": return align("left");
 		case "align_center": return align("center");
 		case "align_right": return align("right");
