@@ -182,13 +182,15 @@ test("live rendering hides Markdown symbols away from the cursor and never chang
 	}
 });
 
-test("wiki links and pictures render live, flag missing targets and open with a modifier click", async ({ loomPage, electronApp }) => {
+test("internal links open with a click in Markdown edit mode and Alt-click edits them", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(60000);
 	const root = await mkdtemp(join(tmpdir(), "loom-md-wiki-e2e-"));
 	const source = join(root, "脚本.md");
 	const text = [
 		"见 [[产品/说明]]、[[产品/说明#结尾|别名]] 和 [[待调研]]。",
+		"",
+		"还有 [普通链接](产品/说明.md#结尾)。",
 		"",
 		"![[图/封面.png]]",
 		"",
@@ -213,12 +215,13 @@ test("wiki links and pictures render live, flag missing targets and open with a 
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		const tree = loomPage.locator(".library-sidebar, aside").first();
-		await tree.locator(".asset-row").filter({ hasText: "脚本.md" }).first().click();
+		const sourceRow = tree.locator(".asset-row").filter({ hasText: "脚本.md" }).first();
+		await sourceRow.click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 脚本.md" });
 		await box.click();
 		await box.press("ControlOrMeta+End");
 
-		await expect(box.locator("a, .cm-live-wiki")).toHaveCount(3);
+		await expect(box.locator(".cm-live-wiki")).toHaveCount(3);
 		await expect(box.locator(".cm-live-wiki.cm-live-broken")).toHaveText("待调研");
 		// Both ways of writing a picture show it, and the missing one is flagged instead.
 		await expect(box.locator("img.cm-live-image")).toHaveCount(2);
@@ -226,15 +229,29 @@ test("wiki links and pictures render live, flag missing targets and open with a 
 		await expect(box.locator(".cm-live-broken")).toHaveCount(2);
 		await expect.poll(() => box.locator("img.cm-live-image").first().evaluate((image) => image.getBoundingClientRect().height)).toBeLessThanOrEqual(360);
 
-		// A plain click only edits: the brackets come back and nothing opens.
-		await box.locator(".cm-live-wiki").first().click();
+		await box.locator(".cm-live-wiki").first().click({ modifiers: ["Alt"] });
 		await expect(box).toContainText("[[产品/说明]]");
-		await expect(loomPage.getByRole("tab", { name: "脚本.md" })).toBeVisible();
+		await expect(box).toBeVisible();
 		await box.press("ControlOrMeta+End");
 
-		// A modifier click opens the file at the heading the link names.
-		await box.locator(".cm-live-wiki", { hasText: "别名" }).click({ modifiers: ["ControlOrMeta"] });
-		await expect(loomPage.locator(".cm-content").getByRole("heading", { name: "结尾" })).toBeInViewport({ timeout: 10_000 });
+		const wiki = box.locator(".cm-live-wiki", { hasText: "别名" });
+		await expect(wiki).toHaveCSS("cursor", "pointer");
+		await wiki.scrollIntoViewIfNeeded();
+		const bounds = (await wiki.boundingBox())!;
+		const y = bounds.y + bounds.height / 2;
+		await loomPage.mouse.move(bounds.x + 2, y);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(bounds.x + bounds.width - 2, y, { steps: 5 });
+		await loomPage.mouse.up();
+		await expect(box).toBeVisible();
+		await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toContain("别名");
+
+		for (const link of [wiki, box.locator(".cm-live-link", { hasText: "普通链接" })]) {
+			await box.press("ControlOrMeta+End");
+			await link.click();
+			await expect(loomPage.locator(".cm-content").getByRole("heading", { name: "结尾" })).toBeInViewport({ timeout: 10_000 });
+			await sourceRow.click();
+		}
 
 		// Looking and clicking left the file as it was.
 		expect(await readFile(source, "utf8")).toBe(text);
@@ -615,17 +632,18 @@ test("table cells render links, formulas and missing references, and a narrow co
 		await cells.nth(0).click();
 		await expect(cells.nth(0)).toBeFocused();
 		expect(await look()).toEqual(resting);
-		// A click on what a cell shows, a link or code or a formula, edits that cell. The content is swapped for the
-		// source as the cell takes the focus, so the clicked element is gone by the time the click reaches the table.
-		for (const index of [0, 1, 3, 4]) {
+		// Clicking a formula, code or a missing reference puts the cell into source editing.
+		for (const index of [1, 3, 4]) {
 			await box.locator(".cm-line").filter({ hasText: "结尾" }).click();
 			await expect(cells.nth(index).locator("a, code, .katex-html, .markdown-broken-reference").first()).toBeVisible();
 			await cells.nth(index).locator("a, code, .katex-html, .markdown-broken-reference").first().click();
 			await expect(cells.nth(index)).toBeFocused();
 		}
-		// A plain click edits the cell, as it does for a link in the text, and shows its source.
-		await cells.nth(0).click();
+		await cells.nth(0).locator("a").click({ modifiers: ["Alt"] });
 		await expect(cells.nth(0)).toHaveText("[[目标]]");
+		await box.locator(".cm-line").filter({ hasText: "结尾" }).click();
+		await cells.nth(0).locator("a").click();
+		await expect(loomPage.getByRole("textbox", { name: "Edit 目标.md" })).toBeVisible();
 		expect(await readFile(file, "utf8")).toBe(original);
 	} finally {
 		await rm(root, { recursive: true, force: true });

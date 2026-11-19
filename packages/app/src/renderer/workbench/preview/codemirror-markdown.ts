@@ -70,7 +70,7 @@ const theme = EditorView.theme({
 	// Hide the layer, not individual cursors: CodeMirror's focused-cursor rule has higher specificity.
 	"&.cm-markdown-read .cm-cursorLayer": { display: "none" },
 	"&.cm-markdown-read .cm-live-checkbox": { cursor: "default" },
-	"&.cm-markdown-read .cm-live-wiki, &.cm-markdown-read [data-asset-id], &.cm-markdown-read [data-anchor], &.cm-markdown-read [data-href]": { cursor: "pointer" },
+	"&.cm-markdown-read [data-href]": { cursor: "pointer" },
 	"&.cm-markdown-read .cm-live-math, &.cm-markdown-read .cm-live-mermaid": { cursor: "default" },
 	".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lm-text-primary)" },
 	"&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {

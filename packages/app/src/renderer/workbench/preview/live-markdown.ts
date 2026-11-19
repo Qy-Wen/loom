@@ -7,6 +7,7 @@ import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
 import { searchSelection } from "./markdown-find-widgets.ts";
+import { liveReferenceSelectors, pressedReference } from "./live-reference.ts";
 import { enterTable, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
@@ -385,15 +386,18 @@ const trackDrag = EditorView.domEventHandlers({
 	mousedown(event, view) {
 		// A cell of a drawn table is edited on its own and selects nothing in the document.
 		if (event.button !== 0 || (event.target as HTMLElement | null)?.closest(".cm-live-table")) return false;
+		const reference = pressedReference(event);
 		// What is open now stays as it is until the button is up: the selection it is about to make does not open anything.
 		view.dispatch({ effects: setPressed.of({ held: revealRanges(view.state).map(({ from, to }) => ({ from, to })) }) });
-		const end = () => {
+		const end = (event: Event) => {
 			document.removeEventListener("mouseup", end, true);
 			window.removeEventListener("blur", end);
 			if (!view.state.field(pressState, false)) return;
+			const link = event instanceof MouseEvent ? reference?.(event) : null;
 			// The symbols at the edges of what was swept over are part of it, as it looked while it was dragged.
 			const selection = snapToSymbols(view.state);
 			view.dispatch({ effects: setPressed.of(null), ...(selection ? { selection } : {}) });
+			if (link) view.state.facet(handlersFacet)?.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
 		};
 		document.addEventListener("mouseup", end, true);
 		window.addEventListener("blur", end);
@@ -956,6 +960,8 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 	}
 }, { decorations: (plugin) => plugin.decorations });
 
+const referencesInContent = liveReferenceSelectors.map((selector) => `.cm-content ${selector}`);
+
 export const liveMarkdownTheme = EditorView.theme({
 	// Hidden marks keep a place in the layout with no width. With display:none they have no position on screen, and a
 	// line that is nothing but a mark and its text offers the vertical move no place to land: it steps over the line.
@@ -963,7 +969,7 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-strong": { fontWeight: "var(--lm-weight-semibold)" },
 	".cm-live-emphasis": { fontStyle: "italic" },
 	".cm-live-strike": { textDecoration: "line-through" },
-	".cm-live-code": {
+	".cm-live-code, .cm-live-table code": {
 		padding: "0.1em 0.35em",
 		borderRadius: "var(--lm-radius-sm)",
 		// Keep the selection layer behind the text visible through the inline code tint.
@@ -972,7 +978,8 @@ export const liveMarkdownTheme = EditorView.theme({
 		fontSize: "0.86em",
 	},
 	".cm-live-broken": { whiteSpace: "nowrap", color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
-	".cm-live-wiki": { cursor: "text" },
+	[referencesInContent.join(", ")]: { cursor: "pointer" },
+	[referencesInContent.map((selector) => `${selector}:hover`).join(", ")]: { textDecorationThickness: "2px" },
 	".cm-live-image": { maxWidth: "100%", maxHeight: "360px", width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
 	".cm-live-codeblock": {
 		position: "relative",
@@ -1032,14 +1039,6 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-table th:focus, .cm-live-table td:focus": {
 		backgroundColor: "var(--lm-surface-accent)",
 		boxShadow: "inset 0 0 0 1.5px var(--lm-border-accent)",
-	},
-	// Inline code in a cell looks as it does in the text.
-	".cm-live-table code": {
-		padding: "0.1em 0.35em",
-		borderRadius: "var(--lm-radius-sm)",
-		backgroundColor: "var(--lm-surface-hover)",
-		fontFamily: "var(--lm-font-mono)",
-		fontSize: "0.86em",
 	},
 	".cm-live-table a": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
 	".cm-live-table img": { maxWidth: "100%", maxHeight: "200px" },
@@ -1155,9 +1154,6 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-h4, .cm-live-h5, .cm-live-h6": { fontSize: "1em" },
 });
 
-/**
- * A plain click while reading, or ⌘/Ctrl+click while editing, opens the link. Other editing clicks only place the cursor.
- */
 export const liveClicks = EditorView.domEventHandlers({
 	mousedown(event, view) {
 		const box = (event.target as HTMLElement | null)?.closest<HTMLElement>(".cm-live-checkbox");
@@ -1172,12 +1168,10 @@ export const liveClicks = EditorView.domEventHandlers({
 			}
 		}
 		if ((!view.state.readOnly && !(event.metaKey || event.ctrlKey)) || event.button !== 0) return false;
-		const handlers = view.state.facet(handlersFacet);
-		const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id], [data-anchor], [data-href]");
-		if (!handlers || !link || link.classList.contains("cm-live-broken")) return false;
+		const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-href]");
+		if (!link?.dataset.href) return false;
 		event.preventDefault();
-		if (link.dataset.href) window.open(link.dataset.href, "_blank", "noopener,noreferrer");
-		else handlers.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
+		window.open(link.dataset.href, "_blank", "noopener,noreferrer");
 		return true;
 	},
 });

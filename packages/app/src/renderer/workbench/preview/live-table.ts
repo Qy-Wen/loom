@@ -3,6 +3,7 @@ import { syntaxTree } from "@codemirror/language";
 import type { StateEffectType } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
+import { pressedReference } from "./live-reference.ts";
 import { renderInlineMarkdown } from "./markdown.ts";
 import type { EditorClipboardAction, TableContextAction, TableContextState } from "../../../shared/ipc.ts";
 import { appendColumn, appendRow, cellChange, cellTexts, clearCells, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, rectText, removeColumn, pasteCells, removeRow, setAlign, type CellRect, type ParsedTable, type TableAlign } from "./table.ts";
@@ -356,25 +357,24 @@ export class TableWidget extends WidgetType {
 	}
 
 	private listen(cell: HTMLElement, wrap: HTMLElement, view: EditorView): void {
+		let reference: ReturnType<typeof pressedReference>;
 		cell.addEventListener("mousedown", (event) => {
+			reference = pressedReference(event);
 			if (event.button === 2) { event.preventDefault(); return; }
 			if (event.button !== 0) return;
-			const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id]");
-			if (link && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
+			const href = (event.target as HTMLElement | null)?.closest("a")?.getAttribute("href");
+			if (href && /^(https?:|mailto:)/i.test(href) && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
 				event.preventDefault();
-				this.hooks(view)?.openAsset(link.dataset.assetId!, link.dataset.anchor);
-				return;
-			}
-			const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>("a");
-			if (anchor && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
-				event.preventDefault();
-				if (anchor.dataset.anchor && !anchor.classList.contains("markdown-broken-reference")) this.hooks(view)?.openAsset("", anchor.dataset.anchor);
-				else if (/^(https?:|mailto:)/i.test(anchor.href)) window.open(anchor.href, "_blank", "noopener,noreferrer");
+				window.open(href, "_blank", "noopener,noreferrer");
 				return;
 			}
 			// A press in a cell ends a block that was picked, and may start a new one by being dragged into another cell.
 			dropPick(wrap);
 			trackPress(wrap, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
+			if (reference) {
+				if (!view.state.readOnly) event.preventDefault();
+				return;
+			}
 			// A cell that is not being edited shows its result. A click turns it into its text first.
 			if (!view.state.readOnly && cell !== cell.ownerDocument.activeElement) {
 				event.preventDefault();
@@ -383,6 +383,9 @@ export class TableWidget extends WidgetType {
 		});
 		cell.addEventListener("click", (event) => {
 			if ((event.target as HTMLElement | null)?.closest("a")) event.preventDefault();
+			const link = reference?.(event);
+			reference = undefined;
+			if (link) this.hooks(view)?.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
 		});
 		cell.addEventListener("focus", () => {
 			if (view.state.readOnly) return;
