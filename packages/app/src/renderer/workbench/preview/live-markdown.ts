@@ -542,6 +542,28 @@ function stepIntoBlock(direction: "up" | "down") {
 }
 
 /**
+ * Up and down inside a line that wraps. The caret in a formula shows its source, which is longer than the formula
+ * and can push the end of the line onto a second row. Down then lands on that row, outside the formula, the source
+ * folds back, the line is one row again and the caret is still where it was in height: the move seems to have
+ * jumped over what followed. When a move within one line shows no change in height, go on to the next line.
+ */
+function stepWithinLine(forward: boolean) {
+	return (view: EditorView): boolean => {
+		const { selection } = view.state;
+		if (selection.ranges.length !== 1 || !selection.main.empty) return false;
+		const range = selection.main;
+		const landing = view.moveVertically(range, forward);
+		if (landing.head === range.head || view.state.doc.lineAt(landing.head).number !== view.state.doc.lineAt(range.head).number) return false;
+		const before = view.coordsAtPos(range.head, range.assoc || 1)?.top;
+		view.dispatch({ selection: landing, scrollIntoView: true, userEvent: "select" });
+		const after = view.coordsAtPos(landing.head, landing.assoc || 1)?.top;
+		if (before == null || after == null || (forward ? after > before + 2 : after < before - 2)) return true;
+		view.dispatch({ selection: view.moveVertically(view.state.selection.main, forward), scrollIntoView: true, userEvent: "select" });
+		return true;
+	};
+}
+
+/**
  * Left and right arrows into a table. A caret that reaches the edge of a table is inside it, and a drawn table
  * cannot show a caret, so it would turn into its source. Entering its first or last cell is what the move means.
  */
@@ -564,6 +586,8 @@ function stepIntoTable(forward: boolean) {
 export const liveBlockKeys = keymap.of([
 	{ key: "ArrowUp", run: stepIntoBlock("up") },
 	{ key: "ArrowDown", run: stepIntoBlock("down") },
+	{ key: "ArrowUp", run: stepWithinLine(false) },
+	{ key: "ArrowDown", run: stepWithinLine(true) },
 	{ key: "ArrowRight", run: stepIntoTable(true) },
 	{ key: "ArrowLeft", run: stepIntoTable(false) },
 ]);
@@ -691,7 +715,9 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 }, { decorations: (plugin) => plugin.decorations });
 
 export const liveMarkdownTheme = EditorView.theme({
-	".cm-live-hidden": { display: "none" },
+	// Hidden marks keep a place in the layout with no width. With display:none they have no position on screen, and a
+	// line that is nothing but a mark and its text offers the vertical move no place to land: it steps over the line.
+	".cm-live-hidden": { fontSize: "0", letterSpacing: "0" },
 	".cm-live-strong": { fontWeight: "var(--lm-weight-semibold)" },
 	".cm-live-emphasis": { fontStyle: "italic" },
 	".cm-live-strike": { textDecoration: "line-through" },

@@ -693,3 +693,111 @@ test("a table at the start or end of the file gets a blank line when the caret l
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("up and down move by line even when the caret's formula source wraps the line", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-wrapline-e2e-"));
+	await writeFile(join(root, "行.md"), ["第一行", "", "单元格里也能放行内代码和公式：$\\sqrt{2}\\approx1.414$、`npm run dev`。", "", "末行", ""].join("\n"));
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "行.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 行.md" });
+		const lineOfCaret = async () => {
+			await loomPage.waitForTimeout(120);
+			return loomPage.evaluate(() => {
+				const selection = getSelection();
+				const node = selection?.anchorNode;
+				const line = (node instanceof Element ? node : node?.parentElement)?.closest(".cm-line");
+				return line ? [...document.querySelectorAll(".cm-content > .cm-line")].indexOf(line) : -1;
+			});
+		};
+		const target = box.locator(".cm-line").filter({ hasText: "npm run dev" });
+		const placeInFormula = async () => {
+			const rect = (await target.boundingBox())!;
+			await loomPage.mouse.click(rect.x + 232, rect.y + 12);
+			expect(await lineOfCaret()).toBe(2);
+			// The source of the formula is showing and the line has gone onto two rows.
+			await expect(box.locator(".cm-live-math-source")).toHaveCount(1);
+		};
+
+		// Down from inside the formula goes to the next line, not to the end of this one.
+		await placeInFormula();
+		await loomPage.keyboard.press("ArrowDown");
+		expect(await lineOfCaret()).toBe(3);
+		await loomPage.keyboard.press("ArrowDown");
+		expect(await lineOfCaret()).toBe(4);
+		// Up from the line below, back through it.
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await lineOfCaret()).toBe(3);
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await lineOfCaret()).toBe(2);
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await lineOfCaret()).toBe(1);
+		// Up from inside the formula goes to the line above.
+		await placeInFormula();
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await lineOfCaret()).toBe(1);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("up and down stop on a line that is only inline code", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-codeline-e2e-"));
+	await writeFile(join(root, "码.md"), ["上一行文字", "", "` dsadsa `", "", "**粗体一行**", "", "下一行文字", ""].join("\n"));
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "码.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 码.md" });
+		const lineOfCaret = async () => {
+			await loomPage.waitForTimeout(120);
+			return loomPage.evaluate(() => {
+				const selection = getSelection();
+				const node = selection?.anchorNode;
+				const line = (node instanceof Element ? node : node?.parentElement)?.closest(".cm-line");
+				return line ? [...document.querySelectorAll(".cm-content > .cm-line")].indexOf(line) : -1;
+			});
+		};
+		// Line by line down: the blank line, the line of code, the blank line, the bold line, and so on.
+		await box.locator(".cm-line").first().click();
+		const down: number[] = [];
+		for (let i = 0; i < 6; i++) {
+			await loomPage.keyboard.press("ArrowDown");
+			down.push(await lineOfCaret());
+		}
+		expect(down).toEqual([1, 2, 3, 4, 5, 6]);
+		const up: number[] = [];
+		for (let i = 0; i < 6; i++) {
+			await loomPage.keyboard.press("ArrowUp");
+			up.push(await lineOfCaret());
+		}
+		expect(up).toEqual([5, 4, 3, 2, 1, 0]);
+		// A hidden mark takes no room: the code sits where the line starts, as it did before.
+		await box.locator(".cm-line").first().click();
+		const marks = await box.locator(".cm-live-hidden").evaluateAll((all) => all.map((mark) => mark.getBoundingClientRect().width));
+		expect(Math.max(...marks)).toBeLessThan(1);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
