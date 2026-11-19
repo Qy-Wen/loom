@@ -61,7 +61,7 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 			if (event.key !== "Escape" || event.defaultPrevented) return;
 			// Escape first closes an open find bar or a rename, which handle it themselves.
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-			if (card.current?.querySelector(".find-bar")) return;
+			if (card.current?.querySelector(".find-bar, .cm-search")) return;
 			close.current();
 		};
 		window.addEventListener("keydown", onKey);

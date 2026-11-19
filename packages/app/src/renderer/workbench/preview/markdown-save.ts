@@ -21,6 +21,8 @@ export class MarkdownSave implements PendingSave {
 	text: string;
 	/** The revision of the file the text was last read from or saved to. */
 	revision: string;
+	/** Size of the last adopted or saved snapshot, not an outside change that would discard unsaved edits. */
+	byteLength: number;
 	state: MarkdownSaveState = "saved";
 	error: string | null = null;
 	private saved: string;
@@ -34,6 +36,7 @@ export class MarkdownSave implements PendingSave {
 		this.assetId = assetId;
 		this.text = this.saved = snapshot.text;
 		this.revision = snapshot.revision;
+		this.byteLength = snapshot.byteLength;
 		this.files = files;
 		this.delay = delay;
 	}
@@ -124,6 +127,7 @@ export class MarkdownSave implements PendingSave {
 					throw new Error("The file was modified on disk");
 				}
 				this.revision = result.snapshot.revision;
+				this.byteLength = result.snapshot.byteLength;
 				this.saved = text;
 			}
 			this.setState("saved");
@@ -140,6 +144,7 @@ export class MarkdownSave implements PendingSave {
 		clearTimeout(this.timer);
 		this.text = this.saved = snapshot.text;
 		this.revision = snapshot.revision;
+		this.byteLength = snapshot.byteLength;
 		this.error = null;
 		removePendingSave(this);
 		this.setState("saved");

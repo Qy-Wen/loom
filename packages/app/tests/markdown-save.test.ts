@@ -29,17 +29,17 @@ function fakeDisk(text: string) {
 	let version = 1;
 	const disk = { text, revision: `r${version}`, saves: [] as string[], failNext: false };
 	const files: MarkdownFiles = {
-		async read() { return { text: disk.text, revision: disk.revision }; },
+		async read() { return { text: disk.text, revision: disk.revision, byteLength: Buffer.byteLength(disk.text) }; },
 		async save(_id, next, revision) {
 			if (disk.failNext) { disk.failNext = false; throw new Error("disk full"); }
 			if (revision !== disk.revision) return { status: "conflict" };
 			disk.text = next;
 			disk.revision = `r${++version}`;
 			disk.saves.push(next);
-			return { status: "saved", snapshot: { text: next, revision: disk.revision } };
+			return { status: "saved", snapshot: { text: next, revision: disk.revision, byteLength: Buffer.byteLength(next) } };
 		},
 	};
-	const snapshot = (): MarkdownSnapshot => ({ text: disk.text, revision: disk.revision });
+	const snapshot = (): MarkdownSnapshot => ({ text: disk.text, revision: disk.revision, byteLength: Buffer.byteLength(disk.text) });
 	const changeOutside = (next: string) => { disk.text = next; disk.revision = `r${++version}`; };
 	return { disk, files, snapshot, changeOutside };
 }
@@ -165,4 +165,24 @@ test("a failed write keeps the text, reports the error and can be retried", asyn
 	assert.equal(disk.text, "b");
 	assert.equal(save.state, "saved");
 	assert.equal(save.error, null);
+});
+
+test("the size tier follows adopted and saved snapshots, not outside changes while dirty", async () => {
+	const { files, snapshot, changeOutside } = fakeDisk("小");
+	const save = new TrackedSave("id", snapshot(), files, 60_000);
+	assert.equal(save.byteLength, 3);
+	save.edit("小笔记");
+	await save.flush();
+	assert.equal(save.byteLength, 9);
+	changeOutside("x".repeat(20));
+	assert.equal(save.external(snapshot()), true);
+	assert.equal(save.byteLength, 20);
+	save.edit("unsaved");
+	changeOutside("x".repeat(40));
+	assert.equal(save.external(snapshot()), false);
+	assert.equal(save.byteLength, 20);
+	await assert.rejects(save.flush());
+	await save.reload();
+	assert.equal(save.byteLength, 40);
+	assert.equal(save.text.length, 40);
 });

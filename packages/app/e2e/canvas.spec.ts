@@ -140,7 +140,15 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await heading.click();
 	await expect(preview).toHaveCount(0);
 	await heading.dblclick();
-	await expect(preview.getByRole("heading", { name: "最后一幕" })).toBeAttached();
+	const editor = preview.getByRole("textbox", { name: "Edit 文案.md" });
+	await expect(editor).toBeVisible();
+	await editor.press("ControlOrMeta+End");
+	await expect(preview.getByRole("heading", { name: "最后一幕" })).toBeInViewport();
+	await editor.press("ControlOrMeta+f");
+	await expect(preview.locator(".cm-search")).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview.locator(".cm-search")).toHaveCount(0);
+	await expect(preview).toBeVisible();
 	await page.keyboard.press("Escape");
 	await expect(preview).toHaveCount(0);
 

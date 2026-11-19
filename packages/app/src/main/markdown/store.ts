@@ -52,8 +52,9 @@ export class MarkdownStore {
 			const path = await this.filePath(assetId);
 			const current = await this.load(path);
 			if (current.snapshot.revision !== expectedRevision) return { status: "conflict" };
+			if (current.before.size > BigInt(MARKDOWN_EDIT_LIMIT_BYTES)) throw new Error("Markdown file exceeds 10 MiB and is read-only");
 			const contents = encode(text.replace(/\r\n?/g, "\n"), current.layout);
-			if (contents.byteLength > MARKDOWN_EDIT_LIMIT_BYTES) throw new Error("Markdown file exceeds 2 MiB");
+			if (contents.byteLength > MARKDOWN_EDIT_LIMIT_BYTES) throw new Error("Markdown file exceeds 10 MiB");
 			// Nothing changed: leave the file, and so its modification time, alone.
 			if (revisionOf(contents) === current.snapshot.revision) return { status: "saved", snapshot: current.snapshot };
 			let changed = false;
@@ -71,14 +72,13 @@ export class MarkdownStore {
 				if (changed) return { status: "conflict" };
 				throw error;
 			}
-			return { status: "saved", snapshot: { text: text.replace(/\r\n?/g, "\n"), revision: revisionOf(contents) } };
+			return { status: "saved", snapshot: { text: text.replace(/\r\n?/g, "\n"), revision: revisionOf(contents), byteLength: contents.byteLength } };
 		});
 	}
 
 	private async load(path: string): Promise<Loaded> {
 		const before = await lstat(path, { bigint: true });
 		if (!before.isFile()) throw new Error("Markdown is not a regular file");
-		if (before.size > BigInt(MARKDOWN_EDIT_LIMIT_BYTES)) throw new Error("Markdown file exceeds 2 MiB");
 		const bytes = await readFile(path);
 		const raw = bytes.toString("utf8");
 		const bom = raw.charCodeAt(0) === 0xfeff;
@@ -86,7 +86,7 @@ export class MarkdownStore {
 		const crlf = (body.match(/\r\n/g) ?? []).length;
 		const lf = (body.match(/(?<!\r)\n/g) ?? []).length;
 		const layout: Layout = { bom, eol: crlf > lf ? "\r\n" : "\n" };
-		return { snapshot: { text: body.replace(/\r\n?/g, "\n"), revision: revisionOf(bytes) }, layout, before };
+		return { snapshot: { text: body.replace(/\r\n?/g, "\n"), revision: revisionOf(bytes), byteLength: bytes.byteLength }, layout, before };
 	}
 
 	private async filePath(assetId: string): Promise<string> {

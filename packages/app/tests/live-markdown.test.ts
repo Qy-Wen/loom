@@ -31,11 +31,11 @@ function blocks(text: string, cursor = text.length) {
 	return out;
 }
 
-function decorate(text: string, cursor = text.length, anchor = cursor, library = LIBRARY) {
+function decorate(text: string, cursor = text.length, anchor = cursor, library = LIBRARY, readOnly = false) {
 	let state = EditorState.create({
 		doc: text,
 		selection: EditorSelection.single(anchor, cursor),
-		extensions: [markdown({ base: markdownLanguage }), liveLibrary],
+		extensions: [markdown({ base: markdownLanguage }), liveLibrary, EditorState.readOnly.of(readOnly)],
 	});
 	if (library) state = state.update({ effects: updateLibrary(library) }).state;
 	ensureSyntaxTree(state, state.doc.length, 5000);
@@ -63,6 +63,37 @@ test("symbols are hidden while the cursor is elsewhere, and the text between the
 	const { hidden, classes } = decorate(text, text.length);
 	assert.deepEqual(hidden, ["**", "**", "*", "*", "~~", "~~", "`", "`"]);
 	assert.deepEqual(classes, ["cm-live-strong:粗", "cm-live-emphasis:斜", "cm-live-strike:删", "cm-live-code:码"]);
+});
+
+test("reading keeps symbols hidden even when the selection touches an element", () => {
+	const text = "# Heading\n\n**bold** [target](产品说明.md)\n\n- [ ] task\n\n$x^2$\n\nend";
+	const reading = decorate(text, text.length, 0, LIBRARY, true);
+	const away = decorate(text, text.length);
+	assert.deepEqual(reading, away);
+	assert(reading.hidden.includes("# "));
+	assert(reading.widgets.includes("[ ]=>CheckboxWidget"));
+});
+
+test("ordinary and automatic links share library resolution and safe external addresses", () => {
+	const text = "[target](产品说明.md#标题) [missing](missing.md) [local](#Heading) <https://example.com> https://example.org [unsafe](javascript:alert)\n\nend";
+	const state = EditorState.create({ doc: text, extensions: [markdown({ base: markdownLanguage }), liveLibrary, EditorState.readOnly.of(true)] })
+		.update({ effects: updateLibrary(LIBRARY) }).state;
+	ensureSyntaxTree(state, state.doc.length, 5000);
+	const links: Record<string, string>[] = [];
+	liveDecorations(state).between(0, text.length, (_from, _to, value) => {
+		if (value.spec.attributes?.class?.startsWith("cm-live-")) links.push(value.spec.attributes);
+	});
+	assert(links.some((link) => link["data-asset-id"] === "notes" && link["data-anchor"] === "标题"));
+	assert(links.some((link) => link.class === "cm-live-broken"));
+	assert(links.some((link) => link["data-anchor"] === "heading" && !link["data-asset-id"]));
+	assert.deepEqual(links.flatMap((link) => link["data-href"] ? [link["data-href"]] : []), ["https://example.com", "https://example.org"]);
+});
+
+test("HTTP images render without being mistaken for missing library files", () => {
+	const text = "![alt](https://example.com/image.png)\n\nend";
+	const { widgets, classes } = decorate(text, text.length);
+	assert(widgets.some((widget) => widget.includes("https://example.com/image.png")));
+	assert.equal(classes.some((name) => name.includes("broken")), false);
 });
 
 test("the symbols of an element come back when the cursor touches it", () => {
@@ -167,7 +198,8 @@ test("a missing embedded picture is marked broken", () => {
 test("wiki syntax in code, escapes and addresses is left alone", () => {
 	const text = "`[[产品说明]]` \\[\\[产品说明\\]\\] [x]([[产品说明]])\n\n```\n[[产品说明]]\n```\n\n末";
 	const { hidden, classes, targets } = decorate(text, text.length);
-	assert.deepEqual(targets, []);
+	// The outer ordinary link is unresolved; its address does not become a wiki reference.
+	assert.deepEqual(targets, ["x->none"]);
 	assert.equal(classes.some((entry) => entry.includes("wiki")), false);
 	assert.equal(hidden.includes("[["), false);
 });

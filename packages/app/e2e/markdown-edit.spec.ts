@@ -21,12 +21,12 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "笔记.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		// CodeMirror keeps one `.cm-line` per line; read the document back by joining them.
 		const box = loomPage.getByRole("textbox", { name: "Edit 笔记.md" });
 		const editorText = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => line.textContent ?? "").join("\n"));
 		await expect.poll(editorText).toBe("# 标题\n\n原文\n");
 		const status = loomPage.locator(".markdown-editor-status");
+		await expect(status).toHaveCount(0);
 
 		// Opening and leaving without typing writes nothing.
 		expect(await readFile(file, "utf8")).toBe("# 标题\n\n原文\n");
@@ -35,14 +35,14 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		await box.click();
 		await box.press("ControlOrMeta+End");
 		await box.pressSequentially("新增一行\n");
-		await expect(status).toContainText("Unsaved changes");
+		await expect(status).toHaveCount(0);
 		await expect.poll(() => readFile(file, "utf8"), { timeout: 10_000 }).toBe("# 标题\n\n原文\n新增一行\n");
-		await expect(status).toContainText("Saved");
+		await expect(status).toHaveCount(0);
 
-		// The preview shows what was saved.
-		await loomPage.getByRole("tab", { name: "Preview" }).click();
-		await expect(loomPage.locator(".markdown-preview-body")).toContainText("新增一行");
-		await loomPage.getByRole("tab", { name: "Source" }).click();
+		// Reading shows the same text in the same editor.
+		await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+		await expect(box).toContainText("新增一行");
+		await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
 
 		// A change from outside with nothing unsaved is taken in.
 		await writeFile(file, "# 标题\n\n外部修改\n");
@@ -59,7 +59,7 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 
 		await status.getByRole("button", { name: "Reload" }).click();
 		await expect.poll(editorText).toBe("# 标题\n\n第二次外部修改\n");
-		await expect(status.getByRole("button", { name: "Overwrite" })).toHaveCount(0);
+		await expect(status).toHaveCount(0);
 
 		// Overwrite writes the editor's text.
 		await box.click();
@@ -69,6 +69,7 @@ test("Markdown source edits save by themselves, follow outside changes and ask b
 		await expect(status.getByRole("button", { name: "Overwrite" })).toBeVisible({ timeout: 15_000 });
 		await status.getByRole("button", { name: "Overwrite" }).click();
 		await expect.poll(() => readFile(file, "utf8")).toBe("# 标题\n\n第二次外部修改\n甲");
+		await expect(status).toHaveCount(0);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}
@@ -91,7 +92,6 @@ test("the Markdown editor undoes, finds, keeps composition intact and saves with
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "a.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit a.md" });
 		const editorText = () => box.evaluate((node) => [...node.querySelectorAll(".cm-line")].map((line) => line.textContent ?? "").join("\n"));
 		await expect.poll(editorText).toBe("alpha beta\nbeta gamma\n");
@@ -148,7 +148,6 @@ test("live rendering hides Markdown symbols away from the cursor and never chang
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "live.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit live.md" });
 		await expect(box).toBeVisible();
 
@@ -215,7 +214,6 @@ test("wiki links and pictures render live, flag missing targets and open with a 
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		const tree = loomPage.locator(".library-sidebar, aside").first();
 		await tree.locator(".asset-row").filter({ hasText: "脚本.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 脚本.md" });
 		await box.click();
 		await box.press("ControlOrMeta+End");
@@ -236,7 +234,7 @@ test("wiki links and pictures render live, flag missing targets and open with a 
 
 		// A modifier click opens the file at the heading the link names.
 		await box.locator(".cm-live-wiki", { hasText: "别名" }).click({ modifiers: ["ControlOrMeta"] });
-		await expect(loomPage.locator(".markdown-preview-body").getByRole("heading", { name: "结尾" })).toBeInViewport({ timeout: 10_000 });
+		await expect(loomPage.locator(".cm-content").getByRole("heading", { name: "结尾" })).toBeInViewport({ timeout: 10_000 });
 
 		// Looking and clicking left the file as it was.
 		expect(await readFile(source, "utf8")).toBe(text);
@@ -263,7 +261,6 @@ test("lists, task boxes, quotes and rules render live and a task box click edits
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "块.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 块.md" });
 		await box.click();
 		await box.press("ControlOrMeta+End");
@@ -308,7 +305,6 @@ test("code blocks, formulas and diagrams render live and give the source back un
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "富.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 富.md" });
 		await box.click();
 		await box.press("ControlOrMeta+End");
@@ -366,7 +362,6 @@ test("tables render as tables, edit in their cells and write back only the cell 
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "表.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 表.md" });
 		const onDisk = () => readFile(file, "utf8");
 
@@ -523,7 +518,6 @@ test("table cells render links, formulas and missing references, and a narrow co
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "格.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 格.md" });
 
 		const cells = box.locator(".cm-live-table td");
@@ -602,7 +596,6 @@ test("clicking the text between two tables keeps both drawn", async ({ loomPage,
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "二.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 二.md" });
 		await expect(box.locator(".cm-live-table")).toHaveCount(2);
 
@@ -656,7 +649,6 @@ test("a table at the start or end of the file gets a blank line when the caret l
 		const focusedRow = () => loomPage.evaluate(() => (document.activeElement as HTMLElement).dataset.row ?? "none");
 		const open = async (name: string) => {
 			await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: name }).first().click();
-			await loomPage.getByRole("tab", { name: "Source" }).click();
 			const box = loomPage.getByRole("textbox", { name: `Edit ${name}` });
 			// The caret starts at the top of the file, which is inside a table that begins there: move it out first.
 			await box.locator(".cm-line").filter({ hasText: "中间" }).click();
@@ -714,7 +706,6 @@ test("up and down move by line even when the caret's formula source wraps the li
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "行.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 行.md" });
 		const lineOfCaret = async () => {
 			await loomPage.waitForTimeout(120);
@@ -772,7 +763,6 @@ test("up and down stop on a line that is only inline code", async ({ loomPage, e
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "码.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 码.md" });
 		const lineOfCaret = async () => {
 			await loomPage.waitForTimeout(120);
@@ -825,7 +815,6 @@ test("rows, columns and alignment change from a table's context menu", async ({ 
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "菜.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 菜.md" });
 		const onDisk = () => readFile(file, "utf8");
 		const lines = async () => (await box.locator(".cm-line").allInnerTexts()).join("\n");
@@ -954,7 +943,6 @@ test("a selection that reaches into a table takes the whole table, which shows a
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "选.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 选.md" });
 		const above = box.locator(".cm-line").filter({ hasText: "上文一行" });
 		const tableBox = box.locator(".cm-live-table");
@@ -1034,7 +1022,6 @@ test("a drag selection leaves what it sweeps over drawn until the button is let 
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "拖.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 拖.md" });
 		const middle = box.locator(".cm-line").filter({ hasText: "再来" });
 		await expect(box.locator(".cm-live-math")).toHaveCount(1);
@@ -1139,7 +1126,6 @@ test("pressing on an element that is already open to source does not close it wh
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "按.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 按.md" });
 		await expect(box.locator(".cm-live-rule")).toHaveCount(1);
 
@@ -1202,7 +1188,6 @@ test("rows and columns of a table move by their grips", async ({ loomPage, elect
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "移.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 移.md" });
 		const onDisk = () => readFile(file, "utf8");
 		const cell = (row: number, column: number) => box.locator(`.cm-live-table [data-row="${row}"][data-column="${column}"]`);
@@ -1356,7 +1341,6 @@ test("dragging from one cell into another picks a block of cells that the menu, 
 		await loomPage.evaluate(() => window.loom.openLibrary());
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
 		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "选.md" }).first().click();
-		await loomPage.getByRole("tab", { name: "Source" }).click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 选.md" });
 		const onDisk = () => readFile(file, "utf8");
 		const cell = (row: number, column: number) => box.locator(`.cm-live-table [data-row="${row}"][data-column="${column}"]`);

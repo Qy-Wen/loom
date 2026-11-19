@@ -196,6 +196,12 @@ export function renderMarkdown(source: string, context?: MarkdownRenderContext):
 	return markdown.render(source, context as never);
 }
 
+/** The visible text of an inline Markdown heading, using exactly the HTML heading renderer's rule. */
+export function markdownHeadingKey(source: string): string {
+	const children = markdown.parseInline(source, {})[0]?.children ?? [];
+	return headingKey(children.filter((child) => child.type === "text" || child.type === "code_inline").map((child) => child.content).join(""));
+}
+
 /** One line of Markdown without the paragraph around it: the content of a table cell. */
 export function renderInlineMarkdown(source: string, context?: MarkdownRenderContext): string {
 	return markdown.renderInline(source, context as never);

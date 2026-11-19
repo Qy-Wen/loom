@@ -1,12 +1,16 @@
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { search, searchKeymap } from "@codemirror/search";
-import { EditorState, type Extension } from "@codemirror/state";
+import { closeSearchPanel, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
+import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
-import type { TableHooks } from "./live-table.ts";
+import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { leaveCell, type TableHooks } from "./live-table.ts";
+import { findEditorHeading } from "./editor-heading.ts";
+
+export type MarkdownMode = "edit" | "read" | "source";
+const replaceText = Annotation.define<boolean>();
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -14,16 +18,17 @@ export interface MarkdownEditorEvents {
 	onChange(text: string): void;
 	onBlur(): void;
 	onSave(): void;
-	/** A link was opened with ⌘/Ctrl+click. */
+	/** A link was opened. An empty target means a heading in this file. */
 	onOpenAsset(assetId: string, anchor: string | undefined): void;
 }
 
-/** The words a table in the editor shows. */
+/** Table labels and the search panel's localized phrases. */
 export interface MarkdownEditorLabels {
 	addRow: string;
 	addColumn: string;
 	moveRow: string;
 	moveColumn: string;
+	searchPhrases: Record<string, string>;
 }
 
 /** What the editor asks the window for. */
@@ -36,7 +41,7 @@ const theme = EditorView.theme({
 	"&": {
 		height: "100%",
 		color: "var(--lm-text-body)",
-		backgroundColor: "var(--lm-surface-app)",
+		backgroundColor: "var(--lm-surface-raised)",
 		fontSize: "15px",
 	},
 	"&.cm-focused": { outline: "none" },
@@ -45,6 +50,13 @@ const theme = EditorView.theme({
 	".cm-scroller": { fontFamily: '"Segoe UI", system-ui, sans-serif', lineHeight: "1.65", padding: "28px 32px 64px" },
 	".cm-content": { maxWidth: "656px", margin: "0 auto", padding: "0", caretColor: "var(--lm-text-primary)" },
 	".cm-line": { padding: 0 },
+	"&.cm-markdown-source .cm-scroller": { fontFamily: "var(--lm-font-mono)" },
+	"&.cm-markdown-read .cm-content": { caretColor: "transparent" },
+	// Hide the layer, not individual cursors: CodeMirror's focused-cursor rule has higher specificity.
+	"&.cm-markdown-read .cm-cursorLayer": { display: "none" },
+	"&.cm-markdown-read .cm-live-checkbox": { cursor: "default" },
+	"&.cm-markdown-read .cm-live-wiki, &.cm-markdown-read [data-asset-id], &.cm-markdown-read [data-anchor], &.cm-markdown-read [data-href]": { cursor: "pointer" },
+	"&.cm-markdown-read .cm-live-math, &.cm-markdown-read .cm-live-mermaid": { cursor: "default" },
 	".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lm-text-primary)" },
 	"&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
 		backgroundColor: "var(--lm-surface-active)",
@@ -89,14 +101,30 @@ export interface MarkdownEditor {
 	view: EditorView;
 	/** Tell the editor which library its references are checked against. */
 	setLibrary(library: LiveLibrary): void;
+	setLabel(label: string): void;
 	/** Replace the whole text without reporting it as a user edit. */
 	setText(text: string): void;
+	/** Switch in place, preserving the document, history, selection and scroll position. */
+	setMode(mode: MarkdownMode): void;
+	find(): void;
+	scrollToHeading(anchor: string): void;
 	focus(): void;
 	destroy(): void;
 }
 
-export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels, host: MarkdownEditorHost): MarkdownEditor {
+export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels, host: MarkdownEditorHost, initialMode: MarkdownMode = "edit"): MarkdownEditor {
 	let replacing = false;
+	let mode = initialMode;
+	const rendering = new Compartment();
+	const access = new Compartment();
+	const accessible = new Compartment();
+	const rendered: Extension = [liveDrag, liveMarkdown, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
+	const modeAccess = (next: MarkdownMode): Extension => [
+		EditorState.readOnly.of(next === "read"),
+		EditorView.editable.of(next !== "read"),
+		EditorView.contentAttributes.of({ "aria-readonly": String(next === "read"), tabindex: "0" }),
+		EditorView.editorAttributes.of({ class: `cm-markdown-${next}` }),
+	];
 	// The tables call back into the editor they are drawn in, which does not exist until the extensions are built.
 	let view: EditorView;
 	const extensions: Extension[] = [
@@ -114,15 +142,14 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 			chooseAction: host.chooseTableAction,
 			labels,
 		}),
-		liveDrag,
-		liveMarkdown,
-		liveBlocks,
-		liveBlockKeys,
-		liveMarkdownTheme,
-		liveClicks,
+		rendering.of(mode === "source" ? [] : rendered),
+		access.of(modeAccess(mode)),
+		// readOnly protects commands; this also protects widget and clipboard transactions. External reloads are allowed.
+		EditorState.transactionFilter.of((transaction) => transaction.docChanged && transaction.startState.readOnly && !transaction.annotation(replaceText) ? [] : transaction),
 		search({ top: false }),
+		EditorState.phrases.of(labels.searchPhrases),
 		theme,
-		EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" }),
+		accessible.of(EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" })),
 		keymap.of([
 			{ key: "Mod-s", preventDefault: true, run: () => { events.onSave(); return true; } },
 			indentWithTab,
@@ -140,14 +167,33 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 	return {
 		view,
 		setLibrary: (next) => view.dispatch({ effects: updateLibrary(next) }),
+		setLabel: (next) => view.dispatch({ effects: accessible.reconfigure(EditorView.contentAttributes.of({ "aria-label": next, spellcheck: "false" })) }),
 		setText(next) {
 			if (view.state.doc.toString() === next) return;
 			replacing = true;
 			try {
-				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next } });
+				view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: next }, annotations: replaceText.of(true) });
 			} finally {
 				replacing = false;
 			}
+		},
+		setMode(next) {
+			if (next === mode) return;
+			const searching = searchPanelOpen(view.state) && (next === "read") !== (mode === "read");
+			if (searching) closeSearchPanel(view);
+			const hadCellFocus = leaveCell(view);
+			const effects = [access.reconfigure(modeAccess(next))];
+			if ((next === "source") !== (mode === "source")) effects.push(rendering.reconfigure(next === "source" ? [] : rendered));
+			mode = next;
+			view.dispatch({ effects });
+			if (hadCellFocus && mode !== "read") view.focus();
+			if (mode !== "source") view.dispatch({ effects: setFocused.of(view.hasFocus) });
+			if (searching) openSearchPanel(view);
+		},
+		find: () => { openSearchPanel(view); },
+		scrollToHeading(anchor) {
+			const position = findEditorHeading(view.state, anchor);
+			if (position !== null) view.dispatch({ selection: { anchor: position }, effects: EditorView.scrollIntoView(position, { y: "start" }) });
 		},
 		focus: () => view.focus(),
 		destroy: () => view.destroy(),

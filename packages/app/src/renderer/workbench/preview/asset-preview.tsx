@@ -7,7 +7,7 @@ import { FindBar } from "./find-bar.tsx";
 import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
 const GradeView = lazy(() => import("./grade-view.tsx").then(({ GradeView }) => ({ default: GradeView })));
-const MarkdownPreview = lazy(() => import("./markdown-preview.tsx").then(({ MarkdownPreview }) => ({ default: MarkdownPreview })));
+const MarkdownEditor = lazy(() => import("./markdown-editor.tsx").then(({ MarkdownEditor }) => ({ default: MarkdownEditor })));
 
 const TEXT_EXTENSIONS = new Set([
 	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log",
@@ -164,7 +164,7 @@ export function AssetPreview({
 	if (extension === ".md") {
 		return (
 			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
-				<MarkdownPreview asset={asset} assets={assets} url={url} onOpenAsset={onOpenAsset} />
+				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} onOpenAsset={onOpenAsset} />
 			</Suspense>
 		);
 	}

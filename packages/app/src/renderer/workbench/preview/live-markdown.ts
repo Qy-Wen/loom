@@ -9,6 +9,8 @@ import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
 import { enterTable, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
+import { editorHeading } from "./editor-heading.ts";
+import { isPassthroughHref } from "./markdown.ts";
 
 /**
  * Live rendering: Markdown shown in its final look while it is edited. The text itself never changes; only
@@ -52,7 +54,7 @@ const libraryField = StateField.define<LiveContext | null>({
 /** The transaction effect that gives the editor a new library. Dispatch it when the asset list changes. */
 export const updateLibrary = (library: LiveLibrary) => setLibrary.of(library);
 
-/** Called when a reference is activated with ⌘/Ctrl+click. */
+/** Opens a reference: plain click while reading, ⌘/Ctrl+click while editing. */
 export interface LiveHandlers {
 	openAsset(assetId: string, anchor: string | undefined): void;
 }
@@ -106,18 +108,21 @@ class BulletWidget extends WidgetType {
 /** A checkbox in place of `[ ]` or `[x]`. A click is handled by {@link liveClicks}, which edits the text. */
 class CheckboxWidget extends WidgetType {
 	readonly checked: boolean;
-	constructor(checked: boolean) {
+	readonly readOnly: boolean;
+	constructor(checked: boolean, readOnly: boolean) {
 		super();
 		this.checked = checked;
+		this.readOnly = readOnly;
 	}
 	eq(other: CheckboxWidget): boolean {
-		return other.checked === this.checked;
+		return other.checked === this.checked && other.readOnly === this.readOnly;
 	}
 	toDOM(): HTMLElement {
 		const box = document.createElement("span");
 		box.className = this.checked ? "cm-live-checkbox cm-live-checkbox-checked" : "cm-live-checkbox";
 		box.setAttribute("role", "checkbox");
 		box.setAttribute("aria-checked", String(this.checked));
+		box.setAttribute("aria-disabled", String(this.readOnly));
 		return box;
 	}
 	ignoreEvent(): boolean {
@@ -158,7 +163,7 @@ function stopRemeasuring(dom: HTMLElement): void {
 /** Clicking a rendered widget puts the cursor in its text, which brings the source back for editing. */
 function enterOnClick(dom: HTMLElement, view: EditorView): void {
 	dom.addEventListener("mousedown", (event) => {
-		if (event.button !== 0 || event.metaKey || event.ctrlKey) return;
+		if (view.state.readOnly || event.button !== 0 || event.metaKey || event.ctrlKey) return;
 		event.preventDefault();
 		view.dispatch({ selection: { anchor: view.posAtDOM(dom) }, scrollIntoView: false });
 		view.focus();
@@ -274,6 +279,8 @@ const HEADINGS: Record<string, string> = {
 	ATXHeading4: "cm-live-h4",
 	ATXHeading5: "cm-live-h5",
 	ATXHeading6: "cm-live-h6",
+	SetextHeading1: "cm-live-h1",
+	SetextHeading2: "cm-live-h2",
 };
 
 /** True when any selection range touches `from..to`, edges included, so a cursor next to a symbol reveals it. */
@@ -315,6 +322,7 @@ const trackFocus = EditorView.focusChangeEffect.of((_state, focusing) => setFocu
 
 /** The ranges whose elements are shown as source: the selection, or while the button is down what was open at the press. */
 function revealRanges(state: EditorState): readonly { from: number; to: number }[] {
+	if (state.readOnly) return [];
 	// States without the editor's fields (the unit tests') show the selection as it is.
 	const pressed = state.field(pressState, false);
 	if (pressed) return pressed.held;
@@ -380,7 +388,6 @@ const trackDrag = EditorView.domEventHandlers({
 
 export function liveDecorations(state: EditorState, from = 0, to = state.doc.length): DecorationSet {
 	const found: Range<Decoration>[] = [];
-	const line = (position: number, className: string) => found.push(Decoration.line({ class: className }).range(state.doc.lineAt(position).from));
 
 	const quotes = new Map<number, { depth: number; marks: { from: number; to: number }[] }>();
 	/** True when a selection touches the line: block marks (`>`, `-`, `[ ]`, `---`) show their text then. */
@@ -422,7 +429,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				const written = state.doc.sliceString(node.from, node.to);
 				if (!/^\[[ xX]\]$/.test(written)) return;
 				found.push(Decoration.line({ class: written === "[ ]" ? "cm-live-task" : "cm-live-task cm-live-task-done" }).range(state.doc.lineAt(node.from).from));
-				if (!onLine(node.from)) found.push(Decoration.replace({ widget: new CheckboxWidget(written !== "[ ]") }).range(node.from, node.to));
+				if (!onLine(node.from)) found.push(Decoration.replace({ widget: new CheckboxWidget(written !== "[ ]", state.readOnly) }).range(node.from, node.to));
 				return;
 			}
 			if (node.name === "FencedCode") {
@@ -441,14 +448,18 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 			if (heading) {
 				for (let at = node.from; at <= node.to; ) {
 					const text = state.doc.lineAt(at);
-					line(text.from, heading);
+					const info = editorHeading(state, node)!;
+					found.push(Decoration.line({ class: heading, attributes: { role: "heading", "aria-level": String(info.level), "data-heading": info.key } }).range(text.from));
 					at = text.to + 1;
 				}
 				// The `#` marks and the one space after them.
 				const mark = node.node.getChild("HeaderMark");
 				if (mark && !touched(state, node.from, node.to)) {
-					const end = state.doc.sliceString(mark.to, mark.to + 1) === " " ? mark.to + 1 : mark.to;
-					found.push(hiddenLead.range(mark.from, end));
+					if (node.name.startsWith("Setext")) found.push(hiddenTrail.range(mark.from, mark.to));
+					else {
+						const end = state.doc.sliceString(mark.to, mark.to + 1) === " " ? mark.to + 1 : mark.to;
+						found.push(hiddenLead.range(mark.from, end));
+					}
 				}
 				return;
 			}
@@ -465,12 +476,25 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				}
 				return;
 			}
+			if (node.name === "Autolink" || (node.name === "URL" && node.node.parent?.name === "Paragraph")) {
+				const url = node.name === "URL" ? node.node : node.node.getChild("URL");
+				if (!url) return;
+				let href = state.doc.sliceString(url.from, url.to);
+				if (node.name === "Autolink" && !href.includes(":") && href.includes("@")) href = `mailto:${href}`;
+				found.push(Decoration.mark({ attributes: linkAttributes(state, href) }).range(url.from, url.to));
+				if (node.name === "Autolink" && !touched(state, node.from, node.to)) {
+					found.push(hiddenLead.range(node.from, url.from), hiddenTrail.range(url.to, node.to));
+				}
+				return false;
+			}
 			if (node.name === "Link") {
 				// `[text](url "title")`: keep the text, hide everything else once the cursor leaves.
 				const marks = node.node.getChildren("LinkMark");
 				const close = marks[1];
 				if (!close || state.doc.sliceString(close.from, close.from + 2) !== "](") return;
-				found.push(Decoration.mark({ class: "cm-live-link" }).range(marks[0].to, close.from));
+				const url = node.node.getChild("URL");
+				const attributes = url ? linkAttributes(state, state.doc.sliceString(url.from, url.to)) : { class: "cm-live-link" };
+				found.push(Decoration.mark({ attributes }).range(marks[0].to, close.from));
 				if (!touched(state, node.from, node.to)) {
 					found.push(hiddenLead.range(marks[0].from, marks[0].to), hiddenTrail.range(close.from, node.to));
 				}
@@ -585,7 +609,7 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				// A table that reads as one is always drawn. A caret in it, or a selection over it, changes nothing.
 				if (parseTable(text)) {
 					const context = state.field(libraryField, false) ?? null;
-					const widget = new TableWidget(text, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks);
+					const widget = new TableWidget(text, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks, state.readOnly);
 					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
 				}
 			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
@@ -608,9 +632,10 @@ const blockDecorations = StateField.define<DecorationSet>({
 	update(value, transaction) {
 		const treeChanged = syntaxTree(transaction.startState) !== syntaxTree(transaction.state);
 		const redraw = transaction.effects.some((effect) => effect.is(redrawBlocks));
-		const dragChanged = transaction.startState.field(pressState) !== transaction.state.field(pressState)
-			|| transaction.startState.field(focusState) !== transaction.state.field(focusState);
-		return transaction.docChanged || transaction.selection || treeChanged || redraw || dragChanged ? liveBlockDecorations(transaction.state) : value;
+		const dragChanged = transaction.startState.field(pressState, false) !== transaction.state.field(pressState, false)
+			|| transaction.startState.field(focusState, false) !== transaction.state.field(focusState, false);
+		const accessChanged = transaction.startState.readOnly !== transaction.state.readOnly;
+		return transaction.docChanged || treeChanged || redraw || accessChanged || (!transaction.state.readOnly && (transaction.selection || dragChanged)) ? liveBlockDecorations(transaction.state) : value;
 	},
 	provide: (field) => EditorView.decorations.from(field),
 });
@@ -846,6 +871,26 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 	found.push(hiddenTrail.range(close, range.to));
 }
 
+/** Ordinary Markdown links use the same resolver as wiki links and the HTML preview. */
+function linkAttributes(state: EditorState, href: string): Record<string, string> {
+	const attributes: Record<string, string> = { class: "cm-live-link" };
+	const context = state.field(libraryField, false);
+	const hash = href.indexOf("#");
+	const anchor = hash === -1 ? undefined : anchorOf(href.slice(hash + 1));
+	if (href.startsWith("#")) {
+		if (anchor) attributes["data-anchor"] = anchor;
+	} else if (isPassthroughHref(href)) {
+		if (/^(https?:|mailto:)/i.test(href)) attributes["data-href"] = href;
+	} else if (context) {
+		const asset = resolveLinkTarget(context.fromRelativePath, href, context.lookup);
+		if (asset) {
+			attributes["data-asset-id"] = asset.assetId;
+			if (anchor) attributes["data-anchor"] = anchor;
+		} else if (asset === undefined) attributes.class = "cm-live-broken";
+	}
+	return attributes;
+}
+
 /** `![alt](picture.png)` with a library path shows the picture; an address that is not in the library is flagged. */
 function markdownImages(state: EditorState, from: number, to: number, found: Range<Decoration>[]): void {
 	const context = state.field(libraryField, false);
@@ -859,11 +904,12 @@ function markdownImages(state: EditorState, from: number, to: number, found: Ran
 			if (!url) return;
 			const written = state.doc.sliceString(url.from, url.to);
 			const asset = resolveLinkTarget(context.fromRelativePath, written, context.lookup);
-			if (asset === null) return;
-			if (asset && !touched(state, node.from, node.to)) {
+			const remote = asset === null && /^https?:/i.test(written);
+			if (asset === null && !remote) return;
+			if ((asset || remote) && !touched(state, node.from, node.to)) {
 				const alt = state.doc.sliceString(node.from + 2, state.doc.sliceString(node.from, node.to).indexOf("](") + node.from);
-				found.push(Decoration.replace({ widget: new ImageWidget(assetPreviewUrl(asset), alt) }).range(node.from, node.to));
-			} else if (!asset) {
+				found.push(Decoration.replace({ widget: new ImageWidget(asset ? assetPreviewUrl(asset) : written, alt) }).range(node.from, node.to));
+			} else if (!asset && !remote) {
 				found.push(Decoration.mark({ class: "cm-live-broken" }).range(node.from, node.to));
 			}
 		},
@@ -879,7 +925,7 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 	}
 
 	update(update: ViewUpdate): void {
-		if (update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)
+		if (update.docChanged || update.selectionSet || update.viewportChanged || update.startState.readOnly !== update.state.readOnly || syntaxTree(update.startState) !== syntaxTree(update.state)
 			|| update.startState.field(pressState, false) !== update.state.field(pressState, false)
 			|| update.startState.field(focusState, false) !== update.state.field(focusState, false)
 			|| update.startState.field(libraryField, false) !== update.state.field(libraryField, false)) {
@@ -1082,13 +1128,12 @@ export const liveMarkdownTheme = EditorView.theme({
 });
 
 /**
- * ⌘/Ctrl+click on a link opens its file, and the heading it names. A plain click only places the cursor,
- * because the text is being edited.
+ * A plain click while reading, or ⌘/Ctrl+click while editing, opens the link. Other editing clicks only place the cursor.
  */
 export const liveClicks = EditorView.domEventHandlers({
 	mousedown(event, view) {
 		const box = (event.target as HTMLElement | null)?.closest<HTMLElement>(".cm-live-checkbox");
-		if (box && event.button === 0) {
+		if (box && event.button === 0 && !view.state.readOnly) {
 			// Tick or untick by rewriting the one character between the brackets.
 			const at = view.posAtDOM(box);
 			if (/^\[[ xX]\]$/.test(view.state.doc.sliceString(at, at + 3))) {
@@ -1098,12 +1143,13 @@ export const liveClicks = EditorView.domEventHandlers({
 				return true;
 			}
 		}
-		if (!(event.metaKey || event.ctrlKey) || event.button !== 0) return false;
+		if ((!view.state.readOnly && !(event.metaKey || event.ctrlKey)) || event.button !== 0) return false;
 		const handlers = view.state.facet(handlersFacet);
-		const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id]");
-		if (!handlers || !link) return false;
+		const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id], [data-anchor], [data-href]");
+		if (!handlers || !link || link.classList.contains("cm-live-broken")) return false;
 		event.preventDefault();
-		handlers.openAsset(link.dataset.assetId!, link.dataset.anchor);
+		if (link.dataset.href) window.open(link.dataset.href, "_blank", "noopener,noreferrer");
+		else handlers.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
 		return true;
 	},
 });

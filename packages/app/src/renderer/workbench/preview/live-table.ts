@@ -34,6 +34,7 @@ interface Shown {
 	rows: number;
 	columns: number;
 	aligns: string;
+	readOnly: boolean;
 	observer: ResizeObserver | null;
 	lastHeight: number;
 }
@@ -51,18 +52,20 @@ export class TableWidget extends WidgetType {
 	readonly text: string;
 	readonly context: TableContext | null;
 	readonly height: number | undefined;
+	readonly readOnly: boolean;
 	private readonly hooks: (view: EditorView) => TableHooks | null;
 	private readonly redraw: StateEffectType<null>;
-	constructor(text: string, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>) {
+	constructor(text: string, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>, readOnly = false) {
 		super();
 		this.text = text;
 		this.context = context;
 		this.height = heights.get(text);
 		this.hooks = hooks;
 		this.redraw = redraw;
+		this.readOnly = readOnly;
 	}
 	eq(other: TableWidget): boolean {
-		return other.text === this.text && other.context === this.context && other.height === this.height;
+		return other.text === this.text && other.context === this.context && other.height === this.height && other.readOnly === this.readOnly;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
@@ -82,7 +85,8 @@ export class TableWidget extends WidgetType {
 			const line = (rowIndex === 0 ? head : body).insertRow();
 			for (let column = 0; column < table.columns; column++) {
 				const cell = document.createElement(rowIndex === 0 ? "th" : "td");
-				cell.contentEditable = "plaintext-only";
+				cell.contentEditable = this.readOnly ? "false" : "plaintext-only";
+				if (this.readOnly) cell.tabIndex = 0;
 				cell.spellcheck = false;
 				cell.dataset.row = String(rowIndex);
 				cell.dataset.column = String(column);
@@ -99,7 +103,7 @@ export class TableWidget extends WidgetType {
 			// The path is taken as the event was sent: a cell that took the focus has already swapped its content for
 			// its source, and the element that was clicked is no longer in the page to be asked.
 			const onCell = event.composedPath().some((node) => node instanceof HTMLElement && node.matches("th, td, button"));
-			if (event.button !== 0 || onCell) return;
+			if (view.state.readOnly || event.button !== 0 || onCell) return;
 			event.preventDefault();
 			const rows = Array.from(wrap.querySelectorAll("tr"));
 			const rect = wrap.getBoundingClientRect();
@@ -109,10 +113,12 @@ export class TableWidget extends WidgetType {
 			if (hit) focusCell(wrap, Number(hit.dataset.row), Number(hit.dataset.column), "end");
 		});
 		this.listenPicked(wrap, view);
-		wrap.append(scroll, this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
-
-		this.attachHandles(view, wrap, scroll, element);
-		const state: Shown = { text: this.text, context: this.context, rows: table.rows.length, columns: table.columns, aligns: table.aligns.join(","), observer: null, lastHeight: 0 };
+		wrap.append(scroll);
+		if (!this.readOnly) {
+			wrap.append(this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
+			this.attachHandles(view, wrap, scroll, element);
+		}
+		const state: Shown = { text: this.text, context: this.context, rows: table.rows.length, columns: table.columns, aligns: table.aligns.join(","), readOnly: this.readOnly, observer: null, lastHeight: 0 };
 		shown.set(wrap, state);
 		if (typeof ResizeObserver !== "undefined") {
 			state.observer = new ResizeObserver(() => {
@@ -127,7 +133,7 @@ export class TableWidget extends WidgetType {
 			state.observer.observe(wrap);
 		}
 		requestAnimationFrame(() => {
-			if (!pendingFocus || !wrap.isConnected) return;
+			if (view.state.readOnly || !pendingFocus || !wrap.isConnected) return;
 			const range = tableRange(view, wrap);
 			if (range?.from !== pendingFocus.from) return;
 			const { row, column } = pendingFocus;
@@ -141,13 +147,13 @@ export class TableWidget extends WidgetType {
 	updateDOM(dom: HTMLElement, view: EditorView): boolean {
 		const state = shown.get(dom);
 		const table = parseTable(this.text);
-		if (!state || !table || table.rows.length !== state.rows || table.columns !== state.columns || table.aligns.join(",") !== state.aligns) return false;
+		if (!state || !table || this.readOnly !== state.readOnly || table.rows.length !== state.rows || table.columns !== state.columns || table.aligns.join(",") !== state.aligns) return false;
 		const contextChanged = state.context !== this.context;
 		state.text = this.text;
 		state.context = this.context;
 		for (const cell of dom.querySelectorAll<HTMLElement>("[data-row]")) {
 			const source = table.rows[Number(cell.dataset.row)].cells[Number(cell.dataset.column)]?.text ?? "";
-			const focused = cell === dom.ownerDocument.activeElement;
+			const focused = !view.state.readOnly && cell === dom.ownerDocument.activeElement;
 			if (source !== cell.dataset.source) {
 				// The text changed from outside this cell: an undo, or a change to the file.
 				showCell(cell, source, this.context, focused);
@@ -161,6 +167,7 @@ export class TableWidget extends WidgetType {
 	}
 
 	destroy(dom: HTMLElement): void {
+		dropPick(dom);
 		shown.get(dom)?.observer?.disconnect();
 		shown.delete(dom);
 	}
@@ -351,16 +358,23 @@ export class TableWidget extends WidgetType {
 		cell.addEventListener("mousedown", (event) => {
 			if (event.button !== 0) return;
 			const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id]");
-			if (link && (event.metaKey || event.ctrlKey)) {
+			if (link && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
 				event.preventDefault();
 				this.hooks(view)?.openAsset(link.dataset.assetId!, link.dataset.anchor);
+				return;
+			}
+			const anchor = (event.target as HTMLElement | null)?.closest<HTMLAnchorElement>("a");
+			if (anchor && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
+				event.preventDefault();
+				if (anchor.dataset.anchor && !anchor.classList.contains("markdown-broken-reference")) this.hooks(view)?.openAsset("", anchor.dataset.anchor);
+				else if (/^(https?:|mailto:)/i.test(anchor.href)) window.open(anchor.href, "_blank", "noopener,noreferrer");
 				return;
 			}
 			// A press in a cell ends a block that was picked, and may start a new one by being dragged into another cell.
 			dropPick(wrap);
 			trackPress(wrap, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
 			// A cell that is not being edited shows its result. A click turns it into its text first.
-			if (cell !== cell.ownerDocument.activeElement) {
+			if (!view.state.readOnly && cell !== cell.ownerDocument.activeElement) {
 				event.preventDefault();
 				cell.focus();
 			}
@@ -369,6 +383,7 @@ export class TableWidget extends WidgetType {
 			if ((event.target as HTMLElement | null)?.closest("a")) event.preventDefault();
 		});
 		cell.addEventListener("focus", () => {
+			if (view.state.readOnly) return;
 			holdWidths(wrap);
 			showCell(cell, cell.dataset.source ?? "", shown.get(wrap)?.context ?? null, true);
 			caretAt(cell, "end");
@@ -386,6 +401,7 @@ export class TableWidget extends WidgetType {
 		// them. Text that has no cells in it is put in at the caret, as text is.
 		cell.addEventListener("paste", (event) => {
 			event.stopPropagation();
+			if (view.state.readOnly) { event.preventDefault(); return; }
 			const values = readCells(event, false);
 			if (!values) return;
 			event.preventDefault();
@@ -393,6 +409,7 @@ export class TableWidget extends WidgetType {
 		});
 		cell.addEventListener("keydown", (event) => keyInCell(event, view, wrap, cell, this.hooks(view)));
 		cell.addEventListener("contextmenu", (event) => {
+			if (view.state.readOnly) return;
 			const hooks = this.hooks(view);
 			const found = currentTable(view, wrap);
 			if (!hooks || !found) return;
@@ -442,7 +459,7 @@ export class TableWidget extends WidgetType {
 				this.hooks(view)?.save();
 			} else if (mod && (key === "z" || key === "y")) {
 				handled();
-				(key === "y" || event.shiftKey ? redo : undo)(view);
+				if (!view.state.readOnly) (key === "y" || event.shiftKey ? redo : undo)(view);
 			} else if (mod || event.altKey) {
 				return;
 			} else if (event.key === "Delete" || event.key === "Backspace") {
@@ -466,7 +483,7 @@ export class TableWidget extends WidgetType {
 			event.clipboardData?.setData("text/plain", rectText(found.table, picked.rect));
 			// The cells alone, for pasting into cells: the text above has a header put on top, which is not one of them.
 			event.clipboardData?.setData(CELLS_TYPE, JSON.stringify(cellTexts(found.table, picked.rect)));
-			if (cut) editTable(view, wrap, { kind: "clear", rect: picked.rect });
+			if (cut && !view.state.readOnly) editTable(view, wrap, { kind: "clear", rect: picked.rect });
 		};
 		wrap.addEventListener("copy", (event) => copy(event, false));
 		wrap.addEventListener("cut", (event) => copy(event, true));
@@ -476,6 +493,7 @@ export class TableWidget extends WidgetType {
 			if (!picked) return;
 			event.stopPropagation();
 			event.preventDefault();
+			if (view.state.readOnly) return;
 			let values = readCells(event, true);
 			if (!values) return;
 			const { rect } = picked;
@@ -654,8 +672,33 @@ function currentTable(view: EditorView, wrap: HTMLElement): { range: { from: num
 	return range && table ? { range, table } : null;
 }
 
+/** Carry the caret from a focused cell into the document before a mode switch destroys its widget. */
+export function leaveCell(view: EditorView): boolean {
+	const active = view.dom.ownerDocument.activeElement;
+	if (!(active instanceof HTMLElement)) return false;
+	const wrap = active.closest<HTMLElement>(".cm-live-table");
+	if (!wrap || !view.dom.contains(wrap)) return false;
+	const found = currentTable(view, wrap);
+	if (!found) return false;
+	const cell = found.table.rows[Number(active.dataset.row)]?.cells[Number(active.dataset.column)];
+	let offset = 0;
+	const selection = window.getSelection();
+	if (cell && selection?.rangeCount && active.contains(selection.anchorNode)) {
+		const range = selection.getRangeAt(0).cloneRange();
+		range.selectNodeContents(active);
+		range.setEnd(selection.anchorNode!, selection.anchorOffset);
+		offset = range.toString().length;
+	}
+	active.blur();
+	dropPick(wrap);
+	const anchor = found.range.from + (cell ? Math.min(cell.to, cell.from + offset) : 0);
+	view.dispatch({ selection: { anchor } });
+	return true;
+}
+
 /** Writes what a cell holds into the file as a change to that cell alone. */
 function commit(view: EditorView, wrap: HTMLElement, cell: HTMLElement): void {
+	if (view.state.readOnly) return;
 	const found = currentTable(view, wrap);
 	if (!found) return;
 	const value = cell.textContent ?? "";
@@ -683,6 +726,7 @@ export type TableEdit =
 
 /** Applies an edit to the table drawn at `wrap` and puts the caret in a cell that makes sense afterwards. */
 function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
+	if (view.state.readOnly) return;
 	const found = currentTable(view, wrap);
 	if (!found) return;
 	dropPick(wrap);
@@ -827,7 +871,7 @@ function caretEdge(cell: HTMLElement, edge: "start" | "end"): boolean {
 }
 
 function keyInCell(event: KeyboardEvent, view: EditorView, wrap: HTMLElement, cell: HTMLElement, hooks: TableHooks | null): void {
-	if (event.isComposing) return;
+	if (view.state.readOnly || event.isComposing) return;
 	const row = Number(cell.dataset.row);
 	const column = Number(cell.dataset.column);
 	const state = shown.get(wrap);
@@ -898,7 +942,7 @@ function keyInCell(event: KeyboardEvent, view: EditorView, wrap: HTMLElement, ce
  */
 function leaveTable(view: EditorView, wrap: HTMLElement, cell: HTMLElement, side: "before" | "after"): void {
 	const range = tableRange(view, wrap);
-	if (!range) return;
+	if (view.state.readOnly || !range) return;
 	cell.blur();
 	if (side === "before") {
 		if (range.from === 0) view.dispatch({ changes: { from: 0, insert: "\n" }, selection: { anchor: 0 }, scrollIntoView: true, userEvent: "input" });

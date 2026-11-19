@@ -23,10 +23,6 @@
 	box-shadow: var(--lm-shadow-md);
 }
 
-.markdown-workbench .find-bar {
-	top: 40px;
-}
-
 .find-bar input {
 	width: 160px;
 	padding: var(--lm-space-2) var(--lm-space-3);
@@ -74,48 +70,49 @@
 	display: flex;
 	flex: 0 0 auto;
 	align-items: center;
-	gap: var(--lm-space-1);
-	padding: 0 var(--lm-space-5);
-	border-bottom: 1px solid var(--lm-border-default);
-	background: var(--lm-surface-subtle);
+	gap: var(--lm-space-2);
+	padding: var(--lm-space-2) var(--lm-space-5);
 }
 
 .markdown-toolbar button {
-	position: relative;
-	height: var(--lm-size-xl);
-	padding: 0 var(--lm-space-5);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
+	padding: 0;
 	border: 0;
-	color: var(--lm-text-muted);
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-secondary);
 	background: transparent;
 	cursor: pointer;
+}
+
+.markdown-toolbar button svg {
+	width: 16px;
+	height: 16px;
+}
+
+.markdown-toolbar button:hover:not(:disabled) {
+	background: var(--lm-surface-hover);
+}
+
+.markdown-toolbar button[aria-pressed="true"] {
+	color: var(--lm-text-accent);
+	background: var(--lm-surface-active);
+}
+
+.markdown-toolbar button:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.markdown-mode-notice {
+	padding: var(--lm-space-3) var(--lm-space-5);
+	border-bottom: 1px solid var(--lm-border-default);
+	color: var(--lm-text-secondary);
+	background: var(--lm-surface-subtle);
 	font-size: var(--lm-text-size-sm);
-}
-
-.markdown-toolbar button.active {
-	color: var(--lm-text-primary);
-	font-weight: var(--lm-weight-semibold);
-}
-
-.markdown-toolbar button.active::after {
-	position: absolute;
-	right: 8px;
-	bottom: 0;
-	left: 8px;
-	height: 2px;
-	border-radius: var(--lm-radius-line);
-	background: var(--lm-surface-inverse);
-	content: "";
-}
-
-.markdown-preview {
-	flex: 1;
-	min-width: 0;
-	min-height: 0;
-	margin-right: calc(var(--lm-panel-scroll-inset) - 5px);
-	overflow: auto;
-	background: var(--lm-surface-app);
-	/* Fill the workbench's 5px side padding under the resize handles. */
-	box-shadow: -5px 0 var(--lm-surface-app), 5px 0 var(--lm-surface-app);
 }
 
 .markdown-preview-body {
@@ -302,23 +299,23 @@
 	font-weight: var(--lm-weight-semibold);
 }
 
-.markdown-source-editor {
+.markdown-editor-body {
 	display: flex;
 	min-height: 0;
 	flex: 1;
 	flex-direction: column;
 }
 
-.markdown-source-input {
+.markdown-editor-input {
 	min-height: 0;
 	flex: 1;
 	overflow: hidden;
-	background: var(--lm-surface-app);
+	background: var(--lm-surface-raised);
 	/* Fill the workbench's 5px side padding under the resize handles. */
-	box-shadow: -5px 0 var(--lm-surface-app), 5px 0 var(--lm-surface-app);
+	box-shadow: -5px 0 var(--lm-surface-raised), 5px 0 var(--lm-surface-raised);
 }
 
-.markdown-source-input .cm-editor {
+.markdown-editor-input .cm-editor {
 	height: 100%;
 }
 

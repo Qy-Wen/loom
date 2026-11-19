@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
 import { MarkdownStore } from "../src/main/markdown/store.ts";
-import { MARKDOWN_EDIT_LIMIT_BYTES } from "../src/shared/markdown-file.ts";
+import { markdownAccess, MARKDOWN_EDIT_LIMIT_BYTES, MARKDOWN_LIVE_LIMIT_BYTES } from "../src/shared/markdown-file.ts";
 
 async function withLibrary(files: Record<string, string | Buffer>, run: (context: { root: string; store: MarkdownStore; id: (path: string) => Promise<string> }) => Promise<void>): Promise<void> {
 	const root = await mkdtemp(join(tmpdir(), "loom-markdown-"));
@@ -112,9 +112,38 @@ test("only Markdown files of the library are readable and writable", async () =>
 	});
 });
 
-test("a file over 2 MiB cannot be read for editing", async () => {
-	await withLibrary({ "big.md": "a".repeat(MARKDOWN_EDIT_LIMIT_BYTES + 1) }, async ({ store, id }) => {
-		await assert.rejects(store.read(await id("big.md")), /2 MiB/);
+test("the 2 and 10 MiB boundaries choose live, source and read-only access", () => {
+	assert.equal(markdownAccess(MARKDOWN_LIVE_LIMIT_BYTES), "live");
+	assert.equal(markdownAccess(MARKDOWN_LIVE_LIMIT_BYTES + 1), "source");
+	assert.equal(markdownAccess(MARKDOWN_EDIT_LIMIT_BYTES), "source");
+	assert.equal(markdownAccess(MARKDOWN_EDIT_LIMIT_BYTES + 1), "read");
+});
+
+test("files from 2 to 10 MiB can be read and saved, but saves cannot exceed 10 MiB", async () => {
+	const text = "a".repeat(MARKDOWN_LIVE_LIMIT_BYTES + 1);
+	await withLibrary({ "medium.md": text }, async ({ root, store, id }) => {
+		const a = await id("medium.md");
+		const read = await store.read(a);
+		assert.equal(read.text, text);
+		assert.equal(read.byteLength, Buffer.byteLength(text));
+		const saved = await store.save(a, text + "x", read.revision);
+		assert.equal(saved.status, "saved");
+		assert.equal(saved.status === "saved" && saved.snapshot.byteLength, Buffer.byteLength(text) + 1);
+		const current = await store.read(a);
+		await assert.rejects(store.save(a, "b".repeat(MARKDOWN_EDIT_LIMIT_BYTES + 1), current.revision), /10 MiB/);
+		assert.equal(await readFile(join(root, "medium.md"), "utf8"), text + "x");
+	});
+});
+
+test("a file beyond 10 MiB still reads but cannot be saved, even with smaller replacement text", async () => {
+	const text = "a".repeat(MARKDOWN_EDIT_LIMIT_BYTES + 1);
+	await withLibrary({ "big.md": text }, async ({ root, store, id }) => {
+		const a = await id("big.md");
+		const read = await store.read(a);
+		assert.equal(read.text, text);
+		assert.equal(read.byteLength, Buffer.byteLength(text));
+		await assert.rejects(store.save(a, "small", read.revision), /read-only/);
+		assert.equal(await readFile(join(root, "big.md"), "utf8"), text);
 	});
 });
 
