@@ -4,6 +4,7 @@ import { markdownAccess } from "../../../shared/markdown-file.ts";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor as MarkdownEditorHandle, type MarkdownMode } from "./codemirror-markdown.ts";
 import { requestHeading, takePendingHeading } from "./heading-anchor.ts";
+import { markdownFindIconPath } from "./markdown-find.ts";
 import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
 
 const files: MarkdownFiles = {
@@ -27,9 +28,11 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 	const [insertIssue, setInsertIssue] = useState<string | null>(null);
 	const [reading, setReading] = useState(false);
 	const [source, setSource] = useState(false);
+	const [findOpen, setFindOpen] = useState(false);
 	const [, rerender] = useState(0);
 	const rootRef = useRef<HTMLDivElement>(null);
 	const hostRef = useRef<HTMLDivElement>(null);
+	const findHostRef = useRef<HTMLDivElement>(null);
 	const editorRef = useRef<MarkdownEditorHandle | null>(null);
 	const libraryRef = useRef({ fromRelativePath: relativePath, assets });
 	libraryRef.current = { fromRelativePath: relativePath, assets };
@@ -79,11 +82,14 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 
 	useEffect(() => {
 		const host = hostRef.current;
-		if (!save || !host) return;
-		const editor = createMarkdownEditor(host, save.text, {
+		const findHost = findHostRef.current;
+		if (!save || !host || !findHost) return;
+		setFindOpen(false);
+		const editor = createMarkdownEditor(host, findHost, save.text, {
 			onChange: (text) => save.edit(text),
 			onBlur: () => { void save.flush().catch(() => undefined); },
 			onSave: () => { void save.flush().catch(() => undefined); },
+			onFindOpenChange: setFindOpen,
 			onOpenAsset: (target, anchor) => {
 				if (!target || target === assetId) {
 					if (anchor) editorRef.current?.scrollToHeading(anchor);
@@ -96,6 +102,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 			addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn,
 			moveRow: t.preview.tableMoveRow, moveColumn: t.preview.tableMoveColumn,
 			searchPhrases: t.preview.searchPhrases,
+			find: t.find,
 			insertCommands: t.preview.insertCommands,
 		}, {
 			chooseTableAction: (state) => window.loom.showTableContextMenu(state),
@@ -167,6 +174,13 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 						<path d="M12 5v14M5 12h14" />
 					</svg>
 				</button>}
+				<div className="markdown-toolbar-find" role="group" aria-label={t.find.label}>
+					{!findOpen && <button type="button" className="markdown-find-trigger" aria-label={t.find.label}
+						aria-expanded="false" data-tooltip={t.find.placeholder} onMouseDown={(event) => event.preventDefault()} onClick={() => editorRef.current?.find()}>
+						<svg viewBox="0 0 24 24" className="markdown-find-icon" aria-hidden="true"><path d={markdownFindIconPath} /></svg>
+					</button>}
+					<div className="markdown-find-panels" ref={findHostRef} />
+				</div>
 			</div>
 			{access !== "live" && <div className="markdown-mode-notice" role="note">{access === "read" ? t.preview.editorReadOnly : t.preview.editorLargeSource}</div>}
 			<div className="markdown-editor-body">

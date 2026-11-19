@@ -2,13 +2,14 @@ import { closeCompletion, completionStatus } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap, indentWithTab, isolateHistory, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
-import { closeSearchPanel, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
+import { openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
-import { drawSelection, EditorView, keymap } from "@codemirror/view";
+import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
+import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
 import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
@@ -24,6 +25,7 @@ export interface MarkdownEditorEvents {
 	onChange(text: string): void;
 	onBlur(): void;
 	onSave(): void;
+	onFindOpenChange(open: boolean): void;
 	/** A link was opened. An empty target means a heading in this file. */
 	onOpenAsset(assetId: string, anchor: string | undefined): void;
 }
@@ -35,6 +37,7 @@ export interface MarkdownEditorLabels {
 	moveRow: string;
 	moveColumn: string;
 	searchPhrases: Record<string, string>;
+	find: MarkdownFindLabels;
 	insertCommands: Messages["preview"]["insertCommands"];
 }
 
@@ -79,23 +82,12 @@ const theme = EditorView.theme({
 		fontFamily: "var(--lm-font-sans)",
 	},
 	".cm-panels-bottom": { borderTop: "1px solid var(--lm-border-default)" },
-	".cm-panel.cm-search": { padding: "6px 28px 6px 10px", fontSize: "12px" },
-	".cm-panel.cm-search input, .cm-panel.cm-search button": { font: "inherit", color: "inherit" },
-	".cm-panel.cm-search input": {
-		border: "1px solid var(--lm-border-default)",
-		borderRadius: "var(--lm-radius-sm)",
-		backgroundColor: "var(--lm-surface-app)",
+	".cm-panels-top": { borderBottom: "1px solid var(--lm-border-default)" },
+	".cm-searchMatch": { backgroundColor: "var(--lm-surface-warning)", borderRadius: "var(--lm-radius-line)" },
+	".cm-searchMatch.cm-searchMatch-selected": {
+		backgroundColor: "color-mix(in srgb, var(--lm-warning) 38%, var(--lm-surface-raised))",
+		outline: "1px solid var(--lm-warning)",
 	},
-	".cm-panel.cm-search button": {
-		border: "1px solid var(--lm-border-default)",
-		borderRadius: "var(--lm-radius-sm)",
-		backgroundColor: "var(--lm-surface-app)",
-		backgroundImage: "none",
-		cursor: "pointer",
-	},
-	".cm-panel.cm-search [name=close]": { color: "var(--lm-text-muted)", border: "none", backgroundColor: "transparent" },
-	".cm-searchMatch": { backgroundColor: "var(--lm-surface-hover)", outline: "1px solid var(--lm-border-strong)" },
-	".cm-searchMatch.cm-searchMatch-selected": { backgroundColor: "var(--lm-surface-active)" },
 });
 
 /**
@@ -124,7 +116,7 @@ export interface MarkdownEditor {
 	destroy(): void;
 }
 
-export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels, host: MarkdownEditorHost, initialMode: MarkdownMode = "edit"): MarkdownEditor {
+export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels, host: MarkdownEditorHost, initialMode: MarkdownMode = "edit"): MarkdownEditor {
 	let replacing = false;
 	let mode = initialMode;
 	const rendering = new Compartment();
@@ -159,7 +151,8 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		access.of(modeAccess(mode)),
 		// readOnly protects commands; this also protects widget and clipboard transactions. External reloads are allowed.
 		EditorState.transactionFilter.of((transaction) => transaction.docChanged && transaction.startState.readOnly && !transaction.annotation(replaceText) ? [] : transaction),
-		search({ top: false }),
+		search({ createPanel: (editor) => new MarkdownFindPanel(editor, labels.find) }),
+		panels({ topContainer: findContainer }),
 		markdownInsert(labels.insertCommands, host.pickAssets),
 		EditorState.phrases.of(labels.searchPhrases),
 		theme,
@@ -173,6 +166,8 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		]),
 		EditorView.updateListener.of((update) => {
 			if (update.docChanged && !replacing) events.onChange(update.state.doc.toString());
+			const findOpen = searchPanelOpen(update.state);
+			if (findOpen !== searchPanelOpen(update.startState)) events.onFindOpenChange(findOpen);
 		}),
 		EditorView.domEventHandlers({
 			blur: () => { events.onBlur(); },
@@ -234,8 +229,6 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		setMode(next) {
 			if (next === mode) return;
 			closeCompletion(view);
-			const searching = searchPanelOpen(view.state) && (next === "read") !== (mode === "read");
-			if (searching) closeSearchPanel(view);
 			const hadCellFocus = leaveCell(view);
 			const effects = [access.reconfigure(modeAccess(next))];
 			if ((next === "source") !== (mode === "source")) effects.push(rendering.reconfigure(next === "source" ? [] : rendered));
@@ -243,7 +236,6 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 			view.dispatch({ effects });
 			if (hadCellFocus && mode !== "read") view.focus();
 			if (mode !== "source") view.dispatch({ effects: setFocused.of(view.hasFocus) });
-			if (searching) openSearchPanel(view);
 		},
 		find: () => { openSearchPanel(view); },
 		insert: () => {

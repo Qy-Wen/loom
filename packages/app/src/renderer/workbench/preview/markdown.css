@@ -56,6 +56,315 @@
 	background: var(--lm-surface-sunken);
 }
 
+.markdown-toolbar-find {
+	--markdown-find-trigger-size: var(--lm-size-lg);
+	flex: 0 1 var(--markdown-find-trigger-size);
+	align-self: center;
+	min-inline-size: 0;
+	margin-inline-start: auto;
+	overflow: clip;
+	overflow-clip-margin: var(--lm-space-2);
+	font-family: var(--lm-font-sans);
+	font-size: var(--lm-text-size-md);
+}
+
+.markdown-toolbar-find:has(.markdown-find) { flex-basis: 21rem; }
+
+@media (pointer: coarse) {
+	.markdown-toolbar-find { --markdown-find-trigger-size: 44px; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.markdown-toolbar-find { transition: flex-basis var(--lm-dur-slow) ease-out; }
+	.markdown-find-controls { transition: opacity var(--lm-dur-fast) ease-out var(--lm-dur-instant); }
+
+	@starting-style {
+		.markdown-find-controls { opacity: 0; }
+	}
+}
+
+.markdown-find-panels:empty { display: none; }
+
+.markdown-find-panels .cm-panels-top:has(> .markdown-find) {
+	border-bottom: 0;
+	background: transparent;
+}
+
+.markdown-find-panels .cm-panel.cm-search.markdown-find {
+	padding: 0;
+	font-size: inherit;
+}
+
+.markdown-find-row,
+.markdown-find-filters {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-2);
+}
+
+.markdown-find-panels .cm-panel.markdown-find :is(.markdown-find-field, .markdown-find-search) {
+	flex: 1;
+	min-width: 0;
+	min-height: var(--lm-size-lg);
+	margin: 0;
+	padding: 0 var(--lm-space-4);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-app);
+	color: var(--lm-text-primary);
+	font: inherit;
+}
+
+.markdown-find-search {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-3);
+}
+
+.markdown-find-trigger {
+	display: grid;
+	place-items: center;
+	inline-size: var(--markdown-find-trigger-size);
+	min-block-size: var(--markdown-find-trigger-size);
+	margin-inline-start: auto;
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
+	color: var(--lm-text-secondary);
+	cursor: pointer;
+}
+
+.markdown-find-trigger:hover { background: var(--lm-surface-hover); }
+
+.markdown-find-icon {
+	flex: none;
+	width: var(--lm-size-xs);
+	height: var(--lm-size-xs);
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.7;
+	stroke-linecap: round;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-search {
+	gap: var(--lm-space-1);
+	min-inline-size: var(--markdown-find-trigger-size);
+	min-block-size: var(--lm-size-md);
+	padding-inline-start: var(--lm-space-1);
+	padding-inline-end: var(--lm-space-3);
+	border: 0;
+	outline: 1px solid var(--lm-border-default);
+	outline-offset: -1px;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-search:has(input:focus-visible) {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: -2px;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-entry {
+	display: flex;
+	align-items: center;
+	flex: 1;
+	min-inline-size: 0;
+	align-self: stretch;
+	gap: var(--lm-space-2);
+	margin: 0;
+	font: inherit;
+	cursor: text;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-entry > .markdown-find-field {
+	align-self: stretch;
+	min-height: 0;
+	padding: 0;
+	border: 0;
+	outline: none;
+	background: transparent;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-search:has(input[aria-invalid="true"]) {
+	outline-color: var(--lm-text-danger);
+}
+
+.markdown-find-field[aria-invalid="true"] + .markdown-find-count {
+	color: var(--lm-text-danger);
+}
+
+.markdown-find-count {
+	/* Reserve the status slot even while the query is empty or being counted. */
+	flex: 0 0 min(14ch, 36%);
+	min-inline-size: 0;
+	overflow: clip;
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-xs);
+	font-variant-numeric: tabular-nums;
+	text-align: end;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markdown-find-feedback:empty { display: none; }
+
+.markdown-find-announcement {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	clip-path: inset(50%);
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-button {
+	flex: none;
+	min-height: var(--lm-size-lg);
+	margin: 0;
+	padding: 0 var(--lm-space-4);
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-secondary);
+	background: transparent;
+	font: inherit;
+	cursor: pointer;
+}
+
+.markdown-find-controls {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-1);
+}
+
+.markdown-find-panels .cm-panel.markdown-find :is(.markdown-find-controls .markdown-find-button, .markdown-find-toggle) {
+	width: var(--lm-size-md);
+	min-height: var(--lm-size-md);
+	margin: 0;
+	padding: 0;
+	font-size: var(--lm-text-size-lg);
+	line-height: 1;
+}
+
+.markdown-find-toggle {
+	display: grid;
+	place-items: center;
+}
+
+@media (pointer: coarse) {
+	.markdown-find-panels .cm-panel.markdown-find :is(.markdown-find-controls .markdown-find-button, .markdown-find-toggle) {
+		min-inline-size: 44px;
+		min-block-size: 44px;
+	}
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-button:hover:enabled,
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-controls .markdown-find-button[aria-expanded="true"] {
+	background: var(--lm-surface-hover);
+	color: var(--lm-text-primary);
+}
+
+.markdown-find .markdown-find-button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+.markdown-find :is(input, button):focus-visible,
+.markdown-find-trigger:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 1px;
+}
+
+.markdown-find-options {
+	inline-size: min(22rem, calc(100vw - 2 * var(--lm-space-6)));
+	max-block-size: min(20rem, 80vh);
+	padding: var(--lm-space-6);
+	overflow: auto;
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-lg);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	box-shadow: var(--lm-shadow-lg);
+	font-size: var(--lm-text-size-sm);
+}
+
+@supports (position-area: block-end span-inline-start) {
+	.markdown-find-options {
+		inset: auto;
+		margin: 0;
+		margin-block-start: var(--lm-space-3);
+		position-area: block-end span-inline-start;
+		position-try-fallbacks: flip-block, flip-inline, flip-block flip-inline;
+	}
+}
+
+.markdown-find-filters {
+	flex-wrap: wrap;
+	gap: var(--lm-space-3);
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-filter {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--lm-space-2);
+	margin: 0;
+	min-height: var(--lm-size-md);
+	padding: var(--lm-space-1) var(--lm-space-4);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-pill);
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-sm);
+	cursor: pointer;
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-filter:hover {
+	background: var(--lm-surface-hover);
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-filter:has(input:checked) {
+	border-color: var(--lm-border-accent);
+	background: var(--lm-surface-accent);
+	color: var(--lm-text-accent);
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-filter input {
+	margin: 0;
+	accent-color: var(--lm-accent-solid);
+}
+
+.markdown-find-replace {
+	display: flex;
+	margin-block-start: var(--lm-space-5);
+	padding-block-start: var(--lm-space-5);
+	border-block-start: 1px solid var(--lm-border-subtle);
+}
+
+.markdown-find-actions,
+.markdown-find-replace-actions:not([hidden]) {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: var(--lm-space-2);
+}
+
+.markdown-find-actions { margin-block-start: var(--lm-space-4); }
+.markdown-find-replace-actions { margin-inline-start: auto; }
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-replace-all {
+	background: var(--lm-surface-accent);
+	color: var(--lm-text-accent);
+	font-weight: var(--lm-weight-medium);
+}
+
+.markdown-find-panels .cm-panel.markdown-find .markdown-find-replace-all:hover:enabled {
+	background: var(--lm-surface-accent-strong);
+	color: var(--lm-text-accent);
+}
+
+.markdown-find-feedback {
+	margin-block-start: var(--lm-space-3);
+	color: var(--lm-text-success);
+	font-size: var(--lm-text-size-sm);
+}
+
 ::highlight(loom-find-match) {
 	background-color: var(--lm-surface-warning);
 	color: inherit;
@@ -69,12 +378,12 @@
 .markdown-toolbar {
 	display: flex;
 	flex: 0 0 auto;
-	align-items: center;
+	align-items: flex-start;
 	gap: var(--lm-space-2);
 	padding: var(--lm-space-2) var(--lm-space-5);
 }
 
-.markdown-toolbar button {
+.markdown-toolbar > button {
 	display: flex;
 	align-items: center;
 	justify-content: center;
@@ -88,21 +397,21 @@
 	cursor: pointer;
 }
 
-.markdown-toolbar button svg {
+.markdown-toolbar > button svg {
 	width: var(--lm-size-xs);
 	height: var(--lm-size-xs);
 }
 
-.markdown-toolbar button:hover:not(:disabled) {
+.markdown-toolbar > button:hover:not(:disabled) {
 	background: var(--lm-surface-hover);
 }
 
-.markdown-toolbar button[aria-pressed="true"] {
+.markdown-toolbar > button[aria-pressed="true"] {
 	color: var(--lm-text-accent);
 	background: var(--lm-surface-active);
 }
 
-.markdown-toolbar button:disabled {
+.markdown-toolbar > button:disabled {
 	opacity: 0.5;
 	cursor: default;
 }

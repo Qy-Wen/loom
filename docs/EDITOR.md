@@ -87,7 +87,7 @@ Agent writes, external editors and cloud pulls are all treated as external chang
 ## Relation to Other Features
 
 - **File references:** After a save, the existing reference extraction updates the graph. A missing target shows a red mark in the editor, the same as in the preview.
-- **Find:** Editing, reading and source share CodeMirror's search panel, opened with ⌘/Ctrl+F. Reading hides replacement controls. Search covers the full source, regardless of viewport virtualization.
+- **Find:** Click the toolbar magnifying glass or press ⌘/Ctrl+F to expand the search box and see the current match and total. Use Enter and Shift+Enter to move between matches. Find options contains matching filters and replacement in editable modes. Search covers the full source and displays `10000+` above 10,000 matches.
 - **Context menu:** Native menus provide undo/redo, cut/copy/paste and select all, alongside table row/column actions. History uses the editor's undo stack; clipboard actions follow the same path as keyboard shortcuts. Reading disables mutations. A table menu acts on selected cell text or a picked cell block; select all selects the cell text or the whole table, respectively.
 - **Format selection:** Right-click selected text and choose Format. Bold, italic, strikethrough and inline code act on a selection within one line. Paragraph, headings, lists and quotes convert the full blocks touched by the selection. Convert to Paragraph to remove a block format. Each change writes Markdown and takes one undo.
 - **Canvas:** A Markdown card on a canvas is still a read-only excerpt, and the editing view opened by double-click can modify it.
