@@ -5,7 +5,8 @@ import { search, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { liveBlockKeys, liveBlocks, liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import type { TableHooks } from "./live-table.ts";
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -23,6 +24,11 @@ export interface MarkdownEditorLabels {
 	addColumn: string;
 }
 
+/** What the editor asks the window for. */
+export interface MarkdownEditorHost {
+	chooseTableAction: TableHooks["chooseAction"];
+}
+
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
 const theme = EditorView.theme({
 	"&": {
@@ -32,8 +38,10 @@ const theme = EditorView.theme({
 		fontSize: "15px",
 	},
 	"&.cm-focused": { outline: "none" },
-	".cm-scroller": { fontFamily: '"Segoe UI", system-ui, sans-serif', lineHeight: "1.65", padding: "28px 0 64px" },
-	".cm-content": { maxWidth: "720px", margin: "0 auto", padding: "0 32px", caretColor: "var(--lm-text-primary)" },
+	// The side gutter belongs to the scroller, not the content: a selection is drawn out to the content box's edges
+	// less the line's padding, so padding on the content would put the highlight that far outside the text.
+	".cm-scroller": { fontFamily: '"Segoe UI", system-ui, sans-serif', lineHeight: "1.65", padding: "28px 32px 64px" },
+	".cm-content": { maxWidth: "656px", margin: "0 auto", padding: "0", caretColor: "var(--lm-text-primary)" },
 	".cm-line": { padding: 0 },
 	".cm-cursor, .cm-dropCursor": { borderLeftColor: "var(--lm-text-primary)" },
 	"&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection": {
@@ -85,17 +93,26 @@ export interface MarkdownEditor {
 	destroy(): void;
 }
 
-export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels): MarkdownEditor {
+export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels, host: MarkdownEditorHost): MarkdownEditor {
 	let replacing = false;
+	// The tables call back into the editor they are drawn in, which does not exist until the extensions are built.
+	let view: EditorView;
 	const extensions: Extension[] = [
 		history(),
-		drawSelection(),
+		// No caret at the end of a selection: next to a drawn table it is as tall as the table.
+		drawSelection({ drawRangeCursor: false }),
 		EditorView.lineWrapping,
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
 		liveLibrary,
 		liveHandlers({ openAsset: events.onOpenAsset } satisfies LiveHandlers),
-		liveTables({ openAsset: events.onOpenAsset, save: events.onSave, labels }),
+		liveTables({
+			openAsset: events.onOpenAsset,
+			save: events.onSave,
+			chooseAction: host.chooseTableAction,
+			labels,
+		}),
+		liveDrag,
 		liveMarkdown,
 		liveBlocks,
 		liveBlockKeys,
@@ -116,7 +133,7 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		}),
 		EditorView.domEventHandlers({ blur: () => { events.onBlur(); } }),
 	];
-	const view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
+	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
 	view.dispatch({ effects: updateLibrary(library) });
 	return {
 		view,

@@ -4,7 +4,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorSelection, EditorState } from "@codemirror/state";
 import type { Asset } from "@loom/core";
-import { liveBlockDecorations, liveDecorations, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
+import { liveBlockDecorations, liveBlocks, liveDecorations, liveDrag, setFocused, snapToSymbols, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
 
 const asset = (assetId: string, relativePath: string): Asset => ({
 	assetId, relativePath, filename: relativePath.split("/").pop()!, type: relativePath.endsWith(".png") ? "image" : "text",
@@ -297,4 +297,92 @@ test("the editor and the preview agree on which formulas are formulas", async ()
 		const editor = decorate(text, text.length).widgets.filter((entry) => entry.endsWith("MathWidget")).length + blocks(text).filter((entry) => entry.endsWith("MathWidget")).length;
 		assert.equal(editor, preview, `${JSON.stringify(sample)}: editor drew ${editor}, preview ${preview}`);
 	}
+});
+
+/** The selection that results from asking for `anchor`..`head` in a document with a drawn table. */
+function selectOver(text: string, anchor: number, head: number): [number, number] {
+	let state = EditorState.create({ doc: text, extensions: [markdown({ base: markdownLanguage }), liveDrag, liveBlocks] });
+	ensureSyntaxTree(state, state.doc.length, 5000);
+	// The block field is built from the tree, which is only complete now.
+	state = state.update({ changes: { from: 0, insert: "" } }).state;
+	state = state.update({ selection: EditorSelection.single(anchor, head) }).state;
+	const range = state.selection.main;
+	return [range.anchor, range.head];
+}
+
+test("a selection that ends inside a drawn table takes the whole table", () => {
+	const text = "上文\n\n| a | b |\n| - | - |\n| 1 | 2 |\n\n下文";
+	const from = text.indexOf("| a");
+	const to = text.indexOf("\n\n下文");
+	const inside = text.indexOf("| 1");
+	// From the text above into the middle of the table: the end moves to the end of the table.
+	assert.deepEqual(selectOver(text, 1, inside + 3), [1, to]);
+	// The same backwards.
+	assert.deepEqual(selectOver(text, inside + 3, 1), [to, 1]);
+	// From the text below into the table: the start moves to the start of the table.
+	assert.deepEqual(selectOver(text, text.length - 1, inside), [text.length - 1, from]);
+	// An end on the very first position of the table is the table's edge, and the table goes in whole.
+	assert.deepEqual(selectOver(text, 1, from), [1, to]);
+	// From the end of the table down into the text below: the start is the table's end, so the table is not in it.
+	assert.deepEqual(selectOver(text, to, text.length - 1), [to, text.length - 1]);
+	// The blank line before the table is the text above it, not the table.
+	assert.deepEqual(selectOver(text, 1, from - 1), [1, from - 1]);
+	// A selection that already holds the table, and one that stays in the text, are left alone.
+	assert.deepEqual(selectOver(text, 0, text.length), [0, text.length]);
+	assert.deepEqual(selectOver(text, 0, 2), [0, 2]);
+	// A caret has nothing to take in.
+	assert.deepEqual(selectOver(text, inside, inside), [inside, inside]);
+});
+
+/** The selection `anchor`..`head` after it is let go, in a document whose symbols are hidden. */
+function letGo(text: string, anchor: number, head: number): [number, number] {
+	let state = EditorState.create({ doc: text, selection: EditorSelection.single(anchor, head), extensions: [markdown({ base: markdownLanguage }), liveDrag, liveLibrary] });
+	ensureSyntaxTree(state, state.doc.length, 5000);
+	// Focused, as it is while the mouse is used.
+	state = state.update({ effects: setFocused.of(true) }).state;
+	const moved = snapToSymbols(state);
+	const range = (moved ?? state.selection).main;
+	return [range.anchor, range.head];
+}
+
+test("a selection let go at the edge of a hidden symbol takes the symbols that belong to what it holds", () => {
+	const text = "前 **粗体** 后";
+	const open = text.indexOf("**");
+	const body = open + 2;
+	const end = text.indexOf("体") + 1;
+	const close = end + 2;
+	// Starting at the first letter of the bold text, the opening `**` is in; ending after the last, the closing is in.
+	assert.deepEqual(letGo(text, body, text.length), [open, text.length]);
+	assert.deepEqual(letGo(text, 0, end), [0, close]);
+	assert.deepEqual(letGo(text, body, end), [open, close]);
+	// Starting inside the closing symbols leaves them out, and ending inside the opening ones leaves them out.
+	assert.deepEqual(letGo(text, end, text.length), [close, text.length]);
+	assert.deepEqual(letGo(text, 0, body), [0, open]);
+	// Backwards is the same selection.
+	assert.deepEqual(letGo(text, close, 0), [close, 0]);
+	assert.deepEqual(letGo(text, end, body), [close, open]);
+	// Edges in the middle of the text, or in text with no symbols, stay.
+	assert.deepEqual(letGo(text, body + 1, end - 1), [body + 1, end - 1]);
+	assert.deepEqual(letGo(text, 0, 1), [0, 1]);
+});
+
+test("a heading's hashes, a link's brackets and a quote's bar go with the text a selection starts at", () => {
+	const heading = "# 标题\n\n正文";
+	assert.deepEqual(letGo(heading, 2, heading.length), [0, heading.length]);
+	assert.deepEqual(letGo(heading, 0, 4), [0, 4]);
+	const link = "看 [文字](https://example.com) 吧";
+	const textStart = link.indexOf("文");
+	const urlEnd = link.indexOf(")") + 1;
+	assert.deepEqual(letGo(link, textStart, link.length), [link.indexOf("["), link.length]);
+	assert.deepEqual(letGo(link, 0, textStart + 2), [0, urlEnd]);
+	assert.deepEqual(letGo(link, urlEnd, link.length), [urlEnd, link.length]);
+	const quote = "> 引用\n\n正文";
+	assert.deepEqual(letGo(quote, 2, quote.length), [0, quote.length]);
+});
+
+test("a caret and a selection with the symbols shown are left alone", () => {
+	const text = "前 **粗体** 后";
+	assert.deepEqual(letGo(text, 5, 5), [5, 5]);
+	// A selection of nothing but one symbol stays as it is.
+	assert.deepEqual(letGo(text, 2, 4), [2, 4]);
 });

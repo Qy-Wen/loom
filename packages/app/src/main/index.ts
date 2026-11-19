@@ -75,7 +75,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
@@ -149,7 +149,7 @@ app.on("second-instance", () => { BrowserWindow.getAllWindows()[0]?.focus(); });
 
 type ContextMenuItem<T extends string> =
 	| { type: "separator" }
-	| { label: string; enabled?: boolean; click: () => T };
+	| { label: string; enabled?: boolean; checked?: boolean; click: () => T };
 
 async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
 	const choice = generalSettings ? (await generalSettings.load()).language : "system";
@@ -172,6 +172,7 @@ function popupContextMenu<T extends string>(
 					return {
 						label: item.label,
 						enabled: item.enabled,
+						...(item.checked === undefined ? {} : { type: "checkbox" as const, checked: item.checked }),
 						click: () => {
 							chosen = item.click();
 						},
@@ -646,6 +647,23 @@ function registerIpc(): void {
 			]);
 		},
 	);
+
+	ipcMain.handle(IPC.showTableContextMenu, async (event, state: TableContextState): Promise<TableContextAction | null> => {
+		const { t } = await uiCopy();
+		return popupContextMenu<TableContextAction>(event, [
+			{ label: t.menu.tableAddRowAbove, click: () => "add_row_above" },
+			{ label: t.menu.tableAddRowBelow, click: () => "add_row_below" },
+			{ label: t.menu.tableAddColumnLeft, click: () => "add_column_left" },
+			{ label: t.menu.tableAddColumnRight, click: () => "add_column_right" },
+			{ type: "separator" },
+			{ label: t.menu.tableDeleteRow, enabled: state.canDeleteRow, click: () => "delete_row" },
+			{ label: t.menu.tableDeleteColumn, enabled: state.canDeleteColumn, click: () => "delete_column" },
+			{ type: "separator" },
+			{ label: t.menu.tableAlignLeft, checked: state.align === "left", click: () => "align_left" },
+			{ label: t.menu.tableAlignCenter, checked: state.align === "center", click: () => "align_center" },
+			{ label: t.menu.tableAlignRight, checked: state.align === "right", click: () => "align_right" },
+		]);
+	});
 
 	ipcMain.handle(IPC.renameAsset, (_event, assetId: string, stem: string) => {
 		return localCore.renameAsset(assetId, stem);

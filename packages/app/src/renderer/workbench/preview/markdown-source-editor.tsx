@@ -92,7 +92,7 @@ export function MarkdownSourceEditor({ asset, assets, onOpenAsset }: {
 				if (anchor) requestHeading(target, anchor);
 				openRef.current?.(target);
 			},
-		}, t.preview.editorLabel(filename), libraryRef.current, { addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn });
+		}, t.preview.editorLabel(filename), libraryRef.current, { addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn }, { chooseTableAction: (state) => window.loom.showTableContextMenu(state) });
 		editorRef.current = editor;
 		return () => {
 			editorRef.current = null;

@@ -152,6 +152,10 @@ test("live rendering hides Markdown symbols away from the cursor and never chang
 		const box = loomPage.getByRole("textbox", { name: "Edit live.md" });
 		await expect(box).toBeVisible();
 
+		// A file just opened has its caret at the start but nobody in the editor: the first line shows as a heading.
+		await expect(box.locator(".cm-live-h1")).toHaveCount(1);
+		await expect(box.locator(".cm-line").first().locator(".cm-live-hidden")).toHaveText("# ");
+
 		// The cursor goes to the last line, away from everything else. What is visible is the rendered text.
 		await box.click();
 		await box.press("ControlOrMeta+End");
@@ -797,6 +801,383 @@ test("up and down stop on a line that is only inline code", async ({ loomPage, e
 		await box.locator(".cm-line").first().click();
 		const marks = await box.locator(".cm-live-hidden").evaluateAll((all) => all.map((mark) => mark.getBoundingClientRect().width));
 		expect(Math.max(...marks)).toBeLessThan(1);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("rows, columns and alignment change from a table's context menu", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-menu-e2e-"));
+	const table = ["| 名称 | 数量 |", "| :--- | ---: |", "| 苹果 | 3 |", "| 梨 | 12 |"].join("\n");
+	const file = join(root, "菜.md");
+	// The table is the first thing in the file, so the caret starts inside it.
+	await writeFile(file, `${table}\n\n结尾\n`);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "菜.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 菜.md" });
+		const onDisk = () => readFile(file, "utf8");
+		const lines = async () => (await box.locator(".cm-line").allInnerTexts()).join("\n");
+		const choose = (label: string) => electronApp!.evaluate(({ Menu }, wanted) => {
+			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+				this.items.find((item) => item.label === wanted && item.enabled)?.click();
+				options?.callback?.();
+			};
+		}, label);
+
+		// Opening the file with the caret in the table leaves it drawn.
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await expect(box.locator(".cm-live-table td")).toHaveCount(4);
+
+		// Alignment is set from the menu, on the column of the cell, and written in the delimiter row alone.
+		await choose("Align center");
+		await box.locator(".cm-live-table td").first().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th").first()).toHaveCSS("text-align", "center");
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :-: | ---: |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		await expect(box.locator(".cm-live-table td").first()).toHaveCSS("text-align", "center");
+		await expect(box.locator(".cm-live-table td").nth(1)).toHaveCSS("text-align", "right");
+		// The other column is untouched by it, and the choice the column already has takes the alignment off.
+		await choose("Align right");
+		await box.locator(".cm-live-table td").nth(1).click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :-: | --- |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Align left");
+		await box.locator(".cm-live-table td").nth(1).click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :-: | :--- |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Align center");
+		await box.locator(".cm-live-table td").first().click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| --- | :--- |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Align right");
+		await box.locator(".cm-live-table td").nth(1).click({ button: "right" });
+		await choose("Align left");
+		await box.locator(".cm-live-table td").first().click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		// The menu marks the alignment the column has.
+		const marked = async (cell: import("@playwright/test").Locator) => {
+			await electronApp!.evaluate(({ Menu }) => {
+				Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+					(globalThis as unknown as { __marked: string }).__marked = this.items.filter((item) => item.checked).map((item) => item.label).join("|");
+					options?.callback?.();
+				};
+			});
+			await cell.click({ button: "right" });
+			return electronApp!.evaluate(() => (globalThis as unknown as { __marked: string }).__marked);
+		};
+		expect(await marked(box.locator(".cm-live-table td").first())).toBe("Align left");
+		expect(await marked(box.locator(".cm-live-table td").nth(1))).toBe("Align right");
+		// There is no way back to a source view of the table: no button, no menu entry.
+		await expect(box.locator(".cm-live-table-source")).toHaveCount(0);
+		await loomPage.keyboard.press("ControlOrMeta+/");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+
+		// The context menu: a row above and below, a column left and right.
+		const second = box.locator(".cm-live-table td").nth(2); // 梨, row 2
+		await choose("Insert row above");
+		await second.click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n|  |  |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Insert row below");
+		await box.locator(".cm-live-table td").nth(0).click({ button: "right" });
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n|  |  |\n|  |  |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Insert column to the left");
+		await box.locator(".cm-live-table th").first().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(3);
+		await choose("Insert column to the right");
+		await box.locator(".cm-live-table th").last().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(4);
+
+		// Delete them again. One column at a time, each checked against the file.
+		await expect(box.locator(".cm-live-table th")).toHaveCount(4);
+		await choose("Delete column");
+		await box.locator(".cm-live-table th").last().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(3);
+		await box.locator(".cm-live-table th").first().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(2);
+		await expect(box.locator(".cm-live-table th").first()).toHaveText("名称");
+		// Two empty rows and the two of ours: delete the empty ones, each time from a cell of that row.
+		await choose("Delete row");
+		await box.locator(".cm-live-table td").nth(2).click({ button: "right" }); // row 2, one of the empty ones
+		await expect(box.locator(".cm-live-table td")).toHaveCount(6);
+		await box.locator(".cm-live-table td").nth(2).click({ button: "right" });
+		await expect(box.locator(".cm-live-table td")).toHaveCount(4);
+		await expect.poll(onDisk).toBe(`| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+
+		// The menu says what is possible: no row to delete at the header, and the last column stays.
+		const offered = async (cell: import("@playwright/test").Locator) => {
+			await electronApp!.evaluate(({ Menu }) => {
+				Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+					(globalThis as unknown as { __menu: string }).__menu = this.items.filter((item) => item.enabled && item.label).map((item) => item.label).join("|");
+					options?.callback?.();
+				};
+			});
+			await cell.click({ button: "right" });
+			return electronApp!.evaluate(() => (globalThis as unknown as { __menu: string }).__menu);
+		};
+		expect(await offered(box.locator(".cm-live-table th").first())).not.toContain("Delete row");
+		expect(await offered(box.locator(".cm-live-table th").first())).toContain("Delete column");
+		expect(await offered(box.locator(".cm-live-table td").first())).toContain("Delete row");
+		expect(await onDisk()).toBe(`| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n| 梨 | 12 |\n\n结尾\n`);
+		await choose("Delete column");
+		await box.locator(".cm-live-table th").first().click({ button: "right" });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(1);
+		expect(await offered(box.locator(".cm-live-table th").first())).not.toContain("Delete column");
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("a selection that reaches into a table takes the whole table, which shows as selected and never deletes half of it", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-selection-e2e-"));
+	const table = ["| 名称 | 数量 |", "| :--- | ---: |", "| 苹果 | 3 |", "| 梨 | 12 |"].join("\n");
+	const original = ["上文一行", "", table, "", "下文一行", ""].join("\n");
+	const file = join(root, "选.md");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "选.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 选.md" });
+		const above = box.locator(".cm-line").filter({ hasText: "上文一行" });
+		const tableBox = box.locator(".cm-live-table");
+		const onDisk = () => readFile(file, "utf8");
+		await expect(tableBox).toHaveCount(1);
+		const background = () => tableBox.locator("table").evaluate((node) => getComputedStyle(node).backgroundColor);
+		const resting = await background();
+
+		// Drag from the text above into the middle of the table: the table is in the selection, as a whole.
+		const start = (await above.boundingBox())!;
+		const target = (await tableBox.boundingBox())!;
+		await loomPage.mouse.move(start.x + 20, start.y + 8);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(target.x + 60, target.y + target.height / 2, { steps: 8 });
+		await loomPage.mouse.up();
+		await expect(tableBox).toHaveClass(/cm-live-table-selected/);
+		await expect.poll(background).not.toBe(resting);
+		// The header and the body are one colour, and no caret is drawn along the table.
+		const headBackground = await tableBox.locator("th").first().evaluate((node) => getComputedStyle(node).backgroundColor);
+		expect(headBackground).toBe("rgba(0, 0, 0, 0)");
+		await expect(loomPage.locator(".cm-cursor")).toHaveCount(0);
+		await expect(tableBox).toHaveCount(1);
+		// Deleting takes the table and the selected text, and leaves no half of it.
+		await loomPage.keyboard.press("Delete");
+		await expect.poll(onDisk).toBe("上\n\n下文一行\n");
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(original);
+		await expect(tableBox).toHaveCount(1);
+
+		// Shift+Down from the line above does the same, one step at a time.
+		await above.click();
+		await loomPage.keyboard.press("End");
+		for (let i = 0; i < 2; i++) await loomPage.keyboard.press("Shift+ArrowDown");
+		await expect(tableBox).toHaveCount(1);
+		await expect(tableBox).toHaveClass(/cm-live-table-selected/);
+		await loomPage.keyboard.press("Delete");
+		// From the end of the line above, the selection holds the line break, the blank line and the table.
+		await expect.poll(onDisk).toBe("上文一行\n下文一行\n");
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(original);
+
+		// A selection that stays in the text beside the table does not take it, and it is not marked.
+		await above.click();
+		await loomPage.keyboard.press("Home");
+		await loomPage.keyboard.press("Shift+End");
+		await expect(tableBox).not.toHaveClass(/cm-live-table-selected/);
+		expect(await background()).toBe(resting);
+
+		// The mark goes when the selection does.
+		await above.click();
+		await loomPage.keyboard.press("ControlOrMeta+a");
+		await expect(tableBox).toHaveClass(/cm-live-table-selected/);
+		await loomPage.keyboard.press("ArrowLeft");
+		await expect(tableBox).not.toHaveClass(/cm-live-table-selected/);
+		expect(await onDisk()).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("a drag selection leaves what it sweeps over drawn until the button is let go", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-drag-e2e-"));
+	const original = ["开头一行", "", "公式 $x^2$ 和 **粗体** 以及 `代码` 再来 [[目标]] 结束", "", "末尾一行", ""].join("\n");
+	const file = join(root, "拖.md");
+	await writeFile(file, original);
+	await writeFile(join(root, "目标.md"), "# 目标\n");
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "拖.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 拖.md" });
+		const middle = box.locator(".cm-line").filter({ hasText: "再来" });
+		await expect(box.locator(".cm-live-math")).toHaveCount(1);
+		const hiddenMarks = () => box.locator(".cm-live-hidden").count();
+		const restingMarks = await hiddenMarks();
+		const restingHeight = (await middle.boundingBox())!.height;
+
+		// Press at the start of the opening line and drag through the middle line to the end of the closing one.
+		const first = (await box.locator(".cm-line").first().boundingBox())!;
+		const line = (await middle.boundingBox())!;
+		const last = (await box.locator(".cm-line").filter({ hasText: "末尾一行" }).boundingBox())!;
+		await loomPage.mouse.move(first.x + 4, first.y + 8);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(line.x + line.width - 10, line.y + 8, { steps: 10 });
+		// Mid-drag: the selection is over the formula, the bold text, the code and the link, and all stay drawn.
+		await expect(box.locator(".cm-live-math")).toHaveCount(1);
+		await expect(box.locator(".cm-live-math-source")).toHaveCount(0);
+		expect(await hiddenMarks()).toBe(restingMarks);
+		await loomPage.mouse.move(last.x + 40, last.y + 8, { steps: 6 });
+		expect(await hiddenMarks()).toBe(restingMarks);
+		expect((await middle.boundingBox())!.height).toBe(restingHeight);
+		await expect(box.locator(".cm-live-math")).toHaveCount(1);
+
+		// Let go: the selection stands and the elements it covers open to source.
+		await loomPage.mouse.up();
+		await expect(box.locator(".cm-live-math-source")).toHaveCount(1);
+		await expect(box.locator(".cm-live-math")).toHaveCount(0);
+		expect(await hiddenMarks()).toBeLessThan(restingMarks);
+		expect(await readFile(file, "utf8")).toBe(original);
+
+		// Not for an instant either: from the moment the button goes down, every frame shows the symbols as they were.
+		await box.locator(".cm-line").first().click();
+		await loomPage.evaluate(() => {
+			const lines = Array.from(document.querySelectorAll(".cm-content .cm-line"));
+			const target = lines.find((line) => line.textContent?.includes("再来"));
+			const count = () => document.querySelectorAll(".cm-content .cm-live-hidden").length;
+			const log: number[] = [];
+			const note = () => log.push(count());
+			(window as unknown as { __frames: number[] }).__frames = log;
+			new MutationObserver(note).observe(target!.closest(".cm-content")!, { childList: true, subtree: true, attributes: true });
+		});
+		const pressedAt = (await middle.locator(".cm-live-strong").first().boundingBox())!;
+		await loomPage.mouse.move(pressedAt.x + 2, pressedAt.y + pressedAt.height / 2);
+		await loomPage.mouse.down();
+		await loomPage.waitForTimeout(120);
+		await loomPage.mouse.move(pressedAt.x + 30, pressedAt.y + pressedAt.height / 2, { steps: 6 });
+		await loomPage.waitForTimeout(120);
+		const seen = await loomPage.evaluate(() => (window as unknown as { __frames: number[] }).__frames);
+		await loomPage.mouse.up();
+		// While the button was down the number of hidden symbols never changed from what it was at the press.
+		expect(new Set(seen).size).toBeLessThanOrEqual(1);
+
+		// The point the drag starts from is not opened either: press inside the bold text and drag away.
+		await box.locator(".cm-line").first().click();
+		const bold = (await middle.locator(".cm-live-strong, strong, .cm-live-bold").first().boundingBox())!;
+		await loomPage.mouse.move(bold.x + bold.width / 2, bold.y + bold.height / 2);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(bold.x + bold.width / 2 + 60, bold.y + bold.height / 2, { steps: 6 });
+		expect(await hiddenMarks()).toBe(restingMarks);
+		expect((await middle.boundingBox())!.height).toBe(restingHeight);
+		await loomPage.mouse.up();
+		expect(await hiddenMarks()).toBeLessThan(restingMarks);
+
+		// Let go with an edge at the bold text: the symbols around it are in the selection, so copying keeps them whole.
+		await box.locator(".cm-line").first().click();
+		const boldBox = (await middle.locator(".cm-live-strong").first().boundingBox())!;
+		const lineBox = (await middle.boundingBox())!;
+		await loomPage.mouse.move(boldBox.x + 2, boldBox.y + boldBox.height / 2);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(lineBox.x + lineBox.width - 4, lineBox.y + lineBox.height / 2, { steps: 8 });
+		await loomPage.mouse.up();
+		// What the browser holds as selected is what copying takes; the hidden symbols are text in it too.
+		const picked = await loomPage.evaluate(() => window.getSelection()?.toString() ?? "");
+		expect(picked.startsWith("**粗体**")).toBe(true);
+		expect(picked.endsWith("结束")).toBe(true);
+
+		// A plain click still opens what it touches at once, and typing during no drag is untouched.
+		await box.locator(".cm-line").first().click();
+		await expect(box.locator(".cm-live-math")).toHaveCount(1);
+		await middle.locator(".katex-html").click();
+		await expect(box.locator(".cm-live-math-source")).toHaveCount(1);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("pressing on an element that is already open to source does not close it while the button is down", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-press-e2e-"));
+	const original = ["开头", "", "---", "", "一句 **粗体** 话", "", "结尾", ""].join("\n");
+	const file = join(root, "按.md");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "按.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 按.md" });
+		await expect(box.locator(".cm-live-rule")).toHaveCount(1);
+
+		// Click the rule: it opens to its `---`. Pressing on that line again keeps it open the whole time.
+		// The drawn rule is as tall as its source line, so opening it moves nothing.
+		const drawnHeight = (await box.locator(".cm-line:has(.cm-live-rule)").boundingBox())!.height;
+		await box.locator(".cm-live-rule").click();
+		await expect(box.locator(".cm-live-rule")).toHaveCount(0);
+		expect((await box.locator(".cm-line").filter({ hasText: /^---$/ }).boundingBox())!.height).toBeCloseTo(drawnHeight, 1);
+		const dashes = box.locator(".cm-line").filter({ hasText: /^---$/ });
+		await expect(dashes).toHaveCount(1);
+		const at = (await dashes.boundingBox())!;
+		for (let round = 0; round < 3; round++) {
+			await loomPage.mouse.move(at.x + 6, at.y + at.height / 2);
+			await loomPage.mouse.down();
+			await loomPage.waitForTimeout(150);
+			await expect(box.locator(".cm-live-rule")).toHaveCount(0);
+			await loomPage.mouse.up();
+			await expect(box.locator(".cm-live-rule")).toHaveCount(0);
+		}
+
+		// The same for bold text: open it, press on it, and its symbols stay. The symbols are outside the bold span.
+		const line = box.locator(".cm-line").filter({ hasText: "一句" });
+		const shown = () => line.evaluate((node) => {
+			const copy = node.cloneNode(true) as HTMLElement;
+			copy.querySelectorAll(".cm-live-hidden").forEach((hiddenNode) => hiddenNode.remove());
+			return copy.textContent ?? "";
+		});
+		await box.locator(".cm-live-strong").click();
+		await expect.poll(shown).toBe("一句 **粗体** 话");
+		const bold = (await box.locator(".cm-live-strong").boundingBox())!;
+		await loomPage.mouse.move(bold.x + bold.width / 2, bold.y + bold.height / 2);
+		await loomPage.mouse.down();
+		await loomPage.waitForTimeout(150);
+		expect(await shown()).toBe("一句 **粗体** 话");
+		await loomPage.mouse.up();
+		expect(await shown()).toBe("一句 **粗体** 话");
+		expect(await readFile(file, "utf8")).toBe(original);
 	} finally {
 		await rm(root, { recursive: true, force: true });
 	}

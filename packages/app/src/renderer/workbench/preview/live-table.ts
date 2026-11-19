@@ -4,7 +4,8 @@ import type { StateEffectType } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
 import { renderInlineMarkdown } from "./markdown.ts";
-import { appendColumn, appendRow, cellChange, escapeCell, parseTable, type ParsedTable } from "./table.ts";
+import type { TableContextAction, TableContextState } from "../../../shared/ipc.ts";
+import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, parseTable, removeColumn, removeRow, setAlign, type ParsedTable, type TableAlign } from "./table.ts";
 
 /**
  * A table drawn as a table, with cells that are edited in place. Every edit is written back as a change to that
@@ -17,6 +18,8 @@ export interface TableHooks {
 	openAsset(assetId: string, anchor: string | undefined): void;
 	/** Saves now. A cell is not the editor's own text box, so the editor's key bindings do not see it. */
 	save(): void;
+	/** Asks the window for the table's context menu; resolves with what was chosen, or null. */
+	chooseAction(state: TableContextState): Promise<TableContextAction | null>;
 	labels: { addRow: string; addColumn: string };
 }
 
@@ -66,6 +69,8 @@ export class TableWidget extends WidgetType {
 		const table = parseTable(this.text)!;
 		const wrap = document.createElement("div");
 		wrap.className = "cm-live-table";
+		// How much of the document the table covers, which tells a selection that spans it from one that does not.
+		wrap.dataset.length = String(this.text.length);
 		const scroll = document.createElement("div");
 		scroll.className = "cm-live-table-scroll";
 		const element = document.createElement("table");
@@ -169,7 +174,10 @@ export class TableWidget extends WidgetType {
 		button.textContent = "+";
 		// Keeps the focus where it is; a click adds a line or a column and puts the caret in it.
 		button.addEventListener("mousedown", (event) => event.preventDefault());
-		button.addEventListener("click", () => addTo(view, wrap, kind));
+		button.addEventListener("click", () => {
+			const found = currentTable(view, wrap);
+			if (found) editTable(view, wrap, kind === "row" ? { kind: "insert-row", at: found.table.rows.length } : { kind: "insert-column", at: found.table.columns });
+		});
 		return button;
 	}
 
@@ -206,6 +214,21 @@ export class TableWidget extends WidgetType {
 		});
 		cell.addEventListener("compositionend", () => commit(view, wrap, cell));
 		cell.addEventListener("keydown", (event) => keyInCell(event, view, wrap, cell, this.hooks(view)));
+		cell.addEventListener("contextmenu", (event) => {
+			const hooks = this.hooks(view);
+			const found = currentTable(view, wrap);
+			if (!hooks || !found) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const row = Number(cell.dataset.row);
+			const column = Number(cell.dataset.column);
+			const align = found.table.aligns[column] ?? "";
+			void hooks.chooseAction({ canDeleteRow: row > 0, canDeleteColumn: found.table.columns > 1, align }).then((action) => {
+				if (!action) return;
+				const edit = editFor(action, row, column, align);
+				if (edit) editTable(view, wrap, edit);
+			});
+		});
 	}
 }
 
@@ -274,20 +297,74 @@ function commit(view: EditorView, wrap: HTMLElement, cell: HTMLElement): void {
 	});
 }
 
-function addTo(view: EditorView, wrap: HTMLElement, kind: "row" | "column"): void {
+/** What can be done to a table at a cell. */
+export type TableEdit =
+	| { kind: "insert-row"; at: number }
+	| { kind: "insert-column"; at: number }
+	| { kind: "delete-row"; at: number }
+	| { kind: "delete-column"; at: number }
+	| { kind: "align"; at: number; align: TableAlign };
+
+/** Applies an edit to the table drawn at `wrap` and puts the caret in a cell that makes sense afterwards. */
+function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
 	const found = currentTable(view, wrap);
 	if (!found) return;
 	const { range, table } = found;
-	if (kind === "row") {
-		pendingFocus = { from: range.from, row: table.rows.length, column: 0 };
-		const change = appendRow(table, range.to - range.from);
-		view.dispatch({ changes: { from: range.from + change.from, to: range.from + change.to, insert: change.insert }, userEvent: "input" });
-	} else {
-		pendingFocus = { from: range.from, row: 0, column: table.columns };
-		view.dispatch({
-			changes: appendColumn(table).map((change) => ({ from: range.from + change.from, to: range.from + change.to, insert: change.insert })),
-			userEvent: "input",
-		});
+	const text = view.state.doc.sliceString(range.from, range.to);
+	const shift = (change: { from: number; to: number; insert: string }) => ({ from: range.from + change.from, to: range.from + change.to, insert: change.insert });
+	let changes: { from: number; to: number; insert: string }[] | null = null;
+	let focus: { row: number; column: number };
+	switch (edit.kind) {
+		case "insert-row": {
+			const at = Math.min(Math.max(edit.at, 1), table.rows.length);
+			changes = [shift(at >= table.rows.length ? appendRow(table, text.length) : insertRow(table, at, text))];
+			focus = { row: at, column: 0 };
+			break;
+		}
+		case "insert-column": {
+			const at = Math.min(Math.max(edit.at, 0), table.columns);
+			changes = insertColumn(table, at, text).map(shift);
+			focus = { row: 0, column: at };
+			break;
+		}
+		case "delete-row": {
+			const change = removeRow(table, edit.at, text);
+			changes = change ? [shift(change)] : null;
+			focus = { row: Math.min(edit.at, table.rows.length - 2), column: 0 };
+			break;
+		}
+		case "delete-column": {
+			changes = removeColumn(table, edit.at)?.map(shift) ?? null;
+			focus = { row: 0, column: Math.min(edit.at, table.columns - 2) };
+			break;
+		}
+		case "align": {
+			const change = setAlign(table, edit.at, edit.align, text);
+			changes = change ? [shift(change)] : null;
+			focus = { row: 0, column: edit.at };
+			break;
+		}
+	}
+	if (!changes) return;
+	pendingFocus = { from: range.from, ...focus };
+	view.dispatch({ changes, userEvent: "input" });
+}
+
+/** The edit a menu choice stands for at a cell, or null when the choice is not an edit. */
+function editFor(action: TableContextAction, row: number, column: number, current: TableAlign): TableEdit | null {
+	// Choosing the alignment a column already has takes it off.
+	const align = (to: TableAlign): TableEdit => ({ kind: "align", at: column, align: current === to ? "" : to });
+	switch (action) {
+		case "add_row_above": return { kind: "insert-row", at: Math.max(row, 1) };
+		case "add_row_below": return { kind: "insert-row", at: row + 1 };
+		case "add_column_left": return { kind: "insert-column", at: column };
+		case "add_column_right": return { kind: "insert-column", at: column + 1 };
+		case "delete_row": return { kind: "delete-row", at: row };
+		case "delete_column": return { kind: "delete-column", at: column };
+		case "align_left": return align("left");
+		case "align_center": return align("center");
+		case "align_right": return align("right");
+		default: return null;
 	}
 }
 
@@ -370,7 +447,7 @@ function keyInCell(event: KeyboardEvent, view: EditorView, wrap: HTMLElement, ce
 		if (next[1] < 0) next.splice(0, 2, row - 1, state.columns - 1);
 		else if (next[1] >= state.columns) next.splice(0, 2, row + 1, 0);
 		if (next[0] < 0) return;
-		if (next[0] >= state.rows) addTo(view, wrap, "row");
+		if (next[0] >= state.rows) editTable(view, wrap, { kind: "insert-row", at: state.rows });
 		else focusCell(wrap, next[0], next[1], "start");
 	} else if (event.key === "ArrowUp") {
 		handled();

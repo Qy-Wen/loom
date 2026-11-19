@@ -29,6 +29,7 @@ const api: LoomApi = {
 	showFolderContextMenu: (relativePath, canPaste, single) =>
 		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
 	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),
+	showTableContextMenu: (state) => ipcRenderer.invoke(IPC.showTableContextMenu, state),
 	renameAsset: (assetId, stem) => ipcRenderer.invoke(IPC.renameAsset, assetId, stem),
 	duplicateAsset: (assetId) => ipcRenderer.invoke(IPC.duplicateAsset, assetId),
 	copyAssetsInto: (assetIds, destFolder) => ipcRenderer.invoke(IPC.copyAssetsInto, assetIds, destFolder),

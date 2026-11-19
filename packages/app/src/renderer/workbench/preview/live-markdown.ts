@@ -1,5 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
-import { Facet, RangeSetBuilder, StateEffect, StateField, type EditorState, type Range } from "@codemirror/state";
+import { EditorSelection, EditorState, Facet, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import type { Asset } from "@loom/core";
 import { createAssetLookup, matchWikiLink, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
@@ -16,7 +16,13 @@ import { parseTable } from "./table.ts";
  * cursor or a selection touches that element, which is when they are needed to edit it.
  */
 
-const hidden = Decoration.mark({ class: "cm-live-hidden" });
+/**
+ * A hidden symbol. Those in front of what they mark (`**` before the text, `# `, `[[`) lead into it, and those after it
+ * (`**` after the text, `]]`) lead away: a selection that is let go with an edge in a symbol takes the first kind in
+ * and leaves the second out.
+ */
+const hiddenLead = Decoration.mark({ class: "cm-live-hidden", lead: true });
+const hiddenTrail = Decoration.mark({ class: "cm-live-hidden", lead: false });
 
 /** Where the open file is and what the library holds, so a reference can be checked against real files. */
 export interface LiveLibrary {
@@ -272,8 +278,105 @@ const HEADINGS: Record<string, string> = {
 
 /** True when any selection range touches `from..to`, edges included, so a cursor next to a symbol reveals it. */
 function touched(state: EditorState, from: number, to: number): boolean {
-	return state.selection.ranges.some((range) => range.from <= to && range.to >= from);
+	return revealRanges(state).some((range) => range.from <= to && range.to >= from);
 }
+
+/**
+ * While the mouse button is down, elements keep the look they had when it went down: what was open to source stays
+ * open and what was drawn stays drawn, wherever the selection goes. Otherwise the element under the press opens, the
+ * ones the drag sweeps over open one by one, and the text moves under the pointer that is aiming at it. The selection
+ * takes effect when the button is let go, as in Obsidian. `held` is the ranges that were open at the press.
+ */
+const setPressed = StateEffect.define<{ held: readonly { from: number; to: number }[] } | null>();
+const pressState = StateField.define<{ held: readonly { from: number; to: number }[] } | null>({
+	create: () => null,
+	update(value, transaction) {
+		for (const effect of transaction.effects) if (effect.is(setPressed)) return effect.value;
+		if (!value) return null;
+		// Typing while the button is down, or any change to the text, ends it.
+		if (transaction.docChanged) return null;
+		return value;
+	},
+});
+
+/**
+ * Whether the editor has the keyboard. A document that has only just been opened has its caret at the start, and nobody
+ * has put it there: without focus there is nothing being edited, so nothing is opened to source.
+ */
+export const setFocused = StateEffect.define<boolean>();
+const focusState = StateField.define<boolean>({
+	create: () => false,
+	update(value, transaction) {
+		for (const effect of transaction.effects) if (effect.is(setFocused)) return effect.value;
+		return value;
+	},
+});
+const trackFocus = EditorView.focusChangeEffect.of((_state, focusing) => setFocused.of(focusing));
+
+/** The ranges whose elements are shown as source: the selection, or while the button is down what was open at the press. */
+function revealRanges(state: EditorState): readonly { from: number; to: number }[] {
+	// States without the editor's fields (the unit tests') show the selection as it is.
+	const pressed = state.field(pressState, false);
+	if (pressed) return pressed.held;
+	if (state.field(focusState, false) === false) return [];
+	return state.selection.ranges;
+}
+
+/**
+ * The selection with each edge that lies in a hidden symbol moved out of it: a start in a symbol that leads into the
+ * text goes to the symbol's start, one in a symbol that leads away goes past it, and the same, mirrored, for an end.
+ * What is drawn is what is judged, so this is called while the elements are still drawn. Returns null when nothing moves.
+ */
+export function snapToSymbols(state: EditorState): EditorSelection | null {
+	// As drawn while the button was down, so that what is judged is what was seen.
+	const drawn = state.field(pressState, false) ? state : state.update({ effects: setPressed.of({ held: [] }) }).state;
+	const symbols: { from: number; to: number; lead: boolean }[] = [];
+	liveDecorations(drawn).between(0, state.doc.length, (from, to, decoration) => {
+		if (decoration.spec.class === "cm-live-hidden") symbols.push({ from, to, lead: decoration.spec.lead === true });
+	});
+	if (!symbols.length) return null;
+	const within = (at: number, lead: boolean) => symbols.filter((symbol) => symbol.lead === lead && symbol.from <= at && at <= symbol.to);
+	let moved = false;
+	const ranges = state.selection.ranges.map((range) => {
+		if (range.empty) return range;
+		let from = range.from;
+		let to = range.to;
+		const leadIn = within(from, true);
+		const leadOut = within(from, false);
+		if (leadIn.length) from = Math.min(...leadIn.map((symbol) => symbol.from));
+		else if (leadOut.length) from = Math.max(...leadOut.map((symbol) => symbol.to));
+		const trailIn = within(to, false);
+		const trailOut = within(to, true);
+		if (trailIn.length) to = Math.max(...trailIn.map((symbol) => symbol.to));
+		else if (trailOut.length) to = Math.min(...trailOut.map((symbol) => symbol.from));
+		// A selection that held nothing but a symbol is left as it was.
+		if (from >= to || (from === range.from && to === range.to)) return range;
+		moved = true;
+		return range.anchor <= range.head ? EditorSelection.range(from, to) : EditorSelection.range(to, from);
+	});
+	return moved ? EditorSelection.create(ranges, state.selection.mainIndex) : null;
+}
+
+/** Starts and ends {@link pressState} with the mouse button. */
+const trackDrag = EditorView.domEventHandlers({
+	mousedown(event, view) {
+		// A cell of a drawn table is edited on its own and selects nothing in the document.
+		if (event.button !== 0 || (event.target as HTMLElement | null)?.closest(".cm-live-table")) return false;
+		// What is open now stays as it is until the button is up: the selection it is about to make does not open anything.
+		view.dispatch({ effects: setPressed.of({ held: revealRanges(view.state).map(({ from, to }) => ({ from, to })) }) });
+		const end = () => {
+			document.removeEventListener("mouseup", end, true);
+			window.removeEventListener("blur", end);
+			if (!view.state.field(pressState, false)) return;
+			// The symbols at the edges of what was swept over are part of it, as it looked while it was dragged.
+			const selection = snapToSymbols(view.state);
+			view.dispatch({ effects: setPressed.of(null), ...(selection ? { selection } : {}) });
+		};
+		document.addEventListener("mouseup", end, true);
+		window.addEventListener("blur", end);
+		return false;
+	},
+});
 
 export function liveDecorations(state: EditorState, from = 0, to = state.doc.length): DecorationSet {
 	const found: Range<Decoration>[] = [];
@@ -311,7 +414,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				if (indent.length > 0 && /^ +$/.test(indent)) found.push(Decoration.mark({ class: "cm-live-indent", attributes: { style: `letter-spacing:${(indent.length * 0.45).toFixed(2)}em` } }).range(text.from, node.from));
 				if (onLine(node.from)) return;
 				const task = item.getChild("Task")?.getChild("TaskMarker");
-				if (task) found.push(hidden.range(node.from, Math.min(task.from, node.to + 1)));
+				if (task) found.push(hiddenLead.range(node.from, Math.min(task.from, node.to + 1)));
 				else found.push(bullet.range(node.from, node.to));
 				return;
 			}
@@ -345,7 +448,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				const mark = node.node.getChild("HeaderMark");
 				if (mark && !touched(state, node.from, node.to)) {
 					const end = state.doc.sliceString(mark.to, mark.to + 1) === " " ? mark.to + 1 : mark.to;
-					found.push(hidden.range(mark.from, end));
+					found.push(hiddenLead.range(mark.from, end));
 				}
 				return;
 			}
@@ -358,7 +461,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				if (!first || !last || first.from === last.from) return;
 				found.push(Decoration.mark({ class: inline.class }).range(first.to, last.from));
 				if (!touched(state, node.from, node.to)) {
-					found.push(hidden.range(first.from, first.to), hidden.range(last.from, last.to));
+					found.push(hiddenLead.range(first.from, first.to), hiddenTrail.range(last.from, last.to));
 				}
 				return;
 			}
@@ -369,7 +472,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				if (!close || state.doc.sliceString(close.from, close.from + 2) !== "](") return;
 				found.push(Decoration.mark({ class: "cm-live-link" }).range(marks[0].to, close.from));
 				if (!touched(state, node.from, node.to)) {
-					found.push(hidden.range(marks[0].from, marks[0].to), hidden.range(close.from, node.to));
+					found.push(hiddenLead.range(marks[0].from, marks[0].to), hiddenTrail.range(close.from, node.to));
 				}
 			}
 		},
@@ -378,7 +481,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 		// One bar for each level of nesting, drawn as a background so the line's own text stays untouched.
 		const bars = Array.from({ length: quote.depth }, (_, level) => `linear-gradient(var(--lm-border-strong), var(--lm-border-strong)) ${level * 16}px 0 / 3px 100% no-repeat`).join(", ");
 		found.push(Decoration.line({ class: "cm-live-quote", attributes: { style: `padding-left:${quote.depth * 16}px;background:${bars}` } }).range(start));
-		if (!onLine(start)) for (const mark of quote.marks) found.push(hidden.range(mark.from, mark.to));
+		if (!onLine(start)) for (const mark of quote.marks) found.push(hiddenLead.range(mark.from, mark.to));
 	}
 	wikiLinks(state, from, to, found);
 	markdownImages(state, from, to, found);
@@ -411,7 +514,7 @@ function fencedCode(state: EditorState, node: SyntaxNodeRef, found: Range<Decora
 		found.push(Decoration.line({ class: classes.join(" ") }).range(text.from));
 		if (fence && !reveal) {
 			const start = Math.max(text.from, number === first ? node.from : marks[marks.length - 1].from);
-			if (start < text.to) found.push(hidden.range(start, text.to));
+			if (start < text.to) found.push((number === first ? hiddenLead : hiddenTrail).range(start, text.to));
 		}
 	}
 }
@@ -479,10 +582,8 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				}
 			} else if (node.name === "Table" && node.node.parent?.name === "Document") {
 				const text = state.doc.sliceString(node.from, node.to);
-				// A selection that runs over a table leaves it drawn. Only a caret inside it, which cannot be
-				// seen in a drawn table, brings the source back.
-				const caretInside = state.selection.ranges.some((range) => range.empty && range.from >= node.from && range.to <= node.to);
-				if (!caretInside && parseTable(text)) {
+				// A table that reads as one is always drawn. A caret in it, or a selection over it, changes nothing.
+				if (parseTable(text)) {
 					const context = state.field(libraryField, false) ?? null;
 					const widget = new TableWidget(text, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks);
 					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
@@ -502,15 +603,91 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 }
 
 /** Draws {@link liveBlockDecorations}. Add it next to {@link liveMarkdown}. */
-export const liveBlocks = StateField.define<DecorationSet>({
+const blockDecorations = StateField.define<DecorationSet>({
 	create: (state) => liveBlockDecorations(state),
 	update(value, transaction) {
 		const treeChanged = syntaxTree(transaction.startState) !== syntaxTree(transaction.state);
 		const redraw = transaction.effects.some((effect) => effect.is(redrawBlocks));
-		return transaction.docChanged || transaction.selection || treeChanged || redraw ? liveBlockDecorations(transaction.state) : value;
+		const dragChanged = transaction.startState.field(pressState) !== transaction.state.field(pressState)
+			|| transaction.startState.field(focusState) !== transaction.state.field(focusState);
+		return transaction.docChanged || transaction.selection || treeChanged || redraw || dragChanged ? liveBlockDecorations(transaction.state) : value;
 	},
 	provide: (field) => EditorView.decorations.from(field),
 });
+/**
+ * A selection that begins or ends inside a drawn table takes the whole table in. The table shows no caret and no
+ * highlight inside it, so a selection that ended in the middle of it could not be seen, and deleting it would cut a
+ * line of the table in two. A caret alone, or a selection that is wholly inside one table, is left as it is.
+ */
+const snapSelection = EditorState.transactionFilter.of((transaction) => {
+	if (!transaction.selection) return transaction;
+	const drawn = transaction.state.field(blockDecorations, false);
+	if (!drawn) return transaction;
+	const tables: { from: number; to: number }[] = [];
+	drawn.between(0, transaction.state.doc.length, (from, to, decoration) => {
+		if (decoration.spec.widget instanceof TableWidget) tables.push({ from, to });
+	});
+	if (!tables.length) return transaction;
+	let moved = false;
+	const ranges = transaction.selection.ranges.map((range) => {
+		if (range.empty) return range;
+		let from = range.from;
+		let to = range.to;
+		for (const table of tables) {
+			if (from >= table.from && to <= table.to) continue; // inside one table: left to the cells
+			if (from > table.from && from < table.to) from = table.from;
+			if (to > table.from && to < table.to) to = table.to;
+			// A selection from above that ends on the table's first position is a caret there for a drawn table, which
+			// shows none: it reaches the table, so the table goes in whole. One that starts at the table's end does not.
+			if (from < table.from && to === table.from) to = table.to;
+		}
+		if (from === range.from && to === range.to) return range;
+		moved = true;
+		return range.anchor <= range.head ? EditorSelection.range(from, to) : EditorSelection.range(to, from);
+	});
+	if (!moved) return transaction;
+	return [transaction, { selection: EditorSelection.create(ranges, transaction.selection.mainIndex), sequential: true }];
+});
+
+/**
+ * Marks the tables a selection covers, so that a selected table can be seen as selected. The class goes on the table's
+ * own element and the table is not rebuilt.
+ */
+const markSelectedTables = ViewPlugin.fromClass(class {
+	constructor(view: EditorView) {
+		this.mark(view);
+	}
+	update(update: ViewUpdate): void {
+		if (update.selectionSet || update.docChanged || update.viewportChanged || update.geometryChanged || update.transactions.some((t) => t.effects.length)) this.mark(update.view);
+	}
+	mark(view: EditorView): void {
+		// Measured after CodeMirror has laid the document out, as the tables' elements are made then.
+		view.requestMeasure({
+			read: () => {
+				const selected: number[] = [];
+				for (const range of view.state.selection.ranges) {
+					if (range.empty) continue;
+					selected.push(range.from, range.to);
+				}
+				return selected;
+			},
+			write: (bounds) => {
+				for (const element of view.contentDOM.querySelectorAll<HTMLElement>(".cm-live-table")) {
+					const from = view.posAtDOM(element);
+					const to = from + (Number(element.dataset.length) || 0);
+					let covered = false;
+					for (let at = 0; at < bounds.length; at += 2) if (bounds[at] <= from && bounds[at + 1] >= to) covered = true;
+					element.classList.toggle("cm-live-table-selected", covered);
+				}
+			},
+		});
+	}
+});
+
+export const liveBlocks: Extension = [blockDecorations, snapSelection, markSelectedTables];
+
+/** Keeps what a drag sweeps over drawn until the button is let go. Add it before {@link liveMarkdown} and {@link liveBlocks}. */
+export const liveDrag: Extension = [pressState, trackDrag, focusState, trackFocus];
 
 /**
  * Arrow keys step into a drawn block instead of over it. CodeMirror's vertical move is by screen position and
@@ -527,7 +704,7 @@ function stepIntoBlock(direction: "up" | "down") {
 		let nearest: { from: number; to: number; table: boolean } | null = null;
 		const from = Math.min(start, landing);
 		const to = Math.max(start, landing);
-		view.state.field(liveBlocks).between(from, to, (blockFrom, blockTo, decoration) => {
+		view.state.field(blockDecorations).between(from, to, (blockFrom, blockTo, decoration) => {
 			// Only a block the move passes over; one that holds the start or the landing is already being edited.
 			if (blockFrom < from || blockTo > to) return;
 			const closer = !nearest || (direction === "down" ? blockFrom < nearest.from : blockTo > nearest.to);
@@ -574,7 +751,7 @@ function stepIntoTable(forward: boolean) {
 		const start = selection.main.head;
 		const landing = view.moveByChar(selection.main, forward).head;
 		let table: { from: number; to: number } | null = null;
-		view.state.field(liveBlocks).between(Math.min(start, landing), Math.max(start, landing), (from, to, decoration) => {
+		view.state.field(blockDecorations).between(Math.min(start, landing), Math.max(start, landing), (from, to, decoration) => {
 			if (decoration.spec.widget instanceof TableWidget && (start < from || start > to)) table = { from, to };
 		});
 		const found = table as { from: number; to: number } | null;
@@ -659,14 +836,14 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 	}
 	// Away from the cursor: the display name if there is one, else the path; the brackets and the rest are hidden.
 	const bar = match.label ? state.doc.sliceString(open, close).indexOf("|") : -1;
-	found.push(hidden.range(range.from, open));
+	found.push(hiddenLead.range(range.from, open));
 	if (bar !== -1) {
-		found.push(hidden.range(open, open + bar + 1));
+		found.push(hiddenLead.range(open, open + bar + 1));
 		found.push(Decoration.mark({ attributes }).range(open + bar + 1, close));
 	} else {
 		found.push(Decoration.mark({ attributes }).range(open, close));
 	}
-	found.push(hidden.range(close, range.to));
+	found.push(hiddenTrail.range(close, range.to));
 }
 
 /** `![alt](picture.png)` with a library path shows the picture; an address that is not in the library is flagged. */
@@ -703,6 +880,8 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 
 	update(update: ViewUpdate): void {
 		if (update.docChanged || update.selectionSet || update.viewportChanged || syntaxTree(update.startState) !== syntaxTree(update.state)
+			|| update.startState.field(pressState, false) !== update.state.field(pressState, false)
+			|| update.startState.field(focusState, false) !== update.state.field(focusState, false)
 			|| update.startState.field(libraryField, false) !== update.state.field(libraryField, false)) {
 			this.decorations = this.build(update.view);
 		}
@@ -756,6 +935,12 @@ export const liveMarkdownTheme = EditorView.theme({
 	// Space around a drawn block is padding, not margin: a click in a margin lands on the block and puts the caret at its start.
 	".cm-live-table": { position: "relative", padding: "0.4em 22px 18px 0" },
 	".cm-live-table-scroll": { overflowX: "auto" },
+	// A table that a selection covers has the selection's own colour, as the lines around it do.
+	// Written with the table's own class as well, so that it outweighs the header's background.
+	".cm-live-table.cm-live-table-selected table": { backgroundColor: "var(--lm-surface-active)" },
+	".cm-live-table.cm-live-table-selected th, .cm-live-table.cm-live-table-selected td": { backgroundColor: "transparent" },
+	// The table is marked as a whole: the browser's own highlight on the text inside it would paint over that, piece by piece.
+	".cm-content .cm-live-table-selected ::selection": { backgroundColor: "transparent" },
 	".cm-live-table table": { borderCollapse: "collapse", minWidth: "100%" },
 	".cm-live-table th, .cm-live-table td": {
 		// Border-box, so this is the width with the padding: room for three characters. A wider table scrolls.
@@ -822,7 +1007,15 @@ export const liveMarkdownTheme = EditorView.theme({
 		backgroundSize: "100% 100%",
 	},
 	".cm-live-task-done": { color: "var(--lm-text-secondary)" },
-	".cm-live-rule": { height: "0", margin: "0.6em 0", borderTop: "1px solid var(--lm-border-default)" },
+	// As tall as the line of source it replaces (the editor's line height), so opening the rule does not move the text around it.
+	// Inline, not a block: the widget's buffers on both sides are inline, and a block between them would add a line box above and below.
+	".cm-live-rule": {
+		display: "inline-block",
+		width: "100%",
+		height: "1.65em",
+		verticalAlign: "top",
+		background: "linear-gradient(var(--lm-border-default), var(--lm-border-default)) center / 100% 1px no-repeat",
+	},
 	".cm-live-link": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
 	".cm-live-h1, .cm-live-h2, .cm-live-h3, .cm-live-h4, .cm-live-h5, .cm-live-h6": {
 		fontWeight: "var(--lm-weight-semibold)",

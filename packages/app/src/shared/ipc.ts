@@ -95,6 +95,14 @@ export type FolderContextAction =
 	| "reveal"
 	| "trash";
 export type LibraryContextAction = "paste" | "new_folder" | "new_md_file" | "new_canvas";
+/** What a right click in a table cell can do. The menu says which of them this cell allows. */
+export type TableContextAction = "add_row_above" | "add_row_below" | "add_column_left" | "add_column_right" | "delete_row" | "delete_column" | "align_left" | "align_center" | "align_right";
+export interface TableContextState {
+	canDeleteRow: boolean;
+	canDeleteColumn: boolean;
+	/** How the column of the cell is aligned now, which the menu marks. */
+	align: "left" | "center" | "right" | "";
+}
 
 export interface AgentEndpoint {
 	runtimeUrl: string;
@@ -127,6 +135,7 @@ export const IPC = {
 	showAssetContextMenu: "loom:showAssetContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
 	showLibraryContextMenu: "loom:showLibraryContextMenu",
+	showTableContextMenu: "loom:showTableContextMenu",
 	renameAsset: "loom:renameAsset",
 	duplicateAsset: "loom:duplicateAsset",
 	copyAssetsInto: "loom:copyAssetsInto",
@@ -265,6 +274,7 @@ export interface LoomApi {
 	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
+	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
 	copyAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
