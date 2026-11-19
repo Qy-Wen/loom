@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import MarkdownIt from "markdown-it";
-import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, parseTable, removeColumn, removeRow, setAlign, type TextChange } from "../src/renderer/workbench/preview/table.ts";
+import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, moveColumn, moveRow, parseTable, removeColumn, removeRow, setAlign, type TextChange } from "../src/renderer/workbench/preview/table.ts";
 
 function apply(text: string, ...changes: (TextChange | null)[]): string {
 	let result = text;
@@ -198,4 +198,75 @@ test("an alignment is written in the delimiter row alone, and the preview reads 
 		assert.ok(align ? html.includes(expected) : !/<th style="text-align:[a-z]+">a/.test(html), `${align}: ${html}`);
 	}
 	assert.equal(setAlign(parseTable(text)!, 3, "left", text), null);
+});
+
+/** The table as the cells and alignments it reads to. */
+function shape(text: string): { aligns: string[]; rows: string[][] } {
+	const table = parseTable(text)!;
+	return { aligns: table.aligns, rows: table.rows.map((row) => Array.from({ length: table.columns }, (_, column) => row.cells[column]?.text ?? "")) };
+}
+
+test("moving a row puts the lines in the new order and leaves their spacing alone", () => {
+	const text = "| 名称 | 数量 |\n| :--- | ---: |\n| 苹果 | 3 |\n| 梨   | 12 |\n| 桃 | 7 |";
+	const table = parseTable(text)!;
+	assert.equal(apply(text, moveRow(table, 1, 3, text)), "| 名称 | 数量 |\n| :--- | ---: |\n| 梨   | 12 |\n| 桃 | 7 |\n| 苹果 | 3 |");
+	assert.equal(apply(text, moveRow(table, 3, 1, text)), "| 名称 | 数量 |\n| :--- | ---: |\n| 桃 | 7 |\n| 苹果 | 3 |\n| 梨   | 12 |");
+	assert.equal(apply(text, moveRow(table, 1, 2, text)), "| 名称 | 数量 |\n| :--- | ---: |\n| 梨   | 12 |\n| 苹果 | 3 |\n| 桃 | 7 |");
+	// Nothing moves for the same place, the header or a row that is not there; the header cannot be a target either.
+	assert.equal(moveRow(table, 2, 2, text), null);
+	assert.equal(moveRow(table, 0, 2, text), null);
+	assert.equal(moveRow(table, 2, 0, text), null);
+	assert.equal(moveRow(table, 1, 4, text), null);
+	// Only the lines between are touched.
+	const change = moveRow(table, 1, 2, text)!;
+	assert.equal(text.slice(0, change.from), "| 名称 | 数量 |\n| :--- | ---: |\n");
+	assert.equal(text.slice(change.to), "\n| 桃 | 7 |");
+	assert.deepEqual(shape(apply(text, moveRow(table, 1, 3, text))).rows.map((row) => row[0]), ["名称", "梨", "桃", "苹果"]);
+});
+
+test("moving a column takes its header, delimiter and cells, and its alignment goes with it", () => {
+	const text = "| a | b | c |\n| :-- | :-: | --: |\n| 1 | 2 | 3 |\n| 4 | 5 | 6 |";
+	const table = parseTable(text)!;
+	assert.deepEqual(shape(apply(text, ...moveColumn(table, 0, 2, text)!)), { aligns: ["center", "right", "left"], rows: [["b", "c", "a"], ["2", "3", "1"], ["5", "6", "4"]] });
+	assert.deepEqual(shape(apply(text, ...moveColumn(table, 2, 0, text)!)), { aligns: ["right", "left", "center"], rows: [["c", "a", "b"], ["3", "1", "2"], ["6", "4", "5"]] });
+	assert.deepEqual(shape(apply(text, ...moveColumn(table, 1, 2, text)!)), { aligns: ["left", "right", "center"], rows: [["a", "c", "b"], ["1", "3", "2"], ["4", "6", "5"]] });
+	assert.equal(moveColumn(table, 1, 1, text), null);
+	assert.equal(moveColumn(table, 0, 3, text), null);
+	assert.equal(moveColumn(table, -1, 1, text), null);
+});
+
+test("moving a column keeps the table readable when the pipes are missing", () => {
+	const md = new MarkdownIt();
+	const samples = [
+		"a | b | c\n--- | :-: | ---:\n1 | 2 | 3",
+		"|a|b|c|\n|-|-|-|\n|1|2|3|",
+		"| a | b | c |\n| --- | --- | --- |\n| 1 | 2 | 3",
+		"| 甲 | 乙 | 丙 |\n| :--- | :---: | ---: |\n| 一 | 二 | 三 |",
+		"| a | b | c |\n| --- | --- | --- |\n|  |  | z |",
+	];
+	for (const text of samples) {
+		const before = shape(text);
+		for (let from = 0; from < before.aligns.length; from++) {
+			for (let to = 0; to < before.aligns.length; to++) {
+				if (from === to) continue;
+				const moved = apply(text, ...moveColumn(parseTable(text)!, from, to, text)!);
+				const expected = (items: string[]) => { const copy = items.slice(); copy.splice(to, 0, copy.splice(from, 1)[0]); return copy; };
+				const after = shape(moved);
+				assert.deepEqual(after.aligns, expected(before.aligns), `${JSON.stringify(text)} ${from}->${to}`);
+				assert.deepEqual(after.rows, before.rows.map(expected), `${JSON.stringify(text)} ${from}->${to}`);
+				// The preview reads the result as the same table.
+				const html = md.render(moved);
+				assert.ok(html.includes("<table>"), JSON.stringify(moved));
+				assert.equal((html.match(/<th[ >]/g) ?? []).length, before.aligns.length, JSON.stringify(moved));
+			}
+		}
+	}
+});
+
+test("a row with fewer cells than the move reaches is left as it is", () => {
+	const text = "| a | b | c |\n| --- | --- | --- |\n| 1 |\n| 4 | 5 |\n| 7 | 8 | 9 |";
+	const table = parseTable(text)!;
+	assert.equal(apply(text, ...moveColumn(table, 0, 2, text)!), "| b | c | a |\n| --- | --- | --- |\n| 1 |\n| 4 | 5 |\n| 8 | 9 | 7 |");
+	// A move among the first two columns reaches the row with two cells but not the one with one.
+	assert.equal(apply(text, ...moveColumn(table, 0, 1, text)!), "| b | a | c |\n| --- | --- | --- |\n| 1 |\n| 5 | 4 |\n| 8 | 7 | 9 |");
 });

@@ -1182,3 +1182,157 @@ test("pressing on an element that is already open to source does not close it wh
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("rows and columns of a table move by their grips", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(120000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-move-e2e-"));
+	const table = ["| 名称 | 数量 | 备注 |", "| :--- | ---: | :---: |", "| 苹果 | 3 | 红 |", "| 梨 | 12 | 黄 |", "| 桃 | 7 | 粉 |"].join("\n");
+	const original = `上文\n\n${table}\n\n下文\n`;
+	const file = join(root, "移.md");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "移.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 移.md" });
+		const onDisk = () => readFile(file, "utf8");
+		const cell = (row: number, column: number) => box.locator(`.cm-live-table [data-row="${row}"][data-column="${column}"]`);
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+
+		// The grips show only from the table's edges: a column's above it, a row's to the left. Over the cells there are none.
+		const table = box.locator(".cm-live-table table");
+		await expect(box.locator(".cm-live-table-handle-row")).toBeHidden();
+		await expect(box.locator(".cm-live-table-handle-column")).toBeHidden();
+		await cell(2, 1).hover();
+		await expect(box.locator(".cm-live-table-handle-row")).toBeHidden();
+		await expect(box.locator(".cm-live-table-handle-column")).toBeHidden();
+		const rect = (await table.boundingBox())!;
+		const over = (await cell(2, 1).boundingBox())!;
+		const headCell = (await cell(0, 1).boundingBox())!;
+		// Above the second column, just over the table's top edge.
+		await loomPage.mouse.move(headCell.x + headCell.width / 2 + 40, rect.y - 6);
+		await expect(box.locator(".cm-live-table-handle-column")).toBeVisible();
+		await expect(box.locator(".cm-live-table-handle-row")).toBeHidden();
+		// Beside the third row, just left of the table's left edge.
+		await loomPage.mouse.move(rect.x - 6, over.y + over.height / 2);
+		await expect(box.locator(".cm-live-table-handle-row")).toBeVisible();
+		await expect(box.locator(".cm-live-table-handle-column")).toBeHidden();
+		// Beside the header there is no row grip.
+		await loomPage.mouse.move(rect.x - 6, headCell.y + headCell.height / 2);
+		await expect(box.locator(".cm-live-table-handle-row")).toBeHidden();
+		// Away from the table there are none.
+		await loomPage.mouse.move(5, 5);
+		await expect(box.locator(".cm-live-table-handle-column")).toBeHidden();
+
+		// The block behind the "add column" plus stays within the table's height: not above its top line.
+		const plus = (await box.locator(".cm-live-table-add-column").boundingBox())!;
+		expect(Math.abs(plus.y - rect.y)).toBeLessThan(1.5);
+		expect(Math.abs(plus.y + plus.height - (rect.y + rect.height))).toBeLessThan(1.5);
+		// It touches the table's right edge, as the "add row" block touches its bottom edge.
+		expect(Math.abs(plus.x - (rect.x + rect.width))).toBeLessThan(1.5);
+		const below = (await box.locator(".cm-live-table-add-row").boundingBox())!;
+		expect(Math.abs(below.y - (rect.y + rect.height))).toBeLessThan(1.5);
+		expect(Math.abs(below.x - rect.x)).toBeLessThan(1.5);
+		expect(Math.abs(below.x + below.width - (rect.x + rect.width))).toBeLessThan(1.5);
+		// The grips are small.
+		await loomPage.mouse.move(headCell.x + headCell.width / 2, rect.y - 6);
+		const small = (await box.locator(".cm-live-table-handle-column").boundingBox())!;
+		expect(small.width).toBeLessThanOrEqual(24);
+		expect(small.height).toBeLessThanOrEqual(14);
+
+		// The grips lie outside the cells: the column's above the table and flat, the row's left of it and tall, each
+		// centred on its column or row.
+		await loomPage.mouse.move(headCell.x + headCell.width / 2, rect.y - 6);
+		const columnGrip = (await box.locator(".cm-live-table-handle-column").boundingBox())!;
+		expect(columnGrip.y + columnGrip.height).toBeLessThanOrEqual(rect.y);
+		expect(columnGrip.width).toBeGreaterThan(columnGrip.height * 1.5);
+		expect(Math.abs(columnGrip.x + columnGrip.width / 2 - (headCell.x + headCell.width / 2))).toBeLessThan(3);
+		await loomPage.mouse.move(rect.x - 6, over.y + over.height / 2);
+		const rowGrip = (await box.locator(".cm-live-table-handle-row").boundingBox())!;
+		expect(rowGrip.x + rowGrip.width).toBeLessThanOrEqual(rect.x);
+		expect(rowGrip.height).toBeGreaterThan(rowGrip.width * 1.5);
+		expect(Math.abs(rowGrip.y + rowGrip.height / 2 - (over.y + over.height / 2))).toBeLessThan(3);
+		await loomPage.mouse.move(5, 5);
+
+		// Moves the pointer to a grip the way a hand does: to the table's edge beside the row or column, then onto the grip.
+		const reach = async (kind: "row" | "column", index: number) => {
+			const edge = (await table.boundingBox())!;
+			const target = (await (kind === "row" ? cell(index, 0) : cell(0, index)).boundingBox())!;
+			if (kind === "row") await loomPage.mouse.move(edge.x - 6, target.y + target.height / 2);
+			else await loomPage.mouse.move(target.x + target.width / 2, edge.y - 6);
+			const grip = box.locator(`.cm-live-table-handle-${kind}`);
+			await expect(grip).toBeVisible();
+			const at = (await grip.boundingBox())!;
+			await loomPage.mouse.move(at.x + at.width / 2, at.y + at.height / 2, { steps: 4 });
+			// Still shown with the pointer on it, though it is no longer beside the edge.
+			await expect(grip).toBeVisible();
+		};
+
+		// The row or column a grip would move is framed while the pointer is on the grip.
+		const frame = box.locator(".cm-live-table-frame");
+		await expect(frame).toBeHidden();
+		await reach("row", 2);
+		await expect(frame).toBeVisible();
+		const rowFrame = (await frame.boundingBox())!;
+		const rowBox = (await cell(2, 0).boundingBox())!;
+		expect(Math.abs(rowFrame.y - rowBox.y)).toBeLessThan(3);
+		expect(Math.abs(rowFrame.height - rowBox.height)).toBeLessThan(4);
+		expect(rowFrame.width).toBeGreaterThan(rowBox.width * 2);
+		await loomPage.mouse.move(5, 5);
+		await reach("column", 1);
+		await expect(frame).toBeVisible();
+		const columnFrame = (await frame.boundingBox())!;
+		const columnBox = (await cell(0, 1).boundingBox())!;
+		expect(Math.abs(columnFrame.x - columnBox.x)).toBeLessThan(3);
+		expect(Math.abs(columnFrame.width - columnBox.width)).toBeLessThan(4);
+		expect(columnFrame.height).toBeGreaterThan(columnBox.height * 2);
+		await loomPage.mouse.move(5, 5);
+		await expect(frame).toBeHidden();
+
+		const drag = async (kind: "row" | "column", index: number, over: import("@playwright/test").Locator, to: "before" | "after") => {
+			await reach(kind, index);
+			const target = (await over.boundingBox())!;
+			await loomPage.mouse.down();
+			await loomPage.mouse.move(target.x + target.width / 2, target.y + (to === "before" ? 4 : target.height - 4), { steps: 8 });
+			// While it is dragged the frame stays on the row or column that is being moved, not under the pointer.
+			await expect(box.locator(".cm-live-table-frame")).toBeVisible();
+			await loomPage.mouse.up();
+			await expect(box.locator(".cm-live-table-frame")).toBeHidden();
+		};
+
+		// Row 1 (苹果) goes below row 3 (桃).
+		await drag("row", 1, cell(3, 0), "after");
+		await expect.poll(onDisk).toBe(`上文\n\n| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 梨 | 12 | 黄 |\n| 桃 | 7 | 粉 |\n| 苹果 | 3 | 红 |\n\n下文\n`);
+		// Column 2 (备注) goes to the front, and its alignment with it.
+		await drag("column", 2, cell(0, 0), "before");
+		await expect.poll(onDisk).toBe(`上文\n\n| 备注 | 名称 | 数量 |\n| :---: | :--- | ---: |\n| 黄 | 梨 | 12 |\n| 粉 | 桃 | 7 |\n| 红 | 苹果 | 3 |\n\n下文\n`);
+		await expect(cell(0, 0)).toHaveCSS("text-align", "center");
+		await expect(cell(0, 2)).toHaveCSS("text-align", "right");
+
+		// Undo puts each move back with one step.
+		await box.locator(".cm-line").filter({ hasText: "下文" }).click();
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(`上文\n\n| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 梨 | 12 | 黄 |\n| 桃 | 7 | 粉 |\n| 苹果 | 3 | 红 |\n\n下文\n`);
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(onDisk).toBe(original);
+
+		// The header never takes a row's place: dragging the third row up to it leaves the row first among the others.
+		await reach("row", 2);
+		const head = (await cell(0, 0).boundingBox())!;
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(head.x + 20, head.y + 4, { steps: 6 });
+		await loomPage.mouse.up();
+		await expect.poll(onDisk).toBe(`上文\n\n| 名称 | 数量 | 备注 |\n| :--- | ---: | :---: |\n| 梨 | 12 | 黄 |\n| 苹果 | 3 | 红 |\n| 桃 | 7 | 粉 |\n\n下文\n`);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

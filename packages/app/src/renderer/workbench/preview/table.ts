@@ -241,6 +241,67 @@ export function setAlign(table: ParsedTable, column: number, align: TableAlign, 
 	return { from: cell.segFrom + lead, to: cell.segTo - trail, insert: delimiterFor(align) };
 }
 
+/** Where `item` of `length` lands when it is taken out and put back at `to`, and the order that gives. */
+function reorder<T>(items: T[], from: number, to: number): T[] {
+	const result = items.slice();
+	const [moved] = result.splice(from, 1);
+	result.splice(to, 0, moved);
+	return result;
+}
+
+/**
+ * The edit that moves body row `from` to where `to` is, both counted as in the table (row 0 is the header and stays).
+ * The lines are put in the new order as they are written, so each keeps its own spacing. Null when nothing moves.
+ */
+export function moveRow(table: ParsedTable, from: number, to: number, text: string): TextChange | null {
+	const last = table.rows.length - 1;
+	if (from === to || from < 1 || to < 1 || from > last || to > last) return null;
+	// Row 0 is line 0 and the delimiter is line 1, so body row `n` is line `n + 1`.
+	const starts = [0];
+	for (let at = text.indexOf("\n"); at !== -1; at = text.indexOf("\n", at + 1)) starts.push(at + 1);
+	const lineEnd = (index: number) => (starts[index + 1] === undefined ? text.length : starts[index + 1] - 1);
+	const low = Math.min(from, to) + 1;
+	const high = Math.max(from, to) + 1;
+	if (starts[low] === undefined || starts[high] === undefined) return null;
+	const lines: string[] = [];
+	for (let index = low; index <= high; index++) lines.push(text.slice(starts[index], lineEnd(index)));
+	return { from: starts[low], to: lineEnd(high), insert: reorder(lines, from - low + 1, to - low + 1).join("\n") };
+}
+
+/**
+ * The edit that moves column `from` to where `to` is. On every line the text of the cells from one to the other is put in
+ * the new order, and the spaces around each cell stay at the place they were: a cell keeps its width and its pipes, so a
+ * line with no outer pipes keeps none, and what the delimiter row says goes with the column. A row that has fewer cells
+ * than the move reaches is left alone, as it is by the other column edits.
+ */
+export function moveColumn(table: ParsedTable, from: number, to: number, text: string): TextChange[] | null {
+	if (from === to || from < 0 || to < 0 || from >= table.columns || to >= table.columns) return null;
+	const low = Math.min(from, to);
+	const high = Math.max(from, to);
+	const changes: TextChange[] = [];
+	const lines = [...table.rows.map((row) => row.cells), table.delimiter.cells];
+	for (const cells of lines) {
+		if (cells.length <= high) continue;
+		// The cell as written, split into the spaces before it, its text and the spaces after it.
+		const parts = cells.slice(low, high + 1).map((cell) => {
+			const written = text.slice(cell.segFrom, cell.segTo);
+			const core = written.trim();
+			const lead = core ? written.length - written.trimStart().length : written.length;
+			return { lead: written.slice(0, lead), core, trail: written.slice(lead + core.length) };
+		});
+		const cores = reorder(parts.map((part) => part.core), from - low, to - low);
+		const pieces = parts.map((part, index) => {
+			// A cell that was empty has spaces only; put its spacing together with the text that comes into it.
+			const core = cores[index];
+			if (!parts[index].core && core) return ` ${core} `;
+			if (parts[index].core && !core) return `${part.lead}${part.trail}`;
+			return `${part.lead}${core}${part.trail}`;
+		});
+		changes.push({ from: cells[low].segFrom, to: cells[high].segTo, insert: pieces.join("|") });
+	}
+	return changes.sort((a, b) => a.from - b.from);
+}
+
 /** A new empty row at body position `row` (1 is right under the header). The same as {@link appendRow} when it is past the end. */
 export function insertRow(table: ParsedTable, row: number, text: string): TextChange {
 	if (row >= table.rows.length) return appendRow(table, text.length);

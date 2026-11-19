@@ -933,7 +933,9 @@ export const liveMarkdownTheme = EditorView.theme({
 	},
 	".cm-live-mermaid svg": { maxWidth: "100%", height: "auto" },
 	// Space around a drawn block is padding, not margin: a click in a margin lands on the block and puts the caret at its start.
-	".cm-live-table": { position: "relative", padding: "0.4em 22px 18px 0" },
+	// The strip to the left is where the row grips show. Its negative margin takes it back out of the layout, so the table
+	// stays level with the text, and it is padding, not margin, so that the pointer is over the table while it is there.
+	".cm-live-table": { position: "relative", margin: "0 0 0 -20px", padding: "18px 18px 18px 20px" },
 	".cm-live-table-scroll": { overflowX: "auto" },
 	// A table that a selection covers has the selection's own colour, as the lines around it do.
 	// Written with the table's own class as well, so that it outweighs the header's background.
@@ -983,8 +985,49 @@ export const liveMarkdownTheme = EditorView.theme({
 		cursor: "pointer",
 		opacity: "0",
 	},
-	".cm-live-table-add-row": { left: "0", right: "22px", bottom: "0", height: "18px" },
-	".cm-live-table-add-column": { top: "0", right: "0", bottom: "22px", width: "18px" },
+	".cm-live-table-add-row": { left: "20px", right: "18px", bottom: "0", height: "18px" },
+	".cm-live-table-add-column": { top: "18px", right: "0", bottom: "18px", width: "18px" },
+	// The grips for moving a row (left of the table, in its left edge) and a column (above it), and the line that marks the drop.
+	".cm-live-table-handle": {
+		position: "absolute",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		boxSizing: "border-box",
+		borderRadius: "var(--lm-radius-sm)",
+		color: "var(--lm-text-muted)",
+		cursor: "grab",
+		userSelect: "none",
+		backgroundColor: "var(--lm-surface-subtle)",
+		border: "1px solid var(--lm-border-default)",
+		zIndex: "1",
+	},
+	".cm-live-table-handle[hidden]": { display: "none" },
+	// The column's grip is flat and the row's is tall, as each lies along the edge it is on.
+	".cm-live-table-handle-column": { width: "22px", height: "12px" },
+	".cm-live-table-handle-row": { width: "12px", height: "22px" },
+	".cm-live-table-dots": {
+		display: "block",
+		backgroundImage: "radial-gradient(circle, currentColor 0.8px, transparent 1.2px)",
+		backgroundSize: "4px 4px",
+	},
+	".cm-live-table-handle-column .cm-live-table-dots": { width: "12px", height: "8px" },
+	".cm-live-table-handle-row .cm-live-table-dots": { width: "8px", height: "12px" },
+	".cm-live-table-handle:hover": { backgroundColor: "var(--lm-surface-hover)", color: "var(--lm-text-primary)" },
+	".cm-live-table-dragging, .cm-live-table-dragging *": { cursor: "grabbing", userSelect: "none" },
+	".cm-live-table-drop": { position: "absolute", backgroundColor: "var(--lm-text-accent)", pointerEvents: "none", zIndex: "2" },
+	".cm-live-table-drop[hidden]": { display: "none" },
+	// A frame over the row or column being moved, drawn over the cells without taking the pointer from them.
+	".cm-live-table-frame": {
+		position: "absolute",
+		boxSizing: "border-box",
+		border: "2px solid var(--lm-text-accent)",
+		borderRadius: "var(--lm-radius-sm)",
+		backgroundColor: "color-mix(in srgb, var(--lm-text-accent) 10%, transparent)",
+		pointerEvents: "none",
+		zIndex: "1",
+	},
+	".cm-live-table-frame[hidden]": { display: "none" },
 	".cm-live-table:hover .cm-live-table-add-row, .cm-live-table:hover .cm-live-table-add-column, .cm-live-table:focus-within .cm-live-table-add-row, .cm-live-table:focus-within .cm-live-table-add-column": { opacity: "1" },
 	".cm-live-table-add-row:hover, .cm-live-table-add-column:hover": { backgroundColor: "var(--lm-surface-hover)", color: "var(--lm-text-primary)" },
 	".cm-live-quote": { color: "var(--lm-text-secondary)" },

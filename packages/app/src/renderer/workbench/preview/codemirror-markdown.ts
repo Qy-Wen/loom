@@ -22,6 +22,8 @@ export interface MarkdownEditorEvents {
 export interface MarkdownEditorLabels {
 	addRow: string;
 	addColumn: string;
+	moveRow: string;
+	moveColumn: string;
 }
 
 /** What the editor asks the window for. */

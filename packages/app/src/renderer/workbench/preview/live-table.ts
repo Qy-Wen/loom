@@ -5,7 +5,7 @@ import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
 import { renderInlineMarkdown } from "./markdown.ts";
 import type { TableContextAction, TableContextState } from "../../../shared/ipc.ts";
-import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, parseTable, removeColumn, removeRow, setAlign, type ParsedTable, type TableAlign } from "./table.ts";
+import { appendColumn, appendRow, cellChange, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, removeColumn, removeRow, setAlign, type ParsedTable, type TableAlign } from "./table.ts";
 
 /**
  * A table drawn as a table, with cells that are edited in place. Every edit is written back as a change to that
@@ -20,7 +20,7 @@ export interface TableHooks {
 	save(): void;
 	/** Asks the window for the table's context menu; resolves with what was chosen, or null. */
 	chooseAction(state: TableContextState): Promise<TableContextAction | null>;
-	labels: { addRow: string; addColumn: string };
+	labels: { addRow: string; addColumn: string; moveRow: string; moveColumn: string };
 }
 
 export interface TableContext {
@@ -108,6 +108,7 @@ export class TableWidget extends WidgetType {
 		});
 		wrap.append(scroll, this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
 
+		this.attachHandles(view, wrap, scroll, element);
 		const state: Shown = { text: this.text, context: this.context, rows: table.rows.length, columns: table.columns, aligns: table.aligns.join(","), observer: null, lastHeight: 0 };
 		shown.set(wrap, state);
 		if (typeof ResizeObserver !== "undefined") {
@@ -163,6 +164,168 @@ export class TableWidget extends WidgetType {
 
 	ignoreEvent(): boolean {
 		return true;
+	}
+
+	/**
+	 * A grip beside the row and above the column of the cell the pointer is over. Dragging it moves that row or column to
+	 * where it is let go; a line marks the place while it is dragged. The header row is not a row that moves.
+	 */
+	private attachHandles(view: EditorView, wrap: HTMLElement, scroll: HTMLElement, element: HTMLTableElement): void {
+		const labels = this.hooks(view)?.labels;
+		const makeHandle = (kind: "row" | "column") => {
+			const handle = document.createElement("div");
+			handle.className = `cm-live-table-handle cm-live-table-handle-${kind}`;
+			handle.title = kind === "row" ? labels?.moveRow ?? "" : labels?.moveColumn ?? "";
+			handle.setAttribute("aria-label", handle.title);
+			// Six dots, drawn by the style: three across and two down on the column's grip, two across and three down on the row's.
+			const dots = document.createElement("span");
+			dots.className = "cm-live-table-dots";
+			handle.append(dots);
+			handle.dataset.kind = kind;
+			handle.hidden = true;
+			return handle;
+		};
+		const rowHandle = makeHandle("row");
+		const columnHandle = makeHandle("column");
+		const marker = document.createElement("div");
+		marker.className = "cm-live-table-drop";
+		marker.hidden = true;
+		// The row or column a grip would move, framed while the pointer is on the grip and while it is dragged.
+		const frame = document.createElement("div");
+		frame.className = "cm-live-table-frame";
+		frame.hidden = true;
+		wrap.append(rowHandle, columnHandle, marker, frame);
+		const showFrame = (kind: "row" | "column", index: number) => {
+			const wrapRect = wrap.getBoundingClientRect();
+			const tableRect = element.getBoundingClientRect();
+			const box = kind === "row"
+				? element.rows[index]?.getBoundingClientRect()
+				: element.rows[0]?.cells[index]?.getBoundingClientRect();
+			if (!box) return;
+			frame.hidden = false;
+			frame.dataset.kind = kind;
+			frame.style.left = `${(kind === "row" ? tableRect.left : box.left) - wrapRect.left}px`;
+			frame.style.top = `${(kind === "row" ? box.top : tableRect.top) - wrapRect.top}px`;
+			frame.style.width = `${kind === "row" ? tableRect.width : box.width}px`;
+			frame.style.height = `${kind === "row" ? box.height : tableRect.height}px`;
+		};
+		for (const [kind, handle] of [["row", rowHandle], ["column", columnHandle]] as const) {
+			handle.addEventListener("mouseenter", () => {
+				const index = kind === "row" ? over?.row : over?.column;
+				if (dragging || index === null || index === undefined) return;
+				showFrame(kind, index);
+			});
+			handle.addEventListener("mouseleave", () => {
+				if (!dragging) frame.hidden = true;
+			});
+		}
+
+		// Which row or column the pointer is beside: a column when it is above the table, a row when it is left of it. Over
+		// the cells themselves there is none, so the grips show only from the edges.
+		let over: { row: number | null; column: number | null } | null = null;
+		const place = () => {
+			const wrapRect = wrap.getBoundingClientRect();
+			const tableRect = element.getBoundingClientRect();
+			rowHandle.hidden = !over || over.row === null || over.row === 0;
+			columnHandle.hidden = !over || over.column === null;
+			// Outside the table: the row's grip in the space to its left, the column's in the space above it.
+			if (!rowHandle.hidden && over?.row != null) {
+				const box = element.rows[over.row]?.getBoundingClientRect();
+				if (box) {
+					rowHandle.style.left = `${tableRect.left - wrapRect.left - rowHandle.offsetWidth - 3}px`;
+					rowHandle.style.top = `${box.top - wrapRect.top + box.height / 2 - rowHandle.offsetHeight / 2}px`;
+				}
+			}
+			if (!columnHandle.hidden && over?.column != null) {
+				const box = element.rows[0]?.cells[over.column]?.getBoundingClientRect();
+				if (box) {
+					columnHandle.style.top = `${tableRect.top - wrapRect.top - columnHandle.offsetHeight - 3}px`;
+					columnHandle.style.left = `${box.left - wrapRect.left + box.width / 2 - columnHandle.offsetWidth / 2}px`;
+				}
+			}
+		};
+		wrap.addEventListener("mousemove", (event) => {
+			if (dragging) return;
+			const tableRect = element.getBoundingClientRect();
+			let next: typeof over = null;
+			const inColumns = event.clientX >= tableRect.left && event.clientX <= tableRect.right;
+			const inRows = event.clientY >= tableRect.top && event.clientY <= tableRect.bottom;
+			if (event.clientY < tableRect.top && inColumns) {
+				const cells = Array.from(element.rows[0]?.cells ?? []);
+				const column = cells.findIndex((cell) => event.clientX < cell.getBoundingClientRect().right);
+				if (column !== -1) next = { row: null, column };
+			} else if (event.clientX < tableRect.left && inRows) {
+				const rows = Array.from(element.rows);
+				const row = rows.findIndex((line) => event.clientY < line.getBoundingClientRect().bottom);
+				if (row !== -1) next = { row, column: null };
+			}
+			if (next?.row === over?.row && next?.column === over?.column) return;
+			over = next;
+			place();
+		});
+		wrap.addEventListener("mouseleave", () => {
+			if (dragging) return;
+			over = null;
+			place();
+		});
+
+		let dragging = false;
+		const begin = (kind: "row" | "column") => (event: MouseEvent) => {
+			const index = kind === "row" ? over?.row : over?.column;
+			if (event.button !== 0 || index === null || index === undefined) return;
+			event.preventDefault();
+			event.stopPropagation();
+			const from = index;
+			const lines = kind === "row"
+				? Array.from(element.rows, (row) => row.getBoundingClientRect())
+				: Array.from(element.rows[0]?.cells ?? [], (cell) => cell.getBoundingClientRect());
+			dragging = true;
+			wrap.classList.add("cm-live-table-dragging");
+			showFrame(kind, from);
+			let target = from;
+			const track = (move: MouseEvent) => {
+				const wrapRect = wrap.getBoundingClientRect();
+				const pointer = kind === "row" ? move.clientY : move.clientX;
+				// The line the pointer is over; rows are counted from the first body row, columns from the first.
+				let index = lines.findIndex((box) => pointer < (kind === "row" ? box.bottom : box.right));
+				if (index === -1) index = lines.length - 1;
+				if (kind === "row") index = Math.max(index, 1);
+				target = index;
+				const box = lines[index];
+				marker.hidden = false;
+				marker.dataset.kind = kind;
+				// The mark goes at the far edge of the line the row or column will take the place of, on the side it comes from.
+				const forward = index > from;
+				if (kind === "row") {
+					marker.style.top = `${(forward ? box.bottom : box.top) - wrapRect.top - 1}px`;
+					marker.style.left = `${lines[0] ? element.getBoundingClientRect().left - wrapRect.left : 0}px`;
+					marker.style.width = `${element.getBoundingClientRect().width}px`;
+					marker.style.height = "2px";
+				} else {
+					marker.style.left = `${(forward ? box.right : box.left) - wrapRect.left - 1}px`;
+					marker.style.top = `${element.getBoundingClientRect().top - wrapRect.top}px`;
+					marker.style.height = `${element.getBoundingClientRect().height}px`;
+					marker.style.width = "2px";
+				}
+			};
+			const finish = () => {
+				document.removeEventListener("mousemove", track, true);
+				document.removeEventListener("mouseup", finish, true);
+				window.removeEventListener("blur", finish);
+				dragging = false;
+				wrap.classList.remove("cm-live-table-dragging");
+				marker.hidden = true;
+				frame.hidden = true;
+				if (target !== from) editTable(view, wrap, { kind: kind === "row" ? "move-row" : "move-column", from, to: target });
+			};
+			document.addEventListener("mousemove", track, true);
+			document.addEventListener("mouseup", finish, true);
+			window.addEventListener("blur", finish);
+			track(event);
+		};
+		rowHandle.addEventListener("mousedown", begin("row"));
+		columnHandle.addEventListener("mousedown", begin("column"));
+		scroll.addEventListener("scroll", place);
 	}
 
 	private addButton(className: string, label: string, view: EditorView, wrap: HTMLElement, kind: "row" | "column"): HTMLElement {
@@ -303,7 +466,9 @@ export type TableEdit =
 	| { kind: "insert-column"; at: number }
 	| { kind: "delete-row"; at: number }
 	| { kind: "delete-column"; at: number }
-	| { kind: "align"; at: number; align: TableAlign };
+	| { kind: "align"; at: number; align: TableAlign }
+	| { kind: "move-row"; from: number; to: number }
+	| { kind: "move-column"; from: number; to: number };
 
 /** Applies an edit to the table drawn at `wrap` and puts the caret in a cell that makes sense afterwards. */
 function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
@@ -336,6 +501,17 @@ function editTable(view: EditorView, wrap: HTMLElement, edit: TableEdit): void {
 		case "delete-column": {
 			changes = removeColumn(table, edit.at)?.map(shift) ?? null;
 			focus = { row: 0, column: Math.min(edit.at, table.columns - 2) };
+			break;
+		}
+		case "move-row": {
+			const change = moveRow(table, edit.from, edit.to, text);
+			changes = change ? [shift(change)] : null;
+			focus = { row: edit.to, column: 0 };
+			break;
+		}
+		case "move-column": {
+			changes = moveColumn(table, edit.from, edit.to, text)?.map(shift) ?? null;
+			focus = { row: 0, column: edit.to };
 			break;
 		}
 		case "align": {
