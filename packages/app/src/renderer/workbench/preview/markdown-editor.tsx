@@ -94,7 +94,11 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 			addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn,
 			moveRow: t.preview.tableMoveRow, moveColumn: t.preview.tableMoveColumn,
 			searchPhrases: t.preview.searchPhrases,
-		}, { chooseTableAction: (state) => window.loom.showTableContextMenu(state) }, modeRef.current);
+		}, {
+			chooseTableAction: (state) => window.loom.showTableContextMenu(state),
+			chooseTextAction: (state) => window.loom.showEditorContextMenu(state),
+			clipboard: (action) => window.loom.runEditorClipboard(action),
+		}, modeRef.current);
 		editorRef.current = editor;
 		const anchor = takePendingHeading(assetId);
 		if (anchor) editor.scrollToHeading(anchor);

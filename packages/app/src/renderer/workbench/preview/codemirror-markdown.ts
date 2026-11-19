@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
+import { defaultKeymap, history, historyKeymap, indentWithTab, redo, redoDepth, selectAll, undo, undoDepth } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { closeSearchPanel, openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemirror/search";
@@ -8,6 +8,7 @@ import { tags } from "@lezer/highlight";
 import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
+import type { EditorClipboardAction, EditorContextAction, EditorContextState } from "../../../shared/ipc.ts";
 
 export type MarkdownMode = "edit" | "read" | "source";
 const replaceText = Annotation.define<boolean>();
@@ -34,6 +35,8 @@ export interface MarkdownEditorLabels {
 /** What the editor asks the window for. */
 export interface MarkdownEditorHost {
 	chooseTableAction: TableHooks["chooseAction"];
+	chooseTextAction(state: EditorContextState): Promise<EditorContextAction | null>;
+	clipboard(action: EditorClipboardAction): Promise<void>;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
@@ -140,6 +143,7 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 			openAsset: events.onOpenAsset,
 			save: events.onSave,
 			chooseAction: host.chooseTableAction,
+			clipboard: host.clipboard,
 			labels,
 		}),
 		rendering.of(mode === "source" ? [] : rendered),
@@ -160,10 +164,40 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		EditorView.updateListener.of((update) => {
 			if (update.docChanged && !replacing) events.onChange(update.state.doc.toString());
 		}),
-		EditorView.domEventHandlers({ blur: () => { events.onBlur(); } }),
+		EditorView.domEventHandlers({
+			blur: () => { events.onBlur(); },
+			mousedown(event, editor) {
+				if (event.button !== 2) return false;
+				const position = editor.posAtCoords({ x: event.clientX, y: event.clientY });
+				if (position !== null && !editor.state.selection.ranges.some((range) => position >= range.from && position <= range.to)) {
+					editor.dispatch({ selection: { anchor: position } });
+				}
+				editor.focus();
+				return true; // Keep a right click inside the selection from collapsing it in Chromium.
+			},
+		}),
 	];
 	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
 	view.dispatch({ effects: updateLibrary(library) });
+	// Listen on the outer DOM too, so rendered images/formulas can open the same menu as plain text.
+	view.dom.addEventListener("contextmenu", (event) => {
+		const target = event.target as HTMLElement | null;
+		if (!target || !view.contentDOM.contains(target) || target.closest(".cm-live-table")) return;
+		event.preventDefault();
+		view.focus();
+		const state = view.state;
+		void host.chooseTextAction({
+			readOnly: state.readOnly, canUndo: undoDepth(state) > 0, canRedo: redoDepth(state) > 0,
+			canCopy: state.selection.ranges.some((range) => !range.empty || !!state.doc.lineAt(range.head).text),
+		}).then(async (action) => {
+			if (!action || !view.dom.isConnected || (view.state.readOnly && action !== "copy" && action !== "select_all")) return;
+			view.focus();
+			if (action === "undo") undo(view);
+			else if (action === "redo") redo(view);
+			else if (action === "select_all") selectAll(view);
+			else await host.clipboard(action);
+		});
+	});
 	return {
 		view,
 		setLibrary: (next) => view.dispatch({ effects: updateLibrary(next) }),

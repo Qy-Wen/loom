@@ -75,7 +75,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
@@ -157,6 +157,20 @@ async function uiCopy(): Promise<{ t: Messages; platform: UiPlatform }> {
 		t: messagesFor(resolveAppLanguage(choice, app.getLocale())),
 		platform: uiPlatform(process.platform),
 	};
+}
+
+/** Shared text actions; history and selection are owned by the renderer, not Chromium's edit history. */
+function editorMenuItems(t: Messages, state: EditorContextState): ContextMenuItem<EditorContextAction>[] {
+	return [
+		{ label: t.menu.undo, enabled: !state.readOnly && state.canUndo, click: () => "undo" },
+		{ label: t.menu.redo, enabled: !state.readOnly && state.canRedo, click: () => "redo" },
+		{ type: "separator" },
+		{ label: t.menu.cut, enabled: !state.readOnly && state.canCopy, click: () => "cut" },
+		{ label: t.menu.copy, enabled: state.canCopy, click: () => "copy" },
+		{ label: t.menu.paste, enabled: !state.readOnly && !!clipboard.readText(), click: () => "paste" },
+		{ type: "separator" },
+		{ label: t.menu.selectAll, click: () => "select_all" },
+	];
 }
 
 function popupContextMenu<T extends string>(
@@ -648,9 +662,23 @@ function registerIpc(): void {
 		},
 	);
 
+	ipcMain.handle(IPC.showEditorContextMenu, async (event, state: EditorContextState): Promise<EditorContextAction | null> => {
+		const { t } = await uiCopy();
+		return popupContextMenu(event, editorMenuItems(t, state));
+	});
+	// The renderer restores the exact editor/cell focus before asking Chromium to send a real clipboard event.
+	ipcMain.handle(IPC.runEditorClipboard, (event, action: EditorClipboardAction) => {
+		if (action !== "cut" && action !== "copy" && action !== "paste") throw new Error("Invalid editor clipboard action");
+		event.sender[action]();
+	});
+
 	ipcMain.handle(IPC.showTableContextMenu, async (event, state: TableContextState): Promise<TableContextAction | null> => {
 		const { t } = await uiCopy();
+		const textItems = editorMenuItems(t, state);
+		if (state.readOnly) return popupContextMenu<TableContextAction>(event, textItems);
 		return popupContextMenu<TableContextAction>(event, [
+			...textItems,
+			{ type: "separator" },
 			{ label: t.menu.tableAddRowAbove, click: () => "add_row_above" },
 			{ label: t.menu.tableAddRowBelow, click: () => "add_row_below" },
 			{ label: t.menu.tableAddColumnLeft, click: () => "add_column_left" },

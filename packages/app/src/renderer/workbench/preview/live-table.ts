@@ -1,10 +1,10 @@
-import { undo, redo } from "@codemirror/commands";
+import { undo, redo, undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import type { StateEffectType } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
 import { renderInlineMarkdown } from "./markdown.ts";
-import type { TableContextAction, TableContextState } from "../../../shared/ipc.ts";
+import type { EditorClipboardAction, TableContextAction, TableContextState } from "../../../shared/ipc.ts";
 import { appendColumn, appendRow, cellChange, cellTexts, clearCells, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, rectText, removeColumn, pasteCells, removeRow, setAlign, type CellRect, type ParsedTable, type TableAlign } from "./table.ts";
 
 /**
@@ -20,6 +20,7 @@ export interface TableHooks {
 	save(): void;
 	/** Asks the window for the table's context menu; resolves with what was chosen, or null. */
 	chooseAction(state: TableContextState): Promise<TableContextAction | null>;
+	clipboard(action: EditorClipboardAction): Promise<void>;
 	labels: { addRow: string; addColumn: string; moveRow: string; moveColumn: string };
 }
 
@@ -356,6 +357,7 @@ export class TableWidget extends WidgetType {
 
 	private listen(cell: HTMLElement, wrap: HTMLElement, view: EditorView): void {
 		cell.addEventListener("mousedown", (event) => {
+			if (event.button === 2) { event.preventDefault(); return; }
 			if (event.button !== 0) return;
 			const link = (event.target as HTMLElement | null)?.closest<HTMLElement>("[data-asset-id]");
 			if (link && (view.state.readOnly || event.metaKey || event.ctrlKey)) {
@@ -409,7 +411,6 @@ export class TableWidget extends WidgetType {
 		});
 		cell.addEventListener("keydown", (event) => keyInCell(event, view, wrap, cell, this.hooks(view)));
 		cell.addEventListener("contextmenu", (event) => {
-			if (view.state.readOnly) return;
 			const hooks = this.hooks(view);
 			const found = currentTable(view, wrap);
 			if (!hooks || !found) return;
@@ -424,12 +425,47 @@ export class TableWidget extends WidgetType {
 				rect = { row1: row, column1: column, row2: row, column2: column };
 			}
 			const block = rect;
+			const selectedText = cellSelection(cell);
+			const inCell = !pickedRect(wrap) && (cell === cell.ownerDocument.activeElement || !!selectedText);
+			if (!inCell) {
+				wrap.focus({ preventScroll: true });
+				window.getSelection()?.removeAllRanges();
+				pickCells(wrap, { row: block.row1, column: block.column1 }, { row: block.row2, column: block.column2 });
+			}
 			const aligns = found.table.aligns.slice(block.column1, block.column2 + 1);
 			// The columns are marked as aligned when they all are, and the same way.
 			const align = aligns.every((one) => one === aligns[0]) ? aligns[0] ?? "" : "";
 			const columns = block.column2 - block.column1 + 1;
-			void hooks.chooseAction({ canDeleteRow: block.row2 > 0, canDeleteColumn: found.table.columns > columns, align }).then((action) => {
-				if (!action) return;
+			void hooks.chooseAction({
+				readOnly: view.state.readOnly, canUndo: undoDepth(view.state) > 0, canRedo: redoDepth(view.state) > 0,
+				canCopy: !inCell || !!selectedText && selectedText.from !== selectedText.to,
+				canDeleteRow: block.row2 > 0, canDeleteColumn: found.table.columns > columns, align,
+			}).then(async (action) => {
+				if (!action || !wrap.isConnected || (view.state.readOnly && action !== "copy" && action !== "select_all")) return;
+				if (action === "undo" || action === "redo") { (action === "undo" ? undo : redo)(view); return; }
+				if (action === "select_all") {
+					if (inCell) {
+						cell.focus({ preventScroll: true });
+						selectCellText(cell, { from: 0, to: cell.textContent?.length ?? 0 });
+						return;
+					}
+					wrap.focus({ preventScroll: true });
+					window.getSelection()?.removeAllRanges();
+					const current = currentTable(view, wrap);
+					if (current) pickCells(wrap, { row: 0, column: 0 }, { row: current.table.rows.length - 1, column: current.table.columns - 1 });
+					return;
+				}
+				if (action === "cut" || action === "copy" || action === "paste") {
+					if (inCell) {
+						cell.focus({ preventScroll: true });
+						if (selectedText) selectCellText(cell, selectedText);
+					} else {
+						wrap.focus({ preventScroll: true });
+						pickCells(wrap, { row: block.row1, column: block.column1 }, { row: block.row2, column: block.column2 });
+					}
+					await hooks.clipboard(action);
+					return;
+				}
 				const edit = editFor(action, block, align);
 				if (edit) editTable(view, wrap, edit);
 			});
@@ -857,6 +893,40 @@ function caretAt(cell: HTMLElement, where: "start" | "end"): void {
 	const selection = window.getSelection();
 	selection?.removeAllRanges();
 	selection?.addRange(range);
+}
+
+/** Keep text offsets, not DOM nodes: a cell may swap between rendered text and source while the menu is open. */
+function cellSelection(cell: HTMLElement): { from: number; to: number } | null {
+	const selection = cell.ownerDocument.getSelection();
+	if (!selection?.rangeCount) return null;
+	const range = selection.getRangeAt(0);
+	if (!cell.contains(range.startContainer) || !cell.contains(range.endContainer)) return null;
+	const before = range.cloneRange();
+	before.selectNodeContents(cell);
+	before.setEnd(range.startContainer, range.startOffset);
+	const from = before.toString().length;
+	before.setEnd(range.endContainer, range.endOffset);
+	return { from, to: before.toString().length };
+}
+
+function selectCellText(cell: HTMLElement, selection: { from: number; to: number }): void {
+	const walker = cell.ownerDocument.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
+	const point = (offset: number): [Node, number] => {
+		walker.currentNode = cell;
+		let node: Node | null;
+		while ((node = walker.nextNode())) {
+			const length = node.textContent?.length ?? 0;
+			if (offset <= length) return [node, offset];
+			offset -= length;
+		}
+		return [cell, cell.childNodes.length];
+	};
+	const range = cell.ownerDocument.createRange();
+	range.setStart(...point(selection.from));
+	range.setEnd(...point(selection.to));
+	const native = cell.ownerDocument.getSelection();
+	native?.removeAllRanges();
+	native?.addRange(range);
 }
 
 /** True when the caret is at the start or the end of the cell, with nothing selected. */

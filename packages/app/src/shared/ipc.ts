@@ -95,9 +95,17 @@ export type FolderContextAction =
 	| "reveal"
 	| "trash";
 export type LibraryContextAction = "paste" | "new_folder" | "new_md_file" | "new_canvas";
-/** What a right click in a table cell can do. The menu says which of them this cell allows. */
-export type TableContextAction = "add_row_above" | "add_row_below" | "add_column_left" | "add_column_right" | "delete_row" | "delete_column" | "align_left" | "align_center" | "align_right";
-export interface TableContextState {
+export type EditorClipboardAction = "cut" | "copy" | "paste";
+export type EditorContextAction = EditorClipboardAction | "undo" | "redo" | "select_all";
+export interface EditorContextState {
+	readOnly: boolean;
+	canUndo: boolean;
+	canRedo: boolean;
+	canCopy: boolean;
+}
+/** A table menu includes text editing and the row/column operations allowed by its selection. */
+export type TableContextAction = EditorContextAction | "add_row_above" | "add_row_below" | "add_column_left" | "add_column_right" | "delete_row" | "delete_column" | "align_left" | "align_center" | "align_right";
+export interface TableContextState extends EditorContextState {
 	canDeleteRow: boolean;
 	canDeleteColumn: boolean;
 	/** How the column of the cell is aligned now, which the menu marks. */
@@ -136,6 +144,8 @@ export const IPC = {
 	showFolderContextMenu: "loom:showFolderContextMenu",
 	showLibraryContextMenu: "loom:showLibraryContextMenu",
 	showTableContextMenu: "loom:showTableContextMenu",
+	showEditorContextMenu: "loom:showEditorContextMenu",
+	runEditorClipboard: "loom:runEditorClipboard",
 	renameAsset: "loom:renameAsset",
 	duplicateAsset: "loom:duplicateAsset",
 	copyAssetsInto: "loom:copyAssetsInto",
@@ -275,6 +285,9 @@ export interface LoomApi {
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
+	showEditorContextMenu: (state: EditorContextState) => Promise<EditorContextAction | null>;
+	/** Use Chromium's clipboard events, including CodeMirror and table-specific formats. */
+	runEditorClipboard: (action: EditorClipboardAction) => Promise<void>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
 	copyAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
