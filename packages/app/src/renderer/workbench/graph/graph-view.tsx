@@ -4,8 +4,7 @@ import type { Asset, AssetRelation, AssetType } from "@loom/core";
 import {
 	GRAPH_NODE_RADIUS,
 	GRAPH_PLUS_OFFSET,
-	GRAPH_SELECTION_RING_RADIUS,
-	GRAPH_SNAP_PAD,
+	GRAPH_LINK_SNAP_RADIUS,
 	graphBounds,
 	graphNodeDetail,
 	nearestNode,
@@ -13,9 +12,9 @@ import {
 	nodeHitZone,
 	nodesInRect,
 	rectBetween,
-	segmentMayCross,
 	viewWorldRect,
 } from "./graph-layout.ts";
+import { GRAPH_ARROW_REF_X, GRAPH_ARROW_SIZE, indexParallelEdges, routeGraphEdge } from "./graph-edge-layout.ts";
 import { GraphEdge } from "./graph-edge.tsx";
 import { GraphNode } from "./graph-node.tsx";
 import { assetTypeLabel, uiPlatform } from "../../../shared/locale.ts";
@@ -72,9 +71,10 @@ const TYPE_COLOR: Record<AssetType, string> = {
 const TYPE_ORDER: AssetType[] = ["image", "video", "audio", "text", "other"];
 
 const MOVE_THRESHOLD = 6;
-const PARALLEL_GAP = 12;
 const PLUS_RADIUS = 8;
 const PLUS_ARM = 3.5;
+const ARROW_HALF = GRAPH_ARROW_SIZE / 2;
+const ARROW_PATH = `M0 0 L${GRAPH_ARROW_SIZE} ${ARROW_HALF} L0 ${GRAPH_ARROW_SIZE} Z`;
 /** Nodes and edges this far outside the canvas, in screen pixels, are still drawn, so a pan does not show pop-in. */
 const CULL_MARGIN_PX = 120;
 
@@ -227,7 +227,7 @@ export function GraphView({
 				world.x,
 				world.y,
 				fromId,
-				GRAPH_SELECTION_RING_RADIUS + GRAPH_SNAP_PAD,
+				GRAPH_LINK_SNAP_RADIUS,
 			)?.id ?? null
 		);
 		const onMove = (event: PointerEvent) => {
@@ -480,31 +480,26 @@ export function GraphView({
 				<svg className="graph-world" role="img" aria-label={t.graph.canvas}>
 					<g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
 						<defs>
-							<marker id="graph-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-graphic)" }} />
+							<marker id="graph-arrow" markerUnits="userSpaceOnUse" markerWidth={GRAPH_ARROW_SIZE} markerHeight={GRAPH_ARROW_SIZE} refX={GRAPH_ARROW_REF_X} refY={ARROW_HALF} orient="auto">
+								<path d={ARROW_PATH} style={{ fill: "var(--lm-graphic)" }} />
 							</marker>
-							<marker id="graph-arrow-selected" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
-								<path d="M0,0 L8,4 L0,8 Z" style={{ fill: "var(--lm-text-primary)" }} />
+							<marker id="graph-arrow-selected" markerUnits="userSpaceOnUse" markerWidth={GRAPH_ARROW_SIZE} markerHeight={GRAPH_ARROW_SIZE} refX={GRAPH_ARROW_REF_X} refY={ARROW_HALF} orient="auto">
+								<path d={ARROW_PATH} style={{ fill: "var(--lm-text-primary)" }} />
 							</marker>
 						</defs>
 						{visibleEdges.map((edge) => {
 							const from = byId.get(edge.fromAssetId);
 							const to = byId.get(edge.toAssetId);
 							if (!from || !to) return null;
-							if (viewRect && !segmentMayCross(viewRect, from.x, from.y, to.x, to.y)) return null;
-							const shifted = offsetPair(from, to, parallelIndex.get(edge.relationId) ?? 0);
-							const start = edgePoint(shifted.from.x, shifted.from.y, shifted.to.x, shifted.to.y, GRAPH_NODE_RADIUS);
-							const end = edgePoint(shifted.to.x, shifted.to.y, shifted.from.x, shifted.from.y, GRAPH_NODE_RADIUS + 6);
+							const route = routeGraphEdge(from, to, parallelIndex.get(edge.relationId), viewRect);
+							if (!route) return null;
 							return (
 								<GraphEdge
 									key={edge.relationId}
 									relationId={edge.relationId}
 									type={edge.type}
 									derived={edge.source !== "manual"}
-									x1={start.x}
-									y1={start.y}
-									x2={end.x}
-									y2={end.y}
+									{...route}
 									selected={edge.relationId === selectedEdgeId}
 									showLabel={detail === "full"}
 									onSelect={setSelectedEdgeId}
@@ -625,44 +620,6 @@ export function GraphView({
 			)}
 		</div>
 	);
-}
-
-function indexParallelEdges(edges: AssetRelation[]): Map<string, number> {
-	const groups = new Map<string, AssetRelation[]>();
-	for (const edge of edges) {
-		const key = pairKey(edge.fromAssetId, edge.toAssetId);
-		const list = groups.get(key) ?? [];
-		list.push(edge);
-		groups.set(key, list);
-	}
-	const offsets = new Map<string, number>();
-	for (const group of groups.values()) {
-		group.forEach((edge, index) => {
-			offsets.set(edge.relationId, (index - (group.length - 1) / 2) * PARALLEL_GAP);
-		});
-	}
-	return offsets;
-}
-
-function pairKey(fromId: string, toId: string): string {
-	return fromId < toId ? `${fromId}\0${toId}` : `${toId}\0${fromId}`;
-}
-
-function offsetPair(
-	from: { x: number; y: number },
-	to: { x: number; y: number },
-	offset: number,
-): { from: { x: number; y: number }; to: { x: number; y: number } } {
-	if (!offset) return { from, to };
-	const dx = to.x - from.x;
-	const dy = to.y - from.y;
-	const dist = Math.hypot(dx, dy) || 1;
-	const ox = (-dy / dist) * offset;
-	const oy = (dx / dist) * offset;
-	return {
-		from: { x: from.x + ox, y: from.y + oy },
-		to: { x: to.x + ox, y: to.y + oy },
-	};
 }
 
 function edgePoint(x: number, y: number, towardX: number, towardY: number, radius: number): { x: number; y: number } {

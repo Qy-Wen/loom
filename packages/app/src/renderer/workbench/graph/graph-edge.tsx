@@ -5,24 +5,24 @@ interface GraphEdgeProps {
 	type: string;
 	/** Edges derived from file contents are drawn dashed. */
 	derived: boolean;
-	x1: number;
-	y1: number;
-	x2: number;
-	y2: number;
+	path: string;
+	labelX: number;
+	labelY: number;
+	labelAngle: number;
 	selected: boolean;
 	showLabel: boolean;
 	onSelect: (relationId: string) => void;
 }
 
-/** One relation line. Plain numeric props let `memo` skip every edge that did not move or change selection. */
+/** One relation path. Primitive props let `memo` skip edges that did not move or change selection. */
 export const GraphEdge = memo(function GraphEdge({
 	relationId,
 	type,
 	derived,
-	x1,
-	y1,
-	x2,
-	y2,
+	path,
+	labelX,
+	labelY,
+	labelAngle,
 	selected,
 	showLabel,
 	onSelect,
@@ -37,17 +37,14 @@ export const GraphEdge = memo(function GraphEdge({
 				onSelect(relationId);
 			}}
 		>
-			<line className="graph-edge-hit" x1={x1} y1={y1} x2={x2} y2={y2} />
-			<line
+			<path className="graph-edge-hit" d={path} />
+			<path
 				className="graph-edge"
-				x1={x1}
-				y1={y1}
-				x2={x2}
-				y2={y2}
+				d={path}
 				markerEnd={selected ? "url(#graph-arrow-selected)" : "url(#graph-arrow)"}
 			/>
 			{showLabel && (
-				<text className="graph-edge-label" x={(x1 + x2) / 2} y={(y1 + y2) / 2 - 4} textAnchor="middle">
+				<text className="graph-edge-label" x={labelX} y={labelY - 4} transform={labelAngle ? `rotate(${labelAngle} ${labelX} ${labelY})` : undefined} textAnchor="middle">
 					{type}
 				</text>
 			)}

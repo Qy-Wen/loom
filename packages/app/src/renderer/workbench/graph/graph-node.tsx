@@ -1,7 +1,9 @@
 import { memo } from "react";
 import type { Asset } from "@loom/core";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
-import { GRAPH_NODE_RADIUS, GRAPH_SELECTION_RING_RADIUS, type GraphNodeDetail } from "./graph-layout.ts";
+import { GRAPH_NODE_OUTLINE_WIDTH, GRAPH_NODE_RADIUS, type GraphNodeDetail } from "./graph-layout.ts";
+
+const SELECTION_RING_WIDTH = 2.5;
 
 interface GraphNodeProps {
 	asset: Asset;
@@ -31,6 +33,8 @@ export const GraphNode = memo(function GraphNode({
 	onPointerDown,
 }: GraphNodeProps): React.JSX.Element {
 	const radius = GRAPH_NODE_RADIUS;
+	const outlineWidth = dropTarget ? 4 : hovered && !selected ? 2.5 : GRAPH_NODE_OUTLINE_WIDTH;
+	const ringRadius = radius + (outlineWidth + SELECTION_RING_WIDTH) / 2;
 	return (
 		<g
 			className={`graph-node${selected ? " selected" : ""}${dropTarget ? " drop-target" : ""}${hovered ? " hovered" : ""}`}
@@ -57,8 +61,9 @@ export const GraphNode = memo(function GraphNode({
 				r={radius}
 				fill={detail === "dot" ? color : "none"}
 				stroke={color}
+				strokeWidth={outlineWidth}
 			/>
-			{selected && <circle className="graph-node-selection-ring" r={GRAPH_SELECTION_RING_RADIUS} aria-hidden="true" />}
+			{selected && <circle className="graph-node-selection-ring" r={ringRadius} strokeWidth={SELECTION_RING_WIDTH} aria-hidden="true" />}
 			{detail === "full" && (
 				<text className="graph-node-name" y={radius + 14} textAnchor="middle">
 					{truncate(asset.filename)}

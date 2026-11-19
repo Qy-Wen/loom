@@ -11,7 +11,7 @@ import {
 	type SimulationLinkDatum,
 	type SimulationNodeDatum,
 } from "d3-force";
-import { FR_MAX_NODES, GRAPH_NODE_RADIUS, layoutForceGraph } from "./graph-layout.ts";
+import { FR_MAX_NODES, GRAPH_NODE_RADIUS, layoutForceGraph, uniqueLayoutEdges, type GraphLayoutEdge } from "./graph-layout.ts";
 
 export interface SimNode extends SimulationNodeDatum {
 	id: string;
@@ -25,10 +25,12 @@ interface SimLink extends SimulationLinkDatum<SimNode> {
 }
 
 const sessionPositions = new Map<string, { x: number; y: number }>();
+const LINK_DISTANCE = 145;
+const LINK_STRENGTH = 0.2;
 
 export function useGraphSimulation(
 	ids: string[],
-	edges: { fromId: string; toId: string }[],
+	edges: GraphLayoutEdge[],
 ): {
 	nodes: SimNode[];
 	pin: (id: string, x: number, y: number) => void;
@@ -37,28 +39,29 @@ export function useGraphSimulation(
 	const simRef = useRef<Simulation<SimNode, SimLink> | null>(null);
 	const nodesRef = useRef<SimNode[]>([]);
 	const draggingRef = useRef(false);
-	const inputRef = useRef({ ids, edges });
-	inputRef.current = { ids, edges };
+	const links = useMemo(() => uniqueLayoutEdges(edges), [edges]);
+	const inputRef = useRef({ ids, links });
+	inputRef.current = { ids, links };
 	const [, setTick] = useState(0);
 	const idsKey = useMemo(() => [...ids].sort().join("\0"), [ids]);
 	const linksKey = useMemo(
-		() => edges.map((edge) => `${edge.fromId}\0${edge.toId}`).sort().join("|"),
-		[edges],
+		() => links.map((link) => `${link.fromId}\0${link.toId}`).join("|"),
+		[links],
 	);
 
 	useLayoutEffect(() => {
-		const { ids, edges } = inputRef.current;
+		const { ids, links } = inputRef.current;
 		const sim = ensureSimulation(simRef, () => setTick((value) => value + 1));
 		const previous = new Map(nodesRef.current.map((node) => [node.id, node]));
 		const known = ids.filter((id) => previous.has(id) || sessionPositions.has(id));
 		const hasNewcomer = ids.some((id) => !previous.has(id) && !sessionPositions.has(id));
 		const next = known.length === 0
-			? seedFresh(ids, edges)
+			? seedFresh(ids, links)
 			: seedIncremental(ids, previous);
 		nodesRef.current = next;
 		sim.nodes(next);
 		const linkForce = sim.force("link") as ForceLink<SimNode, SimLink>;
-		linkForce.links(edges.map((edge) => ({ source: edge.fromId, target: edge.toId })));
+		linkForce.links(links.map((link) => ({ source: link.fromId, target: link.toId })));
 		if (known.length === 0) settle(sim);
 		else if (hasNewcomer) sim.alpha(0.22).alphaTarget(0).restart();
 		else sim.alpha(0).stop();
@@ -108,7 +111,7 @@ function ensureSimulation(
 		.force("charge", forceManyBody().strength(-240))
 		.force(
 			"link",
-			forceLink<SimNode, SimLink>([]).id((node) => node.id).distance(100).strength(0.35),
+			forceLink<SimNode, SimLink>([]).id((node) => node.id).distance(LINK_DISTANCE).strength(LINK_STRENGTH),
 		)
 		.force("collide", forceCollide<SimNode>().radius(GRAPH_NODE_RADIUS + 18).iterations(2))
 		.force("x", forceX(0).strength(0.03))
@@ -137,7 +140,7 @@ function settle(sim: Simulation<SimNode, SimLink>): void {
 	if (onTick) sim.on("tick", onTick);
 }
 
-function seedFresh(ids: string[], edges: { fromId: string; toId: string }[]): SimNode[] {
+function seedFresh(ids: string[], edges: GraphLayoutEdge[]): SimNode[] {
 	return layoutForceGraph(ids, edges).map((node) => {
 		sessionPositions.set(node.id, { x: node.x, y: node.y });
 		return { id: node.id, x: node.x, y: node.y };

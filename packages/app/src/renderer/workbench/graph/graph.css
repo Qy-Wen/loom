@@ -179,14 +179,18 @@
 }
 
 .graph-edge {
+	fill: none;
 	stroke: var(--lm-graphic);
 	stroke-width: 1.5;
+	stroke-linecap: butt;
 	pointer-events: none;
 }
 
 .graph-edge-hit {
+	fill: none;
 	stroke: transparent;
 	stroke-width: 12;
+	pointer-events: stroke;
 	cursor: pointer;
 }
 
@@ -272,14 +276,12 @@
 }
 
 .graph-node-outline {
-	stroke-width: 2;
 	pointer-events: all;
 }
 
 .graph-node-selection-ring {
 	fill: none;
 	stroke: var(--lm-text-secondary);
-	stroke-width: 3;
 	pointer-events: none;
 }
 
@@ -301,14 +303,6 @@
 
 .graph-node-preview .video-thumbnail::after {
 	display: none;
-}
-
-.graph-node.hovered:not(.selected):not(.drop-target) .graph-node-outline {
-	stroke-width: 2.5;
-}
-
-.graph-node.drop-target .graph-node-outline {
-	stroke-width: 4;
 }
 
 .graph-plus {

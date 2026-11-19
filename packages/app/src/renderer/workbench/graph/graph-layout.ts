@@ -1,7 +1,8 @@
 export const GRAPH_NODE_RADIUS = 14;
-export const GRAPH_SELECTION_RING_RADIUS = 18;
+export const GRAPH_NODE_OUTLINE_WIDTH = 2;
+export const GRAPH_NODE_OUTER_RADIUS = GRAPH_NODE_RADIUS + GRAPH_NODE_OUTLINE_WIDTH / 2;
 export const GRAPH_PLUS_OFFSET = 10;
-export const GRAPH_SNAP_PAD = 16;
+export const GRAPH_LINK_SNAP_RADIUS = 34;
 
 /** `dot` is a plain type-colored disc for a node too small on screen to read a thumbnail or name. */
 export type GraphNodeDetail = "full" | "dot";
@@ -17,7 +18,7 @@ export type NodeHitZone = "body" | "rim" | "none";
 
 /** The entire disc and its outline move the node; only the outside band reveals the link handle. */
 export function nodeHitZone(distance: number, radius: number): NodeHitZone {
-	if (distance <= radius + 1) return "body";
+	if (distance <= radius + GRAPH_NODE_OUTLINE_WIDTH / 2) return "body";
 	if (distance <= radius + GRAPH_PLUS_OFFSET + 6) return "rim";
 	return "none";
 }
@@ -52,10 +53,10 @@ export function rectContains(rect: WorldRect, x: number, y: number): boolean {
 	return x >= rect.minX && x <= rect.maxX && y >= rect.minY && y <= rect.maxY;
 }
 
-/** True when the segment's bounding box overlaps the rectangle. May keep a diagonal that just misses a corner. */
-export function segmentMayCross(rect: WorldRect, ax: number, ay: number, bx: number, by: number): boolean {
-	return Math.max(ax, bx) >= rect.minX && Math.min(ax, bx) <= rect.maxX
-		&& Math.max(ay, by) >= rect.minY && Math.min(ay, by) <= rect.maxY;
+/** True when the segment's bounding box, expanded by any curve offset, overlaps the rectangle. */
+export function segmentMayCross(rect: WorldRect, ax: number, ay: number, bx: number, by: number, padding = 0): boolean {
+	return Math.max(ax, bx) + padding >= rect.minX && Math.min(ax, bx) - padding <= rect.maxX
+		&& Math.max(ay, by) + padding >= rect.minY && Math.min(ay, by) - padding <= rect.maxY;
 }
 
 /** Ids of the nodes whose centre lies inside the rectangle, edges included. */
@@ -97,6 +98,19 @@ export const FR_MAX_NODES = 400;
 export interface GraphLayoutEdge {
 	fromId: string;
 	toId: string;
+}
+
+/** One undirected spring per node pair, ordered independently of the rendered relations. */
+export function uniqueLayoutEdges(edges: readonly GraphLayoutEdge[]): GraphLayoutEdge[] {
+	const pairs = new Map<string, GraphLayoutEdge>();
+	for (const edge of edges) {
+		if (edge.fromId === edge.toId) continue;
+		const [fromId, toId] = edge.fromId < edge.toId
+			? [edge.fromId, edge.toId]
+			: [edge.toId, edge.fromId];
+		pairs.set(`${fromId}\0${toId}`, { fromId, toId });
+	}
+	return [...pairs.keys()].sort().map((key) => pairs.get(key)!);
 }
 
 /** Deterministic Fruchterman-Reingold layout. Isolated nodes stay in the ring. */

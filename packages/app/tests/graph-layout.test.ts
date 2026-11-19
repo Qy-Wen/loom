@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { FR_MAX_NODES, graphBounds, layoutForceGraph, nearestNode, nodeHitZone, nodesInRect, rectBetween, rectContains, segmentMayCross, viewWorldRect } from "../src/renderer/workbench/graph/graph-layout.ts";
+import type { AssetRelation } from "@loom/core";
+import { GRAPH_ARROW_REF_X, GRAPH_ARROW_SIZE, indexParallelEdges, routeGraphEdge } from "../src/renderer/workbench/graph/graph-edge-layout.ts";
+import { FR_MAX_NODES, GRAPH_NODE_OUTER_RADIUS, graphBounds, layoutForceGraph, nearestNode, nodeHitZone, nodesInRect, rectBetween, rectContains, segmentMayCross, uniqueLayoutEdges, viewWorldRect } from "../src/renderer/workbench/graph/graph-layout.ts";
 
 test("layoutForceGraph keeps every id and separates a linked pair", () => {
 	const nodes = layoutForceGraph(
@@ -12,6 +14,19 @@ test("layoutForceGraph keeps every id and separates a linked pair", () => {
 	const src = nodes.find((node) => node.id === "src");
 	assert.ok(out && src);
 	assert.equal(out.x === src.x && out.y === src.y, false);
+});
+
+test("layout combines parallel and reciprocal relations into one spring per pair", () => {
+	const edges = [
+		{ fromId: "b", toId: "c" },
+		{ fromId: "b", toId: "a" },
+		{ fromId: "a", toId: "b" },
+		{ fromId: "b", toId: "a" },
+		{ fromId: "a", toId: "a" },
+	];
+	const expected = [{ fromId: "a", toId: "b" }, { fromId: "b", toId: "c" }];
+	assert.deepEqual(uniqueLayoutEdges(edges), expected);
+	assert.deepEqual(uniqueLayoutEdges([...edges].reverse()), expected);
 });
 
 test("nodeHitZone reveals the link handle only outside the disc and outline", () => {
@@ -79,6 +94,53 @@ test("segmentMayCross keeps a line that spans the view and drops one entirely ou
 	assert.equal(segmentMayCross(rect, 20, 20, 30, 30), true);
 	assert.equal(segmentMayCross(rect, 150, 0, 300, 100), false);
 	assert.equal(segmentMayCross(rect, 0, -50, 100, -10), false);
+});
+
+test("parallel edges use separate radial endpoints and spread symmetrically with mixed directions", () => {
+	const nodes = { a: { x: 0, y: 0 }, b: { x: 120, y: 0 } };
+	const edges: AssetRelation[] = Array.from({ length: 32 }, (_, index) => ({
+		relationId: String(index),
+		fromAssetId: index % 2 ? "b" : "a",
+		toAssetId: index % 2 ? "a" : "b",
+		type: String(index),
+		source: "manual",
+	}));
+	for (const count of [2, 3, 8, 32]) {
+		const group = edges.slice(0, count);
+		const lanes = indexParallelEdges(group);
+		assert.deepEqual(lanes, indexParallelEdges([...group].reverse()));
+		const routes = group.map((edge) => {
+			const forward = edge.fromAssetId === "a";
+			const from = forward ? nodes.a : nodes.b;
+			const to = forward ? nodes.b : nodes.a;
+			const route = routeGraphEdge(from, to, lanes.get(edge.relationId))!;
+			const coordinates = route.path.split(" ").map(Number).filter(Number.isFinite);
+			const [startX, startY] = coordinates;
+			const [endX, endY] = coordinates.slice(-2);
+			const startGap = Math.hypot(startX! - from.x, startY!) - GRAPH_NODE_OUTER_RADIUS;
+			const arrowTipGap = Math.hypot(endX! - to.x, endY!) - (GRAPH_ARROW_SIZE - GRAPH_ARROW_REF_X) - GRAPH_NODE_OUTER_RADIUS;
+			assert.ok(Math.abs(startGap - 4.25) < 1e-8);
+			assert.ok(Math.abs(arrowTipGap - 2.5) < 1e-8);
+			return { route, startY, endY };
+		});
+		assert.equal(new Set(routes.map(({ startY }) => startY)).size, count);
+		assert.equal(new Set(routes.map(({ endY }) => endY)).size, count);
+		const midpoints = routes.map(({ route }) => route.labelY).sort((a, b) => a - b);
+		assert.deepEqual(midpoints, Array.from({ length: count }, (_, index) => (index - (count - 1) / 2) * 16));
+		assert.equal(routes.filter(({ route }) => route.path.includes(" L ")).length, count % 2);
+	}
+});
+
+test("routing culls by the curve's spread and keeps single edges straight", () => {
+	const a = { x: 0, y: 0 }, b = { x: 120, y: 0 };
+	const viewport = { minX: 0, minY: 6, maxX: 120, maxY: 20 };
+	assert.equal(routeGraphEdge(a, b)?.path, "M 14 0 L 99 0");
+	assert.equal(routeGraphEdge(a, b, undefined, viewport), null);
+	assert.ok(routeGraphEdge(a, b, { slot: 0.5, halfSpan: 0.5 }, viewport)?.path.includes(" C "));
+	const outerViewport = { minX: 48, minY: 50, maxX: 72, maxY: 60 };
+	assert.ok(routeGraphEdge(a, b, { slot: 3.5, halfSpan: 3.5 }, outerViewport));
+	assert.equal(routeGraphEdge(a, b, { slot: 2.5, halfSpan: 3.5 }, outerViewport), null);
+	assert.equal(routeGraphEdge(a, a), null);
 });
 
 test("layoutForceGraph skips the quadratic pass for a large graph but still places every node once", () => {

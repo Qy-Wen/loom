@@ -65,11 +65,13 @@ for (const colorScheme of ["light", "dark"] as const) {
 		await expect(outline).toHaveCSS("stroke-width", "2px");
 		const ring = photo.locator(".graph-node-selection-ring");
 		await expect(ring).toHaveCSS("stroke", unselectedLabelColor);
-		await expect(ring).toHaveCSS("stroke-width", "3px");
+		await expect(ring).toHaveCSS("stroke-width", "2.5px");
 		await expect(ring).toHaveCSS("fill", "none");
 		await expect(ring).toHaveCSS("pointer-events", "none");
-		// Three-unit ring remains separated from the node's own two-unit outline.
-		expect(Number(await ring.getAttribute("r")) - 1.5 - (radius + 1)).toBe(1.5);
+		// The ring's inner edge touches the node outline's outer edge.
+		const outlineWidth = await outline.evaluate((element) => Number.parseFloat(getComputedStyle(element).strokeWidth));
+		const ringWidth = await ring.evaluate((element) => Number.parseFloat(getComputedStyle(element).strokeWidth));
+		expect(Number(await ring.getAttribute("r")) - ringWidth / 2).toBe(radius + outlineWidth / 2);
 		const from = (await outline.boundingBox())!;
 		const to = (await video.locator(".graph-node-outline").boundingBox())!;
 		await loomPage.mouse.move(from.x + from.width / 2 + from.width / 2 * 1.25, from.y + from.height / 2);
