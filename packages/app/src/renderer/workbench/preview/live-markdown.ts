@@ -35,8 +35,7 @@ export interface LiveLibrary {
 	assets: readonly Asset[];
 }
 
-interface LiveContext {
-	fromRelativePath: string;
+interface LiveContext extends LiveLibrary {
 	lookup: AssetLookup;
 }
 
@@ -47,7 +46,7 @@ const libraryField = StateField.define<LiveContext | null>({
 	create: () => null,
 	update(value, transaction) {
 		for (const effect of transaction.effects) {
-			if (effect.is(setLibrary)) return { fromRelativePath: effect.value.fromRelativePath, lookup: createAssetLookup(effect.value.assets) };
+			if (effect.is(setLibrary)) return { ...effect.value, lookup: createAssetLookup(effect.value.assets) };
 		}
 		return value;
 	},
@@ -60,7 +59,7 @@ export function markdownFilePath(state: EditorState): string | undefined {
 	return state.field(libraryField, false)?.fromRelativePath;
 }
 
-/** Opens a reference: plain click while reading, ⌘/Ctrl+click while editing. */
+/** Opens a file or heading from a reference in the editor. */
 export interface LiveHandlers {
 	openAsset(assetId: string, anchor: string | undefined): void;
 }
@@ -843,7 +842,7 @@ function wikiLinks(state: EditorState, from: number, to: number, found: Range<De
 	}
 }
 
-function insideLiteral(tree: ReturnType<typeof syntaxTree>, from: number, to: number): boolean {
+export function insideLiteral(tree: ReturnType<typeof syntaxTree>, from: number, to: number): boolean {
 	for (let node: ReturnType<typeof tree.resolveInner> | null = tree.resolveInner(from, 1); node; node = node.parent) {
 		if (LITERAL.has(node.name) && node.from <= from && node.to >= to) return true;
 	}

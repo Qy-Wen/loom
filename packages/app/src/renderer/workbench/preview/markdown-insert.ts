@@ -1,12 +1,13 @@
 import { autocompletion, closeCompletion, pickedCompletion, startCompletion, type Completion, type CompletionContext } from "@codemirror/autocomplete";
 import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import type { EditorState } from "@codemirror/state";
+import { StateEffect, StateField, type EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 import type { UiSelectionDraft } from "../../../shared/ipc.ts";
 import { messages, type Messages } from "../../../shared/locale.ts";
 import { markdownFilePath } from "./live-markdown.ts";
 import { enterTable } from "./live-table.ts";
+import { openWikiCompletionAtCaret, wikiLinkCompletion } from "./markdown-wiki-completion.ts";
 
 type Labels = Messages["preview"]["insertCommands"];
 type Insertion = { text: string; cursor: number };
@@ -29,6 +30,14 @@ const commands: readonly Command[] = [
 ];
 const query = /^[\p{L}\p{M}\p{N} _-]*$/u;
 const codeBlocks = new Set(["FencedCode", "CodeBlock", "HTMLBlock", "Table"]);
+const requestInsert = StateEffect.define<null>();
+const insertRequested = StateField.define<boolean>({
+	create: () => false,
+	update(value, transaction) {
+		return transaction.effects.some((effect) => effect.is(requestInsert))
+			|| value && !transaction.docChanged && !transaction.selection;
+	},
+});
 
 function renderCommandIcon(completion: Completion, _state: EditorState, view: EditorView): SVGSVGElement | null {
 	const command = commands.find(({ id }) => id === completion.type);
@@ -120,9 +129,13 @@ export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelec
 	});
 	const typedOptions = options(true);
 	const explicitOptions = options(false);
-	return autocompletion({
+	return [insertRequested, openWikiCompletionAtCaret, autocompletion({
 		override: [(context) => {
 			if (context.state.readOnly || !context.state.selection.main.empty) return null;
+			if (!context.explicit || !context.state.field(insertRequested)) {
+				const wiki = wikiLinkCompletion(context);
+				if (wiki) return wiki;
+			}
 			const line = context.state.doc.lineAt(context.pos);
 			const before = line.text.slice(0, context.pos - line.from);
 			const atEnd = !line.text.slice(before.length).trim();
@@ -142,7 +155,7 @@ export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelec
 		icons: false,
 		addToOptions: [{ position: 20, render: renderCommandIcon }],
 		interactionDelay: 0,
-	});
+	})];
 }
 
 /** An explicit insertion starts after the current Markdown block, or in an empty line. */
@@ -152,7 +165,7 @@ export function openMarkdownInsert(view: EditorView): void {
 	const line = doc.lineAt(selection.main.head);
 	const block = blockAt(view.state, selection.main.head);
 	const position = line.text.trim() || block ? doc.lineAt(block?.to ?? line.to).to : line.to;
-	view.dispatch({ selection: { anchor: position }, scrollIntoView: true });
+	view.dispatch({ selection: { anchor: position }, effects: requestInsert.of(null), scrollIntoView: true });
 	view.focus();
 	startCompletion(view);
 }

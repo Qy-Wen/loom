@@ -1,4 +1,4 @@
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "playwright";
 import { expect, test } from "./loom.ts";
@@ -92,4 +92,66 @@ test("the Insert button and slash menu create undoable, portable Markdown", asyn
 	const link = box.locator("[data-asset-id]").filter({ hasText: "参考 (v1).md" });
 	await link.click();
 	await expect(loomPage.getByRole("textbox", { name: "Edit 参考 (v1).md" })).toBeVisible();
+});
+
+test("wiki link completion filters files and replaces only the link target", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(loomPage);
+	const file = join(root, "commands.md");
+	const first = "Alpha/参考.md";
+	const second = "Beta/参考.md";
+	await mkdir(join(root, "Alpha"));
+	await mkdir(join(root, "Beta"));
+	await writeFile(join(root, first), "# First");
+	await writeFile(join(root, second), "# Second");
+	await writeFile(join(root, "unrelated.md"), "# Unrelated");
+	await writeFile(file, "后缀\n\n[[旧#标题|别名]]\n\n```\n\n```");
+	await openNote(loomPage);
+
+	const box = loomPage.getByRole("textbox", { name: "Edit commands.md" });
+	const menu = loomPage.locator(".cm-markdown-insert").getByRole("listbox");
+	await box.press("ControlOrMeta+Home");
+	await loomPage.keyboard.insertText("[[");
+	await expect(menu.getByRole("option", { name: "unrelated.md" })).toBeVisible();
+	await loomPage.getByRole("button", { name: "Insert", exact: true }).click();
+	await expect(menu.getByRole("option", { name: "Heading 1", exact: true })).toBeVisible();
+	await box.press("Escape");
+	await box.press("Home");
+	await box.press("ArrowRight");
+	await box.press("ArrowRight");
+	await expect(menu.getByRole("option", { name: "unrelated.md" })).toBeVisible();
+	await loomPage.keyboard.insertText("参考");
+	await expect(menu.getByRole("option")).toHaveCount(2);
+	const activeOption = menu.locator('[aria-selected="true"]');
+	const initial = await activeOption.innerText();
+	await box.press("ArrowDown");
+	await expect(activeOption).not.toHaveText(initial);
+	const chosen = await activeOption.innerText();
+	expect([first, second]).toContain(chosen);
+	await box.dispatchEvent("keydown", { key: "Enter", isComposing: true });
+	await expect(menu).toBeVisible();
+	await box.press("Enter");
+	await loomPage.keyboard.insertText(" 后续");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toContain(`[[${chosen}]] 后续后缀`);
+
+	const existing = box.locator(".cm-line").filter({ hasText: "别名" });
+	await existing.click();
+	await box.press("Home");
+	await box.press("ArrowRight");
+	await box.press("ArrowRight");
+	await expect(menu.getByRole("option", { name: first })).toBeVisible();
+	await box.press("Escape");
+	await expect(menu).toBeHidden();
+	await box.press("ArrowLeft");
+	await box.press("ArrowRight");
+	await menu.getByRole("option", { name: first }).click();
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toContain(`[[${first}#标题|别名]]`);
+
+	await box.press("ControlOrMeta+End");
+	await box.press("ArrowUp");
+	await loomPage.keyboard.insertText("[[");
+	await expect(box.locator(".cm-live-codeblock").filter({ hasText: "[[" })).toBeVisible();
+	await expect(menu).toBeHidden();
 });
