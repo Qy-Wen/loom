@@ -1,12 +1,14 @@
 import { syntaxTree } from "@codemirror/language";
 import { Facet, RangeSetBuilder, StateEffect, StateField, type EditorState, type Range } from "@codemirror/state";
-import { Decoration, type DecorationSet, EditorView, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
+import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import type { Asset } from "@loom/core";
 import { createAssetLookup, matchWikiLink, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
+import { enterTable, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
+import { parseTable } from "./table.ts";
 
 /**
  * Live rendering: Markdown shown in its final look while it is edited. The text itself never changes; only
@@ -50,6 +52,10 @@ export interface LiveHandlers {
 }
 const handlersFacet = Facet.define<LiveHandlers, LiveHandlers | null>({ combine: (values) => values[0] ?? null });
 export const liveHandlers = (handlers: LiveHandlers) => handlersFacet.of(handlers);
+
+const tableHooksFacet = Facet.define<TableHooks, TableHooks | null>({ combine: (values) => values[0] ?? null });
+/** What the tables drawn in the editor need from the editor's owner: saving, opening a link, and their labels. */
+export const liveTables = (hooks: TableHooks) => tableHooksFacet.of(hooks);
 
 /** An embedded image shown in place of `![[picture.png]]` or `![alt](picture.png)`. */
 class ImageWidget extends WidgetType {
@@ -458,7 +464,7 @@ function mathBlock(state: EditorState, paragraph: SyntaxNodeRef): { tex: string 
 }
 
 /**
- * Whole blocks drawn in place of their text: a formula on its own lines, and a Mermaid diagram. A replacement
+ * Whole blocks drawn in place of their text: a formula on its own lines, a Mermaid diagram and a table. A replacement
  * that spans lines may only come from a state field, so this is kept apart from {@link liveDecorations}.
  */
 export function liveBlockDecorations(state: EditorState): DecorationSet {
@@ -470,6 +476,16 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				const math = mathBlock(state, node.node);
 				if (math && !touched(state, node.from, node.to)) {
 					builder.add(node.from, node.to, Decoration.replace({ widget: new MathWidget(math.tex, true), block: true }));
+				}
+			} else if (node.name === "Table" && node.node.parent?.name === "Document") {
+				const text = state.doc.sliceString(node.from, node.to);
+				// A selection that runs over a table leaves it drawn. Only a caret inside it, which cannot be
+				// seen in a drawn table, brings the source back.
+				const caretInside = state.selection.ranges.some((range) => range.empty && range.from >= node.from && range.to <= node.to);
+				if (!caretInside && parseTable(text)) {
+					const context = state.field(libraryField, false) ?? null;
+					const widget = new TableWidget(text, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks);
+					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
 				}
 			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
 				const info = node.node.getChild("CodeInfo");
@@ -495,6 +511,62 @@ export const liveBlocks = StateField.define<DecorationSet>({
 	},
 	provide: (field) => EditorView.decorations.from(field),
 });
+
+/**
+ * Arrow keys step into a drawn block instead of over it. CodeMirror's vertical move is by screen position and
+ * passes a replaced block without stopping, so a table, a formula or a diagram could only be reached with the
+ * mouse. This asks where the default move would land and, when a block lies between, goes to the nearest one.
+ * A table takes the caret in its nearest row; the others show their text, with the caret at the edge it came from.
+ */
+function stepIntoBlock(direction: "up" | "down") {
+	return (view: EditorView): boolean => {
+		const { selection } = view.state;
+		if (selection.ranges.length !== 1 || !selection.main.empty) return false;
+		const start = selection.main.head;
+		const landing = view.moveVertically(selection.main, direction === "down").head;
+		let nearest: { from: number; to: number; table: boolean } | null = null;
+		const from = Math.min(start, landing);
+		const to = Math.max(start, landing);
+		view.state.field(liveBlocks).between(from, to, (blockFrom, blockTo, decoration) => {
+			// Only a block the move passes over; one that holds the start or the landing is already being edited.
+			if (blockFrom < from || blockTo > to) return;
+			const closer = !nearest || (direction === "down" ? blockFrom < nearest.from : blockTo > nearest.to);
+			if (closer) nearest = { from: blockFrom, to: blockTo, table: decoration.spec.widget instanceof TableWidget };
+		});
+		const block = nearest as { from: number; to: number; table: boolean } | null;
+		if (!block) return false;
+		if (block.table && enterTable(view, block.from, direction === "up" ? "last" : "first")) return true;
+		view.dispatch({ selection: { anchor: direction === "up" ? block.to : block.from }, scrollIntoView: true });
+		return true;
+	};
+}
+
+/**
+ * Left and right arrows into a table. A caret that reaches the edge of a table is inside it, and a drawn table
+ * cannot show a caret, so it would turn into its source. Entering its first or last cell is what the move means.
+ */
+function stepIntoTable(forward: boolean) {
+	return (view: EditorView): boolean => {
+		const { selection } = view.state;
+		if (selection.ranges.length !== 1 || !selection.main.empty) return false;
+		const start = selection.main.head;
+		const landing = view.moveByChar(selection.main, forward).head;
+		let table: { from: number; to: number } | null = null;
+		view.state.field(liveBlocks).between(Math.min(start, landing), Math.max(start, landing), (from, to, decoration) => {
+			if (decoration.spec.widget instanceof TableWidget && (start < from || start > to)) table = { from, to };
+		});
+		const found = table as { from: number; to: number } | null;
+		return !!found && enterTable(view, found.from, forward ? "first" : "last", "char");
+	};
+}
+
+/** Add this next to {@link liveBlocks}. */
+export const liveBlockKeys = keymap.of([
+	{ key: "ArrowUp", run: stepIntoBlock("up") },
+	{ key: "ArrowDown", run: stepIntoBlock("down") },
+	{ key: "ArrowRight", run: stepIntoTable(true) },
+	{ key: "ArrowLeft", run: stepIntoTable(false) },
+]);
 
 /** Node types whose text is never read as Markdown inline syntax. */
 const LITERAL = new Set(["InlineCode", "FencedCode", "CodeBlock", "CommentBlock", "HTMLBlock", "HTMLTag", "Escape", "URL", "Autolink", "LinkReference", "CodeText"]);
@@ -643,10 +715,10 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-codeblock-last": { borderBottomLeftRadius: "var(--lm-radius-sm)", borderBottomRightRadius: "var(--lm-radius-sm)" },
 	".cm-live-fence": { height: "0.7em", lineHeight: "0.7em", overflow: "hidden" },
 	".cm-live-math": { cursor: "text" },
-	".cm-live-math-block": { margin: "0.4em 0", overflowX: "auto", textAlign: "center" },
+	".cm-live-math-block": { padding: "0.4em 0", overflowX: "auto", textAlign: "center" },
 	".cm-live-math-source": { fontFamily: "var(--lm-font-mono)", fontSize: "0.9em", color: "var(--lm-text-secondary)" },
 	// A block, not a flex row: the SVG is `width: 100%`, which a shrink-to-fit parent would collapse to a few hundred pixels.
-	".cm-live-mermaid": { margin: "0.4em 0", textAlign: "center", cursor: "text" },
+	".cm-live-mermaid": { padding: "0.4em 0", textAlign: "center", cursor: "text" },
 	".cm-live-mermaid pre.mermaid": { margin: "0", padding: "var(--lm-space-4) 0", overflow: "visible", background: "transparent" },
 	".cm-live-mermaid pre.mermaid:not([data-processed]), .cm-live-mermaid pre.mermaid.mermaid-failed": {
 		color: "var(--lm-text-muted)",
@@ -655,6 +727,55 @@ export const liveMarkdownTheme = EditorView.theme({
 		whiteSpace: "pre-wrap",
 	},
 	".cm-live-mermaid svg": { maxWidth: "100%", height: "auto" },
+	// Space around a drawn block is padding, not margin: a click in a margin lands on the block and puts the caret at its start.
+	".cm-live-table": { position: "relative", padding: "0.4em 22px 18px 0" },
+	".cm-live-table-scroll": { overflowX: "auto" },
+	".cm-live-table table": { borderCollapse: "collapse", minWidth: "100%" },
+	".cm-live-table th, .cm-live-table td": {
+		// Border-box, so this is the width with the padding: room for three characters. A wider table scrolls.
+		minWidth: "4.5em",
+		padding: "var(--lm-space-3) var(--lm-space-5)",
+		border: "1px solid var(--lm-border-default)",
+		verticalAlign: "top",
+		outline: "none",
+		whiteSpace: "pre-wrap",
+		overflowWrap: "break-word",
+	},
+	".cm-live-table th": { fontWeight: "var(--lm-weight-semibold)", backgroundColor: "var(--lm-surface-subtle)", textAlign: "left" },
+	".cm-live-table th:focus, .cm-live-table td:focus": {
+		backgroundColor: "var(--lm-surface-accent)",
+		boxShadow: "inset 0 0 0 1.5px var(--lm-border-accent)",
+	},
+	// Inline code in a cell looks as it does in the text.
+	".cm-live-table code": {
+		padding: "0.1em 0.35em",
+		borderRadius: "var(--lm-radius-sm)",
+		backgroundColor: "var(--lm-surface-hover)",
+		fontFamily: "var(--lm-font-mono)",
+		fontSize: "0.86em",
+	},
+	".cm-live-table a": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
+	".cm-live-table img": { maxWidth: "100%", maxHeight: "200px" },
+	".cm-live-table .markdown-broken-reference": { color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
+	".cm-live-table-add-row, .cm-live-table-add-column": {
+		position: "absolute",
+		display: "flex",
+		alignItems: "center",
+		justifyContent: "center",
+		padding: "0",
+		border: "none",
+		borderRadius: "var(--lm-radius-sm)",
+		color: "var(--lm-text-muted)",
+		backgroundColor: "transparent",
+		fontSize: "14px",
+		lineHeight: "1",
+		cursor: "pointer",
+		opacity: "0",
+	},
+	".cm-live-table-add-row": { left: "0", right: "22px", bottom: "0", height: "18px" },
+	".cm-live-table-add-column": { top: "0", right: "0", bottom: "22px", width: "18px" },
+	".cm-live-table:hover .cm-live-table-add-row, .cm-live-table:hover .cm-live-table-add-column, .cm-live-table:focus-within .cm-live-table-add-row, .cm-live-table:focus-within .cm-live-table-add-column": { opacity: "1" },
+	".cm-live-table-add-row:hover, .cm-live-table-add-column:hover": { backgroundColor: "var(--lm-surface-hover)", color: "var(--lm-text-primary)" },
 	".cm-live-quote": { color: "var(--lm-text-secondary)" },
 	".cm-live-bullet": { display: "inline-block", width: "1em", textAlign: "center", color: "var(--lm-text-secondary)" },
 	".cm-live-checkbox": {

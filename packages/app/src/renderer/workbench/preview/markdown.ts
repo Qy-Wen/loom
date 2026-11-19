@@ -195,3 +195,8 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 export function renderMarkdown(source: string, context?: MarkdownRenderContext): string {
 	return markdown.render(source, context as never);
 }
+
+/** One line of Markdown without the paragraph around it: the content of a table cell. */
+export function renderInlineMarkdown(source: string, context?: MarkdownRenderContext): string {
+	return markdown.renderInline(source, context as never);
+}

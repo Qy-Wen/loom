@@ -341,3 +341,355 @@ test("code blocks, formulas and diagrams render live and give the source back un
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("tables render as tables, edit in their cells and write back only the cell that changed", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-e2e-"));
+	const file = join(root, "表.md");
+	const table = ["| 名称 | 数量 |", "| :--- | ---: |", "| **苹果** | 3 |", "| 梨   | 12 |"].join("\n");
+	const original = ["# 表", "", table, "", "结尾", ""].join("\n");
+	await writeFile(file, original);
+	await writeFile(join(root, "目标.md"), "# 目标\n");
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "表.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 表.md" });
+		const onDisk = () => readFile(file, "utf8");
+
+		// Away from the cursor the table is a table: a header row, a body, and the cell's Markdown rendered.
+		await expect(box.locator(".cm-live-table th")).toHaveCount(2);
+		await expect(box.locator(".cm-live-table td")).toHaveCount(4);
+		await expect(box.locator(".cm-live-table td strong")).toHaveText("苹果");
+		expect(await box.locator(".cm-live-table th").first().evaluate((node) => getComputedStyle(node).textAlign)).toBe("left");
+		expect(await box.locator(".cm-live-table td").nth(1).evaluate((node) => getComputedStyle(node).textAlign)).toBe("right");
+
+		// A click puts a cell into its text; typing there changes that cell and nothing else.
+		const cell = box.locator(".cm-live-table td").first();
+		await cell.click();
+		await expect(cell).toHaveText("**苹果**");
+		await loomPage.keyboard.press("End");
+		await loomPage.keyboard.type("干");
+		await expect.poll(onDisk).toBe(original.replace("**苹果**", "**苹果**干"));
+		// Focus stays in the cell while the table redraws around the edit.
+		await loomPage.keyboard.type("!");
+		await expect.poll(onDisk).toBe(original.replace("**苹果**", "**苹果**干!"));
+
+		// Enter goes down a row, Tab across, and both leave the first cell showing its result.
+		await loomPage.keyboard.press("Enter");
+		await expect(box.locator(".cm-live-table td").nth(2)).toBeFocused();
+		await expect(box.locator(".cm-live-table td strong")).toHaveText("苹果");
+		await loomPage.keyboard.press("Tab");
+		await expect(box.locator(".cm-live-table td").nth(3)).toBeFocused();
+		await loomPage.keyboard.press("ControlOrMeta+a");
+		await loomPage.keyboard.type("a | b");
+		// A pipe typed in a cell is escaped, so the table keeps its shape.
+		await expect.poll(onDisk).toBe(original.replace("**苹果**", "**苹果**干!").replace("12 |", "a \\| b |"));
+
+		// Undo is the file's: it takes the cell's text back.
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(async () => (await onDisk()).includes("a \\| b")).toBe(false);
+
+		// A row and a column are added at the end, and the new cell takes the caret.
+		await box.locator(".cm-live-table-add-row").click({ force: true });
+		await expect(box.locator(".cm-live-table tr")).toHaveCount(4);
+		await expect(box.locator(".cm-live-table tr").last().locator("td").first()).toBeFocused();
+		await loomPage.keyboard.type("新");
+		await box.locator(".cm-live-table-add-column").click({ force: true });
+		await expect(box.locator(".cm-live-table th")).toHaveCount(3);
+		await expect.poll(async () => (await onDisk()).includes("| 名称 | 数量 |  |")).toBe(true);
+		const grown = await onDisk();
+		expect(grown).toContain("| :--- | ---: | --- |");
+		expect(grown).toContain("| 新 |  |  |");
+
+		// Escape leaves the table for the text after it.
+		await loomPage.keyboard.press("Escape");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+
+		// From the line after the table, ArrowUp steps into its last row, and ArrowDown from the line before steps
+		// into its first, as the arrow keys do through text.
+		// Put the caret on a line by clicking it, as a person would.
+		await box.locator(".cm-line").filter({ hasText: "结尾" }).click();
+		await loomPage.keyboard.press("ArrowUp"); // The blank line between them.
+		await loomPage.keyboard.press("ArrowUp"); // Into the last row.
+		await expect(box.locator(".cm-live-table tr").last().locator("td").first()).toBeFocused();
+		await loomPage.keyboard.press("Escape");
+		await box.locator(".cm-line").filter({ hasText: "# 表" }).click();
+		await loomPage.keyboard.press("ArrowDown"); // The blank line after the heading.
+		await loomPage.keyboard.press("ArrowDown"); // Into the header row.
+		await expect(box.locator(".cm-live-table th").first()).toBeFocused();
+
+		const focusedRow = () => loomPage.evaluate(() => (document.activeElement as HTMLElement).dataset.row ?? "none");
+		// A click in the space above a table is a click on the table: it goes to the nearest cell and never turns the
+		// table into its source. (The strip below and the one at the right are the buttons that add a row or a column.)
+		// A click just outside is a click on the text beside it.
+		const around = (await box.locator(".cm-live-table").boundingBox())!;
+		await box.locator(".cm-line").first().click();
+		await loomPage.mouse.click(around.x + 40, around.y + 3);
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		expect(await focusedRow()).toBe("0");
+		for (const offset of [-2, around.height + 2]) {
+			await box.locator(".cm-line").first().click();
+			await loomPage.mouse.click(around.x + 40, around.y + offset);
+			await expect(box.locator(".cm-live-table")).toHaveCount(1);
+			expect(await focusedRow()).toBe("none");
+		}
+
+		// The arrow keys stop at the edges of a table: Up in the first row goes to the text above, Down in the last row
+		// to the text below, and neither goes round into the table again.
+		await box.locator(".cm-live-table th").first().click();
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await focusedRow()).toBe("none");
+		for (let i = 0; i < 4; i++) await loomPage.keyboard.press("ArrowUp");
+		expect(await focusedRow()).toBe("none");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await box.locator(".cm-live-table td").last().click();
+		await loomPage.keyboard.press("ArrowDown");
+		expect(await focusedRow()).toBe("none");
+		for (let i = 0; i < 4; i++) await loomPage.keyboard.press("ArrowDown");
+		expect(await focusedRow()).toBe("none");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await box.locator(".cm-live-table td").last().click();
+		await loomPage.keyboard.press("ArrowRight");
+		expect(await focusedRow()).toBe("none");
+
+		// Left and right arrows enter the table at its first or last cell, never as source.
+		await box.locator(".cm-line").filter({ hasText: "# 表" }).click();
+		await loomPage.keyboard.press("End");
+		await loomPage.keyboard.press("ArrowRight"); // The blank line.
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await loomPage.keyboard.press("ArrowRight"); // Into the table.
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await expect(box.locator(".cm-live-table th").first()).toBeFocused();
+		await box.locator(".cm-live-table td").last().click();
+		await loomPage.keyboard.press("ArrowRight"); // Out of the last cell, to the text after the table.
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		expect(await focusedRow()).toBe("none");
+		await loomPage.keyboard.press("ArrowLeft"); // Back into the last cell.
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await expect(box.locator(".cm-live-table td").last()).toBeFocused();
+
+		// A selection that runs over the table leaves it drawn: dragging or Shift+arrows never show its source.
+		await box.locator(".cm-line").filter({ hasText: "# 表" }).click();
+		await loomPage.keyboard.press("End");
+		await loomPage.keyboard.press("Shift+ArrowDown");
+		await loomPage.keyboard.press("Shift+ArrowDown");
+		await loomPage.keyboard.press("Shift+ArrowDown");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		await box.press("ControlOrMeta+a");
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		const unchanged = await onDisk();
+		await box.press("ArrowLeft");
+		expect(await onDisk()).toBe(unchanged);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("table cells render links, formulas and missing references, and a narrow column keeps its words whole", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-cells-e2e-"));
+	const file = join(root, "格.md");
+	const table = [
+		"| 链接 | 公式 | 很长的说明 | 代码 | 缺失 |",
+		"| --- | :-: | --- | --- | --- |",
+		"| [[目标]] | $x^2$ | 这是一段相当长的说明文字，用来看单元格里的文字是不是会按列宽正常换行而不是撑破整张表格的宽度 | `a` | [[不存在]] |",
+	].join("\n");
+	const original = ["# 格", "", table, "", "结尾有 `code` 一段", ""].join("\n");
+	await writeFile(file, original);
+	await writeFile(join(root, "目标.md"), "# 目标\n");
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "格.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 格.md" });
+
+		const cells = box.locator(".cm-live-table td");
+		await expect(cells).toHaveCount(5);
+		// A link to a library file is a link, a missing one is marked, and a formula is typeset.
+		await expect(cells.nth(0).locator("a[data-asset-id]")).toHaveText("目标");
+		await expect(cells.nth(1).locator(".katex")).toHaveCount(1);
+		await expect(cells.nth(3).locator("code")).toHaveText("a");
+		// Inline code in a cell has the same light background and type as in the text.
+		const codeLook = (locator: import("@playwright/test").Locator) => locator.evaluate((node) => {
+			const style = getComputedStyle(node);
+			return { background: style.backgroundColor, family: style.fontFamily };
+		});
+		const inCell = await codeLook(cells.nth(3).locator("code"));
+		expect(inCell.background).not.toBe("rgba(0, 0, 0, 0)");
+		await expect(box.locator(".cm-live-code").first()).toBeVisible();
+		expect(inCell).toEqual(await codeLook(box.locator(".cm-live-code").first()));
+		await expect(cells.nth(4).locator(".markdown-broken-reference")).toHaveText("不存在");
+		// A narrow column keeps a short word on one line, and the cell is as wide as its word.
+		for (const header of await box.locator(".cm-live-table th").all()) {
+			const size = await header.evaluate((node) => {
+				const range = document.createRange();
+				range.selectNodeContents(node);
+				const lines = new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+				return { lines, fits: node.scrollWidth <= node.clientWidth + 1 };
+			});
+			expect(size, await header.innerText()).toEqual({ lines: 1, fits: true });
+		}
+		// Editing a cell shows its source in the same type at the same size, and nothing around it moves.
+		const look = () => box.locator(".cm-live-table th, .cm-live-table td").evaluateAll((all) => all.map((cell) => {
+			const rect = cell.getBoundingClientRect();
+			const style = getComputedStyle(cell);
+			return { size: style.fontSize, family: style.fontFamily, width: Math.round(rect.width), height: Math.round(rect.height) };
+		}));
+		const resting = await look();
+		await cells.nth(2).click();
+		await expect(cells.nth(2)).toBeFocused();
+		expect(await look()).toEqual(resting);
+		await cells.nth(0).click();
+		await expect(cells.nth(0)).toBeFocused();
+		expect(await look()).toEqual(resting);
+		// A click on what a cell shows, a link or code or a formula, edits that cell. The content is swapped for the
+		// source as the cell takes the focus, so the clicked element is gone by the time the click reaches the table.
+		for (const index of [0, 1, 3, 4]) {
+			await box.locator(".cm-line").filter({ hasText: "结尾" }).click();
+			await expect(cells.nth(index).locator("a, code, .katex-html, .markdown-broken-reference").first()).toBeVisible();
+			await cells.nth(index).locator("a, code, .katex-html, .markdown-broken-reference").first().click();
+			await expect(cells.nth(index)).toBeFocused();
+		}
+		// A plain click edits the cell, as it does for a link in the text, and shows its source.
+		await cells.nth(0).click();
+		await expect(cells.nth(0)).toHaveText("[[目标]]");
+		expect(await readFile(file, "utf8")).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("clicking the text between two tables keeps both drawn", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-two-tables-e2e-"));
+	const original = [
+		"## 表格", "", "| 元素 | 写法 |", "| :--- | :---: |", "| 代码块 | a |", "", "对齐试一下：左列靠左。", "", "| 左 | 中 |", "| :--- | :---: |", "| a | b |", "", "结尾", "",
+	].join("\n");
+	const file = join(root, "二.md");
+	await writeFile(file, original);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "二.md" }).first().click();
+		await loomPage.getByRole("tab", { name: "Source" }).click();
+		const box = loomPage.getByRole("textbox", { name: "Edit 二.md" });
+		await expect(box.locator(".cm-live-table")).toHaveCount(2);
+
+		// Every point from the bottom of the first table to the top of the second, in three columns: a click there is
+		// a click on the text or on the blank lines, and never opens a table.
+		const tables = await box.locator(".cm-live-table").evaluateAll((all) => all.map((table) => table.getBoundingClientRect()).map((rect) => ({ top: rect.top, bottom: rect.bottom, left: rect.left })));
+		for (const x of [2, 120, 300]) {
+			for (let y = Math.ceil(tables[0].bottom); y < tables[1].top; y += 4) {
+				await box.locator(".cm-line").first().click();
+				await loomPage.mouse.click(tables[0].left + x, y);
+				await expect(box.locator(".cm-live-table"), `click at ${x},${Math.round(y - tables[0].bottom)}`).toHaveCount(2);
+			}
+		}
+		// Holding Right through the text between them goes into each table by its cells and out again, and neither
+		// table is ever shown as source on the way.
+		await box.locator(".cm-line").filter({ hasText: "## 表格" }).click();
+		await loomPage.keyboard.press("End");
+		const seen = new Set<string>();
+		for (let i = 0; i < 160; i++) {
+			await loomPage.keyboard.press("ArrowRight");
+			expect(await box.locator(".cm-live-table").count(), `after ${i + 1} presses`).toBe(2);
+			seen.add(await loomPage.evaluate(() => { const a = document.activeElement as HTMLElement; return a.dataset.row !== undefined ? `${a.tagName}${a.dataset.row},${a.dataset.column}` : "text"; }));
+		}
+		expect(seen.has("TH0,0")).toBe(true);
+		expect(seen.has("TD1,1")).toBe(true);
+		expect(await readFile(file, "utf8")).toBe(original);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("a table at the start or end of the file gets a blank line when the caret leaves it", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const root = await mkdtemp(join(tmpdir(), "loom-md-table-edges-e2e-"));
+	const table = ["| 名称 | 数量 |", "| :--- | ---: |", "| 苹果 | 3 |"].join("\n");
+	const first = join(root, "头.md");
+	const last = join(root, "尾.md");
+	await writeFile(first, `${table}\n\n中间`);
+	await writeFile(last, `中间\n\n${table}`);
+	try {
+		await electronApp!.evaluate(({ dialog }, path) => {
+			const open = dialog.showOpenDialog;
+			dialog.showOpenDialog = (async () => {
+				dialog.showOpenDialog = open;
+				return { canceled: false, filePaths: [path] };
+			}) as typeof dialog.showOpenDialog;
+		}, root);
+		await loomPage.evaluate(() => window.loom.openLibrary());
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+		const focusedRow = () => loomPage.evaluate(() => (document.activeElement as HTMLElement).dataset.row ?? "none");
+		const open = async (name: string) => {
+			await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: name }).first().click();
+			await loomPage.getByRole("tab", { name: "Source" }).click();
+			const box = loomPage.getByRole("textbox", { name: `Edit ${name}` });
+			// The caret starts at the top of the file, which is inside a table that begins there: move it out first.
+			await box.locator(".cm-line").filter({ hasText: "中间" }).click();
+			await expect(box.locator(".cm-live-table")).toHaveCount(1);
+			return box;
+		};
+
+		// Nothing is above the table: Up in its first row adds a line there and the caret goes onto it.
+		let box = await open("头.md");
+		await box.locator(".cm-live-table th").first().click();
+		await loomPage.keyboard.press("ArrowUp");
+		expect(await focusedRow()).toBe("none");
+		await expect.poll(() => readFile(first, "utf8")).toBe(`\n${table}\n\n中间`);
+		await loomPage.keyboard.type("上");
+		await expect.poll(() => readFile(first, "utf8")).toBe(`上\n${table}\n\n中间`);
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		// A table with a line above it gets no extra one.
+		await box.locator(".cm-live-table th").first().click();
+		await loomPage.keyboard.press("ArrowUp");
+		await loomPage.keyboard.type("!");
+		await expect.poll(() => readFile(first, "utf8")).toBe(`上!\n${table}\n\n中间`);
+
+		// Nothing is below it either.
+		box = await open("尾.md");
+		await box.locator(".cm-live-table td").last().click();
+		await loomPage.keyboard.press("ArrowDown");
+		expect(await focusedRow()).toBe("none");
+		// A blank line, then the line for the caret: text on the line right after a table would be one more row of it.
+		await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}\n\n`);
+		await loomPage.keyboard.type("下");
+		await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}\n\n下`);
+		await expect(box.locator(".cm-live-table")).toHaveCount(1);
+		// Undo takes the added line away with the text typed on it.
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await loomPage.keyboard.press("ControlOrMeta+z");
+		await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}`);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+	}
+});

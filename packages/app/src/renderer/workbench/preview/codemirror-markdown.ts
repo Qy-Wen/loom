@@ -5,7 +5,7 @@ import { search, searchKeymap } from "@codemirror/search";
 import { EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
-import { liveBlocks, liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { liveBlockKeys, liveBlocks, liveClicks, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 
 /** What the editor says about itself to the component that owns it. */
 export interface MarkdownEditorEvents {
@@ -15,6 +15,12 @@ export interface MarkdownEditorEvents {
 	onSave(): void;
 	/** A link was opened with ⌘/Ctrl+click. */
 	onOpenAsset(assetId: string, anchor: string | undefined): void;
+}
+
+/** The words a table in the editor shows. */
+export interface MarkdownEditorLabels {
+	addRow: string;
+	addColumn: string;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */
@@ -79,7 +85,7 @@ export interface MarkdownEditor {
 	destroy(): void;
 }
 
-export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary): MarkdownEditor {
+export function createMarkdownEditor(parent: HTMLElement, text: string, events: MarkdownEditorEvents, label: string, library: LiveLibrary, labels: MarkdownEditorLabels): MarkdownEditor {
 	let replacing = false;
 	const extensions: Extension[] = [
 		history(),
@@ -89,8 +95,10 @@ export function createMarkdownEditor(parent: HTMLElement, text: string, events: 
 		syntaxHighlighting(highlight),
 		liveLibrary,
 		liveHandlers({ openAsset: events.onOpenAsset } satisfies LiveHandlers),
+		liveTables({ openAsset: events.onOpenAsset, save: events.onSave, labels }),
 		liveMarkdown,
 		liveBlocks,
+		liveBlockKeys,
 		liveMarkdownTheme,
 		liveClicks,
 		search({ top: false }),

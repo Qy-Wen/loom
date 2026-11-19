@@ -92,7 +92,7 @@ export function MarkdownSourceEditor({ asset, assets, onOpenAsset }: {
 				if (anchor) requestHeading(target, anchor);
 				openRef.current?.(target);
 			},
-		}, t.preview.editorLabel(filename), libraryRef.current);
+		}, t.preview.editorLabel(filename), libraryRef.current, { addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn });
 		editorRef.current = editor;
 		return () => {
 			editorRef.current = null;
