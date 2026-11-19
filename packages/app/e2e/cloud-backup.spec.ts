@@ -185,6 +185,9 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	await settings.getByRole("button", { name: "Pull cloud changes", exact: true }).click();
 	const pull = settings.getByRole("region", { name: "Changes to apply locally", exact: true });
 	await expect(pull).toBeVisible();
+	const pullProgress = localStatus.getByRole("region", { name: "Cloud backup progress" });
+	await expect(pullProgress).toContainText("Waiting for you to review and apply changes");
+	await expect(pullProgress.getByRole("progressbar")).toHaveCount(0);
 	const apply = pull.getByRole("button", { name: "Apply to current library", exact: true });
 	await expect(apply).toBeDisabled();
 	await pull.getByRole("button", { name: "Use cloud for all conflicts", exact: true }).click();

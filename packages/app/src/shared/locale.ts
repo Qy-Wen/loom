@@ -650,7 +650,7 @@ export const messages = defineLocale(
 				pullMetadataNote: "Tags, relationships, library databases and chat data are applied together. Choose one complete set when they conflict.",
 				conflictCount: (count: number) => `${count} conflicts`, unresolvedConflicts: (count: number) => `${count} choices remaining`,
 				uploaded: "File data uploaded", skippedFiles: (count: number) => `Skipped ${count} files`,
-				phases: { conflicts: "Review changes and resolve conflicts", apply: "Applying to current library", snapshot: "Preparing library", upload: "Uploading files", delete: "Removing deleted files", download: "Downloading files", verify: "Verifying files", list: "Loading cloud libraries", test: "Testing read, write and delete access" },
+				phases: { conflicts: "Waiting for you to review and apply changes", apply: "Applying to current library", snapshot: "Preparing library", upload: "Uploading files", delete: "Removing deleted files", download: "Downloading files", verify: "Verifying files", list: "Loading cloud libraries", test: "Testing read, write and delete access" },
 				status: { completed: "Completed", failed: "Failed", cancelled: "Cancelled" },
 			},
 			external: {
@@ -1431,7 +1431,7 @@ export const messages = defineLocale(
 				pullMetadataNote: "标签、关系、素材库数据库和聊天数据会整体应用。发生冲突时需要选择一整组数据。",
 				conflictCount: (count) => `${count} 项冲突`, unresolvedConflicts: (count) => `还有 ${count} 项未选择`,
 				uploaded: "文件上传量", skippedFiles: (count: number) => `已跳过 ${count} 个文件`,
-				phases: { conflicts: "预览变更并解决冲突", apply: "应用到当前素材库", snapshot: "准备素材库", upload: "上传文件", delete: "清理远端已删除文件", download: "下载文件", verify: "校验文件", list: "加载云端素材库", test: "测试读写及删除权限" },
+				phases: { conflicts: "等待你确认并应用变更", apply: "应用到当前素材库", snapshot: "准备素材库", upload: "上传文件", delete: "清理远端已删除文件", download: "下载文件", verify: "校验文件", list: "加载云端素材库", test: "测试读写及删除权限" },
 				status: { completed: "已完成", failed: "失败", cancelled: "已取消" },
 			},
 			external: {

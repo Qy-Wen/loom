@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { CLOUD_PROVIDER_IDS, defaultCloudConfig, type CloudBackupView, type CloudConfigDraft, type CloudJob, type CloudPreview, type CloudProviderId } from "../../shared/cloud-backup.ts";
 import { useLocale } from "../locale.tsx";
 import { CloudProviderFields } from "./settings-cloud-providers.tsx";
@@ -51,9 +51,11 @@ function ChangePreview({ preview }: { preview: CloudPreview }): React.JSX.Elemen
 
 function JobProgress({ job, busy, onCancel, onOpen }: { job: CloudJob; busy: boolean; onCancel(): void; onOpen(): void }) {
 	const { t } = useLocale(); const text = t.settings.cloud;
-	return <section className="cloud-progress" data-status={job.status} aria-label={text.progress} aria-live="polite">
-		<div className="cloud-progress-heading"><span className="cloud-state-dot" /><strong>{text.operations[job.operation]}</strong><span>{job.status === "running" ? text.phases[job.phase] : text.status[job.status]}</span>{job.status === "running" && <button className="settings-button" type="button" onClick={onCancel}>{text.cancel}</button>}</div>
-		{job.status === "running" && job.totalFiles > 0 && <><progress max={job.totalBytes || job.totalFiles} value={job.totalBytes ? job.completedBytes : job.completedFiles} /><span className="cloud-progress-amount">{job.completedFiles} / {job.totalFiles} · {size(job.completedBytes)} / {size(job.totalBytes)}</span></>}
+	const statusId = useId();
+	const showProgress = job.status === "running" && job.phase !== "conflicts" && job.totalFiles > 0;
+	return <section className="cloud-progress" data-status={job.status} aria-label={text.progress}>
+		<div className="cloud-progress-heading"><span className="cloud-state-dot" /><strong>{text.operations[job.operation]}</strong><span id={statusId} aria-live="polite">{job.status === "running" ? text.phases[job.phase] : text.status[job.status]}</span>{job.status === "running" && <button className="settings-button" type="button" onClick={onCancel}>{text.cancel}</button>}</div>
+		{showProgress && <><progress aria-labelledby={statusId} max={job.totalBytes || job.totalFiles} value={job.totalBytes ? job.completedBytes : job.completedFiles} /><span className="cloud-progress-amount">{job.completedFiles} / {job.totalFiles} · {size(job.completedBytes)} / {size(job.totalBytes)}</span></>}
 		{job.operation === "backup" && job.uploadedBytes !== undefined && <span className="cloud-progress-amount">{text.uploaded}: {size(job.uploadedBytes)} · {text.skippedFiles(job.skippedFiles ?? 0)}</span>}
 		{job.status === "running" && job.rootPath && <code className="cloud-job-path">{job.rootPath}</code>}
 		{(job.status === "running" || job.status === "failed") && job.currentFile && <code className="cloud-job-path">{job.currentFile}</code>}
