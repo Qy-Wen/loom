@@ -1,14 +1,16 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { Asset } from "@loom/core";
-import { isCanvasLibraryPath, removeCanvasElements, type CanvasNode } from "../../../shared/canvas.ts";
+import { isCanvasLibraryPath, removeCanvasElements, type CanvasNode, type CanvasSide } from "../../../shared/canvas.ts";
 import { draggedAssetIds, endLibraryDrag, hasLibraryDrag, readLibraryDrag } from "../../assets/asset-drag.ts";
 import { useConfirmation } from "../../components/confirm-dialog.tsx";
 import { isImeComposing } from "../../components/ime-composition.ts";
+import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { rectBetween, rectsIntersect, type Rect } from "../browser/folder-browser-model.ts";
 import { CanvasCard } from "./canvas-card.tsx";
 import { CanvasConnections } from "./canvas-connections.tsx";
-import { containsCard, fitNodes, movingCards, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
+import { CanvasAction, CanvasSelectionControls, CanvasToolbar } from "./canvas-controls.tsx";
+import { connectionCurve, containsCard, edgeCurve, edgePoint, fitNodes, movingCards, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
 import { useCanvasDocument } from "./use-canvas-document.ts";
 import { useCanvasDrag } from "./use-canvas-drag.ts";
 import "./canvas.css";
@@ -38,6 +40,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	const { confirm } = useConfirmation();
 	const board = useCanvasDocument(asset.assetId);
 	const surface = useRef<HTMLDivElement>(null);
+	const docks = useRef<HTMLDivElement>(null);
 	const capture = useCanvasDrag(surface);
 	const [view, setView] = useState<Viewport>({ x: 36, y: 36, scale: 1 });
 	const [pan, setPan] = useState(false);
@@ -46,20 +49,39 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	const consumed = useRef<readonly string[] | undefined>(undefined);
 	const [selected, setSelected] = useState<Set<string>>(() => new Set());
 	const [edgeId, setEdgeId] = useState<string | null>(null);
+	const [connection, setConnection] = useState<{ id: string; side?: CanvasSide } | null>(null);
+	const [draft, setDraft] = useState<string | null>(null);
+	const [fileSearch, setFileSearch] = useState<{ point: Point } | { replaceId: string } | null>(null);
 	const [editing, setEditing] = useState<string | null>(null);
 	const [box, setBox] = useState<Rect | null>(null);
 	const [shift, setShift] = useState<{ ids: ReadonlySet<string>; delta: Point; resize: boolean } | null>(null);
 	const byId = useMemo(() => new Map(assets.map((file) => [file.assetId, file])), [assets]);
 	const byPath = useMemo(() => new Map(assets.map((file) => [file.relativePath, file])), [assets]);
+	const searchableFiles = useMemo(() => assets.filter((file) => isCanvasLibraryPath(file.relativePath)), [assets]);
 	const nodes = board.document?.nodes ?? EMPTY_NODES;
 	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
 	const visibleNodes = shift ? nodes.map((node) => shift.ids.has(node.id) ? reshape(node, shift.delta, shift.resize) : node) : nodes;
 	const selectedNodes = [...selected].filter((id) => nodeIds.has(id));
+	const selection = visibleNodes.find((node) => node.id === selectedNodes.at(-1));
+	const single = selectedNodes.length === 1 ? selection : undefined;
 	const edge = board.document?.edges.find((item) => item.id === edgeId);
+	const from = edge && visibleNodes.find((node) => node.id === edge.fromNode);
+	const to = edge && visibleNodes.find((node) => node.id === edge.toNode);
+	const midpoint = edge && from && to ? edgeCurve(edge, from, to).midpoint : undefined;
+	const anchor = selection ?? (midpoint && { ...midpoint, width: 0, height: 0 });
+	const preview = single && assetForNode(single);
+	const canEdit = single && (single.type === "text" || single.type === "group");
+	const isEditing = canEdit && editing === single.id;
+
+	function assetForNode(node: CanvasNode): Asset | undefined {
+		return node.loom?.assetId ? byId.get(node.loom.assetId) : node.file ? byPath.get(node.file) : undefined;
+	}
 
 	function fit(): void {
 		const element = surface.current;
-		if (element) setView(fitNodes(board.live.current?.document.nodes ?? [], element.clientWidth, element.clientHeight));
+		if (!element) return;
+		const footerHeight = (docks.current?.offsetHeight ?? 0) + 12;
+		setView(fitNodes(board.live.current?.document.nodes ?? [], element.clientWidth, element.clientHeight - footerHeight));
 	}
 
 	useLayoutEffect(() => {
@@ -113,6 +135,8 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		board.commit({ ...current, nodes: behind ? [...added, ...current.nodes] : [...current.nodes, ...added] });
 		setSelected(new Set(added.map((node) => node.id)));
 		setEdgeId(null);
+		setConnection(null);
+		setEditing(null);
 	}
 
 	function addFiles(ids: readonly string[], point: Point): void {
@@ -128,26 +152,50 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		surface.current?.focus();
 	}
 
-	async function pickFiles(replaceId?: string): Promise<void> {
+	async function openCanvasMenu(event: MouseEvent<HTMLDivElement>): Promise<void> {
+		if (!board.document || !(event.target instanceof Element) || event.target.closest(".canvas-node, button")) return;
+		event.preventDefault();
+		const point = event.clientX === 0 && event.clientY === 0 ? centerPoint() : documentPoint(event);
+		surface.current?.focus({ preventScroll: true });
 		try {
-			const files = await window.loom.pickComposerLibraryAssets();
-			if (!files.length || !board.live.current) return;
-			if (replaceId) {
-				const file = files[0];
-				patchNode(replaceId, (node) => ({ ...node, file: file.path, loom: { ...node.loom, assetId: file.assetId } }));
-			} else addFiles(files.map((file) => file.assetId), centerPoint());
+			const action = await window.loom.showCanvasContextMenu();
+			if (action === "add_files" && surface.current) setFileSearch({ point });
 		} catch (cause) {
 			onError(String(cause));
 		}
 	}
 
-	function addCard(type: "text" | "group"): void {
-		const point = centerPoint();
+	function finishFileSearch(files: Asset[]): void {
+		setFileSearch(null);
+		if (!fileSearch || !files.length) return;
+		if ("point" in fileSearch) {
+			addFiles(files.map((file) => file.assetId), fileSearch.point);
+		} else {
+			const file = files[0];
+			patchNode(fileSearch.replaceId, (node) => ({
+				...node, file: file.relativePath, loom: { ...node.loom, assetId: file.assetId },
+			}));
+		}
+	}
+
+	function addCard(type: "text" | "group", point = centerPoint()): void {
 		const id = crypto.randomUUID();
 		const x = Math.round(point.x - 120), y = Math.round(point.y - 60);
 		append([type === "text" ? { id, type, x, y, width: 260, height: 160, text: "" }
 			: { id, type, x, y, width: 420, height: 280, label: t.canvas.group }], type === "group");
 		setEditing(id);
+	}
+
+	function editCard(id: string | null): void {
+		setEditing(id);
+		if (id === null) {
+			board.endGroup();
+			surface.current?.focus({ preventScroll: true });
+		} else {
+			setSelected(new Set([id]));
+			setEdgeId(null);
+			setConnection(null);
+		}
 	}
 
 	function patchNode(id: string, patch: (node: CanvasNode) => CanvasNode, group?: string): void {
@@ -156,11 +204,17 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	}
 
 	function selectNode(id: string, add: boolean): Set<string> {
+		if (connection && nodeIds.has(connection.id) && !add) {
+			if (connection.id !== id) addEdge(connection.id, id, connection.side);
+			return new Set();
+		}
 		const next = add ? new Set(selected) : selected.has(id) ? selected : new Set<string>();
 		if (add && next.has(id)) next.delete(id);
 		else next.add(id);
 		setSelected(next);
 		setEdgeId(null);
+		setConnection(null);
+		if (editing !== id || add) setEditing(null);
 		return next;
 	}
 
@@ -200,6 +254,8 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		const base = event.shiftKey || event.metaKey || event.ctrlKey ? selected : new Set<string>();
 		const rectangle = (delta: Point) => rectBetween(origin.x, origin.y, origin.x + delta.x / view.scale, origin.y + delta.y / view.scale);
 		setEdgeId(null);
+		setConnection(null);
+		setEditing(null);
 		capture.begin(event, (delta) => setBox(rectangle(delta)), (delta) => {
 			setBox(null);
 			if (!delta) return;
@@ -211,14 +267,37 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		});
 	}
 
-	function addEdge(): void {
+	function addEdge(fromNode: string, toNode: string, fromSide?: CanvasSide): void {
 		const current = board.live.current?.document;
-		if (!current || selectedNodes.length !== 2) return;
-		const [fromNode, toNode] = selectedNodes;
+		if (!current || fromNode === toNode || !current.nodes.some((node) => node.id === fromNode)
+			|| !current.nodes.some((node) => node.id === toNode)) return;
 		const id = crypto.randomUUID();
-		board.commit({ ...current, edges: [...current.edges, { id, fromNode, toNode }] });
+		board.commit({ ...current, edges: [...current.edges, { id, fromNode, toNode, ...(fromSide && { fromSide }) }] });
 		setEdgeId(id);
 		setSelected(new Set());
+		setConnection(null);
+		setEditing(null);
+		surface.current?.focus({ preventScroll: true });
+	}
+
+	function startConnection(id: string, side?: CanvasSide): void {
+		setConnection(connection?.id === id && connection.side === side ? null : { id, side });
+	}
+
+	function dragConnection(event: PointerEvent, node: CanvasNode, side: CanvasSide): void {
+		if (event.button !== 0 || event.defaultPrevented || capture.drag.current) return;
+		const origin = { clientX: event.clientX, clientY: event.clientY };
+		const start = edgePoint(node, side);
+		const cursor = (delta: Point) => ({ clientX: origin.clientX + delta.x, clientY: origin.clientY + delta.y });
+		capture.begin(event, (delta) => {
+			setDraft(connectionCurve(start, side, documentPoint(cursor(delta))).path);
+		}, (delta) => {
+			setDraft(null);
+			if (!delta) return;
+			const { clientX, clientY } = cursor(delta);
+			const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>(".canvas-card");
+			if (target?.dataset.nodeId && surface.current?.contains(target)) addEdge(node.id, target.dataset.nodeId, side);
+		}, 4);
 	}
 
 	function removeSelection(): void {
@@ -227,6 +306,9 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		board.commit(removeCanvasElements(current, new Set(selectedNodes), new Set(edge ? [edge.id] : [])));
 		setSelected(new Set());
 		setEdgeId(null);
+		setConnection(null);
+		setEditing(null);
+		surface.current?.focus({ preventScroll: true });
 	}
 
 	function keyDown(event: KeyboardEvent<HTMLDivElement>): void {
@@ -237,9 +319,16 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		const key = event.key.toLowerCase();
 		if (mod && key === "z") { event.preventDefault(); if (event.shiftKey) board.redo(); else board.undo(); }
 		else if (mod && key === "y") { event.preventDefault(); board.redo(); }
-		else if (mod && key === "a") { event.preventDefault(); setSelected(new Set(nodes.map((node) => node.id))); setEdgeId(null); }
+		else if (mod && key === "a") { event.preventDefault(); setSelected(new Set(nodes.map((node) => node.id))); setEdgeId(null); setConnection(null); }
 		else if (key === "delete" || key === "backspace") { event.preventDefault(); removeSelection(); }
-		else if (key === "escape") { setSelected(new Set()); setEdgeId(null); setEditing(null); }
+		else if (key === "escape") {
+			if (connection) {
+				event.stopPropagation();
+				setConnection(null);
+			} else {
+				setSelected(new Set()); setEdgeId(null); setEditing(null);
+			}
+		}
 		else if (key === " " && target === surface.current) { event.preventDefault(); space.current = true; }
 	}
 
@@ -255,82 +344,125 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 
 	return (
 		<section className="canvas-editor" aria-label={`${t.canvas.canvas} ${asset.filename}`} onKeyDown={keyDown}>
-			<div className="canvas-toolbar">
-				<button type="button" disabled={!board.document} onClick={() => void pickFiles()}>{t.canvas.addFiles}</button>
-				<button type="button" disabled={!board.document} onClick={() => addCard("text")}>{t.canvas.addNote}</button>
-				<button type="button" disabled={!board.document} onClick={() => addCard("group")}>{t.canvas.addGroup}</button>
-				<button type="button" disabled={selectedNodes.length !== 2} title={t.canvas.connectHint} onClick={addEdge}>{t.canvas.connect}</button>
-				<button type="button" disabled={!selectedNodes.length && !edge} onClick={removeSelection}>{t.canvas.deleteSelected}</button>
-				<div className="canvas-toolbar-divider" />
-				<button type="button" disabled={!board.canUndo} aria-label={t.canvas.undo} title={t.canvas.undo} onClick={board.undo}>↶</button>
-				<button type="button" disabled={!board.canRedo} aria-label={t.canvas.redo} title={t.canvas.redo} onClick={board.redo}>↷</button>
-				<button type="button" aria-pressed={pan} onClick={() => setPan(!pan)}>{t.canvas.pan}</button>
-				<button type="button" aria-label={t.canvas.zoomOut} title={t.canvas.zoomOut} onClick={() => zoom(1 / 1.25)}>−</button>
-				<output className="canvas-zoom">{Math.round(view.scale * 100)}%</output>
-				<button type="button" aria-label={t.canvas.zoomIn} title={t.canvas.zoomIn} onClick={() => zoom(1.25)}>+</button>
-				<button type="button" onClick={fit}>{t.canvas.fit}</button>
-				{edge && <input key={edge.id} aria-label={t.canvas.edgeLabel} placeholder={t.canvas.edgeLabel} value={edge.label ?? ""}
-					onBlur={board.endGroup} onChange={(event) => {
-						const current = board.live.current?.document;
-						if (current) board.commit({ ...current, edges: current.edges.map((item) => item.id === edge.id ? { ...item, label: event.target.value } : item) }, edge.id);
-					}} />}
-				{board.saving && !board.error && <span className="canvas-status" role="status">{t.canvas.saving}</span>}
-			</div>
 			{board.error && <div className="canvas-save-error" role="alert">
 				<span>{board.conflict ? t.canvas.conflict : board.error}</span>
 				{board.saving && !board.conflict && <button type="button" onClick={board.retry}>{t.canvas.retry}</button>}
 				<button type="button" onClick={() => void reload()}>{t.canvas.reload}</button>
 			</div>}
-			<div ref={surface} className={`canvas-surface${pan ? " pan" : ""}`} tabIndex={0} aria-label={t.canvas.canvas}
-				onPointerDownCapture={(event) => { if (pan || space.current || event.button === 1) pointerDown(event); }}
-				onPointerDown={(event) => { if (!event.defaultPrevented) pointerDown(event); }}
-				onPointerMove={capture.move} onPointerUp={(event) => capture.end(event)}
-				onPointerCancel={(event) => capture.end(event, true)}
-				onPointerLeave={(event) => { if (!capture.drag.current?.started) capture.end(event, true); }}
-				onLostPointerCapture={(event) => { if (event.target === event.currentTarget) capture.end(event, true); }}
-				onKeyUp={(event) => { if (event.key === " ") space.current = false; }}
-				onBlur={() => { space.current = false; }}
-				onDragOver={(event) => {
-					if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
-					event.preventDefault();
-					event.dataTransfer.dropEffect = "copy";
-				}}
-				onDrop={(event) => {
-					if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
-					event.preventDefault();
-					const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
-					endLibraryDrag();
-					addFiles(ids, documentPoint(event));
+			<div className="canvas-viewport">
+				<div ref={surface} className={`canvas-surface${pan ? " pan" : ""}${connection ? " connecting" : ""}`} tabIndex={0} aria-label={t.canvas.canvas}
+					onContextMenu={(event) => void openCanvasMenu(event)}
+					onPointerDownCapture={(event) => { if (pan || space.current || event.button === 1) pointerDown(event); }}
+					onPointerDown={(event) => { if (!event.defaultPrevented) pointerDown(event); }}
+					onPointerMove={capture.move} onPointerUp={(event) => capture.end(event)}
+					onPointerCancel={(event) => capture.end(event, true)}
+					onPointerLeave={(event) => { if (!capture.drag.current?.started) capture.end(event, true); }}
+					onLostPointerCapture={(event) => { if (event.target === event.currentTarget) capture.end(event, true); }}
+					onKeyUp={(event) => { if (event.key === " ") space.current = false; }}
+					onBlur={() => { space.current = false; }}
+					onDoubleClick={(event) => {
+						if (!board.document || pan || event.button !== 0 || !(event.target instanceof Element)
+							|| event.target.closest(".canvas-node, button")) return;
+						const point = documentPoint(event);
+						addCard("text", { x: point.x + 120, y: point.y + 60 });
+					}}
+					onDragOver={(event) => {
+						if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
+						event.preventDefault();
+						event.dataTransfer.dropEffect = "copy";
+					}}
+					onDrop={(event) => {
+						if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
+						event.preventDefault();
+						const ids = draggedAssetIds(readLibraryDrag(event.dataTransfer) ?? null);
+						endLibraryDrag();
+						addFiles(ids, documentPoint(event));
+					}}>
+					{!board.document && !board.error && <p className="canvas-empty" role="status">{t.common.loading}</p>}
+					{board.document && nodes.length === 0 && <p className="canvas-empty">{t.canvas.empty}</p>}
+					<div className="canvas-plane" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
+						<CanvasConnections edges={board.document?.edges ?? []} nodes={visibleNodes} selected={edge?.id ?? null} selectedNodes={selected} draft={draft}
+							onSelect={(item) => { setEdgeId(item.id); setSelected(new Set()); setConnection(null); setEditing(null); }} />
+						{visibleNodes.map((node) => (
+							<CanvasCard key={node.id} node={node} selected={selected.has(node.id)} editing={editing === node.id}
+								showPorts={single?.id === node.id && !editing && !pan && !shift}
+								connectSide={connection?.id === node.id ? connection.side : undefined}
+								connecting={Boolean(connection)}
+								asset={assetForNode(node)}
+								assets={assets}
+								style={{ transform: `translate(${node.x}px, ${node.y}px)`, width: node.width, height: node.height }}
+								onMove={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, false); }}
+								onResize={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, true); }}
+								onSelect={selectNode} onNudge={(event, id, resize) => {
+									const step = ARROW_STEPS[event.key];
+									if (!step || isImeComposing(event.nativeEvent)) return;
+									event.preventDefault();
+									const ids = !resize && selected.has(id) ? selected : new Set([id]);
+									setSelected(ids);
+									setEdgeId(null);
+									setConnection(null);
+									const distance = event.shiftKey ? 32 : 8;
+									transform(resize ? ids : movingCards(nodes, ids), { x: step.x * distance, y: step.y * distance }, resize);
+								}}
+								onEdit={editCard} onBlur={board.endGroup}
+								onText={(id, key, value) => patchNode(id, (current) => ({ ...current, [key]: value }), id)}
+								onPreview={onPreview} onRelink={(id) => setFileSearch({ replaceId: id })}
+								onConnect={startConnection} onConnectDrag={dragConnection} />
+						))}
+						{box && <div className="canvas-marquee" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
+					</div>
+				</div>
+				<div className="canvas-notices">
+					{connection && <span className="canvas-status" role="status">{t.canvas.connectTarget}</span>}
+					{board.saving && !board.error && <span className="canvas-status" role="status">{t.canvas.saving}</span>}
+				</div>
+				<CanvasToolbar className="canvas-history" label={t.canvas.historyTools}>
+					<CanvasAction icon="undo" label={t.canvas.undo} disabled={!board.canUndo} onClick={board.undo} />
+					<CanvasAction icon="redo" label={t.canvas.redo} disabled={!board.canRedo} onClick={board.redo} />
+				</CanvasToolbar>
+				{anchor && !shift && !box && !draft && <CanvasSelectionControls anchor={{
+					x: view.x + anchor.x * view.scale, y: view.y + anchor.y * view.scale,
+					width: anchor.width * view.scale, height: anchor.height * view.scale,
 				}}>
-				{!board.document && !board.error && <p className="canvas-empty" role="status">{t.common.loading}</p>}
-				{board.document && nodes.length === 0 && <p className="canvas-empty">{t.canvas.empty}</p>}
-				<div className="canvas-plane" style={{ transform: `translate(${view.x}px, ${view.y}px) scale(${view.scale})` }}>
-					<CanvasConnections edges={board.document?.edges ?? []} nodes={visibleNodes} selected={edge?.id ?? null}
-						onSelect={(item) => { setEdgeId(item.id); setSelected(new Set()); }} />
-					{visibleNodes.map((node) => (
-						<CanvasCard key={node.id} node={node} selected={selected.has(node.id)} editing={editing === node.id}
-							asset={node.loom?.assetId ? byId.get(node.loom.assetId) : node.file ? byPath.get(node.file) : undefined}
-							assets={assets}
-							style={{ transform: `translate(${node.x}px, ${node.y}px)`, width: node.width, height: node.height }}
-							onMove={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, false); }}
-							onResize={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, true); }}
-							onSelect={selectNode} onNudge={(event, id, resize) => {
-								const step = ARROW_STEPS[event.key];
-								if (!step || isImeComposing(event.nativeEvent)) return;
-								event.preventDefault();
-								const ids = !resize && selected.has(id) ? selected : new Set([id]);
-								setSelected(ids);
-								setEdgeId(null);
-								const distance = event.shiftKey ? 32 : 8;
-								transform(resize ? ids : movingCards(nodes, ids), { x: step.x * distance, y: step.y * distance }, resize);
-							}}
-							onEdit={setEditing} onBlur={board.endGroup}
-							onText={(id, key, value) => patchNode(id, (current) => ({ ...current, [key]: value }), id)}
-							onPreview={onPreview} onRelink={(id) => void pickFiles(id)} />
-					))}
-					{box && <div className="canvas-marquee" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
+					{edge && <input key={edge.id} className="canvas-edge-input" aria-label={t.canvas.edgeLabel} placeholder={t.canvas.edgeLabel}
+						value={edge.label ?? ""} onBlur={board.endGroup}
+						onKeyDown={(event) => {
+							if (event.nativeEvent.isComposing || event.key !== "Enter") return;
+							event.preventDefault();
+							surface.current?.focus({ preventScroll: true });
+						}}
+						onChange={(event) => {
+							const current = board.live.current?.document;
+							if (current) board.commit({ ...current, edges: current.edges.map((item) => item.id === edge.id ? { ...item, label: event.target.value } : item) }, edge.id);
+						}} />}
+					<CanvasToolbar className="canvas-selection-tools" label={t.canvas.selectionTools}>
+						{canEdit && <CanvasAction icon={isEditing ? "done" : "edit"} label={isEditing ? t.canvas.done : t.common.edit}
+							showLabel onClick={() => editCard(isEditing ? null : single.id)} />}
+						{preview && <CanvasAction icon="open" label={t.canvas.openCard} showLabel onClick={() => onPreview(preview)} />}
+						{!isEditing && (single || selectedNodes.length === 2) && <CanvasAction icon="connect" label={t.canvas.connect}
+							showLabel pressed={single ? Boolean(connection) : undefined}
+							onClick={() => single ? startConnection(single.id) : addEdge(selectedNodes[0], selectedNodes[1])} />}
+						<CanvasAction icon="remove" label={t.canvas.deleteSelected} onClick={removeSelection} />
+					</CanvasToolbar>
+				</CanvasSelectionControls>}
+				<div className="canvas-docks" ref={docks}>
+					<CanvasToolbar className="canvas-create" label={t.canvas.createTools}>
+						<CanvasAction icon="text" label={t.canvas.addNote} showLabel disabled={!board.document} onClick={() => addCard("text")} />
+						<CanvasAction icon="group" label={t.canvas.addGroup} showLabel disabled={!board.document} onClick={() => addCard("group")} />
+					</CanvasToolbar>
+					<CanvasToolbar className="canvas-view" label={t.canvas.viewTools}>
+						<CanvasAction icon="pan" label={t.canvas.pan} pressed={pan} onClick={() => { setPan(!pan); setConnection(null); }} />
+						<span className="canvas-toolbar-divider" role="separator" aria-orientation="vertical" />
+						<CanvasAction icon="minus" label={t.canvas.zoomOut} onClick={() => zoom(1 / 1.25)} />
+						<output className="canvas-zoom">{Math.round(view.scale * 100)}%</output>
+						<CanvasAction icon="plus" label={t.canvas.zoomIn} onClick={() => zoom(1.25)} />
+						<CanvasAction icon="fit" label={t.canvas.fit} onClick={fit} />
+					</CanvasToolbar>
 				</div>
 			</div>
+			{fileSearch && <LibraryFileSearch assets={searchableFiles}
+				title={"point" in fileSearch ? t.canvas.addFiles : t.canvas.relink} multiple={"point" in fileSearch}
+				onClose={finishFileSearch} />}
 		</section>
 	);
 }

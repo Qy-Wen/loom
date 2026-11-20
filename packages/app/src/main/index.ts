@@ -679,6 +679,13 @@ function registerIpc(): void {
 		},
 	);
 
+	ipcMain.handle(IPC.showCanvasContextMenu, async (event) => {
+		const { t } = await uiCopy();
+		return popupContextMenu<"add_files">(event, [
+			{ label: t.canvas.addFiles, click: () => "add_files" },
+		]);
+	});
+
 	ipcMain.handle(IPC.showEditorContextMenu, async (event, state: MarkdownContextState): Promise<MarkdownContextAction | null> => {
 		const { t } = await uiCopy();
 		return popupContextMenu(event, markdownMenuItems(t, state));

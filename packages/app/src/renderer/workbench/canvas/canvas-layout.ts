@@ -1,4 +1,4 @@
-import type { CanvasNode, CanvasSide } from "../../../shared/canvas.ts";
+import type { CanvasEdge, CanvasNode, CanvasSide } from "../../../shared/canvas.ts";
 
 export type Point = { x: number; y: number };
 export type Viewport = Point & { scale: number };
@@ -42,6 +42,28 @@ export function edgePoint(node: CanvasNode, side: CanvasSide): Point {
 	if (side === "top") point.y = node.y;
 	if (side === "bottom") point.y = node.y + node.height;
 	return point;
+}
+
+const sideDirections: Record<CanvasSide, Point> = {
+	top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 },
+};
+
+export function connectionCurve(start: Point, fromSide: CanvasSide, end: Point, toSide?: CanvasSide): { path: string; midpoint: Point } {
+	const bend = Math.min(96, Math.hypot(end.x - start.x, end.y - start.y) * 0.45);
+	const from = sideDirections[fromSide];
+	const to = toSide ? sideDirections[toSide] : { x: -from.x, y: -from.y };
+	const a = { x: start.x + from.x * bend, y: start.y + from.y * bend };
+	const b = { x: end.x + to.x * bend, y: end.y + to.y * bend };
+	return {
+		path: `M ${start.x} ${start.y} C ${a.x} ${a.y} ${b.x} ${b.y} ${end.x} ${end.y}`,
+		midpoint: { x: (start.x + 3 * a.x + 3 * b.x + end.x) / 8, y: (start.y + 3 * a.y + 3 * b.y + end.y) / 8 },
+	};
+}
+
+export function edgeCurve(edge: CanvasEdge, from: CanvasNode, to: CanvasNode): ReturnType<typeof connectionCurve> {
+	const fromSide = edge.fromSide ?? facingSide(from, to);
+	const toSide = edge.toSide ?? facingSide(to, from);
+	return connectionCurve(edgePoint(from, fromSide), fromSide, edgePoint(to, toSide), toSide);
 }
 
 export function containsCard(area: { x: number; y: number; width: number; height: number }, node: CanvasNode): boolean {

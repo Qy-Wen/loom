@@ -206,6 +206,104 @@ test("switching from a canvas tab to icon mode selects the canvas and opens it o
 	await expect(tabs.getByRole("tab", { name: "Note.md", selected: true })).toBeVisible();
 });
 
+test("canvas controls follow selection and connect cards from their ports", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const { filename, relativePath } = await page.evaluate(async (document: CanvasDocument) => {
+		const asset = await window.loom.createCanvasFile("");
+		const initial = (await window.loom.readCanvas(asset.assetId))!;
+		await window.loom.saveCanvas(asset.assetId, document, initial.revision);
+		return asset;
+	}, {
+		nodes: [
+			{ id: "source", type: "text", text: "Source", x: 0, y: 120, width: 150, height: 100 },
+			{ id: "target", type: "text", text: "Target", x: 290, y: 0, width: 150, height: 100 },
+		],
+		edges: [],
+	} satisfies CanvasDocument);
+	const path = join((await rootPath())!, relativePath);
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: filename }).click();
+	const board = page.getByRole("region", { name: `Canvas ${filename}` });
+	const create = board.getByRole("toolbar", { name: "Create cards" });
+	const selection = board.getByRole("toolbar", { name: "Selection actions" });
+	await create.getByRole("button", { name: "Text", exact: true }).press("ArrowRight");
+	await expect(create.getByRole("button", { name: "Group", exact: true })).toBeFocused();
+	await expect(selection).toHaveCount(0);
+
+	const source = board.locator(".canvas-node").filter({ hasText: "Source" });
+	const target = board.locator(".canvas-node").filter({ hasText: "Target" });
+	await source.locator(".canvas-handle").click();
+	await expect(selection.getByRole("button", { name: "Edit" })).toBeVisible();
+	const beforeZoom = (await selection.boundingBox())!;
+	await board.getByRole("button", { name: "Zoom in" }).click();
+	expect((await selection.boundingBox())!.width).toBe(beforeZoom.width);
+	await board.getByRole("button", { name: "Fit view" }).click();
+
+	await source.getByRole("button", { name: "Connect from right" }).dragTo(target.locator(".canvas-handle"));
+	await expect(board.getByRole("textbox", { name: "Connection label" })).toBeVisible();
+	await expect.poll(async () => (await readBoard(path)).edges[0]).toMatchObject({
+		fromNode: "source", toNode: "target", fromSide: "right",
+	});
+
+	await board.locator(".canvas-surface").dblclick({ position: { x: 38, y: 48 } });
+	await expect(board.getByRole("textbox", { name: "Markdown text" })).toBeFocused();
+	await page.keyboard.press("Escape");
+	await expect(board.getByRole("textbox", { name: "Markdown text" })).toHaveCount(0);
+});
+
+test("the canvas context menu searches files under the library root", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const file = await page.evaluate(() => window.loom.createCanvasFile(""));
+	const path = join(root, file.relativePath);
+	await mkdir(join(root, "Project"));
+	await writeFile(join(root, "Project", "Alpha.md"), "# First");
+	await writeFile(join(root, "Project", "Beta.md"), "# Second");
+	await writeFile(join(root, "..", "Outside.md"), "# Outside the library");
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.map((asset) => asset.relativePath))
+		.toEqual(expect.arrayContaining(["Project/Alpha.md", "Project/Beta.md"]));
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "Add files")?.click();
+			options?.callback?.();
+		};
+	});
+
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: file.filename }).click();
+	const board = page.getByRole("region", { name: `Canvas ${file.filename}` });
+	await expect(board.getByText("Drag files here or add text to start.")).toBeVisible();
+	await expect(board.getByRole("button", { name: "Add files" })).toHaveCount(0);
+	const surface = board.locator(".canvas-surface");
+	const location = { x: 48, y: 56 };
+	await surface.click({ button: "right", position: location });
+	const picker = page.getByRole("dialog", { name: "Add files", exact: true });
+	const search = picker.getByRole("searchbox", { name: "Search library files" });
+	await expect(search).toBeFocused();
+	await search.fill("Outside.md");
+	await expect(picker.getByRole("status")).toHaveText("No matching files in this library.");
+	await search.press("Escape");
+	await expect(picker).toHaveCount(0);
+	expect((await readBoard(path)).nodes).toEqual([]);
+
+	await surface.click({ button: "right", position: location });
+	await search.fill("project/");
+	await expect(picker.getByRole("option")).toHaveCount(2);
+	await picker.getByRole("option", { name: /Alpha.md/ }).click();
+	await search.fill("beta");
+	await search.press("ArrowDown");
+	await page.keyboard.press("Space");
+	await picker.getByRole("button", { name: "Select (2)", exact: true }).click();
+	await expect(picker).toHaveCount(0);
+	await expect.poll(async () => (await readBoard(path)).nodes.map((node) => node.file)).toEqual(["Project/Alpha.md", "Project/Beta.md"]);
+	const viewport = (await surface.boundingBox())!;
+	const card = (await board.locator(".canvas-card").first().boundingBox())!;
+	expect(card.x - viewport.x).toBeCloseTo(location.x);
+	expect(card.y - viewport.y).toBeCloseTo(location.y);
+});
+
 test("clicking Table rows and Graph nodes selects files without opening them", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

@@ -19,7 +19,7 @@ function addFolderChain(folders: Set<string>, folder: string): void {
 	}
 }
 
-function assetMatches(asset: Asset, normalizedQuery: string): boolean {
+export function assetMatches(asset: Asset, normalizedQuery: string): boolean {
 	return matches(asset.filename, normalizedQuery) || matches(asset.relativePath, normalizedQuery);
 }
 

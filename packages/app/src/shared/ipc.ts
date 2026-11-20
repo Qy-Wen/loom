@@ -156,6 +156,7 @@ export const IPC = {
 	showAssetContextMenu: "loom:showAssetContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
 	showLibraryContextMenu: "loom:showLibraryContextMenu",
+	showCanvasContextMenu: "loom:showCanvasContextMenu",
 	showTableContextMenu: "loom:showTableContextMenu",
 	showEditorContextMenu: "loom:showEditorContextMenu",
 	runEditorClipboard: "loom:runEditorClipboard",
@@ -297,6 +298,7 @@ export interface LoomApi {
 	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
+	showCanvasContextMenu: () => Promise<"add_files" | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
 	showEditorContextMenu: (state: MarkdownContextState) => Promise<MarkdownContextAction | null>;
 	/** Use Chromium's clipboard events, including CodeMirror and table-specific formats. */
