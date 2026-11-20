@@ -250,23 +250,35 @@ test("switching between list and icons keeps both on the same folder", async ({ 
 	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
 	await mkdir(join(root, "a", "b"), { recursive: true });
 	await writeFile(join(root, "a", "b", "deep.md"), "# deep");
-	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	await writeFile(join(root, "a", "b", "other.md"), "# other");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(2);
 	const sidebar = loomPage.locator(".library-sidebar");
 	const display = sidebar.getByRole("group", { name: "File display", exact: true });
+	const list = display.getByRole("button", { name: "List", exact: true });
+	const icons = display.getByRole("button", { name: "Icons", exact: true });
 	const browser = loomPage.locator(".folder-browser");
 
 	// A selected file: icons browse its folder, keep it selected and show no preview.
 	await sidebar.locator(".asset-row").filter({ hasText: "deep.md" }).click();
-	await display.getByRole("button", { name: "Icons", exact: true }).click();
+	await expect(loomPage.getByRole("tab", { name: "deep.md", selected: true })).toBeVisible();
+	await icons.click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("b");
 	await expect(browser.locator(".browser-tile.selected .browser-tile-name")).toHaveText("deep.md");
 	await expect(loomPage.locator(".preview-overlay")).toHaveCount(0);
 	await expect(sidebar.locator(".folder-row.selected")).toHaveText("b");
 
+	await browser.locator(".browser-tile").filter({ hasText: "other.md" }).click();
+	await expect(loomPage.locator(".preview-overlay")).toHaveCount(0);
+	await list.click();
+	await expect(sidebar.locator(".asset-row.selected .asset-name")).toHaveText("other.md");
+	await expect(loomPage.getByRole("tab", { name: "other.md", selected: true })).toBeVisible();
+	await expect(loomPage.getByRole("textbox", { name: "Edit other.md" })).toBeVisible();
+
 	// Nothing selected: list mode selects the folder being browsed.
+	await icons.click();
 	await browser.locator(".browser-crumb").filter({ hasText: /^a$/ }).click();
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("a");
-	await display.getByRole("button", { name: "List", exact: true }).click();
+	await list.click();
 	await expect(sidebar.locator(".folder-row.selected")).toHaveText("a");
 });
 

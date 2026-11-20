@@ -22,7 +22,6 @@ export function TabStrip({
 	onClose,
 	onMove,
 	onDropFiles,
-	onBrowse,
 	onDropOnCanvas,
 }: {
 	tabs: AssetTabs;
@@ -32,7 +31,6 @@ export function TabStrip({
 	onMove: (assetId: string, beforeId: string | null) => void;
 	/** Library files dropped on the strip: open them as tabs before `beforeId`, or at the end when null. */
 	onDropFiles: (assetIds: string[], beforeId: string | null) => void;
-	onBrowse?: () => void;
 	onDropOnCanvas?: (assetIds: string[], canvasId: string) => void;
 }): React.JSX.Element | null {
 	const { t } = useLocale();
@@ -102,13 +100,6 @@ export function TabStrip({
 				if (slot) drop(slot.beforeId, event.dataTransfer);
 			}}
 		>
-			{onBrowse && (
-				<div className={`asset-tab${files.some((file) => file.assetId === tabs.active) ? "" : " active"}`}>
-					<button type="button" role="tab" aria-selected={!files.some((file) => file.assetId === tabs.active)} onClick={onBrowse}>
-						<span>{t.canvas.browse}</span>
-					</button>
-				</div>
-			)}
 			{files.map((asset, index) => {
 				const selected = asset.assetId === tabs.active;
 				const label = labels.get(asset.assetId) ?? asset.filename;

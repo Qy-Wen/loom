@@ -59,9 +59,10 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 	useEffect(() => {
 		const onKey = (event: KeyboardEvent) => {
 			if (event.key !== "Escape" || event.defaultPrevented) return;
-			// Escape first closes an open find bar or a rename, which handle it themselves.
+			// The inner preview and its find or rename controls get Escape first.
 			if (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement) return;
-			if (card.current?.querySelector(".find-bar, .cm-search")) return;
+			if (card.current?.querySelector(".preview-overlay-card, .find-bar, .cm-search")) return;
+			event.preventDefault();
 			close.current();
 		};
 		window.addEventListener("keydown", onKey);

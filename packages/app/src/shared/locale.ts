@@ -401,7 +401,6 @@ export const messages = defineLocale(
 		},
 		canvas: {
 			newCanvas: "New Canvas",
-			browse: "Files",
 			canvas: "Canvas",
 			addFiles: "Add files",
 			addNote: "Text",
@@ -1183,7 +1182,6 @@ export const messages = defineLocale(
 		},
 		canvas: {
 			newCanvas: "新建画板",
-			browse: "文件",
 			canvas: "画板",
 			addFiles: "添加文件",
 			addNote: "文本",

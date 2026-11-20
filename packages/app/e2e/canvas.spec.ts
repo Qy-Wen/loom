@@ -115,15 +115,11 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await expect.poll(async () => (await snapshot()).folders).toContain("项目");
 	await page.evaluate(() => window.loom.createCanvasFile("项目"));
 	const sidebar = page.locator(".library-sidebar");
-	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
 	await sidebar.locator(".folder-main").filter({ hasText: /^项目$/ }).click();
-	const browser = page.locator(".folder-browser");
-	const tile = (name: string) => browser.locator(".browser-tile").filter({ hasText: name });
-	await tile("Untitled.canvas").dblclick();
+	await sidebar.locator(".asset-row").filter({ hasText: "Untitled.canvas" }).click();
 	const canvasTab = page.getByRole("tab", { name: "Untitled.canvas" });
 	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
-	await page.getByRole("tab", { name: "Files", exact: true }).click();
-	await tile("文案.md").dragTo(canvasTab);
+	await sidebar.locator(".asset-row").filter({ hasText: "文案.md" }).dragTo(canvasTab);
 	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
 	const card = page.locator(".canvas-editor .canvas-file-markdown");
 	const heading = card.getByRole("heading", { name: "文案", exact: true });
@@ -155,6 +151,94 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await writeFile(scriptPath, "# 改过的文案");
 	await expect(card.getByRole("heading", { name: "改过的文案" })).toBeVisible();
 	await expect.poll(async () => (await readBoard(join(root, "项目", "Untitled.canvas"))).nodes[0]?.file).toBe("项目/文案.md");
+});
+
+test("switching from a canvas tab to icon mode selects the canvas and opens it on double-click", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const path = join(root, "Board.canvas");
+	await writeFile(join(root, "Note.md"), "# Reference");
+	await writeFile(path, JSON.stringify({
+		nodes: [{ id: "note", type: "file", file: "Note.md", x: 0, y: 0, width: 260, height: 180 }],
+		edges: [],
+	}));
+
+	const sidebar = page.locator(".library-sidebar");
+	const tabs = page.locator(".asset-tabs");
+	const canvasTab = tabs.getByRole("tab", { name: "Board.canvas", exact: true });
+	const tile = page.locator(".folder-browser .browser-tile").filter({ hasText: "Board.canvas" });
+	const preview = page.getByRole("dialog", { name: "File preview", exact: true });
+	const board = preview.getByRole("region", { name: "Canvas Board.canvas" });
+	await sidebar.locator(".asset-row").filter({ hasText: "Board.canvas" }).click();
+	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await expect(tile).toHaveClass(/selected/);
+	await expect(tabs).toHaveCount(0);
+	await expect(preview).toHaveCount(0);
+
+	await tile.dblclick();
+	await expect(board).toBeVisible();
+	await expect(tabs).toHaveCount(0);
+
+	await board.getByRole("heading", { name: "Reference", exact: true }).dblclick();
+	await expect(preview.getByRole("textbox", { name: "Edit Note.md" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(1);
+	await expect(board).toBeVisible();
+	await board.getByRole("button", { name: "Text", exact: true }).click();
+	await board.getByRole("textbox", { name: "Markdown text" }).fill("Edited in the preview");
+	await board.getByRole("button", { name: "Done", exact: true }).click();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
+	await expect(tile).toBeVisible();
+	await expect.poll(async () => (await readBoard(path)).nodes.some((node) => node.text === "Edited in the preview")).toBe(true);
+
+	await sidebar.getByRole("button", { name: "List", exact: true }).click();
+	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
+	await expect(page.getByRole("region", { name: "Canvas Board.canvas" }).getByText("Edited in the preview")).toBeVisible();
+
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await page.locator(".folder-browser .browser-tile").filter({ hasText: "Note.md" }).click();
+	await sidebar.getByRole("button", { name: "List", exact: true }).click();
+	await expect(canvasTab).toHaveAttribute("aria-selected", "false");
+	await expect(tabs.getByRole("tab", { name: "Note.md", selected: true })).toBeVisible();
+});
+
+test("clicking Graph nodes selects them without opening files", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await writeFile(join(root, "Open.md"), "# Open");
+	await writeFile(join(root, "Other.md"), "# Other");
+	await writeFile(join(root, "Board.canvas"), JSON.stringify({ nodes: [], edges: [] }));
+	const sidebar = page.locator(".library-sidebar");
+	const views = sidebar.locator(".library-views");
+	const graph = views.getByRole("button", { name: "Graph", exact: true });
+	const library = views.getByRole("button", { name: "Library", exact: true });
+	const node = (filename: string) => page.locator(`.graph-node[aria-label="${filename}"]`);
+
+	await sidebar.locator(".asset-row").filter({ hasText: "Open.md" }).click();
+	await graph.click();
+	await node("Board.canvas").locator(".graph-node-outline").click();
+	await expect(node("Board.canvas")).toHaveClass(/selected/);
+	await expect(graph).toHaveAttribute("aria-pressed", "true");
+	await node("Other.md").locator(".graph-node-outline").click();
+	await expect(node("Other.md")).toHaveClass(/selected/);
+	await library.click();
+	await expect(page.getByRole("tab", { name: "Open.md", exact: true })).toHaveAttribute("aria-selected", "true");
+	await expect(page.getByRole("tab", { name: "Board.canvas", exact: true })).toHaveCount(0);
+
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await graph.click();
+	await node("Board.canvas").locator(".graph-node-outline").click();
+	await expect(node("Board.canvas")).toHaveClass(/selected/);
+	await expect(graph).toHaveAttribute("aria-pressed", "true");
+	await library.click();
+	await expect(page.getByRole("tab", { name: "Board.canvas", exact: true })).toHaveCount(0);
+	await expect(page.getByRole("dialog", { name: "File preview", exact: true })).toHaveCount(0);
 });
 
 test("closing the workspace flushes the latest canvas edit", async ({ loomPage: page, electronApp }) => {

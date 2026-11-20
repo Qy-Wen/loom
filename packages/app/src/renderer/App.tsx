@@ -160,28 +160,30 @@ export function App(): React.JSX.Element {
 	const libraryDisplay = useLibraryDisplay();
 	const display: LibraryDisplay = { ...libraryDisplay, setFileDisplay: changeFileDisplay };
 	const iconMode = libraryDisplay.fileDisplay === "icons";
+	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [location, setLocation] = useState<BrowseLocation>(ROOT_LOCATION);
 	// The file open in the icon-mode preview overlay. List mode has tabs instead.
 	const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
-	// The workbench shows the active tab, not the tree focus. Only actions that mean "look at this file"
-	// change tabs (selectAsset, clicking a file). Right-click, select all, and drops move the focus and leave tabs alone.
+	// The list workbench shows the active tab. Right-click, select all, and tree drops can move focus independently.
 	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
 	const [canvasDrop, setCanvasDrop] = useState<{ id: string; assets: string[] } | null>(null);
 	const [canvasPreviewId, setCanvasPreviewId] = useState<string | null>(null);
 	const canvasIds = useMemo(() => new Set(library.assets.filter((asset) => isCanvasFile(asset.filename)).map((asset) => asset.assetId)), [library.assets]);
-	const activeCanvas = useMemo(() => library.assets.find((asset) => asset.assetId === tabs.active && canvasIds.has(asset.assetId)), [library.assets, tabs.active, canvasIds]);
+	const activeCanvas = useMemo(
+		() => iconMode ? undefined : library.assets.find((asset) => asset.assetId === tabs.active && canvasIds.has(asset.assetId)),
+		[iconMode, library.assets, tabs.active, canvasIds],
+	);
 	const canvasPreview = useMemo(() => library.assets.find((asset) => asset.assetId === canvasPreviewId), [library.assets, canvasPreviewId]);
-	const visibleTabs = iconMode ? { ...tabs, ids: tabs.ids.filter((id) => canvasIds.has(id)) } : tabs;
-	// List mode follows the active tab. Icon mode follows the previewed file, else the focused tile.
-	const viewedAssetId = activeCanvas?.assetId ?? (iconMode ? (previewAssetId ?? selectedAssetId) : tabs.active);
+	const libraryAssetId = iconMode ? previewAssetId : tabs.active;
+	// Graph details follow the selection independently of the open file.
+	const viewedAssetId = workbenchView === "graph" ? selectedAssetId : libraryAssetId ?? (iconMode ? selectedAssetId : null);
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<FolderRename | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
-	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
@@ -272,7 +274,7 @@ export function App(): React.JSX.Element {
 	useEffect(() => {
 		if (!iconMode || workbenchView !== "library") setPreviewAssetId(null);
 	}, [iconMode, workbenchView]);
-	useEffect(() => setCanvasPreviewId(null), [activeCanvas?.assetId, workbenchView]);
+	useEffect(() => setCanvasPreviewId(null), [libraryAssetId, workbenchView]);
 	useEffect(() => pruneCanvasSaves(canvasIds), [canvasIds]);
 	useEffect(() => window.loom.onFlushCanvasBeforeClose(async () => {
 		try {
@@ -545,24 +547,27 @@ export function App(): React.JSX.Element {
 		});
 	}
 
+	function showListAsset(assetId: string): void {
+		const canvas = canvasIds.has(assetId);
+		setTabs((current) => canvas || (current.active !== null && canvasIds.has(current.active))
+			? openInNewTab(current, assetId)
+			: showInTab(current, assetId));
+		if (canvas) setWorkbenchView("library");
+	}
+
 	/**
 	 * Look at a file: show it in the active tab, or in icon mode open it in the preview overlay over its folder.
 	 * Outside the Files view icon mode only selects it, since there is nothing to open it in.
 	 */
 	function selectAsset(assetId: string): void {
 		setPicked(singleSelection(assetKey(assetId)));
-		const asset = library.assets.find((item) => item.assetId === assetId);
-		if (asset && isCanvasFile(asset.filename)) {
-			openAssetInNewTab(assetId);
-			return;
-		}
 		if (!iconMode) {
-			setTabs((current) => activeCanvas ? openInNewTab(current, assetId) : showInTab(current, assetId));
+			showListAsset(assetId);
 			return;
 		}
 		if (workbenchView !== "library") return;
-		if (activeCanvas) setTabs((current) => ({ ...current, active: null }));
 		// Stay on a favorites or tag view that already lists it; otherwise browse to its folder.
+		const asset = library.assets.find((item) => item.assetId === assetId);
 		if (asset && !(location.kind !== "folder" && browseHolds(location, assetId))) {
 			setLocation({ kind: "folder", path: parentFolder(asset.relativePath) });
 		}
@@ -576,9 +581,7 @@ export function App(): React.JSX.Element {
 	}
 
 	/**
-	 * Switch between list and icons so both point at the same folder. To icons: browse the focused folder, or the one
-	 * holding the focused file, and keep only the selection that is on screen there (a folder's own tile is not).
-	 * To list: select the browsed folder unless something is already selected.
+	 * Keep the folder in view when switching layouts. Returning to the list also shows the focused file in a tab.
 	 */
 	function changeFileDisplay(next: FileDisplay): void {
 		if (next === libraryDisplay.fileDisplay) return;
@@ -597,6 +600,8 @@ export function App(): React.JSX.Element {
 			const keys = picked.keys.filter((key) => parentOf(key) === dest);
 			setLocation({ kind: "folder", path: dest });
 			setPicked(keys.length === 0 ? emptyTreeSelection : { keys, anchor: keys.includes(picked.anchor ?? "") ? picked.anchor : keys[0], focus: keys.includes(focus) ? focus : keys[0] });
+		} else if (workbenchView === "library" && selectedAssetId && library.assets.some((asset) => asset.assetId === selectedAssetId)) {
+			showListAsset(selectedAssetId);
 		} else if (!picked.focus && location.kind === "folder" && location.path) {
 			selectFolder(location.path);
 			revealFolders(ancestorFolders(location.path));
@@ -605,7 +610,6 @@ export function App(): React.JSX.Element {
 
 	/** Move the browser. What was selected is no longer on screen, so the selection is dropped. */
 	function browseTo(next: BrowseLocation): void {
-		if (iconMode && activeCanvas) setTabs((current) => ({ ...current, active: null }));
 		setLocation(next);
 		setPicked(emptyTreeSelection);
 	}
@@ -630,8 +634,8 @@ export function App(): React.JSX.Element {
 	}
 
 	/**
-	 * A box drag in the graph picks files in the same selection the file tree uses. It leaves the open tab and Details alone,
-	 * so boxing several files does not jump to one of them. A click on empty canvas passes no files and, without a modifier, clears.
+	 * A box drag in the graph picks files in the same selection the file tree uses.
+	 * A click on empty canvas passes no files and, without a modifier, clears.
 	 */
 	function boxSelectAssets(assetIds: string[], add: boolean): void {
 		setPicked((current) => assetIds.length === 0 && !add ? clearAssetSelection(current) : boxSelect(current, assetIds, add));
@@ -639,6 +643,10 @@ export function App(): React.JSX.Element {
 
 	/** Open in a new tab next to the active one. The tree and Details follow the new tab. */
 	function openAssetInNewTab(assetId: string): void {
+		if (iconMode) {
+			selectAsset(assetId);
+			return;
+		}
 		setTabs((current) => openInNewTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
 		if (canvasIds.has(assetId)) {
@@ -702,10 +710,7 @@ export function App(): React.JSX.Element {
 		if (iconMode) setTreePicked(next);
 		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
 		if (!iconMode && next.focus?.startsWith("asset:") && (!activeCanvas || mode === "replace")) {
-			const id = next.focus.slice("asset:".length);
-			const canvas = canvasIds.has(id);
-			setTabs((current) => canvas || activeCanvas ? openInNewTab(current, id) : showInTab(current, id));
-			if (canvas) setWorkbenchView("library");
+			showListAsset(next.focus.slice("asset:".length));
 		}
 	}
 
@@ -1001,7 +1006,6 @@ export function App(): React.JSX.Element {
 		setWorkbenchView("library");
 		setPicked(singleSelection(assetKey(asset.assetId)));
 		if (iconMode) {
-			setTabs((current) => ({ ...current, active: null }));
 			setLocation({ kind: "folder", path: relativePath });
 			setPreviewAssetId(null);
 		} else {
@@ -1471,6 +1475,23 @@ export function App(): React.JSX.Element {
 		);
 	}
 
+	function renderCanvas(asset: Asset): React.JSX.Element {
+		return (
+			<div className="canvas-workbench" key={asset.assetId}>
+				<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
+					<CanvasEditor asset={asset} assets={library.assets}
+						incoming={canvasDrop?.id === asset.assetId ? canvasDrop.assets : undefined}
+						onConsume={() => setCanvasDrop(null)}
+						onError={setError}
+						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
+				</Suspense>
+				{canvasPreview && <PreviewOverlay title={canvasPreview.relativePath} onClose={() => setCanvasPreviewId(null)}>
+					<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets} />
+				</PreviewOverlay>}
+			</div>
+		);
+	}
+
 	return (
 		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
 			<div className="app">
@@ -1571,15 +1592,14 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{workbenchView === "library" && (!iconMode || visibleTabs.ids.length > 0) && (
+						{workbenchView === "library" && !iconMode && (
 							<TabStrip
-								tabs={visibleTabs}
+								tabs={tabs}
 								assets={library.assets}
 								onActivate={activateAssetTab}
 								onClose={closeAssetTab}
 								onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
 								onDropFiles={openDroppedFiles}
-								onBrowse={iconMode ? () => setTabs((current) => ({ ...current, active: null })) : undefined}
 								onDropOnCanvas={(assets, id) => {
 									activateAssetTab(id);
 									setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
@@ -1611,7 +1631,7 @@ export function App(): React.JSX.Element {
 									selectedAssetIds={selectedAssetIds}
 									relationTypes={relationTypes}
 									onSelectAsset={(assetId) => {
-										selectAsset(assetId);
+										setPicked(singleSelection(assetKey(assetId)));
 										panels.focus("details");
 									}}
 									onBoxSelect={boxSelectAssets}
@@ -1620,18 +1640,7 @@ export function App(): React.JSX.Element {
 								/>
 							</Suspense>
 						) : activeCanvas ? (
-							<div className="canvas-workbench" key={activeCanvas.assetId}>
-								<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
-									<CanvasEditor asset={activeCanvas} assets={library.assets}
-										incoming={canvasDrop?.id === activeCanvas.assetId ? canvasDrop.assets : undefined}
-										onConsume={() => setCanvasDrop(null)}
-										onError={setError}
-										onPreview={(asset) => isCanvasFile(asset.filename) ? selectAsset(asset.assetId) : setCanvasPreviewId(asset.assetId)} />
-								</Suspense>
-								{canvasPreview && <PreviewOverlay title={canvasPreview.relativePath} onClose={() => setCanvasPreviewId(null)}>
-									<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets} />
-								</PreviewOverlay>}
-							</div>
+							renderCanvas(activeCanvas)
 						) : iconMode ? (
 							library.rootPath ? (
 								<FolderBrowser
@@ -1660,7 +1669,7 @@ export function App(): React.JSX.Element {
 								>
 									{previewAsset ? (
 										<PreviewOverlay title={previewAsset.relativePath} onClose={() => setPreviewAssetId(null)}>
-											{renderPreview(previewAsset)}
+											{canvasIds.has(previewAsset.assetId) ? renderCanvas(previewAsset) : renderPreview(previewAsset)}
 										</PreviewOverlay>
 									) : null}
 								</FolderBrowser>
