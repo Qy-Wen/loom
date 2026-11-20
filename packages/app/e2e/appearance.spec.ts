@@ -9,6 +9,12 @@ test("Appearance switches the whole window between light and dark and keeps the 
 	test.skip(!electronApp, "needs control of the main process");
 	await followApp(loomPage);
 	const original = await loomPage.evaluate(() => window.loom.getGeneralSettings());
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBeTruthy();
+	const board = await loomPage.evaluate(() => window.loom.createCanvasFile(""));
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: board.filename }).click();
+	await expect(loomPage.locator(".canvas-surface")).toBeVisible();
+	const surfaces = () => loomPage.locator(".library-sidebar, .workbench, .canvas-surface, .panel-region.dock-band").evaluateAll((nodes) =>
+		Object.fromEntries(nodes.map((node) => [node.classList[0], getComputedStyle(node).backgroundColor])));
 	const paint = () => loomPage.evaluate(() => ({
 		theme: document.documentElement.dataset.theme,
 		hasDarkClass: document.documentElement.classList.contains("dark"),
@@ -26,6 +32,7 @@ test("Appearance switches the whole window between light and dark and keeps the 
 		await expect.poll(async () => (await paint()).theme).toBe("dark");
 		const dark = await paint();
 		expect(dark).toMatchObject({ hasDarkClass: true, scheme: "dark", page: "rgb(24, 24, 23)", text: "rgb(236, 236, 233)" });
+		expect(await surfaces()).toEqual({ "library-sidebar": "rgb(37, 37, 35)", workbench: dark.page, "canvas-surface": dark.page, "panel-region": dark.page });
 		expect((await loomPage.evaluate(() => window.loom.getGeneralSettings())).appearance).toBe("dark");
 		// Native chrome follows: the window background the user sees before and behind the page.
 		expect(await electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBackgroundColor().toLowerCase())).toBe("#181817");
@@ -33,6 +40,8 @@ test("Appearance switches the whole window between light and dark and keeps the 
 		await group.getByRole("radio", { name: "Light", exact: true }).locator("..").click();
 		await expect.poll(async () => (await paint()).theme).toBe("light");
 		expect(await paint()).toMatchObject({ hasDarkClass: false, scheme: "light", page: "rgb(247, 247, 245)", text: "rgb(32, 33, 36)" });
+		const white = "rgb(255, 255, 255)";
+		expect(await surfaces()).toEqual({ "library-sidebar": "rgb(247, 247, 245)", workbench: white, "canvas-surface": white, "panel-region": white });
 		expect(await electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.getBackgroundColor().toLowerCase())).toBe("#f7f7f5");
 
 		// "Follow system" hands control back to the operating system.
@@ -59,7 +68,7 @@ test("a saved dark choice is applied on reload, including the third-party chat w
 		// The chat is a third-party widget; it must be dark too, not a white box in a dark window.
 		const widget = loomPage.locator("[data-copilotkit]").first();
 		await expect(widget).toBeVisible();
-		await expect.poll(() => widget.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(37, 37, 35)");
+		await expect.poll(() => widget.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(24, 24, 23)");
 	} finally {
 		await loomPage.evaluate((settings) => window.loom.saveGeneralSettings(settings), original);
 	}

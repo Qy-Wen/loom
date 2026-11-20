@@ -18,6 +18,10 @@
 	transition: grid-template-columns var(--layout-toggle-duration) var(--layout-toggle-ease), grid-template-rows var(--layout-toggle-duration) var(--layout-toggle-ease);
 }
 
+.shell > :is(.workbench, .panel-region) {
+	--lm-surface-raised: var(--lm-surface-workspace);
+}
+
 body.resizing-columns .shell,
 body.resizing-rows .shell,
 body.resizing-panel .shell,

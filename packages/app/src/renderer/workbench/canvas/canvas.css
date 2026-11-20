@@ -122,7 +122,7 @@
 	overflow: hidden;
 	isolation: isolate;
 	touch-action: none;
-	background: color-mix(in srgb, var(--lm-surface-canvas) 75%, var(--lm-surface-sunken))
+	background: var(--lm-surface-canvas)
 		radial-gradient(circle, color-mix(in srgb, var(--lm-text-secondary) 33%, transparent) .7px, transparent .9px) 0 0 / 18px 18px;
 }
 
