@@ -2,6 +2,66 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
+test("the fixed divider after collapsed favorites stays in place across file display modes", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	await writeFile(join((await rootPath())!, "favorite.md"), "# Favorite");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		await window.loom.setFavorite(assets[0]!.assetId, true);
+	});
+
+	const sidebar = loomPage.locator(".library-sidebar");
+	const display = sidebar.getByRole("group", { name: "File display", exact: true });
+	const divider = sidebar.getByRole("separator", { name: "Resize favorites/tags and file tree", exact: true });
+	await expect(sidebar.getByRole("button", { name: "Favorites", exact: true })).toHaveAttribute("aria-expanded", "false");
+	await expect(divider).toHaveAttribute("aria-disabled", "true");
+	const position = () => divider.evaluate((element) => ({
+		y: element.getBoundingClientRect().top,
+		heightAbove: element.getAttribute("aria-valuenow"),
+	}));
+	const listPosition = await position();
+	for (const mode of ["Icons", "List"]) {
+		await display.getByRole("button", { name: mode, exact: true }).click();
+		await expect(divider).toHaveAttribute("aria-disabled", "true");
+		await expect.poll(position).toEqual(listPosition);
+	}
+});
+
+test("list shortcut folders expand by double-clicking the name or clicking the arrow", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	await writeFile(join((await rootPath())!, "shortcut.md"), "# Shortcut");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	await loomPage.evaluate(async () => {
+		const { assets } = await window.loom.getLibrarySnapshot();
+		const id = assets[0]!.assetId;
+		await window.loom.setFavorite(id, true);
+		await window.loom.addAssetTag(id, "Picked");
+	});
+
+	const shortcuts = loomPage.locator(".library-shortcuts");
+	for (const name of ["Favorites", "Tags", "Picked"]) {
+		const label = shortcuts.getByRole("button", { name, exact: true });
+		const row = shortcuts.locator(".shortcut-folder").filter({ has: loomPage.getByRole("button", { name, exact: true }) });
+		const arrow = row.locator(".folder-chevron");
+		await expect(label).toHaveAttribute("aria-expanded", "false");
+		await label.click();
+		await expect(label).toHaveAttribute("aria-expanded", "false");
+		await label.dblclick();
+		await expect(label).toHaveAttribute("aria-expanded", "true");
+		await arrow.click();
+		await expect(label).toHaveAttribute("aria-expanded", "false");
+		await label.press("Enter");
+		await expect(label).toHaveAttribute("aria-expanded", "true");
+	}
+	await expect(shortcuts.locator(".favorites .asset-row")).toHaveCount(1);
+	await expect(shortcuts.locator(".library-tags .asset-row")).toHaveCount(1);
+});
+
 test("expanding tags that fit resizes the shortcuts pane before a frame can show overflow", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
@@ -12,7 +72,7 @@ test("expanding tags that fit resizes the shortcuts pane before a frame can show
 		await window.loom.addAssetTag(assets[0]!.assetId, "Picked");
 	});
 	await expect(loomPage.locator(".tags-label")).toBeVisible();
-	for (const selector of [".tags-label", ".library-tags .folder-main"]) {
+	for (const selector of [".tags-label .folder-chevron", ".library-tags .folder-row .folder-chevron"]) {
 		const frames = await loomPage.evaluate(async (selector) => {
 			const scroller = document.querySelector<HTMLElement>(".library-shortcuts")!;
 			const samples: Array<{ height: number; overflow: number }> = [];
@@ -41,6 +101,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	});
 	const sidebar = loomPage.locator(".library-sidebar");
 	const top = sidebar.locator(".library-shortcuts"), files = sidebar.locator(".asset-list");
+	const favoritesToggle = top.locator(".favorites-label .folder-chevron");
 	const separator = sidebar.getByRole("separator", { name: "Resize favorites/tags and file tree", exact: true });
 	const height = async () => Number(await separator.getAttribute("aria-valuenow"));
 	const scroll = (area: typeof top) => area.evaluate((element) => element.scrollTop);
@@ -50,7 +111,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(separator).toBeVisible();
 	await expect(separator).toHaveCSS("height", "12px");
 	await expect(moreCue).toHaveCount(0); // Folded headings fit; don't suggest that hidden content exists.
-	await top.getByRole("button", { name: "Favorites", exact: true }).click();
+	await favoritesToggle.click();
 	await expect.poll(async () => Math.abs(await height() - await extent() * 0.4)).toBeLessThanOrEqual(1);
 	await expect(moreCue).toBeVisible();
 	await expect(moreCue).toHaveCSS("pointer-events", "none");
@@ -126,7 +187,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await separator.dblclick(); await expect.poll(() => ratio()).toBe(0.4);
 	await separator.press("ArrowDown"); const preferred = await ratio();
 	// Collapsing shortcuts releases space, but expanding restores the preferred cap.
-	await top.getByRole("button", { name: "Favorites", exact: true }).click();
+	await favoritesToggle.click();
 	await expect.poll(() => height()).toBeLessThan(80); expect(await ratio()).toBe(preferred);
 	await expect(moreCue).toHaveCount(0);
 	// With nothing to adjust, the divider is inert: no resize cursor, not focusable, and dragging does nothing.
@@ -137,7 +198,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect(loomPage.locator("body")).not.toHaveClass(/library-resizing-regions/);
 	await loomPage.mouse.move(fixedBox.x + fixedBox.width / 2, fixedBox.y + fixedBox.height / 2 + 80, { steps: 4 }); await loomPage.mouse.up();
 	expect(await height()).toBe(folded); expect(await ratio()).toBe(preferred);
-	await top.getByRole("button", { name: "Favorites", exact: true }).click();
+	await favoritesToggle.click();
 	await expect.poll(async () => Math.abs(await height() - await extent() * preferred)).toBeLessThanOrEqual(1);
 	await expect(moreCue).toBeVisible();
 	// Window resize and sidebar hiding do not overwrite the stored preference.
@@ -148,10 +209,10 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await loomPage.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
 	await loomPage.getByRole("button", { name: "Expand sidebar", exact: true }).click();
 	expect(await ratio()).toBe(preferred);
-	await loomPage.reload(); await top.getByRole("button", { name: "Favorites", exact: true }).click();
+	await loomPage.reload(); await favoritesToggle.click();
 	await expect.poll(async () => Math.abs(await height() - await extent() * preferred)).toBeLessThanOrEqual(1);
-	await top.getByRole("button", { name: "Tags", exact: true }).click();
-	await top.locator(".folder-main").filter({ hasText: /^Picked$/ }).click();
+	await top.locator(".tags-label .folder-chevron").click();
+	await top.getByRole("button", { name: "Expand tag", exact: true }).click();
 	await expect(top.locator(".library-tags .asset-row")).toHaveCount(12);
 	await top.evaluate((element) => { element.scrollTop = 0; });
 	await expect(moreCue).toBeVisible();

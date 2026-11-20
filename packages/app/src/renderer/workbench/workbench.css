@@ -23,10 +23,6 @@
 	align-items: center;
 }
 
-.file-heading-title {
-	gap: var(--lm-space-3);
-}
-
 .file-heading-tools {
 	gap: var(--lm-space-4);
 }

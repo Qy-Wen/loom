@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import {
 	activeLibraryDrag,
@@ -28,6 +28,7 @@ const NO_FOLDERS: ReadonlySet<string> = new Set();
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
 	display: LibraryDisplay;
+	footerActions: ReactNode;
 	/** Where the folder browser is. In icon mode the sidebar is its navigator. */
 	location: BrowseLocation;
 	onLocation: (location: BrowseLocation) => void;
@@ -62,6 +63,7 @@ interface LibrarySidebarProps {
 export function LibrarySidebar({
 	library,
 	display,
+	footerActions,
 	location,
 	onLocation,
 	workbenchView,
@@ -92,6 +94,12 @@ export function LibrarySidebar({
 }: LibrarySidebarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const rootName = library.rootPath?.split(/[/\\]/).filter(Boolean).at(-1) ?? library.rootPath ?? t.library.noFolder;
+	const rootLabel = <>
+		<svg viewBox="0 0 16 16" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+			<path d="M2.5 7 8 2.5 13.5 7v5.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1ZM6.5 13.5v-4h3v4" />
+		</svg>
+		<span className="library-files-name-label">{rootName}</span>
+	</>;
 	const empty = library.assets.length === 0 && library.folders.length === 0;
 	const { fileDisplay, setFileDisplay, fileSort, setFileSort, fileSortDirection, setFileSortDirection } = display;
 	const iconMode = fileDisplay === "icons";
@@ -110,6 +118,8 @@ export function LibrarySidebar({
 	const searchRef = useRef<HTMLInputElement>(null);
 	const visible = useMemo(() => filterLibrary(library, query), [library, query]);
 	const queryActive = query.trim().length > 0;
+	const favoritesOpen = queryActive || !favoritesCollapsed;
+	const listTagsOpen = queryActive || tagsOpen;
 	const treeRows = useMemo(
 		() => visibleTreeRows(
 			visible.folders,
@@ -159,8 +169,10 @@ export function LibrarySidebar({
 			aria-hidden={collapsed || undefined}
 			tabIndex={collapsed ? undefined : 0}
 			onKeyDown={collapsed ? undefined : (event) => {
+				const target = event.target;
+				if (target instanceof Element && target.closest(".library-sidebar-actions")) return;
 				// Toolbar buttons keep native Enter activation; folder rows use tree keyboard navigation.
-				if (event.key === "Enter" && event.target instanceof Element && event.target.closest("button") && !event.target.closest(".folder-row .folder-main, .asset-row.selected")) return;
+				if (event.key === "Enter" && target instanceof Element && target.closest("button") && !target.closest(".folder-row:not(.shortcut-folder) .folder-main, .asset-row.selected")) return;
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>
@@ -249,12 +261,12 @@ export function LibrarySidebar({
 							<span className="file-heading-title">
 								{iconMode ? (
 									<LibraryRootButton
-										name={rootName}
 										title={library.rootPath ?? undefined}
 										onOpen={() => onLocation({ kind: "folder", path: "" })}
-									/>
-								) : <span className="library-files-name" data-tooltip={library.rootPath ?? undefined}>{rootName}</span>}
-								<span>{queryActive ? visible.assets.length : library.assets.length}</span>
+									>
+										{rootLabel}
+									</LibraryRootButton>
+								) : <span className="library-files-name" data-tooltip={library.rootPath ?? undefined}>{rootLabel}</span>}
 							</span>
 							{!iconMode ? (
 								<span className="file-heading-tools">
@@ -396,13 +408,12 @@ export function LibrarySidebar({
 					) : null) : !empty && (favoriteAssets.length > 0 || visibleTags.length > 0) ? <>
 						{favoriteAssets.length > 0 ? (
 							<div className="favorites">
-								<button
-									type="button"
+								<ShortcutFolderRow
 									className="favorites-label"
-									aria-expanded={queryActive || !favoritesCollapsed}
-									onClick={() => setFavoritesCollapsed(queryActive || !favoritesCollapsed)}
+									expanded={favoritesOpen}
+									chevronLabel={favoritesOpen ? t.library.collapseFolder : t.library.expandFolder}
+									onToggle={() => setFavoritesCollapsed(favoritesOpen)}
 								>
-									<span className={`folder-chevron${queryActive || !favoritesCollapsed ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
 									<span className="favorites-main">
 										<span className="favorites-symbol" aria-hidden="true">
 											<svg viewBox="0 0 16 16" width="16" height="16">
@@ -411,48 +422,38 @@ export function LibrarySidebar({
 										</span>
 										{t.library.favorites}
 									</span>
-								</button>
-								{queryActive || !favoritesCollapsed ? <AssetList assets={favoriteAssets} depth={0} quiet /> : null}
+								</ShortcutFolderRow>
+								{favoritesOpen ? <AssetList assets={favoriteAssets} depth={0} quiet /> : null}
 							</div>
 						) : null}
 						{visibleTags.length > 0 ? (
 							<div className="library-tags">
-								<button
-									type="button"
+								<ShortcutFolderRow
 									className="tags-label"
-									aria-expanded={queryActive || !tagsCollapsed}
-									onClick={() => setTagsCollapsed(queryActive || !tagsCollapsed)}
+									expanded={listTagsOpen}
+									chevronLabel={listTagsOpen ? t.library.collapseFolder : t.library.expandFolder}
+									onToggle={() => setTagsCollapsed(listTagsOpen)}
 								>
-									<span className={`folder-chevron${queryActive || !tagsCollapsed ? " expanded" : ""}`} aria-hidden="true"><FolderChevronIcon /></span>
 									<span className="tags-main">
 										<span className="tags-symbol" aria-hidden="true">
 											<TagIcon />
 										</span>
 										{t.library.tags}
 									</span>
-								</button>
-								{queryActive || !tagsCollapsed ? visibleTags.map(({ tag, files }) => {
+								</ShortcutFolderRow>
+								{listTagsOpen ? visibleTags.map(({ tag, files }) => {
 									const open = queryActive || expandedTagIds.has(tag.tagId);
 									return (
 										<div key={tag.tagId}>
-											<div className="folder-row" style={{ paddingLeft: 21 }}>
-												<button
-													className={`folder-chevron${open ? " expanded" : ""}`}
-													type="button"
-													aria-label={open ? t.library.collapseTag : t.library.expandTag}
-													onClick={() => toggleTag(tag.tagId)}
-												>
-													<FolderChevronIcon />
-												</button>
-												<button
-													className="folder-main"
-													type="button"
-													onClick={() => toggleTag(tag.tagId)}
-												>
-													<span className="tag-symbol"><TagHashIcon /></span>
-													<span className="asset-name">{tag.name}</span>
-												</button>
-											</div>
+											<ShortcutFolderRow
+												className="folder-row"
+												expanded={open}
+												chevronLabel={open ? t.library.collapseTag : t.library.expandTag}
+												onToggle={() => toggleTag(tag.tagId)}
+											>
+												<span className="tag-symbol"><TagHashIcon /></span>
+												<span className="asset-name">{tag.name}</span>
+											</ShortcutFolderRow>
 											{open ? <AssetList assets={files} depth={2} quiet /> : null}
 										</div>
 									);
@@ -468,9 +469,46 @@ export function LibrarySidebar({
 					)}
 				</LibraryScrollRegions>
 			)}
+			<footer className="library-sidebar-actions">
+				<span className="library-sidebar-brand">Loom</span>
+				<div className="library-sidebar-buttons">{footerActions}</div>
+			</footer>
 			</div>
 			</TreeProvider>
 		</aside>
+	);
+}
+
+function ShortcutFolderRow({ className, expanded, chevronLabel, onToggle, children }: {
+	className: string;
+	expanded: boolean;
+	chevronLabel: string;
+	onToggle: () => void;
+	children: ReactNode;
+}): React.JSX.Element {
+	const isDoubleClick = useFolderDoubleClick();
+	return (
+		<div className={`${className} shortcut-folder`}>
+			<button
+				className={`folder-chevron${expanded ? " expanded" : ""}`}
+				type="button"
+				aria-label={chevronLabel}
+				aria-expanded={expanded}
+				onClick={onToggle}
+			>
+				<FolderChevronIcon />
+			</button>
+			<button
+				className="folder-main"
+				type="button"
+				aria-expanded={expanded}
+				onClick={(event) => {
+					if (event.detail === 0 || isDoubleClick(event)) onToggle();
+				}}
+			>
+				{children}
+			</button>
+		</div>
 	);
 }
 

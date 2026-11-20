@@ -53,6 +53,34 @@
 	background: var(--lm-surface-hover);
 }
 
+.library-sidebar-actions {
+	display: flex;
+	flex: none;
+	align-items: center;
+	gap: var(--lm-space-2);
+	margin-block-start: auto;
+	padding: var(--lm-space-3) var(--lm-space-5);
+	border-block-start: 1px solid var(--lm-border-subtle);
+}
+
+.library-sidebar-brand {
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-md);
+	font-weight: var(--lm-weight-semibold);
+}
+
+.library-sidebar-buttons {
+	display: flex;
+	flex: none;
+	gap: var(--lm-space-2);
+	margin-inline-start: auto;
+}
+
+.library-sidebar-actions button:focus-visible {
+	outline: 2px solid var(--lm-accent);
+	outline-offset: 1px;
+}
+
 .shell.library-collapsed > .library-sidebar {
 	visibility: hidden;
 	pointer-events: none;
@@ -254,32 +282,52 @@
 }
 
 .library-files-heading {
-	padding-top: 7px;
+	padding-block: var(--lm-space-1);
 	border-top: 0;
 }
 
 /* Keep the row's height when icon mode hides the sort/search buttons. */
 .library-files-heading .file-heading-title {
-	align-items: baseline;
 	min-width: 0;
-	min-height: var(--lm-size-sm);
+	min-height: var(--lm-size-md);
 	flex: 1;
 	margin-right: var(--lm-space-4);
 }
 
+.library-files-heading .file-heading-tools {
+	gap: 0;
+}
+
+.library-files-heading :is(.file-heading-tools, .file-sort) > button {
+	width: var(--lm-size-md);
+	height: var(--lm-size-md);
+}
+
+.library-files-heading .file-sort > button + button {
+	margin-left: 0;
+}
+
 .library-files-name {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--lm-space-2);
 	min-width: 0;
-	overflow: hidden;
 	color: var(--lm-text-primary);
 	font-size: var(--lm-text-size-sm);
-	text-overflow: ellipsis;
-	white-space: nowrap;
 	letter-spacing: 0;
 	text-transform: none;
 }
 
-.library-files-heading .file-heading-title > span:last-child {
+.library-files-name > svg {
 	flex: none;
+	color: var(--lm-text-muted);
+}
+
+.library-files-name-label {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .library-root-button {
@@ -293,8 +341,13 @@
 	cursor: pointer;
 }
 
-.library-root-button:hover {
+.library-root-button:hover,
+.library-root-button[aria-current="location"] {
 	color: var(--lm-text-accent);
+}
+
+.library-root-button[aria-current="location"] > svg {
+	color: inherit;
 }
 
 .library-root-button.drop-target {
@@ -317,8 +370,9 @@
 .library-shortcuts-more { position: absolute; bottom: 0; left: 6px; right: 6px; height: 30px; max-height: 100%; background: linear-gradient(transparent, var(--lm-surface-subtle) 85%); pointer-events: none; }
 
 .library-shortcuts-content { display: flow-root; }
-.library-shortcuts-content > :last-child,
-.library-shortcuts-content > .library-nav > :last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
+/* Trim trailing spacing from shortcut sections. */
+.library-shortcuts-content > :is(.favorites, .library-tags):last-child,
+.library-shortcuts-content > .library-nav > .library-tags:last-child { margin-bottom: 0; padding-bottom: 0; border-bottom: 0; }
 .library-region-handle { position: relative; flex: 0 0 12px; cursor: row-resize; touch-action: none; }
 .library-region-handle::after { position: absolute; top: 50%; left: 6px; right: 6px; height: 1px; transform: translateY(-50%); background: var(--lm-surface-active); content: ""; }
 .library-region-handle.has-more::after { background: var(--lm-border-strong); }
@@ -328,10 +382,13 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 .folder-row,
 .asset-row {
+	/* Depth indents by margin, so a row's highlight starts at its own content, not the tree's left edge. */
+	--tree-indent: 0px;
+	margin-inline-start: var(--tree-indent);
 	display: flex;
 	align-items: center;
 	gap: var(--lm-space-4);
-	width: 100%;
+	width: calc(100% - var(--tree-indent));
 	padding: var(--lm-space-3) 7px;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
@@ -342,15 +399,18 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	font: inherit;
 }
 
-.folder-row:hover,
-.asset-row:hover {
+.asset-row:hover,
+.folder-row:hover .folder-main {
 	background: var(--lm-surface-hover);
 }
 
 .folder-row {
-	gap: 1px;
 	font-weight: var(--lm-weight-medium);
 	cursor: default;
+}
+
+.folder-row.shortcut-folder {
+	padding-inline-start: 21px;
 }
 
 .folder-main {
@@ -361,11 +421,40 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	flex: 1;
 	padding: 0;
 	border: 0;
+	border-radius: var(--lm-radius-sm);
 	background: transparent;
 	color: inherit;
 	font: inherit;
 	cursor: pointer;
 	text-align: left;
+}
+
+/* The highlight belongs to the folder's icon and name, not the arrow: it sits on the button, which keeps its own inset. */
+.folder-row {
+	gap: 0;
+	padding-right: 0;
+}
+
+.folder-row > .folder-main {
+	padding-inline: 3px 7px;
+}
+
+.asset-list .folder-row {
+	min-height: var(--lm-size-lg);
+	padding-block: 0;
+}
+
+.asset-list .folder-main {
+	align-self: stretch;
+}
+
+.asset-list .asset-row {
+	padding-block: 3px;
+}
+
+.asset-list .asset-row .asset-thumbnail {
+	width: var(--lm-size-lg);
+	height: var(--lm-size-lg);
 }
 
 .folder-chevron {
@@ -401,8 +490,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	color: var(--lm-text-muted);
 }
 
-.folder-row.selected,
-.asset-row.selected {
+.asset-row.selected,
+.folder-row.selected .folder-main {
 	background: var(--lm-surface-accent-strong);
 }
 
@@ -420,7 +509,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	opacity: 0.45;
 }
 
-.folder-row.drop-target {
+.folder-row.drop-target .folder-main {
 	background: var(--lm-surface-success);
 }
 
@@ -803,7 +892,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 /* Match the list view's 21px indent plus its arrow, then the same icon and label gap. */
 .library-nav-item.tag-item {
-	padding-left: 29px;
+	padding-left: 31px;
 	gap: var(--lm-space-1);
 }
 

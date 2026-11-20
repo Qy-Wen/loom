@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, type ReactNode } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
@@ -87,7 +87,7 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 			<div
 				ref={rowRef}
 				className={`folder-row ${selected ? "selected" : ""}${cut ? " cut" : ""}${tree.dropFolder === folder.relativePath ? " drop-target" : ""}`}
-				style={{ paddingLeft: 7 + depth * 14 }}
+				style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}
 			>
 				{expandable ? (
 					<button
@@ -148,7 +148,7 @@ function FileTreeRows({ node, depth }: { node: FolderNode; depth: number }): Rea
 }
 
 /** The icon-mode tree heading opens the root folder and accepts drops into it. */
-export function LibraryRootButton({ name, title, onOpen }: { name: string; title: string | undefined; onOpen: () => void }): React.JSX.Element {
+export function LibraryRootButton({ children, title, onOpen }: { children: ReactNode; title: string | undefined; onOpen: () => void }): React.JSX.Element {
 	const tree = useTree();
 	return (
 		<button
@@ -159,7 +159,7 @@ export function LibraryRootButton({ name, title, onOpen }: { name: string; title
 			aria-current={tree.currentFolder === "" ? "location" : undefined}
 			onClick={onOpen}
 		>
-			{name}
+			{children}
 		</button>
 	);
 }

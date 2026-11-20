@@ -77,7 +77,7 @@ test("tab options share the toolbar tooltip, stay within the viewport, and suppo
 		const style = getComputedStyle(element);
 		return { background: style.backgroundColor, color: style.color, fontSize: style.fontSize, borderRadius: style.borderRadius, padding: style.padding };
 	};
-	await loomPage.locator(".window-bar button[aria-label]").first().hover();
+	await loomPage.locator(".window-bar").getByRole("button", { name: "Open", exact: true }).hover();
 	await expect(tooltip).toBeVisible({ timeout: 500 });
 	const expectedStyle = await tooltip.evaluate(tooltipStyle);
 	for (const name of ["Table", "Graph", "Library", "List", "Icons"]) {
@@ -104,11 +104,16 @@ test("tab options share the toolbar tooltip, stay within the viewport, and suppo
 	await expect(tooltip).toHaveText("Graph");
 });
 
-test("toolbar, view, and panel tooltips leave after 80ms and clicks dismiss them immediately", async ({ loomPage, electronApp }) => {
+test("toolbar, view, sidebar, and panel tooltips leave after 80ms and clicks dismiss them immediately", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
 	const tooltip = loomPage.getByRole("tooltip");
-	for (const selector of [".window-bar button[aria-label]", ".library-view-controls button[aria-label]", ".panel-collapse[aria-label]"]) {
-		const button = loomPage.locator(selector).first();
+	const buttons = [
+		loomPage.locator(".window-bar").getByRole("button", { name: "Open", exact: true }),
+		loomPage.locator(".library-view-controls").getByRole("button", { name: "Table", exact: true }),
+		loomPage.locator(".library-sidebar-actions").getByRole("button", { name: "Settings", exact: true }),
+		loomPage.locator(".panel-collapse[aria-label]").first(),
+	];
+	for (const button of buttons) {
 		await button.hover();
 		await expect(tooltip).toBeVisible({ timeout: 500 });
 		await loomPage.mouse.move(600, 20);
@@ -130,6 +135,56 @@ test("toolbar, view, and panel tooltips leave after 80ms and clicks dismiss them
 		await expect(tooltip).toHaveCount(0);
 		await loomPage.mouse.move(600, 20);
 	}
+});
+
+test("Loom and the sidebar actions stay aligned at the bottom while files scroll", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.reload();
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const fileCount = 45;
+	await Promise.all(Array.from({ length: fileCount }, (_, index) => writeFile(join(root, `file-${index}.md`), "# Document")));
+	const sidebar = loomPage.locator(".library-sidebar");
+	const actions = sidebar.locator("footer");
+	const brand = actions.getByText("Loom", { exact: true });
+	const settings = actions.getByRole("button", { name: "Settings", exact: true });
+	const traces = actions.getByRole("button", { name: "Traces", exact: true });
+	const help = actions.getByRole("button", { name: "Help", exact: true });
+	const files = sidebar.locator(".asset-list");
+	await expect(files.locator(".asset-row")).toHaveCount(fileCount);
+	await expect(brand).toBeVisible();
+	for (const name of ["Settings", "Traces", "Help"]) {
+		await expect(actions.getByRole("button", { name, exact: true })).toBeVisible();
+		await expect(loomPage.locator(".window-bar").getByRole("button", { name, exact: true })).toHaveCount(0);
+	}
+	const footer = (await actions.boundingBox())!;
+	const sidebarBounds = (await sidebar.boundingBox())!;
+	expect(footer.y + footer.height).toBeCloseTo(sidebarBounds.y + sidebarBounds.height, 0);
+	const brandBounds = (await brand.boundingBox())!;
+	const settingsBounds = (await settings.boundingBox())!;
+	const helpBounds = (await help.boundingBox())!;
+	expect(brandBounds.x + brandBounds.width).toBeLessThan(settingsBounds.x);
+	expect(brandBounds.x - footer.x).toBeCloseTo(footer.x + footer.width - helpBounds.x - helpBounds.width, 0);
+	const scrollTop = await files.evaluate((element) => {
+		element.scrollTop = element.scrollHeight;
+		return element.scrollTop;
+	});
+	expect(scrollTop).toBeGreaterThan(0);
+	expect(await actions.boundingBox()).toEqual(footer);
+
+	await loomPage.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+	await expect(actions).toBeHidden();
+	await loomPage.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+	await settings.focus();
+	await loomPage.keyboard.press("Tab");
+	await expect(traces).toBeFocused();
+	const opened = electronApp!.waitForEvent("window");
+	await traces.press("Enter");
+	const trace = await opened;
+	await expect(trace.getByRole("tab", { name: "Traces", exact: true })).toBeVisible();
+	await trace.close();
 });
 
 test("both tab groups animate their selection and respect reduced motion", async ({ loomPage, electronApp }) => {
@@ -180,13 +235,14 @@ test("independent display controls preserve the active view and the file tree ow
 	const sidebar = loomPage.locator(".library-sidebar");
 	const workspace = sidebar.locator(".library-view-controls");
 	const header = sidebar.locator(".library-files-header");
+	const title = header.locator(".file-heading-title");
 	const files = sidebar.locator(".asset-list");
 	await expect(sidebar.locator(".library-header, .workspace-heading")).toHaveCount(0);
 	await expect(workspace.getByRole("group", { name: "File display" })).toBeVisible();
 	await expect(workspace.locator(".file-sort")).toHaveCount(0);
 	await expect(workspace.getByRole("button", { name: "Search files", exact: true })).toHaveCount(0);
-	await expect(header.locator(".file-heading-title > span")).toHaveText([basename(root), "2"]);
-	await expect(header.locator(".library-files-name")).toHaveAttribute("title", root);
+	await expect(title).toHaveText(basename(root));
+	await expect(header.locator(".library-files-name")).toHaveAttribute("data-tooltip", root);
 	await expect(header.locator(".library-display-tabs")).toHaveCount(0);
 	await expect(sidebar.locator(".library-shortcuts")).toBeVisible();
 	const shortcuts = (await sidebar.locator(".library-shortcuts-pane").boundingBox())!;
@@ -200,15 +256,15 @@ test("independent display controls preserve the active view and the file tree ow
 	const search = header.getByRole("searchbox");
 	await expect(search).toBeFocused();
 	await search.fill("alpha");
-	await expect(header.locator(".file-heading-title > span")).toHaveText([basename(root), "1"]);
+	await expect(title).toHaveText(basename(root));
 	await expect(files.locator(".asset-name")).toHaveText(["alpha.md"]);
 	await search.press("Escape");
 	await expect(search).toHaveCount(0);
-	await expect(header.locator(".file-heading-title > span")).toHaveText([basename(root), "2"]);
+	await expect(files.locator(".asset-name")).toHaveText(["beta.md", "alpha.md"]);
 	await workspace.getByRole("button", { name: "Icons", exact: true }).click();
 	await expect(header.locator(".file-sort")).toHaveCount(0);
 	await expect(header.getByRole("button", { name: "Search files", exact: true })).toHaveCount(0);
-	await expect(header.locator(".file-heading-title > *")).toHaveText([basename(root), "2"]);
+	await expect(title).toHaveText(basename(root));
 	await workspace.getByRole("button", { name: "List", exact: true }).click();
 	await expect(header.getByRole("button", { name: "Sort files", exact: true })).toBeVisible();
 	await workspace.getByRole("button", { name: "Icons", exact: true }).click();
@@ -230,11 +286,13 @@ test("folder heading stays aligned when switching list and icon modes", async ({
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
 	const sidebar = loomPage.locator(".library-sidebar");
 	const workspace = sidebar.locator(".library-view-controls");
+	const rootIcon = sidebar.locator('.library-files-name > svg[aria-hidden="true"]');
 	const geometry = () => sidebar.evaluate((element) => {
 		const heading = element.querySelector(".library-files-heading")!.getBoundingClientRect();
 		const title = element.querySelector(".library-files-name")!.getBoundingClientRect();
+		const icon = element.querySelector(".library-files-name > svg")!.getBoundingClientRect();
 		const tree = element.querySelector(".asset-list")!.getBoundingClientRect();
-		return { headingY: heading.y, headingHeight: heading.height, titleX: title.x, titleY: title.y, treeY: tree.y };
+		return { headingY: heading.y, headingHeight: heading.height, titleX: title.x, titleY: title.y, iconX: icon.x, iconY: icon.y, treeY: tree.y };
 	});
 	for (const shortcuts of [false, true]) {
 		if (shortcuts) {
@@ -249,6 +307,7 @@ test("folder heading stays aligned when switching list and icon modes", async ({
 			await loomPage.evaluate((width) => localStorage.setItem("loom.layout.libraryWidth", String(width)), width);
 			await loomPage.reload();
 			await expect(workspace.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+			await expect(rootIcon).toBeVisible();
 			const listGeometry = await geometry();
 			for (const mode of ["Icons", "List", "Icons", "List"]) {
 				await workspace.getByRole("button", { name: mode, exact: true }).click();
@@ -277,17 +336,17 @@ test("folder heading preserves its name and fits long names beside the tools", a
 	await loomPage.reload();
 	const sidebar = loomPage.locator(".library-sidebar");
 	const name = sidebar.locator(".library-files-name");
+	const label = name.locator(".library-files-name-label");
 	await expect(sidebar.locator(".library-header")).toHaveCount(0);
 	await expect(name).toHaveText(folderName);
-	await expect(name).toHaveAttribute("title", root);
+	await expect(name).toHaveAttribute("data-tooltip", root);
 	await expect(name).toHaveCSS("font-size", "12px");
-	await expect(sidebar.locator(".library-files-heading .file-heading-title")).toHaveCSS("align-items", "baseline");
 	await expect(name).toHaveCSS("text-transform", "none");
-	await expect(name).toHaveCSS("text-overflow", "ellipsis");
-	expect(await name.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+	await expect(label).toHaveCSS("text-overflow", "ellipsis");
+	expect(await label.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
 	const bounds = (await name.boundingBox())!;
-	const count = (await sidebar.locator(".library-files-heading .file-heading-title > span:last-child").boundingBox())!;
 	const tools = (await sidebar.locator(".library-files-heading .file-heading-tools").boundingBox())!;
-	expect(bounds.x + bounds.width).toBeLessThanOrEqual(count.x);
-	expect(count.x + count.width).toBeLessThanOrEqual(tools.x);
+	expect(bounds.x + bounds.width).toBeLessThanOrEqual(tools.x);
+	await name.hover();
+	await expect(loomPage.getByRole("tooltip")).toHaveText(root);
 });

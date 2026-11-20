@@ -1549,9 +1549,6 @@ export function App(): React.JSX.Element {
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
 				<div className={`window-bar${mac ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
 					<FileHistoryButtons mac={mac} canBack={navigation.canBack} canForward={navigation.canForward} move={moveHistory} />
-					<TracesButton onOpen={() => void window.loom.openDevTrace()} />
-					<HelpButton onOpen={() => setHelpOpen(true)} />
-					<SettingsButton onOpen={() => setSettingsOpen(true)} />
 					<LibraryOpenButton opening={opening} onOpen={() => void openLibrary()} />
 					<SidebarToggle collapsed={libraryCollapsed} onToggle={toggleLibraryCollapsed} />
 				</div>
@@ -1593,6 +1590,11 @@ export function App(): React.JSX.Element {
 					<LibrarySidebar
 						library={library}
 						display={display}
+						footerActions={<>
+							<SettingsButton onOpen={() => setSettingsOpen(true)} />
+							<TracesButton onOpen={() => void window.loom.openDevTrace()} />
+							<HelpButton onOpen={() => setHelpOpen(true)} />
+						</>}
 						location={location}
 						onLocation={(next) => {
 							// Only a real move reaches the effect above, so only then is there a mark to consume.

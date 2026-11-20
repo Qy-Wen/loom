@@ -80,7 +80,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 					rowRef.current = el;
 				}}
 				className={`asset-row rename-row ${selected ? "selected" : ""}`}
-				style={{ paddingLeft: 7 + depth * 14 }}
+				style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}
 			>
 				<AssetThumbnail asset={asset} />
 				<div className="rename-editor">
@@ -97,7 +97,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 				rowRef.current = el;
 			}}
 			className={`asset-row ${selected ? "selected" : ""}${cut ? " cut" : ""}`}
-			style={{ paddingLeft: 7 + depth * 14 }}
+			style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}
 			type="button"
 			draggable
 			{...assetButtonProps(tree, asset, selected)}
