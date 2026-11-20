@@ -6,7 +6,7 @@ import { parseTable } from "./table.ts";
 type Match = { from: number; to: number; current: boolean };
 type Marks = Map<HTMLElement, boolean>;
 
-const widgetSelector = ".cm-live-table, .cm-live-math, .cm-live-mermaid";
+const widgetSelector = ".cm-live-table, .cm-live-math, .cm-live-mermaid, .cm-wiki-embed";
 
 export const searchSelection = StateField.define<boolean>({
 	create: () => false,

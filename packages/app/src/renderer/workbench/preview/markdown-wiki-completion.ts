@@ -8,7 +8,7 @@ import { insideLiteral, liveLibrary, type LiveLibrary } from "./live-markdown.ts
 
 const targetText = /^[^[\]#|\r\n]*$/;
 const remainingLink = /^([^[\]#|]*)(?:[#|][^[\]]*)?\]\]/;
-const libraryOptions = new WeakMap<LiveLibrary, { links: Completion[]; images: Completion[] }>();
+const libraryOptions = new WeakMap<LiveLibrary, Completion[]>();
 
 export function wikiTargetAt(state: EditorState, position: number): { from: number; embed: boolean; canOpenOnMove: boolean } | null {
 	if (state.readOnly || !state.selection.main.empty) return null;
@@ -49,30 +49,28 @@ export const wikiLinkCompletion: CompletionSource = (context) => {
 	if (!target || !library) return null;
 	let options = libraryOptions.get(library);
 	if (!options) {
-		options = { links: [], images: [] };
-		for (const { assetId, relativePath, type } of library.assets) {
+		options = [];
+		for (const { assetId, relativePath } of library.assets) {
 			if (relativePath === library.fromRelativePath || !targetText.test(relativePath)) continue;
 			if (resolveWikiTarget(relativePath, library.lookup)?.assetId !== assetId) continue;
-			const completion: Completion = {
+			options.push({
 				label: relativePath,
 				apply(view, completion, from, to) {
 					const active = wikiTargetAt(view.state, to);
 					if (active?.from !== from) return;
 					const current = view.state.field(liveLibrary, false);
 					const asset = current && resolveWikiTarget(relativePath, current.lookup);
-					if (asset?.assetId === assetId && (!active.embed || asset.type === "image")) {
+					if (asset?.assetId === assetId) {
 						insertReference(view, completion, from, to);
 					}
 				},
-			};
-			options.links.push(completion);
-			if (type === "image") options.images.push(completion);
+			});
 		}
 		libraryOptions.set(library, options);
 	}
 	return {
 		from: target.from,
-		options: target.embed ? options.images : options.links,
+		options,
 		validFor: (_text, start, end, state) => {
 			if (state.field(liveLibrary, false) !== library) return false;
 			const active = wikiTargetAt(state, end);

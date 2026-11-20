@@ -111,7 +111,8 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	const root = (await snapshot()).rootPath!;
 	await mkdir(join(root, "项目"));
 	const scriptPath = join(root, "项目", "文案.md");
-	await writeFile(scriptPath, `# 文案\n\n**开场**\n\n${"Scene direction.\n\n".repeat(920)}## 最后一幕`);
+	await copyFile(still, join(root, "项目", "参考.png"));
+	await writeFile(scriptPath, `# 文案\n\n**开场**\n\n![[项目/参考.png|参考.png]]\n\n${"Scene direction.\n\n".repeat(920)}## 最后一幕`);
 	await expect.poll(async () => (await snapshot()).folders).toContain("项目");
 	await page.evaluate(() => window.loom.createCanvasFile("项目"));
 	const sidebar = page.locator(".library-sidebar");
@@ -133,6 +134,20 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await page.mouse.wheel(0, -320);
 	await expect.poll(() => card.evaluate((element) => element.scrollTop)).toBe(0);
 	const preview = page.getByRole("dialog", { name: "File preview" });
+	const embeddedImage = card.getByRole("img", { name: "参考.png" });
+	await expect(embeddedImage).toBeVisible();
+	await embeddedImage.click();
+	await expect(preview).toHaveCount(0);
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "Open original file")?.click();
+			options?.callback?.();
+		};
+	});
+	await embeddedImage.click({ button: "right" });
+	await expect(preview.getByRole("img", { name: "参考.png" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
 	await heading.click();
 	await expect(preview).toHaveCount(0);
 	await heading.dblclick();

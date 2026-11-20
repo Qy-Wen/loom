@@ -488,6 +488,75 @@
 	color: var(--lm-text-accent);
 }
 
+.cm-wiki-embed {
+	display: inline-block;
+	max-width: 100%;
+	vertical-align: middle;
+}
+
+.cm-wiki-embed.standalone {
+	width: 100%;
+}
+
+.markdown-file-link {
+	--markdown-link-color: var(--lm-text-accent);
+	color: var(--markdown-link-color);
+	border-block-end: 1px solid currentColor;
+	text-decoration: none;
+}
+
+.markdown-file-link:is(:hover, :focus-visible) {
+	box-shadow: 0 1px 0 currentColor;
+}
+
+.markdown-file-link-extension {
+	margin-inline-start: var(--lm-space-2);
+	color: var(--lm-text-muted);
+	white-space: nowrap;
+}
+
+.markdown-embed-file {
+	display: inline-flex;
+	align-items: baseline;
+	max-width: 100%;
+}
+
+.markdown-embed-file > span {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.markdown-embed-image {
+	max-width: 100%;
+	vertical-align: middle;
+}
+
+.markdown-embed-media {
+	display: flex;
+	flex-direction: column;
+	align-items: safe center;
+	gap: var(--lm-space-2);
+	inline-size: fit-content;
+	max-inline-size: 100%;
+}
+
+.markdown-embed-media:has(> audio) {
+	inline-size: 100%;
+}
+
+.markdown-embed-media :is(video, audio) {
+	display: block;
+	max-width: 100%;
+}
+
+.markdown-embed-media video {
+	height: auto;
+	aspect-ratio: auto 16 / 9;
+	background: var(--lm-surface-sunken);
+}
+
 .markdown-mode-notice {
 	padding: var(--lm-space-3) var(--lm-space-5);
 	border-bottom: 1px solid var(--lm-border-default);

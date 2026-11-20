@@ -15,6 +15,7 @@ import { markdownFindWidgets, searchSelection } from "./markdown-find-widgets.ts
 import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
 import { markdownFileDrop } from "./markdown-file-drop.ts";
+import { editingEmbed, embedUnderPointer, revealEmbedSource } from "./live-embed.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import type { EditorClipboardAction, MarkdownContextAction, MarkdownContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
 import type { Messages } from "../../../shared/locale.ts";
@@ -107,7 +108,7 @@ const theme = EditorView.theme({
  * addresses, quote and list markers. The look of rendered text comes from `live-markdown.ts`.
  */
 const highlight = HighlightStyle.define([
-	{ tag: [tags.url, tags.link], color: "var(--lm-text-secondary)" },
+	{ tag: [tags.url, tags.link], color: "var(--markdown-link-color, var(--lm-text-secondary))" },
 	{ tag: tags.quote, color: "var(--lm-text-secondary)" },
 	{ tag: [tags.processingInstruction, tags.contentSeparator, tags.meta], color: "var(--lm-text-muted)" },
 ]);
@@ -134,7 +135,15 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const rendering = new Compartment();
 	const access = new Compartment();
 	const accessible = new Compartment();
-	const rendered: Extension = [liveDrag, liveMarkdown, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
+	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
+	const chooseEmbedAction = (readOnly: boolean) => host.chooseTextAction({
+		embed: true,
+		readOnly,
+		canUndo: false,
+		canRedo: false,
+		canCopy: false,
+		formats: {},
+	});
 	const modeAccess = (next: MarkdownMode): Extension => [
 		EditorState.readOnly.of(next === "read"),
 		EditorView.editable.of(next !== "read"),
@@ -156,6 +165,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			openAsset: events.onOpenAsset,
 			save: events.onSave,
 			chooseAction: host.chooseTableAction,
+			chooseEmbedAction,
 			clipboard: host.clipboard,
 			labels,
 		}),
@@ -188,6 +198,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			blur: () => { events.onBlur(); },
 			mousedown(event, editor) {
 				if (event.button !== 2) return false;
+				if (event.target instanceof Element && event.target.closest(".cm-wiki-embed")) return false;
 				const position = editor.posAtCoords({ x: event.clientX, y: event.clientY });
 				if (position !== null && !editor.state.selection.ranges.some((range) => position >= range.from && position <= range.to)) {
 					editor.dispatch({ selection: { anchor: position } });
@@ -198,9 +209,34 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		}),
 	];
 	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
+	function openEmbedMenu(embed: NonNullable<ReturnType<typeof embedUnderPointer>>): void {
+		const { state } = view;
+		void chooseEmbedAction(state.readOnly).then((action) => {
+			if (!view.dom.isConnected || view.state.doc !== state.doc) return;
+			if (action === "open_embed") events.onOpenAsset(embed.assetId, embed.anchor);
+			if (action === "edit_embed" && !view.state.readOnly && view.state.field(editingEmbed, false) !== undefined) {
+				view.dispatch({ selection: { anchor: embed.from + 3 }, effects: revealEmbedSource.of(embed) });
+				view.focus();
+			}
+		}).catch(() => undefined);
+	}
 	view.contentDOM.addEventListener("keydown", (event) => {
 		// Let the IME confirm its candidate before CodeMirror handles Enter as a menu selection.
 		if (event.key === "Enter" && isImeComposing(event) && completionStatus(view.state)) event.stopImmediatePropagation();
+		if (isImeComposing(event)) return;
+		if (event.key === "Escape" && view.state.field(editingEmbed, false)) {
+			event.preventDefault();
+			event.stopImmediatePropagation();
+			view.dispatch({ effects: revealEmbedSource.of(null) });
+		}
+		if (event.key === "F10" && event.shiftKey && event.target instanceof Element) {
+			const embed = embedUnderPointer(view, event.target);
+			if (embed) {
+				event.preventDefault();
+				event.stopImmediatePropagation();
+				openEmbedMenu(embed);
+			}
+		}
 	}, true);
 	view.dispatch({ effects: updateLibrary(library) });
 	// Listen on the outer DOM too, so rendered images/formulas can open the same menu as plain text.
@@ -208,6 +244,11 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		const target = event.target as HTMLElement | null;
 		if (!target || !view.contentDOM.contains(target) || target.closest(".cm-live-table")) return;
 		event.preventDefault();
+		const embed = embedUnderPointer(view, target);
+		if (embed) {
+			openEmbedMenu(embed);
+			return;
+		}
 		view.focus();
 		const state = view.state;
 		const plans = markdownFormatPlans(state);
@@ -222,7 +263,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			else if (action === "redo") redo(view);
 			else if (action === "select_all") selectAll(view);
 			else if (action === "cut" || action === "copy" || action === "paste") await host.clipboard(action);
-			else if (view.state.doc === state.doc && view.state.selection.eq(state.selection)) {
+			else if (action !== "open_embed" && action !== "edit_embed" && view.state.doc === state.doc && view.state.selection.eq(state.selection)) {
 				const edit = plans.get(action)?.transaction();
 				if (edit) view.dispatch({ ...edit, annotations: isolateHistory.of("full"), userEvent: "input.format", scrollIntoView: true });
 			}

@@ -175,6 +175,12 @@ function editorMenuItems(t: Messages, state: EditorContextState): ContextMenuIte
 }
 
 function markdownMenuItems(t: Messages, state: MarkdownContextState): ContextMenuItem<MarkdownContextAction>[] {
+	if (state.embed) {
+		return [
+			{ label: t.menu.openEmbed, click: () => "open_embed" },
+			{ label: t.menu.editEmbed, enabled: !state.readOnly, click: () => "edit_embed" },
+		];
+	}
 	const items: ContextMenuItem<MarkdownContextAction>[] = editorMenuItems(t, state);
 	if (state.readOnly) return items;
 	const labels = { ...t.preview.insertCommands, ...t.menu.format };

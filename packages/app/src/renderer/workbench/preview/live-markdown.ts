@@ -13,6 +13,8 @@ import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
 import { editorHeading } from "./editor-heading.ts";
 import { isPassthroughHref } from "./markdown.ts";
+import { embedOccupiesLine, FILE_EXTENSION_CLASS, FILE_LINK_CLASS, fileExtensionLabel, renderAssetEmbed } from "./embed-renderers.ts";
+import { editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
 
 /**
  * Live rendering: Markdown shown in its final look while it is edited. The text itself never changes; only
@@ -107,6 +109,26 @@ class BulletWidget extends WidgetType {
 		bullet.className = "cm-live-bullet";
 		bullet.textContent = "•";
 		return bullet;
+	}
+}
+
+class FileExtensionWidget extends WidgetType {
+	readonly extension: string;
+	constructor(extension: string) {
+		super();
+		this.extension = extension;
+	}
+	eq(other: FileExtensionWidget): boolean {
+		return this.extension === other.extension;
+	}
+	toDOM(view: EditorView): HTMLElement {
+		const label = view.dom.ownerDocument.createElement("small");
+		label.className = FILE_EXTENSION_CLASS;
+		label.textContent = this.extension;
+		return label;
+	}
+	ignoreEvent(): boolean {
+		return false;
 	}
 }
 
@@ -862,8 +884,12 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 	const missing = asset === undefined && !sameFile;
 
 	if (match.embed) {
-		if (asset && !editing) {
-			found.push(Decoration.replace({ widget: new ImageWidget(assetPreviewUrl(asset), match.label || match.target) }).range(range.from, range.to));
+		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
+			const line = state.doc.lineAt(range.from);
+			const standalone = embedOccupiesLine(line.text, range.from - line.from, range.to - line.from);
+			const html = renderAssetEmbed(asset, match, anchor, standalone);
+			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, standalone, state.facet(handlersFacet)?.openAsset);
+			found.push(Decoration.replace({ widget }).range(range.from, range.to));
 			return;
 		}
 		found.push(Decoration.mark({ class: missing ? "cm-live-broken" : "cm-live-link" }).range(range.from, range.to));
@@ -871,7 +897,7 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 	}
 	const open = range.from + 2;
 	const close = range.to - 2;
-	const attributes: Record<string, string> = { class: missing ? "cm-live-wiki cm-live-broken" : "cm-live-wiki cm-live-link" };
+	const attributes: Record<string, string> = { class: missing ? "cm-live-wiki cm-live-broken" : `cm-live-wiki cm-live-link ${FILE_LINK_CLASS}` };
 	if (asset) attributes["data-asset-id"] = asset.assetId;
 	if (anchor) attributes["data-anchor"] = anchor;
 	if (editing) {
@@ -879,15 +905,17 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 		return;
 	}
 	// Away from the cursor: the display name if there is one, else the path; the brackets and the rest are hidden.
-	const bar = match.label ? state.doc.sliceString(open, close).indexOf("|") : -1;
+	const inner = state.doc.sliceString(open, close);
+	const labelOffset = match.label ? inner.indexOf("|") + 1 : 0;
+	const displayed = inner.slice(labelOffset);
+	const labelFrom = open + labelOffset + displayed.length - displayed.trimStart().length;
+	const labelTo = open + labelOffset + displayed.trimEnd().length;
+	const extension = asset && fileExtensionLabel(asset, match);
 	found.push(hiddenLead.range(range.from, open));
-	if (bar !== -1) {
-		found.push(hiddenLead.range(open, open + bar + 1));
-		found.push(Decoration.mark({ attributes }).range(open + bar + 1, close));
-	} else {
-		found.push(Decoration.mark({ attributes }).range(open, close));
-	}
-	found.push(hiddenTrail.range(close, range.to));
+	if (labelFrom > open) found.push(hiddenLead.range(open, labelFrom));
+	found.push(Decoration.mark({ attributes, inclusiveEnd: !!extension }).range(labelFrom, labelTo));
+	if (extension) found.push(Decoration.widget({ widget: new FileExtensionWidget(extension), side: -1 }).range(labelTo));
+	found.push(hiddenTrail.range(labelTo, range.to));
 }
 
 /** Ordinary Markdown links use the same resolver as wiki links and the HTML preview. */
@@ -947,6 +975,7 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 		if (update.docChanged || update.selectionSet || update.viewportChanged || update.startState.readOnly !== update.state.readOnly || syntaxTree(update.startState) !== syntaxTree(update.state)
 			|| update.startState.field(pressState, false) !== update.state.field(pressState, false)
 			|| update.startState.field(focusState, false) !== update.state.field(focusState, false)
+			|| update.startState.field(editingEmbed, false) !== update.state.field(editingEmbed, false)
 			|| update.startState.field(searchSelection, false) !== update.state.field(searchSelection, false)
 			|| update.startState.field(libraryField, false) !== update.state.field(libraryField, false)) {
 			this.decorations = this.build(update.view);
@@ -1039,7 +1068,7 @@ export const liveMarkdownTheme = EditorView.theme({
 		backgroundColor: "var(--lm-surface-accent)",
 		boxShadow: "inset 0 0 0 1.5px var(--lm-border-accent)",
 	},
-	".cm-live-table a": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
+	".cm-live-table a:not(.markdown-file-link)": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
 	".cm-live-table img": { maxWidth: "100%", maxHeight: "200px" },
 	".cm-live-table .markdown-broken-reference": { color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
 	".cm-live-table-add-row, .cm-live-table-add-column": {
@@ -1142,7 +1171,7 @@ export const liveMarkdownTheme = EditorView.theme({
 		verticalAlign: "top",
 		background: "linear-gradient(var(--lm-border-default), var(--lm-border-default)) center / 100% 1px no-repeat",
 	},
-	".cm-live-link": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
+	".cm-live-link:not(.markdown-file-link)": { color: "var(--lm-text-accent)", textDecoration: "underline", textUnderlineOffset: "2px" },
 	".cm-live-h1, .cm-live-h2, .cm-live-h3, .cm-live-h4, .cm-live-h5, .cm-live-h6": {
 		fontWeight: "var(--lm-weight-semibold)",
 		lineHeight: "1.3",

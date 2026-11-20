@@ -45,9 +45,12 @@ function decorate(text: string, cursor = text.length, anchor = cursor, library =
 	const widgets: string[] = [];
 	const targets: string[] = [];
 	liveDecorations(state).between(0, state.doc.length, (from, to, value) => {
-		const spec = value.spec as { class?: string; widget?: { src?: string }; attributes?: Record<string, string> };
+		const spec = value.spec as { class?: string; widget?: { src?: string; assetId?: string }; attributes?: Record<string, string> };
 		const name = spec.class ?? spec.attributes?.class ?? "";
-		if (spec.widget) widgets.push(`${text.slice(from, to)}=>${spec.widget.src ?? spec.widget.constructor.name}`);
+		if (spec.widget) {
+			const target = spec.widget.assetId ? `asset:${spec.widget.assetId}` : spec.widget.src ?? spec.widget.constructor.name;
+			widgets.push(`${text.slice(from, to)}=>${target}`);
+		}
 		else if (name === "cm-live-hidden") hidden.push(text.slice(from, to));
 		else if (from === to) lines.push(`${name}@${state.doc.lineAt(from).number}`);
 		else {
@@ -152,10 +155,11 @@ test("decorating never changes the text", () => {
 
 
 test("a wiki link shows its name, links to the asset and hides the brackets away from the cursor", () => {
-	const text = "见 [[产品说明]] 和 [[产品/说明|别名]] 与 [[产品说明#标题]]\n\n末";
-	const { hidden, targets } = decorate(text, text.length);
-	assert.deepEqual(hidden, ["[[", "]]", "[[", "产品/说明|", "]]", "[[", "]]"]);
-	assert.deepEqual(targets, ["产品说明->notes", "别名->deep", "产品说明#标题->notes#标题"]);
+	const text = "见 [[产品说明.md]] 和 [[产品/说明|  别名  ]] 与 [[产品说明#标题]]\n\n末";
+	const { hidden, targets, widgets } = decorate(text, text.length);
+	assert.deepEqual(hidden, ["[[", "]]", "[[", "产品/说明|  ", "  ]]", "[[", "]]"]);
+	assert.deepEqual(targets, ["产品说明.md->notes", "别名->deep", "产品说明#标题->notes#标题"]);
+	assert.deepEqual(widgets, ["=>FileExtensionWidget"]);
 });
 
 test("a wiki link shows its brackets while the cursor is in it", () => {
@@ -175,17 +179,18 @@ test("a wiki link to a missing file is marked broken and keeps no target", () =>
 test("a link to a heading of the same file is not broken", () => {
 	const text = "[[#小节]] [[#]]\n\n末";
 	const { classes, targets } = decorate(text, text.length);
-	assert.deepEqual(classes, ["cm-live-wiki cm-live-link:#小节"]);
+	assert.deepEqual(classes, ["cm-live-wiki cm-live-link markdown-file-link:#小节"]);
 	assert.deepEqual(targets, ["#小节->none#小节"]);
 });
 
-test("an embed shows the picture away from the cursor and its text under it", () => {
+test("wiki embeds stay rendered at the caret, and standard Markdown images still reveal their source", () => {
 	const text = "![[图/架构图.png]] ![](图/架构图.png)\n\n末";
 	const away = decorate(text, text.length);
 	assert.equal(away.widgets.length, 2);
-	assert.match(away.widgets[0], /^!\[\[图\/架构图.png\]\]=>loom-asset:\/\/asset\/pic/);
+	assert.equal(away.widgets[0], "![[图/架构图.png]]=>asset:pic");
 	assert.match(away.widgets[1], /^!\[\]\(图\/架构图.png\)=>loom-asset:/);
-	assert.equal(decorate(text, 4).widgets.length, 1);
+	assert.deepEqual(decorate(text, 4).widgets, away.widgets);
+	assert.deepEqual(decorate(text, text.indexOf("![]") + 4).widgets, [away.widgets[0]]);
 });
 
 test("a missing embedded picture is marked broken", () => {
@@ -219,7 +224,7 @@ test("the editor and the preview agree on which wiki links resolve", async () =>
 	const editorBroken = classes.filter((entry) => entry.includes("broken")).length;
 	const previewResolved = [...html.matchAll(/data-asset-id="([^"]+)"|src="loom-asset:\/\/asset\/([^?"]+)/g)].map((m) => m[1] ?? m[2]);
 	const editorResolved = [...decorate(text, text.length).targets.map((t) => t.split("->")[1].split("#")[0]).filter((id) => id !== "none"),
-		...widgets.map((entry) => entry.split("/asset/")[1].split("?")[0])];
+		...widgets.filter((entry) => entry.includes("=>asset:")).map((entry) => entry.split("=>asset:")[1])];
 	assert.equal(editorBroken, previewBroken);
 	assert.deepEqual([...new Set(editorResolved)].sort(), [...new Set(previewResolved)].sort());
 });

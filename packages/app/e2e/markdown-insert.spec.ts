@@ -154,7 +154,7 @@ test("wiki link completion filters files and replaces only the link target", asy
 	await expect(menu).toBeHidden();
 });
 
-test("wiki embed completion fills empty brackets and suggests images", async ({ loomPage, electronApp }) => {
+test("wiki embed completion fills empty brackets and suggests files", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(loomPage);
 	const file = join(root, "commands.md");
@@ -170,14 +170,15 @@ test("wiki embed completion fills empty brackets and suggests images", async ({ 
 	const options = menu.getByRole("option");
 	await box.press("ControlOrMeta+Home");
 	for (const _ of "![[") await box.press("ArrowRight");
-	await expect(options).toHaveText([image]);
+	await expect(options).toHaveText([image, "reference.md"]);
+	await loomPage.keyboard.insertText("cover");
 	await box.press("Enter");
 	await box.press("ControlOrMeta+s");
 	await expect.poll(() => readFile(file, "utf8")).toBe(`![[${image}]]\n\n`);
 
 	await box.press("ControlOrMeta+End");
 	await loomPage.keyboard.insertText("![[");
-	await expect(options).toHaveText([image]);
+	await expect(options).toHaveText([image, "reference.md"]);
 	await loomPage.keyboard.insertText("cover");
 	await menu.getByRole("option", { name: image, exact: true }).click();
 	await box.press("ControlOrMeta+s");
@@ -187,6 +188,146 @@ test("wiki embed completion fills empty brackets and suggests images", async ({ 
 	const embeds = box.locator("img.cm-live-image");
 	await expect(embeds).toHaveCount(2);
 	await expect.poll(() => embeds.evaluateAll((images: HTMLImageElement[]) => images.every((image) => image.naturalWidth > 0))).toBe(true);
+});
+
+test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const file = join(root, "commands.md");
+	for (const name of ["clip.mp4", "still.png"]) {
+		await copyFile(new URL(`../../core/tests/fixtures/media/${name}`, import.meta.url), join(root, name));
+	}
+	const wave = Buffer.alloc(44 + 16_000);
+	wave.write("RIFF", 0);
+	wave.writeUInt32LE(wave.length - 8, 4);
+	wave.write("WAVEfmt ", 8);
+	wave.writeUInt32LE(16, 16);
+	wave.writeUInt16LE(1, 20);
+	wave.writeUInt16LE(1, 22);
+	wave.writeUInt32LE(8_000, 24);
+	wave.writeUInt32LE(16_000, 28);
+	wave.writeUInt16LE(2, 32);
+	wave.writeUInt16LE(16, 34);
+	wave.write("data", 36);
+	wave.writeUInt32LE(wave.length - 44, 40);
+	await writeFile(join(root, "sound.wav"), wave);
+	await writeFile(join(root, "reference.md"), "# Reference");
+	const source = [
+		"![[clip.mp4]]", "![[sound.wav]]", "![[still.png|First picture]]", "![[still.png|Second picture]]",
+		"Inline ![[clip.mp4]] stays compact.", "| Media |\n| --- |\n| Clip ![[clip.mp4]] |\n| ![[still.png]] |", "![[reference.md]]",
+	].join("\n\n");
+	await writeFile(file, source);
+	await openNote(page);
+
+	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
+	const embeds = editor.locator(".cm-wiki-embed");
+	await expect(embeds).toHaveCount(6);
+	for (const kind of ["video", "audio"]) {
+		const player = embeds.locator(kind);
+		await expect(player).toHaveCount(1);
+		await expect(player).toHaveAttribute("controls", "");
+		await player.evaluate(async (element: HTMLMediaElement) => {
+			await element.play();
+			element.pause();
+		});
+		await expect(player).toBeVisible();
+	}
+	await expect.poll(() => embeds.locator("video").evaluate((video: HTMLVideoElement) => {
+		const bounds = video.getBoundingClientRect();
+		return Math.abs(bounds.width / bounds.height - video.videoWidth / video.videoHeight);
+	})).toBeLessThan(0.01);
+	const audioOffsets = await embeds.locator("audio").evaluate((audio: HTMLAudioElement) => {
+		const block = audio.parentElement!;
+		const measure = () => {
+			const bounds = block.getBoundingClientRect();
+			return [...block.children].map((child) => {
+				const item = child.getBoundingClientRect();
+				return Math.abs(item.left - bounds.left - (bounds.right - item.right));
+			});
+		};
+		const full = measure();
+		block.style.maxInlineSize = "180px";
+		const narrow = measure();
+		block.style.removeProperty("max-inline-size");
+		return [...full, ...narrow];
+	});
+	expect(Math.max(...audioOffsets)).toBeLessThan(1);
+	await expect(editor.locator(".cm-line").filter({ hasText: "Inline" }).locator(".markdown-embed-file")).toContainText("clip.mp4");
+
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "Edit embed syntax" && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+	const picture = (alt: string) => editor.getByRole("img", { name: alt, exact: true });
+	const pictureLink = picture("First picture").locator("xpath=following-sibling::a");
+	await expect(pictureLink).toHaveText("First picture");
+	await expect(pictureLink).toBeVisible();
+	const media = embeds.locator(".markdown-embed-media");
+	await expect(media).toHaveCount(4);
+	await expect.poll(() => media.evaluateAll((blocks) => Math.max(...blocks.map((block) => {
+		const preview = block.firstElementChild!.getBoundingClientRect();
+		const link = block.lastElementChild!.getBoundingClientRect();
+		return Math.abs(preview.left + preview.width / 2 - (link.left + link.width / 2));
+	})))).toBeLessThan(1);
+	await expect(pictureLink).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await pictureLink.hover();
+	await expect(pictureLink).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await picture("First picture").click();
+	await expect(picture("First picture")).toBeVisible();
+	await picture("Second picture").click({ button: "right" });
+	await expect(editor).toContainText("![[still.png|Second picture]]");
+	await expect(picture("Second picture")).toHaveCount(0);
+	await expect(picture("First picture")).toHaveCount(1);
+	await editor.press("Escape");
+	await expect(picture("Second picture")).toBeVisible();
+	await picture("Second picture").press("Shift+F10");
+	await expect(editor).toContainText("![[still.png|Second picture]]");
+	await editor.press("ControlOrMeta+End");
+	await expect(picture("Second picture")).toBeVisible();
+
+	const cell = editor.locator(".cm-live-table td").first();
+	const cellEmbed = cell.locator(".markdown-embed-file");
+	await expect(cellEmbed).toContainText("clip.mp4");
+	await cellEmbed.click({ button: "right" });
+	await expect(cell).toHaveText("Clip ![[clip.mp4]]");
+	await expect(cell).toBeFocused();
+	expect(await cell.evaluate((element) => element.ownerDocument.getSelection()?.anchorOffset)).toBe("Clip ![[".length);
+	await cell.press("Escape");
+	await expect(cellEmbed).toBeVisible();
+	const tablePicture = picture("still.png");
+	await tablePicture.click();
+	await expect(tablePicture).toBeVisible();
+	await tablePicture.click({ button: "right" });
+	const imageCell = editor.locator(".cm-live-table td").last();
+	await expect(imageCell).toHaveText("![[still.png]]");
+	await imageCell.press("Escape");
+	await expect(tablePicture).toBeVisible();
+	expect(await readFile(file, "utf8")).toBe(source);
+
+	await pictureLink.click();
+	const originalImage = page.locator(".image-preview").getByRole("img", { name: "still.png" });
+	await expect(originalImage).toBeVisible();
+	await openNote(page);
+	await editor.locator(".markdown-embed-file").filter({ hasText: "reference.md" }).click();
+	const reference = page.getByRole("textbox", { name: "Edit reference.md", exact: true });
+	await expect(reference).toBeVisible();
+
+	await openNote(page);
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			if (!this.items.find((item) => item.label === "Edit embed syntax")?.enabled) {
+				this.items.find((item) => item.label === "Open original file")?.click();
+			}
+			options?.callback?.();
+		};
+	});
+	await picture("First picture").click();
+	await expect(picture("First picture")).toBeVisible();
+	await picture("First picture").click({ button: "right" });
+	await expect(originalImage).toBeVisible();
 });
 
 test("backspacing an existing wiki target reopens file completion", async ({ loomPage, electronApp }) => {

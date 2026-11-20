@@ -2,9 +2,10 @@ import type { Asset } from "@loom/core";
 import MarkdownIt from "markdown-it";
 import texmath from "markdown-it-texmath";
 import katex from "katex";
-import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
+import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup, type WikiLinkMatch } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf, headingKey } from "./heading-key.ts";
+import { embedOccupiesLine, fileExtensionLabel, FILE_LINK_CLASS, renderAssetEmbed, renderFileExtension } from "./embed-renderers.ts";
 import { KATEX_OPTIONS, MATH_DELIMITERS } from "./math.ts";
 
 export { resolveLibraryHref };
@@ -14,6 +15,7 @@ export interface MarkdownRenderContext {
 	fromRelativePath: string;
 	assets: Asset[];
 	lazyImages?: boolean;
+	compactEmbeds?: boolean;
 	/** Built from `assets` when absent. Pass one to share it across renders of the same library. */
 	lookup?: AssetLookup;
 }
@@ -139,8 +141,32 @@ function assetForHref(context: MarkdownRenderContext, src: string): Asset | unde
 
 /**
  * `[[target]]` and `![[target]]` as an inline rule, so code spans, code blocks and escaped text are left alone.
- * An embed becomes an image token and a link becomes a link, then both render like their Markdown forms.
+ * Both the editor and HTML preview use the same file embed renderers.
  */
+interface WikiEmbedToken {
+	asset: Asset;
+	reference: WikiLinkMatch;
+	anchor?: string;
+	standalone: boolean;
+}
+
+markdown.renderer.rules.wiki_embed = (tokens, idx, _options, env) => {
+	const context = env as MarkdownRenderContext | undefined;
+	const { asset, reference, anchor, standalone } = tokens[idx].meta?.embed as WikiEmbedToken;
+	const html = renderAssetEmbed(asset, reference, anchor, standalone && !context?.compactEmbeds);
+	return context?.compactEmbeds ? `<span class="markdown-cell-embed" data-source-from="${reference.from}" contenteditable="false">${html}</span>` : html;
+};
+markdown.renderer.rules.wiki_file_extension = (tokens, idx) => renderFileExtension(tokens[idx].content);
+
+markdown.core.ruler.after("inline", "compact_table_embeds", ({ tokens }) => {
+	for (let index = 1; index < tokens.length; index++) {
+		const previous = tokens[index - 1].type;
+		if (previous !== "td_open" && previous !== "th_open") continue;
+		for (const child of tokens[index].children ?? []) {
+			if (child.type === "wiki_embed" && child.meta) (child.meta.embed as WikiEmbedToken).standalone = false;
+		}
+	}
+});
 markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	const { src, pos } = state;
 	const found = matchWikiLink(src, pos);
@@ -158,6 +184,7 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 		// `[[#Heading]]`: a heading in this same file.
 		const link = state.push("link_open", "a", 1);
 		link.attrs = [["href", "#"], [ANCHOR_ATTRIBUTE, anchor]];
+		link.attrSet("class", FILE_LINK_CLASS);
 		link.meta = { wiki: true };
 		state.push("text", "", 0).content = label || written.slice(hash + 1).split("#").pop() || written;
 		state.push("link_close", "a", -1);
@@ -171,21 +198,24 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 		return true;
 	}
 	if (embed) {
-		const image = state.push("image", "img", 0);
-		image.attrs = [["src", asset ? assetPreviewUrl(asset) : ""], ["alt", label || written]];
-		image.children = [];
-		image.content = label || written;
-		image.meta = { wiki: true };
-		if (!asset) image.attrSet("class", BROKEN_REFERENCE_CLASS);
-		else if (context?.lazyImages) image.attrSet("loading", "lazy");
+		if (asset) {
+			const token = state.push("wiki_embed", "", 0);
+			token.meta = { embed: { asset, reference: found, anchor, standalone: embedOccupiesLine(src, pos, found.end) } satisfies WikiEmbedToken };
+		} else {
+			state.push("span_open", "span", 1).attrSet("class", BROKEN_REFERENCE_CLASS);
+			state.push("text", "", 0).content = src.slice(pos, found.end);
+			state.push("span_close", "span", -1);
+		}
 	} else {
 		const link = state.push("link_open", "a", 1);
 		link.attrs = [["href", "#"]];
+		link.attrSet("class", asset ? FILE_LINK_CLASS : BROKEN_REFERENCE_CLASS);
 		if (asset) link.attrSet(ASSET_LINK_ATTRIBUTE, asset.assetId);
-		else link.attrSet("class", BROKEN_REFERENCE_CLASS);
 		if (asset && anchor) link.attrSet(ANCHOR_ATTRIBUTE, anchor);
 		link.meta = { wiki: true };
 		state.push("text", "", 0).content = label || written.replaceAll("#", " > ");
+		const extension = asset && fileExtensionLabel(asset, found);
+		if (extension) state.push("wiki_file_extension", "", 0).content = extension;
 		state.push("link_close", "a", -1);
 	}
 	state.pos = close + 2;
@@ -204,5 +234,5 @@ export function markdownHeadingKey(source: string): string {
 
 /** One line of Markdown without the paragraph around it: the content of a table cell. */
 export function renderInlineMarkdown(source: string, context?: MarkdownRenderContext): string {
-	return markdown.renderInline(source, context as never);
+	return markdown.renderInline(source, context ? { ...context, compactEmbeds: true } : {});
 }

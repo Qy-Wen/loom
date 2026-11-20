@@ -88,11 +88,15 @@ test("renderMarkdown turns wiki image embeds into library images", () => {
 		createdAt: 1,
 		modifiedAt: 4,
 	};
-	const html = renderMarkdown("![[cover.jpg]]", {
+	const context = {
 		fromRelativePath: "notes/a.md",
 		assets: [cover],
-	});
+	};
+	const html = renderMarkdown("![[cover.jpg]]", context);
 	assert.match(html, /src="loom-asset:\/\/asset\/cover-id\?v=4-12"/);
+	assert.match(html, /<span>cover\.jpg<\/span><\/a>/);
+	assert.match(renderMarkdown("![[cover.jpg|Cover.JPG]]", context), /<span>Cover\.JPG<\/span><\/a>/);
+	assert.match(renderMarkdown("![[cover.jpg|封面]]", context), /<span>封面<\/span><\/a>/);
 });
 
 test("renderMarkdown typesets TeX with KaTeX", () => {
@@ -120,6 +124,15 @@ function libraryAsset(assetId: string, relativePath: string): Asset {
 	};
 }
 
+test("renderMarkdown embeds media on its own line and keeps embeds in tables compact", () => {
+	const clip: Asset = { ...libraryAsset("clip", "clip.mp4"), type: "video" };
+	const context = { fromRelativePath: "script.md", assets: [clip] };
+	assert.match(renderMarkdown('![[clip.mp4|A "quoted" <title>]]', context), /<video[^>]+aria-label="A &quot;quoted&quot; &lt;title&gt;"[^>]+preload="none"/);
+	const table = renderMarkdown("| Media |\n| --- |\n| ![[clip.mp4]] |", context);
+	assert.match(table, /<td><a class="markdown-embed-file markdown-file-link"[^>]+data-asset-id="clip"/);
+	assert.doesNotMatch(table, /<video/);
+});
+
 const library = [
 	libraryAsset("notes", "产品说明.md"),
 	libraryAsset("deep", "产品/说明.md"),
@@ -131,9 +144,9 @@ function render(source: string, from = "脚本.md"): string {
 }
 
 test("renderMarkdown turns wiki links into links that open the asset", () => {
-	const html = render("[[产品说明]] [[产品/说明|别名]] [[产品说明#标题]]");
-	assert.match(html, /<a href="#" data-asset-id="notes">产品说明<\/a>/);
-	assert.match(html, /<a href="#" data-asset-id="deep">别名<\/a>/);
+	const html = render("[[产品说明.md]] [[产品/说明|别名]] [[产品说明#标题]]");
+	assert.match(html, /class="markdown-file-link" data-asset-id="notes">产品说明\.md<\/a>/);
+	assert.match(html, /class="markdown-file-link" data-asset-id="deep">别名<\/a>/);
 	assert.equal(html.match(/data-asset-id="notes"/g)?.length, 2);
 	assert.equal(html.includes("markdown-broken-reference"), false);
 });
@@ -189,12 +202,12 @@ test("renderMarkdown tags headings and carries link anchors for in-file jumps", 
 	const html = render("# Q&A 总结\n\n## `code` Part\n\n[[产品说明#q-a 总结]] [[产品/说明#Part|跳转]] [x](产品/说明.md#%E6%80%BB%E7%BB%93) [[#Q&A 总结]] [top](#q-a-总结) [[产品说明#^block]]");
 	assert.match(html, /<h1 data-heading="q a 总结">/);
 	assert.match(html, /<h2 data-heading="code part">/);
-	assert.match(html, /data-asset-id="notes" data-anchor="q a 总结">产品说明 &gt; q-a 总结<\/a>/);
+	assert.match(html, /data-asset-id="notes" data-anchor="q a 总结">产品说明 &gt; q-a 总结<small[^>]*>md<\/small><\/a>/);
 	assert.match(html, /data-asset-id="deep" data-anchor="part">跳转/);
 	assert.match(html, /data-asset-id="deep" data-anchor="总结"/);
-	assert.match(html, /<a href="#" data-anchor="q a 总结">Q&amp;A 总结<\/a>/);
+	assert.match(html, /<a href="#" data-anchor="q a 总结" class="markdown-file-link">Q&amp;A 总结<\/a>/);
 	assert.match(html, /<a href="#" data-anchor="q a 总结">top<\/a>/);
 	// A block ID has no heading to jump to, but the link still opens the file.
-	assert.match(html, /<a href="#" data-asset-id="notes">产品说明 &gt; \^block<\/a><\/p>/);
+	assert.match(html, /data-asset-id="notes">产品说明 &gt; \^block<small[^>]*>md<\/small><\/a><\/p>/);
 	assert.equal(html.includes("markdown-broken-reference"), false);
 });

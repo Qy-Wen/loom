@@ -188,7 +188,7 @@ test("internal links open with a click in Markdown edit mode and Alt-click edits
 	const root = await mkdtemp(join(tmpdir(), "loom-md-wiki-e2e-"));
 	const source = join(root, "脚本.md");
 	const text = [
-		"见 [[产品/说明]]、[[产品/说明#结尾|别名]] 和 [[待调研]]。",
+		"见 [[产品/说明]]、[[产品/说明#结尾|  别名  ]] 和 [[待调研]]。",
 		"",
 		"还有 [普通链接](产品/说明.md#结尾)。",
 		"",
@@ -218,7 +218,6 @@ test("internal links open with a click in Markdown edit mode and Alt-click edits
 		const sourceRow = tree.locator(".asset-row").filter({ hasText: "脚本.md" }).first();
 		await sourceRow.click();
 		const box = loomPage.getByRole("textbox", { name: "Edit 脚本.md" });
-		await box.click();
 		await box.press("ControlOrMeta+End");
 
 		await expect(box.locator(".cm-live-wiki")).toHaveCount(3);
@@ -236,6 +235,20 @@ test("internal links open with a click in Markdown edit mode and Alt-click edits
 
 		const wiki = box.locator(".cm-live-wiki", { hasText: "别名" });
 		await expect(wiki).toHaveCSS("cursor", "pointer");
+		await expect(wiki).toHaveCSS("border-bottom-width", "1px");
+		await expect(wiki).toHaveCSS("text-decoration-line", "none");
+		await expect(wiki).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+		await expect(wiki).toHaveText("别名");
+		const embedLink = box.locator(".markdown-embed-file");
+		await expect(embedLink).toBeVisible();
+		await expect(embedLink).toHaveCSS("border-bottom-width", "1px");
+		const label = (link: import("@playwright/test").Locator) => link.evaluate((node) => {
+			const text = node.ownerDocument.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode()!;
+			return { text: text.textContent, color: getComputedStyle(text.parentElement!).color };
+		});
+		const wikiLabel = await label(wiki);
+		expect(wikiLabel.text).toBe("别名");
+		expect(wikiLabel.color).toBe((await label(embedLink)).color);
 		await wiki.scrollIntoViewIfNeeded();
 		const bounds = (await wiki.boundingBox())!;
 		const y = bounds.y + bounds.height / 2;
@@ -596,7 +609,7 @@ test("table cells render links, formulas and missing references, and a narrow co
 		const cells = box.locator(".cm-live-table td");
 		await expect(cells).toHaveCount(5);
 		// A link to a library file is a link, a missing one is marked, and a formula is typeset.
-		await expect(cells.nth(0).locator("a[data-asset-id]")).toHaveText("目标");
+		await expect(cells.nth(0).locator("a[data-asset-id] .markdown-file-link-extension")).toHaveText("md");
 		await expect(cells.nth(1).locator(".katex")).toHaveCount(1);
 		await expect(cells.nth(3).locator("code")).toHaveText("a");
 		// Inline code in a cell has the same light background and type as in the text.
@@ -629,7 +642,7 @@ test("table cells render links, formulas and missing references, and a narrow co
 		await cells.nth(2).click();
 		await expect(cells.nth(2)).toBeFocused();
 		expect(await look()).toEqual(resting);
-		await cells.nth(0).click();
+		await cells.nth(0).click({ position: { x: 2, y: 10 } });
 		await expect(cells.nth(0)).toBeFocused();
 		expect(await look()).toEqual(resting);
 		// Clicking a formula, code or a missing reference puts the cell into source editing.

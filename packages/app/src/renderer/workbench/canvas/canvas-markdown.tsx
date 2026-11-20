@@ -2,12 +2,17 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
+import { EMBED_IMAGE_SELECTOR, EMBED_LINK_SELECTOR } from "../preview/embed-renderers.ts";
 import { renderMarkdown } from "../preview/markdown.ts";
 
 const PREVIEW_BYTES = 16 * 1024;
 type Excerpt = { text: string; truncated: boolean };
 
-export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets }: { asset: Asset; assets: Asset[] }): React.JSX.Element {
+export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, onOpenAsset }: {
+	asset: Asset;
+	assets: Asset[];
+	onOpenAsset(asset: Asset): void;
+}): React.JSX.Element {
 	const { t } = useLocale();
 	const root = useRef<HTMLDivElement>(null);
 	const [visible, setVisible] = useState(false);
@@ -50,9 +55,31 @@ export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets }: { 
 		assets,
 		lazyImages: true,
 	}), [asset.relativePath, assets, excerpt]);
+	const openImageMenu = (event: React.MouseEvent | React.KeyboardEvent) => {
+		const image = event.target instanceof Element ? event.target.closest<HTMLImageElement>(EMBED_IMAGE_SELECTOR) : null;
+		if (!image) return;
+		event.preventDefault();
+		event.stopPropagation();
+		const target = assets.find((item) => item.assetId === image.dataset.embedImageId);
+		if (!target) return;
+		void window.loom.showEditorContextMenu({ embed: true, readOnly: true, canUndo: false, canRedo: false, canCopy: false, formats: {} }).then((action) => {
+			if (action === "open_embed" && image.isConnected) onOpenAsset(target);
+		}).catch(() => undefined);
+	};
 
 	return (
-		<div className="canvas-note canvas-file-markdown thin-scroll" ref={root}>
+		<div className="canvas-note canvas-file-markdown thin-scroll" ref={root} onContextMenu={openImageMenu} onKeyDown={(event) => {
+			if (event.shiftKey && event.key === "F10") openImageMenu(event);
+		}} onDoubleClick={(event) => {
+			if (event.target instanceof Element && event.target.matches(EMBED_IMAGE_SELECTOR)) event.stopPropagation();
+		}} onClick={(event) => {
+			if (!(event.target instanceof Element)) return;
+			const link = event.target.closest<HTMLElement>(EMBED_LINK_SELECTOR);
+			if (!link) return;
+			event.preventDefault();
+			const target = assets.find((item) => item.assetId === link.dataset.assetId);
+			if (target) onOpenAsset(target);
+		}}>
 			{html ? <div className="markdown-preview-body" dangerouslySetInnerHTML={{ __html: html }} /> :
 				<span className="canvas-markdown-status">
 					{excerpt === undefined ? t.preview.loadingMarkdown : excerpt === null ? t.canvas.markdownFailed : t.canvas.markdownEmpty}

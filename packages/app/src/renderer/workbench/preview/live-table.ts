@@ -3,9 +3,10 @@ import { syntaxTree } from "@codemirror/language";
 import type { StateEffectType } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
+import { EMBED_IMAGE_SELECTOR, EMBED_LINK_SELECTOR } from "./embed-renderers.ts";
 import { pressedReference } from "./live-reference.ts";
 import { renderInlineMarkdown } from "./markdown.ts";
-import type { EditorClipboardAction, TableContextAction, TableContextState } from "../../../shared/ipc.ts";
+import type { EditorClipboardAction, MarkdownContextAction, TableContextAction, TableContextState } from "../../../shared/ipc.ts";
 import { appendColumn, appendRow, cellChange, cellTexts, clearCells, escapeCell, insertColumn, insertRow, parseTable, moveColumn, moveRow, rectText, removeColumn, pasteCells, removeRow, setAlign, type CellRect, type ParsedTable, type TableAlign } from "./table.ts";
 
 /**
@@ -21,6 +22,7 @@ export interface TableHooks {
 	save(): void;
 	/** Asks the window for the table's context menu; resolves with what was chosen, or null. */
 	chooseAction(state: TableContextState): Promise<TableContextAction | null>;
+	chooseEmbedAction(readOnly: boolean): Promise<MarkdownContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
 	labels: { addRow: string; addColumn: string; moveRow: string; moveColumn: string };
 }
@@ -357,6 +359,27 @@ export class TableWidget extends WidgetType {
 	}
 
 	private listen(cell: HTMLElement, wrap: HTMLElement, view: EditorView): void {
+		const openEmbedMenu = (event: MouseEvent | KeyboardEvent): boolean => {
+			const embed = event.target instanceof Element ? event.target.closest<HTMLElement>(".markdown-cell-embed") : null;
+			const target = embed?.querySelector<HTMLElement>(`${EMBED_LINK_SELECTOR}, ${EMBED_IMAGE_SELECTOR}`);
+			const assetId = target?.dataset.assetId ?? target?.dataset.embedImageId;
+			const hooks = this.hooks(view);
+			if (!embed || !assetId || !hooks) return false;
+			event.preventDefault();
+			event.stopPropagation();
+			const { doc, readOnly } = view.state;
+			const offset = Number(embed.dataset.sourceFrom) + 3;
+			void hooks.chooseEmbedAction(readOnly).then((action) => {
+				if (!embed.isConnected || view.state.doc !== doc) return;
+				if (action === "open_embed") hooks.openAsset(assetId, target?.dataset.anchor);
+				if (action === "edit_embed" && !view.state.readOnly) {
+					dropPick(wrap);
+					cell.focus({ preventScroll: true });
+					selectCellText(cell, { from: offset, to: offset });
+				}
+			}).catch(() => undefined);
+			return true;
+		};
 		let reference: ReturnType<typeof pressedReference>;
 		cell.addEventListener("mousedown", (event) => {
 			reference = pressedReference(event);
@@ -371,6 +394,7 @@ export class TableWidget extends WidgetType {
 			// A press in a cell ends a block that was picked, and may start a new one by being dragged into another cell.
 			dropPick(wrap);
 			trackPress(wrap, { row: Number(cell.dataset.row), column: Number(cell.dataset.column) });
+			if (event.target instanceof Element && event.target.matches(EMBED_IMAGE_SELECTOR)) return;
 			if (reference) {
 				if (!view.state.readOnly) event.preventDefault();
 				return;
@@ -382,8 +406,10 @@ export class TableWidget extends WidgetType {
 			}
 		});
 		cell.addEventListener("click", (event) => {
-			if ((event.target as HTMLElement | null)?.closest("a")) event.preventDefault();
-			const link = reference?.(event);
+			const anchor = event.target instanceof Element ? event.target.closest<HTMLElement>("a") : null;
+			if (anchor) event.preventDefault();
+			const focusedEmbed = event.detail === 0 && anchor?.matches(EMBED_LINK_SELECTOR) ? anchor : null;
+			const link = focusedEmbed ?? reference?.(event);
 			reference = undefined;
 			if (link) this.hooks(view)?.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
 		});
@@ -412,8 +438,12 @@ export class TableWidget extends WidgetType {
 			event.preventDefault();
 			editTable(view, wrap, { kind: "paste", row: Number(cell.dataset.row), column: Number(cell.dataset.column), values });
 		});
-		cell.addEventListener("keydown", (event) => keyInCell(event, view, wrap, cell, this.hooks(view)));
+		cell.addEventListener("keydown", (event) => {
+			if (event.shiftKey && event.key === "F10" && openEmbedMenu(event)) return;
+			if (event.target === cell) keyInCell(event, view, wrap, cell, this.hooks(view));
+		});
 		cell.addEventListener("contextmenu", (event) => {
+			if (openEmbedMenu(event)) return;
 			const hooks = this.hooks(view);
 			const found = currentTable(view, wrap);
 			if (!hooks || !found) return;

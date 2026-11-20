@@ -54,12 +54,12 @@ export function CanvasCard({
 	return <div className={`canvas-node${node.type === "group" ? " canvas-group" : ""}`} style={style}>
 		<article className={`canvas-card type-${node.type}${selected ? " selected" : ""}`} data-node-id={node.id}
 			onPointerDown={(event) => {
-				if (event.target instanceof Element && event.target.closest("a, input, textarea, button:not(.canvas-handle, .canvas-asset-preview)")) return;
+				if (event.target instanceof Element && event.target.closest("a, audio, video, input, textarea, button:not(.canvas-handle, .canvas-asset-preview)")) return;
 				onMove(event, node.id);
 			}}
 			onDragStart={(event) => event.preventDefault()}
 			onDoubleClick={(event) => {
-				if (event.button !== 0 || (event.target instanceof Element && event.target.closest("a, input, textarea, .canvas-resize"))) return;
+				if (event.button !== 0 || (event.target instanceof Element && event.target.closest("a, audio, video, input, textarea, .canvas-resize"))) return;
 				if (asset && node.type === "file") onPreview(asset);
 				if (node.type === "text" || node.type === "group") onEdit(node.id);
 			}}>
@@ -77,7 +77,7 @@ export function CanvasCard({
 					<span>{name}</span>
 				</button>
 			</header>
-			{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} />}
+			{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
 			{node.type === "file" && !markdownAsset && (
 				<div className="canvas-card-body">
 					{asset ? (
