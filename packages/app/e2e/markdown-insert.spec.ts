@@ -105,7 +105,7 @@ test("wiki link completion filters files and replaces only the link target", asy
 	await writeFile(join(root, first), "# First");
 	await writeFile(join(root, second), "# Second");
 	await writeFile(join(root, "unrelated.md"), "# Unrelated");
-	await writeFile(file, "后缀\n\n[[旧#标题|别名]]\n\n```\n\n```");
+	await writeFile(file, ["后缀", "", `[[${second}#标题|别名]]`, "", "```", "", "```"].join("\n"));
 	await openNote(loomPage);
 
 	const box = loomPage.getByRole("textbox", { name: "Edit commands.md" });
@@ -136,15 +136,13 @@ test("wiki link completion filters files and replaces only the link target", asy
 	await expect.poll(() => readFile(file, "utf8")).toContain(`[[${chosen}]] 后续后缀`);
 
 	const existing = box.locator(".cm-line").filter({ hasText: "别名" });
-	await existing.click();
+	await existing.click({ modifiers: ["Alt"] });
 	await box.press("Home");
 	await box.press("ArrowRight");
 	await box.press("ArrowRight");
-	await expect(menu.getByRole("option", { name: first })).toBeVisible();
-	await box.press("Escape");
-	await expect(menu).toBeHidden();
-	await box.press("ArrowLeft");
-	await box.press("ArrowRight");
+	// Give CodeMirror's deferred completion query time to open if moving the caret started one.
+	await expect(menu.waitFor({ state: "visible", timeout: 350 })).rejects.toThrow(/Timeout/);
+	await loomPage.keyboard.insertText("Alpha");
 	await menu.getByRole("option", { name: first }).click();
 	await box.press("ControlOrMeta+s");
 	await expect.poll(() => readFile(file, "utf8")).toContain(`[[${first}#标题|别名]]`);

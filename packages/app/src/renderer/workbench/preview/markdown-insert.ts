@@ -86,7 +86,7 @@ const openCompletionAtCaret = EditorView.updateListener.of((update) => {
 	const wikiTarget = wikiTargetAt(state, position);
 	const shouldOpen = deleted
 		? wikiTarget !== null || slashQueryStart(state, position) !== null
-		: wikiTarget?.from === position;
+		: wikiTarget?.canOpenOnMove;
 	if (!shouldOpen) return;
 	queueMicrotask(() => {
 		if (view.dom.isConnected && view.hasFocus && view.state.doc === state.doc

@@ -3,22 +3,28 @@ import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
 import type { EditorView } from "@codemirror/view";
-import { resolveWikiTarget } from "@loom/core/references";
+import { matchWikiLink, resolveWikiTarget } from "@loom/core/references";
 import { insideLiteral, liveLibrary, type LiveLibrary } from "./live-markdown.ts";
 
 const targetText = /^[^[\]#|\r\n]*$/;
 const remainingLink = /^([^[\]#|]*)(?:[#|][^[\]]*)?\]\]/;
 const libraryOptions = new WeakMap<LiveLibrary, { links: Completion[]; images: Completion[] }>();
 
-export function wikiTargetAt(state: EditorState, position: number): { from: number; embed: boolean } | null {
+export function wikiTargetAt(state: EditorState, position: number): { from: number; embed: boolean; canOpenOnMove: boolean } | null {
 	if (state.readOnly || !state.selection.main.empty) return null;
 	const line = state.doc.lineAt(position);
 	const before = line.text.slice(0, position - line.from);
 	const open = before.lastIndexOf("[[");
 	if (open < 0 || !targetText.test(before.slice(open + 2))) return null;
 	const embed = before[open - 1] === "!";
-	if (insideLiteral(syntaxTree(state), line.from + open - Number(embed), position)) return null;
-	return { from: line.from + open + 2, embed };
+	const linkStart = open - Number(embed);
+	if (insideLiteral(syntaxTree(state), line.from + linkStart, position)) return null;
+	const from = line.from + open + 2;
+	return {
+		from,
+		embed,
+		canOpenOnMove: from === position && !matchWikiLink(line.text, linkStart)?.target,
+	};
 }
 
 function insertReference(view: EditorView, completion: Completion, from: number, to: number): void {
