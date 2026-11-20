@@ -3,6 +3,62 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
+test("table and graph open an asset in the selected library display", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await mkdir(join(root, "folder"));
+	await writeFile(join(root, "start.md"), "# Start");
+	await writeFile(join(root, "folder", "target.md"), "# Target");
+	const controls = page.locator(".library-view-controls");
+	const button = (name: string) => controls.getByRole("button", { name, exact: true });
+	const row = page.locator(".asset-table tbody tr").filter({ hasText: "target.md" });
+	const node = page.locator('.graph-node[aria-label="target.md"]');
+	const target = page.getByRole("textbox", { name: "Edit target.md", exact: true });
+	const overlay = page.getByRole("dialog", { name: "File preview" });
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "start.md" }).click();
+
+	await button("Table").click();
+	await page.getByRole("button", { name: "+ Add field", exact: true }).click();
+	const field = page.getByPlaceholder("Field name");
+	await field.fill("Notes");
+	await field.press("Enter");
+	const notes = row.getByRole("textbox", { name: "Notes", exact: true });
+	await notes.dblclick();
+	await expect(notes).toBeFocused();
+	await expect(button("Table")).toHaveAttribute("aria-pressed", "true");
+
+	for (const mode of ["List", "Icons"]) {
+		await button(mode).click();
+		for (const view of ["Table", "Graph"]) {
+			await button(view).click();
+			const item = view === "Table" ? row.getByText("target.md", { exact: true }) : node.locator(".graph-node-outline");
+			await item.click();
+			await expect(button(view)).toHaveAttribute("aria-pressed", "true");
+			await expect(view === "Table" ? row : node).toHaveClass(/selected/);
+			await item.dblclick();
+			await expect(button("Library")).toHaveAttribute("aria-pressed", "true");
+			await expect(button(mode)).toHaveAttribute("aria-pressed", "true");
+			await expect(target).toBeVisible();
+			if (mode === "List") {
+				await expect(page.getByRole("tab", { selected: true })).toHaveText("target.md");
+			} else {
+				await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
+				await overlay.getByRole("button", { name: "Close preview", exact: true }).click();
+			}
+		}
+	}
+
+	await button("Table").click();
+	await row.press("Enter");
+	await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
+	await overlay.getByRole("button", { name: "Close preview", exact: true }).click();
+	await button("Graph").click();
+	await node.press("Enter");
+	await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
+});
+
 test("asset tabs follow browser rules and close with their file", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(45000);

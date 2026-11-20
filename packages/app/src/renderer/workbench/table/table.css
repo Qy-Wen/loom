@@ -255,6 +255,11 @@ body.resizing-table-columns {
 	background: var(--lm-surface-accent);
 }
 
+.asset-table tbody tr:focus-visible {
+	outline: 2px solid var(--lm-text-accent);
+	outline-offset: -2px;
+}
+
 .asset-table tbody tr.selected {
 	background: var(--lm-surface-accent-strong);
 }

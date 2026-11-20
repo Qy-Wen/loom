@@ -31,6 +31,7 @@ interface GraphViewProps {
 	selectedAssetIds: ReadonlySet<string>;
 	relationTypes: string[];
 	onSelectAsset: (assetId: string) => void;
+	onOpenAsset: (assetId: string) => void;
 	/** Files inside a box drag, or none for a click on empty canvas. `add` keeps the current selection. */
 	onBoxSelect: (assetIds: string[], add: boolean) => void;
 	onCreateRelation: (fromAssetId: string, toAssetId: string, type: string) => Promise<void>;
@@ -84,6 +85,7 @@ export function GraphView({
 	selectedAssetIds,
 	relationTypes,
 	onSelectAsset,
+	onOpenAsset,
 	onBoxSelect,
 	onCreateRelation,
 	onRemoveRelation,
@@ -91,6 +93,7 @@ export function GraphView({
 	const { t } = useLocale();
 	const canvasRef = useRef<HTMLDivElement>(null);
 	const drag = useRef<PointerDrag | null>(null);
+	const nodeClick = useRef<{ id: string; repeated: boolean } | null>(null);
 	const fitted = useRef(false);
 	const [viewport, setViewport] = useState<Viewport>({ x: 0, y: 0, scale: 1 });
 	const viewportRef = useRef(viewport);
@@ -127,9 +130,10 @@ export function GraphView({
 		pin,
 		unpin,
 		onSelectAsset,
+		onOpenAsset,
 		onBoxSelect,
 	});
-	live.current = { nodes, pin, unpin, onSelectAsset, onBoxSelect };
+	live.current = { nodes, pin, unpin, onSelectAsset, onOpenAsset, onBoxSelect };
 	const byId = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
 	const assetsById = useMemo(() => new Map(assets.map((asset) => [asset.assetId, asset])), [assets]);
 	const parallelIndex = useMemo(() => indexParallelEdges(visibleEdges), [visibleEdges]);
@@ -267,6 +271,8 @@ export function GraphView({
 		};
 		const onUp = (event: PointerEvent) => {
 			const start = drag.current;
+			const previousClick = nodeClick.current;
+			nodeClick.current = null;
 			if (!start) return;
 			if (start.kind === "pan" && (event.pointerId !== start.pointerId || event.button !== 1)) return;
 			drag.current = null;
@@ -284,6 +290,7 @@ export function GraphView({
 			if (start.kind === "move") {
 				if (start.started) live.current.unpin(start.id);
 				else {
+					nodeClick.current = { id: start.id, repeated: previousClick?.id === start.id };
 					setSelectedEdgeId(null);
 					live.current.onSelectAsset(start.id);
 				}
@@ -302,6 +309,7 @@ export function GraphView({
 		const onCancel = () => {
 			const start = drag.current;
 			drag.current = null;
+			nodeClick.current = null;
 			setActiveDrag(null);
 			setBox(null);
 			setLinkPreview(null);
@@ -358,6 +366,17 @@ export function GraphView({
 		drag.current = { kind: "move", id, x: event.clientX, y: event.clientY, started: false };
 		event.currentTarget.setPointerCapture(event.pointerId);
 	}, []);
+
+	const openNode = useCallback((id: string) => {
+		if (!pendingLinkRef.current && !drag.current) live.current.onOpenAsset(id);
+	}, []);
+
+	const onNodeDoubleClick = useCallback((id: string) => {
+		const click = nodeClick.current;
+		nodeClick.current = null;
+		// Pointer capture also sends click events to a dragged node. Require two completed clicks.
+		if (click?.id === id && click.repeated) openNode(id);
+	}, [openNode]);
 
 	function screenToWorld(clientX: number, clientY: number): { x: number; y: number } {
 		const element = canvasRef.current;
@@ -477,7 +496,7 @@ export function GraphView({
 					));
 				}}
 			>
-				<svg className="graph-world" role="img" aria-label={t.graph.canvas}>
+				<svg className="graph-world" role="group" aria-label={t.graph.canvas}>
 					<g transform={`translate(${viewport.x} ${viewport.y}) scale(${viewport.scale})`}>
 						<defs>
 							<marker id="graph-arrow" markerUnits="userSpaceOnUse" markerWidth={GRAPH_ARROW_SIZE} markerHeight={GRAPH_ARROW_SIZE} refX={GRAPH_ARROW_REF_X} refY={ARROW_HALF} orient="auto">
@@ -540,6 +559,8 @@ export function GraphView({
 									hovered={hover?.id === node.id && !linking && !moving}
 									detail={detail}
 									onPointerDown={onNodePointerDown}
+									onDoubleClick={onNodeDoubleClick}
+									onOpen={openNode}
 								/>
 							);
 						})}

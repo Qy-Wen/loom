@@ -34,6 +34,7 @@ interface TableViewProps {
 	selectedAssetId: string | null;
 	canEditProperties: boolean;
 	onSelectAsset: (assetId: string) => void;
+	onOpenAsset: (assetId: string) => void;
 	onCreateProperty: (name: string, type: PropertyType) => Promise<void>;
 	onUpdateProperty: (propertyId: string, name: string, type: PropertyType) => Promise<void>;
 	onRemoveProperty: (propertyId: string) => Promise<void>;
@@ -48,6 +49,7 @@ export function TableView({
 	selectedAssetId,
 	canEditProperties,
 	onSelectAsset,
+	onOpenAsset,
 	onCreateProperty,
 	onUpdateProperty,
 	onRemoveProperty,
@@ -256,6 +258,8 @@ export function TableView({
 							<tr
 								className={asset.assetId === selectedAssetId ? "selected" : ""}
 								key={asset.assetId}
+								tabIndex={0}
+								aria-keyshortcuts="Enter"
 								draggable
 								onDragStart={(event) => {
 									writeLibraryDrag(event.dataTransfer, { kind: "asset", assetId: asset.assetId, path: asset.relativePath }, asset);
@@ -264,6 +268,12 @@ export function TableView({
 									endLibraryDrag();
 								}}
 								onClick={() => onSelectAsset(asset.assetId)}
+								onDoubleClick={() => onOpenAsset(asset.assetId)}
+								onKeyDown={(event) => {
+									if (event.target !== event.currentTarget || event.key !== "Enter" || isImeComposing(event.nativeEvent)) return;
+									event.preventDefault();
+									onOpenAsset(asset.assetId);
+								}}
 							>
 								<td data-tooltip={asset.relativePath}>
 									<strong>{asset.filename}</strong>
@@ -385,7 +395,7 @@ function PropertyCell({
 
 	if (property.type === "boolean") {
 		return (
-			<td className="property-cell" onClick={stopRow} onDragStart={stopRow}>
+			<td className="property-cell" onClick={stopRow} onDoubleClick={stopRow} onDragStart={stopRow}>
 				<label className="property-boolean">
 					<input
 						type="checkbox"
@@ -423,7 +433,7 @@ function PropertyCell({
 	}
 
 	return (
-		<td className="property-cell" onClick={stopRow} onDragStart={stopRow}>
+		<td className="property-cell" onClick={stopRow} onDoubleClick={stopRow} onDragStart={stopRow}>
 			<input
 				type={property.type === "number" ? "number" : property.type === "date" ? "date" : "text"}
 				value={draft}

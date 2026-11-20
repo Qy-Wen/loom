@@ -605,11 +605,15 @@ export function App(): React.JSX.Element {
 		if (assetId !== visibleAssetId) selectAsset(assetId);
 	}
 
-	function moveHistory(direction: -1 | 1): void {
-		const assetId = navigation.move(direction);
-		if (!assetId || assetId === visibleAssetId) return;
+	function openAssetInLibrary(assetId: string): void {
+		if (!assetIds.has(assetId)) return;
 		setWorkbenchView("library");
 		showAsset(assetId, true);
+	}
+
+	function moveHistory(direction: -1 | 1): void {
+		const assetId = navigation.move(direction);
+		if (assetId && assetId !== visibleAssetId) openAssetInLibrary(assetId);
 	}
 
 	function browseHolds(where: BrowseLocation, assetId: string): boolean {
@@ -1659,6 +1663,7 @@ export function App(): React.JSX.Element {
 								onSetPropertyValue={setPropertyValue}
 								onRemovePropertyValue={removePropertyValue}
 								onSelectAsset={selectAssetForDetails}
+								onOpenAsset={openAssetInLibrary}
 							/>
 						) : workbenchView === "graph" ? (
 							<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
@@ -1668,6 +1673,7 @@ export function App(): React.JSX.Element {
 									selectedAssetIds={selectedAssetIds}
 									relationTypes={relationTypes}
 									onSelectAsset={selectAssetForDetails}
+									onOpenAsset={openAssetInLibrary}
 									onBoxSelect={boxSelectAssets}
 									onCreateRelation={createRelation}
 									onRemoveRelation={removeRelation}

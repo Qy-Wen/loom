@@ -1,6 +1,7 @@
 import { memo } from "react";
 import type { Asset } from "@loom/core";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
+import { isImeComposing } from "../../components/ime-composition.ts";
 import { GRAPH_NODE_OUTLINE_WIDTH, GRAPH_NODE_RADIUS, type GraphNodeDetail } from "./graph-layout.ts";
 
 const SELECTION_RING_WIDTH = 2.5;
@@ -15,6 +16,8 @@ interface GraphNodeProps {
 	hovered: boolean;
 	detail: GraphNodeDetail;
 	onPointerDown: (event: React.PointerEvent<SVGGElement>, assetId: string) => void;
+	onDoubleClick: (assetId: string) => void;
+	onOpen: (assetId: string) => void;
 }
 
 /**
@@ -31,6 +34,8 @@ export const GraphNode = memo(function GraphNode({
 	hovered,
 	detail,
 	onPointerDown,
+	onDoubleClick,
+	onOpen,
 }: GraphNodeProps): React.JSX.Element {
 	const radius = GRAPH_NODE_RADIUS;
 	const outlineWidth = dropTarget ? 4 : hovered && !selected ? 2.5 : GRAPH_NODE_OUTLINE_WIDTH;
@@ -39,10 +44,24 @@ export const GraphNode = memo(function GraphNode({
 		<g
 			className={`graph-node${selected ? " selected" : ""}${dropTarget ? " drop-target" : ""}${hovered ? " hovered" : ""}`}
 			data-asset-id={asset.assetId}
+			role="button"
+			tabIndex={0}
 			aria-label={asset.filename}
 			data-tooltip={asset.filename}
 			transform={`translate(${x} ${y})`}
 			onPointerDown={(event) => onPointerDown(event, asset.assetId)}
+			onDoubleClick={() => onDoubleClick(asset.assetId)}
+			onKeyDown={(event) => {
+				if (isImeComposing(event.nativeEvent)) return;
+				if (event.key === " ") event.preventDefault();
+				if (event.key === "Enter" && !event.repeat) {
+					event.preventDefault();
+					onOpen(asset.assetId);
+				}
+			}}
+			onKeyUp={(event) => {
+				if (event.key === " " && !isImeComposing(event.nativeEvent)) onOpen(asset.assetId);
+			}}
 		>
 			{detail === "full" && (
 				<foreignObject
