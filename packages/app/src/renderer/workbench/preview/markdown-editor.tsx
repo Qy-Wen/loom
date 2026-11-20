@@ -3,7 +3,7 @@ import type { Asset } from "@loom/core";
 import { markdownAccess } from "../../../shared/markdown-file.ts";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor as MarkdownEditorHandle, type MarkdownMode } from "./codemirror-markdown.ts";
-import { requestHeading, takePendingHeading } from "./heading-anchor.ts";
+import type { RegisterMarkdownHistory } from "../asset-history.ts";
 import { markdownFindIconPath } from "./markdown-find.ts";
 import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
 
@@ -16,10 +16,11 @@ const files: MarkdownFiles = {
 const sessions = new Map<string, MarkdownSave>();
 
 /** One text, save session and CodeMirror view for live editing, reading and source editing. */
-export function MarkdownEditor({ asset, assets, onOpenAsset }: {
+export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }: {
 	asset: Asset;
 	assets: Asset[];
-	onOpenAsset?: (assetId: string) => void;
+	onOpenAsset?: (assetId: string, heading?: string) => void;
+	registerMarkdown?: RegisterMarkdownHistory;
 }): React.JSX.Element {
 	const { assetId, filename, modifiedAt, relativePath } = asset;
 	const { t } = useLocale();
@@ -91,12 +92,8 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 			onSave: () => { void save.flush().catch(() => undefined); },
 			onFindOpenChange: setFindOpen,
 			onOpenAsset: (target, anchor) => {
-				if (!target || target === assetId) {
-					if (anchor) editorRef.current?.scrollToHeading(anchor);
-					return;
-				}
-				if (anchor) requestHeading(target, anchor);
-				openRef.current?.(target);
+				if (openRef.current) openRef.current(target || assetId, anchor);
+				else if ((!target || target === assetId) && anchor) editorRef.current?.scrollToHeading(anchor);
 			},
 		}, t.preview.editorLabel(filename), libraryRef.current, {
 			addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn,
@@ -125,10 +122,33 @@ export function MarkdownEditor({ asset, assets, onOpenAsset }: {
 			onDropError: (cause) => setInsertIssue(cause instanceof Error ? cause.message : t.library.importFailed),
 		}, modeRef.current);
 		editorRef.current = editor;
-		const anchor = takePendingHeading(assetId);
-		if (anchor) editor.scrollToHeading(anchor);
-		return () => { editorRef.current = null; editor.destroy(); };
-	}, [save, assetId, t]);
+		const { view } = editor;
+		let scroll = view.scrollSnapshot();
+		const rememberScroll = () => { scroll = view.scrollSnapshot(); };
+		if (registerMarkdown) view.scrollDOM.addEventListener("scroll", rememberScroll, { passive: true });
+		const unregister = registerMarkdown?.(assetId, {
+			capture: () => {
+				const { anchor, head } = view.state.selection.main;
+				return { selection: { anchor, head }, scroll: view.dom.isConnected ? view.scrollSnapshot() : scroll };
+			},
+			restore: (place) => {
+				if ("heading" in place) editor.scrollToHeading(place.heading);
+				else {
+					const length = view.state.doc.length;
+					view.dispatch({
+						selection: { anchor: Math.min(place.selection.anchor, length), head: Math.min(place.selection.head, length) },
+						effects: place.scroll,
+					});
+				}
+			},
+		});
+		return () => {
+			unregister?.();
+			view.scrollDOM.removeEventListener("scroll", rememberScroll);
+			editorRef.current = null;
+			editor.destroy();
+		};
+	}, [save, assetId, t, registerMarkdown]);
 
 	useEffect(() => { editorRef.current?.setLabel(t.preview.editorLabel(filename)); }, [filename, t]);
 	useEffect(() => {

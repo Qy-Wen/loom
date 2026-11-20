@@ -3,6 +3,7 @@ import type { Asset } from "@loom/core";
 import { useLocale } from "../../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
+import type { RegisterMarkdownHistory } from "../asset-history.ts";
 import { FindBar } from "./find-bar.tsx";
 import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
@@ -98,6 +99,7 @@ export function AssetPreview({
 	assets,
 	onGraded,
 	onOpenAsset,
+	registerMarkdown,
 	gradeHost = null,
 	grading = false,
 	actions = null,
@@ -105,8 +107,9 @@ export function AssetPreview({
 	asset: Asset;
 	assets: Asset[];
 	onGraded?: (assetId: string) => void;
-	/** Opens another library file, for links inside a Markdown preview. */
-	onOpenAsset?: (assetId: string) => void;
+	/** Follows a Markdown reference to a file or heading. */
+	onOpenAsset?: (assetId: string, heading?: string) => void;
+	registerMarkdown?: RegisterMarkdownHistory;
 	gradeHost?: HTMLElement | null;
 	grading?: boolean;
 	actions?: ReactNode;
@@ -164,7 +167,7 @@ export function AssetPreview({
 	if (extension === ".md") {
 		return (
 			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
-				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} onOpenAsset={onOpenAsset} />
+				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} onOpenAsset={onOpenAsset} registerMarkdown={registerMarkdown} />
 			</Suspense>
 		);
 	}

@@ -56,6 +56,8 @@ export const messages = defineLocale(
 		},
 		app: {
 			connecting: "Connecting to Loom agent…",
+			back: "Back",
+			forward: "Forward",
 			resizeLibrary: "Resize asset library",
 			resizeAgent: "Resize chat panel",
 			resizeLower: "Resize lower panel",
@@ -849,6 +851,8 @@ export const messages = defineLocale(
 		},
 		app: {
 			connecting: "正在连接 Loom…",
+			back: "返回",
+			forward: "前进",
 			resizeLibrary: "调整素材库宽度",
 			resizeAgent: "调整聊天面板宽度",
 			resizeLower: "调整下方面板高度",

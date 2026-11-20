@@ -60,7 +60,7 @@ import {
 	type TreeSelection,
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
-import { HelpButton, LibraryOpenButton, SettingsButton, SidebarToggle, TracesButton } from "./components/app-buttons.tsx";
+import { FileHistoryButtons, HelpButton, LibraryOpenButton, SettingsButton, SidebarToggle, TracesButton } from "./components/app-buttons.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./components/error-toast.tsx";
 import { runActivityRenderers } from "./chat/run-activity.tsx";
@@ -76,6 +76,7 @@ import { existingLocation, remapLocation, ROOT_LOCATION, sameLocation, type Brow
 import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-display.ts";
 import { TableView } from "./workbench/table/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
+import { useAssetHistory } from "./workbench/asset-history.ts";
 import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, showInTab, type AssetTabs } from "./workbench/asset-tabs.ts";
 
 const SettingsPage = lazy(() => import("./settings/settings-page.tsx").then(({ SettingsPage }) => ({ default: SettingsPage })));
@@ -184,6 +185,10 @@ export function App(): React.JSX.Element {
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
+	const assetIds = useMemo(() => new Set(library.assets.map((asset) => asset.assetId)), [library.assets]);
+	const visibleAssetId = workbenchView === "library" && libraryAssetId && assetIds.has(libraryAssetId) ? libraryAssetId : null;
+	const navigation = useAssetHistory(library.rootPath, visibleAssetId, assetIds);
+	const mac = uiPlatform(navigator.userAgent) === "mac";
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
@@ -204,6 +209,18 @@ export function App(): React.JSX.Element {
 	const [settingsOpen, setSettingsOpen] = useState(false);
 	const [helpOpen, setHelpOpen] = useState(false);
 	const [fullscreen, setFullscreen] = useState(false);
+	useEffect(() => {
+		const handleNavigation = (event: KeyboardEvent) => {
+			if (event.defaultPrevented || isImeComposing(event) || event.repeat || event.shiftKey || event.ctrlKey
+				|| !event.altKey || event.metaKey !== mac || settingsOpen || helpOpen || document.querySelector("dialog[open]")) return;
+			const direction = event.key === "ArrowLeft" ? -1 : event.key === "ArrowRight" ? 1 : null;
+			if (direction === null || !(direction < 0 ? navigation.canBack : navigation.canForward)) return;
+			event.preventDefault();
+			moveHistory(direction);
+		};
+		window.addEventListener("keydown", handleNavigation, true);
+		return () => window.removeEventListener("keydown", handleNavigation, true);
+	});
 	const selectedAssetIdRef = useRef<string | null>(null);
 	const detailRequests = useRef(new DetailRequestScope());
 	detailRequests.current.select(viewedAssetId);
@@ -262,10 +279,9 @@ export function App(): React.JSX.Element {
 	);
 	// A file that left the library (deleted, trashed, folder removed, library replaced) closes its tab.
 	useLayoutEffect(() => {
-		const ids = new Set(library.assets.map((asset) => asset.assetId));
-		setTabs((current) => pruneTabs(current, (assetId) => ids.has(assetId)));
-		setPreviewAssetId((current) => current && ids.has(current) ? current : null);
-	}, [library.assets]);
+		setTabs((current) => pruneTabs(current, (assetId) => assetIds.has(assetId)));
+		setPreviewAssetId((current) => current && assetIds.has(current) ? current : null);
+	}, [assetIds]);
 	// A folder or tag that is gone leaves the browser on the nearest place that still exists.
 	useEffect(() => {
 		setLocation((current) => existingLocation(current, library));
@@ -560,18 +576,35 @@ export function App(): React.JSX.Element {
 	 * Outside the Files view icon mode only selects it, since there is nothing to open it in.
 	 */
 	function selectAsset(assetId: string): void {
+		showAsset(assetId, workbenchView === "library");
+	}
+
+	function showAsset(assetId: string, previewInBrowser: boolean): void {
 		setPicked(singleSelection(assetKey(assetId)));
 		if (!iconMode) {
 			showListAsset(assetId);
 			return;
 		}
-		if (workbenchView !== "library") return;
+		if (!previewInBrowser) return;
 		// Stay on a favorites or tag view that already lists it; otherwise browse to its folder.
 		const asset = library.assets.find((item) => item.assetId === assetId);
 		if (asset && !(location.kind !== "folder" && browseHolds(location, assetId))) {
 			setLocation({ kind: "folder", path: parentFolder(asset.relativePath) });
 		}
 		setPreviewAssetId(assetId);
+	}
+
+	function openReference(assetId: string, heading?: string): void {
+		if (!assetIds.has(assetId)) return;
+		if (heading) navigation.followHeading(assetId, heading);
+		if (assetId !== visibleAssetId) selectAsset(assetId);
+	}
+
+	function moveHistory(direction: -1 | 1): void {
+		const assetId = navigation.move(direction);
+		if (!assetId || assetId === visibleAssetId) return;
+		setWorkbenchView("library");
+		showAsset(assetId, true);
 	}
 
 	function browseHolds(where: BrowseLocation, assetId: string): boolean {
@@ -1453,7 +1486,8 @@ export function App(): React.JSX.Element {
 				asset={asset}
 				assets={library.assets}
 				onGraded={selectAsset}
-				onOpenAsset={selectAsset}
+				onOpenAsset={openReference}
+				registerMarkdown={navigation.registerMarkdown}
 				gradeHost={gradeHost}
 				grading={grading && asset.assetId === viewedAssetId}
 				actions={(
@@ -1504,7 +1538,8 @@ export function App(): React.JSX.Element {
 				{sandboxNotice
 					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
-				<div className={`window-bar${uiPlatform(navigator.userAgent) === "mac" ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
+				<div className={`window-bar${mac ? " mac" : ""}${fullscreen ? " fullscreen" : ""}`}>
+					<FileHistoryButtons mac={mac} canBack={navigation.canBack} canForward={navigation.canForward} move={moveHistory} />
 					<TracesButton onOpen={() => void window.loom.openDevTrace()} />
 					<HelpButton onOpen={() => setHelpOpen(true)} />
 					<SettingsButton onOpen={() => setSettingsOpen(true)} />

@@ -78,3 +78,81 @@ test("links in Markdown reading mode open the file and offscreen headings, and a
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("file history restores Markdown locations, branches and skips removed files", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const filler = "A paragraph between the linked sections.\n\n".repeat(45);
+	await writeFile(join(root, "Source.md"), `# Start\n\n${filler}[[Target#Arrival|Go to target]]\n\n${filler}`);
+	const targetPath = join(root, "Target.md");
+	await writeFile(targetPath, `# Target\n\n${filler}## Arrival\n\n[[#Farther|Go farther]]\n\n${filler}## Farther\n\n${filler}`);
+	await writeFile(join(root, "Branch.md"), "# Branch");
+	const rows = page.locator(".library-sidebar .asset-row");
+	const back = page.getByRole("button", { name: "Back", exact: true });
+	const forward = page.getByRole("button", { name: "Forward", exact: true });
+	const editor = (file: string) => page.getByRole("textbox", { name: `Edit ${file}.md`, exact: true });
+	const sourceLink = editor("Source").locator(".cm-live-wiki").filter({ hasText: "Go to target" });
+	const arrival = editor("Target").locator('[data-heading="arrival"]');
+	const farther = editor("Target").locator('[data-heading="farther"]');
+
+	await rows.filter({ hasText: "Source.md" }).click();
+	await expect(back).toBeDisabled();
+	await expect(forward).toBeDisabled();
+	const scroller = page.locator(".cm-scroller");
+	await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight / 2 - 100; });
+	await sourceLink.scrollIntoViewIfNeeded();
+	const originalScroll = await scroller.evaluate((element) => element.scrollTop);
+	expect(originalScroll).toBeGreaterThan(100);
+	await sourceLink.click();
+	await expect(arrival).toBeInViewport();
+	await editor("Target").locator("[data-anchor]").filter({ hasText: "Go farther" }).click();
+	await expect(farther).toBeInViewport();
+
+	await back.click();
+	await expect(arrival).toBeInViewport();
+	await expect(farther).not.toBeInViewport();
+	await back.click();
+	await expect(sourceLink).toBeInViewport();
+	await expect.poll(async () => Math.abs(await scroller.evaluate((element) => element.scrollTop) - originalScroll)).toBeLessThan(24);
+	await expect(back).toBeDisabled();
+
+	const mac = await page.evaluate(() => navigator.userAgent.includes("Mac"));
+	await editor("Source").press(mac ? "Meta+Alt+ArrowRight" : "Alt+ArrowRight");
+	await expect(arrival).toBeInViewport();
+	await forward.click();
+	await expect(farther).toBeInViewport();
+	await expect(forward).toBeDisabled();
+
+	await back.click();
+	await rows.filter({ hasText: "Branch.md" }).click();
+	await expect(editor("Branch")).toBeVisible();
+	await expect(forward).toBeDisabled();
+	await rm(targetPath);
+	await expect(rows.filter({ hasText: "Target.md" })).toHaveCount(0);
+	await back.click();
+	await expect(sourceLink).toBeInViewport();
+	await forward.click();
+	await expect(editor("Branch")).toBeVisible();
+});
+
+test("file history follows links in the icon preview", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await writeFile(join(root, "First.md"), "[[Second|Next file]]");
+	await writeFile(join(root, "Second.md"), "# Destination");
+	await page.getByRole("button", { name: "Icons", exact: true }).click();
+	await page.locator(".browser-tile").filter({ hasText: "First.md" }).dblclick();
+	const preview = page.getByRole("dialog", { name: "File preview" });
+	const title = preview.locator(".preview-overlay-title");
+	await expect(title).toHaveText("First.md");
+	await preview.locator("[data-asset-id]").filter({ hasText: "Next file" }).click();
+	await expect(title).toHaveText("Second.md");
+	await page.getByRole("button", { name: "Back", exact: true }).click();
+	await expect(title).toHaveText("First.md");
+	await page.getByRole("button", { name: "Forward", exact: true }).click();
+	await expect(title).toHaveText("Second.md");
+});

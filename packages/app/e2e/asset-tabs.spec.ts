@@ -87,7 +87,9 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 
 		await file("notes.md").click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(5);
-		await expect(loomPage.locator(".workbench").getByRole("heading", { name: "hello", exact: true })).toBeVisible();
+		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
+		const notesEditor = loomPage.getByRole("textbox", { name: "Edit notes.md", exact: true });
+		await expect(notesEditor.getByRole("heading", { level: 1 })).toContainText("hello");
 
 		// Dragging a tab reorders it; the active tab stays active.
 		const names = () => strip.getByRole("tab");

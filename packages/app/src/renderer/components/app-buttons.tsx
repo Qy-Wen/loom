@@ -1,5 +1,28 @@
 import { useLocale } from "../locale.tsx";
 
+export function FileHistoryButtons({ mac, canBack, canForward, move }: {
+	mac: boolean;
+	canBack: boolean;
+	canForward: boolean;
+	move(direction: -1 | 1): void;
+}): React.JSX.Element {
+	const { t } = useLocale();
+	return <>
+		<button className="library-collapse" type="button" aria-label={t.app.back} aria-keyshortcuts={mac ? "Meta+Alt+ArrowLeft" : "Alt+ArrowLeft"}
+			data-tooltip={`${t.app.back} · ${mac ? "⌘⌥←" : "Alt+←"}`} disabled={!canBack} onClick={() => move(-1)}>
+			<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M12.5 8h-9m4-4-4 4 4 4" />
+			</svg>
+		</button>
+		<button className="library-collapse" type="button" aria-label={t.app.forward} aria-keyshortcuts={mac ? "Meta+Alt+ArrowRight" : "Alt+ArrowRight"}
+			data-tooltip={`${t.app.forward} · ${mac ? "⌘⌥→" : "Alt+→"}`} disabled={!canForward} onClick={() => move(1)}>
+			<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+				<path d="M3.5 8h9m-4-4 4 4-4 4" />
+			</svg>
+		</button>
+	</>;
+}
+
 export function SettingsButton({ onOpen }: { onOpen: () => void }): React.JSX.Element {
 	const { t } = useLocale();
 	return (
