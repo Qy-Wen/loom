@@ -155,3 +155,54 @@ test("wiki link completion filters files and replaces only the link target", asy
 	await expect(box.locator(".cm-live-codeblock").filter({ hasText: "[[" })).toBeVisible();
 	await expect(menu).toBeHidden();
 });
+
+test("backspacing an existing wiki target reopens file completion", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(loomPage);
+	const file = join(root, "commands.md");
+	await writeFile(file, "[[zzz]]\n");
+	await writeFile(join(root, "reference.md"), "# Reference\n");
+	await openNote(loomPage);
+
+	const box = loomPage.getByRole("textbox", { name: "Edit commands.md" });
+	const menu = loomPage.locator(".cm-markdown-insert").getByRole("listbox");
+	await box.press("ControlOrMeta+Home");
+	await box.press("End");
+	await box.press("ArrowLeft");
+	await box.press("ArrowLeft");
+	for (const _ of "zzz") await box.press("Shift+ArrowLeft");
+	await expect(menu).toBeHidden();
+	await box.press("Backspace");
+	const reference = menu.getByRole("option", { name: "reference.md", exact: true });
+	await expect(reference).toBeVisible();
+	await reference.click();
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe("[[reference.md]]\n");
+});
+
+test("deleting a slash query reopens command completion", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	await writeFile(join(await libraryPath(loomPage), "commands.md"), "/tablezz\n\nParagraph\n");
+	await openNote(loomPage);
+
+	const box = loomPage.getByRole("textbox", { name: "Edit commands.md" });
+	const menu = loomPage.locator(".cm-markdown-insert").getByRole("listbox");
+	await box.press("ControlOrMeta+Home");
+	await box.press("End");
+	await expect(menu).toBeHidden();
+	await box.press("Backspace");
+	await box.press("Backspace");
+	await expect(menu.getByRole("option", { name: "Table", exact: true })).toBeVisible();
+
+	for (const _ of "table") await box.press("Shift+ArrowLeft");
+	await expect(menu).toBeHidden();
+	await box.press("Delete");
+	await expect(menu.getByRole("option", { name: "Heading 1", exact: true })).toBeVisible();
+
+	await box.press("ControlOrMeta+End");
+	await box.press("ArrowUp");
+	await box.press("End");
+	await box.press("Backspace");
+	await expect(box.locator(".cm-line").filter({ hasText: /^Paragrap$/ })).toBeVisible();
+	await expect(menu).toBeHidden();
+});

@@ -1,8 +1,8 @@
-import { completionStatus, pickedCompletion, startCompletion, type Completion, type CompletionSource } from "@codemirror/autocomplete";
+import { pickedCompletion, type Completion, type CompletionSource } from "@codemirror/autocomplete";
 import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import type { EditorState } from "@codemirror/state";
-import { EditorView } from "@codemirror/view";
+import type { EditorView } from "@codemirror/view";
 import { resolveWikiTarget } from "@loom/core/references";
 import { insideLiteral, liveLibrary, type LiveLibrary } from "./live-markdown.ts";
 
@@ -10,7 +10,7 @@ const targetText = /^[^[\]#|\r\n]*$/;
 const remainingLink = /^([^[\]#|]*)(?:[#|][^[\]]*)?\]\]/;
 const libraryOptions = new WeakMap<LiveLibrary, Completion[]>();
 
-function wikiTargetStart(state: EditorState, position: number): number | null {
+export function wikiTargetStart(state: EditorState, position: number): number | null {
 	if (state.readOnly || !state.selection.main.empty) return null;
 	const line = state.doc.lineAt(position);
 	const before = line.text.slice(0, position - line.from);
@@ -65,15 +65,3 @@ export const wikiLinkCompletion: CompletionSource = (context) => {
 		validFor: (_text, start, end, state) => state.field(liveLibrary, false) === library && wikiTargetStart(state, end) === start,
 	};
 };
-
-/** Also open completion when the caret is moved back to the beginning of a link. */
-export const openWikiCompletionAtCaret = EditorView.updateListener.of((update) => {
-	if (!update.selectionSet || update.docChanged) return;
-	const { state, view } = update;
-	const position = state.selection.main.head;
-	if (update.startState.selection.eq(state.selection) || wikiTargetStart(state, position) !== position) return;
-	queueMicrotask(() => {
-		if (view.dom.isConnected && view.hasFocus && view.state.doc === state.doc
-			&& view.state.selection.eq(state.selection) && !completionStatus(view.state)) startCompletion(view);
-	});
-});

@@ -1,4 +1,4 @@
-import { autocompletion, closeCompletion, pickedCompletion, startCompletion, type Completion, type CompletionContext } from "@codemirror/autocomplete";
+import { autocompletion, closeCompletion, completionStatus, pickedCompletion, startCompletion, type Completion } from "@codemirror/autocomplete";
 import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { StateEffect, StateField, type EditorState } from "@codemirror/state";
@@ -7,7 +7,7 @@ import type { UiSelectionDraft } from "../../../shared/ipc.ts";
 import { messages, type Messages } from "../../../shared/locale.ts";
 import { markdownFilePath } from "./live-markdown.ts";
 import { enterTable } from "./live-table.ts";
-import { openWikiCompletionAtCaret, wikiLinkCompletion } from "./markdown-wiki-completion.ts";
+import { wikiLinkCompletion, wikiTargetStart } from "./markdown-wiki-completion.ts";
 
 type Labels = Messages["preview"]["insertCommands"];
 type Insertion = { text: string; cursor: number };
@@ -60,15 +60,39 @@ function blockAt(state: EditorState, position: number) {
 	return node.name === "Document" ? null : node;
 }
 
-function isLiteral(context: CompletionContext): boolean {
-	const tree = syntaxTree(context.state);
-	for (let node = tree.resolveInner(context.pos, -1); node; ) {
+function isLiteral(state: EditorState, position: number): boolean {
+	for (let node = syntaxTree(state).resolveInner(position, -1); node; ) {
 		if (codeBlocks.has(node.name)) return true;
 		if (!node.parent) break;
 		node = node.parent;
 	}
 	return false;
 }
+
+function slashQueryStart(state: EditorState, position: number): number | null {
+	const line = state.doc.lineAt(position);
+	const offset = position - line.from;
+	if (offset < 1 || !line.text.startsWith("/") || !query.test(line.text.slice(1, offset))
+		|| line.text.slice(offset).trim() || isLiteral(state, position)) return null;
+	return line.from + 1;
+}
+
+const openCompletionAtCaret = EditorView.updateListener.of((update) => {
+	const { state, view } = update;
+	const deleted = update.docChanged && update.transactions.some((transaction) => transaction.isUserEvent("delete"));
+	const moved = !update.docChanged && update.selectionSet && !update.startState.selection.eq(state.selection);
+	if ((!deleted && !moved) || state.readOnly || !state.selection.main.empty) return;
+	const position = state.selection.main.head;
+	const wikiStart = wikiTargetStart(state, position);
+	const shouldOpen = deleted
+		? wikiStart !== null || slashQueryStart(state, position) !== null
+		: wikiStart === position;
+	if (!shouldOpen) return;
+	queueMicrotask(() => {
+		if (view.dom.isConnected && view.hasFocus && view.state.doc === state.doc
+			&& view.state.selection.eq(state.selection) && !completionStatus(view.state)) startCompletion(view);
+	});
+});
 
 function insert(view: EditorView, completion: Completion, from: number, to: number, insertion: Insertion, typedSlash: boolean): number {
 	const doc = view.state.doc;
@@ -129,27 +153,25 @@ export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelec
 	});
 	const typedOptions = options(true);
 	const explicitOptions = options(false);
-	return [insertRequested, openWikiCompletionAtCaret, autocompletion({
+	return [insertRequested, openCompletionAtCaret, autocompletion({
 		override: [(context) => {
 			if (context.state.readOnly || !context.state.selection.main.empty) return null;
 			if (!context.explicit || !context.state.field(insertRequested)) {
 				const wiki = wikiLinkCompletion(context);
 				if (wiki) return wiki;
 			}
-			const line = context.state.doc.lineAt(context.pos);
-			const before = line.text.slice(0, context.pos - line.from);
-			const atEnd = !line.text.slice(before.length).trim();
-			if (atEnd && before.startsWith("/") && query.test(before.slice(1)) && !isLiteral(context)) {
+			const from = slashQueryStart(context.state, context.pos);
+			if (from !== null) {
 				return {
-					from: line.from + 1, options: typedOptions,
-					validFor(text, start, end, state) {
-						const current = state.doc.lineAt(end);
-						return start === current.from + 1 && current.text.startsWith("/") && query.test(text)
-							&& !current.text.slice(end - current.from).trim();
-					},
+					from, options: typedOptions,
+					validFor: (_text, start, end, state) => slashQueryStart(state, end) === start,
 				};
 			}
-			return context.explicit && atEnd ? { from: context.pos, options: explicitOptions, validFor: query } : null;
+			if (!context.explicit) return null;
+			const line = context.state.doc.lineAt(context.pos);
+			return !line.text.slice(context.pos - line.from).trim()
+				? { from: context.pos, options: explicitOptions, validFor: query }
+				: null;
 		}],
 		tooltipClass: () => "cm-markdown-insert",
 		icons: false,
