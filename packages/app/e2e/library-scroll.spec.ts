@@ -95,9 +95,10 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(40);
 	await loomPage.evaluate(async () => {
 		const { assets } = await window.loom.getLibrarySnapshot();
-		for (const asset of assets.slice(0, 12)) {
-			await window.loom.setFavorite(asset.assetId, true); await window.loom.addAssetTag(asset.assetId, "Picked");
-		}
+		// Favorites must fit in the divider's maximum height (window minus the file area's minimum) so the "fit all content" step
+		// below can remove the cue; the tag group only needs to be long enough to overflow once expanded.
+		for (const asset of assets.slice(0, 12)) await window.loom.addAssetTag(asset.assetId, "Picked");
+		for (const asset of assets.slice(0, 8)) await window.loom.setFavorite(asset.assetId, true);
 	});
 	const sidebar = loomPage.locator(".library-sidebar");
 	const top = sidebar.locator(".library-shortcuts"), files = sidebar.locator(".asset-list");
