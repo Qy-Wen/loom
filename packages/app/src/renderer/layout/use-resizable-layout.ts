@@ -8,7 +8,7 @@ import {
 
 export const DEFAULT_LIBRARY_WIDTH = 240;
 export const DEFAULT_SIDE_WIDTH = 380;
-const MIN_LIBRARY_WIDTH = 180;
+const MIN_LIBRARY_WIDTH = 200;
 const MIN_WORKBENCH_WIDTH = 240;
 const MIN_SIDE_WIDTH = 200;
 const HANDLE_WIDTH = 10;
@@ -32,7 +32,7 @@ export function useResizableLayout(): {
 	resetBesideWidth: () => void;
 } {
 	const [libraryWidth, setLibraryWidth] = useState(() =>
-		Number(localStorage.getItem("loom.layout.libraryWidth")) || DEFAULT_LIBRARY_WIDTH,
+		Math.max(MIN_LIBRARY_WIDTH, Number(localStorage.getItem("loom.layout.libraryWidth")) || DEFAULT_LIBRARY_WIDTH),
 	);
 	const [sideWidth, setSideWidth] = useState(() =>
 		Number(localStorage.getItem("loom.layout.sideWidth")) || DEFAULT_SIDE_WIDTH,
@@ -41,8 +41,13 @@ export function useResizableLayout(): {
 		Number(localStorage.getItem(BESIDE_KEY)) || DEFAULT_BESIDE_WIDTH,
 	);
 	const [libraryCollapsed, setLibraryCollapsed] = useState(() => localStorage.getItem(LIBRARY_COLLAPSED_KEY) === "1");
+	const [libraryCollapsePreview, setLibraryCollapsePreview] = useState(false);
 	const shellRef = useRef<HTMLDivElement>(null);
-	const libraryTaken = libraryCollapsed ? COLLAPSED_LIBRARY_WIDTH + COLLAPSED_LIBRARY_GAP : libraryWidth + HANDLE_WIDTH;
+	const activeResize = useRef<(() => void) | null>(null);
+	const libraryHidden = libraryCollapsed || libraryCollapsePreview;
+	const libraryTaken = libraryHidden ? COLLAPSED_LIBRARY_WIDTH + COLLAPSED_LIBRARY_GAP : libraryWidth + HANDLE_WIDTH;
+
+	useEffect(() => () => activeResize.current?.(), []);
 
 	useEffect(() => {
 		localStorage.setItem("loom.layout.libraryWidth", String(libraryWidth));
@@ -61,21 +66,29 @@ export function useResizableLayout(): {
 	}, [libraryCollapsed]);
 
 	function beginResize(side: ResizeSide, event: ReactPointerEvent<HTMLDivElement>): void {
-		if (event.button !== 0 || !shellRef.current) return;
+		if (event.button !== 0 || activeResize.current || !shellRef.current) return;
 		event.preventDefault();
 		const bounds = shellRef.current.getBoundingClientRect();
 		const handle = event.currentTarget;
+		const { clientX: startX, pointerId } = event;
+		let libraryMinimum: number | null = null;
+		const libraryWidthAt = (clientX: number) => libraryWidth + clientX - startX;
+		const shouldCollapseLibraryAt = (clientX: number) => libraryMinimum !== null
+			&& clientX < startX && libraryWidthAt(clientX) <= (libraryMinimum * 2) / 3;
 		handle.classList.add("dragging");
 		document.body.classList.add("resizing-columns");
 
 		const onPointerMove = (moveEvent: PointerEvent) => {
+			if (moveEvent.pointerId !== pointerId) return;
 			const panelsVisible = !shellRef.current?.classList.contains("panels-collapsed");
 			const besideOpen = panelsVisible && !!shellRef.current?.querySelector(".beside-resize");
 			const sideOpen = panelsVisible && !!shellRef.current?.querySelector(".side-resize");
 			if (side === "library") {
 				const taken = (besideOpen ? besideWidth + HANDLE_WIDTH : 0) + (sideOpen ? sideWidth + HANDLE_WIDTH : 0);
 				const room = bounds.width - taken - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
-				setLibraryWidth(clampColumn(moveEvent.clientX - bounds.left, room, MIN_LIBRARY_WIDTH));
+				libraryMinimum = clampColumn(0, room, MIN_LIBRARY_WIDTH);
+				setLibraryWidth(clampColumn(libraryWidthAt(moveEvent.clientX), room, MIN_LIBRARY_WIDTH));
+				setLibraryCollapsePreview(shouldCollapseLibraryAt(moveEvent.clientX));
 			} else if (side === "beside") {
 				const rightInset = sideOpen ? sideWidth + HANDLE_WIDTH : 0;
 				const room = bounds.width - libraryTaken - rightInset - MIN_WORKBENCH_WIDTH - HANDLE_WIDTH;
@@ -87,28 +100,46 @@ export function useResizableLayout(): {
 			}
 		};
 
-		const onPointerUp = () => {
+		const finishResize = () => {
+			activeResize.current = null;
+			setLibraryCollapsePreview(false);
 			handle.classList.remove("dragging");
 			document.body.classList.remove("resizing-columns");
 			window.removeEventListener("pointermove", onPointerMove);
-			window.removeEventListener("pointerup", onPointerUp);
+			window.removeEventListener("pointerup", onPointerEnd);
+			window.removeEventListener("pointercancel", onPointerEnd);
+			window.removeEventListener("blur", finishResize);
+		};
+		const onPointerEnd = (endEvent: PointerEvent) => {
+			if (endEvent.pointerId !== pointerId) return;
+			finishResize();
+			if (endEvent.type === "pointerup" && libraryMinimum !== null && shouldCollapseLibraryAt(endEvent.clientX)) {
+				setLibraryWidth(libraryMinimum);
+				setLibraryCollapsed(true);
+			}
 		};
 
+		activeResize.current = finishResize;
 		window.addEventListener("pointermove", onPointerMove);
-		window.addEventListener("pointerup", onPointerUp);
+		window.addEventListener("pointerup", onPointerEnd);
+		window.addEventListener("pointercancel", onPointerEnd);
+		window.addEventListener("blur", finishResize);
 	}
 
 	return {
 		shellRef,
 		shellStyle: {
 			"--library-open-width": `${libraryWidth}px`,
-			"--library-width": `${libraryCollapsed ? COLLAPSED_LIBRARY_WIDTH : libraryWidth}px`,
-			"--library-gap": libraryCollapsed ? `${COLLAPSED_LIBRARY_GAP}px` : `${HANDLE_WIDTH}px`,
+			"--library-width": `${libraryHidden ? COLLAPSED_LIBRARY_WIDTH : libraryWidth}px`,
+			"--library-open-gap": `${HANDLE_WIDTH}px`,
 			"--side-width": `${sideWidth}px`,
 			"--beside-width": `${besideWidth}px`,
 		} as CSSProperties,
-		libraryCollapsed,
-		toggleLibraryCollapsed: () => setLibraryCollapsed((collapsed) => !collapsed),
+		libraryCollapsed: libraryHidden,
+		toggleLibraryCollapsed: () => {
+			activeResize.current?.();
+			setLibraryCollapsed((collapsed) => !(collapsed || libraryCollapsePreview));
+		},
 		beginResize,
 		resetLibraryWidth: () => setLibraryWidth(DEFAULT_LIBRARY_WIDTH),
 		resetSideWidth: () => setSideWidth(DEFAULT_SIDE_WIDTH),

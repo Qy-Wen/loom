@@ -2,9 +2,126 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { expect, test } from "./loom.ts";
 
+test("the library divider folds live and can reopen during the same drag", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated renderer required");
+	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.reload();
+	const shell = loomPage.locator(".shell");
+	const divider = loomPage.getByRole("separator", { name: "Resize asset library" });
+	const toggle = loomPage.locator(".sidebar-toggle");
+	const togglePanel = toggle.locator(".sidebar-toggle-panel");
+	const views = loomPage.getByRole("navigation", { name: "Workspace views" });
+	const viewIcons = loomPage.locator(".library-view-controls button svg");
+	const viewIconPositions = () => viewIcons.evaluateAll((icons) => icons.map((icon) => icon.getBoundingClientRect().x));
+	const savedCollapse = () => loomPage.evaluate(() => localStorage.getItem("loom.layout.libraryCollapsed"));
+	const foldingLayout = () => shell.evaluate((element) => {
+		const transition = element.getAnimations().find((animation) =>
+			animation instanceof CSSTransition && animation.transitionProperty === "--library-open-progress");
+		if (!transition?.effect) return null;
+		transition.pause();
+		transition.currentTime = Number(transition.effect.getTiming().duration) / 2;
+		const width = Number.parseFloat(getComputedStyle(element).gridTemplateColumns);
+		const viewsLeft = element.querySelector(".library-views")!.getBoundingClientRect().left;
+		transition.play();
+		return { width, viewsLeft };
+	});
+	await expect(shell).toHaveCSS("--library-width", "200px");
+	const macActions = loomPage.locator(".mac-window-actions");
+	if (await macActions.isVisible()) {
+		const actionsBox = (await macActions.boundingBox())!;
+		expect(actionsBox.x + actionsBox.width).toBeLessThanOrEqual((await divider.boundingBox())!.x);
+	}
+	await divider.dblclick();
+	await expect(shell).toHaveCSS("--library-width", "240px");
+	await expect.poll(async () => (await divider.boundingBox())?.x).toBeCloseTo(240, 0);
+	await expect(toggle).toHaveAttribute("aria-expanded", "true");
+	await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+	await expect(togglePanel).toHaveCount(0);
+	const initialViews = (await views.boundingBox())!;
+
+	const handle = (await divider.boundingBox())!;
+	const x = handle.x + handle.width / 2;
+	const y = handle.y + handle.height / 2;
+	await loomPage.mouse.move(x, y);
+	await loomPage.mouse.down();
+	try {
+		await loomPage.mouse.move(x - 39, y, { steps: 5 });
+		await expect(shell).toHaveCSS("--library-width", "201px");
+		const beforeMinimum = await viewIconPositions();
+		await loomPage.mouse.move(x - 40, y, { steps: 5 });
+		await expect(shell).toHaveCSS("--library-width", "200px");
+		const narrowedViews = (await views.boundingBox())!;
+		expect(narrowedViews.x).toBe(initialViews.x);
+		expect(narrowedViews.width).toBeLessThan(initialViews.width);
+		const atMinimum = await viewIconPositions();
+		expect(atMinimum).toHaveLength(5);
+		for (const [index, position] of atMinimum.entries()) {
+			expect(Math.abs(position - beforeMinimum[index]!)).toBeLessThanOrEqual(1);
+		}
+		await expect(divider).toBeVisible();
+		expect((await divider.boundingBox())!.x).toBeCloseTo(200, 0);
+		await loomPage.mouse.move(x - 106, y, { steps: 5 });
+		await expect(shell).toHaveCSS("--library-width", "200px");
+		const sidebarBox = (await loomPage.locator("#library-sidebar").boundingBox())!;
+		expect(x - 106).toBeGreaterThan(sidebarBox.x);
+		expect(x - 106).toBeLessThan(sidebarBox.x + sidebarBox.width);
+		expect(await loomPage.evaluate(() => [...document.querySelectorAll("#library-sidebar, #library-sidebar *")].some((element) => element.matches(":hover")))).toBe(false);
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await loomPage.mouse.move(x - 107, y);
+		await expect(shell).toHaveCSS("--library-width", "0px");
+		await expect(toggle).toHaveAttribute("aria-expanded", "false");
+		await expect(toggle).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+		await expect(togglePanel).toBeVisible();
+		const closing = await foldingLayout();
+		expect(closing?.width).toBeGreaterThan(0);
+		expect(closing?.width).toBeLessThan(200);
+		expect(closing?.viewsLeft).toBe(initialViews.x);
+		await expect(divider).toBeHidden();
+		expect(await savedCollapse()).toBe("0");
+		await expect(loomPage.locator("body")).toHaveClass(/\bresizing-columns\b/);
+		await loomPage.mouse.move(x + 15, y, { steps: 5 });
+		await expect(shell).toHaveCSS("--library-width", "255px");
+		await expect(toggle).toHaveAttribute("aria-expanded", "true");
+		await expect(togglePanel).toHaveCount(0);
+		const opening = await foldingLayout();
+		expect(opening?.width).toBeGreaterThan(0);
+		expect(opening?.width).toBeLessThan(255);
+		expect(opening?.viewsLeft).toBe(initialViews.x);
+		await expect(divider).toBeVisible();
+	} finally {
+		await loomPage.mouse.up();
+	}
+
+	await expect(shell).toHaveCSS("--library-width", "255px");
+	await expect(divider).toBeVisible();
+	await expect.poll(async () => (await divider.boundingBox())?.x).toBeCloseTo(255, 0);
+	await expect(loomPage.locator("body")).not.toHaveClass(/\bresizing-columns\b/);
+	await loomPage.mouse.move(x + 15, y);
+	await loomPage.mouse.down();
+	try {
+		await loomPage.mouse.move(x - 120, y, { steps: 5 });
+		await expect(shell).toHaveCSS("--library-width", "0px");
+		expect(await savedCollapse()).toBe("0");
+	} finally {
+		await loomPage.mouse.up();
+	}
+	await expect(shell).toHaveCSS("--library-width", "0px");
+	await expect.poll(savedCollapse).toBe("1");
+	await loomPage.getByRole("button", { name: "Expand sidebar", exact: true }).click();
+	await expect(shell).toHaveCSS("--library-width", "200px");
+	await expect(divider).toBeVisible();
+	await expect(shell).toHaveCSS("--library-open-progress", "1");
+	await loomPage.emulateMedia({ reducedMotion: "reduce" });
+	await loomPage.getByRole("button", { name: "Collapse sidebar", exact: true }).click();
+	await expect(shell).toHaveCSS("--library-width", "0px");
+	expect(await foldingLayout()).toBeNull();
+	await expect(shell).toHaveCSS("--library-open-progress", "0");
+});
+
 test("view tabs keep their icons and show only the active label without moving the display controls", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
-	for (const width of [180, 240, 320]) {
+	for (const width of [200, 240, 320]) {
 		await loomPage.evaluate((width) => localStorage.setItem("loom.layout.libraryWidth", String(width)), width);
 		await loomPage.reload();
 		const views = loomPage.getByRole("navigation", { name: "Workspace views" });
@@ -69,7 +186,7 @@ test("view tabs keep their icons and show only the active label without moving t
 
 test("tab options share the toolbar tooltip, stay within the viewport, and support keyboard focus", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated renderer required");
-	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "200"));
 	await loomPage.reload();
 	const controls = loomPage.locator(".library-view-controls");
 	const tooltip = loomPage.getByRole("tooltip");
@@ -77,7 +194,7 @@ test("tab options share the toolbar tooltip, stay within the viewport, and suppo
 		const style = getComputedStyle(element);
 		return { background: style.backgroundColor, color: style.color, fontSize: style.fontSize, borderRadius: style.borderRadius, padding: style.padding };
 	};
-	await loomPage.locator(".window-bar").getByRole("button", { name: "Open", exact: true }).hover();
+	await loomPage.locator(".window-bar, .mac-window-actions").getByRole("button", { name: "Open", exact: true }).hover();
 	await expect(tooltip).toBeVisible({ timeout: 500 });
 	const expectedStyle = await tooltip.evaluate(tooltipStyle);
 	for (const name of ["Table", "Graph", "Library", "List", "Icons"]) {
@@ -108,7 +225,7 @@ test("toolbar, view, sidebar, and panel tooltips leave after 80ms and clicks dis
 	test.skip(!electronApp, "isolated renderer required");
 	const tooltip = loomPage.getByRole("tooltip");
 	const buttons = [
-		loomPage.locator(".window-bar").getByRole("button", { name: "Open", exact: true }),
+		loomPage.locator(".window-bar, .mac-window-actions").getByRole("button", { name: "Open", exact: true }),
 		loomPage.locator(".library-view-controls").getByRole("button", { name: "Table", exact: true }),
 		loomPage.locator(".library-sidebar-actions").getByRole("button", { name: "Settings", exact: true }),
 		loomPage.locator(".panel-collapse[aria-label]").first(),
@@ -139,7 +256,7 @@ test("toolbar, view, sidebar, and panel tooltips leave after 80ms and clicks dis
 
 test("Loom and the sidebar actions stay aligned at the bottom while files scroll", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
-	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "200"));
 	await loomPage.reload();
 	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
@@ -303,7 +420,7 @@ test("folder heading stays aligned when switching list and icon modes", async ({
 			});
 			await expect(sidebar.locator(".library-shortcuts")).toBeVisible();
 		}
-		for (const width of [180, 320]) {
+		for (const width of [200, 320]) {
 			await loomPage.evaluate((width) => localStorage.setItem("loom.layout.libraryWidth", String(width)), width);
 			await loomPage.reload();
 			await expect(workspace.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
@@ -332,7 +449,7 @@ test("folder heading preserves its name and fits long names beside the tools", a
 		}) as typeof dialog.showOpenDialog;
 	}, root);
 	await loomPage.evaluate(() => window.loom.openLibrary());
-	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "180"));
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "200"));
 	await loomPage.reload();
 	const sidebar = loomPage.locator(".library-sidebar");
 	const name = sidebar.locator(".library-files-name");

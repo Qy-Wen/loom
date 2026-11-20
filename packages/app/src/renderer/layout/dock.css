@@ -6,7 +6,13 @@
 .resize-handle.side-resize::after { left: auto; right: 4px; }
 /* The active line stays whole where it crosses another handle. */
 .resize-handle:hover, .resize-handle.dragging { z-index: var(--lm-z-hover); }
-body.resizing-columns { cursor: col-resize; user-select: none; }
+/* The pointer leaves the handle and crosses the column, which would otherwise light up under it. */
+body.resizing-columns,
+body.resizing-columns * {
+	cursor: col-resize !important;
+	user-select: none !important;
+}
+body.resizing-columns * { pointer-events: none !important; }
 
 .panel-region { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--lm-surface-raised); }
 .panel-region { overflow: clip; opacity: 1; visibility: visible; transition: opacity var(--layout-toggle-duration) var(--layout-toggle-ease), visibility 0s; }

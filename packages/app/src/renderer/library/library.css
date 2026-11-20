@@ -8,9 +8,9 @@
 	background: var(--lm-surface-library);
 	outline: none;
 	overflow: hidden;
-	opacity: 1;
+	opacity: var(--library-open-progress);
 	visibility: visible;
-	transition: opacity var(--layout-toggle-duration) var(--layout-toggle-ease), visibility 0s;
+	transition: visibility 0s;
 }
 
 .library-sidebar-content {
@@ -21,19 +21,19 @@
 	min-height: 0;
 	width: var(--library-open-width);
 	min-width: var(--library-open-width);
-	transform: translateX(0);
-	transition: transform var(--layout-toggle-duration) var(--layout-toggle-ease);
+}
+
+.library-window-drag {
+	flex: 0 0 var(--lm-size-3xl);
+	/* Electron resolves drag rectangles independently of the buttons' visual stacking. */
+	margin-inline-start: min(100%, calc(var(--mac-window-controls-inset) + var(--mac-window-actions-width)));
+	-webkit-app-region: drag;
 }
 
 .library-sidebar.collapsed {
 	margin-right: 0;
 	padding-right: 0;
-	opacity: 0;
-	transition-delay: 0s, var(--layout-toggle-duration);
-}
-
-.library-sidebar.collapsed > .library-sidebar-content {
-	transform: translateX(-16px);
+	transition-delay: var(--layout-motion-duration);
 }
 
 .library-collapse {
@@ -51,6 +51,15 @@
 
 .library-collapse:hover {
 	background: var(--lm-surface-hover);
+}
+
+.sidebar-toggle-panel {
+	fill: color-mix(in srgb, currentColor 32%, transparent);
+}
+
+.sidebar-toggle:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 1px;
 }
 
 .library-sidebar-actions {
@@ -111,7 +120,10 @@
 	--library-tab-ease: cubic-bezier(0.22, 1, 0.36, 1);
 	display: flex;
 	gap: var(--lm-space-3);
-	margin: var(--lm-space-5) var(--lm-space-5) var(--lm-space-6);
+	margin-block: var(--lm-space-5) var(--lm-space-6);
+	margin-inline-start: var(--lm-space-5);
+	/* Grow the trailing margin from 4px at 200px to 10px at 240px. */
+	margin-inline-end: clamp(var(--lm-space-2), calc(var(--lm-space-2) + (100cqi - 200px) * 0.15), var(--lm-space-5));
 }
 
 .library-views {
@@ -235,13 +247,6 @@
 .library-display-tabs button.active {
 	color: var(--lm-text-primary);
 	font-weight: var(--lm-weight-semibold);
-}
-
-/* Keep the selected label readable alongside wider buttons in a narrow sidebar. */
-@container (max-width: 200px) {
-	.library-view-controls {
-		margin-inline: var(--lm-space-2);
-	}
 }
 
 @media (prefers-reduced-motion: reduce) {

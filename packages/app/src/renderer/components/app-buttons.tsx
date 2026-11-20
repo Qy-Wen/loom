@@ -75,8 +75,10 @@ export function SidebarToggle({ collapsed, onToggle }: { collapsed: boolean; onT
 	const { t } = useLocale();
 	const label = collapsed ? t.library.expandSidebar : t.library.collapseSidebar;
 	return (
-		<button className="library-collapse" type="button" aria-label={label} data-tooltip={label} onClick={onToggle}>
+		<button className="library-collapse sidebar-toggle" type="button" aria-label={label} aria-expanded={!collapsed}
+			aria-controls="library-sidebar" data-tooltip={label} onClick={onToggle}>
 			<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+				{collapsed && <path className="sidebar-toggle-panel" d="M5.7 2.8H3.8a1.6 1.6 0 0 0-1.6 1.6v7.2a1.6 1.6 0 0 0 1.6 1.6h1.9Z" />}
 				<rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
 				<path d="M5.7 2.8v10.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
 			</svg>

@@ -24,6 +24,9 @@ body {
 }
 
 .app {
+	--mac-window-controls-inset: 86px;
+	--mac-window-actions-gap: var(--lm-space-2);
+	--mac-window-actions-width: calc(4 * var(--lm-size-md) + 3 * var(--mac-window-actions-gap));
 	display: flex;
 	flex-direction: column;
 	height: 100%;
@@ -38,25 +41,69 @@ body {
 	align-items: center;
 	height: var(--lm-size-3xl);
 	gap: var(--lm-space-1);
-	padding-left: var(--lm-space-6);
+	padding-inline: var(--lm-space-6);
 	background: var(--lm-surface-window);
+}
+
+.window-bar.overlay {
 	-webkit-app-region: drag;
 }
 
 .window-bar.mac {
-	padding-left: 96px;
+	padding-inline: var(--lm-space-2);
+	padding-inline-start: max(var(--lm-space-2), calc(var(--mac-window-controls-inset) + var(--mac-window-actions-width) + var(--lm-space-2) - var(--library-track-width) - var(--library-track-gap)));
+	background: var(--lm-surface-raised);
 }
 
-.window-bar.mac.fullscreen {
-	padding-left: var(--lm-space-6);
+.shell[data-mac-fullscreen] {
+	--mac-window-controls-inset: var(--lm-space-2);
 }
 
-.window-bar button {
-	position: relative;
+.mac-window-actions {
+	position: absolute;
+	z-index: calc(var(--lm-z-chrome) + 1);
+	inset-block-start: 0;
+	inset-inline-start: var(--mac-window-controls-inset);
+	display: flex;
+	align-items: center;
+	gap: var(--mac-window-actions-gap);
+	block-size: var(--lm-size-3xl);
 	-webkit-app-region: no-drag;
 }
 
-.window-bar button:disabled {
+.mac-window-actions > button {
+	inline-size: var(--lm-size-md);
+	block-size: var(--lm-size-md);
+}
+
+.window-bar.overlay:not(.fullscreen) {
+	--titlebar-content-start: env(titlebar-area-x, 0px);
+	--titlebar-content-width: env(titlebar-area-width, calc(100% - 160px));
+	padding-inline-start: calc(var(--titlebar-content-start) + var(--lm-space-6));
+	padding-inline-end: max(var(--lm-space-6), calc(100% - var(--titlebar-content-start) - var(--titlebar-content-width) + var(--lm-space-6)));
+}
+
+.window-drag-space {
+	flex: 1 0 var(--lm-size-3xl);
+	align-self: stretch;
+}
+
+.window-bar.mac > .window-drag-space {
+	margin-inline-start: var(--lm-space-1);
+	-webkit-app-region: drag;
+}
+
+.shell:not(.library-collapsed) .window-bar.mac > .window-drag-space {
+	flex-basis: 0;
+}
+
+:is(.window-bar, .mac-window-actions) > button {
+	position: relative;
+	flex-shrink: 0;
+	-webkit-app-region: no-drag;
+}
+
+:is(.window-bar, .mac-window-actions) > button:disabled {
 	opacity: 0.45;
 	cursor: default;
 }

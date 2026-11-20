@@ -144,6 +144,50 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		await file("notes.md").click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(5);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
+		const titleBar = loomPage.locator(".window-bar");
+		await expect(titleBar.getByRole("tablist", { name: "Open files" })).toBeVisible();
+		await expect(strip).toHaveCSS("-webkit-app-region", "no-drag");
+		const windowButtons = loomPage.locator(":is(.mac-window-actions, .window-bar.overlay) > button");
+		expect(await windowButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))))
+			.toEqual(["Open", "Collapse sidebar", "Back", "Forward"]);
+		if (await titleBar.evaluate((node) => node.classList.contains("mac"))) {
+			await expect(titleBar).toHaveCSS("-webkit-app-region", "none");
+			const workbenchDrag = titleBar.locator(".window-drag-space");
+			await expect(workbenchDrag).toHaveCSS("-webkit-app-region", "drag");
+			const divider = loomPage.getByRole("separator", { name: "Resize asset library" });
+			const dividerBox = (await divider.boundingBox())!;
+			expect(dividerBox.y).toBe(0);
+			expect(dividerBox.height).toBeCloseTo(await loomPage.evaluate(() => innerHeight), 0);
+			const sidebarDrag = tree.locator(".library-window-drag");
+			await expect(sidebarDrag).toHaveCSS("-webkit-app-region", "drag");
+			const actions = loomPage.locator(".mac-window-actions");
+			await expect(actions.getByRole("button")).toHaveCount(4);
+			await expect(actions).toHaveCSS("column-gap", "4px");
+			await expect(titleBar.locator(":scope > button")).toHaveCount(0);
+			const actionsBox = (await actions.boundingBox())!;
+			expect(actionsBox.x).toBe(86);
+			const actionsEnd = actionsBox.x + actionsBox.width;
+			expect((await sidebarDrag.boundingBox())!.x).toBeGreaterThanOrEqual(actionsEnd);
+			const collapse = actions.getByRole("button", { name: "Collapse sidebar" });
+			await collapse.focus();
+			await collapse.press("Enter");
+			expect(await actions.boundingBox()).toEqual(actionsBox);
+			await expect(titleBar).toHaveCSS("padding-left", "198px");
+			expect((await workbenchDrag.boundingBox())!.x).toBeGreaterThanOrEqual(actionsEnd);
+			await expect(divider).toBeHidden();
+			const expand = actions.getByRole("button", { name: "Expand sidebar" });
+			await expect(expand).toBeFocused();
+			await expand.press("Enter");
+			await expect(collapse).toBeFocused();
+			await expect(titleBar).toHaveCSS("padding-left", "4px");
+			expect(await actions.boundingBox()).toEqual(actionsBox);
+		} else {
+			await expect(titleBar).toHaveCSS("-webkit-app-region", "drag");
+			const dragSpace = (await titleBar.locator(".window-drag-space").boundingBox())!;
+			const tabsBox = (await strip.boundingBox())!;
+			expect(dragSpace.width).toBeGreaterThanOrEqual(40);
+			expect(dragSpace.x).toBeGreaterThan(tabsBox.x + tabsBox.width);
+		}
 		const notesEditor = loomPage.getByRole("textbox", { name: "Edit notes.md", exact: true });
 		await expect(notesEditor.getByRole("heading", { level: 1 })).toContainText("hello");
 

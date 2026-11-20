@@ -29,6 +29,7 @@ const NO_FOLDERS: ReadonlySet<string> = new Set();
 interface LibrarySidebarProps {
 	library: LibrarySnapshot;
 	display: LibraryDisplay;
+	reserveWindowControls?: boolean;
 	footerActions: ReactNode;
 	/** Where the folder browser is. In icon mode the sidebar is its navigator. */
 	location: BrowseLocation;
@@ -64,6 +65,7 @@ interface LibrarySidebarProps {
 export function LibrarySidebar({
 	library,
 	display,
+	reserveWindowControls,
 	footerActions,
 	location,
 	onLocation,
@@ -165,6 +167,7 @@ export function LibrarySidebar({
 
 	return (
 		<aside
+			id="library-sidebar"
 			className={collapsed ? "library-sidebar collapsed" : "library-sidebar"}
 			inert={collapsed}
 			aria-hidden={collapsed || undefined}
@@ -177,6 +180,7 @@ export function LibrarySidebar({
 				onKeyDown(event, treeRows, !queryActive);
 			}}
 		>
+			{reserveWindowControls && <div className="library-window-drag" aria-hidden="true" />}
 			<TreeProvider
 				library={visible}
 				foldersOnly={iconMode}

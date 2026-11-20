@@ -135,16 +135,19 @@
 .asset-tabs {
 	display: flex;
 	align-items: stretch;
-	/* Same height as the side panel's tab bar so the two bottom borders line up. */
-	flex: 0 0 var(--lm-size-2xl);
-	min-width: 0;
-	/* .workbench pads 5px inside the resize handles. Reach back out so the border meets their lines. */
-	margin: 0 -5px;
-	padding: 0 5px;
+	align-self: stretch;
+	flex: 0 1 auto;
+	min-inline-size: 0;
+	margin-inline-start: var(--lm-space-2);
+	padding-inline-end: var(--lm-size-md);
 	overflow-x: auto;
 	overflow-y: hidden;
 	scrollbar-width: thin;
-	border-bottom: 1px solid var(--lm-border-subtle);
+	-webkit-app-region: no-drag;
+}
+
+.window-bar.mac > .asset-tabs {
+	padding-inline-end: var(--lm-space-2);
 }
 
 .asset-tab {
@@ -187,7 +190,7 @@
 .asset-tab.active::after {
 	position: absolute;
 	right: 6px;
-	bottom: -1px;
+	bottom: 0;
 	left: 8px;
 	height: 2px;
 	border-radius: var(--lm-radius-line);
