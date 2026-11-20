@@ -64,6 +64,9 @@
 }
 
 .library-sidebar-brand {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--lm-space-3);
 	color: var(--lm-text-secondary);
 	font-size: var(--lm-text-size-md);
 	font-weight: var(--lm-weight-semibold);
@@ -405,7 +408,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 }
 
 .folder-row {
-	font-weight: var(--lm-weight-medium);
 	cursor: default;
 }
 

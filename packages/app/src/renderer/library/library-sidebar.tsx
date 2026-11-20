@@ -11,6 +11,7 @@ import {
 } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
+import { LoomLogo } from "../components/loom-logo.tsx";
 import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
 import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
@@ -470,7 +471,7 @@ export function LibrarySidebar({
 				</LibraryScrollRegions>
 			)}
 			<footer className="library-sidebar-actions">
-				<span className="library-sidebar-brand">Loom</span>
+				<span className="library-sidebar-brand"><LoomLogo />Loom</span>
 				<div className="library-sidebar-buttons">{footerActions}</div>
 			</footer>
 			</div>
