@@ -8,20 +8,20 @@ import { insideLiteral, liveLibrary, type LiveLibrary } from "./live-markdown.ts
 
 const targetText = /^[^[\]#|\r\n]*$/;
 const remainingLink = /^([^[\]#|]*)(?:[#|][^[\]]*)?\]\]/;
-const libraryOptions = new WeakMap<LiveLibrary, Completion[]>();
+const libraryOptions = new WeakMap<LiveLibrary, { links: Completion[]; images: Completion[] }>();
 
-export function wikiTargetStart(state: EditorState, position: number): number | null {
+export function wikiTargetAt(state: EditorState, position: number): { from: number; embed: boolean } | null {
 	if (state.readOnly || !state.selection.main.empty) return null;
 	const line = state.doc.lineAt(position);
 	const before = line.text.slice(0, position - line.from);
 	const open = before.lastIndexOf("[[");
-	if (open < 0 || before[open - 1] === "!" || !targetText.test(before.slice(open + 2))) return null;
-	if (insideLiteral(syntaxTree(state), line.from + open, position)) return null;
-	return line.from + open + 2;
+	if (open < 0 || !targetText.test(before.slice(open + 2))) return null;
+	const embed = before[open - 1] === "!";
+	if (insideLiteral(syntaxTree(state), line.from + open - Number(embed), position)) return null;
+	return { from: line.from + open + 2, embed };
 }
 
 function insertReference(view: EditorView, completion: Completion, from: number, to: number): void {
-	if (wikiTargetStart(view.state, to) !== from) return;
 	const line = view.state.doc.lineAt(to);
 	const after = line.text.slice(to - line.from);
 	const link = remainingLink.exec(after);
@@ -38,30 +38,39 @@ function insertReference(view: EditorView, completion: Completion, from: number,
 }
 
 export const wikiLinkCompletion: CompletionSource = (context) => {
-	const from = wikiTargetStart(context.state, context.pos);
+	const target = wikiTargetAt(context.state, context.pos);
 	const library = context.state.field(liveLibrary, false);
-	if (from === null || !library) return null;
+	if (!target || !library) return null;
 	let options = libraryOptions.get(library);
 	if (!options) {
-		options = [];
-		for (const { assetId, relativePath } of library.assets) {
+		options = { links: [], images: [] };
+		for (const { assetId, relativePath, type } of library.assets) {
 			if (relativePath === library.fromRelativePath || !targetText.test(relativePath)) continue;
 			if (resolveWikiTarget(relativePath, library.lookup)?.assetId !== assetId) continue;
-			options.push({
+			const completion: Completion = {
 				label: relativePath,
 				apply(view, completion, from, to) {
+					const active = wikiTargetAt(view.state, to);
+					if (active?.from !== from) return;
 					const current = view.state.field(liveLibrary, false);
-					if (current && resolveWikiTarget(relativePath, current.lookup)?.assetId === assetId) {
+					const asset = current && resolveWikiTarget(relativePath, current.lookup);
+					if (asset?.assetId === assetId && (!active.embed || asset.type === "image")) {
 						insertReference(view, completion, from, to);
 					}
 				},
-			});
+			};
+			options.links.push(completion);
+			if (type === "image") options.images.push(completion);
 		}
 		libraryOptions.set(library, options);
 	}
 	return {
-		from,
-		options,
-		validFor: (_text, start, end, state) => state.field(liveLibrary, false) === library && wikiTargetStart(state, end) === start,
+		from: target.from,
+		options: target.embed ? options.images : options.links,
+		validFor: (_text, start, end, state) => {
+			if (state.field(liveLibrary, false) !== library) return false;
+			const active = wikiTargetAt(state, end);
+			return active?.from === start && active.embed === target.embed;
+		},
 	};
 };

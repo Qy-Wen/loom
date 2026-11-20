@@ -7,7 +7,7 @@ import type { UiSelectionDraft } from "../../../shared/ipc.ts";
 import { messages, type Messages } from "../../../shared/locale.ts";
 import { markdownFilePath } from "./live-markdown.ts";
 import { enterTable } from "./live-table.ts";
-import { wikiLinkCompletion, wikiTargetStart } from "./markdown-wiki-completion.ts";
+import { wikiLinkCompletion, wikiTargetAt } from "./markdown-wiki-completion.ts";
 
 type Labels = Messages["preview"]["insertCommands"];
 type Insertion = { text: string; cursor: number };
@@ -83,10 +83,10 @@ const openCompletionAtCaret = EditorView.updateListener.of((update) => {
 	const moved = !update.docChanged && update.selectionSet && !update.startState.selection.eq(state.selection);
 	if ((!deleted && !moved) || state.readOnly || !state.selection.main.empty) return;
 	const position = state.selection.main.head;
-	const wikiStart = wikiTargetStart(state, position);
+	const wikiTarget = wikiTargetAt(state, position);
 	const shouldOpen = deleted
-		? wikiStart !== null || slashQueryStart(state, position) !== null
-		: wikiStart === position;
+		? wikiTarget !== null || slashQueryStart(state, position) !== null
+		: wikiTarget?.from === position;
 	if (!shouldOpen) return;
 	queueMicrotask(() => {
 		if (view.dom.isConnected && view.hasFocus && view.state.doc === state.doc

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Page } from "playwright";
 import { expect, test } from "./loom.ts";
@@ -154,6 +154,41 @@ test("wiki link completion filters files and replaces only the link target", asy
 	await loomPage.keyboard.insertText("[[");
 	await expect(box.locator(".cm-live-codeblock").filter({ hasText: "[[" })).toBeVisible();
 	await expect(menu).toBeHidden();
+});
+
+test("wiki embed completion fills empty brackets and suggests images", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(loomPage);
+	const file = join(root, "commands.md");
+	const image = "Images/cover.png";
+	await mkdir(join(root, "Images"));
+	await copyFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url), join(root, image));
+	await writeFile(join(root, "reference.md"), "# Reference");
+	await writeFile(file, "![[]]\n\n");
+	await openNote(loomPage);
+
+	const box = loomPage.getByRole("textbox", { name: "Edit commands.md" });
+	const menu = loomPage.locator(".cm-markdown-insert").getByRole("listbox");
+	const options = menu.getByRole("option");
+	await box.press("ControlOrMeta+Home");
+	for (const _ of "![[") await box.press("ArrowRight");
+	await expect(options).toHaveText([image]);
+	await box.press("Enter");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(`![[${image}]]\n\n`);
+
+	await box.press("ControlOrMeta+End");
+	await loomPage.keyboard.insertText("![[");
+	await expect(options).toHaveText([image]);
+	await loomPage.keyboard.insertText("cover");
+	await menu.getByRole("option", { name: image, exact: true }).click();
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(`![[${image}]]\n\n![[${image}]]`);
+
+	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+	const embeds = box.locator("img.cm-live-image");
+	await expect(embeds).toHaveCount(2);
+	await expect.poll(() => embeds.evaluateAll((images: HTMLImageElement[]) => images.every((image) => image.naturalWidth > 0))).toBe(true);
 });
 
 test("backspacing an existing wiki target reopens file completion", async ({ loomPage, electronApp }) => {
