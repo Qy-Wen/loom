@@ -412,6 +412,35 @@ export function withoutKey(selection: TreeSelection, key: string): TreeSelection
 	return { keys, focus, anchor };
 }
 
+/** `path` after `from` was renamed or moved to `to`. Paths outside `from` come back unchanged. */
+export function remapFolderPath(path: string, from: string, to: string): string {
+	if (path === from) return to;
+	return path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path;
+}
+
+/** A set of folder paths after `from` was renamed or moved to `to`. Returns the same set when nothing moved. */
+export function remapFolderSet(paths: ReadonlySet<string>, from: string, to: string): Set<string> {
+	const next = new Set<string>();
+	let changed = false;
+	for (const path of paths) {
+		const remapped = remapFolderPath(path, from, to);
+		if (remapped !== path) changed = true;
+		next.add(remapped);
+	}
+	return changed ? next : (paths as Set<string>);
+}
+
+/** `selection` after the folder `from` was renamed or moved to `to`: the folder and everything under it keep their place. */
+export function remapFolderSelection(selection: TreeSelection, from: string, to: string): TreeSelection {
+	const remap = (key: string | null): string | null => {
+		if (key === null || !key.startsWith("folder:")) return key;
+		return folderKey(remapFolderPath(key.slice("folder:".length), from, to));
+	};
+	const keys = selection.keys.map((key) => remap(key)!);
+	if (keys.every((key, index) => key === selection.keys[index])) return selection;
+	return { keys, anchor: remap(selection.anchor), focus: remap(selection.focus) };
+}
+
 export function withoutFolder(selection: TreeSelection, relativePath: string): TreeSelection {
 	const exact = folderKey(relativePath);
 	const child = `${exact}/`;

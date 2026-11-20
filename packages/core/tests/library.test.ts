@@ -504,3 +504,43 @@ test("Library tags are shared by name and stay with the asset id", async () => {
 		await rm(root, { recursive: true, force: true });
 	}
 });
+
+test("Renaming or moving a folder announces the move before the old path is removed", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-folder-rename-"));
+	const core = new LocalCore();
+
+	try {
+		await mkdir(join(root, "parent", "child"), { recursive: true });
+		await mkdir(join(root, "target"));
+		await writeFile(join(root, "parent", "child", "note.md"), "# Note");
+		await core.openLibrary(root);
+
+		const changes: LibraryChange[] = [];
+		const unsubscribe = core.subscribeLibrary((change) => {
+			if (change.type === "folder_rename" || change.type === "folder_remove" || change.type === "folder_upsert") changes.push(change);
+		});
+		const summary = () => changes.map((change) => change.type === "folder_rename" ? `rename ${change.from} -> ${change.to}`
+			: change.type === "folder_remove" ? `remove ${change.relativePath}` : change.type === "folder_upsert" ? `upsert ${change.relativePath}` : "");
+
+		assert.equal(await core.renameFolder("parent", "parent-final"), "parent-final");
+		assert.deepEqual(summary(), [
+			"rename parent -> parent-final",
+			"remove parent",
+			"upsert parent-final",
+			"upsert parent-final/child",
+		]);
+
+		changes.length = 0;
+		assert.equal(await core.moveFolderInto("parent-final", "target"), "target/parent-final");
+		assert.deepEqual(summary(), [
+			"rename parent-final -> target/parent-final",
+			"remove parent-final",
+			"upsert target/parent-final",
+			"upsert target/parent-final/child",
+		]);
+		unsubscribe();
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});

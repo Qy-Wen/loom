@@ -141,3 +141,110 @@ test("folder tiles keep their own rename editor and list mode still renames in t
 	await expect(treeEditor).toHaveCount(0);
 	await expect(sidebar.locator(".folder-row.selected")).toHaveText("list-final");
 });
+
+for (const operation of ["rename", "move"] as const) {
+	test(`${operation === "rename" ? "renaming" : "moving"} a folder keeps the browser, selection and expanded rows inside it`, async ({ loomPage: page }) => {
+		const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath;
+		expect(root).toBeTruthy();
+		await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
+		await mkdir(join(root!, "parent", "child", "deep"), { recursive: true });
+		await mkdir(join(root!, "target"));
+		await writeFile(join(root!, "parent", "child", "deep", "note.md"), "# Note");
+		await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).folders.length).toBe(4);
+		await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+		const folders = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).folders);
+		const sidebar = page.locator(".library-sidebar");
+		const row = (name: string) => sidebar.locator(".folder-row").filter({ hasText: new RegExp(`^${name}$`) });
+		const main = (name: string) => sidebar.locator(".folder-main").filter({ hasText: new RegExp(`^${name}$`) });
+		const expand = async (name: string) => {
+			const closed = row(name).locator(".folder-chevron:not(.expanded)");
+			if (await closed.count()) await closed.click();
+		};
+
+		// List mode: parent and child open, deep closed, child selected.
+		// Folders created after the library opened start expanded, so fold deep by hand.
+		await expand("parent");
+		await expand("child");
+		await expect(main("deep")).toBeVisible();
+		await row("deep").locator(".folder-chevron.expanded").click();
+		await main("child").click();
+		await expect(sidebar.locator(".folder-row.selected")).toHaveText("child");
+		await expect(sidebar.locator(".asset-name", { hasText: "note.md" })).toHaveCount(0);
+
+		if (operation === "rename") {
+			await main("parent").click({ button: "right" });
+			const editor = sidebar.locator(".rename-editor input");
+			await editor.fill("parent-final");
+			await editor.press("Enter");
+			await expect.poll(folders).toContain("parent-final/child/deep");
+		} else {
+			await main("parent").dragTo(main("target"));
+			await expect.poll(folders).toContain("target/parent/child/deep");
+		}
+
+		// The renamed or moved folder is the new selection; its open rows and its closed row follow it.
+		await expect(sidebar.locator(".folder-row.selected")).toHaveText(operation === "rename" ? "parent-final" : "parent");
+		await expect(main("child")).toBeVisible();
+		await expect(main("deep")).toBeVisible();
+		await expect(sidebar.locator(".asset-name", { hasText: "note.md" })).toHaveCount(0);
+
+		// Icon mode: the browser stays on the folder it was showing.
+		await page.locator(".library-display-tabs").getByRole("button", { name: "Icons", exact: true }).click();
+		const browser = page.locator(".folder-browser");
+		const tile = (name: string) => browser.locator(".browser-tile").filter({ has: page.locator(".browser-tile-name", { hasText: new RegExp(`^${name}$`) }) });
+		await main("child").click();
+		await expect(browser.locator(".browser-crumb.current")).toHaveText("child");
+		await tile("deep").dblclick();
+		await expect(tile("note.md")).toBeVisible();
+		const head = operation === "rename" ? "parent-final" : "parent";
+		if (operation === "rename") {
+			await main(head).click({ button: "right" });
+			const editor = sidebar.locator(".rename-editor input");
+			await editor.fill("again");
+			await editor.press("Enter");
+			await expect.poll(folders).toContain("again/child/deep");
+		} else {
+			await main(head).dragTo(sidebar.locator(".library-files-name"));
+			await expect.poll(folders).toContain("parent/child/deep");
+		}
+		await expect(browser.locator(".browser-crumb.current")).toHaveText("deep");
+		await expect(tile("note.md")).toBeVisible();
+	});
+}
+
+test("cutting a folder and pasting it elsewhere keeps the browser inside it", async ({ loomPage: page }) => {
+	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath;
+	expect(root).toBeTruthy();
+	await expect.poll(async () => (await page.evaluate(() => window.loom.listSessions())).length).toBe(1);
+	await mkdir(join(root!, "parent", "child"), { recursive: true });
+	await mkdir(join(root!, "target"));
+	await writeFile(join(root!, "parent", "child", "note.md"), "# Note");
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).folders.length).toBe(3);
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+	const folders = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).folders);
+	const sidebar = page.locator(".library-sidebar");
+	const browser = page.locator(".folder-browser");
+	const main = (name: string) => sidebar.locator(".folder-main").filter({ hasText: new RegExp(`^${name}$`) });
+	const tile = (name: string) => browser.locator(".browser-tile").filter({ has: page.locator(".browser-tile-name", { hasText: new RegExp(`^${name}$`) }) });
+
+	await page.locator(".library-display-tabs").getByRole("button", { name: "Icons", exact: true }).click();
+	await tile("parent").dblclick();
+	await tile("child").dblclick();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("child");
+	await expect(tile("note.md")).toBeVisible();
+
+	// A plain click on a tree row would navigate the browser, so select with the modifier instead.
+	const modifier = process.platform === "darwin" ? "Meta" : "Control";
+	await main("parent").click({ modifiers: [modifier] });
+	await page.keyboard.press("ControlOrMeta+x");
+	await main("target").click({ modifiers: [modifier] });
+	await page.keyboard.press("ControlOrMeta+v");
+	await expect.poll(folders).toContain("target/parent/child");
+	await expect.poll(folders).not.toContain("parent");
+
+	// The browser is still showing the same folder, now under its new parent.
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("child");
+	await expect(browser.locator(".browser-crumb").filter({ hasText: /^target$/ })).toHaveCount(1);
+	await expect(browser.locator(".browser-crumb").filter({ hasText: /^parent$/ })).toHaveCount(1);
+	await expect(tile("note.md")).toBeVisible();
+});

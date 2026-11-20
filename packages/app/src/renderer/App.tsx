@@ -48,6 +48,9 @@ import {
 	isTreeNavKey,
 	parentFolder,
 	pointerSelect,
+	remapFolderPath,
+	remapFolderSelection,
+	remapFolderSet,
 	rootLibraryItems,
 	selectVisible,
 	singleSelection,
@@ -128,6 +131,12 @@ function applyLibraryChange(current: LibrarySnapshot, change: LibraryChange): Li
 		return current.folders.includes(change.relativePath)
 			? current
 			: { ...current, folders: [...current.folders, change.relativePath].sort() };
+	}
+	if (change.type === "folder_rename") {
+		// Swap the paths in one step. The `folder_remove` and `folder_upsert` that follow arrive as separate messages, and
+		// a render between them would show neither path and look like the folder was deleted.
+		const folders = new Set(current.folders.map((folder) => remapFolderPath(folder, change.from, change.to)));
+		return { ...current, folders: [...folders].sort() };
 	}
 	if (change.type === "folder_remove") {
 		const prefix = `${change.relativePath}/`;
@@ -404,6 +413,7 @@ export function App(): React.JSX.Element {
 				setLocation(ROOT_LOCATION);
 				setPreviewAssetId(null);
 			}
+			if (change.type === "folder_rename") followFolder(change.from, change.to);
 			if (change.type === "folder_remove") {
 				const prefix = `${change.relativePath}/`;
 				setPicked((current) => withoutFolder(current, change.relativePath));
@@ -670,9 +680,18 @@ export function App(): React.JSX.Element {
 		if (focus) setPicked({ keys, anchor: focus, focus });
 	}
 
-	/** A folder moved or was renamed: keep the browser inside it. */
+	/**
+	 * Everything the UI remembers by folder path follows a rename or move. The library sends this before the matching
+	 * `folder_remove`, so the folder is never mistaken for a deleted one and the browser is not sent back to the root.
+	 */
 	function followFolder(from: string, to: string): void {
 		setLocation((current) => remapLocation(current, from, to));
+		setPicked((current) => remapFolderSelection(current, from, to));
+		setTreePicked((current) => current && remapFolderSelection(current, from, to));
+		setCollapsedFolders((current) => remapFolderSet(current, from, to));
+		setRenamingFolder((current) => current && remapFolderPath(current.relativePath, from, to) !== current.relativePath
+			? { ...current, relativePath: remapFolderPath(current.relativePath, from, to) }
+			: current);
 	}
 
 	/**
@@ -868,7 +887,6 @@ export function App(): React.JSX.Element {
 				try {
 					const move = libraryClipboard.mode === "cut";
 					const placed = await window.loom.pasteLibraryItems(libraryClipboard.assetIds, libraryClipboard.folders, destFolder, move);
-					for (const folder of placed.movedFolders) followFolder(folder.from, folder.to);
 					if (placed.assets.length || placed.folders.length) showPlaced(destFolder, placed);
 					if (move && !placed.cancelled) setLibraryClipboard(null);
 				} catch (cause) {
@@ -915,7 +933,6 @@ export function App(): React.JSX.Element {
 				for (const folder of item.folders) {
 					const moved = await window.loom.moveFolderInto(folder, destFolder);
 					movedFolders.push(moved);
-					followFolder(folder, moved);
 				}
 				const keys = [...movedFolders.map(folderKey), ...movedAssets.map((asset) => assetKey(asset.assetId))];
 				const focus = movedAssets[0] ? assetKey(movedAssets[0].assetId) : keys[0];
@@ -927,7 +944,6 @@ export function App(): React.JSX.Element {
 				else if (moved[0]) selectAsset(moved[0].assetId);
 			} else {
 				const moved = await window.loom.moveFolderInto(item.relativePath, destFolder);
-				followFolder(item.relativePath, moved);
 				if (iconMode) selectLanded(destFolder, [folderKey(moved)], folderKey(moved));
 				else selectFolder(moved);
 				revealFolders([moved]);
@@ -1242,7 +1258,6 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			const renamed = await window.loom.renameFolder(relativePath, name);
-			followFolder(relativePath, renamed);
 			const next = singleSelection(folderKey(renamed));
 			setPicked(next);
 			if (iconMode && renamingFolder?.view === "tree") setTreePicked(next);

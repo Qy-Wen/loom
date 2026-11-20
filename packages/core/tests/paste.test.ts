@@ -80,7 +80,6 @@ test("moving a merged folder keeps asset identities and removes only the emptied
 	});
 	const original = initial.assets.find((asset) => asset.relativePath === "from/bundle/nested/same.md")!;
 	const result = await core.pastePathsInto([join(root, "from/bundle")], "to", true, async () => "replace");
-	assert.deepEqual(result.movedFolders, [{ from: "from/bundle", to: "to/bundle" }]);
 	assert.equal((await core.getAsset(original.assetId))?.relativePath, "to/bundle/nested/same.md");
 	assert.equal((await core.getAsset(original.assetId))?.fileSystemId, original.fileSystemId);
 	await assert.rejects(access(join(root, "from/bundle")));
@@ -100,7 +99,6 @@ test("Cancel stops the batch and retains completed moves and unfinished source c
 	assert.equal(await readFile(join(root, "from/bundle/same.md"), "utf8"), "new");
 	assert.equal(await readFile(join(root, "to/bundle/same.md"), "utf8"), "old");
 	assert.equal(await readFile(join(root, "from/last.md"), "utf8"), "last");
-	assert.deepEqual(result.movedFolders, []);
 });
 
 test("outside folders merge, and file-folder collisions support keeping both or replacing", async (t) => {
@@ -134,7 +132,6 @@ test("a destination modified during the prompt is preserved", async (t) => {
 test("moving a merged folder retains ignored source contents", async (t) => {
 	const { core, root } = await fixture(t, { "from/bundle/.DS_Store": "metadata", "from/bundle/note.md": "note", "to/bundle/old.md": "old" });
 	const result = await core.pastePathsInto([join(root, "from/bundle")], "to", true, unexpectedConflict);
-	assert.deepEqual(result.movedFolders, []);
 	assert.equal(await readFile(join(root, "from/bundle/.DS_Store"), "utf8"), "metadata");
 	assert.equal(await readFile(join(root, "to/bundle/note.md"), "utf8"), "note");
 });

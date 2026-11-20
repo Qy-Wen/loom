@@ -30,7 +30,6 @@ export async function pastePaths(sources: string[], destination: string, options
 	const { paths, move, checkActive } = options;
 	let cancelled = false;
 	const placed: string[] = [];
-	const moved: { from: string; to: string }[] = [];
 
 	async function paste(source: string, parent: string): Promise<string | undefined> {
 		checkActive();
@@ -101,13 +100,10 @@ export async function pastePaths(sources: string[], destination: string, options
 
 	for (const source of sources) {
 		const target = await paste(source, destination);
-		if (target) {
-			placed.push(target);
-			if (move && !(await maybeStat(source))) moved.push({ from: source, to: target });
-		}
+		if (target) placed.push(target);
 		if (cancelled) break;
 	}
-	return { placed, moved, cancelled };
+	return { placed, cancelled };
 }
 
 async function transfer(source: string, destination: string, directory: boolean, previous: Awaited<ReturnType<typeof maybeStat>>, options: PasteOptions): Promise<void> {

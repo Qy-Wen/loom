@@ -4,6 +4,7 @@ import {
 	compareFolderPaths,
 	contentModifiedAt,
 	parentFolder,
+	remapFolderPath,
 	type FileSort,
 	type FileSortDirection,
 	type TreeRow,
@@ -135,12 +136,6 @@ export function rectBetween(ax: number, ay: number, bx: number, by: number): Rec
 
 export function rectsIntersect(a: Rect, b: Rect): boolean {
 	return a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y;
-}
-
-/** `path` after `from` was renamed or moved to `to`. Paths outside `from` come back unchanged. */
-export function remapFolderPath(path: string, from: string, to: string): string {
-	if (path === from) return to;
-	return path.startsWith(`${from}/`) ? `${to}${path.slice(from.length)}` : path;
 }
 
 export function remapLocation(location: BrowseLocation, from: string, to: string): BrowseLocation {

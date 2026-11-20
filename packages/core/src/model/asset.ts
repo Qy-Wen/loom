@@ -39,6 +39,11 @@ export type LibraryChange =
 	| { type: "remove"; assetId: string }
 	| { type: "folder_upsert"; relativePath: string }
 	| { type: "folder_remove"; relativePath: string }
+	/**
+	 * A folder (and everything under it) now lives at `to`. Sent right before the matching `folder_remove` of `from`
+	 * and the `folder_upsert`s under `to`, so a listener can follow the move instead of treating it as a deletion.
+	 */
+	| { type: "folder_rename"; from: string; to: string }
 	| { type: "favorites"; assetIds: string[] }
 	| { type: "tags"; tags: Tag[]; assetTags: AssetTag[] }
 	| { type: "error"; message: string }

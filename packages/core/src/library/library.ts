@@ -34,7 +34,6 @@ export interface PlacedLibraryItems {
 
 export interface PastedLibraryItems extends PlacedLibraryItems {
 	cancelled: boolean;
-	movedFolders: { from: string; to: string }[];
 }
 
 type PlacedEntry =
@@ -409,14 +408,7 @@ export class Library {
 					if (asset) assets.push(asset);
 				}
 			}
-			return {
-				assets, folders, cancelled: result.cancelled,
-				movedFolders: result.moved.flatMap(({ from, to }) => {
-					const source = toRelative(from);
-					const target = paths.toRelativePath(to);
-					return source && folders.includes(target) ? [{ from: source, to: target }] : [];
-				}),
-			};
+			return { assets, folders, cancelled: result.cancelled };
 		} finally {
 			if (this.paths === paths) {
 				// Includes partial completion and edits made outside Loom while a dialog was open.
@@ -839,6 +831,7 @@ export class Library {
 			this.emit({ type: "upsert", asset: updated });
 		}
 
+		this.emit({ type: "folder_rename", from: oldPrefix, to: newPrefix });
 		this.emit({ type: "folder_remove", relativePath: oldPrefix });
 		for (const folder of nextFolders.sort((a, b) => a.localeCompare(b))) {
 			this.emit({ type: "folder_upsert", relativePath: folder });
