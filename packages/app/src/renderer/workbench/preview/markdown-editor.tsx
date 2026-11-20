@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { markdownAccess } from "../../../shared/markdown-file.ts";
+import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor as MarkdownEditorHandle, type MarkdownMode } from "./codemirror-markdown.ts";
 import type { RegisterMarkdownHistory } from "../asset-history.ts";
@@ -27,6 +28,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 	const [save, setSave] = useState<MarkdownSave | null>(sessions.get(assetId) ?? null);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [insertIssue, setInsertIssue] = useState<string | null>(null);
+	const [pickReference, setPickReference] = useState<((file: Asset) => void) | null>(null);
 	const [reading, setReading] = useState(false);
 	const [source, setSource] = useState(false);
 	const [findOpen, setFindOpen] = useState(false);
@@ -49,6 +51,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 		const existing = sessions.get(assetId);
 		setFailure(null);
 		setInsertIssue(null);
+		setPickReference(null);
 		if (existing) { setSave(existing); return; }
 		window.loom.readMarkdown(assetId).then((snapshot) => {
 			if (cancelled) return;
@@ -105,14 +108,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 			chooseTableAction: (state) => window.loom.showTableContextMenu(state),
 			chooseTextAction: (state) => window.loom.showEditorContextMenu(state),
 			clipboard: (action) => window.loom.runEditorClipboard(action),
-			pickAssets: async () => {
-				setInsertIssue(null);
-				try { return await window.loom.pickComposerLibraryAssets(); }
-				catch (cause) {
-					setInsertIssue(cause instanceof Error ? cause.message : String(cause));
-					return [];
-				}
-			},
+			pickAsset: (onPick) => setPickReference(() => onPick),
 			importFiles: async (files) => {
 				setInsertIssue(null);
 				const paths = files.map((file) => window.loom.pathForFile(file)).filter(Boolean);
@@ -181,7 +177,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 	const flush = () => { void save.flush().catch(() => undefined); };
 	const toggleReading = () => { flush(); setSource(false); setReading(mode !== "read"); };
 	const toggleLabel = mode === "read" ? t.preview.editMode : t.preview.readingMode;
-	return (
+	return <>
 		<div className="markdown-workbench" ref={rootRef}>
 			<div className="markdown-toolbar" role="toolbar" aria-label={t.preview.markdownView}>
 				<button type="button" aria-label={toggleLabel} data-tooltip={toggleLabel} aria-pressed={mode === "read"}
@@ -226,5 +222,10 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 				</div>}
 			</div>
 		</div>
-	);
+		{pickReference && <LibraryFileSearch assets={assets} title={t.preview.insertCommands.asset}
+			onClose={(file) => {
+				setPickReference(null);
+				if (file) pickReference(file);
+			}} />}
+	</>;
 }

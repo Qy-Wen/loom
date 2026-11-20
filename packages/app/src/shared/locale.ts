@@ -403,11 +403,13 @@ export const messages = defineLocale(
 		},
 		fileSearch: {
 			search: "Search library files",
-			placeholder: "Search by filename or path",
+			placeholder: "Search…",
 			results: "Matching files",
 			noResults: "No matching files in this library.",
 			resultLimit: (count: number) => `Showing ${count} results. Refine your search to see more.`,
-			confirm: "Select",
+			navigate: "Navigate",
+			select: "Select",
+			dismiss: "Dismiss",
 		},
 		canvas: {
 			newCanvas: "New Canvas",
@@ -1200,11 +1202,13 @@ export const messages = defineLocale(
 		},
 		fileSearch: {
 			search: "搜索资产库文件",
-			placeholder: "搜索文件名或路径",
+			placeholder: "搜索…",
 			results: "匹配文件",
 			noResults: "资产库中没有匹配的文件。",
 			resultLimit: (count: number) => `显示前 ${count} 个结果，请缩小搜索范围。`,
-			confirm: "选择",
+			navigate: "导航",
+			select: "选择",
+			dismiss: "退出",
 		},
 		canvas: {
 			newCanvas: "新建画板",

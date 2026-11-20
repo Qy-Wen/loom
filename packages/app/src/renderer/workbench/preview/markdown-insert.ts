@@ -3,10 +3,11 @@ import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { StateEffect, StateField, type EditorState } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
-import type { UiSelectionDraft } from "../../../shared/ipc.ts";
+import type { Asset } from "@loom/core";
 import { messages, type Messages } from "../../../shared/locale.ts";
 import { markdownFilePath } from "./live-markdown.ts";
 import { enterTable } from "./live-table.ts";
+import { markdownLibraryReference } from "./markdown-reference.ts";
 import { wikiLinkCompletion, wikiTargetAt } from "./markdown-wiki-completion.ts";
 
 type Labels = Messages["preview"]["insertCommands"];
@@ -112,18 +113,7 @@ function insert(view: EditorView, completion: Completion, from: number, to: numb
 	return start + before.length;
 }
 
-export function markdownAssetLink(from: string, path: string): string {
-	const directory = from.split("/").slice(0, -1);
-	const target = path.split("/");
-	const name = target.at(-1)!.replace(/[\r\n]/g, " ").replace(/[\\\[\]`*_<>~&|]/g, "\\$&");
-	let common = 0;
-	while (common < directory.length && common < target.length - 1 && directory[common] === target[common]) common++;
-	const address = "../".repeat(directory.length - common) + target.slice(common)
-		.map((part) => encodeURIComponent(part).replaceAll("(", "%28").replaceAll(")", "%29")).join("/");
-	return `[${name}](${address})`;
-}
-
-export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelectionDraft[]>) {
+export function markdownInsert(labels: Labels, pickAsset: (onPick: (file: Asset) => void) => void) {
 	const options = (typedSlash: boolean): Completion[] => commands.map((command, index) => {
 		const displayLabel = labels[command.id];
 		return {
@@ -140,14 +130,14 @@ export function markdownInsert(labels: Labels, pickAssets: () => Promise<UiSelec
 				}
 				closeCompletion(view);
 				const original = view.state.doc;
-				void pickAssets().then((picked) => {
-					if (!picked.length || !view.dom.isConnected || view.state.doc !== original || view.state.readOnly) return;
+				pickAsset((file) => {
+					if (!view.dom.isConnected || view.state.doc !== original || view.state.readOnly) return;
 					const sourcePath = markdownFilePath(view.state);
 					if (!sourcePath) return;
-					const text = picked.map((asset) => markdownAssetLink(sourcePath, asset.path)).join("\n\n");
+					const text = markdownLibraryReference(sourcePath, file.relativePath);
 					insert(view, completion, from, to, { text, cursor: text.length }, typedSlash);
 					view.focus();
-				}).catch(() => undefined);
+				});
 			},
 		};
 	});

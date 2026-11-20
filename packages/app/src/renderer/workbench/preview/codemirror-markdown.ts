@@ -6,6 +6,7 @@ import { openSearchPanel, search, searchKeymap, searchPanelOpen } from "@codemir
 import { Annotation, Compartment, EditorState, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
+import type { Asset } from "@loom/core";
 import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
@@ -48,7 +49,7 @@ export interface MarkdownEditorHost {
 	chooseTableAction: TableHooks["chooseAction"];
 	chooseTextAction(state: MarkdownContextState): Promise<MarkdownContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
-	pickAssets(): Promise<UiSelectionDraft[]>;
+	pickAsset(onPick: (file: Asset) => void): void;
 	importFiles(files: readonly File[]): Promise<UiSelectionDraft[]>;
 	onDropError(error: unknown): void;
 }
@@ -166,7 +167,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		searchSelection,
 		markdownFindWidgets,
 		panels({ topContainer: findContainer }),
-		markdownInsert(labels.insertCommands, host.pickAssets),
+		markdownInsert(labels.insertCommands, host.pickAsset),
 		markdownFileDrop(host),
 		EditorState.phrases.of(labels.searchPhrases),
 		theme,

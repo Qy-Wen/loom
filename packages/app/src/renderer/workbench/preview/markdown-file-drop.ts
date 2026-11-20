@@ -2,12 +2,11 @@ import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, StateEffect, StateField } from "@codemirror/state";
 import { EditorView, layer, RectangleMarker, ViewPlugin, type ViewUpdate } from "@codemirror/view";
-import { extractMarkdownReferences } from "@loom/core/references";
 import type { UiSelectionDraft } from "../../../shared/ipc.ts";
 import { activeLibraryDrag, draggedAssetIds, endLibraryDrag, hasLibraryDrag, hasOsFileDrag, readLibraryDrag } from "../../assets/asset-drag.ts";
 import { liveLibrary, markdownFilePath } from "./live-markdown.ts";
 import { tableRange } from "./live-table.ts";
-import { markdownAssetLink } from "./markdown-insert.ts";
+import { markdownLibraryReference } from "./markdown-reference.ts";
 
 type DropPoint = { position: number; beforeBlock: boolean; side: -1 | 1 };
 type DropHost = {
@@ -73,19 +72,11 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 		: { position, beforeBlock, side: position === at ? assoc : -1 };
 }
 
-function droppedReference(source: string, path: string): string {
-	const wiki = `[[${path}]]`;
-	// Match the reference scan too, since Markdown markup in a filename can split the wiki token.
-	const [reference] = extractMarkdownReferences(wiki);
-	if (reference?.kind === "wiki" && reference.target === path && !/[#\\]/.test(path)) return wiki;
-	return markdownAssetLink(source, path);
-}
-
 function insertReferences(view: EditorView, point: DropPoint, paths: Iterable<string>): void {
 	if (view.state.readOnly) return;
 	const source = markdownFilePath(view.state);
 	if (!source) return;
-	const links = [...new Set(paths)].map((path) => droppedReference(source, path)).join(" ");
+	const links = [...new Set(paths)].map((path) => markdownLibraryReference(source, path)).join(" ");
 	if (!links) return;
 	const { doc } = view.state;
 	const { beforeBlock } = point;

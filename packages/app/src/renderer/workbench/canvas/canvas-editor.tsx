@@ -165,13 +165,12 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		}
 	}
 
-	function finishFileSearch(files: Asset[]): void {
+	function finishFileSearch(file: Asset | null): void {
 		setFileSearch(null);
-		if (!fileSearch || !files.length) return;
+		if (!fileSearch || !file) return;
 		if ("point" in fileSearch) {
-			addFiles(files.map((file) => file.assetId), fileSearch.point);
+			addFiles([file.assetId], fileSearch.point);
 		} else {
-			const file = files[0];
 			patchNode(fileSearch.replaceId, (node) => ({
 				...node, file: file.relativePath, loom: { ...node.loom, assetId: file.assetId },
 			}));
@@ -461,7 +460,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 				</div>
 			</div>
 			{fileSearch && <LibraryFileSearch assets={searchableFiles}
-				title={"point" in fileSearch ? t.canvas.addFiles : t.canvas.relink} multiple={"point" in fileSearch}
+				title={"point" in fileSearch ? t.canvas.addFiles : t.canvas.relink}
 				onClose={finishFileSearch} />}
 		</section>
 	);

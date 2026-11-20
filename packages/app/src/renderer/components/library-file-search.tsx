@@ -8,23 +8,19 @@ import "./library-file-search.css";
 
 const RESULT_LIMIT = 100;
 
-/** Choose existing files from the caller's current library snapshot. */
-export function LibraryFileSearch({ assets, title, multiple = false, onClose }: {
+/** Choose an existing file from the caller's current library snapshot. */
+export function LibraryFileSearch({ assets, title, onClose }: {
 	assets: readonly Asset[];
 	title: string;
-	multiple?: boolean;
-	onClose: (files: Asset[]) => void;
+	onClose: (file: Asset | null) => void;
 }): React.JSX.Element {
 	const { language, t } = useLocale();
-	const heading = useId();
 	const listId = useId();
 	const dialog = useRef<HTMLDialogElement>(null);
+	const input = useRef<HTMLInputElement>(null);
 	const list = useRef<HTMLUListElement>(null);
-	const confirmed = useRef<string[]>([]);
 	const [query, setQuery] = useState("");
 	const [activeIndex, setActiveIndex] = useState(0);
-	const [selected, setSelected] = useState<Set<string>>(() => new Set());
-	const byId = useMemo(() => new Map(assets.map((asset) => [asset.assetId, asset])), [assets]);
 	const sorted = useMemo(() => {
 		const { compare } = new Intl.Collator(language, { numeric: true });
 		return [...assets].sort((a, b) => compare(a.filename, b.filename) || compare(a.relativePath, b.relativePath));
@@ -34,9 +30,10 @@ export function LibraryFileSearch({ assets, title, multiple = false, onClose }: 
 		return normalized ? sorted.filter((asset) => assetMatches(asset, normalized)) : sorted;
 	}, [sorted, query]);
 	const visible = matches.slice(0, RESULT_LIMIT);
+	const nameCounts = new Map<string, number>();
+	for (const { filename } of visible) nameCounts.set(filename, (nameCounts.get(filename) ?? 0) + 1);
 	const index = Math.min(activeIndex, visible.length - 1);
 	const active = visible[index];
-	const selection = [...selected].filter((id) => byId.has(id));
 
 	useLayoutEffect(() => {
 		const element = dialog.current;
@@ -48,78 +45,68 @@ export function LibraryFileSearch({ assets, title, multiple = false, onClose }: 
 		list.current?.children[index]?.scrollIntoView({ block: "nearest" });
 	}, [index, query]);
 
-	function accept(): void {
-		const ids = selection.length ? selection : active ? [active.assetId] : [];
-		if (ids.length) close(ids);
-	}
-
-	function close(ids: string[]): void {
-		confirmed.current = ids;
-		dialog.current?.close();
-	}
-
 	function choose(asset: Asset): void {
-		if (!multiple) return close([asset.assetId]);
-		setSelected((current) => {
-			const next = new Set(current);
-			if (next.has(asset.assetId)) next.delete(asset.assetId);
-			else next.add(asset.assetId);
-			return next;
-		});
+		dialog.current?.close(asset.assetId);
 	}
 
-	function move(event: KeyboardEvent, inList = false): void {
-		if (isImeComposing(event.nativeEvent) || !visible.length) return;
+	function onSearchKeyDown(event: KeyboardEvent<HTMLInputElement>): void {
+		if (isImeComposing(event.nativeEvent) || !active) return;
 		const { key } = event;
 		if (key === "ArrowDown" || key === "ArrowUp") {
 			event.preventDefault();
-			if (inList) setActiveIndex(Math.max(0, Math.min(visible.length - 1, index + (key === "ArrowDown" ? 1 : -1))));
-			else list.current?.focus({ preventScroll: true });
-		} else if (inList && (key === "Home" || key === "End")) {
-			event.preventDefault();
-			setActiveIndex(key === "Home" ? 0 : visible.length - 1);
-		} else if (inList && key === " " && active) {
-			event.preventDefault();
-			choose(active);
+			setActiveIndex(Math.max(0, Math.min(visible.length - 1, index + (key === "ArrowDown" ? 1 : -1))));
 		} else if (key === "Enter") {
 			event.preventDefault();
-			accept();
+			choose(active);
 		}
 	}
 
-	return <dialog ref={dialog} className="library-file-search" aria-labelledby={heading}
+	return <dialog ref={dialog} className="library-file-search" aria-label={title}
 		onKeyDown={(event) => event.stopPropagation()}
+		onPointerDown={(event) => {
+			if (event.target !== event.currentTarget || event.button !== 0) return;
+			const { left, right, top, bottom } = event.currentTarget.getBoundingClientRect();
+			if (event.clientX < left || event.clientX > right || event.clientY < top || event.clientY > bottom) {
+				event.preventDefault();
+				event.currentTarget.close();
+			}
+		}}
 		onClose={(event) => {
-			if (event.currentTarget.open) return;
-			const ids = confirmed.current;
-			confirmed.current = [];
-			onClose(ids.flatMap((id) => {
-				const asset = byId.get(id);
-				return asset ? [asset] : [];
-			}));
+			const element = event.currentTarget;
+			if (element.open) return;
+			const id = element.returnValue;
+			element.returnValue = "";
+			onClose(assets.find((asset) => asset.assetId === id) ?? null);
 		}}>
-		<h2 id={heading}>{title}</h2>
-		<input type="text" role="searchbox" inputMode="search" autoFocus aria-label={t.fileSearch.search} aria-controls={listId}
-			placeholder={t.fileSearch.placeholder} value={query}
-			onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
-			onKeyDown={(event) => move(event)} />
+		<div className="library-file-field">
+			<input ref={input} type="text" role="combobox" inputMode="search" autoFocus
+				autoCapitalize="off" spellCheck={false} enterKeyHint="done" aria-label={t.fileSearch.search}
+				aria-autocomplete="list" aria-expanded={Boolean(active)} aria-controls={listId}
+				aria-activedescendant={active ? `${listId}-${index}` : undefined}
+				placeholder={t.fileSearch.placeholder} value={query}
+				onChange={(event) => { setQuery(event.target.value); setActiveIndex(0); }}
+				onKeyDown={onSearchKeyDown} />
+			{query && <button type="button" className="library-file-clear" aria-label={t.browser.clearSearch}
+				onClick={() => {
+					setQuery("");
+					setActiveIndex(0);
+					input.current?.focus();
+				}}><span aria-hidden="true">×</span></button>}
+		</div>
 		<ul ref={list} id={listId} className="library-file-results thin-scroll" role="listbox"
-			tabIndex={0} hidden={!visible.length} aria-label={t.fileSearch.results}
-			aria-multiselectable={multiple || undefined} aria-activedescendant={active ? `${listId}-${index}` : undefined}
-			onKeyDown={(event) => move(event, true)}>
-			{visible.map((asset, row) => <li key={asset.assetId} id={`${listId}-${row}`} role="option" data-active={index === row}
-				aria-selected={selected.has(asset.assetId)} onClick={() => { setActiveIndex(row); choose(asset); }}>
+			hidden={!active} aria-label={t.fileSearch.results}>
+			{visible.map((asset, row) => <li key={asset.assetId} id={`${listId}-${row}`} role="option"
+				aria-selected={index === row} aria-label={asset.relativePath} title={asset.relativePath} onClick={() => choose(asset)}>
 				<span className="library-file-name">{asset.filename}</span>
-				{asset.relativePath !== asset.filename && <span className="library-file-path">{parentFolder(asset.relativePath)}</span>}
+				{(nameCounts.get(asset.filename) ?? 0) > 1 && <span className="library-file-path">{parentFolder(asset.relativePath) || "/"}</span>}
 			</li>)}
 		</ul>
 		{!matches.length && <p className="library-file-message" role="status">{t.fileSearch.noResults}</p>}
 		{matches.length > RESULT_LIMIT && <p className="library-file-message">{t.fileSearch.resultLimit(RESULT_LIMIT)}</p>}
-		<footer>
-			<button type="button" onClick={() => close([])}>{t.common.cancel}</button>
-			<button type="button" className="library-file-confirm" disabled={!active && !selection.length} onClick={accept}>
-				{selection.length ? `${t.fileSearch.confirm} (${selection.length})` : t.fileSearch.confirm}
-			</button>
+		<footer className="library-file-shortcuts">
+			<span><kbd>↑↓</kbd> {t.fileSearch.navigate}</span>
+			<span><kbd>↵</kbd> {t.fileSearch.select}</span>
+			<span><kbd>Esc</kbd> {t.fileSearch.dismiss}</span>
 		</footer>
 	</dialog>;
 }

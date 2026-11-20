@@ -75,18 +75,18 @@ test("the Insert button and slash menu create undoable, portable Markdown", asyn
 	await box.press("ControlOrMeta+s");
 	await expect.poll(() => readFile(file, "utf8")).toBe("Existing paragraph\n");
 
-	await electronApp!.evaluate(({ dialog }, path) => {
-		const original = dialog.showOpenDialog;
-		dialog.showOpenDialog = (async () => {
-			dialog.showOpenDialog = original;
-			return { canceled: false, filePaths: [path] };
-		}) as typeof dialog.showOpenDialog;
-	}, reference);
 	await box.press("ControlOrMeta+End");
 	await loomPage.keyboard.insertText("/link");
 	await menu.getByRole("option", { name: "Link to a library file", exact: true }).click();
+	const picker = loomPage.getByRole("dialog", { name: "Link to a library file", exact: true });
+	const search = picker.getByRole("combobox", { name: "Search library files" });
+	await expect(search).toBeFocused();
+	await search.fill("参考");
+	await expect(picker.getByRole("option", { name: "参考 (v1).md", exact: true })).toBeVisible();
+	await search.press("Enter");
+	await expect(picker).toHaveCount(0);
 	await box.press("ControlOrMeta+s");
-	await expect.poll(() => readFile(file, "utf8")).toBe("Existing paragraph\n\n[参考 (v1).md](%E5%8F%82%E8%80%83%20%28v1%29.md)");
+	await expect.poll(() => readFile(file, "utf8")).toBe("Existing paragraph\n\n[[参考 (v1).md]]");
 	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
 	await expect(button).toHaveCount(0);
 	const link = box.locator("[data-asset-id]").filter({ hasText: "参考 (v1).md" });
