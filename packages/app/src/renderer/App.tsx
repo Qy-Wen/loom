@@ -178,8 +178,8 @@ export function App(): React.JSX.Element {
 	);
 	const canvasPreview = useMemo(() => library.assets.find((asset) => asset.assetId === canvasPreviewId), [library.assets, canvasPreviewId]);
 	const libraryAssetId = iconMode ? previewAssetId : tabs.active;
-	// Graph details follow the selection independently of the open file.
-	const viewedAssetId = workbenchView === "graph" ? selectedAssetId : libraryAssetId ?? (iconMode ? selectedAssetId : null);
+	// Table and Graph details follow the selection independently of the open file.
+	const viewedAssetId = workbenchView === "library" ? libraryAssetId ?? (iconMode ? selectedAssetId : null) : selectedAssetId;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<FolderRename | null>(null);
 	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
@@ -577,6 +577,11 @@ export function App(): React.JSX.Element {
 	 */
 	function selectAsset(assetId: string): void {
 		showAsset(assetId, workbenchView === "library");
+	}
+
+	function selectAssetForDetails(assetId: string): void {
+		setPicked(singleSelection(assetKey(assetId)));
+		panels.focus("details");
 	}
 
 	function showAsset(assetId: string, previewInBrowser: boolean): void {
@@ -1653,10 +1658,7 @@ export function App(): React.JSX.Element {
 								onRemoveProperty={removeProperty}
 								onSetPropertyValue={setPropertyValue}
 								onRemovePropertyValue={removePropertyValue}
-								onSelectAsset={(assetId) => {
-									selectAsset(assetId);
-									panels.focus("details");
-								}}
+								onSelectAsset={selectAssetForDetails}
 							/>
 						) : workbenchView === "graph" ? (
 							<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
@@ -1665,10 +1667,7 @@ export function App(): React.JSX.Element {
 									edges={graphEdges}
 									selectedAssetIds={selectedAssetIds}
 									relationTypes={relationTypes}
-									onSelectAsset={(assetId) => {
-										setPicked(singleSelection(assetKey(assetId)));
-										panels.focus("details");
-									}}
+									onSelectAsset={selectAssetForDetails}
 									onBoxSelect={boxSelectAssets}
 									onCreateRelation={createRelation}
 									onRemoveRelation={removeRelation}

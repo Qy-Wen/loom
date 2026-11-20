@@ -206,21 +206,34 @@ test("switching from a canvas tab to icon mode selects the canvas and opens it o
 	await expect(tabs.getByRole("tab", { name: "Note.md", selected: true })).toBeVisible();
 });
 
-test("clicking Graph nodes selects them without opening files", async ({ loomPage: page, electronApp }) => {
+test("clicking Table rows and Graph nodes selects files without opening them", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
 	const root = (await rootPath())!;
 	await writeFile(join(root, "Open.md"), "# Open");
 	await writeFile(join(root, "Other.md"), "# Other");
-	await writeFile(join(root, "Board.canvas"), JSON.stringify({ nodes: [], edges: [] }));
+	const canvas = JSON.stringify({ nodes: [], edges: [] });
+	await writeFile(join(root, "Board.canvas"), canvas);
 	const sidebar = page.locator(".library-sidebar");
 	const views = sidebar.locator(".library-views");
+	const table = views.getByRole("button", { name: "Table", exact: true });
 	const graph = views.getByRole("button", { name: "Graph", exact: true });
 	const library = views.getByRole("button", { name: "Library", exact: true });
 	const node = (filename: string) => page.locator(`.graph-node[aria-label="${filename}"]`);
+	const row = page.locator(".table-view").getByRole("row", { name: /Board\.canvas/ });
+	const canvasDetails = page.locator(".details-content").getByText(`${Buffer.byteLength(canvas)} B`, { exact: true });
+	const openTab = page.getByRole("tab", { name: "Open.md", exact: true });
 
 	await sidebar.locator(".asset-row").filter({ hasText: "Open.md" }).click();
+	await table.click();
+	await row.click();
+	await expect(table).toHaveAttribute("aria-pressed", "true");
+	await expect(row).toHaveClass(/selected/);
+	await expect(canvasDetails).toBeVisible();
+	await library.click();
+	await expect(openTab).toHaveAttribute("aria-selected", "true");
+
 	await graph.click();
 	await node("Board.canvas").locator(".graph-node-outline").click();
 	await expect(node("Board.canvas")).toHaveClass(/selected/);
@@ -228,7 +241,7 @@ test("clicking Graph nodes selects them without opening files", async ({ loomPag
 	await node("Other.md").locator(".graph-node-outline").click();
 	await expect(node("Other.md")).toHaveClass(/selected/);
 	await library.click();
-	await expect(page.getByRole("tab", { name: "Open.md", exact: true })).toHaveAttribute("aria-selected", "true");
+	await expect(openTab).toHaveAttribute("aria-selected", "true");
 	await expect(page.getByRole("tab", { name: "Board.canvas", exact: true })).toHaveCount(0);
 
 	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
@@ -236,6 +249,11 @@ test("clicking Graph nodes selects them without opening files", async ({ loomPag
 	await node("Board.canvas").locator(".graph-node-outline").click();
 	await expect(node("Board.canvas")).toHaveClass(/selected/);
 	await expect(graph).toHaveAttribute("aria-pressed", "true");
+	await table.click();
+	await row.click();
+	await expect(table).toHaveAttribute("aria-pressed", "true");
+	await expect(row).toHaveClass(/selected/);
+	await expect(canvasDetails).toBeVisible();
 	await library.click();
 	await expect(page.getByRole("tab", { name: "Board.canvas", exact: true })).toHaveCount(0);
 	await expect(page.getByRole("dialog", { name: "File preview", exact: true })).toHaveCount(0);
