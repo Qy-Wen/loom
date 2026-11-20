@@ -127,7 +127,11 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 					</button>
 				)}
 			</div>
-			{!collapsed && <FileTreeRows node={folder} depth={depth + 1} />}
+			{!collapsed && (
+				<div className="folder-children" style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}>
+					<FileTreeRows node={folder} depth={depth + 1} />
+				</div>
+			)}
 		</div>
 	);
 }
@@ -142,7 +146,7 @@ function FileTreeRows({ node, depth }: { node: FolderNode; depth: number }): Rea
 	return (
 		<>
 			{folders.map((folder) => <FolderTreeRow key={folder.relativePath} folder={folder} depth={depth} />)}
-			{foldersOnly ? null : <AssetList assets={assets} depth={depth} />}
+			{foldersOnly ? null : <AssetList assets={assets} depth={depth} besideFolders />}
 		</>
 	);
 }

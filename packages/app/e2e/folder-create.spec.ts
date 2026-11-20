@@ -137,3 +137,30 @@ for (const source of ["folder menu", "shortcut"] as const) {
 		await expect(browser.locator(".browser-crumb")).toHaveText(crumbs);
 	});
 }
+
+test("folder menu leads with New Folder, New Markdown File and New Canvas, and creates Markdown inside the folder", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "notes"));
+	await expect.poll(async () => (await snapshot()).folders).toContain("notes");
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			const labels = this.items.filter((item) => item.type !== "separator").map((item) => item.label);
+			(globalThis as { menuLabels?: string[] }).menuLabels = labels;
+			this.items.find((item) => item.label === "New Markdown File" && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+
+	const sidebar = page.locator(".library-sidebar");
+	await sidebar.locator(".folder-main").filter({ hasText: /^notes$/ }).click({ button: "right" });
+	await expect.poll(async () => (await electronApp!.evaluate(() => (globalThis as { menuLabels?: string[] }).menuLabels))?.slice(0, 3))
+		.toEqual(["New Folder", "New Markdown File", "New Canvas"]);
+	const editor = sidebar.locator(".rename-editor input");
+	await expect(editor).toBeFocused();
+	await editor.fill("inside");
+	await editor.press("Enter");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/inside.md");
+});

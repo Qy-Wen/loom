@@ -999,6 +999,8 @@ export function App(): React.JSX.Element {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
 				await createFolderIn(relativePath, fromTree);
+			} else if (action === "new_md_file") {
+				await createMarkdownIn(relativePath);
 			} else if (action === "new_canvas") {
 				await createCanvasIn(relativePath);
 			} else if (action === "copy_path") {
@@ -1023,21 +1025,25 @@ export function App(): React.JSX.Element {
 			if (action === "new_folder") await createFolderIn(relativePath, fromTree);
 			else if (action === "paste") await pasteInto(relativePath);
 			else if (action === "new_canvas") await createCanvasIn(relativePath);
-			else if (action === "new_md_file") {
-				const asset = await window.loom.createMarkdownFile(relativePath);
-				if (!sameLibrary()) return;
-				if (iconMode) {
-					setWorkbenchView("library");
-					setLocation({ kind: "folder", path: relativePath });
-					setPicked(singleSelection(assetKey(asset.assetId)));
-				} else {
-					selectAsset(asset.assetId);
-				}
-				setRenamingAssetId(asset.assetId);
-			}
+			else if (action === "new_md_file") await createMarkdownIn(relativePath);
 		} catch (cause) {
 			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		}
+	}
+
+	async function createMarkdownIn(relativePath: string): Promise<void> {
+		const sameLibrary = detailRequests.current.libraryGuard();
+		const asset = await window.loom.createMarkdownFile(relativePath);
+		if (!sameLibrary()) return;
+		if (iconMode) {
+			setWorkbenchView("library");
+			setLocation({ kind: "folder", path: relativePath });
+			setPicked(singleSelection(assetKey(asset.assetId)));
+		} else {
+			revealFolders(ancestorFolders(asset.relativePath));
+			selectAsset(asset.assetId);
+		}
+		setRenamingAssetId(asset.assetId);
 	}
 
 	async function createCanvasIn(relativePath: string): Promise<void> {

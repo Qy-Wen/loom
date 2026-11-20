@@ -29,9 +29,15 @@ export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttrib
  * `quiet` is for shortcut lists: their rows never take the tree's focus or host a rename editor, because the same
  * file also appears in the tree.
  */
-export function AssetList({ assets, depth, quiet = false }: { assets: readonly Asset[]; depth: number; quiet?: boolean }): React.JSX.Element | null {
+export function AssetList({ assets, depth, quiet = false, besideFolders = false }: {
+	assets: readonly Asset[];
+	depth: number;
+	quiet?: boolean;
+	/** Files that share a level with folders line their icons up with the folders' icons, not their arrows. */
+	besideFolders?: boolean;
+}): React.JSX.Element | null {
 	if (assets.length === 0) return null;
-	return <>{assets.map((asset) => <AssetTreeRow key={asset.assetId} asset={asset} depth={depth} quiet={quiet} />)}</>;
+	return <>{assets.map((asset) => <AssetTreeRow key={asset.assetId} asset={asset} depth={depth} quiet={quiet} besideFolders={besideFolders} />)}</>;
 }
 
 function useAssetRow(asset: Asset, quiet: boolean) {
@@ -67,7 +73,7 @@ function assetButtonProps(tree: TreeContextValue, asset: Asset, selected: boolea
 	};
 }
 
-function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; quiet: boolean }): React.JSX.Element {
+function AssetTreeRow({ asset, depth, quiet, besideFolders }: { asset: Asset; depth: number; quiet: boolean; besideFolders: boolean }): React.JSX.Element {
 	const { tree, selected, focused, renaming, cut, favorite } = useAssetRow(asset, quiet);
 	const rowRef = useRef<HTMLElement | null>(null);
 	useScrollWhenFocused(rowRef, focused, asset.assetId);
@@ -79,7 +85,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 				ref={(el) => {
 					rowRef.current = el;
 				}}
-				className={`asset-row rename-row ${selected ? "selected" : ""}`}
+				className={`asset-row rename-row${besideFolders ? " beside-folders" : ""} ${selected ? "selected" : ""}`}
 				style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}
 			>
 				<AssetThumbnail asset={asset} />
@@ -96,7 +102,7 @@ function AssetTreeRow({ asset, depth, quiet }: { asset: Asset; depth: number; qu
 			ref={(el) => {
 				rowRef.current = el;
 			}}
-			className={`asset-row ${selected ? "selected" : ""}${cut ? " cut" : ""}`}
+			className={`asset-row${besideFolders ? " beside-folders" : ""} ${selected ? "selected" : ""}${cut ? " cut" : ""}`}
 			style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}
 			type="button"
 			draggable

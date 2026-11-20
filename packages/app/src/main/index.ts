@@ -649,8 +649,9 @@ function registerIpc(): void {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
-				{ label: t.canvas.newCanvas, enabled: single, click: () => "new_canvas" },
 				{ label: t.menu.newFolder, click: () => "new_folder" },
+				{ label: t.menu.newMdFile, enabled: single, click: () => "new_md_file" },
+				{ label: t.canvas.newCanvas, enabled: single, click: () => "new_canvas" },
 				{ type: "separator" },
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },

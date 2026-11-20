@@ -452,9 +452,36 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	padding-block: 3px;
 }
 
+/*
+ * Match the folder name button: it starts after the 7px inset and 8px arrow, and its icon sits 3px in
+ * plus 2px to center a 16px icon in the 20px slot. The highlight starts there too, not under the arrow.
+ */
+.asset-row.beside-folders {
+	--folder-label-start: 15px;
+	margin-inline-start: calc(var(--tree-indent) + var(--folder-label-start));
+	width: calc(100% - var(--tree-indent) - var(--folder-label-start));
+	padding-inline-start: 5px;
+}
+
 .asset-list .asset-row .asset-thumbnail {
 	width: var(--lm-size-lg);
 	height: var(--lm-size-lg);
+}
+
+/* Guide line under the arrow (7px row inset + half the 8px arrow): everything to its right belongs to this folder. */
+.folder-children {
+	position: relative;
+}
+
+.folder-children::before {
+	position: absolute;
+	top: 0;
+	bottom: 0;
+	left: calc(var(--tree-indent) + 11px);
+	width: 1px;
+	background: var(--lm-hairline);
+	content: "";
+	pointer-events: none;
 }
 
 .folder-chevron {

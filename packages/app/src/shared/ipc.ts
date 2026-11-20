@@ -90,6 +90,7 @@ export type FolderContextAction =
 	| "copy"
 	| "paste"
 	| "new_folder"
+	| "new_md_file"
 	| "new_canvas"
 	| "copy_path"
 	| "reveal"
