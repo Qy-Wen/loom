@@ -80,7 +80,7 @@ import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-di
 import { TableView } from "./workbench/table/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
 import { useAssetHistory } from "./workbench/asset-history.ts";
-import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, showInTab, type AssetTabs } from "./workbench/asset-tabs.ts";
+import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, setTabPinned, showPreviewTab, type AssetTabs, type TabOpenMode } from "./workbench/asset-tabs.ts";
 
 const SettingsPage = lazy(() => import("./settings/settings-page.tsx").then(({ SettingsPage }) => ({ default: SettingsPage })));
 const GraphView = lazy(() => import("./workbench/graph/graph-view.tsx").then(({ GraphView }) => ({ default: GraphView })));
@@ -574,15 +574,12 @@ export function App(): React.JSX.Element {
 	}
 
 	function showListAsset(assetId: string): void {
-		const canvas = canvasIds.has(assetId);
-		setTabs((current) => canvas || (current.active !== null && canvasIds.has(current.active))
-			? openInNewTab(current, assetId)
-			: showInTab(current, assetId));
-		if (canvas) setWorkbenchView("library");
+		setTabs((current) => showPreviewTab(current, assetId));
+		if (canvasIds.has(assetId)) setWorkbenchView("library");
 	}
 
 	/**
-	 * Look at a file: show it in the active tab, or in icon mode open it in the preview overlay over its folder.
+	 * Look at a file: show it in a tab, or in icon mode open it in the preview overlay over its folder.
 	 * Outside the Files view icon mode only selects it, since there is nothing to open it in.
 	 */
 	function selectAsset(assetId: string): void {
@@ -702,13 +699,13 @@ export function App(): React.JSX.Element {
 		setPicked((current) => assetIds.length === 0 && !add ? clearAssetSelection(current) : boxSelect(current, assetIds, add));
 	}
 
-	/** Open in a new tab next to the active one. The tree and Details follow the new tab. */
-	function openAssetInNewTab(assetId: string): void {
+	/** Open a new tab. The tree and Details follow it. */
+	function openAssetInNewTab(assetId: string, mode?: TabOpenMode): void {
 		if (iconMode) {
 			selectAsset(assetId);
 			return;
 		}
-		setTabs((current) => openInNewTab(current, assetId));
+		setTabs((current) => openInNewTab(current, assetId, mode));
 		setPicked(singleSelection(assetKey(assetId)));
 		if (canvasIds.has(assetId)) {
 			setPreviewAssetId(null);
@@ -729,6 +726,15 @@ export function App(): React.JSX.Element {
 		setPreviewAssetId(null);
 		setTabs((current) => activateTab(current, assetId));
 		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	async function showAssetTabContextMenu(assetId: string): Promise<void> {
+		try {
+			const action = await window.loom.showAssetTabContextMenu(!tabs.previews.includes(assetId));
+			if (action !== null) setTabs((current) => setTabPinned(current, assetId, action === "pin"));
+		} catch (cause) {
+			setError(cause instanceof Error ? cause.message : String(cause));
+		}
 	}
 
 	/** Closing a tab shows its neighbour, and the tree selection follows it. */
@@ -769,8 +775,8 @@ export function App(): React.JSX.Element {
 		const next = pointerSelect(treeSelection(), rows, key, mode);
 		setPicked(next);
 		if (iconMode) setTreePicked(next);
-		// Show the file the click leaves focused. Ctrl-clicking a file out of the selection shows nothing new.
-		if (!iconMode && next.focus?.startsWith("asset:") && (!activeCanvas || mode === "replace")) {
+		// Modified clicks build a selection without changing the preview.
+		if (!iconMode && mode === "replace" && next.focus?.startsWith("asset:")) {
 			showListAsset(next.focus.slice("asset:".length));
 		}
 	}
@@ -962,7 +968,7 @@ export function App(): React.JSX.Element {
 			if (action === "open") {
 				selectAsset(asset.assetId);
 			} else if (action === "open_in_new_tab") {
-				openAssetInNewTab(asset.assetId);
+				openAssetInNewTab(asset.assetId, "preview");
 			} else if (action === "favorite" || action === "unfavorite") {
 				await window.loom.setFavorite(asset.assetId, action === "favorite");
 			} else if (action === "add_to_chat") {
@@ -1569,6 +1575,7 @@ export function App(): React.JSX.Element {
 			assets={library.assets}
 			onActivate={activateAssetTab}
 			onClose={closeAssetTab}
+			onContextMenu={(assetId) => void showAssetTabContextMenu(assetId)}
 			onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
 			onDropFiles={openDroppedFiles}
 			onDropOnCanvas={(assets, id) => {

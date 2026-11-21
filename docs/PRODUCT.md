@@ -296,7 +296,7 @@ The layout is a left asset library, a central workbench, and separate Chat and D
 - On first use, image Edit opens Grade as a tab in the right sidebar; later opens restore its saved placement.
 
 **File tabs (Files view)**
-- The workbench shows open files as browser-style tabs. A plain click on a file shows it in the active tab; middle-click it, or choose "Open in new tab" in its menu, to open it in a new tab next to the active one.
+- Clicking a file in the tree switches to its open tab or reuses the most recently viewed preview tab. "Open in new tab" in the file menu opens a separate preview. Middle-click opens a pinned tab. Pinned tabs display a pushpin icon. The tab menu can pin or unpin a tab in place.
 - A file is open in at most one tab. Drag a tab sideways to reorder it, or drag a file from the tree onto the tab strip to open it.
 - Closing a tab (the × or middle-click) shows its neighbour, and a file that is deleted or leaves the library closes its tab.
 - Tabs are not saved across restarts and keep no view state: zoom, playback position, and unsaved Grade edits reset when you switch away. Details and the Agent follow the active tab.

@@ -155,6 +155,7 @@ export const IPC = {
 	libraryChanged: "loom:libraryChanged",
 	trashStarted: "loom:trashStarted",
 	showAssetContextMenu: "loom:showAssetContextMenu",
+	showAssetTabContextMenu: "loom:showAssetTabContextMenu",
 	showFolderContextMenu: "loom:showFolderContextMenu",
 	showLibraryContextMenu: "loom:showLibraryContextMenu",
 	showCanvasContextMenu: "loom:showCanvasContextMenu",
@@ -297,6 +298,7 @@ export interface LoomApi {
 	onTrashStarted: (listener: () => void) => () => void;
 	/** `tabs` is true in list mode, where a file can open in a new tab; otherwise the first item opens the preview. */
 	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
+	showAssetTabContextMenu: (pinned: boolean) => Promise<"pin" | "unpin" | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	showCanvasContextMenu: () => Promise<"add_files" | null>;

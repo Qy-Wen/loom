@@ -459,6 +459,10 @@ export const messages = defineLocale(
 		},
 		tabs: {
 			label: "Open files",
+			pin: "Pin Tab",
+			unpin: "Unpin Tab",
+			pinned: "Pinned tab",
+			preview: "Preview tab. Right-click to pin.",
 			close: (name: string) => `Close ${name}`,
 		},
 		sessions: {
@@ -1260,6 +1264,10 @@ export const messages = defineLocale(
 		},
 		tabs: {
 			label: "已打开的文件",
+			pin: "固定标签页",
+			unpin: "取消固定",
+			pinned: "已固定的标签页",
+			preview: "预览标签页。右键可固定。",
 			close: (name) => `关闭 ${name}`,
 		},
 		sessions: {

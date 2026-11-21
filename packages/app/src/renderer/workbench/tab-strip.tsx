@@ -20,6 +20,7 @@ export function TabStrip({
 	assets,
 	onActivate,
 	onClose,
+	onContextMenu,
 	onMove,
 	onDropFiles,
 	onDropOnCanvas,
@@ -28,6 +29,7 @@ export function TabStrip({
 	assets: readonly Asset[];
 	onActivate: (assetId: string) => void;
 	onClose: (assetId: string) => void;
+	onContextMenu: (assetId: string) => void;
 	onMove: (assetId: string, beforeId: string | null) => void;
 	/** Library files dropped on the strip: open them as tabs before `beforeId`, or at the end when null. */
 	onDropFiles: (assetIds: string[], beforeId: string | null) => void;
@@ -102,6 +104,8 @@ export function TabStrip({
 		>
 			{files.map((asset, index) => {
 				const selected = asset.assetId === tabs.active;
+				const preview = tabs.previews.includes(asset.assetId);
+				const status = preview ? t.tabs.preview : t.tabs.pinned;
 				const label = labels.get(asset.assetId) ?? asset.filename;
 				const marked = slot !== null && slot.beforeId === asset.assetId && dragging !== asset.assetId
 					&& files[index - 1]?.assetId !== dragging;
@@ -112,8 +116,12 @@ export function TabStrip({
 					<div
 						key={asset.assetId}
 						className={`asset-tab${selected ? " active" : ""}${dragging === asset.assetId ? " dragging" : ""}${marked ? " drop-before" : ""}${markedEnd ? " drop-after" : ""}${canvasTarget === asset.assetId ? " canvas-drop-target" : ""}`}
-						data-tooltip={asset.relativePath}
+						data-tooltip={`${asset.relativePath}\n${status}`}
 						draggable
+						onContextMenu={(event) => {
+							event.preventDefault();
+							onContextMenu(asset.assetId);
+						}}
 						onDragStart={(event) => {
 							event.dataTransfer.effectAllowed = "move";
 							event.dataTransfer.setData(LOOM_TAB_DRAG, asset.assetId);
@@ -153,7 +161,15 @@ export function TabStrip({
 							type="button"
 							role="tab"
 							aria-selected={selected}
+							aria-description={status}
+							aria-keyshortcuts="Shift+F10"
 							onClick={() => onActivate(asset.assetId)}
+							onKeyDown={(event) => {
+								if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
+									event.preventDefault();
+									if (!event.repeat) onContextMenu(asset.assetId);
+								}
+							}}
 							onMouseDown={(event) => {
 								// Windows starts autoscroll on middle press; a middle click closes the tab.
 								if (event.button === 1) event.preventDefault();
@@ -162,7 +178,13 @@ export function TabStrip({
 								if (event.button === 1) onClose(asset.assetId);
 							}}
 						>
-							<span>{label}</span>
+							<span className="asset-tab-name">{label}</span>
+							{!preview && (
+								<svg className="asset-tab-pin" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"
+									fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+									<path d="M5 2h6M6 2v3L4 7v2h8V7l-2-2V2M8 9v5" transform="rotate(36 8 8)" />
+								</svg>
+							)}
 						</button>
 						<button
 							type="button"

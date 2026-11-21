@@ -166,5 +166,5 @@ test("dropping native files imports them and inserts references only in edit mod
 	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
 	await expect(loomPage.locator(".cm-content [data-asset-id]")).toHaveCount(2);
 	await loomPage.locator(".cm-content [data-asset-id]").filter({ hasText: "外部 (1).txt" }).click();
-	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveText("外部 (1).txt");
+	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveAccessibleName("外部 (1).txt");
 });

@@ -26,6 +26,7 @@ const api: LoomApi = {
 	removeAssetTag: (assetId, tagId) => ipcRenderer.invoke(IPC.removeAssetTag, assetId, tagId),
 	showAssetContextMenu: (assetId, canPaste, single, tabs) =>
 		ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste, single, tabs),
+	showAssetTabContextMenu: (pinned) => ipcRenderer.invoke(IPC.showAssetTabContextMenu, pinned),
 	showFolderContextMenu: (relativePath, canPaste, single) =>
 		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
 	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),

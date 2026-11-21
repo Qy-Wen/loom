@@ -187,22 +187,28 @@
 }
 
 .asset-tab > button[role="tab"] {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-2);
 	min-width: 0;
 	flex: 1;
 	padding: 0 var(--lm-space-2) 0 var(--lm-space-6);
-	overflow: hidden;
+	color: var(--lm-text-primary);
 	text-align: left;
-	text-overflow: ellipsis;
 	white-space: nowrap;
 }
 
-.asset-tab > button[role="tab"] > span {
+.asset-tab-name {
+	overflow: hidden;
+	text-overflow: ellipsis;
 	pointer-events: none;
 }
 
-.asset-tab.active > button[role="tab"] {
-	color: var(--lm-text-primary);
-	font-weight: var(--lm-weight-semibold);
+.asset-tab-pin {
+	flex: none;
+	margin-inline-start: auto;
+	color: var(--lm-text-muted);
+	pointer-events: none;
 }
 
 .asset-tab.active::after {
@@ -210,9 +216,8 @@
 	right: 6px;
 	bottom: 0;
 	left: 8px;
-	height: 2px;
+	border-block-end: 2px solid var(--lm-surface-inverse);
 	border-radius: var(--lm-radius-line);
-	background: var(--lm-surface-inverse);
 	content: "";
 	pointer-events: none;
 }

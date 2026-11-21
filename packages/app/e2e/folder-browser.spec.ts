@@ -30,7 +30,7 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 
 	// List mode is unchanged: files in the tree open in tabs, and there is no browser.
 	await sidebar.locator(".asset-row").filter({ hasText: "cover.png" }).click();
-	await expect(strip.getByRole("tab", { selected: true })).toHaveText("cover.png");
+	await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("cover.png");
 	await expect(browser).toHaveCount(0);
 
 	await display.getByRole("button", { name: "Icons", exact: true }).click();
@@ -186,7 +186,7 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	await expect(loomPage.locator(".folder-browser")).toHaveCount(0);
 	await expect(sidebar.locator(".asset-row").first()).toBeVisible();
 	await sidebar.locator(".asset-row").filter({ hasText: "cover.png" }).click();
-	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveText("cover.png");
+	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveAccessibleName("cover.png");
 });
 
 test("icon-mode root heading and sidebar blank area return from folders, favorites, and tags", async ({ loomPage, electronApp }) => {

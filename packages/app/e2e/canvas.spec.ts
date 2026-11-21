@@ -186,7 +186,7 @@ test("switching from a canvas tab to icon mode selects the canvas and opens it o
 	const tile = page.locator(".folder-browser .browser-tile").filter({ hasText: "Board.canvas" });
 	const preview = page.getByRole("dialog", { name: "File preview", exact: true });
 	const board = preview.getByRole("region", { name: "Canvas Board.canvas" });
-	await sidebar.locator(".asset-row").filter({ hasText: "Board.canvas" }).click();
+	await sidebar.locator(".asset-row").filter({ hasText: "Board.canvas" }).click({ button: "middle" });
 	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
 	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
 	await expect(tile).toHaveClass(/selected/);

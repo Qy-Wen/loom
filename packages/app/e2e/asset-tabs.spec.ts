@@ -42,7 +42,7 @@ test("table and graph open an asset in the selected library display", async ({ l
 			await expect(button(mode)).toHaveAttribute("aria-pressed", "true");
 			await expect(target).toBeVisible();
 			if (mode === "List") {
-				await expect(page.getByRole("tab", { selected: true })).toHaveText("target.md");
+				await expect(page.getByRole("tab", { selected: true })).toHaveAccessibleName("target.md");
 			} else {
 				await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
 				await overlay.getByRole("button", { name: "Close preview", exact: true }).click();
@@ -59,7 +59,90 @@ test("table and graph open an asset in the selected library display", async ({ l
 	await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
 });
 
-test("asset tabs follow browser rules and close with their file", async ({ loomPage, electronApp }) => {
+test("canvas and Markdown previews can be pinned and unpinned from the tab menu", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await writeFile(join(root, "Board.canvas"), JSON.stringify({ nodes: [], edges: [] }));
+	for (const name of ["First.md", "Second.md", "Third.md"]) await writeFile(join(root, name), "# Note");
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => ["Pin Tab", "Unpin Tab", "Open in new tab"].includes(item.label) && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+
+	const file = (name: string) => page.locator(".library-sidebar .asset-row").filter({ has: page.getByText(name, { exact: true }) });
+	const strip = page.getByRole("tablist", { name: "Open files" });
+	const names = strip.locator(".asset-tab-name");
+	const tab = (name: string) => strip.getByRole("tab", { name, exact: true });
+	const selected = strip.getByRole("tab", { selected: true });
+
+	for (const name of ["First.md", "Board.canvas", "Second.md"]) {
+		await file(name).click();
+		await expect(names).toHaveText([name]);
+		await expect(selected).toHaveText(name);
+		await expect(selected).toHaveAccessibleDescription(/Preview tab/);
+		await expect(selected).toHaveCSS("font-style", "normal");
+		await expect(selected.locator(".asset-tab-pin")).toHaveCount(0);
+	}
+
+	await file("Board.canvas").dblclick();
+	await tab("Board.canvas").dblclick();
+	await expect(tab("Board.canvas")).toHaveAccessibleDescription(/Preview tab/);
+	await tab("Board.canvas").click({ button: "right" });
+	await expect(tab("Board.canvas")).toHaveAccessibleDescription("Pinned tab");
+	await expect(tab("Board.canvas")).toHaveCSS("font-style", "normal");
+	await expect(tab("Board.canvas").locator(".asset-tab-pin")).toBeVisible();
+	await expect(page.getByRole("region", { name: "Canvas Board.canvas" })).toBeVisible();
+
+	await file("First.md").click();
+	await tab("Board.canvas").click({ button: "right" });
+	await expect(tab("Board.canvas")).toHaveAccessibleDescription(/Preview tab/);
+	await expect(tab("Board.canvas").locator(".asset-tab-pin")).toHaveCount(0);
+	await expect(tab("First.md")).toHaveAccessibleDescription(/Preview tab/);
+	await expect(names).toHaveText(["Board.canvas", "First.md"]);
+	await expect(selected).toHaveAccessibleName("First.md");
+	await file("Second.md").click();
+	await expect(names).toHaveText(["Board.canvas", "Second.md"]);
+	await expect(selected).toHaveAccessibleName("Second.md");
+
+	await tab("Board.canvas").click({ button: "right" });
+	await expect(tab("Board.canvas")).toHaveAccessibleDescription("Pinned tab");
+	for (const colorScheme of ["light", "dark"] as const) {
+		await page.emulateMedia({ colorScheme });
+		const pinnedColor = await tab("Board.canvas").evaluate((element) => getComputedStyle(element).color);
+		await expect(tab("Second.md")).toHaveCSS("color", pinnedColor);
+	}
+	await page.emulateMedia({ colorScheme: null });
+	const tabWidths = () => strip.locator(".asset-tab").evaluateAll((elements) =>
+		elements.map((element) => element.getBoundingClientRect().width));
+	const widthsBeforeSelection = await tabWidths();
+	await tab("Board.canvas").click();
+	await expect(selected).toHaveAccessibleName("Board.canvas");
+	await expect.poll(tabWidths).toEqual(widthsBeforeSelection);
+	await tab("Second.md").press("Shift+F10");
+	await expect(tab("Second.md")).toHaveAccessibleDescription("Pinned tab");
+	await expect(tab("Second.md")).toBeFocused();
+	await expect(selected).toHaveAccessibleName("Board.canvas");
+	await file("Third.md").click();
+	await expect(names).toHaveText(["Board.canvas", "Third.md", "Second.md"]);
+	await file("First.md").click({ button: "right" });
+	await expect(names).toHaveText(["Board.canvas", "Third.md", "First.md", "Second.md"]);
+	await expect(selected).toHaveAccessibleName("First.md");
+	await expect(selected).toHaveAccessibleDescription(/Preview tab/);
+	await expect(selected.locator(".asset-tab-pin")).toHaveCount(0);
+	await file("Board.canvas").click({ button: "right" });
+	await expect(names).toHaveText(["Board.canvas", "Third.md", "First.md", "Second.md"]);
+	await expect(selected).toHaveAccessibleName("Board.canvas");
+	await expect(selected).toHaveAccessibleDescription("Pinned tab");
+	await file("Third.md").click({ button: "middle" });
+	await expect(names).toHaveText(["Board.canvas", "Third.md", "First.md", "Second.md"]);
+	await expect(tab("Third.md")).toHaveAccessibleDescription("Pinned tab");
+});
+
+test("asset tabs can be opened, moved and closed with their files", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(45000);
 	const previousRoot = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
@@ -83,6 +166,7 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(path);
 	}
 	const strip = loomPage.getByRole("tablist", { name: "Open files" });
+	const names = strip.locator(".asset-tab-name");
 	const tree = loomPage.locator(".library-sidebar, aside").first();
 	const file = (name: string) => tree.locator(".asset-row").filter({ hasText: name }).first();
 	// A real mouse drag: the welcome page only takes a drop that started from a tree row.
@@ -101,32 +185,32 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 
 		await file("alpha.png").click();
 		await expect(strip.getByRole("tab")).toHaveCount(1);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
 
-		// A plain click replaces the active tab.
+		// A plain click replaces the preview.
 		await file("beta.png").click();
 		await expect(strip.getByRole("tab")).toHaveCount(1);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
 		// Right-click moves the tree focus but must not change the shown tab.
 		await file("alpha.png").click({ button: "right" });
 		await loomPage.keyboard.press("Escape");
 		await expect(strip.getByRole("tab")).toHaveCount(1);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
 		// Middle-click opens a new tab next to it.
 		await file("alpha.png").click({ button: "middle" });
-		await expect(strip.getByRole("tab")).toHaveText(["beta.png", "alpha.png"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
+		await expect(names).toHaveText(["beta.png", "alpha.png"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
 
 		// A file that is already open is shown, not duplicated.
 		await file("beta.png").click();
 		await expect(strip.getByRole("tab")).toHaveCount(2);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
 		// Clicking a tab selects it in the tree.
 		await strip.getByRole("tab", { name: "alpha.png" }).click();
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
 		await expect(file("alpha.png")).toHaveClass(/selected/);
 
 		// Two open files with the same name show their folder.
@@ -143,7 +227,7 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 
 		await file("notes.md").click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(5);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("notes.md");
 		const titleBar = loomPage.locator(".window-bar");
 		await expect(loomPage.locator(".workbench").getByRole("tablist", { name: "Open files" })).toBeVisible();
 		await expect(strip).toHaveCSS("-webkit-app-region", "no-drag");
@@ -198,78 +282,69 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		await expect(notesEditor.getByRole("heading", { level: 1 })).toContainText("hello");
 
 		// Dragging a tab reorders it; the active tab stays active.
-		const names = () => strip.getByRole("tab");
-		await expect(names()).toHaveText(["beta.png", "alpha.png", "same.png · one", "same.png · two", "notes.md"]);
-		const box = async (name: string) => (await strip.getByRole("tab", { name }).boundingBox())!;
-		const last = await box("notes.md");
-		await strip.getByRole("tab", { name: "beta.png" }).dragTo(strip.getByRole("tab", { name: "notes.md" }), {
-			targetPosition: { x: last.width - 4, y: last.height / 2 },
-		});
-		await expect(names()).toHaveText(["alpha.png", "same.png · one", "same.png · two", "notes.md", "beta.png"]);
-		const first = await box("alpha.png");
-		await strip.getByRole("tab", { name: "notes.md" }).dragTo(strip.getByRole("tab", { name: "alpha.png" }), {
-			targetPosition: { x: 4, y: first.height / 2 },
-		});
-		await expect(names()).toHaveText(["notes.md", "alpha.png", "same.png · one", "same.png · two", "beta.png"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
+		await expect(names).toHaveText(["beta.png", "alpha.png", "same.png · one", "same.png · two", "notes.md"]);
+		const tab = (name: string) => strip.getByRole("tab", { name, exact: true });
+		const closeButton = (name: string) => strip.getByRole("button", { name: `Close ${name}`, exact: true });
+		await tab("beta.png").dragTo(closeButton("notes.md"));
+		await expect(names).toHaveText(["alpha.png", "same.png · one", "same.png · two", "notes.md", "beta.png"]);
+		await tab("notes.md").dragTo(tab("alpha.png"), { targetPosition: { x: 4, y: 10 } });
+		await expect(names).toHaveText(["notes.md", "alpha.png", "same.png · one", "same.png · two", "beta.png"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("notes.md");
 		// A tab dropped on the file tree is not a file move.
 		await strip.getByRole("tab", { name: "notes.md" }).dragTo(tree.locator(".folder-main").filter({ hasText: "one" }).first());
-		await expect(names()).toHaveCount(5);
+		await expect(names).toHaveCount(5);
 		expect((await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.find((asset) => asset.filename === "notes.md")!.relativePath).toBe("notes.md");
 		// Put the tabs back in the order the rest of the test expects.
-		await strip.getByRole("tab", { name: "notes.md" }).dragTo(strip.getByRole("tab", { name: "beta.png" }), {
-			targetPosition: { x: (await box("beta.png")).width - 4, y: 10 },
-		});
-		await expect(names()).toHaveText(["alpha.png", "same.png · one", "same.png · two", "beta.png", "notes.md"]);
+		await tab("notes.md").dragTo(closeButton("beta.png"));
+		await expect(names).toHaveText(["alpha.png", "same.png · one", "same.png · two", "beta.png", "notes.md"]);
 
 		// Closing the active tab shows a neighbour.
 		await strip.getByRole("button", { name: "Close notes.md" }).click();
 		await expect(strip.getByRole("tab")).toHaveCount(4);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
 		// Middle-click on a tab closes it.
 		await strip.getByRole("tab", { name: "beta.png" }).click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(3);
 		for (let i = 0; i < 2; i++) await strip.getByRole("button", { name: "Close same.png" }).first().click();
-		await expect(strip.getByRole("tab")).toHaveText(["alpha.png"]);
+		await expect(names).toHaveText(["alpha.png"]);
 
 		// Dragging files from the tree onto the strip opens them as tabs.
 		const modifier = process.platform === "darwin" ? "Meta" : "Control";
 		await file("beta.png").click();
-		await expect(strip.getByRole("tab")).toHaveText(["beta.png"]);
+		await expect(names).toHaveText(["alpha.png", "beta.png"]);
 		await file("notes.md").dragTo(strip.getByRole("tab", { name: "beta.png" }), { targetPosition: { x: 4, y: 10 } });
-		await expect(strip.getByRole("tab")).toHaveText(["notes.md", "beta.png"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
+		await expect(names).toHaveText(["alpha.png", "notes.md", "beta.png"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("notes.md");
 		await expect(file("notes.md")).toHaveClass(/selected/);
 		// A file that is already open moves instead of duplicating.
-		const endBox = (await strip.getByRole("tab", { name: "beta.png" }).boundingBox())!;
-		await file("notes.md").dragTo(strip.getByRole("tab", { name: "beta.png" }), { targetPosition: { x: endBox.width - 4, y: 10 } });
-		await expect(strip.getByRole("tab")).toHaveText(["beta.png", "notes.md"]);
+		await file("notes.md").dragTo(closeButton("beta.png"));
+		await expect(names).toHaveText(["alpha.png", "beta.png", "notes.md"]);
 		// A folder has no view, so the strip does not take it.
 		await tree.locator(".folder-main").filter({ hasText: "one" }).first().dragTo(strip.getByRole("tab", { name: "beta.png" }));
-		await expect(strip.getByRole("tab")).toHaveCount(2);
+		await expect(strip.getByRole("tab")).toHaveCount(3);
 		// With no tab open, dropping on the workbench opens the file.
-		for (const name of ["beta.png", "notes.md"]) await strip.getByRole("button", { name: `Close ${name}` }).click();
+		for (const name of ["alpha.png", "beta.png", "notes.md"]) await strip.getByRole("button", { name: `Close ${name}` }).click();
 		await expect(strip).toHaveCount(0);
 		await dragToWorkbench("alpha.png");
-		await expect(strip.getByRole("tab")).toHaveText(["alpha.png"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
+		await expect(names).toHaveText(["alpha.png"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
 		await expect(loomPage.locator(".welcome")).toHaveCount(0);
 
 		// Several selected files all open as tabs, in tree order, and the first is shown.
-		// Ctrl/Cmd-clicking builds the selection and shows the file it ends on, so the one open tab is now notes.md.
+		// Ctrl/Cmd-clicking builds the selection while keeping the current tab.
 		await file("beta.png").click({ modifiers: [modifier] });
 		await file("notes.md").click({ modifiers: [modifier] });
 		for (const name of ["alpha.png", "beta.png", "notes.md"]) await expect(file(name)).toHaveClass(/selected/);
-		await expect(strip.getByRole("tab")).toHaveText(["notes.md"]);
-		await file("beta.png").dragTo(strip.getByRole("tab", { name: "notes.md" }), { targetPosition: { x: 4, y: 10 } });
-		await expect(strip.getByRole("tab")).toHaveText(["alpha.png", "beta.png", "notes.md"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("alpha.png");
+		await expect(names).toHaveText(["alpha.png"]);
+		await file("beta.png").dragTo(strip.getByRole("tab", { name: "alpha.png" }), { targetPosition: { x: 4, y: 10 } });
+		await expect(names).toHaveText(["alpha.png", "beta.png", "notes.md"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
 
 		// Removing a file externally closes its tab through the library watcher.
 		await rm(join(root, "alpha.png"));
-		await expect(strip.getByRole("tab")).toHaveText(["beta.png", "notes.md"]);
-		await expect(strip.getByRole("tab", { selected: true })).toHaveText("beta.png");
+		await expect(names).toHaveText(["beta.png", "notes.md"]);
+		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
 		// Switching library forgets every tab.
 		await file("beta.png").click();

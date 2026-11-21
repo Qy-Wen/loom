@@ -5,38 +5,72 @@ import {
 	closeTab,
 	emptyAssetTabs,
 	insertTabs,
+	setTabPinned,
 	moveTab,
 	openInNewTab,
 	pruneTabs,
-	showInTab,
+	showPreviewTab,
 	tabLabels,
 	type AssetTabs,
 } from "../src/renderer/workbench/asset-tabs.ts";
 
-const tabs = (ids: string[], active: string | null): AssetTabs => ({ ids, active });
+const tabs = (ids: string[], active: string | null, ...previews: string[]): AssetTabs => ({ ids, active, previews });
 
 describe("asset tabs", () => {
-	it("shows the first file in a new tab", () => {
-		assert.deepEqual(showInTab(emptyAssetTabs, "a"), tabs(["a"], "a"));
+	it("opens the preview beside the active pinned tab", () => {
+		assert.deepEqual(showPreviewTab(emptyAssetTabs, "a"), tabs(["a"], "a", "a"));
+		assert.deepEqual(showPreviewTab(tabs(["a", "b"], "a"), "c"), tabs(["a", "c", "b"], "c", "c"));
 	});
 
-	it("replaces the active tab on a plain click, like following a link", () => {
-		assert.deepEqual(showInTab(tabs(["a", "b", "c"], "b"), "d"), tabs(["a", "d", "c"], "d"));
+	it("replaces the preview in place even when a pinned tab is active", () => {
+		assert.deepEqual(showPreviewTab(tabs(["a", "b", "c"], "c", "b"), "d"), tabs(["a", "d", "c"], "d", "d"));
 	});
 
-	it("switches to the tab that already has the file instead of duplicating it", () => {
-		assert.deepEqual(showInTab(tabs(["a", "b"], "b"), "a"), tabs(["a", "b"], "a"));
-		const same = tabs(["a", "b"], "a");
-		assert.equal(showInTab(same, "a"), same);
+	it("activates an existing tab and retains the preview", () => {
+		assert.deepEqual(showPreviewTab(tabs(["a", "b"], "b", "b"), "a"), tabs(["a", "b"], "a", "b"));
+		assert.deepEqual(showPreviewTab(tabs(["a", "b"], "a", "b"), "b"), tabs(["a", "b"], "b", "b"));
+		const same = tabs(["a", "b"], "b", "b");
+		assert.equal(showPreviewTab(same, "b"), same);
+	});
+
+	it("pins the preview without activating it and ignores a stale menu choice", () => {
+		const current = tabs(["a", "b"], "a", "b");
+		assert.deepEqual(setTabPinned(current, "b", true), tabs(["a", "b"], "a"));
+		assert.equal(setTabPinned(current, "a", true), current);
+		assert.equal(setTabPinned(current, "missing", false), current);
+	});
+
+	it("unpins in place and replaces only the most recently viewed preview", () => {
+		const current = tabs(["a", "b"], "b", "b");
+		const both = setTabPinned(current, "a", false);
+		assert.deepEqual(both, tabs(["a", "b"], "b", "a", "b"));
+		assert.deepEqual(showPreviewTab(both, "c"), tabs(["a", "c"], "c", "a", "c"));
+		assert.deepEqual(showPreviewTab(activateTab(both, "a"), "c"), tabs(["c", "b"], "c", "b", "c"));
+		assert.deepEqual(setTabPinned(tabs(["a", "b"], "a", "b"), "a", false), tabs(["a", "b"], "a", "b", "a"));
 	});
 
 	it("opens a new tab right of the active one", () => {
 		assert.deepEqual(openInNewTab(tabs(["a", "b", "c"], "a"), "d"), tabs(["a", "d", "b", "c"], "d"));
 		assert.deepEqual(openInNewTab(tabs(["a", "b"], "b"), "c"), tabs(["a", "b", "c"], "c"));
 		assert.deepEqual(openInNewTab(emptyAssetTabs, "a"), tabs(["a"], "a"));
+		assert.deepEqual(openInNewTab(tabs(["a"], "a", "a"), "b"), tabs(["a", "b"], "b", "a"));
 	});
 
-	it("does not duplicate a file when asked to open it in a new tab", () => {
+	it("opens a separate preview and reuses it on the next ordinary open", () => {
+		const current = tabs(["a", "b", "c"], "b", "b");
+		const next = openInNewTab(current, "d", "preview");
+		assert.deepEqual(next, tabs(["a", "b", "d", "c"], "d", "b", "d"));
+		assert.deepEqual(showPreviewTab(next, "e"), tabs(["a", "b", "e", "c"], "e", "b", "e"));
+	});
+
+	it("keeps an existing tab's pin state when asked to open a preview", () => {
+		const current = tabs(["a", "b", "c"], "c", "b", "c");
+		assert.deepEqual(openInNewTab(current, "a", "preview"), tabs(["a", "b", "c"], "a", "b", "c"));
+		assert.deepEqual(openInNewTab(current, "b", "preview"), tabs(["a", "b", "c"], "b", "c", "b"));
+	});
+
+	it("pins a preview in place and activates existing pinned tabs", () => {
+		assert.deepEqual(openInNewTab(tabs(["a", "b"], "a", "b"), "b"), tabs(["a", "b"], "b"));
 		assert.deepEqual(openInNewTab(tabs(["a", "b"], "a"), "b"), tabs(["a", "b"], "b"));
 	});
 
@@ -55,6 +89,8 @@ describe("asset tabs", () => {
 
 	it("keeps the active tab when another one closes", () => {
 		assert.deepEqual(closeTab(tabs(["a", "b", "c"], "c"), "a"), tabs(["b", "c"], "c"));
+		assert.deepEqual(closeTab(tabs(["a", "b"], "a", "b"), "b"), tabs(["a"], "a"));
+		assert.deepEqual(closeTab(tabs(["a", "b"], "a", "b"), "a"), tabs(["b"], "b", "b"));
 		const current = tabs(["a"], "a");
 		assert.equal(closeTab(current, "x"), current);
 	});
@@ -96,9 +132,16 @@ describe("asset tabs", () => {
 		assert.equal(insertTabs(current, [], null), current);
 	});
 
+	it("pins a dropped preview and preserves an unrelated preview", () => {
+		const current = tabs(["a", "b"], "b", "a");
+		assert.deepEqual(insertTabs(current, ["a"], null), tabs(["b", "a"], "a"));
+		assert.deepEqual(insertTabs(current, ["c"], null), tabs(["a", "b", "c"], "c", "a"));
+	});
+
 	it("drops tabs whose file left the library and falls back to a neighbour", () => {
 		assert.deepEqual(pruneTabs(tabs(["a", "b", "c"], "b"), (id) => id !== "b"), tabs(["a", "c"], "c"));
 		assert.deepEqual(pruneTabs(tabs(["a", "b", "c"], "a"), (id) => id === "a"), tabs(["a"], "a"));
+		assert.deepEqual(pruneTabs(tabs(["a", "b"], "a", "a"), (id) => id === "b"), tabs(["b"], "b"));
 		assert.deepEqual(pruneTabs(tabs(["a", "b"], "a"), () => false), emptyAssetTabs);
 		const current = tabs(["a", "b"], "a");
 		assert.equal(pruneTabs(current, () => true), current);

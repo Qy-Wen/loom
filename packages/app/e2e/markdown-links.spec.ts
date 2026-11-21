@@ -49,7 +49,7 @@ test("links in Markdown reading mode open the file and offscreen headings, and a
 		// A missing target is not followed.
 		await broken.click();
 		await expect(body.getByRole("heading", { name: "说明正文" })).toHaveCount(0);
-		await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveText("脚本.md");
+		await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveAccessibleName("脚本.md");
 
 		// A link to a file opens that file.
 		await body.locator("[data-asset-id]").first().click();

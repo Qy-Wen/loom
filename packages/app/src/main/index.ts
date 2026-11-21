@@ -649,6 +649,13 @@ function registerIpc(): void {
 		},
 	);
 
+	ipcMain.handle(IPC.showAssetTabContextMenu, async (event, pinned: boolean) => {
+		const { t } = await uiCopy();
+		return popupContextMenu<"pin" | "unpin">(event, [
+			{ label: pinned ? t.tabs.unpin : t.tabs.pin, click: () => pinned ? "unpin" : "pin" },
+		]);
+	});
+
 	ipcMain.handle(
 		IPC.showFolderContextMenu,
 		async (event, relativePath: string, canPaste: boolean, single: boolean): Promise<FolderContextAction | null> => {
