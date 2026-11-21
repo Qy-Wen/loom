@@ -4,6 +4,8 @@
 
 For prerequisites and startup, see the [quick start](../README.md#quick-start).
 
+Stop `pnpm dev` before running `pnpm run dev:win-style` from the repository root to preview the Windows layout on macOS. The preview keeps the macOS window controls and shortcuts.
+
 ## Package boundaries
 
 - `packages/core` owns library files and stable asset IDs, metadata, relations, retrieval, and media processing. `LocalCore` is the domain facade; stores and internal services stay private. The root entry exports domain types, provider contracts, and shared path/binary helpers. Grading and process sandboxing use `@loom/core/grade` and `@loom/core/sandbox`.

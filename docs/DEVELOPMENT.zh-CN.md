@@ -4,6 +4,8 @@
 
 环境要求与启动步骤见[快速开始](../README.zh-CN.md#快速开始)。
 
+先停止 `pnpm dev`，再从仓库根目录运行 `pnpm run dev:win-style`，即可在 macOS 上预览 Windows 布局。预览仍使用 macOS 的窗口控制按钮和快捷键。
+
 ## 包边界
 
 - `packages/core` 负责库文件、稳定素材 ID、元数据、关系、检索和媒体处理。`LocalCore` 是领域入口，存储与内部服务不对外公开。根入口导出领域类型、provider 接口及共用的路径和二进制定位工具；调色工具与进程沙箱分别走 `@loom/core/grade`、`@loom/core/sandbox`。

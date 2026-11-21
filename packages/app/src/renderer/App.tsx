@@ -197,7 +197,10 @@ export function App(): React.JSX.Element {
 	const assetIds = useMemo(() => new Set(library.assets.map((asset) => asset.assetId)), [library.assets]);
 	const visibleAssetId = workbenchView === "library" && libraryAssetId && assetIds.has(libraryAssetId) ? libraryAssetId : null;
 	const navigation = useAssetHistory(library.rootPath, visibleAssetId, assetIds);
-	const mac = uiPlatform(navigator.userAgent) === "mac";
+	const platform = uiPlatform(navigator.userAgent);
+	const mac = platform === "mac";
+	const windowsPreview = mac && import.meta.env.DEV && import.meta.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
+	const macLayout = mac && !windowsPreview;
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
 	const [propertyValues, setPropertyValues] = useState<AssetPropertyValue[]>([]);
 	const [opening, setOpening] = useState(false);
@@ -1597,7 +1600,7 @@ export function App(): React.JSX.Element {
 				{sandboxNotice
 					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
-				{!mac && (
+				{!macLayout && (
 					<header className={`window-bar overlay${fullscreen ? " fullscreen" : ""}`}>
 						{windowActions}
 						<div className="window-drag-space" aria-hidden="true" />
@@ -1607,10 +1610,10 @@ export function App(): React.JSX.Element {
 				<div
 					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.dockSplitFrame ? " dock-split-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
 					ref={shellRef}
-					data-mac-fullscreen={mac && fullscreen || undefined}
+					data-mac-fullscreen={macLayout && fullscreen || undefined}
 					style={{
 						...shellStyle,
-						...({ "--window-corner": navigator.userAgent.includes("Windows") ? "8px" : "16px" } as CSSProperties),
+						...({ "--window-corner": platform === "windows" || windowsPreview ? "8px" : "16px" } as CSSProperties),
 						...(bottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
 						...(above ? { "--above-height": `${panels.aboveHeight}px` } : {}),
 						...(panels.dockSplitFrame ? {
@@ -1639,11 +1642,11 @@ export function App(): React.JSX.Element {
 						} : {}),
 					}}
 				>
-					{mac && <div className="mac-window-actions">{windowActions}</div>}
+					{macLayout && <div className="mac-window-actions">{windowActions}</div>}
 					<LibrarySidebar
 						library={library}
 						display={display}
-						reserveWindowControls={mac}
+						reserveWindowControls={macLayout}
 						footerActions={<>
 							<SettingsButton onOpen={() => setSettingsOpen(true)} />
 							<TracesButton onOpen={() => void window.loom.openDevTrace()} />
@@ -1692,7 +1695,7 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{mac ? (
+						{macLayout ? (
 							<header className="window-bar mac">
 								{assetTabStrip}
 								<div className="window-drag-space" aria-hidden="true" />

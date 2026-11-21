@@ -397,6 +397,8 @@ async function thumbnailResponse(assetId: string, versioned: boolean, request: R
 
 function createWindow(): void {
 	const mac = process.platform === "darwin";
+	const windowsPreview = mac && !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
+		&& process.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
 	const win = new BrowserWindow({
 		width: 1200,
 		height: 800,
@@ -406,10 +408,10 @@ function createWindow(): void {
 		backgroundColor: windowColors().background,
 		// Test runs open and close many windows. Keep them off the user's desktop (see LOOM_E2E_VISIBLE).
 		show: !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1"),
-		titleBarStyle: mac ? "hiddenInset" : "hidden",
-		...(mac
-			? { trafficLightPosition: { x: 14, y: 13 } }
-			: { titleBarOverlay: { color: windowColors().titleBar, symbolColor: windowColors().titleBarSymbol, height: 40 } }),
+		// In the preview, keep native macOS controls above the simulated Windows toolbar.
+		titleBarStyle: windowsPreview ? "default" : mac ? "hiddenInset" : "hidden",
+		...(mac && !windowsPreview && { trafficLightPosition: { x: 14, y: 13 } }),
+		...(!mac && { titleBarOverlay: { color: windowColors().titleBar, symbolColor: windowColors().titleBarSymbol, height: 40 } }),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
