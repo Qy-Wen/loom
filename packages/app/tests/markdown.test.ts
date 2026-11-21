@@ -127,7 +127,8 @@ function libraryAsset(assetId: string, relativePath: string): Asset {
 test("renderMarkdown embeds media on its own line and keeps embeds in tables compact", () => {
 	const clip: Asset = { ...libraryAsset("clip", "clip.mp4"), type: "video" };
 	const context = { fromRelativePath: "script.md", assets: [clip] };
-	assert.match(renderMarkdown('![[clip.mp4|A "quoted" <title>]]', context), /<video[^>]+aria-label="A &quot;quoted&quot; &lt;title&gt;"[^>]+preload="none"/);
+	const video = renderMarkdown('![[clip.mp4|A "quoted" <title>]]', context);
+	assert.match(video, /<video[^>]+poster="loom-asset:\/\/poster\/clip\?v=2-5"[^>]+aria-label="A &quot;quoted&quot; &lt;title&gt;"[^>]+preload="none"/);
 	const table = renderMarkdown("| Media |\n| --- |\n| ![[clip.mp4]] |", context);
 	assert.match(table, /<td><a class="markdown-embed-file markdown-file-link"[^>]+data-asset-id="clip"/);
 	assert.doesNotMatch(table, /<video/);

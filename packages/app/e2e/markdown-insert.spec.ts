@@ -222,6 +222,15 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
 	const embeds = editor.locator(".cm-wiki-embed");
 	await expect(embeds).toHaveCount(6);
+	const video = embeds.locator("video");
+	const poster = embeds.locator(".markdown-embed-video > img");
+	await expect(video).toHaveAttribute("poster", /^loom-asset:\/\/poster\//);
+	await expect.poll(() => poster.evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight)).toBeCloseTo(4 / 3, 2);
+	const videoSize = () => video.evaluate((element) => {
+		const { width, height } = element.getBoundingClientRect();
+		return { width, height };
+	});
+	const beforePlayback = await videoSize();
 	for (const kind of ["video", "audio"]) {
 		const player = embeds.locator(kind);
 		await expect(player).toHaveCount(1);
@@ -232,7 +241,8 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 		});
 		await expect(player).toBeVisible();
 	}
-	await expect.poll(() => embeds.locator("video").evaluate((video: HTMLVideoElement) => {
+	await expect.poll(videoSize).toEqual(beforePlayback);
+	await expect.poll(() => video.evaluate((video: HTMLVideoElement) => {
 		const bounds = video.getBoundingClientRect();
 		return Math.abs(bounds.width / bounds.height - video.videoWidth / video.videoHeight);
 	})).toBeLessThan(0.01);
@@ -328,6 +338,36 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 	await expect(picture("First picture")).toBeVisible();
 	await picture("First picture").click({ button: "right" });
 	await expect(originalImage).toBeVisible();
+});
+
+test("the Markdown editor and its video shrink while dragging the right sidebar divider", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	await copyFile(new URL("../../core/tests/fixtures/media/clip.mp4", import.meta.url), join(root, "clip.mp4"));
+	await writeFile(join(root, "commands.md"), "# Video\n\n![[clip.mp4]]\n\nText after the video.\n");
+	await openNote(page);
+	const video = page.locator(".markdown-embed-video video");
+	await expect(video).toBeVisible();
+	const geometry = () => video.evaluate((element) => {
+		const scroller = element.closest(".cm-scroller")!;
+		const { width, right } = element.getBoundingClientRect();
+		return { width, overflow: right - scroller.getBoundingClientRect().right };
+	});
+	const initial = await geometry();
+	const divider = (await page.locator(".side-resize").boundingBox())!;
+	const x = divider.x + divider.width / 2;
+	const y = divider.y + divider.height / 2;
+	await page.mouse.move(x, y);
+	await page.mouse.down();
+	try {
+		await page.mouse.move(x - 140, y, { steps: 6 });
+		await expect.poll(async () => (await geometry()).width).toBeLessThan(initial.width - 100);
+		await expect.poll(async () => (await geometry()).overflow).toBeLessThanOrEqual(0);
+		await page.mouse.move(x, y, { steps: 6 });
+		await expect.poll(async () => (await geometry()).width).toBeGreaterThan(initial.width - 12);
+	} finally {
+		await page.mouse.up();
+	}
 });
 
 test("backspacing an existing wiki target reopens file completion", async ({ loomPage, electronApp }) => {

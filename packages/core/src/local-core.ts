@@ -50,7 +50,7 @@ import { bestChunkPerFile, fuseChunks } from "./retrieval/deep.ts";
 import { HYBRID_CANDIDATES, uniqueInOrder } from "./retrieval/rrf.ts";
 import { rerankHits } from "./retrieval/rerank.ts";
 import { MediaService } from "./media/service.ts";
-import { ThumbnailService } from "./media/thumbnail.ts";
+import { ThumbnailService, type ThumbnailVariant } from "./media/thumbnail.ts";
 import type {
 	GradeImageArgs,
 	GradeImageResult,
@@ -251,9 +251,9 @@ export class LocalCore {
 	}
 
 	/** Absolute path of the cached preview image for an image or video, made on first request. Undefined if it has none. */
-	async getThumbnailPath(assetId: string, signal?: AbortSignal): Promise<string | undefined> {
+	async getThumbnailPath(assetId: string, signal?: AbortSignal, variant?: ThumbnailVariant): Promise<string | undefined> {
 		if (!this.tasks?.active || this.transitions) return undefined;
-		return this.thumbnails.get(assetId, signal);
+		return this.thumbnails.get(assetId, signal, variant);
 	}
 
 	renameAsset(assetId: string, stem: string): Promise<Asset> {

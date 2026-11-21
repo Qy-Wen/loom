@@ -36,8 +36,13 @@ test("thumbnails are cached under .loom, reused, shared between concurrent reque
 		assert.ok(image.startsWith(join(root, ".loom", "thumbnails")));
 		assert.equal((await readFile(image)).subarray(8, 12).toString(), "WEBP");
 
-		const video = (await core.getThumbnailPath(byName("clip.mp4").assetId))!;
+		const videoAsset = byName("clip.mp4");
+		const video = await core.getThumbnailPath(videoAsset.assetId);
 		assert.ok(video && (await stat(video)).size > 0);
+		const poster = await core.getThumbnailPath(videoAsset.assetId, undefined, "poster");
+		assert.ok(poster && (await stat(poster)).size > 0);
+		assert.notEqual(poster, video);
+		assert.equal(await core.getThumbnailPath(videoAsset.assetId, undefined, "poster"), poster);
 
 		assert.equal(await core.getThumbnailPath(byName("notes.md").assetId), undefined);
 		assert.equal(await core.getThumbnailPath(byName("broken.png").assetId), undefined);
@@ -50,21 +55,22 @@ test("thumbnails are cached under .loom, reused, shared between concurrent reque
 
 		// Concurrent requests share one job.
 		const [a, b] = await Promise.all([
-			core.getThumbnailPath(byName("clip.mp4").assetId),
-			core.getThumbnailPath(byName("clip.mp4").assetId),
+			core.getThumbnailPath(videoAsset.assetId),
+			core.getThumbnailPath(videoAsset.assetId),
 		]);
 		assert.equal(a, b);
 
-		// A changed file gets a new thumbnail.
-		await copyFile(join(FIXTURES, "still.png"), join(root, "still.png"));
-		const later = new Date(Date.now() + 5_000);
-		await utimes(join(root, "still.png"), later, later);
-		await new Promise((resolve) => setTimeout(resolve, 1500));
-		const refreshed = await core.getAsset(byName("still.png").assetId);
-		assert.ok(refreshed && refreshed.modifiedAt > byName("still.png").modifiedAt);
-		const again = (await core.getThumbnailPath(refreshed.assetId))!;
-		assert.ok(again);
-		assert.ok(Math.abs((await stat(again)).mtimeMs - refreshed.modifiedAt) < 2);
+		// Reopening reconciles the new source timestamp before checking both cached previews.
+		const later = new Date(videoAsset.modifiedAt + 5_000);
+		await utimes(join(root, videoAsset.filename), later, later);
+		const reopened = await core.openLibrary(root);
+		const refreshed = reopened.assets.find((asset) => asset.assetId === videoAsset.assetId);
+		assert.ok(refreshed && refreshed.modifiedAt > videoAsset.modifiedAt);
+		for (const variant of ["square", "poster"] as const) {
+			const path = await core.getThumbnailPath(refreshed.assetId, undefined, variant);
+			assert.ok(path);
+			assert.ok(Math.abs((await stat(path)).mtimeMs - refreshed.modifiedAt) < 2);
+		}
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });

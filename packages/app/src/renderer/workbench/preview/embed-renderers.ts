@@ -1,6 +1,6 @@
 import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
-import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
+import { assetPosterUrl, assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 
 type WikiTarget = Pick<WikiLinkMatch, "target" | "label">;
 
@@ -52,6 +52,14 @@ function imagePreview(embed: EmbedContent): string {
 	return standalone ? mediaBlock(embed, image) : image;
 }
 
+function videoPreview(embed: EmbedContent): string {
+	const poster = escapeHtml(assetPosterUrl(embed.asset));
+	// The poster image sizes the player even after the browser switches to video frames.
+	const sizingImage = `<img src="${poster}" alt="" aria-hidden="true" loading="lazy" width="640" height="360">`;
+	const player = `<video src="${embed.src}" poster="${poster}" aria-label="${embed.label}" controls playsinline preload="none" loading="lazy"></video>`;
+	return mediaBlock(embed, `<span class="markdown-embed-video">${sizingImage}${player}</span>`);
+}
+
 const renderers: readonly EmbedRenderer[] = [
 	{
 		matches: (asset) => asset.type === "image",
@@ -60,7 +68,7 @@ const renderers: readonly EmbedRenderer[] = [
 	{
 		matches: (asset) => asset.type === "video",
 		standaloneOnly: true,
-		render: (embed) => mediaBlock(embed, `<video src="${embed.src}" aria-label="${embed.label}" controls playsinline preload="none" loading="lazy" width="640" height="360"></video>`),
+		render: videoPreview,
 	},
 	{
 		matches: (asset) => asset.type === "audio",

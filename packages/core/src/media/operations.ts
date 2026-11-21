@@ -30,10 +30,13 @@ export function buildImageStillArgs(inputPath: string, outputPath: string): stri
 }
 
 /**
- * One square WebP still for list, grid, graph and chip previews, center-cropped like `object-fit: cover`.
+ * One bounded WebP still. Square thumbnails cover the box, while posters preserve the frame.
  * `seekSeconds` skips a black first frame in video.
  */
-export function buildThumbnailArgs(inputPath: string, outputPath: string, size: number, seekSeconds?: number): string[] {
+export function buildThumbnailArgs(
+	inputPath: string, outputPath: string, size: number, seekSeconds?: number, fit: "cover" | "contain" = "cover",
+): string[] {
+	const scale = `scale=${size}:${size}`;
 	return [
 		"-y",
 		...(seekSeconds ? ["-ss", formatSeconds(seekSeconds)] : []),
@@ -42,7 +45,7 @@ export function buildThumbnailArgs(inputPath: string, outputPath: string, size: 
 		"-frames:v",
 		"1",
 		"-vf",
-		`scale=${size}:${size}:force_original_aspect_ratio=increase,crop=${size}:${size}`,
+		fit === "cover" ? `${scale}:force_original_aspect_ratio=increase,crop=${size}:${size}` : `${scale}:force_original_aspect_ratio=decrease:reset_sar=1`,
 		"-c:v",
 		"libwebp",
 		"-quality",

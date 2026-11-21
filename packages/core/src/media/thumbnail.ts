@@ -8,12 +8,17 @@ import { buildThumbnailArgs } from "./operations.ts";
 import { runMediaProcess } from "./run.ts";
 
 export const THUMBNAIL_SIZE = 256;
+const POSTER_SIZE = 640;
+export type ThumbnailVariant = "square" | "poster";
+const VARIANTS = {
+	square: { suffix: ".webp", size: THUMBNAIL_SIZE, fit: "cover" },
+	poster: { suffix: ".poster.webp", size: POSTER_SIZE, fit: "contain" },
+} as const;
 const MAX_CONCURRENT = 3;
 /** Video frames are taken a little after the start; the very first frame is often black. */
 const VIDEO_SEEK_SECONDS = 0.1;
 /** ffmpeg has no SVG decoder. The renderer falls back to the original file. */
 const UNSUPPORTED = new Set([".svg"]);
-const SUFFIX = ".webp";
 
 export interface ThumbnailSource {
 	getAsset(assetId: string): Promise<Asset | undefined>;
@@ -21,7 +26,7 @@ export interface ThumbnailSource {
 }
 
 /**
- * Small previews cached under `.loom/thumbnails/<assetId>.webp`, shared by every view that shows a thumbnail.
+ * Square thumbnails and uncropped posters cached under `.loom/thumbnails`.
  * Each file is stamped with the source's mtime, so it is current exactly while the two match.
  */
 export class ThumbnailService {
@@ -39,30 +44,31 @@ export class ThumbnailService {
 	}
 
 	/** Absolute path of the current thumbnail, generated on first use. Undefined when the asset has none. */
-	async get(assetId: string, signal?: AbortSignal): Promise<string | undefined> {
+	async get(assetId: string, signal?: AbortSignal, variant: ThumbnailVariant = "square"): Promise<string | undefined> {
 		const asset = await this.source.getAsset(assetId);
 		if (!asset || !isThumbnailable(asset)) return undefined;
 		const paths = this.source.getPaths();
-		const file = join(paths.thumbnails, `${asset.assetId}${SUFFIX}`);
-		const version = `${asset.assetId}:${asset.modifiedAt}:${asset.size}`;
+		const file = join(paths.thumbnails, `${asset.assetId}${VARIANTS[variant].suffix}`);
+		const version = `${file}:${asset.modifiedAt}:${asset.size}`;
 		if (this.failed.has(version)) return undefined;
 		if (await isFresh(file, asset.modifiedAt)) return file;
 		let job = this.jobs.get(version);
 		if (!job) {
-			job = this.generate(asset, paths, file, version, signal).finally(() => this.jobs.delete(version));
+			job = this.generate(asset, paths, file, version, variant, signal).finally(() => this.jobs.delete(version));
 			this.jobs.set(version, job);
 		}
 		return job;
 	}
 
 	async forget(assetId: string): Promise<void> {
-		await rm(join(this.source.getPaths().thumbnails, `${assetId}${SUFFIX}`), { force: true }).catch(() => undefined);
+		const dir = this.source.getPaths().thumbnails;
+		await Promise.all(Object.values(VARIANTS).map(({ suffix }) => rm(join(dir, `${assetId}${suffix}`), { force: true }).catch(() => undefined)));
 	}
 
 	/** Drop thumbnails whose asset is gone, and temp files left by a crash. */
 	async prune(assetIds: Iterable<string>): Promise<void> {
 		this.failed.clear();
-		const keep = new Set(assetIds);
+		const keep = new Set(Array.from(assetIds).flatMap((id) => Object.values(VARIANTS).map(({ suffix }) => `${id}${suffix}`)));
 		const dir = this.source.getPaths().thumbnails;
 		let names: string[];
 		try {
@@ -71,7 +77,7 @@ export class ThumbnailService {
 			return;
 		}
 		for (const name of names) {
-			const orphan = name.endsWith(SUFFIX) ? !keep.has(name.slice(0, -SUFFIX.length)) : this.jobs.size === 0;
+			const orphan = name.endsWith(".webp") ? !keep.has(name) : this.jobs.size === 0;
 			if (orphan) await rm(join(dir, name), { force: true }).catch(() => undefined);
 		}
 	}
@@ -81,13 +87,14 @@ export class ThumbnailService {
 		paths: LibraryPaths,
 		file: string,
 		version: string,
+		variant: ThumbnailVariant,
 		signal?: AbortSignal,
 	): Promise<string | undefined> {
 		const temp = join(paths.thumbnails, `${asset.assetId}.${randomUUID()}.tmp`);
 		try {
 			await this.slot(async () => {
 				await mkdir(paths.thumbnails, { recursive: true });
-				await this.render(paths.toAbsolutePath(asset.relativePath), temp, asset.type, paths.root, signal);
+				await this.render(paths.toAbsolutePath(asset.relativePath), temp, asset.type, paths.root, variant, signal);
 			});
 			const stamp = new Date(asset.modifiedAt);
 			await utimes(temp, stamp, stamp);
@@ -102,14 +109,15 @@ export class ThumbnailService {
 		}
 	}
 
-	private async render(input: string, output: string, type: Asset["type"], cwd: string, signal?: AbortSignal): Promise<void> {
+	private async render(input: string, output: string, type: Asset["type"], cwd: string, variant: ThumbnailVariant, signal?: AbortSignal): Promise<void> {
 		const seeks = type === "video" ? [VIDEO_SEEK_SECONDS, undefined] : [undefined];
+		const { size, fit } = VARIANTS[variant];
 		let failure: unknown;
 		for (const seek of seeks) {
 			try {
 				await this.run({
 					program: "ffmpeg",
-					args: buildThumbnailArgs(input, output, THUMBNAIL_SIZE, seek),
+					args: buildThumbnailArgs(input, output, size, seek, fit),
 					cwd,
 					signal,
 					timeoutMs: 30_000,
