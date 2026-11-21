@@ -2,9 +2,10 @@ import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, StateEffect, StateField } from "@codemirror/state";
 import { EditorView, layer, RectangleMarker, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { findWikiLinks } from "@loom/core/references";
 import type { UiSelectionDraft } from "../../../shared/ipc.ts";
 import { activeLibraryDrag, draggedAssetIds, endLibraryDrag, hasLibraryDrag, hasOsFileDrag, readLibraryDrag } from "../../assets/asset-drag.ts";
-import { liveLibrary, markdownFilePath } from "./live-markdown.ts";
+import { insideLiteral, liveLibrary, markdownFilePath } from "./live-markdown.ts";
 import { tableRange } from "./live-table.ts";
 import { markdownLibraryReference } from "./markdown-reference.ts";
 
@@ -37,12 +38,25 @@ const dropCaret = layer({
 	markers(view) {
 		const point = view.state.field(hoverPoint);
 		if (!point) return [];
-		const range = EditorSelection.cursor(point.position, point.side);
-		const markers = RectangleMarker.forRange(view, "cm-dropCursor", range);
+		const markersAt = (position: number, side: -1 | 1) =>
+			RectangleMarker.forRange(view, "cm-dropCursor", EditorSelection.cursor(position, side));
+		const markers = markersAt(point.position, point.side);
 		const marker = markers[0];
 		// A rendered block can report its entire height, or just the edge before it.
 		if (point.beforeBlock && marker) {
 			return [new RectangleMarker("cm-dropCursor", marker.left, marker.top, null, view.defaultLineHeight)];
+		}
+		if (!marker?.height) {
+			// Hidden Markdown symbols have zero font size. Measure at their visible edge while keeping the drop position.
+			const { node } = view.domAtPos(point.position, point.side);
+			const hidden = (node instanceof Element ? node : node.parentElement)?.closest(".cm-live-hidden");
+			if (hidden) {
+				const before = view.posAtDOM(hidden);
+				const after = view.posAtDOM(hidden, hidden.childNodes.length);
+				const preferred = point.side < 0 ? markersAt(before, -1) : markersAt(after, 1);
+				if (preferred[0]?.height) return preferred;
+				return point.side < 0 ? markersAt(after, 1) : markersAt(before, -1);
+			}
 		}
 		return markers;
 	},
@@ -59,17 +73,25 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 	if (range) return { position: doc.lineAt(range.from).from, beforeBlock: true, side: 1 };
 
 	const { pos: at, assoc } = view.posAndSideAtCoords({ x: event.clientX, y: event.clientY }, false);
+	const tree = syntaxTree(view.state);
 	let position = at;
 	let blockStart = at;
 	let beforeBlock = false;
-	for (let node = syntaxTree(view.state).resolveInner(at, -1); node.parent; node = node.parent) {
+	for (let node = tree.resolveInner(at, -1); node.parent; node = node.parent) {
 		if (literalBlocks.has(node.name)) beforeBlock = true;
 		if (inlineReferences.has(node.name)) position = node.to;
 		blockStart = node.from;
 	}
-	return beforeBlock
-		? { position: doc.lineAt(blockStart).from, beforeBlock, side: 1 }
-		: { position, beforeBlock, side: position === at ? assoc : -1 };
+	if (beforeBlock) return { position: doc.lineAt(blockStart).from, beforeBlock, side: 1 };
+
+	// Lezer sees the inner brackets as a Markdown link. Include the outer brackets when snapping past a wiki link.
+	const line = doc.lineAt(at);
+	const offset = at - line.from;
+	const wiki = findWikiLinks(line.text).find((link) => link.from < offset && offset < link.end);
+	if (wiki && !insideLiteral(tree, line.from + wiki.from, line.from + wiki.end)) {
+		position = Math.max(position, line.from + wiki.end);
+	}
+	return { position, beforeBlock, side: position === at ? assoc : -1 };
 }
 
 function insertReferences(view: EditorView, point: DropPoint, paths: Iterable<string>): void {

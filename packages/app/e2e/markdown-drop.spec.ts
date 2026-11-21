@@ -99,6 +99,40 @@ test("dragging a library file inserts an undoable link where it lands in Markdow
 	await expect.poll(() => readFile(file, "utf8")).toBe(withCodeDrop.replace("| Header |", link + "\n\n| Header |"));
 });
 
+test("dragging over a rendered wiki link shows the caret after the full link", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(loomPage);
+	const file = join(root, "drop.md");
+	const original = "[[Untitled 3.canvas]]";
+	await writeFile(file, original);
+	await writeFile(join(root, "Untitled 3.canvas"), JSON.stringify({ nodes: [], edges: [] }));
+	await writeFile(join(root, "reference.md"), "# Reference\n");
+	await row(loomPage, "drop.md").click();
+	const editor = loomPage.getByRole("textbox", { name: "Edit drop.md" });
+	const link = editor.locator(".cm-live-wiki[data-asset-id]");
+	await expect(link).toHaveText("Untitled 3.canvas");
+	await expect(editor.locator(".cm-live-hidden").filter({ hasText: "]]" })).toHaveCount(1);
+	const bounds = (await link.boundingBox())!;
+	const source = (await row(loomPage, "reference.md").boundingBox())!;
+	const { mouse } = loomPage;
+	const x = bounds.x + bounds.width / 2;
+	const y = bounds.y + bounds.height / 2;
+	await mouse.move(source.x + 20, source.y + source.height / 2);
+	await mouse.down();
+	await mouse.move(x, y, { steps: 8 });
+	await mouse.move(x + 1, y);
+	const caret = loomPage.locator(".cm-dropCursor");
+	await expect(caret).toBeVisible();
+	const marker = (await caret.boundingBox())!;
+	expect(Math.abs(marker.x - (bounds.x + bounds.width))).toBeLessThan(2);
+	expect(marker.y).toBeLessThan(y);
+	expect(marker.y + marker.height).toBeGreaterThan(y);
+	await mouse.up();
+	await expect(caret).toHaveCount(0);
+	await loomPage.keyboard.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(`${original} [[reference.md]]`);
+});
+
 test("dropping native files imports them and inserts references only in edit modes", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(loomPage);
