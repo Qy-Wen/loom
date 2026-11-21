@@ -168,6 +168,14 @@
 	padding-inline-end: var(--lm-space-2);
 }
 
+/* A native window drag region can't receive file drops. Give its space to the strip during a drag. */
+.window-bar.mac:has(> .asset-tabs):is(.dragging-library-files *, :has(> .asset-tabs > .asset-tab.dragging)) {
+	padding-inline-end: 0;
+
+	> .asset-tabs { flex-grow: 1; }
+	> .window-drag-space { display: none; }
+}
+
 .asset-tab {
 	position: relative;
 	display: flex;

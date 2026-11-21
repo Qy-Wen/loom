@@ -29,6 +29,7 @@ export function activeLibraryDrag(): LibraryDrag | null {
 }
 
 export function endLibraryDrag(): void {
+	if (active) document.body.classList.remove("dragging-library-files");
 	active = null;
 }
 
@@ -50,6 +51,7 @@ export function writeLibraryDrag(transfer: DataTransfer, item: LibraryDrag, asse
 	if (asset) writeAssetDrag(transfer, asset);
 	const files = item.kind === "asset" ? [item] : item.kind === "batch" ? item.assets : [];
 	const first = files[0];
+	document.body.classList.toggle("dragging-library-files", Boolean(first));
 	if (first) setFileDragPreview(transfer, asset?.filename ?? first.path.split("/").at(-1)!, files.length);
 }
 

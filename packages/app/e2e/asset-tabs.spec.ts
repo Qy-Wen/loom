@@ -346,13 +346,33 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 		const modifier = process.platform === "darwin" ? "Meta" : "Control";
 		await file("beta.png").click();
 		await expect(names).toHaveText(["alpha.png", "beta.png"]);
-		await file("notes.md").dragTo(strip.getByRole("tab", { name: "beta.png" }), { targetPosition: { x: 4, y: 10 } });
-		await expect(names).toHaveText(["alpha.png", "notes.md", "beta.png"]);
+		const lastTab = (await strip.locator(".asset-tab").last().boundingBox())!;
+		const tabBar = (await tabRow.boundingBox())!;
+		const source = (await file("notes.md").boundingBox())!;
+		const blankX = (lastTab.x + lastTab.width + tabBar.x + tabBar.width) / 2;
+		const tabY = tabBar.y + tabBar.height / 2;
+		const sourceY = source.y + source.height / 2;
+		expect(blankX).toBeGreaterThan(lastTab.x + lastTab.width + 20);
+		await loomPage.mouse.move(source.x + 20, sourceY);
+		await loomPage.mouse.down();
+		try {
+			// Enter the empty strip from below without crossing an existing tab.
+			await loomPage.mouse.move(blankX, sourceY, { steps: 8 });
+			await loomPage.mouse.move(blankX, tabY, { steps: 8 });
+			await loomPage.mouse.move(blankX - 1, tabY);
+			await expect(strip.locator(".asset-tab.drop-after .asset-tab-name")).toHaveText("beta.png");
+		} finally {
+			await loomPage.mouse.up();
+		}
+		await expect(names).toHaveText(["alpha.png", "beta.png", "notes.md"]);
+		await expect(strip.locator(".asset-tab.drop-after")).toHaveCount(0);
+		await expect(titleBar.locator(".window-drag-space")).toBeVisible();
 		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("notes.md");
 		await expect(file("notes.md")).toHaveClass(/selected/);
+
 		// A file that is already open moves instead of duplicating.
-		await file("notes.md").dragTo(closeButton("beta.png"));
-		await expect(names).toHaveText(["alpha.png", "beta.png", "notes.md"]);
+		await file("notes.md").dragTo(strip.getByRole("tab", { name: "beta.png" }), { targetPosition: { x: 4, y: 10 } });
+		await expect(names).toHaveText(["alpha.png", "notes.md", "beta.png"]);
 		// A folder has no view, so the strip does not take it.
 		await tree.locator(".folder-main").filter({ hasText: "one" }).first().dragTo(strip.getByRole("tab", { name: "beta.png" }));
 		await expect(strip.getByRole("tab")).toHaveCount(3);

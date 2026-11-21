@@ -65,7 +65,7 @@ export function TabStrip({
 		}
 		const ids = draggedAssetIds(readLibraryDrag(transfer) ?? null);
 		endLibraryDrag();
-		setSlot(null);
+		end();
 		if (ids.length > 0) onDropFiles(ids, beforeId);
 	}
 
@@ -99,9 +99,9 @@ export function TabStrip({
 				}
 			}}
 			onDrop={(event) => {
-				if (!accepts(event.dataTransfer)) return;
+				if (event.target !== event.currentTarget || !accepts(event.dataTransfer)) return;
 				event.preventDefault();
-				if (slot) drop(slot.beforeId, event.dataTransfer);
+				drop(null, event.dataTransfer);
 			}}
 		>
 			{files.map((asset, index) => {
