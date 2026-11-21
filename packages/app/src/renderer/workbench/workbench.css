@@ -1,10 +1,11 @@
 .workbench {
+	--workbench-start-inset: 5px;
 	display: flex;
 	min-width: 0;
 	min-height: 0;
 	flex-direction: column;
 	margin: 0 -5px;
-	padding: 0 5px;
+	padding-inline: var(--workbench-start-inset) 5px;
 	background: var(--lm-surface-raised);
 }
 
@@ -144,6 +145,23 @@
 	overflow-y: hidden;
 	scrollbar-width: thin;
 	-webkit-app-region: no-drag;
+}
+
+/* Match the docked panel titles and tabs so their dividers line up. */
+.workbench > .asset-tabs,
+.window-bar.mac:has(> .asset-tabs) {
+	flex-basis: var(--lm-size-2xl);
+	border-block-end: 1px solid var(--lm-border-subtle);
+}
+
+.workbench > .asset-tabs {
+	flex-shrink: 0;
+	margin-inline: calc(-1 * var(--workbench-start-inset)) -5px;
+	padding-inline: var(--workbench-start-inset) 5px;
+}
+
+.window-bar.mac:has(> .asset-tabs) {
+	block-size: var(--lm-size-2xl);
 }
 
 .window-bar.mac > .asset-tabs {

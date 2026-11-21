@@ -39,7 +39,7 @@ body {
 	display: flex;
 	flex: 0 0 var(--lm-size-3xl);
 	align-items: center;
-	height: var(--lm-size-3xl);
+	block-size: var(--lm-size-3xl);
 	gap: var(--lm-space-1);
 	padding-inline: var(--lm-space-6);
 	background: var(--lm-surface-window);
@@ -50,8 +50,9 @@ body {
 }
 
 .window-bar.mac {
-	padding-inline: var(--lm-space-2);
-	padding-inline-start: max(var(--lm-space-2), calc(var(--mac-window-controls-inset) + var(--mac-window-actions-width) + var(--lm-space-2) - var(--library-track-width) - var(--library-track-gap)));
+	margin-inline: calc(-1 * var(--workbench-start-inset)) -5px;
+	padding-inline-end: calc(var(--lm-space-2) + 5px);
+	padding-inline-start: calc(var(--workbench-start-inset) + max(var(--lm-space-2), var(--mac-window-controls-inset) + var(--mac-window-actions-width) + var(--lm-space-2) - var(--library-track-width) - var(--library-track-gap)));
 	background: var(--lm-surface-raised);
 }
 

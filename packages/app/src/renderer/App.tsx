@@ -1563,25 +1563,19 @@ export function App(): React.JSX.Element {
 			<FileHistoryButtons mac={mac} canBack={navigation.canBack} canForward={navigation.canForward} move={moveHistory} />
 		</>
 	);
-	const windowBar = (
-		<header className={`window-bar ${mac ? "mac" : "overlay"}${fullscreen ? " fullscreen" : ""}`}>
-			{!mac && windowActions}
-			{workbenchView === "library" && !iconMode && (
-				<TabStrip
-					tabs={tabs}
-					assets={library.assets}
-					onActivate={activateAssetTab}
-					onClose={closeAssetTab}
-					onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
-					onDropFiles={openDroppedFiles}
-					onDropOnCanvas={(assets, id) => {
-						activateAssetTab(id);
-						setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
-					}}
-				/>
-			)}
-			<div className="window-drag-space" aria-hidden="true" />
-		</header>
+	const assetTabStrip = workbenchView === "library" && !iconMode && (
+		<TabStrip
+			tabs={tabs}
+			assets={library.assets}
+			onActivate={activateAssetTab}
+			onClose={closeAssetTab}
+			onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
+			onDropFiles={openDroppedFiles}
+			onDropOnCanvas={(assets, id) => {
+				activateAssetTab(id);
+				setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
+			}}
+		/>
 	);
 
 	return (
@@ -1596,7 +1590,12 @@ export function App(): React.JSX.Element {
 				{sandboxNotice
 					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
-				{!mac && windowBar}
+				{!mac && (
+					<header className={`window-bar overlay${fullscreen ? " fullscreen" : ""}`}>
+						{windowActions}
+						<div className="window-drag-space" aria-hidden="true" />
+					</header>
+				)}
 
 				<div
 					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.dockSplitFrame ? " dock-split-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
@@ -1686,7 +1685,12 @@ export function App(): React.JSX.Element {
 					/>
 
 					<main className="workbench">
-						{mac && windowBar}
+						{mac ? (
+							<header className="window-bar mac">
+								{assetTabStrip}
+								<div className="window-drag-space" aria-hidden="true" />
+							</header>
+						) : assetTabStrip}
 						{workbenchView === "table" ? (
 							<TableView
 								assets={library.assets}

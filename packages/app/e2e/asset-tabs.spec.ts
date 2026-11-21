@@ -145,8 +145,15 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 		await expect(strip.getByRole("tab")).toHaveCount(5);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveText("notes.md");
 		const titleBar = loomPage.locator(".window-bar");
-		await expect(titleBar.getByRole("tablist", { name: "Open files" })).toBeVisible();
+		await expect(loomPage.locator(".workbench").getByRole("tablist", { name: "Open files" })).toBeVisible();
 		await expect(strip).toHaveCSS("-webkit-app-region", "no-drag");
+		const tabRow = loomPage.locator(".workbench > :is(.window-bar.mac, .asset-tabs)");
+		const dockHeading = loomPage.locator(".dock-band :is(.panel-tabs, .work-panel-title):visible").first();
+		await expect(tabRow).toHaveCSS("border-bottom-width", "1px");
+		await expect(dockHeading).toHaveCSS("border-bottom-width", "1px");
+		const tabRowBounds = (await tabRow.boundingBox())!;
+		const dockHeadingBounds = (await dockHeading.boundingBox())!;
+		expect(tabRowBounds.y + tabRowBounds.height).toBe(dockHeadingBounds.y + dockHeadingBounds.height);
 		const windowButtons = loomPage.locator(":is(.mac-window-actions, .window-bar.overlay) > button");
 		expect(await windowButtons.evaluateAll((buttons) => buttons.map((button) => button.getAttribute("aria-label"))))
 			.toEqual(["Open", "Collapse sidebar", "Back", "Forward"]);
@@ -179,14 +186,13 @@ test("asset tabs follow browser rules and close with their file", async ({ loomP
 			await expect(expand).toBeFocused();
 			await expand.press("Enter");
 			await expect(collapse).toBeFocused();
-			await expect(titleBar).toHaveCSS("padding-left", "4px");
+			await expect(titleBar).toHaveCSS("padding-left", "9px");
 			expect(await actions.boundingBox()).toEqual(actionsBox);
 		} else {
 			await expect(titleBar).toHaveCSS("-webkit-app-region", "drag");
 			const dragSpace = (await titleBar.locator(".window-drag-space").boundingBox())!;
-			const tabsBox = (await strip.boundingBox())!;
 			expect(dragSpace.width).toBeGreaterThanOrEqual(40);
-			expect(dragSpace.x).toBeGreaterThan(tabsBox.x + tabsBox.width);
+			expect(dragSpace.y + dragSpace.height).toBeLessThanOrEqual(tabRowBounds.y);
 		}
 		const notesEditor = loomPage.getByRole("textbox", { name: "Edit notes.md", exact: true });
 		await expect(notesEditor.getByRole("heading", { level: 1 })).toContainText("hello");
