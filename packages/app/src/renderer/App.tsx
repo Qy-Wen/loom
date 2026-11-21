@@ -728,13 +728,19 @@ export function App(): React.JSX.Element {
 	function activateAssetTab(assetId: string): void {
 		setPreviewAssetId(null);
 		setTabs((current) => activateTab(current, assetId));
+	}
+
+	function locateAssetInTree(assetId: string): void {
 		setPicked(singleSelection(assetKey(assetId)));
 	}
 
 	async function showAssetTabContextMenu(assetId: string): Promise<void> {
+		const sameLibrary = detailRequests.current.libraryGuard();
 		try {
 			const action = await window.loom.showAssetTabContextMenu(!tabs.previews.includes(assetId));
-			if (action !== null) setTabs((current) => setTabPinned(current, assetId, action === "pin"));
+			if (!sameLibrary()) return;
+			if (action === "locate") locateAssetInTree(assetId);
+			else if (action !== null) setTabs((current) => setTabPinned(current, assetId, action === "pin"));
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -1577,12 +1583,14 @@ export function App(): React.JSX.Element {
 			tabs={tabs}
 			assets={library.assets}
 			onActivate={activateAssetTab}
+			onLocate={locateAssetInTree}
 			onClose={closeAssetTab}
 			onContextMenu={(assetId) => void showAssetTabContextMenu(assetId)}
 			onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
 			onDropFiles={openDroppedFiles}
 			onDropOnCanvas={(assets, id) => {
 				activateAssetTab(id);
+				setPicked(singleSelection(assetKey(id)));
 				setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
 			}}
 		/>

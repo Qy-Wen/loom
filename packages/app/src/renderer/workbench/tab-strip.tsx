@@ -19,6 +19,7 @@ export function TabStrip({
 	tabs,
 	assets,
 	onActivate,
+	onLocate,
 	onClose,
 	onContextMenu,
 	onMove,
@@ -28,6 +29,7 @@ export function TabStrip({
 	tabs: AssetTabs;
 	assets: readonly Asset[];
 	onActivate: (assetId: string) => void;
+	onLocate: (assetId: string) => void;
 	onClose: (assetId: string) => void;
 	onContextMenu: (assetId: string) => void;
 	onMove: (assetId: string, beforeId: string | null) => void;
@@ -164,6 +166,7 @@ export function TabStrip({
 							aria-description={status}
 							aria-keyshortcuts="Shift+F10"
 							onClick={() => onActivate(asset.assetId)}
+							onDoubleClick={() => onLocate(asset.assetId)}
 							onKeyDown={(event) => {
 								if (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10")) {
 									event.preventDefault();

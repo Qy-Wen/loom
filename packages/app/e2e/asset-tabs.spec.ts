@@ -208,10 +208,9 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 		await expect(strip.getByRole("tab")).toHaveCount(2);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
-		// Clicking a tab selects it in the tree.
 		await strip.getByRole("tab", { name: "alpha.png" }).click();
 		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("alpha.png");
-		await expect(file("alpha.png")).toHaveClass(/selected/);
+		await expect(file("beta.png")).toHaveClass(/selected/);
 
 		// Two open files with the same name show their folder.
 		const same = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.filter((asset) => asset.filename === "same.png");
@@ -224,6 +223,40 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 		await expect(strip.getByRole("tab", { name: "same.png · one" })).toHaveCount(1);
 		await expect(strip.getByRole("tab", { name: "same.png · two" })).toHaveCount(1);
 		await expect(strip.getByRole("tab")).toHaveCount(4);
+
+		// A single click switches tabs and keeps the tree selection and folder collapsed.
+		const oneFolder = tree.locator(".folder-row").filter({ hasText: "one" });
+		const oneTab = strip.getByRole("tab", { name: "same.png · one" });
+		const oneFile = tree.locator(".asset-row").filter({ has: loomPage.locator('[data-tooltip="one/same.png"]') });
+		await oneFolder.locator(".folder-chevron").click();
+		await oneTab.click();
+		await expect(oneTab).toHaveAttribute("aria-selected", "true");
+		await expect(oneFolder).toHaveClass(/selected/);
+		await expect(oneFile).toHaveCount(0);
+
+		// Double-clicking the active tab expands its folder and locates its file.
+		await oneTab.dblclick();
+		await expect(oneFile).toHaveClass(/selected/);
+		await expect(oneFile).toBeInViewport();
+
+		// The tab menu can locate a file while another tab stays active.
+		const twoTab = strip.getByRole("tab", { name: "same.png · two" });
+		await twoTab.click();
+		await oneFolder.locator(".folder-chevron").click();
+		await expect(oneFile).toHaveCount(0);
+		await electronApp!.evaluate(({ Menu }) => {
+			const popup = Menu.prototype.popup;
+			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+				const locate = this.items.find((item) => item.label === "Locate in File Tree" && item.enabled);
+				if (!locate) return popup.call(this, options);
+				locate.click();
+				options?.callback?.();
+			};
+		});
+		await oneTab.click({ button: "right" });
+		await expect(oneFile).toHaveClass(/selected/);
+		await expect(oneFile).toBeInViewport();
+		await expect(twoTab).toHaveAttribute("aria-selected", "true");
 
 		await file("notes.md").click({ button: "middle" });
 		await expect(strip.getByRole("tab")).toHaveCount(5);

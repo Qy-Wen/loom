@@ -75,7 +75,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
@@ -653,8 +653,9 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.showAssetTabContextMenu, async (event, pinned: boolean) => {
 		const { t } = await uiCopy();
-		return popupContextMenu<"pin" | "unpin">(event, [
+		return popupContextMenu<AssetTabContextAction>(event, [
 			{ label: pinned ? t.tabs.unpin : t.tabs.pin, click: () => pinned ? "unpin" : "pin" },
+			{ label: t.tabs.locateInFileTree, click: () => "locate" },
 		]);
 	});
 

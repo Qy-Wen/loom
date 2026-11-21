@@ -84,6 +84,7 @@ export type AssetContextAction =
 	| "copy_path"
 	| "reveal"
 	| "trash";
+export type AssetTabContextAction = "pin" | "unpin" | "locate";
 export type FolderContextAction =
 	| "rename"
 	| "cut"
@@ -298,7 +299,7 @@ export interface LoomApi {
 	onTrashStarted: (listener: () => void) => () => void;
 	/** `tabs` is true in list mode, where a file can open in a new tab; otherwise the first item opens the preview. */
 	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
-	showAssetTabContextMenu: (pinned: boolean) => Promise<"pin" | "unpin" | null>;
+	showAssetTabContextMenu: (pinned: boolean) => Promise<AssetTabContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
 	showCanvasContextMenu: () => Promise<"add_files" | null>;
