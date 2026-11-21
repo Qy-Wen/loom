@@ -56,6 +56,10 @@ export const messages = defineLocale(
 		},
 		app: {
 			connecting: "Connecting to Loom agent…",
+			minimizeWindow: "Minimize window",
+			maximizeWindow: "Maximize window",
+			restoreWindow: "Restore window",
+			closeWindow: "Close window",
 			back: "Back",
 			forward: "Forward",
 			resizeLibrary: "Resize asset library",
@@ -874,6 +878,10 @@ export const messages = defineLocale(
 		},
 		app: {
 			connecting: "正在连接 Loom…",
+			minimizeWindow: "最小化窗口",
+			maximizeWindow: "最大化窗口",
+			restoreWindow: "还原窗口",
+			closeWindow: "关闭窗口",
 			back: "返回",
 			forward: "前进",
 			resizeLibrary: "调整素材库宽度",

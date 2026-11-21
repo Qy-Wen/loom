@@ -307,6 +307,7 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 			expect(await actions.boundingBox()).toEqual(actionsBox);
 		} else {
 			await expect(titleBar).toHaveCSS("-webkit-app-region", "drag");
+			await expect(titleBar).toHaveCSS("height", "32px");
 			const dragSpace = (await titleBar.locator(".window-drag-space").boundingBox())!;
 			expect(dragSpace.width).toBeGreaterThanOrEqual(40);
 			expect(dragSpace.y + dragSpace.height).toBeLessThanOrEqual(tabRowBounds.y);

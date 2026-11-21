@@ -64,6 +64,7 @@ import {
 } from "./library/tree-nav.ts";
 import { uiPlatform } from "../shared/locale.ts";
 import { FileHistoryButtons, HelpButton, LibraryOpenButton, SettingsButton, SidebarToggle, TracesButton } from "./components/app-buttons.tsx";
+import { WindowCaptionControls } from "./components/window-caption-controls.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./components/error-toast.tsx";
 import { runActivityRenderers } from "./chat/run-activity.tsx";
@@ -201,6 +202,7 @@ export function App(): React.JSX.Element {
 	const navigation = useAssetHistory(library.rootPath, visibleAssetId, assetIds);
 	const platform = uiPlatform(navigator.userAgent);
 	const mac = platform === "mac";
+	const windows = platform === "windows";
 	const windowsPreview = mac && import.meta.env.DEV && import.meta.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
 	const macLayout = mac && !windowsPreview;
 	const [properties, setProperties] = useState<PropertyDefinition[]>([]);
@@ -1478,8 +1480,19 @@ export function App(): React.JSX.Element {
 		}
 	}
 
+	function renderWindowBar(actions?: React.ReactNode): React.JSX.Element {
+		return (
+			<header className={`window-bar overlay${windows ? " windows" : ""}${fullscreen ? " fullscreen" : ""}`}>
+				{actions}
+				<div className="window-drag-space" aria-hidden="true" />
+				{windows && !fullscreen && <WindowCaptionControls />}
+			</header>
+		);
+	}
+
 	if (!endpoint) {
-		return <div className="loading">{error ?? t.app.connecting}</div>;
+		const loading = <div className="loading">{error ?? t.app.connecting}</div>;
+		return windows ? <div className="app">{renderWindowBar()}{loading}</div> : loading;
 	}
 
 	const panelsCollapsed = panels.panelsCollapsed;
@@ -1610,12 +1623,7 @@ export function App(): React.JSX.Element {
 				{sandboxNotice
 					? <ErrorToast text={t.settings.sandboxDisabledAfterFailure(sandboxNotice.reason)} onDismiss={dismissSandboxNotice} autoDismiss={false} />
 					: error && <ErrorToast text={error} onDismiss={() => setError(null)} />}
-				{!macLayout && (
-					<header className={`window-bar overlay${fullscreen ? " fullscreen" : ""}`}>
-						{windowActions}
-						<div className="window-drag-space" aria-hidden="true" />
-					</header>
-				)}
+				{!macLayout && renderWindowBar(windowActions)}
 
 				<div
 					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.dockSplitFrame ? " dock-split-target" : ""}${joinWindowCorners(panels.joinFrame, shellRef.current)}`}
@@ -1624,7 +1632,7 @@ export function App(): React.JSX.Element {
 					data-mac-fullscreen={macLayout && fullscreen || undefined}
 					style={{
 						...shellStyle,
-						...({ "--window-corner": platform === "windows" || windowsPreview ? "8px" : "16px" } as CSSProperties),
+						...({ "--window-corner": windows || windowsPreview ? "8px" : "16px" } as CSSProperties),
 						...(bottom ? { "--bottom-height": `${panels.bottomHeight}px` } : {}),
 						...(above ? { "--above-height": `${panels.aboveHeight}px` } : {}),
 						...(panels.dockSplitFrame ? {

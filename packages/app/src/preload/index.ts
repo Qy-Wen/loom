@@ -146,6 +146,13 @@ const api: LoomApi = {
 		ipcRenderer.on(IPC.fullscreenChanged, handler);
 		return () => ipcRenderer.removeListener(IPC.fullscreenChanged, handler);
 	},
+	isMaximized: () => ipcRenderer.invoke(IPC.isMaximized),
+	onMaximizedChanged: (listener) => {
+		const handler = (_event: Electron.IpcRendererEvent, maximized: boolean) => listener(maximized);
+		ipcRenderer.on(IPC.maximizedChanged, handler);
+		return () => ipcRenderer.removeListener(IPC.maximizedChanged, handler);
+	},
+	windowAction: (action) => ipcRenderer.send(IPC.windowAction, action),
 	getModelSettings: () => ipcRenderer.invoke(IPC.getModelSettings),
 	saveModelSettings: (draft) => ipcRenderer.invoke(IPC.saveModelSettings, draft),
 	probeModelSlot: (draft) => ipcRenderer.invoke(IPC.probeModelSlot, draft),

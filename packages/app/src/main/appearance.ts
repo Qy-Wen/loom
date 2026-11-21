@@ -15,8 +15,6 @@ function repaintWindowChrome(): void {
 	for (const window of BrowserWindow.getAllWindows()) {
 		if (window.isDestroyed()) continue;
 		window.setBackgroundColor(colors.background);
-		// Only Windows draws its own caption buttons over the page (see createWindow).
-		if (process.platform === "win32") window.setTitleBarOverlay({ color: colors.titleBar, symbolColor: colors.titleBarSymbol });
 	}
 }
 

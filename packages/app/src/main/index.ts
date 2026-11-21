@@ -397,21 +397,23 @@ async function thumbnailResponse(assetId: string, versioned: boolean, request: R
 
 function createWindow(): void {
 	const mac = process.platform === "darwin";
+	const windows = process.platform === "win32";
 	const windowsPreview = mac && !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
 		&& process.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
+	const colors = windowColors();
 	const win = new BrowserWindow({
 		width: 1200,
 		height: 800,
 		minWidth: 860,
 		minHeight: 600,
 		icon: loadAppIcon(),
-		backgroundColor: windowColors().background,
+		backgroundColor: colors.background,
 		// Test runs open and close many windows. Keep them off the user's desktop (see LOOM_E2E_VISIBLE).
 		show: !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1"),
 		// In the preview, keep native macOS controls above the simulated Windows toolbar.
 		titleBarStyle: windowsPreview ? "default" : mac ? "hiddenInset" : "hidden",
 		...(mac && !windowsPreview && { trafficLightPosition: { x: 14, y: 13 } }),
-		...(!mac && { titleBarOverlay: { color: windowColors().titleBar, symbolColor: windowColors().titleBarSymbol, height: 40 } }),
+		...(!mac && !windows && { titleBarOverlay: { color: colors.titleBar, symbolColor: colors.titleBarSymbol, height: 40 } }),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
@@ -439,6 +441,14 @@ function createWindow(): void {
 	};
 	win.on("enter-full-screen", () => sendFullscreen(true));
 	win.on("leave-full-screen", () => sendFullscreen(false));
+	if (windows) {
+		const sendMaximized = () => {
+			if (!win.isDestroyed()) win.webContents.send(IPC.maximizedChanged, win.isMaximized());
+		};
+		win.on("maximize", sendMaximized);
+		win.on("unmaximize", sendMaximized);
+		win.on("restore", sendMaximized);
+	}
 }
 
 async function applyProcessSandbox(): Promise<void> {
@@ -592,6 +602,26 @@ function registerIpc(): void {
 
 	ipcMain.handle(IPC.isFullscreen, (event): boolean => {
 		return BrowserWindow.fromWebContents(event.sender)?.isFullScreen() ?? false;
+	});
+	ipcMain.handle(IPC.isMaximized, (event): boolean => {
+		return BrowserWindow.fromWebContents(event.sender)?.isMaximized() ?? false;
+	});
+	ipcMain.on(IPC.windowAction, (event, action: unknown) => {
+		if (process.platform !== "win32") return;
+		const window = BrowserWindow.fromWebContents(event.sender);
+		if (!window || window.isDestroyed()) return;
+		switch (action) {
+			case "minimize":
+				window.minimize();
+				break;
+			case "toggleMaximize":
+				if (window.isMaximized()) window.unmaximize();
+				else window.maximize();
+				break;
+			case "close":
+				window.close();
+				break;
+		}
 	});
 
 	ipcMain.handle(IPC.getLibrarySnapshot, (): Promise<LibrarySnapshot> => {

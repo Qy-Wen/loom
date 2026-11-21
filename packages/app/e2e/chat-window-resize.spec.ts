@@ -2,6 +2,39 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
+test("Windows caption buttons resize, minimize and close the window", async ({ loomPage: page, electronApp }) => {
+	test.skip(process.platform !== "win32" || !electronApp || process.env.LOOM_E2E_VISIBLE !== "1", "visible Windows Electron required");
+	const window = await electronApp!.browserWindow(page);
+	const controls = page.locator(".window-caption-controls");
+	const maximize = controls.getByRole("button", { name: "Maximize window" });
+	const restore = controls.getByRole("button", { name: "Restore window" });
+	const minimize = controls.getByRole("button", { name: "Minimize window" });
+	const close = controls.getByRole("button", { name: "Close window" });
+	await expect(controls).toHaveCSS("gap", "8px");
+	await expect(maximize).toHaveCSS("width", "28px");
+	await expect(controls).toHaveCSS("-webkit-app-region", "no-drag");
+
+	await maximize.click();
+	await expect.poll(() => window.evaluate((win) => win.isMaximized())).toBe(true);
+	await restore.press("Enter");
+	await expect.poll(() => window.evaluate((win) => win.isMaximized())).toBe(false);
+	await window.evaluate((win) => win.maximize());
+	await expect(restore).toBeVisible();
+	await window.evaluate((win) => win.unmaximize());
+	await expect(maximize).toBeVisible();
+
+	await minimize.click();
+	await expect.poll(() => window.evaluate((win) => win.isMinimized())).toBe(true);
+	await window.evaluate((win) => win.restore());
+	await expect.poll(() => window.evaluate((win) => win.isMinimized())).toBe(false);
+	await Promise.all([
+		page.waitForEvent("close"),
+		close.click().catch((error) => {
+			if (!page.isClosed()) throw error;
+		}),
+	]);
+});
+
 for (const nativeMaximize of [false, true]) test(`chat stays aligned after ${nativeMaximize ? "maximizing and restoring" : "growing and shrinking"} the window`, async ({ loomPage: page, electronApp }, testInfo) => {
 	test.skip(!electronApp, "isolated window required");
 	// Electron's maximize() shows a hidden window. Run that path only when visible tests were requested.

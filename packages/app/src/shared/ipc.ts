@@ -277,6 +277,9 @@ export const IPC = {
 	pickGradeLut: "loom:pickGradeLut",
 	isFullscreen: "loom:isFullscreen",
 	fullscreenChanged: "loom:fullscreenChanged",
+	isMaximized: "loom:isMaximized",
+	maximizedChanged: "loom:maximizedChanged",
+	windowAction: "loom:windowAction",
 } as const;
 
 export interface LoomApi {
@@ -442,6 +445,9 @@ export interface LoomApi {
 	pickGradeLut: () => Promise<{ path: string; name: string } | null>;
 	isFullscreen: () => Promise<boolean>;
 	onFullscreenChanged: (listener: (fullscreen: boolean) => void) => () => void;
+	isMaximized: () => Promise<boolean>;
+	onMaximizedChanged: (listener: (maximized: boolean) => void) => () => void;
+	windowAction: (action: "minimize" | "toggleMaximize" | "close") => void;
 	openDevTrace: () => Promise<void>;
 }
 

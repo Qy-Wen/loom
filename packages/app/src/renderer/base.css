@@ -46,6 +46,9 @@ body {
 }
 
 .window-bar.overlay {
+	--window-bar-height: max(var(--lm-size-xl), env(titlebar-area-height, 0px));
+	flex-basis: var(--window-bar-height);
+	block-size: var(--window-bar-height);
 	-webkit-app-region: drag;
 }
 
@@ -77,11 +80,59 @@ body {
 	block-size: var(--lm-size-md);
 }
 
-.window-bar.overlay:not(.fullscreen) {
+.window-bar.overlay:not(.fullscreen, .windows) {
 	--titlebar-content-start: env(titlebar-area-x, 0px);
 	--titlebar-content-width: env(titlebar-area-width, calc(100% - 160px));
 	padding-inline-start: calc(var(--titlebar-content-start) + var(--lm-space-6));
 	padding-inline-end: max(var(--lm-space-6), calc(100% - var(--titlebar-content-start) - var(--titlebar-content-width) + var(--lm-space-6)));
+}
+
+.window-bar.windows {
+	padding-inline-end: var(--lm-space-2);
+}
+
+.window-caption-controls {
+	display: flex;
+	flex: none;
+	gap: var(--lm-space-4);
+	-webkit-app-region: no-drag;
+}
+
+.window-caption-controls > button {
+	display: grid;
+	place-items: center;
+	inline-size: var(--lm-size-lg);
+	block-size: var(--lm-size-lg);
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	color: var(--lm-text-primary);
+	background: transparent;
+	cursor: pointer;
+}
+
+.window-caption-controls > button:hover {
+	background: var(--lm-surface-hover);
+}
+
+.window-caption-controls > .window-caption-close:hover {
+	color: var(--lm-text-danger);
+	background: var(--lm-surface-danger);
+}
+
+.window-caption-controls > button:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: -2px;
+}
+
+.window-caption-controls svg {
+	inline-size: 12px;
+	block-size: 12px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.2;
+	stroke-linecap: round;
+	stroke-linejoin: round;
 }
 
 .window-drag-space {
