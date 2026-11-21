@@ -503,6 +503,47 @@
 	width: 100%;
 }
 
+.cm-wiki-embed:has(> .markdown-note-embed > .markdown-note-embed-content:not(:empty)) {
+	inline-size: 100%;
+}
+
+.markdown-note-embed:has(> .markdown-note-embed-content:not(:empty)) {
+	display: block;
+	margin-block: var(--lm-space-2);
+	padding: var(--lm-space-4) var(--lm-space-5);
+	border: 1px solid var(--lm-border-default);
+	border-inline-start: 2px solid var(--lm-text-accent);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-subtle);
+}
+
+.markdown-note-embed:has(> .markdown-note-embed-content:not(:empty)) > .markdown-embed-file {
+	font-size: var(--lm-text-size-sm);
+	font-weight: var(--lm-weight-medium);
+}
+
+.markdown-note-embed > .markdown-note-embed-content:not(:empty) {
+	display: block;
+	max-inline-size: none;
+	max-block-size: min(28rem, 60vh);
+	margin: var(--lm-space-3) 0 0;
+	padding: var(--lm-space-3) 0 0;
+	border-block-start: 1px solid var(--lm-border-default);
+	overflow: auto;
+	overflow-wrap: anywhere;
+	white-space: normal;
+	font: inherit;
+	user-select: text;
+}
+
+.markdown-note-embed-content:empty {
+	display: none;
+}
+
+.markdown-note-embed-content .markdown-note-embed > .markdown-note-embed-content {
+	max-block-size: none;
+}
+
 .markdown-file-link {
 	--markdown-link-color: var(--lm-text-accent);
 	color: var(--markdown-link-color);

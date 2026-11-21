@@ -193,12 +193,12 @@ test("wiki embed completion fills empty brackets and suggests files", async ({ l
 test("the caret stays beside a standalone file embed without a preview", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
-	await writeFile(join(root, "reference.md"), "# Reference");
-	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.md]]");
+	await writeFile(join(root, "reference.txt"), "Reference");
+	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.txt]]");
 	await openNote(page);
 
 	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
-	const link = editor.getByRole("link", { name: "reference.md", exact: true });
+	const link = editor.getByRole("link", { name: "reference.txt", exact: true });
 	await expect(link).toBeVisible();
 	await editor.press("ControlOrMeta+End");
 
@@ -214,8 +214,8 @@ test("the caret stays beside a standalone file embed without a preview", async (
 test("a file embed and a wiki link share the same baseline", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
-	await writeFile(join(root, "reference.md"), "# Reference");
-	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.md]] [[reference.md]]");
+	await writeFile(join(root, "reference.txt"), "Reference");
+	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.txt]] [[reference.txt]]");
 	await openNote(page);
 
 	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
@@ -229,6 +229,43 @@ test("a file embed and a wiki link share the same baseline", async ({ loomPage: 
 	}));
 	expect(Math.abs(embedText - wikiText)).toBeLessThan(1);
 	expect(Math.abs(embedUnderline - wikiUnderline)).toBeLessThan(1);
+});
+
+test("wiki note embeds render a whole document or heading and stop at cycles", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const folder = join(root, "notes");
+	await mkdir(folder);
+	const report = join(folder, "Report.md");
+	const source = "# Report\n\nWhole-note introduction.\n\n## Highlights\n\nThe **latest** result.\n\n### Details\n\n![[notes/Details]]\n\n![[commands]]\n\n## Other section\n\nOut of scope.";
+	await writeFile(report, source);
+	await writeFile(join(folder, "Details.md"), "[Follow-up](Follow-up.md)");
+	await writeFile(join(folder, "Follow-up.md"), "Follow-up note.");
+	await writeFile(join(root, "commands.md"), "![[notes/Report#Highlights|Project excerpt]]\n\n![[notes/Report]]\n\n![[commands]]");
+	await openNote(page);
+
+	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
+	const previews = editor.locator(".cm-wiki-embed > .markdown-note-embed");
+	await expect(previews).toHaveCount(2);
+	const excerpt = previews.first();
+	const fullNote = previews.last();
+	await expect(excerpt.locator("strong")).toHaveText("latest");
+	await expect(excerpt.getByRole("heading", { name: "Highlights" })).toBeVisible();
+	await expect(excerpt.getByRole("heading", { name: "Details" })).toBeVisible();
+	await expect(excerpt.getByText("Out of scope.")).toHaveCount(0);
+	await expect(fullNote.getByText("Whole-note introduction.")).toBeVisible();
+	await expect(fullNote.getByText("Out of scope.")).toBeVisible();
+	await expect(excerpt.getByRole("link", { name: "Follow-up", exact: true })).toHaveAttribute("data-asset-id", /.+/);
+	await expect(excerpt.getByRole("link", { name: "commands", exact: false })).toBeVisible();
+	await expect(excerpt.getByRole("link", { name: "commands", exact: false }).locator("+ .markdown-note-embed-content")).toBeEmpty();
+	await expect(editor.locator(".cm-live-wiki").filter({ hasText: "commands" })).toHaveCount(1);
+
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect(excerpt.locator("strong")).toHaveText("latest");
+	await writeFile(report, source.replace("**latest**", "**updated**"));
+	await expect(excerpt.locator("strong")).toHaveText("updated");
+	await excerpt.getByRole("link", { name: "Project excerpt", exact: true }).click();
+	await expect(page.getByRole("textbox", { name: "Edit Report.md", exact: true }).locator('[data-heading="highlights"]')).toBeInViewport();
 });
 
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {

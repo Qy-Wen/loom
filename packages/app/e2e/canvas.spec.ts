@@ -112,7 +112,8 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await mkdir(join(root, "项目"));
 	const scriptPath = join(root, "项目", "文案.md");
 	await copyFile(still, join(root, "项目", "参考.png"));
-	await writeFile(scriptPath, `# 文案\n\n**开场**\n\n![[项目/参考.png|参考.png]]\n\n${"Scene direction.\n\n".repeat(920)}## 最后一幕`);
+	await writeFile(join(root, "项目", "补充.md"), "## 场景备注\n\n补充说明。");
+	await writeFile(scriptPath, `# 文案\n\n**开场**\n\n![[项目/参考.png|参考.png]]\n\n![[项目/补充]]\n\n${"Scene direction.\n\n".repeat(920)}## 最后一幕`);
 	await expect.poll(async () => (await snapshot()).folders).toContain("项目");
 	await page.evaluate(() => window.loom.createCanvasFile("项目"));
 	const sidebar = page.locator(".library-sidebar");
@@ -126,6 +127,7 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	const heading = card.getByRole("heading", { name: "文案", exact: true });
 	await expect(heading).toBeVisible();
 	await expect(card.locator("strong")).toHaveText("开场");
+	await expect(card.locator(".markdown-note-embed").getByRole("heading", { name: "场景备注" })).toBeAttached();
 	await expect(card.getByText("Double-click to read the full file.")).toBeAttached();
 	await expect(card.getByRole("heading", { name: "最后一幕" })).toHaveCount(0);
 	await card.hover();

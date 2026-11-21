@@ -13,7 +13,7 @@ export { headingKey } from "./heading-key.ts";
 
 export interface MarkdownRenderContext {
 	fromRelativePath: string;
-	assets: Asset[];
+	assets: readonly Asset[];
 	lazyImages?: boolean;
 	compactEmbeds?: boolean;
 	/** Built from `assets` when absent. Pass one to share it across renders of the same library. */
@@ -88,12 +88,18 @@ function markInternalLink(token: { attrSet(name: string, value: string): void },
 const defaultHeadingOpen = markdown.renderer.rules.heading_open ?? ((tokens, idx, options, _env, self) => {
 	return self.renderToken(tokens, idx, options);
 });
-markdown.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
-	const text = (tokens[idx + 1]?.children ?? [])
+type MarkdownToken = ReturnType<typeof markdown.parse>[number];
+
+function headingTokenKey(inline: MarkdownToken | undefined): string {
+	const text = (inline?.children ?? [])
 		.filter((child) => child.type === "text" || child.type === "code_inline")
 		.map((child) => child.content)
 		.join("");
-	tokens[idx].attrSet(HEADING_ATTRIBUTE, headingKey(text));
+	return headingKey(text);
+}
+
+markdown.renderer.rules.heading_open = (tokens, idx, options, env, self) => {
+	tokens[idx].attrSet(HEADING_ATTRIBUTE, headingTokenKey(tokens[idx + 1]));
 	return defaultHeadingOpen(tokens, idx, options, env, self);
 };
 
@@ -222,14 +228,20 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	return true;
 });
 
-export function renderMarkdown(source: string, context?: MarkdownRenderContext): string {
-	return markdown.render(source, context as never);
+export function renderMarkdown(source: string, context?: MarkdownRenderContext, heading?: string): string {
+	if (!heading) return markdown.render(source, context as never);
+	const env = context ?? {};
+	const tokens = markdown.parse(source, env);
+	const isHeading = (token: MarkdownToken) => token.type === "heading_open" && token.level === 0;
+	const start = tokens.findIndex((token, index) => isHeading(token) && headingTokenKey(tokens[index + 1]) === heading);
+	if (start === -1) return "";
+	const end = tokens.findIndex((token, index) => index > start && isHeading(token) && token.tag <= tokens[start].tag);
+	return markdown.renderer.render(tokens.slice(start, end === -1 ? undefined : end), markdown.options, env);
 }
 
 /** The visible text of an inline Markdown heading, using exactly the HTML heading renderer's rule. */
 export function markdownHeadingKey(source: string): string {
-	const children = markdown.parseInline(source, {})[0]?.children ?? [];
-	return headingKey(children.filter((child) => child.type === "text" || child.type === "code_inline").map((child) => child.content).join(""));
+	return headingTokenKey(markdown.parseInline(source, {})[0]);
 }
 
 /** One line of Markdown without the paragraph around it: the content of a table cell. */

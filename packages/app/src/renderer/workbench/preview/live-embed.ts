@@ -1,6 +1,7 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import { WidgetType, type EditorView } from "@codemirror/view";
-import { EMBED_LINK_SELECTOR } from "./embed-renderers.ts";
+import { embeddedReference, hydrateMarkdownNoteEmbeds } from "./markdown-note-embed.ts";
+import type { MarkdownRenderContext } from "./markdown.ts";
 
 interface SourceRange {
 	from: number;
@@ -26,6 +27,7 @@ export const editingEmbed = StateField.define<SourceRange | null>({
 
 const instances = new WeakMap<HTMLElement, WikiEmbedWidget>();
 const observers = new WeakMap<HTMLElement, ResizeObserver>();
+const loads = new WeakMap<HTMLElement, AbortController>();
 
 export function embedUnderPointer(view: EditorView, target: Element | null): (SourceRange & { assetId: string; anchor?: string }) | null {
 	const element = target?.closest<HTMLElement>(".cm-wiki-embed");
@@ -41,18 +43,20 @@ export class WikiEmbedWidget extends WidgetType {
 	readonly anchor: string | undefined;
 	readonly html: string;
 	readonly open: ((assetId: string, anchor?: string) => void) | undefined;
+	readonly noteContext: MarkdownRenderContext | undefined;
 
-	constructor(length: number, assetId: string, anchor: string | undefined, html: string, open?: (assetId: string, anchor?: string) => void) {
+	constructor(length: number, assetId: string, anchor: string | undefined, html: string, open?: (assetId: string, anchor?: string) => void, noteContext?: MarkdownRenderContext) {
 		super();
 		this.length = length;
 		this.assetId = assetId;
 		this.anchor = anchor;
 		this.html = html;
 		this.open = open;
+		this.noteContext = noteContext;
 	}
 
 	eq(other: WikiEmbedWidget): boolean {
-		return this.length === other.length && this.html === other.html;
+		return this.length === other.length && this.html === other.html && this.noteContext === other.noteContext;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
@@ -62,10 +66,16 @@ export class WikiEmbedWidget extends WidgetType {
 		element.innerHTML = this.html;
 		instances.set(element, this);
 		element.addEventListener("click", (event) => {
-			if (!(event.target instanceof Element) || !event.target.closest(EMBED_LINK_SELECTOR)) return;
+			const reference = embeddedReference(event.target);
+			if (!reference) return;
 			event.preventDefault();
-			this.open?.(this.assetId, this.anchor);
+			this.open?.(reference.assetId, reference.anchor);
 		});
+		if (this.noteContext) {
+			const controller = new AbortController();
+			loads.set(element, controller);
+			void hydrateMarkdownNoteEmbeds(element, this.noteContext, controller.signal);
+		}
 		const observer = new ResizeObserver(() => view.requestMeasure());
 		observer.observe(element);
 		observers.set(element, observer);
@@ -75,6 +85,7 @@ export class WikiEmbedWidget extends WidgetType {
 	destroy(element: HTMLElement): void {
 		instances.delete(element);
 		observers.get(element)?.disconnect();
+		loads.get(element)?.abort();
 		observers.delete(element);
 	}
 }

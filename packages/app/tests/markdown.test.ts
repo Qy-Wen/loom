@@ -162,6 +162,20 @@ test("Markdown previews render self embeds as ordinary wiki links", () => {
 	}
 });
 
+test("Markdown note embeds render sections and stay compact in table cells", () => {
+	const context = { fromRelativePath: "脚本.md", assets: library };
+	assert.match(renderMarkdown("![[产品/说明#标题]]", context), /data-note-asset-id="deep".*data-anchor="标题"/);
+	assert.doesNotMatch(renderInlineMarkdown("![[产品/说明]]", context), /data-note-asset-id/);
+	assert.doesNotMatch(renderMarkdown("![[产品/说明#^block]]", context), /data-note-asset-id/);
+	const source = "# Before\n\n## **标题**\n\n```md\n## Inside code\n```\n\n### Child\n\nContent.\n\n## Next\n\nAfter.";
+	const html = renderMarkdown(source, context, "标题");
+	assert.match(html, /<h2 data-heading="标题"><strong>标题<\/strong><\/h2>/);
+	assert.match(html, /Inside code/);
+	assert.match(html, /<h3 data-heading="child">Child<\/h3>/);
+	assert.doesNotMatch(html, /Before|Next|After/);
+	assert.equal(renderMarkdown(source, context, "missing"), "");
+});
+
 test("renderMarkdown opens Markdown links to library files in the app", () => {
 	const html = render("[a](%E4%BA%A7%E5%93%81%E8%AF%B4%E6%98%8E.md) [b](产品/说明.md) [web](https://example.com)");
 	assert.match(html, /data-asset-id="notes"/);

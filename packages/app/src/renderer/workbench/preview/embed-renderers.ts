@@ -1,5 +1,6 @@
 import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
+import { isMarkdownFile } from "../../../shared/markdown-file.ts";
 import { markdownEmbedLayout } from "../../../shared/markdown-reference.ts";
 import { assetPosterUrl, assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 
@@ -16,6 +17,7 @@ interface EmbedContent {
 
 export const EMBED_LINK_SELECTOR = "a[data-embed-link]";
 export const EMBED_IMAGE_SELECTOR = "img[data-embed-image-id]";
+export const NOTE_EMBED_SELECTOR = ".markdown-note-embed[data-note-asset-id]";
 export const FILE_LINK_CLASS = "markdown-file-link";
 export const FILE_EXTENSION_CLASS = "markdown-file-link-extension";
 
@@ -65,7 +67,7 @@ const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string
 export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, compact = false): string {
 	const renderer = compact && markdownEmbedLayout(asset.type) === "block" ? undefined : renderers[asset.type];
 	const fragment = anchor ? ` data-anchor="${escapeHtml(anchor)}"` : "";
-	return (renderer ?? fileCard)({
+	const html = (renderer ?? fileCard)({
 		asset,
 		label: escapeHtml(reference.label || reference.target || asset.filename),
 		extension: fileExtensionLabel(asset, reference),
@@ -73,4 +75,6 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		src: escapeHtml(assetPreviewUrl(asset)),
 		compact,
 	});
+	if (compact || !isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
+	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body"></span></span>`;
 }

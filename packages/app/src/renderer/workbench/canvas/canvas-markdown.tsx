@@ -2,7 +2,8 @@ import { memo, useEffect, useMemo, useRef, useState } from "react";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
-import { EMBED_IMAGE_SELECTOR, EMBED_LINK_SELECTOR } from "../preview/embed-renderers.ts";
+import { EMBED_IMAGE_SELECTOR } from "../preview/embed-renderers.ts";
+import { embeddedReference, hydrateMarkdownNoteEmbeds } from "../preview/markdown-note-embed.ts";
 import { renderMarkdown } from "../preview/markdown.ts";
 
 const PREVIEW_BYTES = 16 * 1024;
@@ -50,11 +51,19 @@ export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, onOp
 		return () => controller.abort();
 	}, [url, visible]);
 
-	const html = useMemo(() => excerpt?.text && renderMarkdown(excerpt.text, {
+	const context = useMemo(() => ({
 		fromRelativePath: asset.relativePath,
 		assets,
 		lazyImages: true,
-	}), [asset.relativePath, assets, excerpt]);
+	}), [asset.relativePath, assets]);
+	// Keep the same HTML object across ordinary Canvas renders so React preserves the hydrated notes.
+	const markup = useMemo(() => excerpt?.text ? { __html: renderMarkdown(excerpt.text, context) } : undefined, [context, excerpt]);
+	useEffect(() => {
+		if (!markup || !root.current) return;
+		const controller = new AbortController();
+		void hydrateMarkdownNoteEmbeds(root.current, context, controller.signal);
+		return () => controller.abort();
+	}, [context, markup]);
 	const openImageMenu = (event: React.MouseEvent | React.KeyboardEvent) => {
 		const image = event.target instanceof Element ? event.target.closest<HTMLImageElement>(EMBED_IMAGE_SELECTOR) : null;
 		if (!image) return;
@@ -73,14 +82,13 @@ export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, onOp
 		}} onDoubleClick={(event) => {
 			if (event.target instanceof Element && event.target.matches(EMBED_IMAGE_SELECTOR)) event.stopPropagation();
 		}} onClick={(event) => {
-			if (!(event.target instanceof Element)) return;
-			const link = event.target.closest<HTMLElement>(EMBED_LINK_SELECTOR);
-			if (!link) return;
+			const reference = embeddedReference(event.target);
+			if (!reference) return;
 			event.preventDefault();
-			const target = assets.find((item) => item.assetId === link.dataset.assetId);
+			const target = assets.find((item) => item.assetId === reference.assetId);
 			if (target) onOpenAsset(target);
 		}}>
-			{html ? <div className="markdown-preview-body" dangerouslySetInnerHTML={{ __html: html }} /> :
+			{markup ? <div className="markdown-preview-body" dangerouslySetInnerHTML={markup} /> :
 				<span className="canvas-markdown-status">
 					{excerpt === undefined ? t.preview.loadingMarkdown : excerpt === null ? t.canvas.markdownFailed : t.canvas.markdownEmpty}
 				</span>}

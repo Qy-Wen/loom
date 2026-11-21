@@ -57,9 +57,9 @@ test("dragging a library file inserts an undoable link where it lands in Markdow
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(loomPage);
 	const file = join(root, "drop.md");
-	const reference = "参考 (v1).md";
+	const reference = "参考 (v1).txt";
 	const original = "Before\n\n```text\nCode\n```\n\nAfter\n\n| Header |\n| --- |\n| Cell |\n";
-	const link = "[[参考 (v1).md]]";
+	const link = "[[参考 (v1).txt]]";
 	await writeFile(file, original);
 	await writeFile(join(root, reference), "# Reference\n");
 	await row(loomPage, "drop.md").click();
@@ -146,14 +146,14 @@ test("dragging over a rendered wiki link shows the caret after the full link", a
 	const original = "[[Untitled 3.canvas]]";
 	await writeFile(file, original);
 	await writeFile(join(root, "Untitled 3.canvas"), JSON.stringify({ nodes: [], edges: [] }));
-	await writeFile(join(root, "reference.md"), "# Reference\n");
+	await writeFile(join(root, "reference.txt"), "Reference\n");
 	await row(loomPage, "drop.md").click();
 	const editor = loomPage.getByRole("textbox", { name: "Edit drop.md" });
 	const link = editor.locator(".cm-live-wiki[data-asset-id]");
 	await expect(link).toHaveText("Untitled 3.canvas");
 	await expect(editor.locator(".cm-live-hidden").filter({ hasText: "]]" })).toHaveCount(1);
 	const bounds = (await link.boundingBox())!;
-	const source = (await row(loomPage, "reference.md").boundingBox())!;
+	const source = (await row(loomPage, "reference.txt").boundingBox())!;
 	const { mouse } = loomPage;
 	const x = bounds.x + bounds.width / 2;
 	const y = bounds.y + bounds.height / 2;
@@ -170,7 +170,7 @@ test("dragging over a rendered wiki link shows the caret after the full link", a
 	await mouse.up();
 	await expect(caret).toHaveCount(0);
 	await loomPage.keyboard.press("ControlOrMeta+s");
-	await expect.poll(() => readFile(file, "utf8")).toBe(`${original} [[reference.md]]`);
+	await expect.poll(() => readFile(file, "utf8")).toBe(`${original} [[reference.txt]]`);
 });
 
 test("dropping native files imports them and inserts references only in edit modes", async ({ loomPage, electronApp }) => {
@@ -252,6 +252,22 @@ test("a library media drop can insert a link or embed a standalone player", asyn
 	await expect(editor.locator(".cm-wiki-embed video")).toBeVisible();
 	const labels = ["Insert link", "Embed content"];
 	expect(await menu.evaluate((state) => state.labels)).toEqual([labels, labels, labels]);
+});
+
+test("dropping a Markdown file can embed its rendered text", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const note = join(root, "drop.md");
+	await writeFile(note, "Drop here\n");
+	await writeFile(join(root, "reference.md"), "# Referenced heading\n\nRendered **content**.");
+	const menu = await recordDropMenus(electronApp!);
+	await menu.evaluate((state) => { state.choice = "Embed content"; });
+	await row(page, "drop.md").click();
+	const editor = page.getByRole("textbox", { name: "Edit drop.md", exact: true });
+	await row(page, "reference.md").dragTo(editor.locator(".cm-line").first(), { targetPosition: { x: 100, y: 10 } });
+	await expect.poll(() => readFile(note, "utf8")).toBe("Drop here\n\n![[reference.md]]\n");
+	await expect(editor.getByRole("heading", { name: "Referenced heading" })).toBeVisible();
+	await expect(editor.locator(".markdown-note-embed strong")).toHaveText("content");
 });
 
 test("canceling a native media drop skips import and embedding preserves unsupported file links", async ({ loomPage: page, electronApp }) => {

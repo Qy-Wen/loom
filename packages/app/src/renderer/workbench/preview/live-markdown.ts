@@ -2,6 +2,7 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, EditorState, Facet, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import type { Asset } from "@loom/core";
+import { isMarkdownFile } from "../../../shared/markdown-file.ts";
 import { createAssetLookup, matchWikiLink, resolveLinkTarget, resolveWikiTarget, type AssetLookup } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf } from "./heading-key.ts";
@@ -886,7 +887,8 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 	if (match.embed && !localHeading && asset?.relativePath !== context.fromRelativePath) {
 		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
 			const html = renderAssetEmbed(asset, match, anchor);
-			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, state.facet(handlersFacet)?.openAsset);
+			const noteContext = isMarkdownFile(asset.relativePath) ? context : undefined;
+			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, state.facet(handlersFacet)?.openAsset, noteContext);
 			found.push(Decoration.replace({ widget }).range(range.from, range.to));
 			return;
 		}
