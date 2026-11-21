@@ -93,11 +93,13 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	});
 	const group = saved.nodes.find((node) => node.type === "group")!;
 	expect(group.label).toBe("素材");
-	for (const card of saved.nodes.filter((node) => node.type !== "group")) {
-		expect(group.x).toBeLessThan(card.x);
-		expect(group.y).toBeLessThan(card.y);
-		expect(group.x + group.width).toBeGreaterThan(card.x + card.width);
-		expect(group.y + group.height).toBeGreaterThan(card.y + card.height);
+	const groupBounds = (await board.locator(".canvas-card.type-group").boundingBox())!;
+	for (const card of [fileCard, board.locator(".canvas-card.type-text")]) {
+		const bounds = (await card.boundingBox())!;
+		expect(groupBounds.x).toBeLessThan(bounds.x);
+		expect(groupBounds.y).toBeLessThan(bounds.y);
+		expect(groupBounds.x + groupBounds.width).toBeGreaterThan(bounds.x + bounds.width);
+		expect(groupBounds.y + groupBounds.height).toBeGreaterThan(bounds.y + bounds.height);
 	}
 	expect((await readdir(root)).sort()).toEqual([".loom", "参考.png", "分镜.canvas"].sort());
 
@@ -107,15 +109,83 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
 
 	const fileBefore = (await readBoard(path)).nodes.find((node) => node.type === "file")!;
+	const readImageRatio = () => fileCard.locator(".media-thumbnail img").evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight);
+	await expect.poll(readImageRatio).toBeGreaterThan(0);
+	const imageRatio = await readImageRatio();
+	await expect.poll(async () => {
+		const { width, height } = (await fileCard.boundingBox())!;
+		return width / height;
+	}).toBeCloseTo(imageRatio);
 	await fileCard.locator(".canvas-handle").press("ArrowRight");
 	await fileCard.locator(".canvas-resize").press("ArrowDown");
-	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.type === "file")?.height).toBe(fileBefore.height + 8);
-	expect((await readBoard(path)).nodes.find((node) => node.type === "file")?.x).toBe(fileBefore.x + 8);
+	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.type === "file")?.width).toBe(fileBefore.width + 8);
+	const fileAfter = (await readBoard(path)).nodes.find((node) => node.type === "file")!;
+	expect(fileAfter.x).toBe(fileBefore.x + 8);
+	expect(fileAfter.height).toBe(Math.ceil(fileAfter.width / imageRatio));
 	await page.evaluate((id) => window.loom.renameAsset(id, "参考改名"), reference.assetId);
 	await expect(fileCard.getByRole("button", { name: "Open preview 参考改名.png" })).toBeVisible();
 	await unlink(join(root, "参考改名.png"));
 	await expect(fileCard.getByText("Missing asset", { exact: true })).toBeVisible();
 	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+});
+
+test("canvas image and video frames follow the media aspect ratio when zoomed and resized", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const media = [
+		{ file: "still.png", ratio: 127 / 66 }, // Display ratio accounts for the PNG's non-square pixels.
+		{ file: "clip.mp4", ratio: 480 / 360 },
+	];
+	await Promise.all(media.map(({ file }) => copyFile(new URL(file, still), join(root, file))));
+	await writeFile(join(root, "Media.canvas"), JSON.stringify({
+		nodes: media.map(({ file }, index) => ({ id: file, type: "file", file, x: index * 270, y: 0, width: 244, height: 172 })),
+		edges: [],
+	} satisfies CanvasDocument));
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "Media.canvas" }).click();
+	const board = page.getByRole("region", { name: "Canvas Media.canvas" });
+	const cardFor = (file: string) => board.locator(".canvas-card").filter({ hasText: file });
+	const frameRatio = async (file: string) => {
+		const { width, height } = (await cardFor(file).boundingBox())!;
+		return width / height;
+	};
+	for (const { file, ratio } of media) {
+		const card = cardFor(file);
+		const preview = card.locator(".media-thumbnail img");
+		await expect.poll(() => preview.evaluate((image: HTMLImageElement) => image.naturalWidth / image.naturalHeight)).toBeCloseTo(ratio);
+		await expect.poll(() => frameRatio(file)).toBeCloseTo(ratio);
+		await expect(preview).toHaveCSS("object-fit", "contain");
+		await expect(card.locator(".canvas-card-frame")).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+		const bounds = (await card.boundingBox())!;
+		const title = (await card.locator(".canvas-card-header").boundingBox())!;
+		expect(title.y + title.height).toBeCloseTo(bounds.y);
+		expect(await preview.evaluate((image) => {
+			const frame = image.closest(".canvas-card-frame")!;
+			return { widthGap: frame.clientWidth - image.clientWidth, heightGap: frame.clientHeight - image.clientHeight };
+		})).toEqual({ widthGap: 0, heightGap: 0 });
+	}
+
+	const video = cardFor("clip.mp4");
+	const beforeZoom = (await video.boundingBox())!;
+	await board.getByRole("button", { name: "Zoom in" }).click();
+	const zoomed = (await video.boundingBox())!;
+	expect(zoomed.width).toBeCloseTo(beforeZoom.width * 1.25);
+	expect(zoomed.height).toBeCloseTo(beforeZoom.height * 1.25);
+	for (const { file, ratio } of media) expect(await frameRatio(file)).toBeCloseTo(ratio);
+	await board.getByRole("button", { name: "Fit view" }).click();
+
+	await video.locator(".canvas-handle").click();
+	const beforeResize = (await video.boundingBox())!;
+	const handle = (await video.locator(".canvas-resize").boundingBox())!;
+	await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(handle.x + handle.width / 2 + 45, handle.y + handle.height / 2 + 12, { steps: 4 });
+	await expect.poll(async () => (await video.boundingBox())!.width).toBeGreaterThan(beforeResize.width);
+	expect(await frameRatio("clip.mp4")).toBeCloseTo(4 / 3);
+	await page.mouse.up();
+	expect(await frameRatio("clip.mp4")).toBeCloseTo(4 / 3);
+	await expect.poll(async () => (await readBoard(join(root, "Media.canvas"))).nodes[1]?.width).toBeGreaterThan(244);
 });
 
 test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens the full preview on double-click", async ({ loomPage: page, electronApp }) => {
@@ -267,9 +337,29 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 	const target = board.locator(".canvas-node").filter({ hasText: "Target" });
 	await source.locator(".canvas-handle").click();
 	await expect(selection.getByRole("button", { name: "Edit" })).toBeVisible();
+	const surface = board.locator(".canvas-surface");
+	const grid = () => surface.evaluate((element) => {
+		const { backgroundImage, backgroundSize, backgroundPositionX, backgroundPositionY } = getComputedStyle(element);
+		return {
+			spacing: parseFloat(backgroundSize),
+			radius: parseFloat(backgroundImage.match(/[\d.]+px(?=\)+$)/)?.[0] ?? ""),
+			x: parseFloat(backgroundPositionX),
+			y: parseFloat(backgroundPositionY),
+		};
+	});
+	const beforeGrid = await grid();
 	const beforeZoom = (await selection.boundingBox())!;
 	await board.getByRole("button", { name: "Zoom in" }).click();
 	expect((await selection.boundingBox())!.width).toBe(beforeZoom.width);
+	const zoomedGrid = await grid();
+	expect(zoomedGrid.spacing).toBeCloseTo(beforeGrid.spacing * 1.25);
+	expect(zoomedGrid.radius).toBeCloseTo(beforeGrid.radius * 1.25);
+	await surface.dispatchEvent("wheel", { deltaX: 80, deltaY: 40 });
+	await expect(async () => {
+		const pannedGrid = await grid();
+		expect(pannedGrid.x).toBeCloseTo(zoomedGrid.x - 80);
+		expect(pannedGrid.y).toBeCloseTo(zoomedGrid.y - 40);
+	}).toPass();
 	await board.getByRole("button", { name: "Fit view" }).click();
 
 	await source.getByRole("button", { name: "Connect from right" }).dragTo(target.locator(".canvas-handle"));
@@ -278,7 +368,7 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 		fromNode: "source", toNode: "target", fromSide: "right",
 	});
 
-	await board.locator(".canvas-surface").dblclick({ position: { x: 38, y: 48 } });
+	await surface.dblclick({ position: { x: 38, y: 48 } });
 	await expect(board.getByRole("textbox", { name: "Markdown text" })).toBeFocused();
 	await page.keyboard.press("Escape");
 	await expect(board.getByRole("textbox", { name: "Markdown text" })).toHaveCount(0);

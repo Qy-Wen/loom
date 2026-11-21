@@ -10,6 +10,7 @@ import { CanvasIcon } from "./canvas-controls.tsx";
 import { CanvasMarkdown } from "./canvas-markdown.tsx";
 
 const PORTS = ["top", "right", "bottom", "left"] as const;
+export const CANVAS_CARD_HEADER_HEIGHT = 28;
 
 type CanvasCardProps = {
 	node: CanvasNode;
@@ -29,13 +30,14 @@ type CanvasCardProps = {
 	onText: (id: string, key: "text" | "label", value: string) => void;
 	onBlur: () => void;
 	onPreview: (asset: Asset) => void;
+	onMediaLoad: (asset: Asset, width: number, height: number) => void;
 	onRelink: (id: string) => void;
 	onConnect: (id: string, side: CanvasSide) => void;
 	onConnectDrag: (event: PointerEvent, node: CanvasNode, side: CanvasSide) => void;
 };
 
 export function CanvasCard({
-	node, asset, assets, selected, editing, showPorts, connecting, connectSide, style, onMove, onResize, onSelect, onNudge, onEdit, onText, onBlur, onPreview,
+	node, asset, assets, selected, editing, showPorts, connecting, connectSide, style, onMove, onResize, onSelect, onNudge, onEdit, onText, onBlur, onPreview, onMediaLoad,
 	onRelink, onConnect, onConnectDrag,
 }: CanvasCardProps): React.JSX.Element {
 	const { t } = useLocale();
@@ -45,6 +47,7 @@ export function CanvasCard({
 	const url = node.type === "link" && /^https?:\/\//i.test(node.url ?? "") ? node.url : undefined;
 	const markdownAsset = node.type === "file" && asset && extensionOf(asset.filename) === ".md" ? asset : undefined;
 	const openFromHandle = markdownAsset && !connecting;
+	const media = node.type === "file" && (asset?.type === "image" || asset?.type === "video");
 	function finishEditing(event: KeyboardEvent): void {
 		if (event.key === "Escape" && !isImeComposing(event.nativeEvent)) {
 			event.stopPropagation();
@@ -63,55 +66,58 @@ export function CanvasCard({
 				if (asset && node.type === "file") onPreview(asset);
 				if (node.type === "text" || node.type === "group") onEdit(node.id);
 			}}>
-			<header className="canvas-card-header">
-				<button type="button" className="canvas-handle" title={t.canvas.moveCard}
-					aria-label={openFromHandle ? `${t.canvas.preview} ${name}. ${t.canvas.moveCard}` : `${name}. ${t.canvas.moveCard}`}
-					aria-pressed={openFromHandle ? undefined : selected}
-					onClick={(event) => {
-						if (event.detail !== 0) return;
-						if (openFromHandle) onPreview(markdownAsset);
-						else onSelect(node.id, event.shiftKey);
-					}}
-					onKeyDown={(event) => onNudge(event, node.id, false)}>
-					{node.type === "file" && <CanvasIcon name="document" />}
-					<span>{name}</span>
-				</button>
+			<header className="canvas-card-header" style={{ height: CANVAS_CARD_HEADER_HEIGHT }}>
+				{node.type === "group" && editing ? (
+					<input className="canvas-group-title" aria-label={t.canvas.groupLabel} autoFocus value={node.label ?? ""}
+						onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "label", event.target.value)} />
+				) : (
+					<button type="button" className="canvas-handle" title={t.canvas.moveCard}
+						aria-label={openFromHandle ? `${t.canvas.preview} ${name}. ${t.canvas.moveCard}` : `${name}. ${t.canvas.moveCard}`}
+						aria-pressed={openFromHandle ? undefined : selected}
+						onClick={(event) => {
+							if (event.detail !== 0) return;
+							if (openFromHandle) onPreview(markdownAsset);
+							else onSelect(node.id, event.shiftKey);
+						}}
+						onKeyDown={(event) => onNudge(event, node.id, false)}>
+						{node.type === "file" && <CanvasIcon name="document" />}
+						<span>{name}</span>
+					</button>
+				)}
 			</header>
-			{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
-			{node.type === "file" && !markdownAsset && (
-				<div className="canvas-card-body">
-					{asset ? (
-						<button type="button" className="canvas-asset-preview" aria-label={`${t.canvas.preview} ${asset.filename}`}
-							onClick={(event) => {
-								if (event.detail !== 0) return;
-								if (connecting) onSelect(node.id, event.shiftKey);
-								else onPreview(asset);
-							}}><AssetThumbnail asset={asset} /></button>
-					) : (
-						<div className="canvas-missing">
-							<span>{t.canvas.missing}</span>
-							<button type="button" onClick={() => onRelink(node.id)}>{t.canvas.relink}</button>
-						</div>
-					)}
-				</div>
-			)}
-			{node.type === "text" && (
-				editing ? <textarea className="canvas-note-input" aria-label={t.canvas.textLabel} autoFocus value={node.text ?? ""}
-					onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "text", event.target.value)} />
-					: <NoteBody text={node.text ?? ""} />
-			)}
-			{node.type === "group" && editing && (
-				<input className="canvas-group-title" aria-label={t.canvas.groupLabel} autoFocus value={node.label ?? ""}
-					onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "label", event.target.value)} />
-			)}
-			{node.type === "link" && (
-				<div className="canvas-card-body canvas-external-link">
-					{url ? <a href={url} target="_blank" rel="noopener noreferrer">{url}</a> : node.url}
-				</div>
-			)}
-			<button type="button" className="canvas-resize" title={t.canvas.resizeCard} aria-label={`${name}. ${t.canvas.resizeCard}`}
-				onPointerDown={(event) => onResize(event, node.id)}
-				onKeyDown={(event) => onNudge(event, node.id, true)} />
+			<div className={`canvas-card-frame${media ? " canvas-card-media" : ""}`}>
+				{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
+				{node.type === "file" && !markdownAsset && (
+					<div className="canvas-card-body">
+						{asset ? (
+							<button type="button" className="canvas-asset-preview" aria-label={`${t.canvas.preview} ${asset.filename}`}
+								onClick={(event) => {
+									if (event.detail !== 0) return;
+									if (connecting) onSelect(node.id, event.shiftKey);
+									else onPreview(asset);
+								}}><AssetThumbnail asset={asset} variant="poster" onMediaLoad={(width, height) => onMediaLoad(asset, width, height)} /></button>
+						) : (
+							<div className="canvas-missing">
+								<span>{t.canvas.missing}</span>
+								<button type="button" onClick={() => onRelink(node.id)}>{t.canvas.relink}</button>
+							</div>
+						)}
+					</div>
+				)}
+				{node.type === "text" && (
+					editing ? <textarea className="canvas-note-input" aria-label={t.canvas.textLabel} autoFocus value={node.text ?? ""}
+						onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "text", event.target.value)} />
+						: <NoteBody text={node.text ?? ""} />
+				)}
+				{node.type === "link" && (
+					<div className="canvas-card-body canvas-external-link">
+						{url ? <a href={url} target="_blank" rel="noopener noreferrer">{url}</a> : node.url}
+					</div>
+				)}
+				<button type="button" className="canvas-resize" title={t.canvas.resizeCard} aria-label={`${name}. ${t.canvas.resizeCard}`}
+					onPointerDown={(event) => onResize(event, node.id)}
+					onKeyDown={(event) => onNudge(event, node.id, true)} />
+			</div>
 		</article>
 		{showPorts && PORTS.map((side) => <button key={side} type="button" className={`canvas-port is-${side}`}
 			aria-label={t.canvas.ports[side]} aria-pressed={connectSide === side}

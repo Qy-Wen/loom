@@ -3,6 +3,27 @@ import type { CanvasEdge, CanvasNode, CanvasSide } from "../../../shared/canvas.
 export type Point = { x: number; y: number };
 export type Viewport = Point & { scale: number };
 
+export function fitMediaNode(node: CanvasNode, ratio?: number): CanvasNode {
+	if (!ratio) return node;
+	const width = Math.min(node.width, node.height * ratio);
+	return { ...node, width, height: width / ratio };
+}
+
+export function reshapeNode(node: CanvasNode, delta: Point, resize: boolean, ratio?: number): CanvasNode {
+	const x = Math.round(delta.x), y = Math.round(delta.y);
+	if (!x && !y) return node;
+	if (!resize) return { ...node, x: node.x + x, y: node.y + y };
+	if (!ratio) return { ...node, width: Math.max(96, node.width + x), height: Math.max(72, node.height + y) };
+	const { width, height } = fitMediaNode(node, ratio);
+	const longestSide = Math.max(width, height);
+	// Project the pointer movement onto the resize diagonal so both edges move together.
+	const direction = { x: width / longestSide, y: height / longestSide };
+	const change = (delta.x * direction.x + delta.y * direction.y) / (direction.x ** 2 + direction.y ** 2);
+	const nextSide = Math.max(1, Math.min(longestSide, 96), Math.min(Number.MAX_SAFE_INTEGER, Math.round(longestSide + change)));
+	// JSON Canvas stores integer sizes. Round up the shorter side so fitting it again preserves the long side.
+	return { ...node, width: Math.ceil(nextSide * direction.x), height: Math.ceil(nextSide * direction.y) };
+}
+
 export function worldPoint(view: Viewport, point: Point): Point {
 	return { x: (point.x - view.x) / view.scale, y: (point.y - view.y) / view.scale };
 }

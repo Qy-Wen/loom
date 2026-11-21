@@ -41,7 +41,7 @@ export function assetThumbnailUrl(asset: AssetVersion): string {
 	return assetUrl("thumb", asset);
 }
 
-/** An uncropped video frame for the player before playback. */
+/** An uncropped cached still of an image or video. */
 export function assetPosterUrl(asset: AssetVersion): string {
 	return assetUrl("poster", asset);
 }

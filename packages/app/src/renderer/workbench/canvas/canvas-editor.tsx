@@ -1,16 +1,17 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type KeyboardEvent, type MouseEvent, type PointerEvent } from "react";
 import type { Asset } from "@loom/core";
 import { isCanvasLibraryPath, removeCanvasElements, type CanvasNode, type CanvasSide } from "../../../shared/canvas.ts";
 import { draggedAssetIds, endLibraryDrag, hasLibraryDrag, readLibraryDrag } from "../../assets/asset-drag.ts";
+import { assetPosterUrl } from "../../assets/asset-utils.ts";
 import { useConfirmation } from "../../components/confirm-dialog.tsx";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { rectBetween, rectsIntersect, type Rect } from "../browser/folder-browser-model.ts";
-import { CanvasCard } from "./canvas-card.tsx";
+import { CANVAS_CARD_HEADER_HEIGHT, CanvasCard } from "./canvas-card.tsx";
 import { CanvasConnections } from "./canvas-connections.tsx";
 import { CanvasAction, CanvasSelectionControls, CanvasToolbar } from "./canvas-controls.tsx";
-import { connectionCurve, containsCard, edgeCurve, edgePoint, fitNodes, movingCards, nodeBounds, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
+import { connectionCurve, containsCard, edgeCurve, edgePoint, fitMediaNode, fitNodes, movingCards, nodeBounds, reshapeNode, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
 import { useCanvasDocument } from "./use-canvas-document.ts";
 import { useCanvasDrag } from "./use-canvas-drag.ts";
 import "./canvas.css";
@@ -19,14 +20,6 @@ const EMPTY_NODES: CanvasNode[] = [];
 const ARROW_STEPS: Record<string, Point> = {
 	ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
 };
-
-function reshape(node: CanvasNode, delta: Point, resize: boolean): CanvasNode {
-	const x = Math.round(delta.x), y = Math.round(delta.y);
-	if (!x && !y) return node;
-	return resize
-		? { ...node, width: Math.max(96, node.width + x), height: Math.max(72, node.height + y) }
-		: { ...node, x: node.x + x, y: node.y + y };
-}
 
 export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, onError }: {
 	asset: Asset;
@@ -54,13 +47,20 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	const [fileSearch, setFileSearch] = useState<{ point: Point } | { replaceId: string } | null>(null);
 	const [editing, setEditing] = useState<string | null>(null);
 	const [box, setBox] = useState<Rect | null>(null);
-	const [shift, setShift] = useState<{ ids: ReadonlySet<string>; delta: Point; resize: boolean } | null>(null);
+	const [shift, setShift] = useState<{ ids: ReadonlySet<string>; delta: Point; resize: boolean; ratio?: number } | null>(null);
+	const [mediaRatios, setMediaRatios] = useState<ReadonlyMap<string, number>>(() => new Map());
 	const byId = useMemo(() => new Map(assets.map((file) => [file.assetId, file])), [assets]);
 	const byPath = useMemo(() => new Map(assets.map((file) => [file.relativePath, file])), [assets]);
 	const searchableFiles = useMemo(() => assets.filter((file) => isCanvasLibraryPath(file.relativePath)), [assets]);
 	const nodes = board.document?.nodes ?? EMPTY_NODES;
 	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
-	const visibleNodes = shift ? nodes.map((node) => shift.ids.has(node.id) ? reshape(node, shift.delta, shift.resize) : node) : nodes;
+	const layoutNodes = mediaRatios.size ? nodes.map((node) => fitMediaNode(node, mediaRatioForNode(node))) : nodes;
+	const visibleNodes = shift ? nodes.map((node, index) => {
+		if (!shift.ids.has(node.id)) return layoutNodes[index]!;
+		return shift.resize
+			? fitMediaNode(reshapeNode(node, shift.delta, true, shift.ratio), shift.ratio)
+			: reshapeNode(layoutNodes[index]!, shift.delta, false);
+	}) : layoutNodes;
 	const selectedNodes = [...selected].filter((id) => nodeIds.has(id));
 	const selection = visibleNodes.find((node) => node.id === selectedNodes.at(-1));
 	const single = selectedNodes.length === 1 ? selection : undefined;
@@ -69,6 +69,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	const to = edge && visibleNodes.find((node) => node.id === edge.toNode);
 	const midpoint = edge && from && to ? edgeCurve(edge, from, to).midpoint : undefined;
 	const anchor = selection ?? (midpoint && { ...midpoint, width: 0, height: 0 });
+	const anchorTopInset = selection ? CANVAS_CARD_HEADER_HEIGHT : 0;
 	const preview = single && assetForNode(single);
 	const canEdit = single && (single.type === "text" || single.type === "group");
 	const isEditing = canEdit && editing === single.id;
@@ -77,11 +78,23 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		return node.loom?.assetId ? byId.get(node.loom.assetId) : node.file ? byPath.get(node.file) : undefined;
 	}
 
+	function mediaRatioForNode(node: CanvasNode): number | undefined {
+		const file = node.type === "file" ? assetForNode(node) : undefined;
+		if (file?.type === "image" || file?.type === "video") return mediaRatios.get(assetPosterUrl(file));
+	}
+
+	function recordMediaSize(file: Asset, width: number, height: number): void {
+		if (width <= 0 || height <= 0) return;
+		const key = assetPosterUrl(file);
+		const ratio = width / height;
+		setMediaRatios((current) => current.get(key) === ratio ? current : new Map(current).set(key, ratio));
+	}
+
 	function fit(): void {
 		const element = surface.current;
 		if (!element) return;
 		const footerHeight = (docks.current?.offsetHeight ?? 0) + 12;
-		setView(fitNodes(board.live.current?.document.nodes ?? [], element.clientWidth, element.clientHeight - footerHeight));
+		setView(fitNodes(layoutNodes, element.clientWidth, element.clientHeight - footerHeight));
 	}
 
 	useLayoutEffect(() => {
@@ -195,13 +208,13 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		const picked = new Set(ids);
 		const cards = board.live.current?.document.nodes.filter((node) => picked.has(node.id));
 		if (!cards || cards.length < 2) return;
-		const bounds = nodeBounds(cards)!;
+		const bounds = nodeBounds(cards.map((node) => fitMediaNode(node, mediaRatioForNode(node))))!;
 		const padding = 32;
 		const id = crypto.randomUUID();
 		append([{
 			id, type: "group", label: t.canvas.group,
 			x: bounds.x - padding, y: bounds.y - padding,
-			width: bounds.width + padding * 2, height: bounds.height + padding * 2,
+			width: Math.ceil(bounds.width) + padding * 2, height: Math.ceil(bounds.height) + padding * 2,
 		}], true);
 		setEditing(id);
 	}
@@ -238,25 +251,27 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		return next;
 	}
 
-	function transform(ids: ReadonlySet<string>, delta: Point, resize: boolean): void {
+	function transform(ids: ReadonlySet<string>, delta: Point, resize: boolean, ratio?: number): void {
 		if (Math.round(delta.x) === 0 && Math.round(delta.y) === 0) return;
 		const current = board.live.current?.document;
-		if (current) board.commit({ ...current, nodes: current.nodes.map((node) => ids.has(node.id) ? reshape(node, delta, resize) : node) });
+		if (current) board.commit({ ...current, nodes: current.nodes.map((node) => ids.has(node.id) ? reshapeNode(node, delta, resize, ratio) : node) });
 	}
 
-	function dragNode(event: PointerEvent, id: string, resize: boolean): void {
+	function dragNode(event: PointerEvent, node: CanvasNode, resize: boolean): void {
 		if (event.button !== 0 || capture.drag.current) return;
+		const { id } = node;
 		event.preventDefault();
 		const target = event.target instanceof Element ? event.target.closest<HTMLButtonElement>("button") : null;
 		(target ?? event.currentTarget.querySelector<HTMLButtonElement>(".canvas-handle"))?.focus({ preventScroll: true });
 		const picked = resize ? new Set([id]) : selectNode(id, event.shiftKey || event.metaKey || event.ctrlKey);
 		if (!picked.has(id)) return;
 		if (resize) { setSelected(picked); setEdgeId(null); }
-		const ids = resize ? picked : movingCards(nodes, picked);
+		const ids = resize ? picked : movingCards(layoutNodes, picked);
+		const ratio = resize ? mediaRatioForNode(node) : undefined;
 		const scale = (delta: Point) => ({ x: delta.x / view.scale, y: delta.y / view.scale });
-		capture.begin(event, (delta) => setShift({ ids, delta: scale(delta), resize }), (delta) => {
+		capture.begin(event, (delta) => setShift({ ids, delta: scale(delta), resize, ratio }), (delta) => {
 			setShift(null);
-			if (delta) transform(ids, scale(delta), resize);
+			if (delta) transform(ids, scale(delta), resize, ratio);
 		}, resize ? 0 : 4);
 	}
 
@@ -280,7 +295,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 			setBox(null);
 			if (!delta) return;
 			const area = rectangle(delta);
-			const boxed = Math.hypot(delta.x, delta.y) < 4 ? [] : nodes
+			const boxed = Math.hypot(delta.x, delta.y) < 4 ? [] : layoutNodes
 				.filter((node) => node.type === "group" ? containsCard(area, node) : rectsIntersect(area, node))
 				.map((node) => node.id);
 			setSelected(new Set([...base, ...boxed]));
@@ -371,6 +386,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 			</div>}
 			<div className="canvas-viewport">
 				<div ref={surface} className={`canvas-surface${pan ? " pan" : ""}${connection ? " connecting" : ""}`} tabIndex={0} aria-label={t.canvas.canvas}
+					style={{ "--canvas-scale": view.scale, backgroundPosition: `${view.x}px ${view.y}px` } as CSSProperties}
 					onContextMenu={(event) => void openCanvasMenu(event)}
 					onPointerDownCapture={(event) => { if (pan || space.current || event.button === 1) pointerDown(event); }}
 					onPointerDown={(event) => { if (!event.defaultPrevented) pointerDown(event); }}
@@ -411,8 +427,8 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 								asset={assetForNode(node)}
 								assets={assets}
 								style={{ transform: `translate(${node.x}px, ${node.y}px)`, width: node.width, height: node.height }}
-								onMove={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, false); }}
-								onResize={(event, id) => { if (!event.defaultPrevented) dragNode(event, id, true); }}
+								onMove={(event) => { if (!event.defaultPrevented) dragNode(event, node, false); }}
+								onResize={(event) => { if (!event.defaultPrevented) dragNode(event, node, true); }}
 								onSelect={selectNode} onNudge={(event, id, resize) => {
 									const step = ARROW_STEPS[event.key];
 									if (!step || isImeComposing(event.nativeEvent)) return;
@@ -422,11 +438,16 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 									setEdgeId(null);
 									setConnection(null);
 									const distance = event.shiftKey ? 32 : 8;
-									transform(resize ? ids : movingCards(nodes, ids), { x: step.x * distance, y: step.y * distance }, resize);
+									const ratio = resize ? mediaRatioForNode(node) : undefined;
+									const direction = step.x || step.y;
+									const delta = ratio
+										? { x: direction * distance * Math.min(1, ratio), y: direction * distance * Math.min(1, 1 / ratio) }
+										: { x: step.x * distance, y: step.y * distance };
+									transform(resize ? ids : movingCards(layoutNodes, ids), delta, resize, ratio);
 								}}
 								onEdit={editCard} onBlur={board.endGroup}
 								onText={(id, key, value) => patchNode(id, (current) => ({ ...current, [key]: value }), id)}
-								onPreview={onPreview} onRelink={(id) => setFileSearch({ replaceId: id })}
+								onPreview={onPreview} onMediaLoad={recordMediaSize} onRelink={(id) => setFileSearch({ replaceId: id })}
 								onConnect={startConnection} onConnectDrag={dragConnection} />
 						))}
 						{box && <div className="canvas-marquee" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
@@ -441,8 +462,8 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 					<CanvasAction icon="redo" label={t.canvas.redo} disabled={!board.canRedo} onClick={board.redo} />
 				</CanvasToolbar>
 				{anchor && !shift && !box && !draft && <CanvasSelectionControls anchor={{
-					x: view.x + anchor.x * view.scale, y: view.y + anchor.y * view.scale,
-					width: anchor.width * view.scale, height: anchor.height * view.scale,
+					x: view.x + anchor.x * view.scale, y: view.y + (anchor.y - anchorTopInset) * view.scale,
+					width: anchor.width * view.scale, height: (anchor.height + anchorTopInset) * view.scale,
 				}}>
 					{edge && <input key={edge.id} className="canvas-edge-input" aria-label={t.canvas.edgeLabel} placeholder={t.canvas.edgeLabel}
 						value={edge.label ?? ""} onBlur={board.endGroup}
