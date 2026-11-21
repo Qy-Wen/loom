@@ -178,10 +178,12 @@ function editorMenuItems(t: Messages, state: EditorContextState): ContextMenuIte
 
 function markdownMenuItems(t: Messages, state: MarkdownContextState): ContextMenuItem<MarkdownContextAction>[] {
 	if (state.embed) {
-		return [
+		const items: ContextMenuItem<MarkdownContextAction>[] = [
 			{ label: t.menu.openEmbed, click: () => "open_embed" },
 			{ label: t.menu.editEmbed, enabled: !state.readOnly, click: () => "edit_embed" },
 		];
+		if (state.removeEmbed) items.push({ label: t.menu.removeEmbed, enabled: !state.readOnly, click: () => "remove_embed" });
+		return items;
 	}
 	const items: ContextMenuItem<MarkdownContextAction>[] = editorMenuItems(t, state);
 	if (state.readOnly) return items;

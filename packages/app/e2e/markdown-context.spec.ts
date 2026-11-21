@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import type { ElectronApplication, Page } from "playwright";
@@ -140,6 +140,41 @@ test("reading offers copy and select all but disables clipboard mutations and hi
 		await expect(box).toHaveAttribute("aria-readonly", "true");
 		expect(await readFile(file, "utf8")).toBe("alpha beta\n!");
 	} finally { await rm(root, { recursive: true, force: true }); }
+});
+
+test("removing an embed from its menu is undoable and leaves the original file in the library", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const libraryPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(libraryPath).toBeTruthy();
+	const root = (await libraryPath())!;
+	const file = join(root, "a.md");
+	const image = join(root, "still.png");
+	const fixture = new URL("../../core/tests/fixtures/media/still.png", import.meta.url);
+	const text = "![[still.png|Keep]]\n\nbefore ![[still.png|Remove]]after\n";
+	await copyFile(fixture, image);
+	await writeFile(file, text);
+	await page.locator(".asset-row").filter({ hasText: "a.md" }).click();
+
+	const box = page.getByRole("textbox", { name: "Edit a.md" });
+	const embed = box.getByRole("img", { name: "Remove", exact: true });
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	const readingItems = await menu(electronApp!, embed, "Remove embed");
+	expect(readingItems.find((item) => item.label === "Remove embed")?.enabled).toBe(false);
+	await expect(embed).toBeVisible();
+
+	await page.getByRole("button", { name: "Edit mode", exact: true }).click();
+	const editingItems = await menu(electronApp!, embed, "Remove embed");
+	expect(editingItems.find((item) => item.label === "Remove embed")?.enabled).toBe(true);
+	await expect(embed).toHaveCount(0);
+	await expect(box.getByRole("img", { name: "Keep", exact: true })).toBeVisible();
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe("![[still.png|Keep]]\n\nbefore after\n");
+	expect(await readFile(image)).toEqual(await readFile(fixture));
+
+	await box.press("ControlOrMeta+z");
+	await expect(embed).toBeVisible();
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
 });
 
 test("table menus copy and paste cell blocks, keep partial cell text and remain read-only while reading", async ({ loomPage: page, electronApp }) => {

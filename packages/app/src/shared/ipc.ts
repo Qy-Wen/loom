@@ -111,10 +111,11 @@ export const markdownFormats = {
 export type MarkdownInlineFormat = typeof markdownFormats.inline[number];
 export type MarkdownBlockFormat = typeof markdownFormats.block[number];
 export type MarkdownFormat = MarkdownInlineFormat | MarkdownBlockFormat;
-export type MarkdownContextAction = EditorContextAction | MarkdownFormat | "open_embed" | "edit_embed";
+export type MarkdownContextAction = EditorContextAction | MarkdownFormat | "open_embed" | "edit_embed" | "remove_embed";
 export type MarkdownDropAction = "link" | "embed";
 export interface MarkdownContextState extends EditorContextState {
 	embed?: boolean;
+	removeEmbed?: boolean;
 	/** Available formatting actions and whether the full selection already has each format. */
 	formats: Partial<Record<MarkdownFormat, boolean>>;
 }

@@ -135,8 +135,9 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const access = new Compartment();
 	const accessible = new Compartment();
 	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
-	const chooseEmbedAction = (readOnly: boolean) => host.chooseTextAction({
+	const chooseEmbedAction = (readOnly: boolean, removeEmbed = false) => host.chooseTextAction({
 		embed: true,
+		removeEmbed,
 		readOnly,
 		canUndo: false,
 		canRedo: false,
@@ -210,13 +211,25 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
 	function openEmbedMenu(embed: NonNullable<ReturnType<typeof embedUnderPointer>>): void {
 		const { state } = view;
-		void chooseEmbedAction(state.readOnly).then((action) => {
+		void chooseEmbedAction(state.readOnly, true).then((action) => {
 			if (!view.dom.isConnected || view.state.doc !== state.doc) return;
-			if (action === "open_embed") events.onOpenAsset(embed.assetId, embed.anchor);
-			if (action === "edit_embed" && !view.state.readOnly && view.state.field(editingEmbed, false) !== undefined) {
-				view.dispatch({ selection: { anchor: embed.from + 3 }, effects: revealEmbedSource.of(embed) });
-				view.focus();
+			if (action === "open_embed") {
+				events.onOpenAsset(embed.assetId, embed.anchor);
+				return;
 			}
+			if (view.state.readOnly || view.state.field(editingEmbed, false) === undefined) return;
+			if (action === "edit_embed") {
+				view.dispatch({ selection: { anchor: embed.from + 3 }, effects: revealEmbedSource.of(embed) });
+			} else if (action === "remove_embed") {
+				view.dispatch({
+					changes: { from: embed.from, to: embed.to },
+					selection: { anchor: embed.from },
+					annotations: isolateHistory.of("full"),
+					userEvent: "delete.embed",
+					scrollIntoView: true,
+				});
+			} else return;
+			view.focus();
 		}).catch(() => undefined);
 	}
 	view.contentDOM.addEventListener("keydown", (event) => {
@@ -262,7 +275,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			else if (action === "redo") redo(view);
 			else if (action === "select_all") selectAll(view);
 			else if (action === "cut" || action === "copy" || action === "paste") await host.clipboard(action);
-			else if (action !== "open_embed" && action !== "edit_embed" && view.state.doc === state.doc && view.state.selection.eq(state.selection)) {
+			else if (action !== "open_embed" && action !== "edit_embed" && action !== "remove_embed" && view.state.doc === state.doc && view.state.selection.eq(state.selection)) {
 				const edit = plans.get(action)?.transaction();
 				if (edit) view.dispatch({ ...edit, annotations: isolateHistory.of("full"), userEvent: "input.format", scrollIntoView: true });
 			}
