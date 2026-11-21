@@ -75,7 +75,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type FolderContextAction, type LibraryContextAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type FolderContextAction, type LibraryContextAction, type LibraryCreateAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
 import { messagesFor, uiPlatform, type Messages, type UiPlatform } from "../shared/locale.ts";
@@ -197,6 +197,14 @@ function markdownMenuItems(t: Messages, state: MarkdownContextState): ContextMen
 		items.push({ type: "separator" }, { label: t.menu.format.label, submenu });
 	}
 	return items;
+}
+
+function libraryCreateMenuItems(t: Messages, filesEnabled = true): ContextMenuItem<LibraryCreateAction>[] {
+	return [
+		{ label: t.menu.newFolder, click: () => "new_folder" },
+		{ label: t.menu.newMdFile, enabled: filesEnabled, click: () => "new_md_file" },
+		{ label: t.canvas.newCanvas, enabled: filesEnabled, click: () => "new_canvas" },
+	];
 }
 
 function popupContextMenu<T extends string>(
@@ -665,7 +673,7 @@ function registerIpc(): void {
 					click: () => favorite ? "unfavorite" : "favorite",
 				},
 				{ type: "separator" },
-				{ label: t.menu.newFolder, click: () => "new_folder" },
+				...libraryCreateMenuItems(t),
 				{ type: "separator" },
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.duplicate, click: () => "duplicate" },
@@ -695,9 +703,7 @@ function registerIpc(): void {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
-				{ label: t.menu.newFolder, click: () => "new_folder" },
-				{ label: t.menu.newMdFile, enabled: single, click: () => "new_md_file" },
-				{ label: t.canvas.newCanvas, enabled: single, click: () => "new_canvas" },
+				...libraryCreateMenuItems(t, single),
 				{ type: "separator" },
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },
@@ -717,9 +723,7 @@ function registerIpc(): void {
 		async (event, canPaste: boolean): Promise<LibraryContextAction | null> => {
 			const { t } = await uiCopy();
 			return popupContextMenu<LibraryContextAction>(event, [
-				{ label: t.menu.newFolder, click: () => "new_folder" },
-				{ label: t.menu.newMdFile, click: () => "new_md_file" },
-				{ label: t.canvas.newCanvas, click: () => "new_canvas" },
+				...libraryCreateMenuItems(t),
 				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
 			]);
 		},

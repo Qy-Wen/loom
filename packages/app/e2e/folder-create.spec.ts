@@ -164,3 +164,47 @@ test("folder menu leads with New Folder, New Markdown File and New Canvas, and c
 	await editor.press("Enter");
 	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/inside.md");
 });
+
+test("file menus create Markdown and canvas files next to the clicked file", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "notes"));
+	await writeFile(join(root, "notes", "existing.md"), "# Existing");
+	const paths = async () => (await snapshot()).assets.map((asset) => asset.relativePath);
+	await expect.poll(paths).toContain("notes/existing.md");
+	const sidebar = page.locator(".library-sidebar");
+	const browser = page.locator(".folder-browser");
+	const folder = sidebar.locator(".folder-row").filter({ hasText: /^notes$/ });
+	await expect(folder).toBeVisible();
+	const expand = folder.getByRole("button", { name: "Expand folder" });
+	if (await expand.count()) await expand.click();
+
+	const cases = [
+		{ label: "New Markdown File", file: sidebar.locator(".asset-row").filter({ hasText: "existing.md" }), editor: sidebar.locator(".rename-editor input"), stem: "sibling note", extension: "md" },
+		{ label: "New Canvas", file: browser.locator(".browser-tile").filter({ hasText: "existing.md" }), editor: browser.locator(".browser-tile-rename input"), stem: "sibling canvas", extension: "canvas" },
+	];
+	for (const { label, file, editor, stem, extension } of cases) {
+		if (extension === "canvas") {
+			await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+			await sidebar.locator(".folder-main").filter({ hasText: /^notes$/ }).click();
+		}
+		await electronApp!.evaluate(({ Menu }, label) => {
+			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+				const start = this.items.findIndex((item) => item.label === "New Folder");
+				const items = this.items.slice(start, start + 3);
+				(globalThis as { createLabels?: string[] }).createLabels = items.map((item) => item.label);
+				items.find((item) => item.label === label && item.enabled)?.click();
+				options?.callback?.();
+			};
+		}, label);
+		await file.click({ button: "right" });
+		await expect(editor).toBeFocused();
+		await editor.fill(stem);
+		await editor.press("Enter");
+		await expect.poll(paths).toContain(`notes/${stem}.${extension}`);
+		expect(await electronApp!.evaluate(() => (globalThis as { createLabels?: string[] }).createLabels))
+			.toEqual(["New Folder", "New Markdown File", "New Canvas"]);
+	}
+});

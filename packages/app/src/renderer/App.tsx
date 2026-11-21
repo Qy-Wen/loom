@@ -974,10 +974,13 @@ export function App(): React.JSX.Element {
 
 	async function showAssetContextMenu(asset: Asset): Promise<void> {
 		const next = contextSelection(picked, assetKey(asset.assetId));
+		const sameLibrary = detailRequests.current.libraryGuard();
+		const directory = parentFolder(asset.relativePath);
 		setPicked(next);
 		setError(null);
 		try {
 			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1, !iconMode);
+			if (!sameLibrary()) return;
 			if (action === "open") {
 				selectAsset(asset.assetId);
 			} else if (action === "open_in_new_tab") {
@@ -1002,9 +1005,13 @@ export function App(): React.JSX.Element {
 			} else if (action === "cut") {
 				cutSelection(next);
 			} else if (action === "paste") {
-				await pasteInto(parentFolder(asset.relativePath));
+				await pasteInto(directory);
 			} else if (action === "new_folder") {
-				await createFolderIn(parentFolder(asset.relativePath));
+				await createFolderIn(directory);
+			} else if (action === "new_md_file") {
+				await createMarkdownIn(directory);
+			} else if (action === "new_canvas") {
+				await createCanvasIn(directory);
 			} else if (action === "copy_path") {
 				await copySelectionPaths(next);
 			} else if (action === "reveal") {
@@ -1013,7 +1020,7 @@ export function App(): React.JSX.Element {
 				if (await trashSelection(next)) clearLibrarySelection();
 			}
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
 

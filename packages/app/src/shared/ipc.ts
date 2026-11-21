@@ -69,7 +69,9 @@ export type ChatLoginPrompt =
 	| { type: "info"; message: string; links?: { url: string; label?: string }[] }
 	| { type: "progress"; message: string };
 
+export type LibraryCreateAction = "new_folder" | "new_md_file" | "new_canvas";
 export type AssetContextAction =
+	| LibraryCreateAction
 	| "open"
 	| "open_in_new_tab"
 	| "add_to_chat"
@@ -80,23 +82,20 @@ export type AssetContextAction =
 	| "cut"
 	| "copy"
 	| "paste"
-	| "new_folder"
 	| "copy_path"
 	| "reveal"
 	| "trash";
 export type AssetTabContextAction = "pin" | "unpin" | "locate";
 export type FolderContextAction =
+	| LibraryCreateAction
 	| "rename"
 	| "cut"
 	| "copy"
 	| "paste"
-	| "new_folder"
-	| "new_md_file"
-	| "new_canvas"
 	| "copy_path"
 	| "reveal"
 	| "trash";
-export type LibraryContextAction = "paste" | "new_folder" | "new_md_file" | "new_canvas";
+export type LibraryContextAction = "paste" | LibraryCreateAction;
 export type EditorClipboardAction = "cut" | "copy" | "paste";
 export type EditorContextAction = EditorClipboardAction | "undo" | "redo" | "select_all";
 export interface EditorContextState {
