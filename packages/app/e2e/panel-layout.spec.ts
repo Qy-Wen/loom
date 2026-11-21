@@ -185,17 +185,22 @@ for (const sourceMode of ["dock", "float", "bottom", "beside"] as const) test(`t
 				titleLeft: title.getBoundingClientRect().left,
 				panelWidth: target.getBoundingClientRect().width,
 				overlayWidth: Number.parseFloat(overlay.width),
+				overlayTop: overlay.top,
+				topRightRadius: overlay.borderTopRightRadius,
 			};
 		});
+		const topRightInset = process.platform === "darwin" ? 1 : 0;
 		expect(hover.overlayLeft, "sidebar edge must not shift when its neighbor starts dragging").toBeCloseTo(initial!.x, 1);
 		expect(hover.overlayLeft, "outline aligns with target panel").toBeCloseTo(hover.panelLeft, 1);
 		expect(hover.overlayLeft, "outline aligns with visible title edge").toBeCloseTo(hover.titleLeft, 1);
-		expect(hover.overlayWidth).toBeCloseTo(hover.panelWidth, 1);
+		expect(hover.overlayWidth).toBeCloseTo(hover.panelWidth - topRightInset, 1);
+		expect(hover.overlayTop).toBe(`${topRightInset}px`);
+		expect(hover.topRightRadius).toBe(topRightInset ? "15px" : "0px");
 		await page.mouse.up();
 		await expect(page.locator(".side-stack.joined.dock-band")).toBeVisible();
 		const landed = await page.locator(".side-stack.joined.dock-band").boundingBox();
 		expect(landed!.x).toBeCloseTo(hover.overlayLeft, 1);
-		expect(landed!.width).toBeCloseTo(hover.overlayWidth, 1);
+		expect(landed!.width).toBeCloseTo(hover.overlayWidth + topRightInset, 1);
 		await expect(page.locator('.panel-tabs button[data-tab="agent"]')).toBeVisible();
 		await expect(page.locator('.panel-tabs button[data-tab="details"]')).toBeVisible();
 	} finally { await page.mouse.up(); }
@@ -376,6 +381,35 @@ test("joined upper tabs cover the lower divider gap and keep it covered after re
 	} finally { await page.mouse.up(); }
 });
 
+for (const layout of ["native", "Windows"] as const) test(`a new right dock preview follows the ${layout} window corner`, async ({ loomPage: page, electronApp }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
+	test.skip(layout === "Windows" && process.platform !== "darwin", "the native test covers Windows on Windows");
+	if (layout === "Windows") {
+		await electronApp!.evaluate(({ BrowserWindow }) => {
+			const contents = BrowserWindow.getAllWindows()[0]!.webContents;
+			contents.setUserAgent(contents.getUserAgent().replace(/\([^)]*\)/, "(Windows NT 10.0; Win64; x64)"));
+		});
+	}
+	await configurePanels(page, ["float", "float", "float"]);
+	const shell = page.locator(".shell");
+	const bounds = (await shell.boundingBox())!;
+	const handle = (await page.locator('.work-panel[data-panel="details"] .work-panel-title').boundingBox())!;
+	try {
+		await page.mouse.move(handle.x + handle.width / 2, handle.y + handle.height / 2);
+		await page.mouse.down();
+		await page.mouse.move(bounds.x + bounds.width - 8, bounds.y + 180, { steps: 12 });
+		await expect(shell).toHaveClass(/\bdock-target\b/);
+		const preview = page.locator(".panel-slot.drop-preview");
+		await expect(preview).toBeVisible();
+		const stroke = await preview.evaluate((slot) => {
+			const style = getComputedStyle(slot, "::after");
+			return { top: style.top, right: style.right, radius: style.borderTopRightRadius };
+		});
+		const rounded = layout === "native" && process.platform === "darwin";
+		expect(stroke).toEqual({ top: rounded ? "1px" : "0px", right: "1px", radius: rounded ? "15px" : "0px" });
+	} finally { await page.mouse.up(); }
+});
+
 for (const edge of ["top", "bottom"] as const) test(`dragging onto the right panel ${edge} edge stacks panels instead of joining tabs`, async ({ loomPage: page }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated layout acceptance uses temporary user data");
 	await configurePanels(page, ["float", "dock", "float"]);
@@ -393,6 +427,8 @@ for (const edge of ["top", "bottom"] as const) test(`dragging onto the right pan
 		await expect(page.locator(".shell.dock-split-target")).toBeVisible();
 		await expect(page.locator(".shell.join-target")).toHaveCount(0);
 		await expect(agent).toHaveClass(/\bdock\b/);
+		const topRightRadius = await page.locator(".panel-slot.drop-preview").evaluate((slot) => getComputedStyle(slot, "::after").borderTopRightRadius);
+		expect(topRightRadius).toBe(edge === "top" && process.platform === "darwin" ? "15px" : "0px");
 		const preview = { agent: (await agent.boundingBox())!, details: (await details.boundingBox())! };
 		expect(preview.details.height).toBeLessThan(target!.height * 0.6);
 		expect(preview.agent.height).toBeCloseTo(preview.details.height, 1);

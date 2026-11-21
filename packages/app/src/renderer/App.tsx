@@ -92,12 +92,14 @@ const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
 type WorkbenchView = "library" | "table" | "graph";
 type FolderRename = { relativePath: string; view: "tree" | "browser" };
 
-function meetsWindowCorner(
-	frame: { x: number; y: number; width: number; height: number },
+function joinWindowCorners(
+	frame: { x: number; y: number; width: number; height: number } | null,
 	shell: HTMLElement | null,
-): boolean {
-	if (!shell) return false;
-	return frame.x + frame.width >= shell.clientWidth - 2 && frame.y + frame.height >= shell.clientHeight - 2;
+): string {
+	if (!frame || !shell || frame.x + frame.width < shell.clientWidth - 2) return "";
+	const top = frame.y <= 1 ? " window-top-right" : "";
+	const bottom = frame.y + frame.height >= shell.clientHeight - 2 ? " window-bottom-right" : "";
+	return top + bottom;
 }
 
 type LibraryClipboard = {
@@ -1616,8 +1618,9 @@ export function App(): React.JSX.Element {
 				)}
 
 				<div
-					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.dockSplitFrame ? " dock-split-target" : ""}${panels.joinFrame && meetsWindowCorner(panels.joinFrame, shellRef.current) ? " window-corner" : ""}`}
+					className={`shell${libraryCollapsed ? " library-collapsed" : ""}${docked ? "" : " side-hidden"}${bottom ? " has-bottom" : ""}${beside ? " has-beside" : ""}${above ? " has-above" : ""}${panelsCollapsed ? " panels-collapsed" : ""}${collapseOnBottom ? " panel-collapse-bottom" : ""}${collapseOnAbove ? " panel-collapse-above" : ""}${panels.dragDock ? " dock-target" : ""}${panels.lowerFrame ? " lower-target" : ""}${panels.joinFrame ? " join-target" : ""}${panels.spliceFrame ? " splice-target" : ""}${panels.dockSplitFrame ? " dock-split-target" : ""}${joinWindowCorners(panels.joinFrame, shellRef.current)}`}
 					ref={shellRef}
+					data-mac-windowed={macLayout && !fullscreen || undefined}
 					data-mac-fullscreen={macLayout && fullscreen || undefined}
 					style={{
 						...shellStyle,

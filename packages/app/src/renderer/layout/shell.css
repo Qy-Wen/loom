@@ -8,6 +8,7 @@
 .shell {
 	position: relative;
 	--window-corner: 16px;
+	--window-inset-corner: calc(var(--window-corner) - 1px);
 	--join-border-width: 2px;
 	--layout-motion-duration: 240ms;
 	--layout-toggle-duration: var(--layout-motion-duration);
@@ -89,5 +90,6 @@ body.dragging-panel .shell {
 	pointer-events: none;
 }
 .shell.lower-target::before { left: var(--lower-x); top: calc(var(--lower-y) - 1px); width: var(--lower-w); height: calc(var(--lower-h) + 1px); }
-.shell.dock-target::before { top: -1px; right: 0; bottom: 0; width: calc(var(--side-width) + 5px); border-bottom-right-radius: var(--window-corner); }
+.shell.dock-target::before { top: -1px; right: 0; bottom: 0; left: calc(100% - var(--side-width) - 5px); border-bottom-right-radius: var(--window-corner); }
+.shell[data-mac-windowed].dock-target::before { top: 1px; right: 1px; border-top-right-radius: var(--window-inset-corner); }
 .shell.side-hidden.lower-target::before { border-bottom-right-radius: var(--window-corner); }

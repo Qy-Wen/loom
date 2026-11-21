@@ -64,7 +64,11 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.splice-target::before { left: var(--splice-x); top: var(--splice-y); width: var(--splice-w); height: var(--splice-h); border: 2px solid var(--lm-border-accent); background: var(--lm-selection-soft); }
 .shell.dock-split-target::before { left: var(--dock-split-x); top: var(--dock-split-y); width: var(--dock-split-w); height: var(--dock-split-h); border: 2px solid var(--lm-border-accent); background: var(--lm-selection-soft); }
 .shell.join-target::before { left: var(--join-x); top: var(--join-y); width: var(--join-w); height: var(--join-h); border: var(--join-border-width) dashed var(--lm-border-accent); background: transparent; }
-.shell.join-target.window-corner::before { border-bottom-right-radius: var(--window-corner); }
+.shell.join-target.window-bottom-right::before { border-bottom-right-radius: var(--window-corner); }
+.shell[data-mac-windowed].join-target.window-top-right::before {
+	top: 1px; right: 1px; width: auto; height: calc(var(--join-y) + var(--join-h) - 1px);
+	border-top-right-radius: var(--window-inset-corner);
+}
 .shell:has(.panel-slot.drop-preview)::before { display: none; }
 /* Lift both stacking contexts so dividers cannot cover the preview's border. */
 .panel-region:has(.drop-preview),
@@ -73,15 +77,18 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .panel-region.dock-band,
 .shell.side-hidden > .panel-region:is(.beside-band, .bottom-band),
 .shell.side-hidden:not(.has-beside) > .panel-region.above-band { --preview-window-right: 1; }
+.shell[data-mac-windowed] > .panel-region:is(.dock-band, .beside-band) > .panel-region-content > .panel-slot:first-child { --preview-window-top: 1; }
 .panel-region:is(.dock-band, .bottom-band) > .panel-region-content > .panel-slot:last-child,
 .shell:not(.has-bottom) > .panel-region:is(.beside-band, .above-band) > .panel-region-content > .panel-slot:last-child { --preview-window-bottom: 1; }
 .shell.library-collapsed > .panel-region:is(.bottom-band, .above-band) { --preview-window-left: 1; }
 .panel-slot.drop-preview::after {
 	position: absolute; inset: 0; z-index: var(--lm-z-overlay); box-sizing: border-box;
+	top: calc(var(--preview-window-top, 0) * var(--preview-window-right, 0) * 1px);
 	left: calc(var(--preview-window-left, 0) * 1px); right: calc(var(--preview-window-right, 0) * 1px); bottom: calc(var(--preview-window-bottom, 0) * 1px);
 	border: 2px solid var(--lm-border-accent);
-	border-bottom-right-radius: calc((var(--window-corner) - 1px) * var(--preview-window-right, 0) * var(--preview-window-bottom, 0));
-	border-bottom-left-radius: calc((var(--window-corner) - 1px) * var(--preview-window-left, 0) * var(--preview-window-bottom, 0));
+	border-top-right-radius: calc(var(--window-inset-corner) * var(--preview-window-right, 0) * var(--preview-window-top, 0));
+	border-bottom-right-radius: calc(var(--window-inset-corner) * var(--preview-window-right, 0) * var(--preview-window-bottom, 0));
+	border-bottom-left-radius: calc(var(--window-inset-corner) * var(--preview-window-left, 0) * var(--preview-window-bottom, 0));
 	background: var(--lm-selection-soft); content: ""; pointer-events: none;
 }
 .panel-region.above-band > .panel-region-content > .panel-slot.drop-preview:first-child::after,
