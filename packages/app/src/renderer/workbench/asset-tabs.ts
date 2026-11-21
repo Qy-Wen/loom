@@ -75,7 +75,7 @@ export function moveTab(tabs: AssetTabs, assetId: string, beforeId: string | nul
 
 /**
  * Open files dropped onto the tab strip, in order, before `beforeId` (or at the end when null).
- * Dropped tabs are pinned, and the first becomes active. An existing tab moves to the drop position.
+ * New tabs are previews. Existing tabs move with their pin state, and the first dropped file becomes active.
  */
 export function insertTabs(tabs: AssetTabs, assetIds: readonly string[], beforeId: string | null): AssetTabs {
 	const incoming = [...new Set(assetIds)];
@@ -84,8 +84,9 @@ export function insertTabs(tabs: AssetTabs, assetIds: readonly string[], beforeI
 	// If the tab dropped on is itself being moved, it still marks the spot: count the tabs ahead of it that stay.
 	const anchor = beforeId === null ? -1 : tabs.ids.indexOf(beforeId);
 	const position = anchor < 0 ? rest.length : tabs.ids.slice(0, anchor).filter((id) => !incoming.includes(id)).length;
-	const previews = tabs.previews.filter((id) => !incoming.includes(id));
-	return { ids: [...rest.slice(0, position), ...incoming, ...rest.slice(position)], active: incoming[0], previews };
+	const ids = [...rest.slice(0, position), ...incoming, ...rest.slice(position)];
+	const previews = [...tabs.previews, ...incoming.filter((id) => !tabs.ids.includes(id))];
+	return activateTab({ ids, active: null, previews }, incoming[0]);
 }
 
 /**

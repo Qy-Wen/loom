@@ -114,28 +114,35 @@ describe("asset tabs", () => {
 		assert.equal(moveTab(current, "a", "x"), current);
 	});
 
-	it("opens dropped files as tabs at the drop position and shows the first one", () => {
-		assert.deepEqual(insertTabs(emptyAssetTabs, ["x", "y"], null), tabs(["x", "y"], "x"));
-		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x", "y"], "b"), tabs(["a", "x", "y", "b", "c"], "x"));
-		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x"], null), tabs(["a", "b", "c", "x"], "x"));
+	it("opens dropped files as previews at the drop position and shows the first one", () => {
+		assert.deepEqual(insertTabs(emptyAssetTabs, ["x", "y"], null), tabs(["x", "y"], "x", "y", "x"));
+		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x", "y"], "b"), tabs(["a", "x", "y", "b", "c"], "x", "y", "x"));
+		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x"], null), tabs(["a", "b", "c", "x"], "x", "x"));
 	});
 
 	it("moves a dropped file that is already open instead of duplicating it", () => {
 		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["c"], "a"), tabs(["c", "a", "b"], "c"));
 		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "b"), ["a"], "a"), tabs(["a", "b", "c"], "a"));
-		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x", "b"], "c"), tabs(["a", "x", "b", "c"], "x"));
+		assert.deepEqual(insertTabs(tabs(["a", "b", "c"], "a"), ["x", "b"], "c"), tabs(["a", "x", "b", "c"], "x", "x"));
 	});
 
 	it("ignores duplicate ids and an empty drop", () => {
-		assert.deepEqual(insertTabs(tabs(["a"], "a"), ["x", "x"], null), tabs(["a", "x"], "x"));
+		assert.deepEqual(insertTabs(tabs(["a"], "a"), ["x", "x"], null), tabs(["a", "x"], "x", "x"));
 		const current = tabs(["a"], "a");
 		assert.equal(insertTabs(current, [], null), current);
 	});
 
-	it("pins a dropped preview and preserves an unrelated preview", () => {
+	it("preserves the pin state of dropped tabs that are already open", () => {
 		const current = tabs(["a", "b"], "b", "a");
-		assert.deepEqual(insertTabs(current, ["a"], null), tabs(["b", "a"], "a"));
-		assert.deepEqual(insertTabs(current, ["c"], null), tabs(["a", "b", "c"], "c", "a"));
+		assert.deepEqual(insertTabs(current, ["a"], null), tabs(["b", "a"], "a", "a"));
+		assert.deepEqual(insertTabs(current, ["b", "c"], "a"), tabs(["b", "c", "a"], "b", "a", "c"));
+	});
+
+	it("browsing replaces the first dropped preview even if it was already active", () => {
+		const current = tabs(["a", "b"], "b", "a", "b");
+		const dropped = insertTabs(current, ["b", "c"], null);
+		assert.deepEqual(dropped, tabs(["a", "b", "c"], "b", "a", "c", "b"));
+		assert.deepEqual(showPreviewTab(dropped, "d"), tabs(["a", "d", "c"], "d", "a", "c", "d"));
 	});
 
 	it("drops tabs whose file left the library and falls back to a neighbour", () => {

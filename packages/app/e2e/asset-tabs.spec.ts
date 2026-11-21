@@ -158,6 +158,27 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 	await expect(tab("Third.md")).toHaveAccessibleDescription("Pinned tab");
 });
 
+test("files dragged from the tree into the tab strip open as previews", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await writeFile(join(root, "Pinned.md"), "# Pinned");
+	await writeFile(join(root, "Dragged.md"), "# Dragged");
+
+	const file = (name: string) => page.locator(".library-sidebar .asset-row").filter({ hasText: name });
+	const strip = page.getByRole("tablist", { name: "Open files" });
+	const pinned = strip.getByRole("tab", { name: "Pinned.md", exact: true });
+	const dragged = strip.getByRole("tab", { name: "Dragged.md", exact: true });
+	await file("Pinned.md").click({ button: "middle" });
+	await expect(pinned).toHaveAccessibleDescription("Pinned tab");
+	await file("Dragged.md").dragTo(pinned, { targetPosition: { x: 4, y: 10 } });
+	await expect(dragged).toHaveAttribute("aria-selected", "true");
+	await expect(dragged).toHaveAccessibleDescription(/Preview tab/);
+	await expect(dragged.locator(".asset-tab-pin")).toHaveCount(0);
+	await expect(pinned).toHaveAccessibleDescription("Pinned tab");
+});
+
 test("asset tabs can be opened, moved and closed with their files", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(45000);
