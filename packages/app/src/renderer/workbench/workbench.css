@@ -181,7 +181,7 @@
 	display: flex;
 	align-items: stretch;
 	flex: 0 1 auto;
-	min-width: 72px;
+	min-width: 92px;
 	max-width: 200px;
 	border-radius: var(--lm-radius-sm) var(--lm-radius-sm) 0 0;
 }
@@ -197,10 +197,11 @@
 .asset-tab > button[role="tab"] {
 	display: flex;
 	align-items: center;
-	gap: var(--lm-space-2);
+	gap: var(--lm-space-1);
 	min-width: 0;
 	flex: 1;
-	padding: 0 var(--lm-space-2) 0 var(--lm-space-6);
+	padding-block: 0;
+	padding-inline: var(--lm-space-4) var(--lm-space-2);
 	color: var(--lm-text-primary);
 	text-align: left;
 	white-space: nowrap;
@@ -212,11 +213,19 @@
 	pointer-events: none;
 }
 
+.asset-file-icon,
 .asset-tab-pin {
 	flex: none;
+	pointer-events: none;
+}
+
+.asset-file-icon {
+	color: var(--lm-text-accent);
+}
+
+.asset-tab-pin {
 	margin-inline-start: auto;
 	color: var(--lm-text-muted);
-	pointer-events: none;
 }
 
 .asset-tab.active::after {

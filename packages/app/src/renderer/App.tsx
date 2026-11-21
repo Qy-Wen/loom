@@ -1586,7 +1586,7 @@ export function App(): React.JSX.Element {
 						onError={setError}
 						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
 				</Suspense>
-				{canvasPreview && <PreviewOverlay title={canvasPreview.relativePath} onClose={() => setCanvasPreviewId(null)}>
+				{canvasPreview && <PreviewOverlay asset={canvasPreview} onClose={() => setCanvasPreviewId(null)}>
 					<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets} />
 				</PreviewOverlay>}
 			</div>
@@ -1785,7 +1785,7 @@ export function App(): React.JSX.Element {
 									onKeyDown={onLibraryKeyDown}
 								>
 									{previewAsset ? (
-										<PreviewOverlay title={previewAsset.relativePath} onClose={() => setPreviewAssetId(null)}>
+										<PreviewOverlay asset={previewAsset} onClose={() => setPreviewAssetId(null)}>
 											{canvasIds.has(previewAsset.assetId) ? renderCanvas(previewAsset) : renderPreview(previewAsset)}
 										</PreviewOverlay>
 									) : null}

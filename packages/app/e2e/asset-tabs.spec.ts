@@ -45,6 +45,7 @@ test("table and graph open an asset in the selected library display", async ({ l
 				await expect(page.getByRole("tab", { selected: true })).toHaveAccessibleName("target.md");
 			} else {
 				await expect(overlay.locator(".preview-overlay-title")).toHaveText("folder/target.md");
+				await expect(overlay.locator(".preview-overlay-bar > .asset-file-icon")).toHaveAttribute("data-kind", "markdown");
 				await overlay.getByRole("button", { name: "Close preview", exact: true }).click();
 			}
 		}
@@ -85,6 +86,9 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 		await expect(selected).toHaveText(name);
 		await expect(selected).toHaveAccessibleDescription(/Preview tab/);
 		await expect(selected).toHaveCSS("font-style", "normal");
+		const icon = selected.locator(".asset-file-icon");
+		await expect(icon).toBeVisible();
+		await expect(icon).toHaveAttribute("data-kind", name.endsWith(".canvas") ? "canvas" : "markdown");
 		await expect(selected.locator(".asset-tab-pin")).toHaveCount(0);
 	}
 
@@ -105,6 +109,7 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 	await tab("Board.canvas").click({ button: "right" });
 	await expect(tab("Board.canvas")).toHaveAccessibleDescription("Pinned tab");
 	await expect(tab("Board.canvas")).toHaveCSS("font-style", "normal");
+	await expect(tab("Board.canvas").locator(".asset-file-icon")).toHaveAttribute("data-kind", "canvas");
 	await expect(tab("Board.canvas").locator(".asset-tab-pin")).toBeVisible();
 	await expect(page.getByRole("region", { name: "Canvas Board.canvas" })).toBeVisible();
 
@@ -242,6 +247,7 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 		await oneFolder.locator(".folder-chevron").click();
 		await oneTab.click();
 		await expect(oneTab).toHaveAttribute("aria-selected", "true");
+		await expect(oneTab.locator(".asset-file-icon")).toHaveAttribute("data-kind", "image");
 		await expect(oneFolder).toHaveClass(/selected/);
 		await expect(oneFile).toHaveCount(0);
 

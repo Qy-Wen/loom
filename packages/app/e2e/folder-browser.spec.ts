@@ -133,6 +133,9 @@ test("icon mode browses one folder at a time: folder tree, path, recursive searc
 	const overlay = loomPage.getByRole("dialog", { name: "File preview" });
 	await expect(overlay).toBeVisible();
 	await expect(overlay.locator(".preview-overlay-title")).toHaveText("cover.png");
+	const titleIcon = overlay.locator(".preview-overlay-bar > .asset-file-icon");
+	await expect(titleIcon).toBeVisible();
+	await expect(titleIcon).toHaveAttribute("data-kind", "image");
 	await expect(overlay.locator("img")).toBeVisible();
 	await expect(loomPage.locator('.panel-tabs button[data-tab="details"]')).toBeVisible(); // Side panels stay in reach.
 	await expect(overlay.getByRole("button", { name: "Full screen" })).toHaveCount(1); // The image's own button is hidden.

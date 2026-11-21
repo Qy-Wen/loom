@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { Asset } from "@loom/core";
 import { isCanvasFile } from "../../shared/canvas.ts";
 import { draggedAssetIds, endLibraryDrag, hasLibraryDrag, readLibraryDrag } from "../assets/asset-drag.ts";
+import { AssetFileIcon } from "../assets/asset-file-icon.tsx";
 import { useLocale } from "../locale.tsx";
 import { tabLabels, type AssetTabs } from "./asset-tabs.ts";
 
@@ -181,6 +182,7 @@ export function TabStrip({
 								if (event.button === 1) onClose(asset.assetId);
 							}}
 						>
+							<AssetFileIcon asset={asset} />
 							<span className="asset-tab-name">{label}</span>
 							{!preview && (
 								<svg className="asset-tab-pin" width="12" height="12" viewBox="0 0 16 16" aria-hidden="true"

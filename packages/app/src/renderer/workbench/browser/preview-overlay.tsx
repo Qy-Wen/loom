@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import type { Asset } from "@loom/core";
+import { AssetFileIcon } from "../../assets/asset-file-icon.tsx";
 import { useLocale } from "../../locale.tsx";
 
 /** How long to wait for the window's full screen event before the next request goes out anyway. */
@@ -8,8 +10,9 @@ const FULLSCREEN_SETTLE_MS = 1500;
  * A file preview drawn over the folder browser, inside the workbench so the side panels stay usable.
  * Escape, the scrim, and the close button dismiss it. The expand button takes the card to full screen.
  */
-export function PreviewOverlay({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }): React.JSX.Element {
+export function PreviewOverlay({ asset, onClose, children }: { asset: Asset; onClose: () => void; children: ReactNode }): React.JSX.Element {
 	const { t } = useLocale();
+	const title = asset.relativePath;
 	const card = useRef<HTMLDivElement>(null);
 	const [fullscreen, setFullscreen] = useState(false);
 	const close = useRef(onClose);
@@ -78,6 +81,7 @@ export function PreviewOverlay({ title, onClose, children }: { title: string; on
 		<div className="preview-overlay" onPointerDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
 			<div className="preview-overlay-card" ref={card} role="dialog" aria-label={t.browser.preview} tabIndex={-1}>
 				<div className="preview-overlay-bar">
+					<AssetFileIcon asset={asset} />
 					<span className="preview-overlay-title" data-tooltip={title}>{title}</span>
 					<button
 						type="button"
