@@ -139,7 +139,7 @@ test("dragging a library file inserts an undoable link where it lands in Markdow
 	await expect.poll(() => readFile(file, "utf8")).toBe(withCodeDrop.replace("| Header |", link + "\n\n| Header |"));
 });
 
-test("dragging over a rendered wiki link shows the caret after the full link", async ({ loomPage, electronApp }) => {
+test("dragging onto or below a wiki link shows where the new link will be inserted", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(loomPage);
 	const file = join(root, "drop.md");
@@ -155,22 +155,47 @@ test("dragging over a rendered wiki link shows the caret after the full link", a
 	const bounds = (await link.boundingBox())!;
 	const source = (await row(loomPage, "reference.txt").boundingBox())!;
 	const { mouse } = loomPage;
+	const caret = loomPage.locator(".cm-dropCursor");
+	const dragOver = async (x: number, y: number) => {
+		await mouse.move(source.x + 20, source.y + source.height / 2);
+		await mouse.down();
+		await mouse.move(x, y, { steps: 8 });
+		await mouse.move(x + 1, y);
+		await expect(caret).toBeVisible();
+		return (await caret.boundingBox())!;
+	};
+	const dropAndSave = async (expected: string) => {
+		await mouse.up();
+		await expect(caret).toHaveCount(0);
+		await editor.press("ControlOrMeta+s");
+		await expect.poll(() => readFile(file, "utf8")).toBe(expected);
+	};
 	const x = bounds.x + bounds.width / 2;
 	const y = bounds.y + bounds.height / 2;
-	await mouse.move(source.x + 20, source.y + source.height / 2);
-	await mouse.down();
-	await mouse.move(x, y, { steps: 8 });
-	await mouse.move(x + 1, y);
-	const caret = loomPage.locator(".cm-dropCursor");
-	await expect(caret).toBeVisible();
-	const marker = (await caret.boundingBox())!;
+	const marker = await dragOver(x, y);
 	expect(Math.abs(marker.x - (bounds.x + bounds.width))).toBeLessThan(2);
 	expect(marker.y).toBeLessThan(y);
 	expect(marker.y + marker.height).toBeGreaterThan(y);
-	await mouse.up();
-	await expect(caret).toHaveCount(0);
-	await loomPage.keyboard.press("ControlOrMeta+s");
-	await expect.poll(() => readFile(file, "utf8")).toBe(`${original} [[reference.txt]]`);
+	await dropAndSave(`${original} [[reference.txt]]`);
+
+	await editor.press("ControlOrMeta+z");
+	await editor.press("ControlOrMeta+End");
+	const lastLine = editor.locator(".cm-line").last();
+	const last = (await lastLine.boundingBox())!;
+	const nextLine = await dragOver(x, last.y + last.height + 8);
+	expect(Math.abs(nextLine.x - last.x)).toBeLessThan(2);
+	expect(Math.abs(nextLine.y - (last.y + last.height))).toBeLessThan(3);
+	await dropAndSave(`${original}\n[[reference.txt]]`);
+
+	await editor.press("ControlOrMeta+z");
+	await editor.press("ControlOrMeta+End");
+	await editor.press("Enter");
+	await expect(editor.locator(".cm-line")).toHaveCount(2);
+	const blank = (await lastLine.boundingBox())!;
+	const reusedLine = await dragOver(x, blank.y + blank.height + 8);
+	expect(Math.abs(reusedLine.x - blank.x)).toBeLessThan(2);
+	expect(reusedLine.y + reusedLine.height / 2).toBeLessThan(blank.y + blank.height);
+	await dropAndSave(`${original}\n[[reference.txt]]`);
 });
 
 test("dropping native files imports them and inserts references only in edit modes", async ({ loomPage, electronApp }) => {

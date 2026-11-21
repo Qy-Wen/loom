@@ -1,7 +1,7 @@
 import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, StateEffect, StateField } from "@codemirror/state";
-import { EditorView, layer, RectangleMarker, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { Direction, EditorView, layer, RectangleMarker, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { findWikiLinks } from "@loom/core/references";
 import type { MarkdownDropAction, UiSelectionDraft } from "../../../shared/ipc.ts";
 import { markdownEmbedLayout, markdownLibraryReference } from "../../../shared/markdown-reference.ts";
@@ -9,7 +9,7 @@ import { activeLibraryDrag, draggedAssetIds, endLibraryDrag, hasLibraryDrag, has
 import { insideLiteral, liveLibrary, markdownFilePath } from "./live-markdown.ts";
 import { tableRange } from "./live-table.ts";
 
-type DropPoint = { position: number; beforeBlock: boolean; side: -1 | 1 };
+type DropPoint = { position: number; placement: "inline" | "beforeBlock" | "documentEnd"; side: -1 | 1 };
 type DroppedFile = Pick<UiSelectionDraft, "path" | "assetType">;
 export interface MarkdownDropHost {
 	chooseDropAction(nativeFilenames?: readonly string[]): Promise<MarkdownDropAction | null>;
@@ -19,6 +19,10 @@ export interface MarkdownDropHost {
 
 const literalBlocks = new Set(["CodeBlock", "FencedCode", "HTMLBlock", "Table"]);
 const inlineReferences = new Set(["InlineCode", "Link", "Image", "Autolink"]);
+
+function documentBottom(view: EditorView): number {
+	return view.documentTop + view.lineBlockAt(view.state.doc.length).bottom;
+}
 
 const setHoverPoint = StateEffect.define<DropPoint | null>();
 const hoverPoint = StateField.define<DropPoint | null>({
@@ -30,7 +34,7 @@ const hoverPoint = StateField.define<DropPoint | null>({
 		}
 		if (!point || !transaction.docChanged) return point;
 		const position = transaction.changes.mapPos(point.position, 1);
-		return { ...point, position: point.beforeBlock ? transaction.state.doc.lineAt(position).from : position };
+		return { ...point, position: point.placement === "beforeBlock" ? transaction.state.doc.lineAt(position).from : position };
 	},
 });
 
@@ -42,10 +46,26 @@ const dropCaret = layer({
 		if (!point) return [];
 		const markersAt = (position: number, side: -1 | 1) =>
 			RectangleMarker.forRange(view, "cm-dropCursor", EditorSelection.cursor(position, side));
+		if (point.placement === "documentEnd") {
+			const line = view.state.doc.lineAt(point.position);
+			if (!line.text.trim()) return markersAt(line.from, 1);
+			const content = view.contentDOM.getBoundingClientRect();
+			const scroll = view.scrollDOM.getBoundingClientRect();
+			const left = view.textDirection === Direction.LTR
+				? content.left - scroll.left
+				: content.right - (scroll.right - view.scrollDOM.clientWidth * view.scaleX);
+			return [new RectangleMarker(
+				"cm-dropCursor",
+				left + view.scrollDOM.scrollLeft * view.scaleX,
+				documentBottom(view) - scroll.top + view.scrollDOM.scrollTop * view.scaleY,
+				null,
+				view.defaultLineHeight,
+			)];
+		}
 		const markers = markersAt(point.position, point.side);
 		const marker = markers[0];
 		// A rendered block can report its entire height, or just the edge before it.
-		if (point.beforeBlock && marker) {
+		if (point.placement === "beforeBlock" && marker) {
 			return [new RectangleMarker("cm-dropCursor", marker.left, marker.top, null, view.defaultLineHeight)];
 		}
 		if (!marker?.height) {
@@ -72,7 +92,7 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 	const doc = view.state.doc;
 	const table = event.target instanceof Element ? event.target.closest<HTMLElement>(".cm-live-table") : null;
 	const range = table && tableRange(view, table);
-	if (range) return { position: doc.lineAt(range.from).from, beforeBlock: true, side: 1 };
+	if (range) return { position: doc.lineAt(range.from).from, placement: "beforeBlock", side: 1 };
 
 	const { pos: at, assoc } = view.posAndSideAtCoords({ x: event.clientX, y: event.clientY }, false);
 	const tree = syntaxTree(view.state);
@@ -84,7 +104,10 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 		if (inlineReferences.has(node.name)) position = node.to;
 		blockStart = node.from;
 	}
-	if (beforeBlock) return { position: doc.lineAt(blockStart).from, beforeBlock, side: 1 };
+	if (beforeBlock) return { position: doc.lineAt(blockStart).from, placement: "beforeBlock", side: 1 };
+	if (at === doc.length && event.clientY >= documentBottom(view)) {
+		return { position: at, placement: "documentEnd", side: 1 };
+	}
 
 	// Lezer sees the inner brackets as a Markdown link. Include the outer brackets when snapping past a wiki link.
 	const line = doc.lineAt(at);
@@ -93,7 +116,7 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 	if (wiki && !insideLiteral(tree, line.from + wiki.from, line.from + wiki.end)) {
 		position = Math.max(position, line.from + wiki.end);
 	}
-	return { position, beforeBlock, side: position === at ? assoc : -1 };
+	return { position, placement: "inline", side: position === at ? assoc : -1 };
 }
 
 function insertReferences(view: EditorView, point: DropPoint, files: readonly DroppedFile[], action: MarkdownDropAction): void {
@@ -114,7 +137,7 @@ function insertReferences(view: EditorView, point: DropPoint, files: readonly Dr
 	let position = point.position;
 	let prefix: string;
 	let suffix: string;
-	if (point.beforeBlock) {
+	if (point.placement === "beforeBlock") {
 		position = line.from;
 		prefix = line.number > 1 && doc.line(line.number - 1).text.trim() ? "\n" : "";
 		suffix = "\n\n";
@@ -124,6 +147,11 @@ function insertReferences(view: EditorView, point: DropPoint, files: readonly Dr
 		const needsNewline = line.length > 0 || line.number > 1 && doc.line(line.number - 1).text.trim();
 		prefix = line.text.trim() ? "\n\n" : needsNewline ? "\n" : "";
 		suffix = line.number < doc.lines && doc.line(line.number + 1).text.trim() ? "\n" : "";
+	} else if (point.placement === "documentEnd") {
+		const blank = !line.text.trim();
+		position = blank ? line.from : line.to;
+		prefix = blank ? "" : "\n";
+		suffix = "";
 	} else {
 		prefix = /\S/.test(doc.sliceString(Math.max(0, position - 1), position)) ? " " : "";
 		suffix = /\S/.test(doc.sliceString(position, Math.min(doc.length, position + 1))) ? " " : "";
@@ -167,7 +195,7 @@ export function markdownFileDrop(host: MarkdownDropHost) {
 
 		function setCaret(point: DropPoint | null): void {
 			const current = view.state.field(hoverPoint);
-			if (current?.position === point?.position && current?.beforeBlock === point?.beforeBlock && current?.side === point?.side) return;
+			if (current?.position === point?.position && current?.placement === point?.placement && current?.side === point?.side) return;
 			view.dispatch({ effects: setHoverPoint.of(point) });
 		}
 
