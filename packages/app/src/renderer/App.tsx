@@ -1100,7 +1100,7 @@ export function App(): React.JSX.Element {
 			setPreviewAssetId(null);
 		} else {
 			revealFolders(ancestorFolders(asset.relativePath));
-			setTabs((current) => openInNewTab(current, asset.assetId));
+			showListAsset(asset.assetId);
 		}
 		setRenamingAssetId(asset.assetId);
 	}

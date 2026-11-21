@@ -68,7 +68,7 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 	for (const name of ["First.md", "Second.md", "Third.md"]) await writeFile(join(root, name), "# Note");
 	await electronApp!.evaluate(({ Menu }) => {
 		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
-			this.items.find((item) => ["Pin Tab", "Unpin Tab", "Open in new tab"].includes(item.label) && item.enabled)?.click();
+			this.items.find((item) => ["Pin Tab", "Unpin Tab", "Open in new tab", "New Canvas"].includes(item.label) && item.enabled)?.click();
 			options?.callback?.();
 		};
 	});
@@ -87,6 +87,17 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 		await expect(selected).toHaveCSS("font-style", "normal");
 		await expect(selected.locator(".asset-tab-pin")).toHaveCount(0);
 	}
+
+	const list = page.locator(".library-sidebar .asset-list");
+	const bounds = (await list.boundingBox())!;
+	await list.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
+	const rename = list.locator(".rename-editor input");
+	await rename.fill("New board");
+	await rename.press("Enter");
+	await expect(names).toHaveText(["New board.canvas"]);
+	await expect(selected).toHaveAccessibleDescription(/Preview tab/);
+	await file("Second.md").click();
+	await expect(names).toHaveText(["Second.md"]);
 
 	await file("Board.canvas").dblclick();
 	await tab("Board.canvas").dblclick();
