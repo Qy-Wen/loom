@@ -1,5 +1,8 @@
+import { execFile } from "node:child_process";
 import { copyFile, mkdir, readFile, readdir, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { promisify } from "node:util";
+import { resolveMediaBinary } from "../../core/src/media/binaries.ts";
 import type { CanvasDocument } from "../src/shared/canvas.ts";
 import { expect, test } from "./loom.ts";
 
@@ -186,6 +189,84 @@ test("canvas image and video frames follow the media aspect ratio when zoomed an
 	await page.mouse.up();
 	expect(await frameRatio("clip.mp4")).toBeCloseTo(4 / 3);
 	await expect.poll(async () => (await readBoard(join(root, "Media.canvas"))).nodes[1]?.width).toBeGreaterThan(244);
+});
+
+test("canvas videos play inline and resume after switching cards or tabs", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	test.setTimeout(60_000);
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	await promisify(execFile)(resolveMediaBinary("ffmpeg"), [
+		"-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=10", "-t", "60",
+		"-c:v", "libx264", "-pix_fmt", "yuv420p", join(root, "Video.mp4"),
+	], { windowsHide: true });
+	await writeFile(join(root, "Other.md"), "# Other tab");
+	await writeFile(join(root, "Playback.canvas"), JSON.stringify({
+		nodes: [
+			{ id: "video", type: "file", file: "Video.mp4", x: 0, y: 0, width: 244, height: 172 },
+			{ id: "other-video", type: "file", file: "Video.mp4", x: 280, y: 0, width: 244, height: 172 },
+		],
+		edges: [],
+	} satisfies CanvasDocument));
+	const sidebar = page.locator(".library-sidebar");
+	await sidebar.locator(".asset-row").filter({ hasText: "Playback.canvas" }).click();
+	const board = page.getByRole("region", { name: "Canvas Playback.canvas" });
+	const videoCard = board.locator("[data-node-id=video]");
+	const otherCard = board.locator("[data-node-id=other-video]");
+	const video = videoCard.locator("video");
+	const otherVideo = otherCard.locator("video");
+	const videoState = () => video.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime }));
+	const otherState = () => otherVideo.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime }));
+	const videoPlay = videoCard.getByRole("button", { name: "Play Video.mp4", exact: true });
+	const otherPlay = otherCard.getByRole("button", { name: "Play Video.mp4", exact: true });
+	await expect(videoPlay).not.toHaveAttribute("data-tooltip", /.+/);
+	await videoCard.hover();
+	expect(await videoState()).toEqual({ paused: true, time: 0 });
+	await videoPlay.click();
+	await expect.poll(async () => (await videoState()).time).toBeGreaterThan(0);
+	await expect(videoCard.getByRole("slider", { name: "Seek" })).toBeEnabled();
+	await videoCard.getByRole("button", { name: "Mute", exact: true }).click();
+	await expect(videoCard.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
+	await otherCard.hover();
+	await expect(videoCard.locator(".canvas-player-controls")).toHaveCSS("opacity", "0");
+	expect((await videoState()).paused).toBe(false);
+
+	await otherPlay.click();
+	await expect.poll(async () => (await otherState()).time).toBeGreaterThan(0);
+	await videoCard.hover();
+	const seek = (await videoCard.getByRole("slider", { name: "Seek" }).boundingBox())!;
+	await page.mouse.click(seek.x + seek.width / 3, seek.y + seek.height / 2);
+	await expect.poll(async () => (await videoState()).time).toBeGreaterThan(10);
+	const pausedVideo = await videoState();
+	expect(pausedVideo.paused).toBe(true);
+	await videoPlay.click();
+	await expect.poll(async () => (await videoState()).time).toBeGreaterThan(pausedVideo.time);
+	expect((await otherState()).paused).toBe(true);
+
+	const previousVideo = (await video.elementHandle())!;
+	await sidebar.locator(".asset-row").filter({ hasText: "Other.md" }).click({ button: "middle" });
+	await expect(board).toHaveCount(0);
+	const detached = await previousVideo.evaluate((element) => {
+		const media = element as HTMLVideoElement;
+		return { paused: media.paused, time: media.currentTime };
+	});
+	expect(detached.paused).toBe(true);
+	await page.getByRole("tab", { name: "Playback.canvas" }).click();
+	await expect(videoPlay).toBeVisible();
+	expect((await videoState()).paused).toBe(true);
+	await videoPlay.click();
+	await expect.poll(async () => (await videoState()).time).toBeGreaterThan(detached.time);
+	const beforeMove = (await videoCard.boundingBox())!;
+	await page.mouse.move(beforeMove.x + 20, beforeMove.y + 20);
+	await page.mouse.down();
+	await page.mouse.move(beforeMove.x + 48, beforeMove.y + 36, { steps: 4 });
+	await page.mouse.up();
+	await expect.poll(async () => (await videoCard.boundingBox())!.x).toBeGreaterThan(beforeMove.x);
+
+	await videoCard.locator(".canvas-video-player").dblclick({ position: { x: 20, y: 20 } });
+	await expect(page.getByRole("dialog", { name: "File preview" })).toBeVisible();
+	expect((await videoState()).paused).toBe(true);
 });
 
 test("a file dropped on a canvas tab opens a preview tab, and a drop on the canvas creates a card", async ({ loomPage: page, electronApp }) => {

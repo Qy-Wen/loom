@@ -2,12 +2,13 @@ import { memo, useMemo, type CSSProperties, type PointerEvent, type KeyboardEven
 import type { Asset } from "@loom/core";
 import type { CanvasNode, CanvasSide } from "../../../shared/canvas.ts";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
-import { extensionOf } from "../../assets/asset-utils.ts";
+import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import { useLocale } from "../../locale.tsx";
 import { renderMarkdown } from "../preview/markdown.ts";
 import { CanvasIcon } from "./canvas-controls.tsx";
 import { CanvasMarkdown } from "./canvas-markdown.tsx";
+import { CanvasMedia, type CanvasPlayback } from "./canvas-media.tsx";
 
 const PORTS = ["top", "right", "bottom", "left"] as const;
 export const CANVAS_CARD_HEADER_HEIGHT = 28;
@@ -20,6 +21,8 @@ type CanvasCardProps = {
 	editing: boolean;
 	showPorts: boolean;
 	connecting: boolean;
+	playback: CanvasPlayback;
+	playbackDisabled: boolean;
 	connectSide?: CanvasSide;
 	style: CSSProperties;
 	onMove: (event: PointerEvent, id: string) => void;
@@ -38,7 +41,7 @@ type CanvasCardProps = {
 
 export function CanvasCard({
 	node, asset, assets, selected, editing, showPorts, connecting, connectSide, style, onMove, onResize, onSelect, onNudge, onEdit, onText, onBlur, onPreview, onMediaLoad,
-	onRelink, onConnect, onConnectDrag,
+	onRelink, onConnect, onConnectDrag, playback, playbackDisabled,
 }: CanvasCardProps): React.JSX.Element {
 	const { t } = useLocale();
 	const name = node.type === "file" ? (asset?.filename ?? node.file?.split("/").at(-1))
@@ -48,6 +51,7 @@ export function CanvasCard({
 	const markdownAsset = node.type === "file" && asset && extensionOf(asset.filename) === ".md" ? asset : undefined;
 	const openFromHandle = markdownAsset && !connecting;
 	const media = node.type === "file" && (asset?.type === "image" || asset?.type === "video");
+	const playable = node.type === "file" && asset?.type === "video" ? asset : undefined;
 	function finishEditing(event: KeyboardEvent): void {
 		if (event.key === "Escape" && !isImeComposing(event.nativeEvent)) {
 			event.stopPropagation();
@@ -62,7 +66,8 @@ export function CanvasCard({
 			}}
 			onDragStart={(event) => event.preventDefault()}
 			onDoubleClick={(event) => {
-				if (event.button !== 0 || (event.target instanceof Element && event.target.closest("a, audio, video, input, textarea, .canvas-resize"))) return;
+				if (event.button !== 0 || (event.target instanceof Element
+					&& event.target.closest("a, audio, video, input, textarea, .canvas-resize, .canvas-player button"))) return;
 				if (asset && node.type === "file") onPreview(asset);
 				if (node.type === "text" || node.type === "group") onEdit(node.id);
 			}}>
@@ -87,7 +92,9 @@ export function CanvasCard({
 			</header>
 			<div className={`canvas-card-frame${media ? " canvas-card-media" : ""}`}>
 				{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
-				{node.type === "file" && !markdownAsset && (
+				{playable && <CanvasMedia key={`${playable.type}:${assetPreviewUrl(playable)}`} asset={playable} nodeId={node.id}
+					playback={playback} disabled={playbackDisabled} onSize={(width, height) => onMediaLoad(playable, width, height)} />}
+				{node.type === "file" && !markdownAsset && !playable && (
 					<div className="canvas-card-body">
 						{asset ? (
 							<button type="button" className="canvas-asset-preview" aria-label={`${t.canvas.preview} ${asset.filename}`}

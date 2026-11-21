@@ -21,9 +21,10 @@ const ARROW_STEPS: Record<string, Point> = {
 	ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
 };
 
-export function CanvasEditor({ asset, assets, onPreview, onError }: {
+export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onError }: {
 	asset: Asset;
 	assets: Asset[];
+	playbackPositions: Map<string, number>;
 	onPreview: (asset: Asset) => void;
 	onError: (error: string) => void;
 }): React.JSX.Element {
@@ -32,6 +33,7 @@ export function CanvasEditor({ asset, assets, onPreview, onError }: {
 	const board = useCanvasDocument(asset.assetId);
 	const surface = useRef<HTMLDivElement>(null);
 	const docks = useRef<HTMLDivElement>(null);
+	const playingMedia = useRef<HTMLMediaElement | null>(null);
 	const capture = useCanvasDrag(surface);
 	const [view, setView] = useState<Viewport>({ x: 36, y: 36, scale: 1 });
 	const [pan, setPan] = useState(false);
@@ -70,9 +72,20 @@ export function CanvasEditor({ asset, assets, onPreview, onError }: {
 	const preview = single && assetForNode(single);
 	const canEdit = single && (single.type === "text" || single.type === "group");
 	const isEditing = canEdit && editing === single.id;
+	const playback = { boardId: asset.assetId, positions: playbackPositions, activate: activatePlayback };
 
 	function assetForNode(node: CanvasNode): Asset | undefined {
 		return node.loom?.assetId ? byId.get(node.loom.assetId) : node.file ? byPath.get(node.file) : undefined;
+	}
+
+	function activatePlayback(media: HTMLMediaElement): void {
+		if (playingMedia.current !== media) playingMedia.current?.pause();
+		playingMedia.current = media;
+	}
+
+	function openPreview(target: Asset): void {
+		playingMedia.current?.pause();
+		onPreview(target);
 	}
 
 	function mediaRatioForNode(node: CanvasNode): number | undefined {
@@ -414,6 +427,8 @@ export function CanvasEditor({ asset, assets, onPreview, onError }: {
 								showPorts={single?.id === node.id && !editing && !pan && !shift}
 								connectSide={connection?.id === node.id ? connection.side : undefined}
 								connecting={Boolean(connection)}
+								playback={playback}
+								playbackDisabled={pan || Boolean(connection)}
 								asset={assetForNode(node)}
 								assets={assets}
 								style={{ transform: `translate(${node.x}px, ${node.y}px)`, width: node.width, height: node.height }}
@@ -437,7 +452,7 @@ export function CanvasEditor({ asset, assets, onPreview, onError }: {
 								}}
 								onEdit={editCard} onBlur={board.endGroup}
 								onText={(id, key, value) => patchNode(id, (current) => ({ ...current, [key]: value }), id)}
-								onPreview={onPreview} onMediaLoad={recordMediaSize} onRelink={(id) => setFileSearch({ replaceId: id })}
+								onPreview={openPreview} onMediaLoad={recordMediaSize} onRelink={(id) => setFileSearch({ replaceId: id })}
 								onConnect={startConnection} onConnectDrag={dragConnection} />
 						))}
 						{box && <div className="canvas-marquee" style={{ left: box.x, top: box.y, width: box.width, height: box.height }} />}
@@ -469,7 +484,7 @@ export function CanvasEditor({ asset, assets, onPreview, onError }: {
 					<CanvasToolbar className="canvas-selection-tools" label={t.canvas.selectionTools}>
 						{canEdit && <CanvasAction icon={isEditing ? "done" : "edit"} label={isEditing ? t.canvas.done : t.common.edit}
 							showLabel onClick={() => editCard(isEditing ? null : single.id)} />}
-						{preview && <CanvasAction icon="open" label={t.canvas.openCard} showLabel onClick={() => onPreview(preview)} />}
+						{preview && <CanvasAction icon="open" label={t.canvas.openCard} showLabel onClick={() => openPreview(preview)} />}
 						{!isEditing && (single || selectedNodes.length === 2) && <CanvasAction icon="connect" label={t.canvas.connect}
 							showLabel pressed={single ? Boolean(connection) : undefined}
 							onClick={() => single ? startConnection(single.id) : addEdge(selectedNodes[0], selectedNodes[1])} />}

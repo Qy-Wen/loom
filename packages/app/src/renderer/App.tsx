@@ -182,6 +182,7 @@ export function App(): React.JSX.Element {
 	// The list workbench shows the active tab. Right-click, select all, and tree drops can move focus independently.
 	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
 	const [canvasPreviewId, setCanvasPreviewId] = useState<string | null>(null);
+	const canvasPlaybackPositions = useMemo(() => new Map<string, number>(), [library.rootPath]);
 	const canvasIds = useMemo(() => new Set(library.assets.filter((asset) => isCanvasFile(asset.filename)).map((asset) => asset.assetId)), [library.assets]);
 	const activeCanvas = useMemo(
 		() => iconMode ? undefined : library.assets.find((asset) => asset.assetId === tabs.active && canvasIds.has(asset.assetId)),
@@ -1580,6 +1581,7 @@ export function App(): React.JSX.Element {
 			<div className="canvas-workbench" key={asset.assetId}>
 				<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
 					<CanvasEditor asset={asset} assets={library.assets}
+						playbackPositions={canvasPlaybackPositions}
 						onError={setError}
 						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
 				</Suspense>
