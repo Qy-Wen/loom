@@ -76,5 +76,5 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		compact,
 	});
 	if (compact || !isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
-	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body"></span></span>`;
+	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body thin-scroll"></span></span>`;
 }

@@ -209,6 +209,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		}),
 	];
 	view = new EditorView({ parent, state: EditorState.create({ doc: text, extensions }) });
+	view.scrollDOM.classList.add("thin-scroll");
 	function openEmbedMenu(embed: NonNullable<ReturnType<typeof embedUnderPointer>>): void {
 		const { state } = view;
 		void chooseEmbedAction(state.readOnly, true).then((action) => {

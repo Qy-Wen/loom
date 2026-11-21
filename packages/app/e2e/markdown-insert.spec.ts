@@ -268,6 +268,30 @@ test("wiki note embeds render a whole document or heading and stop at cycles", a
 	await expect(page.getByRole("textbox", { name: "Edit Report.md", exact: true }).locator('[data-heading="highlights"]')).toBeInViewport();
 });
 
+test("the Markdown editor and embedded notes use the library scrollbar style", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const paragraphs = "A paragraph to make the note scroll.\n\n".repeat(60);
+	await writeFile(join(root, "reference.md"), paragraphs);
+	await writeFile(join(root, "commands.md"), `![[reference.md]]\n\n${paragraphs}`);
+	await openNote(page);
+
+	const embedded = page.locator(".markdown-note-embed-content");
+	await expect(embedded).toBeVisible();
+	const library = page.locator(".library-sidebar .library-scroll").first();
+	const scrollbar = (locator: typeof library) => locator.evaluate((element) => {
+		const width = parseFloat(getComputedStyle(element, "::-webkit-scrollbar").width);
+		const thumb = getComputedStyle(element, "::-webkit-scrollbar-thumb");
+		return { width, thumb: width - parseFloat(thumb.borderLeftWidth) - parseFloat(thumb.borderRightWidth), color: thumb.backgroundColor };
+	});
+	await page.mouse.move(600, 20);
+	const style = await scrollbar(library);
+	for (const area of [page.locator(".markdown-editor-input .cm-scroller"), embedded]) {
+		await expect.poll(() => area.evaluate((element) => element.scrollHeight - element.clientHeight)).toBeGreaterThan(0);
+		expect(await scrollbar(area)).toEqual(style);
+	}
+});
+
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
