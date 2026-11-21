@@ -107,6 +107,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 		}, {
 			chooseTableAction: (state) => window.loom.showTableContextMenu(state),
 			chooseTextAction: (state) => window.loom.showEditorContextMenu(state),
+			chooseDropAction: (filenames) => window.loom.showMarkdownDropMenu(filenames),
 			clipboard: (action) => window.loom.runEditorClipboard(action),
 			pickAsset: (onPick) => setPickReference(() => onPick),
 			importFiles: async (files) => {

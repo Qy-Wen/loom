@@ -14,10 +14,10 @@ import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
 import { markdownFindWidgets, searchSelection } from "./markdown-find-widgets.ts";
 import { markdownFormatPlans } from "./markdown-format.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
-import { markdownFileDrop } from "./markdown-file-drop.ts";
+import { markdownFileDrop, type MarkdownDropHost } from "./markdown-file-drop.ts";
 import { editingEmbed, embedUnderPointer, revealEmbedSource } from "./live-embed.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
-import type { EditorClipboardAction, MarkdownContextAction, MarkdownContextState, UiSelectionDraft } from "../../../shared/ipc.ts";
+import type { EditorClipboardAction, MarkdownContextAction, MarkdownContextState } from "../../../shared/ipc.ts";
 import type { Messages } from "../../../shared/locale.ts";
 
 export type MarkdownMode = "edit" | "read" | "source";
@@ -46,13 +46,11 @@ export interface MarkdownEditorLabels {
 }
 
 /** What the editor asks the window for. */
-export interface MarkdownEditorHost {
+export interface MarkdownEditorHost extends MarkdownDropHost {
 	chooseTableAction: TableHooks["chooseAction"];
 	chooseTextAction(state: MarkdownContextState): Promise<MarkdownContextAction | null>;
 	clipboard(action: EditorClipboardAction): Promise<void>;
 	pickAsset(onPick: (file: Asset) => void): void;
-	importFiles(files: readonly File[]): Promise<UiSelectionDraft[]>;
-	onDropError(error: unknown): void;
 }
 
 /** Colors come from the app's design tokens, so the editor follows the theme with no extra work. */

@@ -112,6 +112,7 @@ export type MarkdownInlineFormat = typeof markdownFormats.inline[number];
 export type MarkdownBlockFormat = typeof markdownFormats.block[number];
 export type MarkdownFormat = MarkdownInlineFormat | MarkdownBlockFormat;
 export type MarkdownContextAction = EditorContextAction | MarkdownFormat | "open_embed" | "edit_embed";
+export type MarkdownDropAction = "link" | "embed";
 export interface MarkdownContextState extends EditorContextState {
 	embed?: boolean;
 	/** Available formatting actions and whether the full selection already has each format. */
@@ -161,6 +162,7 @@ export const IPC = {
 	showCanvasContextMenu: "loom:showCanvasContextMenu",
 	showTableContextMenu: "loom:showTableContextMenu",
 	showEditorContextMenu: "loom:showEditorContextMenu",
+	showMarkdownDropMenu: "loom:showMarkdownDropMenu",
 	runEditorClipboard: "loom:runEditorClipboard",
 	renameAsset: "loom:renameAsset",
 	duplicateAsset: "loom:duplicateAsset",
@@ -307,6 +309,7 @@ export interface LoomApi {
 	showCanvasContextMenu: () => Promise<"add_files" | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
 	showEditorContextMenu: (state: MarkdownContextState) => Promise<MarkdownContextAction | null>;
+	showMarkdownDropMenu: (nativeFilenames?: readonly string[]) => Promise<MarkdownDropAction | null>;
 	/** Use Chromium's clipboard events, including CodeMirror and table-specific formats. */
 	runEditorClipboard: (action: EditorClipboardAction) => Promise<void>;
 	renameAsset: (assetId: string, stem: string) => Promise<Asset>;

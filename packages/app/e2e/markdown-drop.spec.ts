@@ -1,6 +1,7 @@
-import { readFile, readdir, writeFile } from "node:fs/promises";
+import { copyFile, readFile, readdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
+import type { ElectronApplication } from "playwright";
 import { expect, test } from "./loom.ts";
 
 async function libraryPath(page: Page): Promise<string> {
@@ -11,6 +12,45 @@ async function libraryPath(page: Page): Promise<string> {
 
 function row(page: Page, filename: string) {
 	return page.locator(".library-sidebar .asset-row").filter({ hasText: filename });
+}
+
+async function recordDropMenus(app: ElectronApplication) {
+	return app.evaluateHandle(({ Menu }) => {
+		const state = { labels: [] as string[][], choice: "" };
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			state.labels.push(this.items.map((item) => item.label));
+			this.items.find((item) => item.label === state.choice)?.click();
+			options?.callback?.();
+		};
+		return state;
+	});
+}
+
+async function nativeDropFixture(target: Locator) {
+	const page = target.page();
+	await page.evaluate(() => {
+		const input = document.createElement("input");
+		input.type = "file";
+		input.multiple = true;
+		input.dataset.dropFixture = "";
+		input.hidden = true;
+		document.body.append(input);
+	});
+	const fileInput = page.locator("input[data-drop-fixture]");
+	const drag = (type: "dragover" | "dragleave" | "drop", offset = 100) => target.evaluate((element, { type, offset }) => {
+		const input = document.querySelector<HTMLInputElement>("input[data-drop-fixture]")!;
+		const transfer = new DataTransfer();
+		for (const file of input.files!) {
+			if (!window.loom.pathForFile(file)) throw new Error("The file input did not provide a native path");
+			transfer.items.add(file);
+		}
+		const bounds = element.getBoundingClientRect();
+		return element.dispatchEvent(new DragEvent(type, {
+			dataTransfer: transfer, clientX: bounds.left + offset, clientY: bounds.top + 10, bubbles: true, cancelable: true,
+			relatedTarget: type === "dragleave" ? document.body : null,
+		}));
+	}, { type, offset });
+	return { fileInput, drag };
 }
 
 test("dragging a library file inserts an undoable link where it lands in Markdown", async ({ loomPage, electronApp }) => {
@@ -148,28 +188,7 @@ test("dropping native files imports them and inserts references only in edit mod
 	const editor = loomPage.getByRole("textbox", { name: "Edit drop.md" });
 	const caret = loomPage.locator(".cm-dropCursor");
 	const target = editor.locator(".cm-line").filter({ hasText: /^Drop here$/ });
-	await loomPage.evaluate(() => {
-		const input = document.createElement("input");
-		input.type = "file";
-		input.multiple = true;
-		input.dataset.dropFixture = "";
-		input.hidden = true;
-		document.body.append(input);
-	});
-	const fileInput = loomPage.locator("input[data-drop-fixture]");
-	const drag = (type: "dragover" | "dragleave" | "drop", offset = 100) => target.evaluate((element, { type, offset }) => {
-		const input = document.querySelector<HTMLInputElement>("input[data-drop-fixture]")!;
-		const transfer = new DataTransfer();
-		for (const file of input.files!) {
-			if (!window.loom.pathForFile(file)) throw new Error("The file input did not provide a native path");
-			transfer.items.add(file);
-		}
-		const bounds = element.getBoundingClientRect();
-		return element.dispatchEvent(new DragEvent(type, {
-			dataTransfer: transfer, clientX: bounds.left + offset, clientY: bounds.top + 10, bubbles: true, cancelable: true,
-			relatedTarget: type === "dragleave" ? document.body : null,
-		}));
-	}, { type, offset });
+	const { fileInput, drag } = await nativeDropFixture(target);
 
 	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
 	await expect(editor).toHaveAttribute("aria-readonly", "true");
@@ -201,4 +220,61 @@ test("dropping native files imports them and inserts references only in edit mod
 	await expect(loomPage.locator(".cm-content [data-asset-id]")).toHaveCount(2);
 	await loomPage.locator(".cm-content [data-asset-id]").filter({ hasText: "外部 (1).txt" }).click();
 	await expect(loomPage.getByRole("tablist", { name: "Open files" }).getByRole("tab", { selected: true })).toHaveAccessibleName("外部 (1).txt");
+});
+
+test("a library media drop can insert a link or embed a standalone player", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const note = join(root, "drop.md");
+	const original = "Drop here\nNext line\n\n    ";
+	await writeFile(note, original);
+	await copyFile(new URL("../../core/tests/fixtures/media/clip.mp4", import.meta.url), join(root, "clip.mp4"));
+	const menu = await recordDropMenus(electronApp!);
+	await row(page, "drop.md").click();
+	const editor = page.getByRole("textbox", { name: "Edit drop.md", exact: true });
+	const target = editor.locator(".cm-line").first();
+	const drop = () => row(page, "clip.mp4").dragTo(target, { targetPosition: { x: 100, y: 10 } });
+	await menu.evaluate((state) => { state.choice = "Insert link"; });
+	await drop();
+	await expect.poll(() => readFile(note, "utf8")).toBe("Drop here [[clip.mp4]]\nNext line\n\n    ");
+	await editor.press("ControlOrMeta+z");
+	await editor.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(note, "utf8")).toBe(original);
+	await menu.evaluate((state) => { state.choice = "Embed content"; });
+	await drop();
+	await expect.poll(() => readFile(note, "utf8")).toBe("Drop here\n\n![[clip.mp4]]\n\nNext line\n\n    ");
+	await expect(editor.locator(".cm-wiki-embed video")).toBeVisible();
+	await editor.press("ControlOrMeta+z");
+	await editor.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(note, "utf8")).toBe(original);
+	await row(page, "clip.mp4").dragTo(editor.locator(".cm-line").last());
+	await expect.poll(() => readFile(note, "utf8")).toBe(`${original}\n![[clip.mp4]]`);
+	await expect(editor.locator(".cm-wiki-embed video")).toBeVisible();
+	const labels = ["Insert link", "Embed content"];
+	expect(await menu.evaluate((state) => state.labels)).toEqual([labels, labels, labels]);
+});
+
+test("canceling a native media drop skips import and embedding preserves unsupported file links", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	const note = join(root, "drop.md");
+	const image = join(dirname(root), "still#1.png");
+	const text = join(dirname(root), "reference.txt");
+	await writeFile(note, "Drop here\n");
+	await copyFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url), image);
+	await writeFile(text, "Reference\n");
+	const menu = await recordDropMenus(electronApp!);
+	await row(page, "drop.md").click();
+	const editor = page.getByRole("textbox", { name: "Edit drop.md", exact: true });
+	const { fileInput, drag } = await nativeDropFixture(editor.locator(".cm-line").first());
+	await fileInput.setInputFiles([image, text]);
+	await drag("drop");
+	await expect.poll(() => menu.evaluate((state) => state.labels.length)).toBe(1);
+	await expect(readFile(join(root, "Inbox", "still#1.png"))).rejects.toMatchObject({ code: "ENOENT" });
+	expect(await readFile(note, "utf8")).toBe("Drop here\n");
+
+	await menu.evaluate((state) => { state.choice = "Embed content"; });
+	await drag("drop");
+	await expect.poll(() => readFile(note, "utf8")).toBe("Drop here ![still#1.png](Inbox/still%231.png) [[Inbox/reference.txt]]\n");
+	await expect(editor.locator("img.cm-live-image")).toBeVisible();
 });

@@ -7,7 +7,7 @@ import type { Asset } from "@loom/core";
 import { messages, type Messages } from "../../../shared/locale.ts";
 import { markdownFilePath } from "./live-markdown.ts";
 import { enterTable } from "./live-table.ts";
-import { markdownLibraryReference } from "./markdown-reference.ts";
+import { markdownLibraryReference } from "../../../shared/markdown-reference.ts";
 import { wikiLinkCompletion, wikiTargetAt } from "./markdown-wiki-completion.ts";
 
 type Labels = Messages["preview"]["insertCommands"];

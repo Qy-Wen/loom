@@ -33,6 +33,7 @@ const api: LoomApi = {
 	showCanvasContextMenu: () => ipcRenderer.invoke(IPC.showCanvasContextMenu),
 	showTableContextMenu: (state) => ipcRenderer.invoke(IPC.showTableContextMenu, state),
 	showEditorContextMenu: (state) => ipcRenderer.invoke(IPC.showEditorContextMenu, state),
+	showMarkdownDropMenu: (nativeFilenames) => ipcRenderer.invoke(IPC.showMarkdownDropMenu, nativeFilenames),
 	runEditorClipboard: (action) => ipcRenderer.invoke(IPC.runEditorClipboard, action),
 	renameAsset: (assetId, stem) => ipcRenderer.invoke(IPC.renameAsset, assetId, stem),
 	duplicateAsset: (assetId) => ipcRenderer.invoke(IPC.duplicateAsset, assetId),

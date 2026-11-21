@@ -1,10 +1,22 @@
+import type { AssetType } from "@loom/core";
 import { extractMarkdownReferences } from "@loom/core/references";
 
-export function markdownLibraryReference(from: string, path: string): string {
+function wikiReference(path: string): string | undefined {
 	const wiki = `[[${path}]]`;
 	// Markdown markup and heading delimiters can make a filename ambiguous as a wiki target.
 	const [reference] = extractMarkdownReferences(wiki);
 	if (reference?.kind === "wiki" && reference.target === path && !/[#\\]/.test(path)) return wiki;
+}
+
+export function markdownEmbedLayout(type: AssetType, path?: string): "inline" | "block" | undefined {
+	if (type === "image") return "inline";
+	// Audio and video players use wiki syntax. Images also support standard Markdown syntax.
+	if ((type === "audio" || type === "video") && (path === undefined || wikiReference(path))) return "block";
+}
+
+export function markdownLibraryReference(from: string, path: string): string {
+	const wiki = wikiReference(path);
+	if (wiki) return wiki;
 
 	const directory = from.split("/").slice(0, -1);
 	const target = path.split("/");

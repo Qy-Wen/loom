@@ -1,5 +1,6 @@
 import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
+import { markdownEmbedLayout } from "../../../shared/markdown-reference.ts";
 import { assetPosterUrl, assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 
 type WikiTarget = Pick<WikiLinkMatch, "target" | "label">;
@@ -11,12 +12,6 @@ interface EmbedContent {
 	href: string;
 	src: string;
 	standalone: boolean;
-}
-
-interface EmbedRenderer {
-	matches(asset: Asset): boolean;
-	render(content: EmbedContent): string;
-	standaloneOnly?: boolean;
 }
 
 export const EMBED_LINK_SELECTOR = "a[data-embed-link]";
@@ -60,28 +55,17 @@ function videoPreview(embed: EmbedContent): string {
 	return mediaBlock(embed, `<span class="markdown-embed-video">${sizingImage}${player}</span>`);
 }
 
-const renderers: readonly EmbedRenderer[] = [
-	{
-		matches: (asset) => asset.type === "image",
-		render: imagePreview,
-	},
-	{
-		matches: (asset) => asset.type === "video",
-		standaloneOnly: true,
-		render: videoPreview,
-	},
-	{
-		matches: (asset) => asset.type === "audio",
-		standaloneOnly: true,
-		render: (embed) => mediaBlock(embed, `<audio src="${embed.src}" aria-label="${embed.label}" controls preload="none" loading="lazy"></audio>`),
-	},
-];
+const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string>> = {
+	image: imagePreview,
+	video: videoPreview,
+	audio: (embed) => mediaBlock(embed, `<audio src="${embed.src}" aria-label="${embed.label}" controls preload="none" loading="lazy"></audio>`),
+};
 
 /** Shared by the editor's widget and rendered Markdown. Full-size players need their own line. */
 export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, standalone: boolean): string {
-	const renderer = renderers.find((item) => (standalone || !item.standaloneOnly) && item.matches(asset));
+	const renderer = !standalone && markdownEmbedLayout(asset.type) === "block" ? undefined : renderers[asset.type];
 	const fragment = anchor ? ` data-anchor="${escapeHtml(anchor)}"` : "";
-	return (renderer?.render ?? fileCard)({
+	return (renderer ?? fileCard)({
 		asset,
 		label: escapeHtml(reference.label || reference.target || asset.filename),
 		extension: fileExtensionLabel(asset, reference),

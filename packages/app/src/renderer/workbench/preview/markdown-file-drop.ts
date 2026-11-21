@@ -3,17 +3,19 @@ import { syntaxTree } from "@codemirror/language";
 import { EditorSelection, StateEffect, StateField } from "@codemirror/state";
 import { EditorView, layer, RectangleMarker, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { findWikiLinks } from "@loom/core/references";
-import type { UiSelectionDraft } from "../../../shared/ipc.ts";
+import type { MarkdownDropAction, UiSelectionDraft } from "../../../shared/ipc.ts";
+import { markdownEmbedLayout, markdownLibraryReference } from "../../../shared/markdown-reference.ts";
 import { activeLibraryDrag, draggedAssetIds, endLibraryDrag, hasLibraryDrag, hasOsFileDrag, readLibraryDrag } from "../../assets/asset-drag.ts";
 import { insideLiteral, liveLibrary, markdownFilePath } from "./live-markdown.ts";
 import { tableRange } from "./live-table.ts";
-import { markdownLibraryReference } from "./markdown-reference.ts";
 
 type DropPoint = { position: number; beforeBlock: boolean; side: -1 | 1 };
-type DropHost = {
+type DroppedFile = Pick<UiSelectionDraft, "path" | "assetType">;
+export interface MarkdownDropHost {
+	chooseDropAction(nativeFilenames?: readonly string[]): Promise<MarkdownDropAction | null>;
 	importFiles(files: readonly File[]): Promise<UiSelectionDraft[]>;
 	onDropError(error: unknown): void;
-};
+}
 
 const literalBlocks = new Set(["CodeBlock", "FencedCode", "HTMLBlock", "Table"]);
 const inlineReferences = new Set(["InlineCode", "Link", "Image", "Autolink"]);
@@ -94,24 +96,41 @@ function dropPoint(view: EditorView, event: DragEvent): DropPoint {
 	return { position, beforeBlock, side: position === at ? assoc : -1 };
 }
 
-function insertReferences(view: EditorView, point: DropPoint, paths: Iterable<string>): void {
+function insertReferences(view: EditorView, point: DropPoint, files: readonly DroppedFile[], action: MarkdownDropAction): void {
 	if (view.state.readOnly) return;
 	const source = markdownFilePath(view.state);
 	if (!source) return;
-	const links = [...new Set(paths)].map((path) => markdownLibraryReference(source, path)).join(" ");
-	if (!links) return;
+	const references = new Map<string, string>();
+	let standalone = false;
+	for (const { path, assetType } of files) {
+		const layout = action === "embed" && path !== source ? markdownEmbedLayout(assetType, path) : undefined;
+		if (layout === "block") standalone = true;
+		references.set(path, (layout ? "!" : "") + markdownLibraryReference(source, path));
+	}
+	const text = [...references.values()].join(standalone ? "\n\n" : " ");
+	if (!text) return;
 	const { doc } = view.state;
-	const { beforeBlock } = point;
-	const position = beforeBlock ? doc.lineAt(point.position).from : point.position;
-	const before = doc.sliceString(Math.max(0, position - 1), position);
-	const after = position < doc.length ? doc.sliceString(position, position + 1) : "";
-	const prefix = beforeBlock
-		? position > 0 && doc.lineAt(position - 1).text.trim() ? "\n" : ""
-		: /\S/.test(before) ? " " : "";
-	const suffix = beforeBlock ? "\n\n" : /\S/.test(after) ? " " : "";
+	const line = doc.lineAt(point.position);
+	let position = point.position;
+	let prefix: string;
+	let suffix: string;
+	if (point.beforeBlock) {
+		position = line.from;
+		prefix = line.number > 1 && doc.line(line.number - 1).text.trim() ? "\n" : "";
+		suffix = "\n\n";
+	} else if (standalone) {
+		// Players need their own paragraphs. Keep the source line intact when the drop lands inside it.
+		position = line.to;
+		const needsNewline = line.length > 0 || line.number > 1 && doc.line(line.number - 1).text.trim();
+		prefix = line.text.trim() ? "\n\n" : needsNewline ? "\n" : "";
+		suffix = line.number < doc.lines && doc.line(line.number + 1).text.trim() ? "\n" : "";
+	} else {
+		prefix = /\S/.test(doc.sliceString(Math.max(0, position - 1), position)) ? " " : "";
+		suffix = /\S/.test(doc.sliceString(position, Math.min(doc.length, position + 1))) ? " " : "";
+	}
 	view.dispatch({
-		changes: { from: position, insert: prefix + links + suffix },
-		selection: { anchor: position + prefix.length + links.length },
+		changes: { from: position, insert: prefix + text + suffix },
+		selection: { anchor: position + prefix.length + text.length },
 		annotations: isolateHistory.of("full"),
 		userEvent: "input.drop",
 		scrollIntoView: true,
@@ -119,10 +138,32 @@ function insertReferences(view: EditorView, point: DropPoint, paths: Iterable<st
 	view.focus();
 }
 
-export function markdownFileDrop(host: DropHost) {
+export function markdownFileDrop(host: MarkdownDropHost) {
 	const events = ViewPlugin.define((view) => {
 		const pending = new Set<DropPoint>();
-		let imports = Promise.resolve();
+		let drops = Promise.resolve();
+
+		function queueDrop(
+			point: DropPoint,
+			choose: () => MarkdownDropAction | Promise<MarkdownDropAction | null>,
+			load: () => DroppedFile[] | Promise<DroppedFile[]>,
+		): void {
+			pending.add(point);
+			const active = () => pending.has(point) && !view.state.readOnly;
+			drops = drops.then(async () => {
+				try {
+					if (!active()) return;
+					const action = await choose();
+					if (!action || !active()) return;
+					const files = await load();
+					if (active()) insertReferences(view, point, files, action);
+				} catch (error) {
+					if (active()) host.onDropError(error);
+				} finally {
+					pending.delete(point);
+				}
+			});
+		}
 
 		function setCaret(point: DropPoint | null): void {
 			const current = view.state.field(hoverPoint);
@@ -162,12 +203,20 @@ export function markdownFileDrop(host: DropHost) {
 			const point = hovered ? { ...hovered } : dropPoint(view, event);
 			if (libraryDrag) {
 				try {
-					const lookup = view.state.field(liveLibrary, false)?.lookup;
 					const ids = draggedAssetIds(readLibraryDrag(transfer) ?? null);
-					insertReferences(view, point, ids.flatMap((id) => {
-						const asset = lookup?.byId(id);
-						return asset ? [asset.relativePath] : [];
-					}));
+					if (!ids.length) return;
+					const assets = () => {
+						const lookup = view.state.field(liveLibrary, false)?.lookup;
+						return ids.flatMap((id) => {
+							const asset = lookup?.byId(id);
+							return asset ? [{ path: asset.relativePath, assetType: asset.type }] : [];
+						});
+					};
+					queueDrop(point, () => {
+						const source = markdownFilePath(view.state);
+						return assets().some(({ path, assetType }) => path !== source && markdownEmbedLayout(assetType, path))
+							? host.chooseDropAction() : "link";
+					}, assets);
 				} catch (error) {
 					host.onDropError(error);
 				} finally {
@@ -178,18 +227,7 @@ export function markdownFileDrop(host: DropHost) {
 
 			const files = [...transfer.files];
 			if (!files.length) return;
-			pending.add(point);
-			imports = imports.then(async () => {
-				if (!pending.has(point)) return;
-				try {
-					const assets = await host.importFiles(files);
-					if (pending.has(point)) insertReferences(view, point, assets.map((asset) => asset.path));
-				} catch (error) {
-					if (pending.has(point)) host.onDropError(error);
-				} finally {
-					pending.delete(point);
-				}
-			});
+			queueDrop(point, () => host.chooseDropAction(files.map((file) => file.name)), () => host.importFiles(files));
 		}
 
 		// Listen in capture so table widgets and CodeMirror's own text-file drop cannot consume file drops.

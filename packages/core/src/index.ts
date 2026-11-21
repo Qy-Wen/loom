@@ -8,6 +8,7 @@ export { resolveMediaBinary, tryResolveMediaBinaries } from "./media/binaries.ts
 export type { MediaProgram } from "./media/binaries.ts";
 
 export type { Asset, AssetType, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
+export { assetTypeFromPath } from "./model/asset.ts";
 export type { AssetTag, Tag } from "./model/tag.ts";
 export type { AssetRelation, RelationSource } from "./model/relation.ts";
 export type {
