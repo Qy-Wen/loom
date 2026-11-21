@@ -40,26 +40,24 @@ export class WikiEmbedWidget extends WidgetType {
 	readonly assetId: string;
 	readonly anchor: string | undefined;
 	readonly html: string;
-	readonly standalone: boolean;
 	readonly open: ((assetId: string, anchor?: string) => void) | undefined;
 
-	constructor(length: number, assetId: string, anchor: string | undefined, html: string, standalone: boolean, open?: (assetId: string, anchor?: string) => void) {
+	constructor(length: number, assetId: string, anchor: string | undefined, html: string, open?: (assetId: string, anchor?: string) => void) {
 		super();
 		this.length = length;
 		this.assetId = assetId;
 		this.anchor = anchor;
 		this.html = html;
-		this.standalone = standalone;
 		this.open = open;
 	}
 
 	eq(other: WikiEmbedWidget): boolean {
-		return this.length === other.length && this.html === other.html && this.standalone === other.standalone;
+		return this.length === other.length && this.html === other.html;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
 		const element = view.dom.ownerDocument.createElement("span");
-		element.className = "cm-wiki-embed" + (this.standalone ? " standalone" : "");
+		element.className = "cm-wiki-embed";
 		element.dataset.length = String(this.length);
 		element.innerHTML = this.html;
 		instances.set(element, this);

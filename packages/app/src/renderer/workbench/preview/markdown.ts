@@ -5,7 +5,7 @@ import katex from "katex";
 import { createAssetLookup, matchWikiLink, resolveLibraryHref, resolveLinkTarget, resolveWikiTarget, type AssetLookup, type WikiLinkMatch } from "@loom/core/references";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { anchorOf, headingKey } from "./heading-key.ts";
-import { embedOccupiesLine, fileExtensionLabel, FILE_LINK_CLASS, renderAssetEmbed, renderFileExtension } from "./embed-renderers.ts";
+import { fileExtensionLabel, FILE_LINK_CLASS, renderAssetEmbed, renderFileExtension } from "./embed-renderers.ts";
 import { KATEX_OPTIONS, MATH_DELIMITERS } from "./math.ts";
 
 export { resolveLibraryHref };
@@ -147,13 +147,13 @@ interface WikiEmbedToken {
 	asset: Asset;
 	reference: WikiLinkMatch;
 	anchor?: string;
-	standalone: boolean;
+	compact?: boolean;
 }
 
 markdown.renderer.rules.wiki_embed = (tokens, idx, _options, env) => {
 	const context = env as MarkdownRenderContext | undefined;
-	const { asset, reference, anchor, standalone } = tokens[idx].meta?.embed as WikiEmbedToken;
-	const html = renderAssetEmbed(asset, reference, anchor, standalone && !context?.compactEmbeds);
+	const { asset, reference, anchor, compact } = tokens[idx].meta?.embed as WikiEmbedToken;
+	const html = renderAssetEmbed(asset, reference, anchor, compact || context?.compactEmbeds);
 	return context?.compactEmbeds ? `<span class="markdown-cell-embed" data-source-from="${reference.from}" contenteditable="false">${html}</span>` : html;
 };
 markdown.renderer.rules.wiki_file_extension = (tokens, idx) => renderFileExtension(tokens[idx].content);
@@ -163,7 +163,7 @@ markdown.core.ruler.after("inline", "compact_table_embeds", ({ tokens }) => {
 		const previous = tokens[index - 1].type;
 		if (previous !== "td_open" && previous !== "th_open") continue;
 		for (const child of tokens[index].children ?? []) {
-			if (child.type === "wiki_embed" && child.meta) (child.meta.embed as WikiEmbedToken).standalone = false;
+			if (child.type === "wiki_embed" && child.meta) (child.meta.embed as WikiEmbedToken).compact = true;
 		}
 	}
 });
@@ -200,7 +200,7 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	if (embed && asset?.relativePath !== context?.fromRelativePath) {
 		if (asset) {
 			const token = state.push("wiki_embed", "", 0);
-			token.meta = { embed: { asset, reference: found, anchor, standalone: embedOccupiesLine(src, pos, found.end) } satisfies WikiEmbedToken };
+			token.meta = { embed: { asset, reference: found, anchor } satisfies WikiEmbedToken };
 		} else {
 			state.push("span_open", "span", 1).attrSet("class", BROKEN_REFERENCE_CLASS);
 			state.push("text", "", 0).content = src.slice(pos, found.end);

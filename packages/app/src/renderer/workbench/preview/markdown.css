@@ -494,7 +494,12 @@
 	vertical-align: middle;
 }
 
-.cm-wiki-embed.standalone:has(> .markdown-embed-media) {
+.cm-wiki-embed:has(> .markdown-embed-file) {
+	vertical-align: baseline;
+	line-height: normal;
+}
+
+.cm-wiki-embed:has(> .markdown-embed-media) {
 	width: 100%;
 }
 

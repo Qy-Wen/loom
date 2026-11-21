@@ -211,6 +211,26 @@ test("the caret stays beside a standalone file embed without a preview", async (
 	}).toBeLessThan(4);
 });
 
+test("a file embed and a wiki link share the same baseline", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	await writeFile(join(root, "reference.md"), "# Reference");
+	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.md]] [[reference.md]]");
+	await openNote(page);
+
+	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
+	const links = editor.locator(".cm-line .markdown-file-link");
+	await expect(links).toHaveCount(2);
+	const [[embedText, embedUnderline], [wikiText, wikiUnderline]] = await links.evaluateAll((elements) => elements.map((link) => {
+		const label = link.querySelector("span") ?? link;
+		const text = document.createRange();
+		text.selectNodeContents(label);
+		return [text.getBoundingClientRect().bottom, link.getBoundingClientRect().bottom];
+	}));
+	expect(Math.abs(embedText - wikiText)).toBeLessThan(1);
+	expect(Math.abs(embedUnderline - wikiUnderline)).toBeLessThan(1);
+});
+
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
@@ -234,15 +254,16 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 	await writeFile(join(root, "sound.wav"), wave);
 	await writeFile(join(root, "reference.md"), "# Reference");
 	const source = [
-		"![[clip.mp4]]", "![[sound.wav]]", "![[still.png|First picture]]", "![[still.png|Second picture]]",
-		"Inline ![[clip.mp4]] stays compact.", "| Media |\n| --- |\n| Clip ![[clip.mp4]] |\n| ![[still.png]] |", "![[reference.md]]",
+		"# Media", "[[reference.md|Before]]![[clip.mp4]][[reference.md|After]]",
+		"![[sound.wav]]![[still.png|First picture]]", "![[still.png|Second picture]]",
+		"| Media |\n| --- |\n| Clip ![[clip.mp4]] |\n| ![[still.png]] |", "![[reference.md]]",
 	].join("\n\n");
 	await writeFile(file, source);
 	await openNote(page);
 
 	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
 	const embeds = editor.locator(".cm-wiki-embed");
-	await expect(embeds).toHaveCount(6);
+	await expect(embeds).toHaveCount(5);
 	const video = embeds.locator("video");
 	const poster = embeds.locator(".markdown-embed-video > img");
 	await expect(video).toHaveAttribute("poster", /^loom-asset:\/\/poster\//);
@@ -283,7 +304,13 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 		return [...full, ...narrow];
 	});
 	expect(Math.max(...audioOffsets)).toBeLessThan(1);
-	await expect(editor.locator(".cm-line").filter({ hasText: "Inline" }).locator(".markdown-embed-file")).toContainText("clip.mp4");
+	const [before, player, after] = await Promise.all([
+		editor.getByText("Before", { exact: true }).boundingBox(),
+		embeds.filter({ has: page.locator("video") }).boundingBox(),
+		editor.getByText("After", { exact: true }).boundingBox(),
+	]);
+	expect(before!.y + before!.height).toBeLessThanOrEqual(player!.y);
+	expect(player!.y + player!.height).toBeLessThanOrEqual(after!.y);
 
 	await electronApp!.evaluate(({ Menu }) => {
 		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
@@ -297,6 +324,11 @@ test("wiki embeds play media, open files and reveal only the chosen source", asy
 	await expect(pictureLink).toBeVisible();
 	const media = embeds.locator(".markdown-embed-media");
 	await expect(media).toHaveCount(4);
+	const [audioBlock, imageBlock] = await Promise.all([
+		media.filter({ has: page.locator("audio") }).boundingBox(),
+		media.filter({ has: page.getByRole("img", { name: "First picture", exact: true }) }).boundingBox(),
+	]);
+	expect(audioBlock!.y + audioBlock!.height).toBeLessThanOrEqual(imageBlock!.y);
 	await expect.poll(() => media.evaluateAll((blocks) => Math.max(...blocks.map((block) => {
 		const preview = block.firstElementChild!.getBoundingClientRect();
 		const link = block.lastElementChild!.getBoundingClientRect();

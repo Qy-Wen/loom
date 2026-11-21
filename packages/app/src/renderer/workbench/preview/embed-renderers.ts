@@ -11,7 +11,7 @@ interface EmbedContent {
 	extension: string;
 	href: string;
 	src: string;
-	standalone: boolean;
+	compact: boolean;
 }
 
 export const EMBED_LINK_SELECTOR = "a[data-embed-link]";
@@ -42,9 +42,9 @@ function mediaBlock(embed: EmbedContent, preview: string): string {
 }
 
 function imagePreview(embed: EmbedContent): string {
-	const { asset, src, label, standalone } = embed;
+	const { asset, src, label, compact } = embed;
 	const image = `<img class="cm-live-image markdown-embed-image" data-embed-image-id="${escapeHtml(asset.assetId)}" src="${src}" alt="${label}" loading="lazy" draggable="false" tabindex="0">`;
-	return standalone ? mediaBlock(embed, image) : image;
+	return compact ? image : mediaBlock(embed, image);
 }
 
 function videoPreview(embed: EmbedContent): string {
@@ -61,9 +61,9 @@ const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string
 	audio: (embed) => mediaBlock(embed, `<audio src="${embed.src}" aria-label="${embed.label}" controls preload="none" loading="lazy"></audio>`),
 };
 
-/** Shared by the editor's widget and rendered Markdown. Full-size players need their own line. */
-export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, standalone: boolean): string {
-	const renderer = !standalone && markdownEmbedLayout(asset.type) === "block" ? undefined : renderers[asset.type];
+/** Shared by the editor and rendered Markdown. Table cells use compact embeds. */
+export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, compact = false): string {
+	const renderer = compact && markdownEmbedLayout(asset.type) === "block" ? undefined : renderers[asset.type];
 	const fragment = anchor ? ` data-anchor="${escapeHtml(anchor)}"` : "";
 	return (renderer ?? fileCard)({
 		asset,
@@ -71,12 +71,6 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		extension: fileExtensionLabel(asset, reference),
 		href: `href="#" data-embed-link data-asset-id="${escapeHtml(asset.assetId)}"${fragment}`,
 		src: escapeHtml(assetPreviewUrl(asset)),
-		standalone,
+		compact,
 	});
-}
-
-export function embedOccupiesLine(text: string, from: number, to: number): boolean {
-	const start = from === 0 ? 0 : text.lastIndexOf("\n", from - 1) + 1;
-	const end = text.indexOf("\n", to);
-	return !text.slice(start, from).trim() && !text.slice(to, end < 0 ? text.length : end).trim();
 }

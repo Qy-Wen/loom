@@ -13,7 +13,7 @@ import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
 import { editorHeading } from "./editor-heading.ts";
 import { isPassthroughHref } from "./markdown.ts";
-import { embedOccupiesLine, FILE_EXTENSION_CLASS, FILE_LINK_CLASS, fileExtensionLabel, renderAssetEmbed } from "./embed-renderers.ts";
+import { FILE_EXTENSION_CLASS, FILE_LINK_CLASS, fileExtensionLabel, renderAssetEmbed } from "./embed-renderers.ts";
 import { editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
 
 /**
@@ -885,10 +885,8 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 
 	if (match.embed && !localHeading && asset?.relativePath !== context.fromRelativePath) {
 		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
-			const line = state.doc.lineAt(range.from);
-			const standalone = embedOccupiesLine(line.text, range.from - line.from, range.to - line.from);
-			const html = renderAssetEmbed(asset, match, anchor, standalone);
-			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, standalone, state.facet(handlersFacet)?.openAsset);
+			const html = renderAssetEmbed(asset, match, anchor);
+			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, state.facet(handlersFacet)?.openAsset);
 			found.push(Decoration.replace({ widget }).range(range.from, range.to));
 			return;
 		}
