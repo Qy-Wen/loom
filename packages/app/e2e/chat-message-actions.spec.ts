@@ -3,6 +3,7 @@ import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 const REPLY = "Here is a table:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nDone.";
+const CODE_REPLY = "Here is code:\n\n```ts\nconst answer = 42;\n```\n\nDone.";
 /** The text above the copy button leaves a small gap, not the typography's 20px bottom margin. */
 const MAX_GAP_ABOVE_COPY = 8;
 
@@ -93,6 +94,53 @@ test("a reply's table actions sit under the table and match the message copy but
 		// The message copy button's hover background is not clipped on the left.
 		const clipLeft = await loomPage.evaluate(() => document.querySelector(".session-chat-scroll")!.getBoundingClientRect().left);
 		expect(m.x).toBeGreaterThanOrEqual(clipLeft - 0.5);
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+test("a reply's code block is readable and its actions sit under the block", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+	const server = createServer((request, response) => {
+		request.resume();
+		request.on("end", () => {
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			const chunk = (delta: object, finish: string | null, usage?: object) => `data: ${JSON.stringify({ id: "t", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason: finish }], ...(usage ? { usage } : {}) })}\n\n`;
+			response.end(chunk({ content: CODE_REPLY }, null) + chunk({}, "stop", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }) + "data: [DONE]\n\n");
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+		await loomPage.getByRole("textbox").fill("some code please");
+		await loomPage.getByRole("textbox").press("Enter");
+		await expect(loomPage.getByText("Done.", { exact: true })).toBeVisible({ timeout: 20_000 });
+
+		// Both themes are in the DOM. Only the one that matches the app is shown.
+		await expect(loomPage.locator("[data-code-block]")).toHaveCount(2);
+		const block = loomPage.locator("[data-code-block]:visible");
+		await expect(block).toHaveCount(1);
+		await expect(block.getByText("const answer = 42;")).toBeVisible();
+		await expect(block).toHaveCSS("background-color", "rgb(240, 240, 237)");
+		await expect(block.getByText("const", { exact: true })).toHaveCSS("color", "rgb(215, 58, 73)");
+
+		const lang = loomPage.locator("[data-code-block-header] > span");
+		const copy = loomPage.locator("[data-code-block-header] > div > button").nth(1);
+		const download = loomPage.locator('button[data-tooltip="Download file"]');
+		await expect(lang).toHaveText("ts");
+		await expect(download).toBeVisible();
+		const [blockBox, langBox, lineBox, copyBox, downloadBox] = [block, lang, block.locator(".line").first(), copy, download].map((locator) => locator.boundingBox());
+		const [code, label, line, copyButton, downloadButton] = [(await blockBox)!, (await langBox)!, (await lineBox)!, (await copyBox)!, (await downloadBox)!];
+
+		expect([copyButton.width, copyButton.height]).toEqual([26, 26]);
+		expect([downloadButton.width, downloadButton.height]).toEqual([26, 26]);
+		expect(label.y).toBeGreaterThanOrEqual(code.y);
+		expect(label.y + label.height).toBeLessThanOrEqual(line.y + 1);
+		expect(copyButton.y).toBeGreaterThanOrEqual(code.y + code.height);
+		expect(Math.abs(copyButton.x - code.x)).toBeLessThan(1);
+		expect(downloadButton.x).toBeGreaterThan(copyButton.x + copyButton.width - 1);
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
