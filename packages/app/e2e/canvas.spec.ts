@@ -188,7 +188,7 @@ test("canvas image and video frames follow the media aspect ratio when zoomed an
 	await expect.poll(async () => (await readBoard(join(root, "Media.canvas"))).nodes[1]?.width).toBeGreaterThan(244);
 });
 
-test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens the full preview on double-click", async ({ loomPage: page, electronApp }) => {
+test("a file dropped on a canvas tab opens a preview tab, and a drop on the canvas creates a card", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
 	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
@@ -205,8 +205,14 @@ test("a Markdown file dropped onto a canvas tab shows a live excerpt and opens t
 	await sidebar.locator(".asset-row").filter({ hasText: "Untitled.canvas" }).click();
 	const canvasTab = page.getByRole("tab", { name: "Untitled.canvas" });
 	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
-	await sidebar.locator(".asset-row").filter({ hasText: "文案.md" }).dragTo(canvasTab);
-	await expect(canvasTab).toHaveAttribute("aria-selected", "true");
+	const file = sidebar.locator(".asset-row").filter({ hasText: "文案.md" });
+	await file.dragTo(canvasTab, { targetPosition: { x: 4, y: 10 } });
+	const fileTab = page.getByRole("tab", { name: "文案.md", exact: true });
+	await expect(fileTab).toHaveAttribute("aria-selected", "true");
+	await expect(fileTab).toHaveAccessibleDescription(/Preview tab/);
+	await canvasTab.click();
+	await expect(page.locator(".canvas-editor .canvas-empty")).toHaveText("Drag files here or add text to start.");
+	await file.dragTo(page.locator(".canvas-surface"), { targetPosition: { x: 48, y: 56 } });
 	const card = page.locator(".canvas-editor .canvas-file-markdown");
 	const heading = card.getByRole("heading", { name: "文案", exact: true });
 	await expect(heading).toBeVisible();

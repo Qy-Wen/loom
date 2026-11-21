@@ -21,11 +21,9 @@ const ARROW_STEPS: Record<string, Point> = {
 	ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
 };
 
-export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, onError }: {
+export function CanvasEditor({ asset, assets, onPreview, onError }: {
 	asset: Asset;
 	assets: Asset[];
-	incoming?: readonly string[];
-	onConsume: () => void;
 	onPreview: (asset: Asset) => void;
 	onError: (error: string) => void;
 }): React.JSX.Element {
@@ -39,7 +37,6 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	const [pan, setPan] = useState(false);
 	const space = useRef(false);
 	const ready = useRef(false);
-	const consumed = useRef<readonly string[] | undefined>(undefined);
 	const [selected, setSelected] = useState<Set<string>>(() => new Set());
 	const [edgeId, setEdgeId] = useState<string | null>(null);
 	const [connection, setConnection] = useState<{ id: string; side?: CanvasSide } | null>(null);
@@ -124,13 +121,6 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		element.addEventListener("wheel", wheel, { passive: false });
 		return () => element.removeEventListener("wheel", wheel);
 	}, []);
-
-	useEffect(() => {
-		if (!incoming || !board.document || consumed.current === incoming) return;
-		consumed.current = incoming;
-		addFiles(incoming, centerPoint());
-		onConsume();
-	}, [incoming, board.document]);
 
 	function centerPoint(): Point {
 		const element = surface.current;

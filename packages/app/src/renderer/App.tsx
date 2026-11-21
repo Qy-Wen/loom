@@ -181,7 +181,6 @@ export function App(): React.JSX.Element {
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
 	// The list workbench shows the active tab. Right-click, select all, and tree drops can move focus independently.
 	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
-	const [canvasDrop, setCanvasDrop] = useState<{ id: string; assets: string[] } | null>(null);
 	const [canvasPreviewId, setCanvasPreviewId] = useState<string | null>(null);
 	const canvasIds = useMemo(() => new Set(library.assets.filter((asset) => isCanvasFile(asset.filename)).map((asset) => asset.assetId)), [library.assets]);
 	const activeCanvas = useMemo(
@@ -1581,8 +1580,6 @@ export function App(): React.JSX.Element {
 			<div className="canvas-workbench" key={asset.assetId}>
 				<Suspense fallback={<div className="loading" role="status">{t.common.loading}</div>}>
 					<CanvasEditor asset={asset} assets={library.assets}
-						incoming={canvasDrop?.id === asset.assetId ? canvasDrop.assets : undefined}
-						onConsume={() => setCanvasDrop(null)}
 						onError={setError}
 						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
 				</Suspense>
@@ -1610,11 +1607,6 @@ export function App(): React.JSX.Element {
 			onContextMenu={(assetId) => void showAssetTabContextMenu(assetId)}
 			onMove={(assetId, beforeId) => setTabs((current) => moveTab(current, assetId, beforeId))}
 			onDropFiles={openDroppedFiles}
-			onDropOnCanvas={(assets, id) => {
-				activateAssetTab(id);
-				setPicked(singleSelection(assetKey(id)));
-				setCanvasDrop((current) => ({ id, assets: current?.id === id ? [...current.assets, ...assets] : assets }));
-			}}
 		/>
 	);
 
