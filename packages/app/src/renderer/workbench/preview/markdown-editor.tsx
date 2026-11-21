@@ -5,6 +5,7 @@ import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor as MarkdownEditorHandle, type MarkdownMode } from "./codemirror-markdown.ts";
 import type { RegisterMarkdownHistory } from "../asset-history.ts";
+import { FavoriteButton } from "./favorite-button.tsx";
 import { markdownFindIconPath } from "./markdown-find.ts";
 import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
 
@@ -17,9 +18,11 @@ const files: MarkdownFiles = {
 const sessions = new Map<string, MarkdownSave>();
 
 /** One text, save session and CodeMirror view for live editing, reading and source editing. */
-export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }: {
+export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOpenAsset, registerMarkdown }: {
 	asset: Asset;
 	assets: Asset[];
+	favorite: boolean;
+	onToggleFavorite: () => void;
 	onOpenAsset?: (assetId: string, heading?: string) => void;
 	registerMarkdown?: RegisterMarkdownHistory;
 }): React.JSX.Element {
@@ -181,6 +184,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 	return <>
 		<div className="markdown-workbench" ref={rootRef}>
 			<div className="markdown-toolbar" role="toolbar" aria-label={t.preview.markdownView}>
+				<FavoriteButton favorite={favorite} onToggle={onToggleFavorite} onMouseDown={(event) => event.preventDefault()} />
 				<button type="button" className="markdown-reading-toggle" aria-label={toggleLabel} data-tooltip={toggleLabel} aria-pressed={mode === "read"}
 					disabled={access === "read"} onMouseDown={(event) => event.preventDefault()} onClick={toggleReading}>
 					<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">

@@ -1547,11 +1547,15 @@ export function App(): React.JSX.Element {
 	);
 
 	function renderPreview(asset: Asset): React.JSX.Element {
+		const favorite = library.favoriteAssetIds.includes(asset.assetId);
+		const onToggleFavorite = () => void togglePreviewFavorite(asset);
 		return (
 			<AssetPreview
 				key={asset.assetId}
 				asset={asset}
 				assets={library.assets}
+				favorite={favorite}
+				onToggleFavorite={onToggleFavorite}
 				onGraded={selectAsset}
 				onOpenAsset={openReference}
 				registerMarkdown={navigation.registerMarkdown}
@@ -1562,13 +1566,13 @@ export function App(): React.JSX.Element {
 						canGrade={gradeable && asset.assetId === viewedAssetId}
 						grading={grading && asset.assetId === viewedAssetId}
 						leaveVideo={asset.type === "video"}
-						favorite={library.favoriteAssetIds.includes(asset.assetId)}
+						favorite={favorite}
 						onGrade={() => {
 							setGradingAssetId(asset.assetId);
 							panels.focus("grade");
 						}}
 						onLeaveGrade={() => setGradingAssetId(null)}
-						onToggleFavorite={() => void togglePreviewFavorite(asset)}
+						onToggleFavorite={onToggleFavorite}
 						onDelete={() => void trashPreviewed(asset.assetId)}
 					/>
 				)}
@@ -1586,7 +1590,8 @@ export function App(): React.JSX.Element {
 						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
 				</Suspense>
 				{canvasPreview && <PreviewOverlay asset={canvasPreview} onClose={() => setCanvasPreviewId(null)}>
-					<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets} />
+					<AssetPreview key={canvasPreview.assetId} asset={canvasPreview} assets={library.assets}
+						favorite={library.favoriteAssetIds.includes(canvasPreview.assetId)} onToggleFavorite={() => void togglePreviewFavorite(canvasPreview)} />
 				</PreviewOverlay>}
 			</div>
 		);

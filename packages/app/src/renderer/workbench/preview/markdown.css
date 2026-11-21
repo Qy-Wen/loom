@@ -410,8 +410,12 @@
 	color: var(--lm-text-accent);
 }
 
-.markdown-toolbar > button[aria-pressed="true"]:not(.markdown-reading-toggle) {
+.markdown-toolbar > button[aria-pressed="true"]:not(.markdown-reading-toggle, .preview-favorite-button) {
 	background: var(--lm-surface-active);
+}
+
+.markdown-toolbar > .preview-favorite-button[aria-pressed="true"] {
+	color: var(--lm-warning);
 }
 
 .markdown-toolbar > button:disabled {

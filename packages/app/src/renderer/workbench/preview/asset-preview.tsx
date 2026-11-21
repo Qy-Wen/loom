@@ -4,6 +4,7 @@ import { useLocale } from "../../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import type { RegisterMarkdownHistory } from "../asset-history.ts";
+import { FavoriteButton } from "./favorite-button.tsx";
 import { FindBar } from "./find-bar.tsx";
 import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
@@ -97,6 +98,8 @@ function VideoPreview({ asset, url, actions = null }: { asset: Asset; url: strin
 export function AssetPreview({
 	asset,
 	assets,
+	favorite,
+	onToggleFavorite,
 	onGraded,
 	onOpenAsset,
 	registerMarkdown,
@@ -106,6 +109,8 @@ export function AssetPreview({
 }: {
 	asset: Asset;
 	assets: Asset[];
+	favorite: boolean;
+	onToggleFavorite: () => void;
 	onGraded?: (assetId: string) => void;
 	/** Follows a Markdown reference to a file or heading. */
 	onOpenAsset?: (assetId: string, heading?: string) => void;
@@ -167,7 +172,8 @@ export function AssetPreview({
 	if (extension === ".md") {
 		return (
 			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
-				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} onOpenAsset={onOpenAsset} registerMarkdown={registerMarkdown} />
+				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} favorite={favorite} onToggleFavorite={onToggleFavorite}
+					onOpenAsset={onOpenAsset} registerMarkdown={registerMarkdown} />
 			</Suspense>
 		);
 	}
@@ -196,7 +202,6 @@ export function PreviewActions({
 	onDelete: () => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
-	const favoriteLabel = favorite ? t.menu.removeFromFavorites : t.menu.addToFavorites;
 	return (
 		<div className="preview-actions">
 			{canGrade && !grading && (
@@ -209,15 +214,7 @@ export function PreviewActions({
 					{leaveVideo ? <LeaveGradeIcon /> : <LeaveStillIcon />}
 				</button>
 			)}
-			<button
-				type="button"
-				data-tooltip={favoriteLabel}
-				aria-label={favoriteLabel}
-				aria-pressed={favorite}
-				onClick={onToggleFavorite}
-			>
-				<StarIcon filled={favorite} />
-			</button>
+			<FavoriteButton favorite={favorite} onToggle={onToggleFavorite} />
 			<button type="button" className="danger" data-tooltip={t.common.delete} aria-label={t.common.delete} onClick={onDelete}>
 				<TrashIcon />
 			</button>
@@ -249,20 +246,6 @@ function LeaveStillIcon(): React.JSX.Element {
 		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
 			<rect x="2.2" y="3.2" width="11.6" height="9.6" rx="1.2" fill="none" stroke="currentColor" strokeWidth="1.2" />
 			<path fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" d="m3.4 11 2.6-2.4 1.8 1.6 1.5-1.3L12.6 11" />
-		</svg>
-	);
-}
-
-function StarIcon({ filled }: { filled: boolean }): React.JSX.Element {
-	return (
-		<svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
-			<path
-				fill={filled ? "currentColor" : "none"}
-				stroke="currentColor"
-				strokeWidth="1.2"
-				strokeLinejoin="round"
-				d="M8 1.7 9.8 5.6l4.3.4-3.3 2.8.1 4.3L8 11.2 5.1 13.1l.1-4.3L1.9 6l4.3-.4L8 1.7z"
-			/>
 		</svg>
 	);
 }
