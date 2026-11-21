@@ -79,6 +79,26 @@ test("links in Markdown reading mode open the file and offscreen headings, and a
 	}
 });
 
+test("a self embed reads and opens like a wiki link", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const link = "[[Self#Details|Jump to details]]";
+	const filler = "A paragraph between the link and the heading.\n\n".repeat(45);
+	await writeFile(join(root, "Self.md"), `!${link}\n\n${link}\n\n${filler}## Details`);
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "Self.md" }).click();
+	const editor = page.getByRole("textbox", { name: "Edit Self.md", exact: true });
+	const links = editor.locator('.cm-live-wiki[data-asset-id][data-anchor="details"]');
+	await expect(links).toHaveText(["Jump to details", "Jump to details"]);
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect(links).toHaveText(["Jump to details", "Jump to details"]);
+	const heading = editor.locator('[data-heading="details"]');
+	await expect(heading).not.toBeInViewport();
+	await links.first().click();
+	await expect(heading).toBeInViewport();
+});
+
 test("file history restores Markdown locations, branches and skips removed files", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

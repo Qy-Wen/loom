@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import type { Asset } from "@loom/core";
 import { findMatchOffsets, overflowScrollDelta, preferVisibleRect } from "../src/renderer/workbench/preview/find-in-view.ts";
-import { renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/preview/markdown.ts";
+import { renderInlineMarkdown, renderMarkdown, resolveLibraryHref } from "../src/renderer/workbench/preview/markdown.ts";
 
 test("findMatchOffsets is case-insensitive and non-overlapping", () => {
 	assert.deepEqual(findMatchOffsets("Hello hello HELLO", "hello"), [0, 6, 12]);
@@ -150,6 +150,15 @@ test("renderMarkdown turns wiki links into links that open the asset", () => {
 	assert.match(html, /class="markdown-file-link" data-asset-id="deep">别名<\/a>/);
 	assert.equal(html.match(/data-asset-id="notes"/g)?.length, 2);
 	assert.equal(html.includes("markdown-broken-reference"), false);
+});
+
+test("Markdown previews render self embeds as ordinary wiki links", () => {
+	const context = { fromRelativePath: "产品/说明.md", assets: library };
+	for (const target of ["产品/说明.md", "/产品/说明#标题|回到标题", "#标题"]) {
+		const link = `[[${target}]]`;
+		assert.equal(renderMarkdown(`!${link}`, context), renderMarkdown(link, context));
+		assert.equal(renderInlineMarkdown(`!${link}`, context), renderInlineMarkdown(link, context));
+	}
 });
 
 test("renderMarkdown opens Markdown links to library files in the app", () => {

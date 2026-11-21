@@ -183,6 +183,16 @@ test("a link to a heading of the same file is not broken", () => {
 	assert.deepEqual(targets, ["#小节->none#小节"]);
 });
 
+test("self embeds show the ordinary wiki link and reveal their syntax at the caret", () => {
+	for (const target of ["脚本.md", "/脚本#小节|跳转", "#小节"]) {
+		const link = `[[${target}]]\n\n末`;
+		const embed = `!${link}`;
+		const expected = decorate(link);
+		assert.deepEqual(decorate(embed), { ...expected, hidden: ["![[", ...expected.hidden.slice(1)] });
+		assert.deepEqual(decorate(embed, 2), decorate(link, 1));
+	}
+});
+
 test("wiki embeds stay rendered at the caret, and standard Markdown images still reveal their source", () => {
 	const text = "![[图/架构图.png]] ![](图/架构图.png)\n\n末";
 	const away = decorate(text, text.length);

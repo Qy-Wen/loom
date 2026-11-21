@@ -180,7 +180,7 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 	const anchor = hash === -1 ? undefined : anchorOf(written.slice(hash + 1));
 	// Without a library (a loose snippet) nothing can be resolved, so nothing is flagged either.
 	const asset = context?.assets ? resolveWikiTarget(written, lookupOf(context)) : null;
-	if (!embed && context?.assets && anchor && !written.slice(0, hash).trim()) {
+	if (context?.assets && anchor && hash === 0) {
 		// `[[#Heading]]`: a heading in this same file.
 		const link = state.push("link_open", "a", 1);
 		link.attrs = [["href", "#"], [ANCHOR_ATTRIBUTE, anchor]];
@@ -197,7 +197,7 @@ markdown.inline.ruler.before("link", "wiki_link", (state, silent) => {
 		state.pos = close + 2;
 		return true;
 	}
-	if (embed) {
+	if (embed && asset?.relativePath !== context?.fromRelativePath) {
 		if (asset) {
 			const token = state.push("wiki_embed", "", 0);
 			token.meta = { embed: { asset, reference: found, anchor, standalone: embedOccupiesLine(src, pos, found.end) } satisfies WikiEmbedToken };

@@ -877,13 +877,13 @@ export function insideLiteral(tree: ReturnType<typeof syntaxTree>, from: number,
 function decorateWiki(state: EditorState, context: LiveContext, match: ReturnType<typeof matchWikiLink> & object, range: { from: number; to: number }, found: Range<Decoration>[]): void {
 	const asset = resolveWikiTarget(match.target, context.lookup);
 	const hash = match.target.indexOf("#");
-	const sameFile = hash === 0 && !!anchorOf(match.target.slice(1));
 	const anchor = hash === -1 ? undefined : anchorOf(match.target.slice(hash + 1));
-	if (asset === null && !sameFile) return;
+	const localHeading = hash === 0 && !!anchor;
+	if (asset === null && !localHeading) return;
 	const editing = touched(state, range.from, range.to);
-	const missing = asset === undefined && !sameFile;
+	const missing = asset === undefined;
 
-	if (match.embed) {
+	if (match.embed && !localHeading && asset?.relativePath !== context.fromRelativePath) {
 		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
 			const line = state.doc.lineAt(range.from);
 			const standalone = embedOccupiesLine(line.text, range.from - line.from, range.to - line.from);
@@ -895,7 +895,7 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 		found.push(Decoration.mark({ class: missing ? "cm-live-broken" : "cm-live-link" }).range(range.from, range.to));
 		return;
 	}
-	const open = range.from + 2;
+	const open = range.from + (match.embed ? 3 : 2);
 	const close = range.to - 2;
 	const attributes: Record<string, string> = { class: missing ? "cm-live-wiki cm-live-broken" : `cm-live-wiki cm-live-link ${FILE_LINK_CLASS}` };
 	if (asset) attributes["data-asset-id"] = asset.assetId;
