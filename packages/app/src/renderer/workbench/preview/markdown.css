@@ -402,12 +402,15 @@
 	height: var(--lm-size-xs);
 }
 
-.markdown-toolbar > button:hover:not(:disabled) {
+.markdown-toolbar > button:hover:not(:disabled, .markdown-reading-toggle) {
 	background: var(--lm-surface-hover);
 }
 
 .markdown-toolbar > button[aria-pressed="true"] {
 	color: var(--lm-text-accent);
+}
+
+.markdown-toolbar > button[aria-pressed="true"]:not(.markdown-reading-toggle) {
 	background: var(--lm-surface-active);
 }
 

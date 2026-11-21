@@ -181,7 +181,7 @@ export function MarkdownEditor({ asset, assets, onOpenAsset, registerMarkdown }:
 	return <>
 		<div className="markdown-workbench" ref={rootRef}>
 			<div className="markdown-toolbar" role="toolbar" aria-label={t.preview.markdownView}>
-				<button type="button" aria-label={toggleLabel} data-tooltip={toggleLabel} aria-pressed={mode === "read"}
+				<button type="button" className="markdown-reading-toggle" aria-label={toggleLabel} data-tooltip={toggleLabel} aria-pressed={mode === "read"}
 					disabled={access === "read"} onMouseDown={(event) => event.preventDefault()} onClick={toggleReading}>
 					<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
 						{mode === "read" ? <><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" /></> : <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>}
