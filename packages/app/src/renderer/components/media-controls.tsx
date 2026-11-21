@@ -7,15 +7,12 @@ export function formatClock(seconds: number): string {
 	return `${minutes}:${rest}`;
 }
 
-export function PlayIcon(): React.JSX.Element {
-	return <svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
-		<path fill="currentColor" d="M5.2 3.3v9.4L12.6 8 5.2 3.3z" />
-	</svg>;
-}
-
-export function PauseIcon(): React.JSX.Element {
-	return <svg viewBox="2 2 12 12" width="15" height="15" aria-hidden="true">
-		<path fill="currentColor" d="M4.2 3.2h2.4v9.6H4.2zM9.4 3.2h2.4v9.6H9.4z" />
+export function PlaybackIcon({ paused, discDiameter }: { paused: boolean; discDiameter?: number }): React.JSX.Element {
+	const size = discDiameter ?? 12;
+	const origin = 8 - size / 2;
+	return <svg viewBox={`${origin} ${origin} ${size} ${size}`} width="15" height="15" aria-hidden="true">
+		{discDiameter !== undefined && <circle cx="8" cy="8" r={size / 2} />}
+		<path fill="currentColor" d={paused ? "M5.5 3.3v9.4L13 8z" : "M4.2 3.2h2.4v9.6H4.2zM9.4 3.2h2.4v9.6H9.4z"} />
 	</svg>;
 }
 

@@ -4,16 +4,17 @@ import { extname, join } from "node:path";
 import { retryWindowsFileOperation } from "../fs-retry.ts";
 import type { LibraryPaths } from "../library/paths.ts";
 import type { Asset } from "../model/asset.ts";
-import { buildThumbnailArgs } from "./operations.ts";
+import { buildThumbnailArgs, buildWaveformArgs } from "./operations.ts";
 import { runMediaProcess } from "./run.ts";
 
 export const THUMBNAIL_SIZE = 256;
 const POSTER_SIZE = 640;
-export type ThumbnailVariant = "square" | "poster";
 const VARIANTS = {
 	square: { suffix: ".webp", size: THUMBNAIL_SIZE, fit: "cover" },
 	poster: { suffix: ".poster.webp", size: POSTER_SIZE, fit: "contain" },
+	waveform: { suffix: ".waveform.webp" },
 } as const;
+export type ThumbnailVariant = keyof typeof VARIANTS;
 const MAX_CONCURRENT = 3;
 /** Video frames are taken a little after the start; the very first frame is often black. */
 const VIDEO_SEEK_SECONDS = 0.1;
@@ -26,7 +27,7 @@ export interface ThumbnailSource {
 }
 
 /**
- * Square thumbnails and uncropped posters cached under `.loom/thumbnails`.
+ * Thumbnails, uncropped posters and audio waveforms cached under `.loom/thumbnails`.
  * Each file is stamped with the source's mtime, so it is current exactly while the two match.
  */
 export class ThumbnailService {
@@ -46,7 +47,7 @@ export class ThumbnailService {
 	/** Absolute path of the current thumbnail, generated on first use. Undefined when the asset has none. */
 	async get(assetId: string, signal?: AbortSignal, variant: ThumbnailVariant = "square"): Promise<string | undefined> {
 		const asset = await this.source.getAsset(assetId);
-		if (!asset || !isThumbnailable(asset)) return undefined;
+		if (!asset || (variant === "waveform" ? asset.type !== "audio" : !isThumbnailable(asset))) return undefined;
 		const paths = this.source.getPaths();
 		const file = join(paths.thumbnails, `${asset.assetId}${VARIANTS[variant].suffix}`);
 		const version = `${file}:${asset.modifiedAt}:${asset.size}`;
@@ -111,13 +112,13 @@ export class ThumbnailService {
 
 	private async render(input: string, output: string, type: Asset["type"], cwd: string, variant: ThumbnailVariant, signal?: AbortSignal): Promise<void> {
 		const seeks = type === "video" ? [VIDEO_SEEK_SECONDS, undefined] : [undefined];
-		const { size, fit } = VARIANTS[variant];
 		let failure: unknown;
 		for (const seek of seeks) {
 			try {
 				await this.run({
 					program: "ffmpeg",
-					args: buildThumbnailArgs(input, output, size, seek, fit),
+					args: variant === "waveform" ? buildWaveformArgs(input, output)
+						: buildThumbnailArgs(input, output, VARIANTS[variant].size, seek, VARIANTS[variant].fit),
 					cwd,
 					signal,
 					timeoutMs: 30_000,

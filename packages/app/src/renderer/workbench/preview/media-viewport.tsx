@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { useLocale } from "../../locale.tsx";
-import { formatClock, MutedIcon, PauseIcon, PlayIcon, VolumeIcon } from "../../components/media-controls.tsx";
+import { formatClock, MutedIcon, PlaybackIcon, VolumeIcon } from "../../components/media-controls.tsx";
 import { uiPlatform } from "../../../shared/locale.ts";
 import {
 	FIT_MEDIA_VIEW,
@@ -378,7 +378,7 @@ function VideoTransport({ video, actions = null }: { video: HTMLVideoElement; ac
 							else video.pause();
 						}}
 					>
-						{clock.paused ? <PlayIcon /> : <PauseIcon />}
+						<PlaybackIcon paused={clock.paused} />
 					</button>
 					<span className="media-clock">
 						{formatClock(clock.time)}

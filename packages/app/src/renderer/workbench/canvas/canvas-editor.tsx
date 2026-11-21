@@ -163,7 +163,7 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onEr
 		append(files.map((file, index) => ({
 			id: crypto.randomUUID(), type: "file",
 			x: Math.round(point.x + (index % 3) * 260), y: Math.round(point.y + Math.floor(index / 3) * 188),
-			width: 244, height: 172, file: file.relativePath, loom: { assetId: file.assetId },
+			width: 244, height: file.type === "audio" ? 72 : 172, file: file.relativePath, loom: { assetId: file.assetId },
 		})));
 		surface.current?.focus();
 	}

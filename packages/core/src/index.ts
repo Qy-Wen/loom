@@ -6,6 +6,7 @@ export type { PastedLibraryItems } from "./library/library.ts";
 export type { PasteConflict, PasteChoice, ResolvePasteConflict } from "./library/paste.ts";
 export { resolveMediaBinary, tryResolveMediaBinaries } from "./media/binaries.ts";
 export type { MediaProgram } from "./media/binaries.ts";
+export type { ThumbnailVariant } from "./media/thumbnail.ts";
 
 export type { Asset, AssetType, LibraryChange, LibrarySnapshot } from "./model/asset.ts";
 export { assetTypeFromPath } from "./model/asset.ts";

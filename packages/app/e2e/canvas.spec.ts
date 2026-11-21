@@ -191,21 +191,22 @@ test("canvas image and video frames follow the media aspect ratio when zoomed an
 	await expect.poll(async () => (await readBoard(join(root, "Media.canvas"))).nodes[1]?.width).toBeGreaterThan(244);
 });
 
-test("canvas videos play inline and resume after switching cards or tabs", async ({ loomPage: page, electronApp }) => {
+test("canvas video and audio play inline and resume after switching cards or tabs", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	test.setTimeout(60_000);
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
 	const root = (await rootPath())!;
 	await promisify(execFile)(resolveMediaBinary("ffmpeg"), [
-		"-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=10", "-t", "60",
-		"-c:v", "libx264", "-pix_fmt", "yuv420p", join(root, "Video.mp4"),
+		"-v", "error", "-f", "lavfi", "-i", "color=c=blue:s=160x90:r=10", "-f", "lavfi", "-i", "aevalsrc=0.06*(1+sin(0.7*PI*t))*sin(2*PI*440*t):s=8000",
+		"-map", "0:v", "-t", "60", "-c:v", "libx264", "-pix_fmt", "yuv420p", join(root, "Video.mp4"),
+		"-map", "1:a", "-t", "60", "-c:a", "pcm_s16le", join(root, "Audio.wav"),
 	], { windowsHide: true });
 	await writeFile(join(root, "Other.md"), "# Other tab");
 	await writeFile(join(root, "Playback.canvas"), JSON.stringify({
 		nodes: [
 			{ id: "video", type: "file", file: "Video.mp4", x: 0, y: 0, width: 244, height: 172 },
-			{ id: "other-video", type: "file", file: "Video.mp4", x: 280, y: 0, width: 244, height: 172 },
+			{ id: "audio", type: "file", file: "Audio.wav", x: 280, y: 0, width: 244, height: 72 },
 		],
 		edges: [],
 	} satisfies CanvasDocument));
@@ -213,14 +214,40 @@ test("canvas videos play inline and resume after switching cards or tabs", async
 	await sidebar.locator(".asset-row").filter({ hasText: "Playback.canvas" }).click();
 	const board = page.getByRole("region", { name: "Canvas Playback.canvas" });
 	const videoCard = board.locator("[data-node-id=video]");
-	const otherCard = board.locator("[data-node-id=other-video]");
+	const audioCard = board.locator("[data-node-id=audio]");
 	const video = videoCard.locator("video");
-	const otherVideo = otherCard.locator("video");
+	const audio = audioCard.locator("audio");
 	const videoState = () => video.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime }));
-	const otherState = () => otherVideo.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime }));
+	const audioState = () => audio.evaluate((element: HTMLAudioElement) => ({ paused: element.paused, time: element.currentTime }));
 	const videoPlay = videoCard.getByRole("button", { name: "Play Video.mp4", exact: true });
-	const otherPlay = otherCard.getByRole("button", { name: "Play Video.mp4", exact: true });
+	const audioPlay = audioCard.getByRole("button", { name: "Play Audio.wav", exact: true });
 	await expect(videoPlay).not.toHaveAttribute("data-tooltip", /.+/);
+	await expect(audioPlay).not.toHaveAttribute("data-tooltip", /.+/);
+	const waveform = audioCard.locator(".canvas-waveform");
+	await expect(waveform).toBeVisible();
+	const audioTime = audioCard.locator(".canvas-player-time");
+	const audioMute = audioCard.getByRole("button", { name: "Mute", exact: true });
+	const audioVolume = audioCard.getByRole("slider", { name: "Volume" });
+	await expect(audioTime).toHaveText("0:00 / 1:00");
+	await expect(audioPlay.locator("circle")).toHaveCSS("fill", await videoPlay.locator("circle").evaluate((disc) => getComputedStyle(disc).fill));
+	await expect(audioPlay).toHaveCSS("width", "20px");
+	await expect(audioPlay).toHaveCSS("height", "20px");
+	await expect(audioVolume).toHaveCSS("--canvas-track-height", "4px");
+	const waveBounds = (await waveform.boundingBox())!;
+	const playBounds = (await audioPlay.boundingBox())!;
+	const timeBounds = (await audioTime.boundingBox())!;
+	const muteBounds = (await audioMute.boundingBox())!;
+	const volumeBounds = (await audioVolume.boundingBox())!;
+	expect(waveBounds.y + waveBounds.height).toBeLessThan(playBounds.y);
+	expect(playBounds.x + playBounds.width).toBeLessThan(timeBounds.x);
+	expect(timeBounds.x + timeBounds.width).toBeLessThan(muteBounds.x);
+	expect(muteBounds.x + muteBounds.width).toBeLessThan(volumeBounds.x);
+	expect(volumeBounds.x + volumeBounds.width).toBeCloseTo(waveBounds.x + waveBounds.width);
+	const waveBars = waveform.locator("span");
+	await expect(waveBars.first()).toHaveCSS("border-radius", "0px");
+	const waveHeights = await waveBars.evaluateAll((bars) => bars.map((bar) => bar.getBoundingClientRect().height));
+	expect(new Set(waveHeights).size).toBeGreaterThan(1);
+
 	await videoCard.hover();
 	expect(await videoState()).toEqual({ paused: true, time: 0 });
 	await videoPlay.click();
@@ -228,12 +255,25 @@ test("canvas videos play inline and resume after switching cards or tabs", async
 	await expect(videoCard.getByRole("slider", { name: "Seek" })).toBeEnabled();
 	await videoCard.getByRole("button", { name: "Mute", exact: true }).click();
 	await expect(videoCard.getByRole("button", { name: "Unmute", exact: true })).toBeVisible();
-	await otherCard.hover();
+	await audioCard.hover();
 	await expect(videoCard.locator(".canvas-player-controls")).toHaveCSS("opacity", "0");
 	expect((await videoState()).paused).toBe(false);
 
-	await otherPlay.click();
-	await expect.poll(async () => (await otherState()).time).toBeGreaterThan(0);
+	await page.mouse.click(volumeBounds.x + volumeBounds.width / 4, volumeBounds.y + volumeBounds.height / 2);
+	const readAudioVolume = () => audio.evaluate((element: HTMLAudioElement) => element.volume);
+	await expect.poll(readAudioVolume).toBeCloseTo(0.2, 1);
+	const volume = String(await readAudioVolume());
+	await expect(audioVolume).toHaveValue(volume);
+	await audioMute.click();
+	await expect(audioVolume).toHaveValue("0");
+	await audioCard.getByRole("button", { name: "Unmute", exact: true }).click();
+	await expect(audioVolume).toHaveValue(volume);
+	await audioCard.getByRole("slider", { name: "Seek" }).click();
+	await expect.poll(async () => (await audioState()).time).toBeGreaterThan(25);
+	await expect(waveform.locator(".is-played").first()).toBeVisible();
+	const audioSeekTime = (await audioState()).time;
+	await audioPlay.click();
+	await expect.poll(async () => (await audioState()).time).toBeGreaterThan(audioSeekTime);
 	await videoCard.hover();
 	const seek = (await videoCard.getByRole("slider", { name: "Seek" }).boundingBox())!;
 	await page.mouse.click(seek.x + seek.width / 3, seek.y + seek.height / 2);
@@ -242,7 +282,7 @@ test("canvas videos play inline and resume after switching cards or tabs", async
 	expect(pausedVideo.paused).toBe(true);
 	await videoPlay.click();
 	await expect.poll(async () => (await videoState()).time).toBeGreaterThan(pausedVideo.time);
-	expect((await otherState()).paused).toBe(true);
+	expect((await audioState()).paused).toBe(true);
 
 	const previousVideo = (await video.elementHandle())!;
 	await sidebar.locator(".asset-row").filter({ hasText: "Other.md" }).click({ button: "middle" });

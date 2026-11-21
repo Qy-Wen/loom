@@ -23,7 +23,7 @@ export function filenameStem(filename: string): string {
 
 type AssetVersion = { assetId: string; modifiedAt?: number; size?: number };
 
-function assetUrl(host: "asset" | "thumb" | "poster", asset: AssetVersion): string {
+function assetUrl(host: "asset" | "thumb" | "poster" | "waveform", asset: AssetVersion): string {
 	const id = encodeURIComponent(asset.assetId);
 	if (asset.modifiedAt == null) return `loom-asset://${host}/${id}`;
 	// Size changes when a file is still being written, so a just-saved video does not keep the first empty response.
@@ -44,6 +44,10 @@ export function assetThumbnailUrl(asset: AssetVersion): string {
 /** An uncropped cached still of an image or video. */
 export function assetPosterUrl(asset: AssetVersion): string {
 	return assetUrl("poster", asset);
+}
+
+export function assetWaveformUrl(asset: AssetVersion): string {
+	return assetUrl("waveform", asset);
 }
 
 /** Same badge letters the library tree uses for audio / text / other. */

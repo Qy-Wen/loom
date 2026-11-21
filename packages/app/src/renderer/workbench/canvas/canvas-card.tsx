@@ -51,7 +51,7 @@ export function CanvasCard({
 	const markdownAsset = node.type === "file" && asset && extensionOf(asset.filename) === ".md" ? asset : undefined;
 	const openFromHandle = markdownAsset && !connecting;
 	const media = node.type === "file" && (asset?.type === "image" || asset?.type === "video");
-	const playable = node.type === "file" && asset?.type === "video" ? asset : undefined;
+	const playable = node.type === "file" && (asset?.type === "audio" || asset?.type === "video") ? asset : undefined;
 	function finishEditing(event: KeyboardEvent): void {
 		if (event.key === "Escape" && !isImeComposing(event.nativeEvent)) {
 			event.stopPropagation();

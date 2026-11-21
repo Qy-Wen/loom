@@ -72,6 +72,15 @@ export function buildAudioCompactArgs(inputPath: string, outputPath: string): st
 	];
 }
 
+export function buildWaveformArgs(inputPath: string, outputPath: string): string[] {
+	return [
+		"-y", "-i", inputPath,
+		// Rectify before downsampling to retain the level of high-frequency sounds with a small sample buffer.
+		"-filter_complex", "[0:a:0]aformat=channel_layouts=mono,aeval=abs(val(0)),aresample=2000,apad=whole_len=320,showwavespic=s=320x64:colors=white:scale=sqrt:filter=peak:draw=full[wave]",
+		"-map", "[wave]", "-frames:v", "1", "-c:v", "libwebp", "-pix_fmt", "bgra", "-lossless", "1", "-f", "webp", outputPath,
+	];
+}
+
 function formatSeconds(value: number): string {
 	return String(assertFiniteNumber(value, "time"));
 }
