@@ -494,7 +494,7 @@
 	vertical-align: middle;
 }
 
-.cm-wiki-embed.standalone {
+.cm-wiki-embed.standalone:has(> .markdown-embed-media) {
 	width: 100%;
 }
 

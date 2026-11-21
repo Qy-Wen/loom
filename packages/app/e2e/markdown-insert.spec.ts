@@ -190,6 +190,27 @@ test("wiki embed completion fills empty brackets and suggests files", async ({ l
 	await expect.poll(() => embeds.evaluateAll((images: HTMLImageElement[]) => images.every((image) => image.naturalWidth > 0))).toBe(true);
 });
 
+test("the caret stays beside a standalone file embed without a preview", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	await writeFile(join(root, "reference.md"), "# Reference");
+	await writeFile(join(root, "commands.md"), "Before\n\n![[reference.md]]");
+	await openNote(page);
+
+	const editor = page.getByRole("textbox", { name: "Edit commands.md", exact: true });
+	const link = editor.getByRole("link", { name: "reference.md", exact: true });
+	await expect(link).toBeVisible();
+	await editor.press("ControlOrMeta+End");
+
+	const cursor = page.locator(".cm-cursor-primary");
+	await expect(cursor).toBeVisible();
+	await expect.poll(async () => {
+		const linkBox = (await link.boundingBox())!;
+		const cursorBox = (await cursor.boundingBox())!;
+		return Math.abs(cursorBox.x - (linkBox.x + linkBox.width));
+	}).toBeLessThan(4);
+});
+
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
