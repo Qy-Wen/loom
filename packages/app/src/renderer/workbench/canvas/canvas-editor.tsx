@@ -10,7 +10,7 @@ import { rectBetween, rectsIntersect, type Rect } from "../browser/folder-browse
 import { CanvasCard } from "./canvas-card.tsx";
 import { CanvasConnections } from "./canvas-connections.tsx";
 import { CanvasAction, CanvasSelectionControls, CanvasToolbar } from "./canvas-controls.tsx";
-import { connectionCurve, containsCard, edgeCurve, edgePoint, fitNodes, movingCards, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
+import { connectionCurve, containsCard, edgeCurve, edgePoint, fitNodes, movingCards, nodeBounds, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
 import { useCanvasDocument } from "./use-canvas-document.ts";
 import { useCanvasDrag } from "./use-canvas-drag.ts";
 import "./canvas.css";
@@ -153,13 +153,20 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 	}
 
 	async function openCanvasMenu(event: MouseEvent<HTMLDivElement>): Promise<void> {
-		if (!board.document || !(event.target instanceof Element) || event.target.closest(".canvas-node, button")) return;
+		const target = event.target;
+		if (!board.document || event.defaultPrevented || !(target instanceof Element)
+			|| target.closest("a, audio, video, input, textarea, select, [contenteditable='true']")) return;
+		const card = target.closest<HTMLElement>(".canvas-card[data-node-id]");
+		const canGroup = selectedNodes.length > 1 && (!card || selectedNodes.includes(card.dataset.nodeId ?? ""));
+		if (target.closest(".canvas-node, button") && (!card || !canGroup)) return;
 		event.preventDefault();
 		const point = event.clientX === 0 && event.clientY === 0 ? centerPoint() : documentPoint(event);
 		surface.current?.focus({ preventScroll: true });
 		try {
-			const action = await window.loom.showCanvasContextMenu();
-			if (action === "add_files" && surface.current) setFileSearch({ point });
+			const action = await window.loom.showCanvasContextMenu(canGroup);
+			if (!surface.current) return;
+			if (action === "add_files") setFileSearch({ point });
+			else if (action === "group" && canGroup) groupSelection(selectedNodes);
 		} catch (cause) {
 			onError(String(cause));
 		}
@@ -177,11 +184,25 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 		}
 	}
 
-	function addCard(type: "text" | "group", point = centerPoint()): void {
+	function addTextCard(point = centerPoint()): void {
 		const id = crypto.randomUUID();
 		const x = Math.round(point.x - 120), y = Math.round(point.y - 60);
-		append([type === "text" ? { id, type, x, y, width: 260, height: 160, text: "" }
-			: { id, type, x, y, width: 420, height: 280, label: t.canvas.group }], type === "group");
+		append([{ id, type: "text", x, y, width: 260, height: 160, text: "" }]);
+		setEditing(id);
+	}
+
+	function groupSelection(ids: readonly string[]): void {
+		const picked = new Set(ids);
+		const cards = board.live.current?.document.nodes.filter((node) => picked.has(node.id));
+		if (!cards || cards.length < 2) return;
+		const bounds = nodeBounds(cards)!;
+		const padding = 32;
+		const id = crypto.randomUUID();
+		append([{
+			id, type: "group", label: t.canvas.group,
+			x: bounds.x - padding, y: bounds.y - padding,
+			width: bounds.width + padding * 2, height: bounds.height + padding * 2,
+		}], true);
 		setEditing(id);
 	}
 
@@ -363,7 +384,7 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 						if (!board.document || pan || event.button !== 0 || !(event.target instanceof Element)
 							|| event.target.closest(".canvas-node, button")) return;
 						const point = documentPoint(event);
-						addCard("text", { x: point.x + 120, y: point.y + 60 });
+						addTextCard({ x: point.x + 120, y: point.y + 60 });
 					}}
 					onDragOver={(event) => {
 						if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
@@ -446,8 +467,8 @@ export function CanvasEditor({ asset, assets, incoming, onConsume, onPreview, on
 				</CanvasSelectionControls>}
 				<div className="canvas-docks" ref={docks}>
 					<CanvasToolbar className="canvas-create" label={t.canvas.createTools}>
-						<CanvasAction icon="text" label={t.canvas.addNote} showLabel disabled={!board.document} onClick={() => addCard("text")} />
-						<CanvasAction icon="group" label={t.canvas.addGroup} showLabel disabled={!board.document} onClick={() => addCard("group")} />
+						<CanvasAction icon="text" label={t.canvas.addNote} showLabel disabled={!board.document} onClick={() => addTextCard()} />
+						<CanvasAction icon="document" label={t.canvas.addFiles} showLabel disabled={!board.document} onClick={() => setFileSearch({ point: centerPoint() })} />
 					</CanvasToolbar>
 					<CanvasToolbar className="canvas-view" label={t.canvas.viewTools}>
 						<CanvasAction icon="pan" label={t.canvas.pan} pressed={pan} onClick={() => { setPan(!pan); setConnection(null); }} />

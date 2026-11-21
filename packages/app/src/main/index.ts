@@ -76,7 +76,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type FolderContextAction, type LibraryContextAction, type LibraryCreateAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownDropAction, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type CanvasContextAction, type FolderContextAction, type LibraryContextAction, type LibraryCreateAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownDropAction, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
 import { markdownEmbedLayout } from "../shared/markdown-reference.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
@@ -735,11 +735,13 @@ function registerIpc(): void {
 		},
 	);
 
-	ipcMain.handle(IPC.showCanvasContextMenu, async (event) => {
+	ipcMain.handle(IPC.showCanvasContextMenu, async (event, canGroup: boolean) => {
 		const { t } = await uiCopy();
-		return popupContextMenu<"add_files">(event, [
+		const items: ContextMenuItem<CanvasContextAction>[] = [
 			{ label: t.canvas.addFiles, click: () => "add_files" },
-		]);
+		];
+		if (canGroup) items.push({ label: t.canvas.addGroup, click: () => "group" });
+		return popupContextMenu(event, items);
 	});
 
 	ipcMain.handle(IPC.showEditorContextMenu, async (event, state: MarkdownContextState): Promise<MarkdownContextAction | null> => {

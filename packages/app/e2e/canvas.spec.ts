@@ -16,7 +16,7 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	const reference = (await snapshot()).assets[0]!;
 	await electronApp!.evaluate(({ Menu }) => {
 		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
-			this.items.find((item) => item.label === "New Canvas" && item.enabled)?.click();
+			this.items.find((item) => item.enabled && (item.label === "New Canvas" || item.label === "Group"))?.click();
 			options?.callback?.();
 		};
 	});
@@ -67,11 +67,16 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	await page.keyboard.press("Escape");
 	await expect(preview).toHaveCount(0);
 
-	await board.getByRole("button", { name: "Group", exact: true }).click();
+	const fileHandle = fileCard.locator(".canvas-handle");
+	const textHandle = board.locator(".type-text .canvas-handle");
+	await fileHandle.click();
+	await textHandle.click({ modifiers: ["Shift"] });
+	await expect(board.locator(".canvas-card.selected")).toHaveCount(2);
+	await fileHandle.click({ button: "right" });
 	await board.getByRole("textbox", { name: "Group title" }).fill("素材");
 	await board.getByRole("button", { name: "Done", exact: true }).click();
-	await fileCard.locator(".canvas-handle").click();
-	await board.locator(".type-text .canvas-handle").click({ modifiers: ["Shift"] });
+	await fileHandle.click();
+	await textHandle.click({ modifiers: ["Shift"] });
 	await board.getByRole("button", { name: "Connect", exact: true }).click();
 	await board.getByRole("textbox", { name: "Connection label" }).fill("接演示");
 	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
@@ -82,9 +87,18 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 
 	const path = join(root, "分镜.canvas");
 	await expect.poll(async () => (await readBoard(path)).edges[0]?.label).toBe("接演示");
-	expect((await readBoard(path)).nodes.find((node) => node.type === "file")).toMatchObject({
+	const saved = await readBoard(path);
+	expect(saved.nodes.find((node) => node.type === "file")).toMatchObject({
 		file: "参考.png", loom: { assetId: reference.assetId },
 	});
+	const group = saved.nodes.find((node) => node.type === "group")!;
+	expect(group.label).toBe("素材");
+	for (const card of saved.nodes.filter((node) => node.type !== "group")) {
+		expect(group.x).toBeLessThan(card.x);
+		expect(group.y).toBeLessThan(card.y);
+		expect(group.x + group.width).toBeGreaterThan(card.x + card.width);
+		expect(group.y + group.height).toBeGreaterThan(card.y + card.height);
+	}
 	expect((await readdir(root)).sort()).toEqual([".loom", "参考.png", "分镜.canvas"].sort());
 
 	await page.getByRole("button", { name: "Close 分镜.canvas" }).click();
@@ -245,7 +259,8 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 	const create = board.getByRole("toolbar", { name: "Create cards" });
 	const selection = board.getByRole("toolbar", { name: "Selection actions" });
 	await create.getByRole("button", { name: "Text", exact: true }).press("ArrowRight");
-	await expect(create.getByRole("button", { name: "Group", exact: true })).toBeFocused();
+	await expect(create.getByRole("button", { name: "Add files", exact: true })).toBeFocused();
+	await expect(create.getByRole("button", { name: "Group", exact: true })).toHaveCount(0);
 	await expect(selection).toHaveCount(0);
 
 	const source = board.locator(".canvas-node").filter({ hasText: "Source" });
@@ -269,7 +284,7 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 	await expect(board.getByRole("textbox", { name: "Markdown text" })).toHaveCount(0);
 });
 
-test("the canvas context menu searches files under the library root", async ({ loomPage: page, electronApp }) => {
+test("the canvas toolbar and context menu add files from the library", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
@@ -292,10 +307,10 @@ test("the canvas context menu searches files under the library root", async ({ l
 	await page.locator(".library-sidebar .asset-row").filter({ hasText: file.filename }).click();
 	const board = page.getByRole("region", { name: `Canvas ${file.filename}` });
 	await expect(board.getByText("Drag files here or add text to start.")).toBeVisible();
-	await expect(board.getByRole("button", { name: "Add files" })).toHaveCount(0);
+	const addFiles = board.getByRole("button", { name: "Add files", exact: true });
 	const surface = board.locator(".canvas-surface");
 	const location = { x: 48, y: 56 };
-	await surface.click({ button: "right", position: location });
+	await addFiles.click();
 	const picker = page.getByRole("dialog", { name: "Add files", exact: true });
 	const search = picker.getByRole("combobox", { name: "Search library files" });
 	await expect(search).toBeFocused();
@@ -329,6 +344,11 @@ test("the canvas context menu searches files under the library root", async ({ l
 	const card = (await board.locator(".canvas-card").first().boundingBox())!;
 	expect(card.x - viewport.x).toBeCloseTo(location.x);
 	expect(card.y - viewport.y).toBeCloseTo(location.y);
+
+	await addFiles.click();
+	await search.fill("Beta.md");
+	await search.press("Enter");
+	await expect.poll(async () => (await readBoard(path)).nodes.map((node) => node.file)).toEqual(["Project/Alpha.md", "Project/Beta.md"]);
 });
 
 test("clicking Table rows and Graph nodes selects files without opening them", async ({ loomPage: page, electronApp }) => {

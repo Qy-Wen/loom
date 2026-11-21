@@ -4,7 +4,6 @@ import type { Rect } from "../browser/folder-browser-model.ts";
 const iconPaths = {
 	text: "M3 5V3h10v2M8 3v10m-2 0h4",
 	document: "M10 2H4a1 1 0 0 0-1 1v10a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V5Zm0 0v3h3M6 8h4M6 11h4",
-	group: "M5 2H2v3m9-3h3v3m0 6v3h-3m-6 0H2v-3m3-6h6v6H5Z",
 	pan: "M5 8V4a1 1 0 0 1 2 0v3-5a1 1 0 0 1 2 0v5-4a1 1 0 0 1 2 0v5-2a1 1 0 0 1 2 0v4a4 4 0 0 1-4 4H8a3 3 0 0 1-2.5-1.3L3 9.5A1 1 0 0 1 4.5 8Z",
 	minus: "M3 8h10",
 	plus: "M3 8h10M8 3v10",

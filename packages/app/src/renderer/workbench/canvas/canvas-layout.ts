@@ -13,15 +13,21 @@ export function zoomAt(view: Viewport, point: Point, ratio: number): Viewport {
 	return { x: point.x - origin.x * scale, y: point.y - origin.y * scale, scale };
 }
 
-export function fitNodes(nodes: CanvasNode[], width: number, height: number): Viewport {
-	if (!nodes.length) return { x: 36, y: 36, scale: 1 };
+export function nodeBounds(nodes: readonly CanvasNode[]): { x: number; y: number; width: number; height: number } | undefined {
+	if (!nodes.length) return;
 	let left = Infinity, top = Infinity, right = -Infinity, bottom = -Infinity;
 	for (const node of nodes) {
 		left = Math.min(left, node.x); top = Math.min(top, node.y);
 		right = Math.max(right, node.x + node.width); bottom = Math.max(bottom, node.y + node.height);
 	}
-	const scale = Math.max(0.125, Math.min(1, (width - 64) / (right - left), (height - 64) / (bottom - top)));
-	return { x: width / 2 - (left + right) / 2 * scale, y: height / 2 - (top + bottom) / 2 * scale, scale };
+	return { x: left, y: top, width: right - left, height: bottom - top };
+}
+
+export function fitNodes(nodes: CanvasNode[], width: number, height: number): Viewport {
+	const bounds = nodeBounds(nodes);
+	if (!bounds) return { x: 36, y: 36, scale: 1 };
+	const scale = Math.max(0.125, Math.min(1, (width - 64) / bounds.width, (height - 64) / bounds.height));
+	return { x: width / 2 - (bounds.x + bounds.width / 2) * scale, y: height / 2 - (bounds.y + bounds.height / 2) * scale, scale };
 }
 
 function center(node: CanvasNode): Point {
