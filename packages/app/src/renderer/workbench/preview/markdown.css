@@ -56,6 +56,10 @@
 	background: var(--lm-surface-sunken);
 }
 
+.markdown-workbench .document-toolbar > .document-mode-toggle {
+	color: var(--lm-text-secondary);
+}
+
 .markdown-toolbar-find {
 	--markdown-find-trigger-size: var(--lm-size-lg);
 	flex: 0 1 var(--markdown-find-trigger-size);
