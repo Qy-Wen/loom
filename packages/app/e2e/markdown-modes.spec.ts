@@ -435,39 +435,35 @@ test("large Markdown uses source editing from 2 to 10 MiB and opens read-only be
 
 test("source mode removes all live widgets and carries a cell caret into the raw table", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	const root = await mkdtemp(join(tmpdir(), "loom-md-raw-"));
-	const file = join(root, "a.md");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const file = join((await rootPath())!, "a.md");
 	const text = "$x^2$\n\n| A | B |\n| - | - |\n| one | two |\n\n```mermaid\ngraph TD; A-->B\n```\n\nend";
 	await writeFile(file, text);
-	try {
-		await openLibrary(loomPage, electronApp!, root);
-		await selectFile(loomPage, "a.md");
-		const box = loomPage.getByRole("textbox", { name: "Edit a.md" });
-		const source = loomPage.getByRole("button", { name: "Source mode", exact: true });
-		await expect(box.locator(".cm-live-table")).toHaveCount(1);
-		await box.locator("td").first().click();
-		await loomPage.keyboard.press("End");
-		await source.click();
-		await expect(box).toBeFocused();
-		await expect(box.locator(".cm-live-table, .cm-live-math, .cm-live-mermaid, .cm-live-hidden")).toHaveCount(0);
-		await loomPage.keyboard.type("!");
-		await loomPage.keyboard.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text.replace("| one |", "| one! |"));
-		await source.click();
-		await expect(box.locator("td").first()).toHaveText("one!");
-		await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
-		await box.focus();
-		await box.press("ControlOrMeta+z");
-		await box.press("ControlOrMeta+s");
-		expect(await readFile(file, "utf8")).toContain("| one! |");
-		await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
-		await box.focus();
-		await box.press("ControlOrMeta+z");
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text);
-	} finally {
-		await rm(root, { recursive: true, force: true });
-	}
+	await selectFile(loomPage, "a.md");
+	const box = loomPage.getByRole("textbox", { name: "Edit a.md" });
+	const source = loomPage.getByRole("button", { name: "Source mode", exact: true });
+	await expect(box.locator(".cm-live-table")).toHaveCount(1);
+	await box.locator("td").first().click();
+	await loomPage.keyboard.press("End");
+	await source.click();
+	await expect(box).toBeFocused();
+	await expect(box.locator(".cm-live-table, .cm-live-math, .cm-live-mermaid, .cm-live-hidden")).toHaveCount(0);
+	await loomPage.keyboard.type("!");
+	await loomPage.keyboard.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text.replace("| one |", "| one! |"));
+	await source.click();
+	await expect(box.locator("td").first()).toHaveText("one!");
+	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await box.focus();
+	await box.press("ControlOrMeta+z");
+	await box.press("ControlOrMeta+s");
+	expect(await readFile(file, "utf8")).toContain("| one! |");
+	await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
+	await box.focus();
+	await box.press("ControlOrMeta+z");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
 });
 
 test("outside changes update the size tier only when adopted and never lock unsaved edits", async ({ loomPage, electronApp }) => {

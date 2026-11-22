@@ -964,7 +964,7 @@ const imageDecorations = StateField.define<DecorationSet>({
 	create: markdownImageDecorations,
 	update(decorations, { startState, state, docChanged, selection }) {
 		if (docChanged || selection || syntaxTree(startState) !== syntaxTree(state) || startState.readOnly !== state.readOnly
-			|| startState.field(imageLayout) !== state.field(imageLayout) || startState.field(libraryField, false) !== state.field(libraryField, false)
+			|| startState.field(imageLayout, false) !== state.field(imageLayout) || startState.field(libraryField, false) !== state.field(libraryField, false)
 			|| startState.field(pressState, false) !== state.field(pressState, false) || startState.field(focusState, false) !== state.field(focusState, false)) {
 			return markdownImageDecorations(state);
 		}
