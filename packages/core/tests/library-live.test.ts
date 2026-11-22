@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { randomUUID } from "node:crypto";
 import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -119,6 +120,54 @@ test("Library keeps the id and tags when an editor saves over a file by rename w
 		assert.equal(snap.assets.length, 1);
 		assert.equal(snap.assets[0]?.assetId, note.assetId);
 		assert.deepEqual(snap.assetTags.map((row) => row.assetId), [note.assetId]);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Loom text saves keep metadata even when the library scans while the writes are staged", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-live-text-save-"));
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
+	try {
+		await writeFile(join(root, "page.html"), "<p>Before</p>");
+		await writeFile(join(root, "note.txt"), "Before");
+		const initial = await core.openLibrary(root);
+		const page = initial.assets.find((asset) => asset.relativePath === "page.html")!;
+		const note = initial.assets.find((asset) => asset.relativePath === "note.txt")!;
+		const status = await core.createProperty("Status", "text");
+		const properties = [];
+		for (const asset of [page, note]) {
+			await core.setFavorite(asset.assetId, true);
+			await core.addAssetTag(asset.assetId, "keep");
+			properties.push(await core.setAssetProperty(asset.assetId, status.propertyId, "Selected"));
+		}
+		const relation = await core.createRelation(page.assetId, note.assetId, "documents");
+		const htmlTemporary = join(root, `.loom-html.${randomUUID()}.tmp`);
+		const textTemporary = join(root, `.loom-text.${randomUUID()}.tmp`);
+		const html = "<p>After saving</p>";
+		const text = "After saving the note";
+		await writeFile(htmlTemporary, html);
+		await writeFile(textTemporary, text);
+		await writeFile(join(root, "other.txt"), "An unrelated change that causes a scan");
+		const staged = await waitUntil(core, (snapshot) => snapshot.assets.some((asset) => asset.relativePath === "other.txt"), "scan during save");
+
+		await renameRetry(htmlTemporary, join(root, page.relativePath));
+		await renameRetry(textTemporary, join(root, note.relativePath));
+		const saved = await waitUntil(core, (snapshot) =>
+			snapshot.assets.some((asset) => asset.relativePath === page.relativePath && asset.size === html.length)
+			&& snapshot.assets.some((asset) => asset.relativePath === note.relativePath && asset.size === text.length), "scan after save");
+		for (const asset of [page, note]) {
+			assert.equal(saved.assets.find((row) => row.relativePath === asset.relativePath)?.assetId, asset.assetId);
+		}
+		assert.equal(staged.assets.length, 3);
+		const originalIds = [page.assetId, note.assetId].sort();
+		assert.deepEqual([...saved.favoriteAssetIds].sort(), originalIds);
+		assert.deepEqual(saved.assetTags.map((row) => row.assetId).sort(), originalIds);
+		const { values } = await core.getPropertySnapshot();
+		assert.deepEqual(values.sort((a, b) => a.assetId.localeCompare(b.assetId)),
+			properties.sort((a, b) => a.assetId.localeCompare(b.assetId)));
+		assert.deepEqual(await core.listGraphRelations(), [relation]);
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

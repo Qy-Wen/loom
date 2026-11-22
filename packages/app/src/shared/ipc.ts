@@ -183,6 +183,8 @@ export const IPC = {
 	saveMarkdown: "loom:saveMarkdown",
 	readHtml: "loom:readHtml",
 	saveHtml: "loom:saveHtml",
+	readTextFile: "loom:readTextFile",
+	saveTextFile: "loom:saveTextFile",
 	canvasDirtyChanged: "loom:canvasDirtyChanged",
 	flushCanvasBeforeClose: "loom:flushCanvasBeforeClose",
 	canvasCloseReady: "loom:canvasCloseReady",
@@ -333,6 +335,8 @@ export interface LoomApi {
 	saveMarkdown: (assetId: string, text: string, revision: string) => Promise<TextFileSaveResult>;
 	readHtml: (assetId: string) => Promise<TextFileSnapshot>;
 	saveHtml: (assetId: string, text: string, revision: string) => Promise<TextFileSaveResult>;
+	readTextFile: (assetId: string) => Promise<TextFileSnapshot>;
+	saveTextFile: (assetId: string, text: string, revision: string) => Promise<TextFileSaveResult>;
 	setCanvasDirty: (dirty: boolean) => void;
 	onFlushCanvasBeforeClose: (flush: () => Promise<boolean>) => () => void;
 	renameFolder: (relativePath: string, name: string) => Promise<string>;

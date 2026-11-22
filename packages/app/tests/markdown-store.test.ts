@@ -7,7 +7,7 @@ import { LocalCore } from "@loom/core";
 import { TextFileStore } from "../src/main/storage/text-file.ts";
 import { markdownAccess, MARKDOWN_EDIT_LIMIT_BYTES, MARKDOWN_LIVE_LIMIT_BYTES } from "../src/shared/markdown-file.ts";
 
-async function withLibrary(files: Record<string, string | Buffer>, run: (context: { root: string; core: LocalCore; store: TextFileStore; id: (path: string) => Promise<string> }) => Promise<void>, format: "Markdown" | "HTML" = "Markdown"): Promise<void> {
+async function withLibrary(files: Record<string, string | Buffer>, run: (context: { root: string; core: LocalCore; store: TextFileStore; id: (path: string) => Promise<string> }) => Promise<void>, format: ConstructorParameters<typeof TextFileStore>[1] = "Markdown"): Promise<void> {
 	const root = await mkdtemp(join(tmpdir(), "loom-markdown-"));
 	const core = new LocalCore();
 	try {
@@ -52,6 +52,25 @@ test("the HTML store saves UTF-8 HTML and rejects other file types and legacy en
 		await assert.rejects(store.read(await id("note.md")), /HTML file not found/);
 		await assert.rejects(store.read(await id("legacy.html")), /UTF-8/);
 	}, "HTML");
+});
+
+test("the text store edits known UTF-8 formats and rejects unsupported or binary contents", async () => {
+	await withLibrary({
+		"config.YAML": "\uFEFFenabled: true\r\n",
+		"legacy.txt": Buffer.from([0xe9]),
+		"binary.txt": Buffer.from([0, 1, 2]),
+		"note.md": "# Note",
+		"page.html": "<p>HTML</p>",
+		"board.canvas": "{}",
+	}, async ({ root, store, id }) => {
+		const config = await id("config.YAML");
+		const { text, revision } = await store.read(config);
+		assert.equal(text, "enabled: true\n");
+		assert.equal((await store.save(config, "enabled: false\n", revision)).status, "saved");
+		assert.equal(await readFile(join(root, "config.YAML"), "utf8"), "\uFEFFenabled: false\r\n");
+		for (const path of ["legacy.txt", "binary.txt"]) await assert.rejects(store.read(await id(path)), /UTF-8/);
+		for (const path of ["note.md", "page.html", "board.canvas"]) await assert.rejects(store.read(await id(path)), /not found/);
+	}, "Text");
 });
 
 test("saving unchanged text leaves the file and its modification time alone", async () => {

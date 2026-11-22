@@ -256,6 +256,7 @@ const localCore = new LocalCore();
 const canvasStore = new CanvasStore(localCore);
 const markdownStore = new TextFileStore(localCore, "Markdown");
 const htmlStore = new TextFileStore(localCore, "HTML");
+const textFileStore = new TextFileStore(localCore, "Text");
 const toolCatalog = createAppToolCatalog(localCore, {
 	assets: {
 		embedAsset: embedAssetWithSettings,
@@ -834,6 +835,10 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.readHtml, (_event, id: string) => localCore.runLibraryTask(() => htmlStore.read(id)));
 	ipcMain.handle(IPC.saveHtml, (_event, id: string, text: unknown, revision: unknown) =>
 		localCore.runLibraryTask(() => htmlStore.save(id, text, revision)));
+	ipcMain.handle(IPC.readTextFile, (_event, id: string) =>
+		localCore.runLibraryTask(() => textFileStore.read(id, TEXT_FILE_EDIT_LIMIT_BYTES)));
+	ipcMain.handle(IPC.saveTextFile, (_event, id: string, text: unknown, revision: unknown) =>
+		localCore.runLibraryTask(() => textFileStore.save(id, text, revision)));
 
 	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {
 		return localCore.renameFolder(relativePath, name);

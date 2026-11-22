@@ -1,22 +1,16 @@
-import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, useState, type ReactNode } from "react";
 import type { Asset } from "@loom/core";
-import { isHtmlFile } from "../../../shared/text-file.ts";
+import { isHtmlFile, isPlainTextFile } from "../../../shared/text-file.ts";
 import { useLocale } from "../../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
 import type { RegisterMarkdownHistory } from "../asset-history.ts";
 import { FavoriteButton } from "./favorite-button.tsx";
-import { FindBar } from "./find-bar.tsx";
 import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
 const GradeView = lazy(() => import("./grade-view.tsx").then(({ GradeView }) => ({ default: GradeView })));
 const MarkdownEditor = lazy(() => import("./markdown-editor.tsx").then(({ MarkdownEditor }) => ({ default: MarkdownEditor })));
-const HtmlWorkbench = lazy(() => import("./html-workbench.tsx").then(({ HtmlWorkbench }) => ({ default: HtmlWorkbench })));
-
-const TEXT_EXTENSIONS = new Set([
-	".css", ".csv", ".ini", ".js", ".json", ".jsx", ".log",
-	".py", ".sh", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
-]);
+const TextWorkbench = lazy(() => import("./text-workbench.tsx").then(({ TextWorkbench }) => ({ default: TextWorkbench })));
 
 function PreviewFallback({ asset, message, actions = null }: { asset: Asset; message: string; actions?: ReactNode }): React.JSX.Element {
 	return (
@@ -24,48 +18,6 @@ function PreviewFallback({ asset, message, actions = null }: { asset: Asset; mes
 			<div className="preview-icon">{asset.type.toUpperCase()}</div>
 			<strong>{asset.filename}</strong>
 			<span>{message}</span>
-			{actions}
-		</div>
-	);
-}
-
-function TextPreview({ asset, url, actions = null }: { asset: Asset; url: string; actions?: ReactNode }): React.JSX.Element {
-	const { t } = useLocale();
-	const contentRef = useRef<HTMLPreElement>(null);
-	const [content, setContent] = useState<string | null>(null);
-	const [tooLarge, setTooLarge] = useState(false);
-	const [failure, setFailure] = useState<string | null>(null);
-
-	useEffect(() => {
-		const controller = new AbortController();
-		setContent(null);
-		setFailure(null);
-		setTooLarge(false);
-		if (asset.size > 2 * 1_024 * 1_024) {
-			setTooLarge(true);
-			return () => controller.abort();
-		}
-		void fetch(url, { signal: controller.signal })
-			.then((response) => {
-				if (!response.ok) throw new Error(`Preview request failed (${response.status})`);
-				return response.text();
-			})
-			.then(setContent)
-			.catch((cause) => {
-				if (!controller.signal.aborted) {
-					setFailure(cause instanceof Error ? cause.message : String(cause));
-				}
-			});
-		return () => controller.abort();
-	}, [asset.assetId, asset.size, url]);
-
-	if (tooLarge) return <PreviewFallback asset={asset} message={t.preview.tooLarge} actions={actions} />;
-	if (failure) return <PreviewFallback asset={asset} message={failure} actions={actions} />;
-	if (content === null) return <div className="preview-loading">{t.preview.loadingText}</div>;
-	return (
-		<div className="text-workbench">
-			<FindBar rootRef={contentRef} assetId={asset.assetId} documentKey={content} />
-			<pre className="text-preview" ref={contentRef}>{content}</pre>
 			{actions}
 		</div>
 	);
@@ -179,14 +131,14 @@ export function AssetPreview({
 			</Suspense>
 		);
 	}
-	if (isHtmlFile(asset.filename)) {
+	const html = isHtmlFile(asset.filename);
+	if (html || isPlainTextFile(asset.filename)) {
 		return (
 			<Suspense fallback={<div className="preview-loading" role="status">{t.common.loading}</div>}>
-				<HtmlWorkbench key={asset.assetId} asset={asset} favorite={favorite} onToggleFavorite={onToggleFavorite} />
+				<TextWorkbench key={`${html}:${asset.assetId}`} asset={asset} html={html} favorite={favorite} onToggleFavorite={onToggleFavorite} />
 			</Suspense>
 		);
 	}
-	if (TEXT_EXTENSIONS.has(extension)) return <TextPreview asset={asset} url={url} actions={actions} />;
 	return <PreviewFallback asset={asset} message={t.preview.unavailable} actions={actions} />;
 }
 

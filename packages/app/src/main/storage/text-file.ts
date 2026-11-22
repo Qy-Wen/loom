@@ -7,13 +7,13 @@ import type { LocalCore } from "@loom/core";
 import { LibraryPaths } from "@loom/core/paths";
 import { isCanvasLibraryPath } from "../../shared/canvas.ts";
 import { isMarkdownFile } from "../../shared/markdown-file.ts";
-import { isHtmlFile, TEXT_FILE_EDIT_LIMIT_BYTES, type TextFileSaveResult, type TextFileSnapshot } from "../../shared/text-file.ts";
+import { isHtmlFile, isPlainTextFile, TEXT_FILE_EDIT_LIMIT_BYTES, type TextFileSaveResult, type TextFileSnapshot } from "../../shared/text-file.ts";
 import { atomicWrite } from "./file.ts";
 import { SerialQueue } from "./serial-queue.ts";
 
 type TextFileLibrary = Pick<LocalCore, "getLibraryRoot" | "getAsset">;
-type TextFileFormat = "Markdown" | "HTML";
-const supports = { Markdown: isMarkdownFile, HTML: isHtmlFile };
+const supports = { Markdown: isMarkdownFile, HTML: isHtmlFile, Text: isPlainTextFile };
+type TextFileFormat = keyof typeof supports;
 
 /** How a file writes its text, so a save can put back exactly what the editor did not touch. */
 interface Layout {
@@ -51,6 +51,7 @@ export class TextFileStore {
 
 	async save(assetId: string, text: unknown, expectedRevision: unknown): Promise<TextFileSaveResult> {
 		if (typeof text !== "string") throw new Error(`Invalid ${this.format} text`);
+		if (this.format === "Text" && text.includes("\0")) throw new Error("Text source cannot contain NUL characters");
 		if (typeof expectedRevision !== "string" || !/^[\da-f]{64}$/.test(expectedRevision)) throw new Error(`Invalid ${this.format} revision`);
 		const root = this.library.getLibraryRoot();
 		return this.writes.run(async () => {
@@ -89,6 +90,7 @@ export class TextFileStore {
 		const bytes = await readFile(path);
 		if (maxBytes !== undefined && bytes.byteLength > maxBytes) throw new Error(`${this.format} file exceeds the preview size limit`);
 		if (this.format === "HTML" && !isUtf8(bytes)) throw new Error("HTML source must be encoded as UTF-8 to edit it");
+		if (this.format === "Text" && (!isUtf8(bytes) || bytes.includes(0))) throw new Error("Text source must contain UTF-8 text to edit it");
 		const raw = bytes.toString("utf8");
 		const bom = raw.charCodeAt(0) === 0xfeff;
 		const body = bom ? raw.slice(1) : raw;

@@ -54,6 +54,15 @@ describe("reconcileOpenAssets", () => {
 		assert.equal(next[0]?.fileSystemId, "1:9");
 	});
 
+	it("keeps the destination id when a text save's temporary file was previously indexed", () => {
+		const next = reconcileOpenAssets(
+			[asset("doc", "doc.txt", "1:1"), asset("temp", ".loom-text.00000000-0000-4000-8000-000000000001.tmp", "1:9")],
+			[file("doc.txt", "1:9")],
+			false,
+		);
+		assert.deepEqual(next.map((entry) => entry.assetId), ["doc"]);
+	});
+
 	it("does not give a recorded id to a path whose file moved elsewhere", () => {
 		const next = reconcileOpenAssets(
 			[asset("a", "a.txt", "1:1"), asset("b", "b.txt", "1:2")],

@@ -6,6 +6,7 @@ export function isCanvasTemporaryFile(path: string): boolean {
 
 export function isAssetTemporaryFile(path: string): boolean {
 	return isCanvasTemporaryFile(path)
+		|| /(?:^|[/\\])\.loom-(?:html|markdown|text)\.[\da-f-]{36}\.tmp$/i.test(path)
 		|| /(?:^|[/\\])\.loom-grade\.[\da-f-]{36}\.tmp\.[a-z\d]+$/i.test(path);
 }
 

@@ -48,6 +48,8 @@ const api: LoomApi = {
 	saveMarkdown: (assetId, text, revision) => ipcRenderer.invoke(IPC.saveMarkdown, assetId, text, revision),
 	readHtml: (assetId) => ipcRenderer.invoke(IPC.readHtml, assetId),
 	saveHtml: (assetId, text, revision) => ipcRenderer.invoke(IPC.saveHtml, assetId, text, revision),
+	readTextFile: (assetId) => ipcRenderer.invoke(IPC.readTextFile, assetId),
+	saveTextFile: (assetId, text, revision) => ipcRenderer.invoke(IPC.saveTextFile, assetId, text, revision),
 	setCanvasDirty: (dirty) => ipcRenderer.send(IPC.canvasDirtyChanged, dirty),
 	onFlushCanvasBeforeClose: (flush) => {
 		const handler = () => { void flush().then((ok) => ipcRenderer.send(IPC.canvasCloseReady, ok), () => ipcRenderer.send(IPC.canvasCloseReady, false)); };

@@ -40,7 +40,7 @@ test("an HTML file opened from the tree can be previewed, edited and saved", asy
 	await expect(preview).toHaveAttribute("aria-pressed", "false");
 	const source = page.getByRole("textbox", { name: "Edit report.html" });
 	await expect(source).toBeFocused();
-	await expect(page.locator(".html-source .cm-editor.cm-focused")).toHaveCSS("outline-style", "none");
+	await expect(page.locator(".source-editor .cm-editor.cm-focused")).toHaveCSS("outline-style", "none");
 	await expect(source).toContainText("<h1>Original report</h1>");
 	const updated = '<!doctype html><h1>Updated report</h1><script>document.querySelector("h1").dataset.scriptRan = "yes";</script>';
 	await source.press("ControlOrMeta+a");

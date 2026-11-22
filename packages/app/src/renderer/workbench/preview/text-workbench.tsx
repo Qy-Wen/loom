@@ -1,23 +1,31 @@
 import { html } from "@codemirror/lang-html";
+import { css } from "@codemirror/lang-css";
+import { javascript } from "@codemirror/lang-javascript";
+import { json } from "@codemirror/lang-json";
 import { defaultKeymap, history, historyKeymap, indentWithTab } from "@codemirror/commands";
 import { HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { search, searchKeymap } from "@codemirror/search";
-import { Annotation, Transaction } from "@codemirror/state";
+import { Annotation, EditorState, Transaction, type Extension } from "@codemirror/state";
 import { drawSelection, EditorView, keymap, lineNumbers } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
 import { useEffect, useRef, useState } from "react";
 import { TEXT_FILE_EDIT_LIMIT_BYTES } from "../../../shared/text-file.ts";
-import { assetPreviewUrl } from "../../assets/asset-utils.ts";
+import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
 import { DocumentModeButton } from "./document-mode-button.tsx";
 import { FavoriteButton } from "./favorite-button.tsx";
 import { createHtmlPreviewGuest } from "./html-preview-guest.ts";
 import { TextFileSave, type TextFiles } from "./text-file-save.ts";
+import { TextPreview } from "./text-preview.tsx";
 
-const files: TextFiles = {
+const htmlFiles: TextFiles = {
 	read: (id) => window.loom.readHtml(id),
 	save: (id, text, revision) => window.loom.saveHtml(id, text, revision),
+};
+const textFiles: TextFiles = {
+	read: (id) => window.loom.readTextFile(id),
+	save: (id, text, revision) => window.loom.saveTextFile(id, text, revision),
 };
 const sessions = new Map<string, TextFileSave>();
 const replaceSource = Annotation.define<boolean>();
@@ -26,8 +34,22 @@ const highlight = HighlightStyle.define([
 	{ tag: [tags.tagName, tags.keyword], color: "var(--lm-text-accent)" },
 	{ tag: [tags.attributeName, tags.propertyName], color: "var(--lm-text-secondary)" },
 	{ tag: [tags.string, tags.attributeValue], color: "var(--lm-text-success)" },
+	{ tag: [tags.number, tags.bool, tags.null], color: "var(--lm-text-accent)" },
 	{ tag: tags.comment, color: "var(--lm-text-muted)" },
 ]);
+
+function sourceLanguage(extension: string): Extension {
+	switch (extension) {
+		case ".html": case ".htm": return html();
+		case ".css": return css();
+		case ".json": return json();
+		case ".js": case ".mjs": case ".cjs": return javascript();
+		case ".jsx": return javascript({ jsx: true });
+		case ".ts": case ".mts": case ".cts": return javascript({ typescript: true });
+		case ".tsx": return javascript({ jsx: true, typescript: true });
+		default: return [];
+	}
+}
 
 function flush(save: TextFileSave): void {
 	void save.flush().catch(() => undefined);
@@ -45,22 +67,25 @@ function InteractiveHtmlPreview({ src, title }: { src: string; title: string }):
 	return <div ref={hostRef} className="html-page-preview" />;
 }
 
-export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
+export function TextWorkbench({ asset, html: renderHtml, favorite, onToggleFavorite }: {
 	asset: Asset;
+	html: boolean;
 	favorite: boolean;
 	onToggleFavorite: () => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const { assetId, filename, modifiedAt, size } = asset;
+	const files = renderHtml ? htmlFiles : textFiles;
+	const sessionKey = `${renderHtml ? "html" : "text"}:${assetId}`;
 	const [editing, setEditing] = useState(false);
 	const [switching, setSwitching] = useState(false);
-	const [save, setSave] = useState<TextFileSave | null>(() => sessions.get(assetId) ?? null);
+	const [save, setSave] = useState<TextFileSave | null>(() => sessions.get(sessionKey) ?? null);
 	const [error, setError] = useState<string | null>(null);
 	const [loadAttempt, retryLoad] = useState(0);
 	const [, renderSaveState] = useState(0);
 	const hostRef = useRef<HTMLDivElement>(null);
 	const viewRef = useRef<EditorView | null>(null);
-	const readOnly = (save?.byteLength ?? size) > TEXT_FILE_EDIT_LIMIT_BYTES;
+	const readOnly = Math.max(save?.byteLength ?? 0, save?.dirty ? 0 : size) > TEXT_FILE_EDIT_LIMIT_BYTES;
 
 	useEffect(() => {
 		if (!editing || save) return;
@@ -68,14 +93,14 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 		setError(null);
 		void files.read(assetId).then((snapshot) => {
 			if (cancelled) return;
-			const session = sessions.get(assetId) ?? new TextFileSave(assetId, snapshot, files);
-			sessions.set(assetId, session);
+			const session = sessions.get(sessionKey) ?? new TextFileSave(assetId, snapshot, files);
+			sessions.set(sessionKey, session);
 			setSave(session);
 		}).catch((cause: unknown) => {
 			if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
 		});
 		return () => { cancelled = true; };
-	}, [assetId, editing, loadAttempt, save]);
+	}, [assetId, editing, files, loadAttempt, save, sessionKey]);
 
 	useEffect(() => {
 		if (!save) return;
@@ -83,10 +108,10 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 		return () => {
 			unsubscribe();
 			void save.flush().catch(() => undefined).finally(() => {
-				if (!save.dirty && save.state !== "conflict" && sessions.get(assetId) === save) sessions.delete(assetId);
+				if (!save.dirty && save.state !== "conflict" && sessions.get(sessionKey) === save) sessions.delete(sessionKey);
 			});
 		};
-	}, [save, assetId]);
+	}, [save, sessionKey]);
 
 	useEffect(() => {
 		if (!save) return;
@@ -95,17 +120,20 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 			if (!cancelled) save.external(snapshot);
 		}).catch(() => undefined);
 		return () => { cancelled = true; };
-	}, [assetId, modifiedAt, save, size]);
+	}, [assetId, files, modifiedAt, save, size]);
 
 	const editorLabel = t.preview.editorLabel(filename);
+	const extension = extensionOf(filename);
+	const searchPhrases = t.preview.searchPhrases;
 	useEffect(() => {
 		if (!hostRef.current || !save || readOnly) return;
 		const view = new EditorView({
 			parent: hostRef.current,
 			doc: save.text,
 			extensions: [
-				html(), lineNumbers(), history(), drawSelection(), search(),
+				sourceLanguage(extension), lineNumbers(), history(), drawSelection(), search(),
 				EditorView.lineWrapping,
+				EditorState.phrases.of(searchPhrases),
 				syntaxHighlighting(highlight),
 				EditorView.contentAttributes.of({ "aria-label": editorLabel, spellcheck: "false" }),
 				keymap.of([
@@ -123,7 +151,7 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 		view.scrollDOM.classList.add("thin-scroll");
 		viewRef.current = view;
 		return () => { viewRef.current = null; view.destroy(); };
-	}, [editorLabel, readOnly, save]);
+	}, [editorLabel, extension, readOnly, save, searchPhrases]);
 
 	const text = save?.text;
 	useEffect(() => {
@@ -153,8 +181,8 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 	if (save) url.searchParams.set("revision", save.revision);
 	const title = t.preview.title(filename);
 	return (
-		<div className="html-workbench">
-			<div className="document-toolbar" role="toolbar" aria-label={t.preview.htmlView}>
+		<div className="text-workbench">
+			<div className="document-toolbar" role="toolbar" aria-label={renderHtml ? t.preview.htmlView : t.preview.textView}>
 				<FavoriteButton favorite={favorite} onToggle={onToggleFavorite} />
 				<DocumentModeButton previewing={!editing} label={editing ? t.preview.previewMode : t.preview.editMode}
 					disabled={switching || (!editing && readOnly)} onToggle={() => {
@@ -163,10 +191,12 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 					}} />
 			</div>
 			{readOnly && <div className="markdown-mode-notice" role="note">{t.preview.editorReadOnly}</div>}
-			{!editing && (readOnly
-				? <iframe className="html-page-preview" src={url.href} title={title} sandbox="" referrerPolicy="no-referrer" />
-				: <InteractiveHtmlPreview src={url.href} title={title} />)}
-			<div className="html-source" ref={hostRef} hidden={!editing || !save || readOnly} />
+			{!editing && (renderHtml ? (
+				readOnly
+					? <iframe className="html-page-preview" src={url.href} title={title} sandbox="" referrerPolicy="no-referrer" />
+					: <InteractiveHtmlPreview src={url.href} title={title} />
+			) : <TextPreview asset={asset} url={url.href} />)}
+			<div className="source-editor" ref={hostRef} hidden={!editing || !save || readOnly} />
 			{editing && !save && (error
 				? <div className="markdown-editor-status" role="alert"><span className="markdown-editor-problem">{error}</span><button type="button" onClick={() => retryLoad((attempt) => attempt + 1)}>{t.preview.editorRetry}</button></div>
 				: <div className="preview-loading" role="status">{t.preview.loadingText}</div>)}

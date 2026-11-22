@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { assetTypeFromPath, type Asset } from "../model/asset.ts";
+import { isAssetTemporaryFile } from "./paths.ts";
 
 export interface ReconcileDiskFile {
 	relativePath: string;
@@ -16,16 +17,18 @@ export function reconcileOpenAssets(
 	diskFiles: ReconcileDiskFile[],
 	trustPath: boolean,
 ): Asset[] {
-	if (trustPath) return matchByPath(existing, diskFiles);
+	// A staged file indexed by an older version must not lend its ID to the save destination.
+	const indexedAssets = existing.filter((asset) => !isAssetTemporaryFile(asset.relativePath));
+	if (trustPath) return matchByPath(indexedAssets, diskFiles);
 
 	const next: Asset[] = [];
 	const usedPaths = new Set<string>();
 	const usedAssetIds = new Set<string>();
 	const byFileSystemId = new Map<string, Asset>();
-	for (const asset of existing) {
+	for (const asset of indexedAssets) {
 		if (asset.fileSystemId) byFileSystemId.set(asset.fileSystemId, asset);
 	}
-	const byPath = new Map(existing.map((asset) => [asset.relativePath, asset]));
+	const byPath = new Map(indexedAssets.map((asset) => [asset.relativePath, asset]));
 
 	for (const file of diskFiles) {
 		if (!file.fileSystemId) continue;
