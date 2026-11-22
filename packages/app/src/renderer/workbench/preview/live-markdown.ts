@@ -396,6 +396,8 @@ const trackDrag = EditorView.domEventHandlers({
 			// The symbols at the edges of what was swept over are part of it, as it looked while it was dragged.
 			const selection = snapToSymbols(view.state);
 			view.dispatch({ effects: setPressed.of(null), ...(selection ? { selection } : {}) });
+			// Revealing inline markup can move text to another visual row. Flush the new selection geometry now.
+			if (!view.state.readOnly && !view.state.selection.main.empty) view.coordsAtPos(view.state.selection.main.head);
 			if (link) view.state.facet(handlersFacet)?.openAsset(link.dataset.assetId ?? "", link.dataset.anchor);
 		};
 		document.addEventListener("mouseup", end, true);
@@ -734,7 +736,14 @@ const markSelectedTables = ViewPlugin.fromClass(class {
 export const liveBlocks: Extension = [blockDecorations, snapSelection, markSelectedTables];
 
 /** Keeps what a drag sweeps over drawn until the button is let go. Add it before {@link liveMarkdown} and {@link liveBlocks}. */
-export const liveDrag: Extension = [pressState, trackDrag, focusState, trackFocus];
+export const liveDrag: Extension = [
+	pressState,
+	trackDrag,
+	focusState,
+	trackFocus,
+	EditorView.contentAttributes.compute([pressState], (state): Record<string, string> =>
+		state.field(pressState) ? { class: "cm-live-selecting" } : {}),
+];
 
 /**
  * Arrow keys step into a drawn block instead of over it. CodeMirror's vertical move is by screen position and
@@ -994,9 +1003,10 @@ export const liveMarkdown = ViewPlugin.fromClass(class {
 const referencesInContent = liveReferenceSelectors.map((selector) => `.cm-content ${selector}`);
 
 export const liveMarkdownTheme = EditorView.theme({
-	// Hidden marks keep a place in the layout with no width. With display:none they have no position on screen, and a
-	// line that is nothing but a mark and its text offers the vertical move no place to land: it steps over the line.
+	// Keep a zero-width position for vertical caret movement. During a mouse selection, the mark's box at the
+	// baseline can make hit testing skip visible text on its far side, so only its text remains in the layout.
 	".cm-live-hidden": { fontSize: "0", letterSpacing: "0" },
+	".cm-live-selecting .cm-live-hidden": { display: "contents" },
 	".cm-live-strong": { fontWeight: "var(--lm-weight-semibold)" },
 	".cm-live-emphasis": { fontStyle: "italic" },
 	".cm-live-strike": { textDecoration: "line-through" },

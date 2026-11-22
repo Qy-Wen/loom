@@ -1,7 +1,13 @@
 import { copyFile, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { ElectronApplication } from "playwright";
 import { expect, test } from "./loom.ts";
+
+function capturePixels(app: ElectronApplication, clip: { x: number; y: number; width: number; height: number }): Promise<string> {
+	return app.evaluate(async ({ BrowserWindow }, bounds) =>
+		(await BrowserWindow.getAllWindows()[0]!.capturePage(bounds)).toBitmap().toString("hex"), clip);
+}
 
 test("Markdown source edits save by themselves, follow outside changes and ask before overwriting", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
@@ -388,11 +394,7 @@ test("dragging across block and inline code keeps the selection visible", async 
 	const last = (await lastLine.boundingBox())!;
 	// Sample the spaces after `const`, away from both the text and the caret.
 	const clip = { x: Math.floor(first.x + 68), y: Math.floor(first.y + first.height / 2), width: 2, height: 2 };
-	const sampledPixels = async (clip: { x: number; y: number; width: number; height: number }) => {
-		const png = await loomPage.screenshot({ clip, scale: "css" });
-		return electronApp!.evaluate(({ nativeImage }, encoded) =>
-			nativeImage.createFromBuffer(Buffer.from(encoded, "base64")).toBitmap().toString("hex"), png.toString("base64"));
-	};
+	const sampledPixels = (clip: { x: number; y: number; width: number; height: number }) => capturePixels(electronApp!, clip);
 	const unselected = await sampledPixels(clip);
 	await loomPage.mouse.move(first.x + 16, first.y + first.height / 2);
 	await loomPage.mouse.down();
@@ -426,6 +428,218 @@ test("dragging across block and inline code keeps the selection visible", async 
 	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toBe("lpha    bet");
 	await expect.poll(inlinePixels).not.toBe(inlineUnselected);
 	expect(await readFile(file, "utf8")).toBe(original);
+});
+
+test("the selection height stays steady when dragging from inline code into prose", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60_000);
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	await writeFile(join((await library())!, "selection-height.md"), "Before\n\n`XXXX`XXXXX\n");
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "selection-height.md" }).click();
+	const editor = loomPage.locator(".markdown-editor-input");
+	const line = editor.locator(".cm-line").filter({ hasText: "XXXXX" });
+	const selectionBounds = () => editor.locator(".cm-selectionBackground, .cm-markdown-inline-selection-fill").evaluateAll((elements) => {
+		const rects = elements.filter((element) => getComputedStyle(element).visibility !== "hidden").map((element) => element.getBoundingClientRect());
+		return { top: Math.min(...rects.map((rect) => rect.top)), bottom: Math.max(...rects.map((rect) => rect.bottom)) };
+	});
+	const selected = () => loomPage.evaluate(() => getSelection()?.toString());
+	for (const mode of ["edit", "read"]) {
+		if (mode === "read") await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+		await editor.locator(".cm-line").filter({ hasText: "Before" }).click();
+		const { start, inside, outside, top, bottom } = await line.evaluate((element) => {
+			const code = element.querySelector(".cm-live-code")!.firstChild!;
+			const prose = [...element.childNodes].find((node) => node.nodeType === Node.TEXT_NODE && node.textContent === "XXXXX")!;
+			const range = document.createRange();
+			const character = (node: Node, offset: number) => {
+				range.setStart(node, offset);
+				range.setEnd(node, offset + 1);
+				return range.getBoundingClientRect();
+			};
+			const first = character(code, 0), last = character(code, 2), next = character(prose, 1);
+			return {
+				start: { x: first.left + 1, y: first.top + first.height / 2 },
+				inside: { x: last.right - 1, y: last.top + last.height / 2 },
+				outside: { x: next.right - 1, y: next.top + next.height / 2 },
+				top: next.top,
+				bottom: next.bottom,
+			};
+		});
+		const highlightEdge = { x: Math.floor(start.x + 2), y: Math.ceil(top + 1), width: 1, height: 1 };
+		const unselected = await capturePixels(electronApp!, highlightEdge);
+		await loomPage.mouse.move(start.x, start.y);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(inside.x, inside.y, { steps: 3 });
+		await expect.poll(selected).toBe("XXX");
+		await expect.poll(selectionBounds).toEqual({ top, bottom });
+		await expect.poll(() => capturePixels(electronApp!, highlightEdge)).not.toBe(unselected);
+		const insidePixels = await capturePixels(electronApp!, highlightEdge);
+		await loomPage.mouse.move(outside.x, outside.y, { steps: 3 });
+		await expect.poll(selected).toBe("XXXX`XX");
+		await expect.poll(selectionBounds).toEqual({ top, bottom });
+		await expect.poll(() => capturePixels(electronApp!, highlightEdge)).toBe(insidePixels);
+		await loomPage.mouse.up();
+	}
+});
+
+test("a wrapped Markdown selection keeps flat row edges during and after dragging", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60_000);
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const paragraph = "`ConversationImpl.submit` 只是转发；`Submissions.submit` 包一层 `pi.durable.submit` span 后，把整个 `admitSubmission()` 放进**一个 commit**：";
+	await writeFile(join((await library())!, "wrapped-selection.md"), paragraph + "\n\nNext paragraph.\n");
+	await electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1480, 880));
+	await loomPage.reload();
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "wrapped-selection.md" }).click();
+	const line = loomPage.locator(".cm-content > .cm-line").filter({ hasText: "ConversationImpl.submit" });
+	await line.evaluate((element) => { element.parentElement!.style.maxWidth = "480px"; });
+	const paint = () => line.evaluate((element) => {
+		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+		const range = document.createRange();
+		const highlights = [...element.closest(".cm-editor")!.querySelectorAll(".cm-selectionBackground, .cm-markdown-inline-selection-fill")]
+			.filter((marker) => getComputedStyle(marker).visibility !== "hidden")
+			.map((marker) => marker.getBoundingClientRect())
+			.filter((rect) => rect.width > 0 && rect.height > 0);
+		type Glyph = { x: number; y: number; left: number; right: number; text: string };
+		const rows: Glyph[][] = [];
+		for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+			for (let i = 0; i < node.length; i++) {
+				range.setStart(node, i);
+				range.setEnd(node, i + 1);
+				const { left, right, top, bottom, width } = range.getBoundingClientRect();
+				if (width <= 1) continue;
+				const glyph = { left, right, x: (left + right) / 2, y: (top + bottom) / 2, text: node.data[i]! };
+				const row = rows.find(([first]) => Math.abs(first!.y - glyph.y) < 10);
+				if (row) row.push(glyph);
+				else rows.push([glyph]);
+			}
+		}
+		const unpainted = rows.flat().filter(({ x, y }) => !highlights.some(({ left, right, top, bottom }) => x >= left && x <= right && y >= top && y <= bottom));
+		const bands = rows.map(([first]) => {
+			const matching = highlights.filter(({ top, bottom }) => top <= first!.y && bottom >= first!.y);
+			if (matching.length !== 1) return null;
+			return { top: matching[0]!.top, bottom: matching[0]!.bottom };
+		});
+		const shape = highlights.map(({ left, right, top, bottom }) => ({ left, right, top, bottom }));
+		return { rows, bands, shape, unpainted: unpainted.map((glyph) => glyph.text).join("") };
+	});
+	const { rows } = await paint();
+	expect(rows.length).toBeGreaterThanOrEqual(2);
+	const first = rows[0]![0]!;
+	const last = rows.at(-1)!.at(-1)!;
+	const rowEnd = (row: number) => rows[row]!.at(-2)!;
+	const moveTo = ({ right, y }: { right: number; y: number }) => loomPage.mouse.move(right - 1, y, { steps: 3 });
+	await loomPage.mouse.move(first.left + 1, first.y);
+	await loomPage.mouse.down();
+	await moveTo(rowEnd(0));
+	await expect.poll(async () => (await paint()).bands[0]).not.toBeNull();
+	const firstBand = (await paint()).bands[0];
+	await moveTo(rows[1]![3]!);
+	await expect.poll(async () => (await paint()).bands[1]).not.toBeNull();
+	const secondBand = (await paint()).bands[1];
+	await moveTo(rowEnd(1));
+	await expect.poll(async () => (await paint()).bands.slice(0, 2)).toEqual([firstBand, secondBand]);
+	await moveTo(last);
+	await expect.poll(async () => (await paint()).unpainted).toBe("");
+	await expect.poll(async () => (await paint()).bands.slice(0, 2)).toEqual([firstBand, secondBand]);
+	const throughText = (await paint()).shape;
+	const blank = await line.evaluate((element) => {
+		const { top, bottom } = element.nextElementSibling!.getBoundingClientRect();
+		return { top, bottom };
+	});
+	await loomPage.mouse.move(last.right - 1, (blank.top + blank.bottom) / 2, { steps: 3 });
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString().endsWith("\n"))).toBe(true);
+	await expect.poll(async () => (await paint()).shape).toEqual(throughText);
+	const next = (await loomPage.locator(".cm-line").filter({ hasText: "Next paragraph." }).boundingBox())!;
+	await loomPage.mouse.move(next.x + 45, next.y + next.height / 2, { steps: 3 });
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toContain("\n\nNext");
+	await expect.poll(async () => (await paint()).bands.slice(0, 2)).toEqual([firstBand, secondBand]);
+	await expect.poll(async () => (await paint()).shape.some(({ top, bottom }) => top <= blank.top && bottom >= blank.bottom)).toBe(true);
+	await moveTo(last);
+	await loomPage.mouse.up();
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toBe(paragraph);
+	await expect.poll(async () => (await paint()).unpainted).toBe("");
+});
+
+test("a selected blank line uses the full paragraph width below a padded code block", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60_000);
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const first = '**写入**：`pi.system` entry（可能 0 条）+ `checkpoint = {phase:"request", attempt, model, thinkingLevel, streamOptions, cutoff}`。';
+	const second = "`cutoff` 是本次 commit 的最后一条 entry  重试和恢复时都用它，保证看到的历史与首次请求一致。";
+	const paragraph = `${first}\n\n${second}`;
+	await writeFile(join((await library())!, "blank-width.md"), "```ts\nconst header = 1;\n```\n\n" + paragraph + "\n");
+	await electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0]!.setSize(1480, 880));
+	await loomPage.reload();
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "blank-width.md" }).click();
+	const content = loomPage.locator(".cm-content");
+	await content.evaluate((element) => { (element as HTMLElement).style.maxWidth = "520px"; });
+	await expect(content.locator(".cm-line").first()).toHaveClass(/cm-live-codeblock/);
+	const above = content.locator(".cm-line").filter({ hasText: "streamOptions" });
+	const below = content.locator(".cm-line").filter({ hasText: "首次请求一致" });
+	const start = (await above.locator(".cm-live-strong").boundingBox())!;
+	const end = await below.evaluate((element) => {
+		const text = element.lastChild as Text;
+		const range = document.createRange();
+		range.setStart(text, text.length - 1);
+		range.setEnd(text, text.length);
+		const { right, top, height } = range.getBoundingClientRect();
+		return { x: right - 1, y: top + height / 2 };
+	});
+	const blankEdges = () => above.evaluate((element) => {
+		const { left, right, top, bottom } = element.nextElementSibling!.getBoundingClientRect();
+		const center = (top + bottom) / 2;
+		return [...element.closest(".cm-editor")!.querySelectorAll(".cm-markdown-inline-selection-fill")]
+			.map((marker) => marker.getBoundingClientRect())
+			.filter((rect) => rect.top < center && rect.bottom > center)
+			.map((rect) => ({ left: rect.left - left, right: right - rect.right }));
+	});
+	await loomPage.mouse.move(start.x + 1, start.y + start.height / 2);
+	await loomPage.mouse.down();
+	await loomPage.mouse.move(end.x, end.y, { steps: 4 });
+	await expect.poll(blankEdges).toEqual([{ left: 0, right: 0 }]);
+	await loomPage.mouse.up();
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toBe(paragraph);
+	await expect.poll(blankEdges).toEqual([{ left: 0, right: 0 }]);
+});
+
+test("dragging left from Chinese text after inline code keeps the starting character selected", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(60_000);
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const sentence = "`admit()` 第一件事就是 `if (tx.hasTableWrite) throw new ReadAfterWrite(...)`  借调用方事务时，准入必须在那个 commit 的**第一次表写之前**。";
+	await writeFile(join((await library())!, "inline-selection.md"), `Before\n\n${sentence}\n`);
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "inline-selection.md" }).click();
+	const editor = loomPage.getByRole("textbox", { name: "Edit inline-selection.md" });
+	const line = editor.locator(".cm-line").filter({ hasText: "借" });
+	const characterBounds = (token: string) => line.evaluate((element, token) => {
+		const walker = document.createTreeWalker(element, NodeFilter.SHOW_TEXT);
+		for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+			const offset = (text as Text).data.indexOf(token);
+			if (offset < 0) continue;
+			const range = document.createRange();
+			range.setStart(text, offset);
+			range.setEnd(text, offset + 1);
+			const { left, right, top, height } = range.getBoundingClientRect();
+			return { left, right, y: top + height / 2 };
+		}
+		throw new Error(`Text missing from the line: ${token}`);
+	}, token);
+
+	for (const mode of ["edit", "read"]) {
+		if (mode === "read") await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+		await editor.locator(".cm-line").filter({ hasText: "Before" }).click();
+		const start = await characterBounds("借");
+		const end = await characterBounds("ReadAfterWrite");
+		await loomPage.mouse.move(start.right - 1, start.y);
+		await loomPage.mouse.down();
+		await loomPage.mouse.move(end.left + 1, end.y, { steps: 3 });
+		await loomPage.mouse.up();
+		await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toBe("ReadAfterWrite(...)`  借");
+	}
 });
 
 test("tables render as tables, edit in their cells and write back only the cell that changed", async ({ loomPage, electronApp }) => {

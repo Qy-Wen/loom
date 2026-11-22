@@ -13,6 +13,7 @@ import { findEditorHeading } from "./editor-heading.ts";
 import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
 import { markdownFindWidgets, searchSelection } from "./markdown-find-widgets.ts";
 import { markdownFormatPlans } from "./markdown-format.ts";
+import { markdownInlineSelection } from "./markdown-inline-selection.ts";
 import { markdownInsert, openMarkdownInsert } from "./markdown-insert.ts";
 import { markdownFileDrop, type MarkdownDropHost } from "./markdown-file-drop.ts";
 import { editingEmbed, embedUnderPointer, revealEmbedSource } from "./live-embed.ts";
@@ -134,7 +135,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const rendering = new Compartment();
 	const access = new Compartment();
 	const accessible = new Compartment();
-	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
+	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks, markdownInlineSelection];
 	const chooseEmbedAction = (readOnly: boolean, removeEmbed = false) => host.chooseTextAction({
 		embed: true,
 		removeEmbed,
