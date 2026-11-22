@@ -7,7 +7,7 @@ import { Annotation, Compartment, EditorState, type Extension } from "@codemirro
 import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
-import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveImages, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { initialLiveLibrary, liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveImages, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
 import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
@@ -160,7 +160,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		EditorView.lineWrapping,
 		markdown({ base: markdownLanguage }),
 		syntaxHighlighting(highlight),
-		liveLibrary,
+		initialLiveLibrary(library),
 		liveHandlers({ openAsset: events.onOpenAsset } satisfies LiveHandlers),
 		liveTables({
 			openAsset: events.onOpenAsset,
@@ -252,7 +252,6 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			}
 		}
 	}, true);
-	view.dispatch({ effects: updateLibrary(library) });
 	// Listen on the outer DOM too, so rendered images/formulas can open the same menu as plain text.
 	view.dom.addEventListener("contextmenu", (event) => {
 		const target = event.target as HTMLElement | null;
@@ -285,8 +284,16 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	});
 	return {
 		view,
-		setLibrary: (next) => view.dispatch({ effects: updateLibrary(next) }),
-		setLabel: (next) => view.dispatch({ effects: accessible.reconfigure(EditorView.contentAttributes.of({ "aria-label": next, spellcheck: "false" })) }),
+		setLibrary(next) {
+			if (next.assets === library.assets && next.fromRelativePath === library.fromRelativePath) return;
+			library = next;
+			view.dispatch({ effects: updateLibrary(next) });
+		},
+		setLabel(next) {
+			if (next === label) return;
+			label = next;
+			view.dispatch({ effects: accessible.reconfigure(EditorView.contentAttributes.of({ "aria-label": next, spellcheck: "false" })) });
+		},
 		setText(next) {
 			if (view.state.doc.toString() === next) return;
 			replacing = true;

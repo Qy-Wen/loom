@@ -29,7 +29,8 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 }): React.JSX.Element {
 	const { assetId, filename, modifiedAt, relativePath } = asset;
 	const { t } = useLocale();
-	const [save, setSave] = useState<TextFileSave | null>(sessions.get(assetId) ?? null);
+	const [save, setSave] = useState<TextFileSave | null>(() => sessions.get(assetId) ?? null);
+	const saveRef = useRef(save);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [insertIssue, setInsertIssue] = useState<string | null>(null);
 	const [pickReference, setPickReference] = useState<((file: Asset) => void) | null>(null);
@@ -52,21 +53,23 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 
 	useEffect(() => {
 		let cancelled = false;
-		const existing = sessions.get(assetId);
 		setFailure(null);
-		setInsertIssue(null);
-		setPickReference(null);
-		if (existing) { setSave(existing); return; }
-		window.loom.readMarkdown(assetId).then((snapshot) => {
+		void files.read(assetId).then((snapshot) => {
 			if (cancelled) return;
-			const created = new TextFileSave(assetId, snapshot, files);
-			sessions.set(assetId, created);
-			setSave(created);
+			const existing = saveRef.current ?? sessions.get(assetId);
+			if (existing) {
+				existing.external(snapshot);
+				if (saveRef.current === existing) return;
+			}
+			const session = existing ?? new TextFileSave(assetId, snapshot, files);
+			sessions.set(assetId, session);
+			saveRef.current = session;
+			setSave(session);
 		}).catch((cause) => {
-			if (!cancelled) setFailure(cause instanceof Error ? cause.message : String(cause));
+			if (!cancelled && !saveRef.current) setFailure(cause instanceof Error ? cause.message : String(cause));
 		});
 		return () => { cancelled = true; };
-	}, [assetId]);
+	}, [assetId, modifiedAt, asset.size]);
 
 	useEffect(() => {
 		if (!save) return;
@@ -78,15 +81,6 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 			});
 		};
 	}, [save, assetId]);
-
-	useEffect(() => {
-		if (!save) return;
-		let cancelled = false;
-		window.loom.readMarkdown(assetId).then((snapshot) => {
-			if (!cancelled) save.external(snapshot);
-		}).catch(() => undefined);
-		return () => { cancelled = true; };
-	}, [save, assetId, modifiedAt, asset.size]);
 
 	useEffect(() => {
 		const host = hostRef.current;

@@ -358,9 +358,20 @@ export function App(): React.JSX.Element {
 	);
 	const gradeVisible = workbenchView === "library" && grading && (!iconMode || previewAsset !== null);
 	const [gradeHost, setGradeHost] = useState<HTMLDivElement | null>(null);
+	// The chat keeps stable callbacks while navigation uses the current workbench state.
+	const chatNavigation = useRef({ selectAsset, openFolderReference });
+	useLayoutEffect(() => {
+		chatNavigation.current = { selectAsset, openFolderReference };
+	});
+	const chatActions = useMemo(() => ({
+		onOpenAsset: (assetId: string) => chatNavigation.current.selectAsset(assetId),
+		onOpenFolder: (path: string) => chatNavigation.current.openFolderReference(path),
+		onComposerAttachApplied: () => setComposerAttach(null),
+		onOpenSettings: () => setSettingsOpen(true),
+	}), []);
 	// One product registry supplies identity, content, visibility and first-use policy.
 	const panelViews: PanelView[] = [
-		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} folders={library.folders} onOpenAsset={selectAsset} onOpenFolder={openFolderReference} composerAttach={composerAttach} onComposerAttachApplied={() => setComposerAttach(null)} onOpenSettings={() => setSettingsOpen(true)} /> },
+		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} folders={library.folders} composerAttach={composerAttach} {...chatActions} /> },
 		{ id: "details", visible: true, title: t.app.details, initialJoin: ["agent"], render: () => <DetailsPanel
 			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}

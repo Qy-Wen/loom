@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { memo, useEffect } from "react";
 import type { Asset } from "@loom/core";
 import type { AssetRefAttachment } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
@@ -21,7 +21,7 @@ interface AgentPanelProps {
 	onOpenSettings: () => void;
 }
 
-export function AgentPanel({
+export const AgentPanel = memo(function AgentPanel({
 	libraryRoot,
 	assets,
 	folders,
@@ -110,4 +110,4 @@ export function AgentPanel({
 			</div>
 		</div>
 	);
-}
+});

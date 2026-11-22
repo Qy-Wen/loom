@@ -53,11 +53,18 @@ const libraryField = StateField.define<LiveContext | null>({
 	create: () => null,
 	update(value, transaction) {
 		for (const effect of transaction.effects) {
-			if (effect.is(setLibrary)) return { ...effect.value, lookup: createAssetLookup(effect.value.assets) };
+			if (!effect.is(setLibrary)) continue;
+			const library = effect.value;
+			if (value?.assets === library.assets && value.fromRelativePath === library.fromRelativePath) return value;
+			return { ...library, lookup: value?.assets === library.assets ? value.lookup : createAssetLookup(library.assets) };
 		}
 		return value;
 	},
 });
+
+export function initialLiveLibrary(library: LiveLibrary): Extension {
+	return libraryField.init(() => ({ ...library, lookup: createAssetLookup(library.assets) }));
+}
 
 /** The transaction effect that gives the editor a new library. Dispatch it when the asset list changes. */
 export const updateLibrary = (library: LiveLibrary) => setLibrary.of(library);
