@@ -877,7 +877,7 @@ function decorateWiki(state: EditorState, context: LiveContext, match: ReturnTyp
 
 	if (match.embed && !localHeading && asset?.relativePath !== context.fromRelativePath) {
 		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
-			const html = renderAssetEmbed(asset, match, anchor);
+			const html = renderAssetEmbed(asset, match, anchor, { interactiveHtml: true });
 			const noteContext = isMarkdownFile(asset.relativePath) ? context : undefined;
 			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, state.facet(handlersFacet)?.openAsset, noteContext);
 			found.push(Decoration.replace({ widget }).range(range.from, range.to));

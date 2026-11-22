@@ -144,6 +144,9 @@ test("HTML wiki embeds render in sandboxed frames and stay compact inside tables
 	assert.match(table, /<td><a[^>]*data-asset-id="report"/);
 	assert.doesNotMatch(table, /<iframe/);
 	assert.doesNotMatch(renderMarkdown("[[Report.HTM]]", context), /<iframe/);
+	const interactive = { ...context, interactiveHtml: true };
+	assert.match(renderMarkdown('![[Report.HTM|A "quoted" report]]', interactive), /data-html-preview-src="loom-asset:\/\/asset\/report\?v=2-5" data-html-preview-title="A &quot;quoted&quot; report"/);
+	assert.doesNotMatch(renderMarkdown("| Report |\n| --- |\n| ![[Report.HTM]] |", interactive), /data-html-preview-src/);
 });
 
 const library = [

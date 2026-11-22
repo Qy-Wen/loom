@@ -7,12 +7,12 @@ import { drawSelection, EditorView, keymap, lineNumbers } from "@codemirror/view
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
 import { useEffect, useRef, useState } from "react";
-import { HTML_PREVIEW_PARTITION, HTML_PREVIEW_SCHEME } from "../../../shared/html-preview.ts";
 import { TEXT_FILE_EDIT_LIMIT_BYTES } from "../../../shared/text-file.ts";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
 import { DocumentModeButton } from "./document-mode-button.tsx";
 import { FavoriteButton } from "./favorite-button.tsx";
+import { createHtmlPreviewGuest } from "./html-preview-guest.ts";
 import { TextFileSave, type TextFiles } from "./text-file-save.ts";
 
 const files: TextFiles = {
@@ -36,11 +36,10 @@ function flush(save: TextFileSave): void {
 function InteractiveHtmlPreview({ src, title }: { src: string; title: string }): React.JSX.Element {
 	const hostRef = useRef<HTMLDivElement>(null);
 	useEffect(() => {
-		const guest = document.createElement("webview");
-		guest.setAttribute("partition", HTML_PREVIEW_PARTITION);
-		guest.setAttribute("src", src);
-		guest.setAttribute("aria-label", title);
-		hostRef.current?.append(guest);
+		const host = hostRef.current;
+		if (!host) return;
+		const guest = createHtmlPreviewGuest(host.ownerDocument, src, title);
+		host.append(guest);
 		return () => guest.remove();
 	}, [src, title]);
 	return <div ref={hostRef} className="html-page-preview" />;
@@ -166,7 +165,7 @@ export function HtmlWorkbench({ asset, favorite, onToggleFavorite }: {
 			{readOnly && <div className="markdown-mode-notice" role="note">{t.preview.editorReadOnly}</div>}
 			{!editing && (readOnly
 				? <iframe className="html-page-preview" src={url.href} title={title} sandbox="" referrerPolicy="no-referrer" />
-				: <InteractiveHtmlPreview src={`${HTML_PREVIEW_SCHEME}://${url.host}${url.pathname}${url.search}`} title={title} />)}
+				: <InteractiveHtmlPreview src={url.href} title={title} />)}
 			<div className="html-source" ref={hostRef} hidden={!editing || !save || readOnly} />
 			{editing && !save && (error
 				? <div className="markdown-editor-status" role="alert"><span className="markdown-editor-problem">{error}</span><button type="button" onClick={() => retryLoad((attempt) => attempt + 1)}>{t.preview.editorRetry}</button></div>

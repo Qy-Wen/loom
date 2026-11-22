@@ -2,6 +2,7 @@ import type { Asset } from "@loom/core";
 import { createAssetLookup } from "@loom/core/references";
 import { MARKDOWN_LIVE_LIMIT_BYTES } from "../../../shared/markdown-file.ts";
 import { EMBED_LINK_SELECTOR, NOTE_EMBED_SELECTOR } from "./embed-renderers.ts";
+import { observeHtmlEmbeds } from "./markdown-html-embed.ts";
 import { ASSET_LINK_ATTRIBUTE, ANCHOR_ATTRIBUTE, BROKEN_REFERENCE_CLASS, renderMarkdown, type MarkdownRenderContext } from "./markdown.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 
@@ -35,7 +36,9 @@ export function embeddedReference(target: EventTarget | null): { assetId: string
 export async function hydrateMarkdownNoteEmbeds(root: HTMLElement, context: MarkdownRenderContext, signal: AbortSignal): Promise<void> {
 	const lookup = context.lookup ?? createAssetLookup(context.assets);
 	async function expand(container: HTMLElement, trail: readonly string[]): Promise<void> {
-		if (signal.aborted || trail.length > maximumDepth) return;
+		if (signal.aborted) return;
+		if (context.interactiveHtml) observeHtmlEmbeds(container, signal);
+		if (trail.length > maximumDepth) return;
 		const notes = Array.from(container.querySelectorAll<HTMLElement>(NOTE_EMBED_SELECTOR)).filter((note) => {
 			const parent = note.parentElement?.closest(NOTE_EMBED_SELECTOR);
 			return !parent || !container.contains(parent);
@@ -49,6 +52,7 @@ export async function hydrateMarkdownNoteEmbeds(root: HTMLElement, context: Mark
 			const heading = note.querySelector<HTMLElement>(":scope > a[data-anchor]")?.dataset.anchor;
 			content.innerHTML = source === undefined ? "" : renderMarkdown(source, {
 				fromRelativePath: asset.relativePath, assets: context.assets, lookup, lazyImages: true,
+				interactiveHtml: context.interactiveHtml,
 			}, heading);
 			if (content.querySelector("pre.mermaid")) void hydrateMermaid(content);
 			await expand(content, [...trail, asset.relativePath]);

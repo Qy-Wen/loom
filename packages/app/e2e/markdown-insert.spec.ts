@@ -1,6 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { Page } from "playwright";
+import type { Locator, Page } from "playwright";
 import { expect, test } from "./loom.ts";
 
 async function libraryPath(page: Page): Promise<string> {
@@ -292,27 +292,51 @@ test("the Markdown editor and embedded notes use the library scrollbar style", a
 	}
 });
 
-test("HTML wiki embeds preview the page in edit and reading modes", async ({ loomPage: page, electronApp }) => {
+test("visible HTML wiki embeds run scripts and keep their guest across Markdown modes", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);
 	await writeFile(join(root, "report.html"), `<!doctype html><html><head><style>h1 { color: rgb(20, 60, 100); }</style></head>
-		<body><h1>Quarterly report</h1><p id="status">Static contents</p>
-		<script>document.getElementById("status").textContent = "Changed by script";</script></body></html>`);
-	await writeFile(join(root, "commands.md"), "Before![[report.html|Report preview]]After\n\n| File |\n| --- |\n| ![[report.html]] |\n");
+		<body><h1>Quarterly report</h1><button id="activate">Update</button><p id="status">Waiting</p>
+		<script>
+			const statusElement = document.getElementById("status");
+			statusElement.textContent = "Running";
+			document.getElementById("activate").onclick = () => { statusElement.textContent = "Updated"; };
+		</script></body></html>`);
+	await writeFile(join(root, "commands.md"), [
+		"| File |\n| --- |\n| ![[report.html]] |",
+		"Before![[report.html|Report preview]]After",
+		"![[collection.md]]",
+	].join("\n\n"));
+	await writeFile(join(root, "collection.md"), [
+		...Array.from({ length: 20 }, (_, index) => `Paragraph ${index}`),
+		"![[report.html|Delayed preview]]",
+	].join("\n\n"));
 	await openNote(page);
 	const editor = page.locator(".markdown-editor-input");
-	const preview = editor.locator('iframe[title="Report preview"]');
-	const frame = preview.contentFrame();
-	const heading = frame.getByRole("heading", { name: "Quarterly report" });
-	await expect(heading).toBeVisible();
-	await expect(heading).toHaveCSS("color", "rgb(20, 60, 100)");
-	await expect(preview).toHaveAttribute("sandbox", "");
-	await expect(frame.locator("#status")).toHaveText("Static contents");
-	await expect(editor.locator("iframe")).toHaveCount(1);
+	const preview = editor.locator('webview[aria-label="Report preview"]');
+	const delayed = editor.locator('[data-html-preview-title="Delayed preview"]');
+	const delayedPreview = delayed.locator("webview");
+	const run = (guest: Locator, code: string): Promise<unknown> => guest.evaluate(async (node, code) => {
+		try { return await (node as Electron.WebviewTag).executeJavaScript(code); }
+		catch { return null; } // The guest may still be loading.
+	}, code);
+	const status = (guest: Locator) => run(guest, 'document.querySelector("#status")?.textContent');
+	await expect.poll(() => status(preview)).toBe("Running");
+	expect(await run(preview, 'getComputedStyle(document.querySelector("h1")).color')).toBe("rgb(20, 60, 100)");
+	expect(await run(preview, 'typeof window.require + " " + typeof window.loom')).toBe("undefined undefined");
+	await expect(delayed).toBeAttached();
+	await expect(delayedPreview).toHaveCount(0);
+	const height = await delayed.evaluate((node) => node.getBoundingClientRect().height);
 	await expect(editor.locator(".cm-live-table").getByRole("link", { name: "report.html" })).toBeVisible();
+	await run(preview, 'document.querySelector("button").click()');
+	await expect.poll(() => status(preview)).toBe("Updated");
+	await page.getByRole("textbox", { name: "Edit commands.md" }).press("ArrowRight");
+	await expect.poll(() => status(preview)).toBe("Updated");
 	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
-	await expect(heading).toBeVisible();
-	await expect(editor.locator("iframe")).toHaveCount(1);
+	await expect.poll(() => status(preview)).toBe("Updated");
+	await delayed.scrollIntoViewIfNeeded();
+	await expect.poll(() => status(delayedPreview)).toBe("Running");
+	expect(await delayed.evaluate((node) => node.getBoundingClientRect().height)).toBe(height);
 });
 
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {

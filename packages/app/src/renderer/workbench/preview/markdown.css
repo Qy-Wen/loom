@@ -560,6 +560,13 @@
 	background: var(--lm-surface-raised);
 }
 
+.markdown-embed-html[data-html-preview-src] { overflow: hidden; }
+
+.markdown-embed-html > webview {
+	inline-size: 100%;
+	block-size: 100%;
+}
+
 .markdown-embed-media :is(video, audio) {
 	display: block;
 	max-width: 100%;

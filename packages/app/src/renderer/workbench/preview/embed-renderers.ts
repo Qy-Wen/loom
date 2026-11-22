@@ -2,7 +2,7 @@ import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
 import { isMarkdownFile } from "../../../shared/markdown-file.ts";
 import { markdownEmbedLayout } from "../../../shared/markdown-reference.ts";
-import { isHtmlFile } from "../../../shared/text-file.ts";
+import { isHtmlFile, TEXT_FILE_EDIT_LIMIT_BYTES } from "../../../shared/text-file.ts";
 import { assetPosterUrl, assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 
 type WikiTarget = Pick<WikiLinkMatch, "target" | "label">;
@@ -14,6 +14,7 @@ interface EmbedContent {
 	href: string;
 	src: string;
 	compact: boolean;
+	interactiveHtml: boolean;
 }
 
 export const EMBED_LINK_SELECTOR = "a[data-embed-link]";
@@ -59,6 +60,9 @@ function videoPreview(embed: EmbedContent): string {
 }
 
 function htmlPreview(embed: EmbedContent): string {
+	if (embed.interactiveHtml && embed.asset.size <= TEXT_FILE_EDIT_LIMIT_BYTES) {
+		return mediaBlock(embed, `<span class="markdown-embed-html" data-html-preview-src="${embed.src}" data-html-preview-title="${embed.label}"></span>`);
+	}
 	return mediaBlock(embed, `<iframe class="markdown-embed-html" src="${embed.src}" title="${embed.label}" sandbox="" loading="lazy" referrerpolicy="no-referrer"></iframe>`);
 }
 
@@ -69,7 +73,9 @@ const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string
 };
 
 /** Shared by the editor and rendered Markdown. Table cells use compact embeds. */
-export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, compact = false): string {
+export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, {
+	compact = false, interactiveHtml = false,
+}: { compact?: boolean; interactiveHtml?: boolean } = {}): string {
 	const htmlFile = isHtmlFile(asset.relativePath);
 	const renderer = compact && (htmlFile || markdownEmbedLayout(asset.type) === "block")
 		? fileCard : htmlFile ? htmlPreview : renderers[asset.type] ?? fileCard;
@@ -81,6 +87,7 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		href: `href="#" data-embed-link data-asset-id="${escapeHtml(asset.assetId)}"${fragment}`,
 		src: escapeHtml(assetPreviewUrl(asset)),
 		compact,
+		interactiveHtml,
 	});
 	if (compact || !isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
 	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body thin-scroll"></span></span>`;

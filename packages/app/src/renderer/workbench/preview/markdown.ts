@@ -16,6 +16,7 @@ export interface MarkdownRenderContext {
 	assets: readonly Asset[];
 	lazyImages?: boolean;
 	compactEmbeds?: boolean;
+	interactiveHtml?: boolean;
 	/** Built from `assets` when absent. Pass one to share it across renders of the same library. */
 	lookup?: AssetLookup;
 }
@@ -159,7 +160,10 @@ interface WikiEmbedToken {
 markdown.renderer.rules.wiki_embed = (tokens, idx, _options, env) => {
 	const context = env as MarkdownRenderContext | undefined;
 	const { asset, reference, anchor, compact } = tokens[idx].meta?.embed as WikiEmbedToken;
-	const html = renderAssetEmbed(asset, reference, anchor, compact || context?.compactEmbeds);
+	const html = renderAssetEmbed(asset, reference, anchor, {
+		compact: compact || context?.compactEmbeds,
+		interactiveHtml: context?.interactiveHtml,
+	});
 	return context?.compactEmbeds ? `<span class="markdown-cell-embed" data-source-from="${reference.from}" contenteditable="false">${html}</span>` : html;
 };
 markdown.renderer.rules.wiki_file_extension = (tokens, idx) => renderFileExtension(tokens[idx].content);

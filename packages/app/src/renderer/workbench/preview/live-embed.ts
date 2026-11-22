@@ -1,5 +1,6 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import { WidgetType, type EditorView } from "@codemirror/view";
+import { observeHtmlEmbeds } from "./markdown-html-embed.ts";
 import { embeddedReference, hydrateMarkdownNoteEmbeds } from "./markdown-note-embed.ts";
 import type { MarkdownRenderContext } from "./markdown.ts";
 
@@ -71,11 +72,10 @@ export class WikiEmbedWidget extends WidgetType {
 			event.preventDefault();
 			this.open?.(reference.assetId, reference.anchor);
 		});
-		if (this.noteContext) {
-			const controller = new AbortController();
-			loads.set(element, controller);
-			void hydrateMarkdownNoteEmbeds(element, this.noteContext, controller.signal);
-		}
+		const controller = new AbortController();
+		loads.set(element, controller);
+		if (this.noteContext) void hydrateMarkdownNoteEmbeds(element, { ...this.noteContext, interactiveHtml: true }, controller.signal);
+		else observeHtmlEmbeds(element, controller.signal);
 		const observer = new ResizeObserver(() => view.requestMeasure());
 		observer.observe(element);
 		observers.set(element, observer);
@@ -87,5 +87,6 @@ export class WikiEmbedWidget extends WidgetType {
 		observers.get(element)?.disconnect();
 		loads.get(element)?.abort();
 		observers.delete(element);
+		loads.delete(element);
 	}
 }
