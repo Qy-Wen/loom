@@ -70,10 +70,33 @@ export function clickMode(event: React.MouseEvent): PointerMode {
 	return pointerMode(event, uiPlatform(navigator.userAgent) === "mac");
 }
 
+export function folderHeightTransition(branch: Element): Animation | undefined {
+	return branch.getAnimations().find((animation) =>
+		animation instanceof CSSTransition && animation.transitionProperty === "height",
+	);
+}
+
 /** Keep the focused tree row in view. `id` re-runs it when the same row component shows another file. */
 export function useScrollWhenFocused(ref: React.RefObject<HTMLElement | null>, focused: boolean, id: string): void {
 	const { locateToken } = useTree();
 	useEffect(() => {
-		if (focused) ref.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		const row = ref.current;
+		if (!focused || !row || row.closest("[inert]")) return;
+		const scroll = () => row.scrollIntoView({ block: "nearest", inline: "nearest" });
+		// A long branch may still be too short for scrolling to reach the row during expansion.
+		const expansions: Promise<Animation>[] = [];
+		for (let branch = row.closest(".folder-children"); branch; branch = branch.parentElement?.closest(".folder-children") ?? null) {
+			const motion = folderHeightTransition(branch);
+			if (motion) expansions.push(motion.finished);
+		}
+		if (expansions.length === 0) {
+			scroll();
+			return;
+		}
+		let current = true;
+		void Promise.allSettled(expansions).then(() => {
+			if (current && row.isConnected && !row.closest("[inert]")) scroll();
+		});
+		return () => { current = false; };
 	}, [ref, focused, id, locateToken]);
 }

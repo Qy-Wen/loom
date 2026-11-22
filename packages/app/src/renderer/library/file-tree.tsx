@@ -1,10 +1,10 @@
-import { useRef, type ReactNode } from "react";
+import { useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset, LibrarySnapshot } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
 import { folderDropProps } from "./folder-drop.ts";
-import { clickMode, useScrollWhenFocused, useTree } from "./tree-context.tsx";
+import { clickMode, folderHeightTransition, useScrollWhenFocused, useTree } from "./tree-context.tsx";
 import { compareAssetPaths, compareFolderPaths, coversPath, folderKey } from "./tree-nav.ts";
 import { useInlineRename } from "./use-inline-rename.ts";
 import { useFolderDoubleClick } from "./use-folder-double-click.ts";
@@ -42,6 +42,35 @@ function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 		ensureFolder(parts.join("/")).assets.push(asset);
 	}
 	return root;
+}
+
+function FolderChildren({ collapsed, depth, children }: { collapsed: boolean; depth: number; children: ReactNode }): React.JSX.Element {
+	const branch = useRef<HTMLDivElement>(null);
+	const [retained, setRetained] = useState(!collapsed);
+	useLayoutEffect(() => {
+		if (!collapsed) {
+			setRetained(true);
+			return;
+		}
+		if (!retained) return;
+		// Keep the rows through the closing transition. A reopen supersedes its cleanup.
+		const closing = branch.current && folderHeightTransition(branch.current);
+		if (!closing) {
+			setRetained(false);
+			return;
+		}
+		let current = true;
+		const finish = () => { if (current) setRetained(false); };
+		void closing.finished.then(finish, finish);
+		return () => { current = false; };
+	}, [collapsed, retained]);
+
+	return (
+		<div ref={branch} className="folder-children" data-collapsed={collapsed || undefined} inert={collapsed}
+			style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}>
+			{(!collapsed || retained) && children}
+		</div>
+	);
 }
 
 function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number }): React.JSX.Element {
@@ -94,6 +123,7 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 						className={`folder-chevron${collapsed ? "" : " expanded"}`}
 						type="button"
 						aria-label={collapsed ? t.library.expandFolder : t.library.collapseFolder}
+						aria-expanded={!collapsed}
 						onClick={toggleFolder}
 					>
 						<FolderChevronIcon />
@@ -127,10 +157,10 @@ function FolderTreeRow({ folder, depth }: { folder: FolderNode; depth: number })
 					</button>
 				)}
 			</div>
-			{!collapsed && (
-				<div className="folder-children" style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}>
+			{expandable && (
+				<FolderChildren collapsed={collapsed} depth={depth}>
 					<FileTreeRows node={folder} depth={depth + 1} />
-				</div>
+				</FolderChildren>
 			)}
 		</div>
 	);

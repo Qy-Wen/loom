@@ -478,6 +478,24 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 /* Guide line under the arrow (7px row inset + half the 8px arrow): everything to its right belongs to this folder. */
 .folder-children {
 	position: relative;
+	display: flow-root;
+	height: auto;
+	overflow: clip;
+}
+
+.folder-children[data-collapsed] {
+	height: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.folder-children {
+		interpolate-size: allow-keywords;
+		transition: height var(--lm-dur-fast) ease-out;
+	}
+
+	.folder-row:not(.shortcut-folder) > .folder-chevron {
+		transition: transform var(--lm-dur-fast) ease-out;
+	}
 }
 
 .folder-children::before {

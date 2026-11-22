@@ -1,6 +1,96 @@
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
+
+test("file tree folders animate in both directions and reopen during a collapse", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	await mkdir(join((await rootPath())!, "parent", "child"), { recursive: true });
+	const folder = loomPage.locator(".asset-list .folder-row").filter({ hasText: /^parent$/ });
+	const arrow = folder.locator(".folder-chevron");
+	const branch = folder.locator("..").locator(":scope > .folder-children");
+	const child = branch.locator(".folder-row");
+	await loomPage.emulateMedia({ reducedMotion: "reduce" });
+	await expect(arrow).toBeVisible();
+	if (await arrow.getAttribute("aria-expanded") === "true") await arrow.click();
+	await expect(child).toHaveCount(0);
+	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
+
+	const sampleTransition = (hold: boolean) => arrow.evaluate((button, hold) => new Promise<{
+		height: number; fullHeight: number; inert: boolean;
+	}>((resolve, reject) => {
+		const branch = button.parentElement!.nextElementSibling as HTMLElement;
+		const observer = new MutationObserver(() => {
+			observer.disconnect();
+			const motion = branch.getAnimations().find((animation) =>
+				animation instanceof CSSTransition && animation.transitionProperty === "height",
+			);
+			if (!motion) { reject(new Error("Missing folder height transition")); return; }
+			motion.pause();
+			motion.currentTime = Number(motion.effect!.getComputedTiming().activeDuration) / 2;
+			resolve({ height: branch.getBoundingClientRect().height, fullHeight: branch.scrollHeight, inert: branch.inert });
+			if (!hold) motion.play();
+		});
+		observer.observe(branch, { attributeFilter: ["data-collapsed"] });
+		branch.getBoundingClientRect();
+		(button as HTMLButtonElement).click();
+	}), hold);
+	const expanded = () => branch.evaluate((branch) => Math.round(branch.getBoundingClientRect().height) === branch.scrollHeight);
+	const opening = await sampleTransition(false);
+	expect(opening.height).toBeGreaterThan(0);
+	expect(opening.height).toBeLessThan(opening.fullHeight);
+	await expect.poll(expanded).toBe(true);
+
+	const closing = await sampleTransition(true);
+	expect(closing.height).toBeGreaterThan(0);
+	expect(closing.height).toBeLessThan(closing.fullHeight);
+	expect(closing.inert).toBe(true);
+	await expect(child).toHaveCount(1);
+	await sampleTransition(false);
+	await expect(arrow).toHaveAttribute("aria-expanded", "true");
+	await expect.poll(expanded).toBe(true);
+	await expect(child).toBeVisible();
+
+	await loomPage.emulateMedia({ reducedMotion: "reduce" });
+	const animations = await arrow.evaluate(async (button) => {
+		const branch = button.parentElement!.nextElementSibling!;
+		(button as HTMLButtonElement).click();
+		await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+		return branch.getAnimations().length;
+	});
+	expect(animations).toBe(0);
+	await expect(child).toHaveCount(0);
+});
+
+test("locating a file scrolls to it after its folder expands", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
+	const snapshot = () => loomPage.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const directory = join((await snapshot()).rootPath!, "parent", "child");
+	await mkdir(directory, { recursive: true });
+	const names = Array.from({ length: 42 }, (_, index) => `${String(index).padStart(2, "0")}.txt`);
+	await Promise.all(names.map((name) => writeFile(join(directory, name), "text")));
+	await expect.poll(async () => (await snapshot()).assets.length).toBe(names.length);
+	const tree = loomPage.locator(".asset-list");
+	const arrow = (name: string) => tree.locator(".folder-row").filter({ hasText: new RegExp(`^${name}$`) }).locator(".folder-chevron");
+	for (const folder of ["parent", "child"]) {
+		const button = arrow(folder);
+		await expect(button).toBeVisible();
+		if (await button.getAttribute("aria-expanded") === "false") await button.click();
+	}
+	const name = names.at(-1)!;
+	const file = tree.locator(".asset-row").filter({ hasText: name });
+	const tab = loomPage.getByRole("tab", { name, exact: true });
+	await file.click({ button: "middle" });
+	await expect(tab).toBeVisible();
+	await arrow("parent").click();
+	await expect(file).toHaveCount(0);
+	await tab.dblclick();
+	await expect(file).toHaveClass(/selected/);
+	await expect(file).toBeInViewport({ ratio: 1 });
+});
 
 test("the fixed divider after collapsed favorites stays in place across file display modes", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
