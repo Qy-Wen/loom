@@ -38,7 +38,6 @@ interface Shown {
 	rows: number;
 	columns: number;
 	aligns: string;
-	readOnly: boolean;
 	observer: ResizeObserver | null;
 	lastHeight: number;
 }
@@ -56,15 +55,29 @@ const TABLE_PADDING_AND_BORDER = 37;
 /** A cell to put the caret in once the table around it has been rebuilt (a row or a column was added). */
 let pendingFocus: { from: number; row: number; column: number } | null = null;
 
+function setCellReadOnly(cell: HTMLElement, readOnly: boolean): void {
+	cell.contentEditable = readOnly ? "false" : "plaintext-only";
+	if (readOnly) cell.tabIndex = 0;
+	else cell.removeAttribute("tabindex");
+}
+
+/** Changing access keeps the measured table and its horizontal scroll position. */
+export const liveTableAccess = EditorView.updateListener.of(({ view, startState, state }) => {
+	if (startState.readOnly === state.readOnly) return;
+	for (const table of view.contentDOM.querySelectorAll<HTMLElement>(".cm-live-table")) {
+		dropPick(table);
+		for (const cell of table.querySelectorAll<HTMLElement>("th[data-row], td[data-row]")) setCellReadOnly(cell, state.readOnly);
+	}
+});
+
 export class TableWidget extends WidgetType {
 	readonly text: string;
 	readonly context: TableContext | null;
 	readonly height: number | undefined;
-	readonly readOnly: boolean;
 	private readonly rowCount: number;
 	private readonly hooks: (view: EditorView) => TableHooks | null;
 	private readonly redraw: StateEffectType<null>;
-	constructor(text: string, rowCount: number, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>, readOnly = false) {
+	constructor(text: string, rowCount: number, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>) {
 		super();
 		this.text = text;
 		this.rowCount = rowCount;
@@ -72,10 +85,9 @@ export class TableWidget extends WidgetType {
 		this.height = heights.get(text);
 		this.hooks = hooks;
 		this.redraw = redraw;
-		this.readOnly = readOnly;
 	}
 	eq(other: TableWidget): boolean {
-		return other.text === this.text && other.context === this.context && other.height === this.height && other.readOnly === this.readOnly;
+		return other.text === this.text && other.context === this.context && other.height === this.height;
 	}
 
 	get estimatedHeight(): number {
@@ -99,8 +111,7 @@ export class TableWidget extends WidgetType {
 			const line = (rowIndex === 0 ? head : body).insertRow();
 			for (let column = 0; column < table.columns; column++) {
 				const cell = document.createElement(rowIndex === 0 ? "th" : "td");
-				cell.contentEditable = this.readOnly ? "false" : "plaintext-only";
-				if (this.readOnly) cell.tabIndex = 0;
+				setCellReadOnly(cell, view.state.readOnly);
 				cell.spellcheck = false;
 				cell.dataset.row = String(rowIndex);
 				cell.dataset.column = String(column);
@@ -127,12 +138,12 @@ export class TableWidget extends WidgetType {
 			if (hit) focusCell(wrap, Number(hit.dataset.row), Number(hit.dataset.column), "end");
 		});
 		this.listenPicked(wrap, view);
-		wrap.append(scroll);
-		if (!this.readOnly) {
-			wrap.append(this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
-			this.attachHandles(view, wrap, scroll, element);
-		}
-		const state: Shown = { text: this.text, context: this.context, rows: table.rows.length, columns: table.columns, aligns: table.aligns.join(","), readOnly: this.readOnly, observer: null, lastHeight: 0 };
+		const controls = document.createElement("div");
+		controls.className = "cm-live-table-edit-controls";
+		controls.append(this.addButton("cm-live-table-add-row", this.hooks(view)?.labels.addRow ?? "", view, wrap, "row"), this.addButton("cm-live-table-add-column", this.hooks(view)?.labels.addColumn ?? "", view, wrap, "column"));
+		wrap.append(scroll, controls);
+		this.attachHandles(view, wrap, scroll, element, controls);
+		const state: Shown = { text: this.text, context: this.context, rows: table.rows.length, columns: table.columns, aligns: table.aligns.join(","), observer: null, lastHeight: 0 };
 		shown.set(wrap, state);
 		if (typeof ResizeObserver !== "undefined") {
 			state.observer = new ResizeObserver(() => {
@@ -161,7 +172,7 @@ export class TableWidget extends WidgetType {
 	updateDOM(dom: HTMLElement, view: EditorView): boolean {
 		const state = shown.get(dom);
 		const table = parseTable(this.text);
-		if (!state || !table || this.readOnly !== state.readOnly || table.rows.length !== state.rows || table.columns !== state.columns || table.aligns.join(",") !== state.aligns) return false;
+		if (!state || !table || table.rows.length !== state.rows || table.columns !== state.columns || table.aligns.join(",") !== state.aligns) return false;
 		const contextChanged = state.context !== this.context;
 		state.text = this.text;
 		state.context = this.context;
@@ -194,7 +205,7 @@ export class TableWidget extends WidgetType {
 	 * A grip beside the row and above the column of the cell the pointer is over. Dragging it moves that row or column to
 	 * where it is let go; a line marks the place while it is dragged. The header row is not a row that moves.
 	 */
-	private attachHandles(view: EditorView, wrap: HTMLElement, scroll: HTMLElement, element: HTMLTableElement): void {
+	private attachHandles(view: EditorView, wrap: HTMLElement, scroll: HTMLElement, element: HTMLTableElement, controls: HTMLElement): void {
 		const labels = this.hooks(view)?.labels;
 		const makeHandle = (kind: "row" | "column") => {
 			const handle = document.createElement("div");
@@ -218,7 +229,7 @@ export class TableWidget extends WidgetType {
 		const frame = document.createElement("div");
 		frame.className = "cm-live-table-frame";
 		frame.hidden = true;
-		wrap.append(rowHandle, columnHandle, marker, frame);
+		controls.append(rowHandle, columnHandle, marker, frame);
 		const showFrame = (kind: "row" | "column", index: number) => {
 			const wrapRect = wrap.getBoundingClientRect();
 			const tableRect = element.getBoundingClientRect();
@@ -269,7 +280,7 @@ export class TableWidget extends WidgetType {
 			}
 		};
 		wrap.addEventListener("mousemove", (event) => {
-			if (dragging) return;
+			if (dragging || view.state.readOnly) return;
 			const tableRect = element.getBoundingClientRect();
 			let next: typeof over = null;
 			const inColumns = event.clientX >= tableRect.left && event.clientX <= tableRect.right;
@@ -296,7 +307,7 @@ export class TableWidget extends WidgetType {
 		let dragging = false;
 		const begin = (kind: "row" | "column") => (event: MouseEvent) => {
 			const index = kind === "row" ? over?.row : over?.column;
-			if (event.button !== 0 || index === null || index === undefined) return;
+			if (view.state.readOnly || event.button !== 0 || index === null || index === undefined) return;
 			event.preventDefault();
 			event.stopPropagation();
 			const from = index;
@@ -751,7 +762,7 @@ function currentTable(view: EditorView, wrap: HTMLElement): { range: { from: num
 	return range && table ? { range, table } : null;
 }
 
-/** Carry the caret from a focused cell into the document before a mode switch destroys its widget. */
+/** Carry the caret from a focused cell into the document before switching modes. */
 export function leaveCell(view: EditorView): boolean {
 	const active = view.dom.ownerDocument.activeElement;
 	if (!(active instanceof HTMLElement)) return false;

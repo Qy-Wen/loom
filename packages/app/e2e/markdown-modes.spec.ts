@@ -109,7 +109,19 @@ test("Markdown mode switching keeps the text at the top of the viewport", async 
 	});
 	await expect.poll(markerOffset).toBe(35);
 	const distanceFromOriginal = async () => Math.abs((await markerOffset() ?? Infinity) - 35);
-	await readingMode.click();
+	const firstReadingOffset = await readingMode.evaluate((button) => new Promise<number>((resolve) => {
+		const editor = button.closest(".markdown-workbench")!.querySelector(".cm-editor")!;
+		const observer = new MutationObserver(() => {
+			if (!editor.classList.contains("cm-markdown-read")) return;
+			observer.disconnect();
+			const scroll = editor.querySelector(".cm-scroller")!;
+			const line = [...scroll.querySelectorAll(".cm-line")].find((block) => block.textContent === "After formula");
+			resolve(line ? Math.round(line.getBoundingClientRect().top - scroll.getBoundingClientRect().top) : Infinity);
+		});
+		observer.observe(editor, { attributes: true, attributeFilter: ["class"] });
+		(button as HTMLButtonElement).click();
+	}));
+	expect(Math.abs(firstReadingOffset - 35)).toBeLessThan(4);
 	await expect(editor).toHaveClass(/cm-markdown-read/);
 	await expect.poll(distanceFromOriginal).toBeLessThan(4);
 	await expect(math).toHaveCount(1);
@@ -129,6 +141,8 @@ test("Markdown keeps its scroll height when a table enters the viewport and when
 	const editor = loomPage.locator(".cm-editor");
 	const scroller = editor.locator(".cm-scroller");
 	const renderedTable = editor.locator(".cm-live-table");
+	const readingMode = loomPage.getByRole("button", { name: "Reading mode", exact: true });
+	const editMode = loomPage.getByRole("button", { name: "Edit mode", exact: true });
 	const measure = () => scroller.evaluate(async (element) => {
 		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
 		return { top: element.scrollTop, height: element.scrollHeight };
@@ -139,6 +153,17 @@ test("Markdown keeps its scroll height when a table enters the viewport and when
 	const initialHeight = (await measure()).height;
 	await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
 	await expect(renderedTable).toBeInViewport();
+	const tableNode = (await renderedTable.elementHandle())!;
+	const sameTable = () => tableNode.evaluate((element) => element === document.querySelector(".cm-live-table"));
+	await readingMode.click();
+	await expect(renderedTable.locator("td").first()).toHaveAttribute("contenteditable", "false");
+	await expect(renderedTable.getByRole("button", { name: "Add row", exact: true })).toHaveCount(0);
+	expect(await sameTable()).toBe(true);
+	await editMode.click();
+	await expect(renderedTable.locator("td").first()).toHaveAttribute("contenteditable", "plaintext-only");
+	await expect(renderedTable.getByRole("button", { name: "Add row", exact: true })).toHaveCount(1);
+	expect(await sameTable()).toBe(true);
+
 	await scroller.evaluate((element) => { element.scrollTop = 900; });
 	await expect(renderedTable).toHaveCount(0);
 	const before = await measure();
@@ -147,10 +172,10 @@ test("Markdown keeps its scroll height when a table enters the viewport and when
 		const after = await measure();
 		return Math.max(Math.abs(after.top - before.top), Math.abs(after.height - before.height));
 	};
-	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await readingMode.click();
 	await expect(editor).toHaveClass(/cm-markdown-read/);
 	await expect.poll(scrollChange).toBeLessThan(3);
-	await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
+	await editMode.click();
 	await expect(editor).toHaveClass(/cm-markdown-edit/);
 	await expect.poll(scrollChange).toBeLessThan(3);
 });
@@ -314,7 +339,7 @@ test("reading mode keeps results drawn, forbids table and task edits, copies cel
 		await expect(box.locator(".katex")).toHaveCount(1);
 		const table = box.locator(".cm-live-table");
 		await expect(table.locator("[contenteditable=plaintext-only]")).toHaveCount(0);
-		await expect(table.locator(".cm-live-table-add-row, .cm-live-table-add-column, .cm-live-table-handle")).toHaveCount(0);
+		await expect(table.locator(".cm-live-table-edit-controls")).toBeHidden();
 		const one = table.locator('td[data-row="1"][data-column="0"]');
 		const two = table.locator('td[data-row="1"][data-column="1"]');
 		await one.click();

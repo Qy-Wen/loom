@@ -9,7 +9,7 @@ import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
 import { searchSelection } from "./markdown-find-widgets.ts";
 import { liveReferenceSelectors, pressedReference } from "./live-reference.ts";
-import { enterTable, TableWidget, type TableHooks } from "./live-table.ts";
+import { enterTable, liveTableAccess, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
 import { editorHeading } from "./editor-heading.ts";
@@ -632,7 +632,7 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				// A table that reads as one is always drawn. A caret in it, or a selection over it, changes nothing.
 				if (table) {
 					const context = state.field(libraryField, false) ?? null;
-					const widget = new TableWidget(text, table.rows.length, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks, state.readOnly);
+					const widget = new TableWidget(text, table.rows.length, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks);
 					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
 				}
 			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
@@ -733,7 +733,7 @@ const markSelectedTables = ViewPlugin.fromClass(class {
 	}
 });
 
-export const liveBlocks: Extension = [blockDecorations, snapSelection, markSelectedTables];
+export const liveBlocks: Extension = [blockDecorations, liveTableAccess, snapSelection, markSelectedTables];
 
 /** Keeps what a drag sweeps over drawn until the button is let go. Add it before {@link liveMarkdown} and {@link liveBlocks}. */
 export const liveDrag: Extension = [
@@ -1059,6 +1059,8 @@ export const liveMarkdownTheme = EditorView.theme({
 	// stays level with the text, and it is padding, not margin, so that the pointer is over the table while it is there.
 	".cm-live-table": { position: "relative", margin: "0 0 0 -20px", padding: "18px 18px 18px 20px" },
 	".cm-live-table-scroll": { overflowX: "auto" },
+	".cm-live-table-edit-controls": { display: "contents" },
+	"&.cm-markdown-read .cm-live-table-edit-controls": { display: "none" },
 	// A table that a selection covers has the selection's own colour, as the lines around it do.
 	// Written with the table's own class as well, so that it outweighs the header's background.
 	".cm-live-table.cm-live-table-selected table": { backgroundColor: "var(--markdown-selection-bg)" },

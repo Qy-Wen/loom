@@ -298,6 +298,9 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		},
 		setMode(next) {
 			if (next === mode) return;
+			const measureViewport = () => view.lineBlockAtHeight(view.scrollDOM.scrollTop - view.documentPadding.top);
+			// Finish pending viewport measurements before saving the scroll anchor after a fresh scroll.
+			measureViewport();
 			// A widget above the viewport can change height when its source is shown or hidden.
 			const scroll = view.scrollSnapshot();
 			closeCompletion(view);
@@ -308,6 +311,8 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 			view.dispatch({ effects: [...effects, scroll] });
 			if (hadCellFocus && mode !== "read") view.focus();
 			if (mode !== "source") view.dispatch({ effects: setFocused.of(view.hasFocus) });
+			// Restore the anchor before the new layout can paint at the old scroll offset.
+			measureViewport();
 		},
 		find: () => { openSearchPanel(view); },
 		insert: () => {
