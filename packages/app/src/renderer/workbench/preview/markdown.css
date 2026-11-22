@@ -375,54 +375,6 @@
 	color: inherit;
 }
 
-.markdown-toolbar {
-	display: flex;
-	flex: 0 0 auto;
-	align-items: flex-start;
-	gap: var(--lm-space-2);
-	padding: var(--lm-space-2) var(--lm-space-5);
-}
-
-.markdown-toolbar > button {
-	display: flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--lm-size-lg);
-	height: var(--lm-size-lg);
-	padding: 0;
-	border: 0;
-	border-radius: var(--lm-radius-sm);
-	color: var(--lm-text-secondary);
-	background: transparent;
-	cursor: pointer;
-}
-
-.markdown-toolbar > button svg {
-	width: var(--lm-size-xs);
-	height: var(--lm-size-xs);
-}
-
-.markdown-toolbar > button:hover:not(:disabled, .markdown-reading-toggle) {
-	background: var(--lm-surface-hover);
-}
-
-.markdown-toolbar > button[aria-pressed="true"] {
-	color: var(--lm-text-accent);
-}
-
-.markdown-toolbar > button[aria-pressed="true"]:not(.markdown-reading-toggle, .preview-favorite-button) {
-	background: var(--lm-surface-active);
-}
-
-.markdown-toolbar > .preview-favorite-button[aria-pressed="true"] {
-	color: var(--lm-warning);
-}
-
-.markdown-toolbar > button:disabled {
-	opacity: 0.5;
-	cursor: default;
-}
-
 .markdown-editor-input .cm-tooltip.cm-markdown-insert {
 	border: 1px solid var(--lm-border-default);
 	border-radius: var(--lm-radius-lg);
@@ -595,8 +547,17 @@
 	max-inline-size: 100%;
 }
 
-.markdown-embed-media:has(> audio) {
+.markdown-embed-media:has(> :is(audio, .markdown-embed-html)) {
 	inline-size: 100%;
+}
+
+.markdown-embed-html {
+	display: block;
+	inline-size: 100%;
+	block-size: clamp(15rem, 55vh, 28rem);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
 }
 
 .markdown-embed-media :is(video, audio) {

@@ -5,17 +5,18 @@ import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { createMarkdownEditor, type MarkdownEditor as MarkdownEditorHandle, type MarkdownMode } from "./codemirror-markdown.ts";
 import type { RegisterMarkdownHistory } from "../asset-history.ts";
+import { DocumentModeButton } from "./document-mode-button.tsx";
 import { FavoriteButton } from "./favorite-button.tsx";
 import { markdownFindIconPath } from "./markdown-find.ts";
-import { MarkdownSave, type MarkdownFiles } from "./markdown-save.ts";
+import { TextFileSave, type TextFiles } from "./text-file-save.ts";
 
-const files: MarkdownFiles = {
+const files: TextFiles = {
 	read: (assetId) => window.loom.readMarkdown(assetId),
 	save: (assetId, text, revision) => window.loom.saveMarkdown(assetId, text, revision),
 };
 
 /** Leaving and returning to a file finds its unsaved text, including a save conflict. */
-const sessions = new Map<string, MarkdownSave>();
+const sessions = new Map<string, TextFileSave>();
 
 /** One text, save session and CodeMirror view for live editing, reading and source editing. */
 export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOpenAsset, registerMarkdown }: {
@@ -28,7 +29,7 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 }): React.JSX.Element {
 	const { assetId, filename, modifiedAt, relativePath } = asset;
 	const { t } = useLocale();
-	const [save, setSave] = useState<MarkdownSave | null>(sessions.get(assetId) ?? null);
+	const [save, setSave] = useState<TextFileSave | null>(sessions.get(assetId) ?? null);
 	const [failure, setFailure] = useState<string | null>(null);
 	const [insertIssue, setInsertIssue] = useState<string | null>(null);
 	const [pickReference, setPickReference] = useState<((file: Asset) => void) | null>(null);
@@ -58,7 +59,7 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 		if (existing) { setSave(existing); return; }
 		window.loom.readMarkdown(assetId).then((snapshot) => {
 			if (cancelled) return;
-			const created = new MarkdownSave(assetId, snapshot, files);
+			const created = new TextFileSave(assetId, snapshot, files);
 			sessions.set(assetId, created);
 			setSave(created);
 		}).catch((cause) => {
@@ -183,14 +184,10 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 	const toggleLabel = mode === "read" ? t.preview.editMode : t.preview.readingMode;
 	return <>
 		<div className="markdown-workbench" ref={rootRef}>
-			<div className="markdown-toolbar" role="toolbar" aria-label={t.preview.markdownView}>
+			<div className="document-toolbar" role="toolbar" aria-label={t.preview.markdownView}>
 				<FavoriteButton favorite={favorite} onToggle={onToggleFavorite} onMouseDown={(event) => event.preventDefault()} />
-				<button type="button" className="markdown-reading-toggle" aria-label={toggleLabel} data-tooltip={toggleLabel} aria-pressed={mode === "read"}
-					disabled={access === "read"} onMouseDown={(event) => event.preventDefault()} onClick={toggleReading}>
-					<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
-						{mode === "read" ? <><path d="m15 4 5 5M4 20l4-1L20 7a2.8 2.8 0 0 0-4-4L4 15Z" /></> : <><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" /><circle cx="12" cy="12" r="3" /></>}
-					</svg>
-				</button>
+				<DocumentModeButton previewing={mode === "read"} label={toggleLabel} disabled={access === "read"}
+					onMouseDown={(event) => event.preventDefault()} onToggle={toggleReading} />
 				{mode !== "read" && <button type="button" aria-label={t.preview.sourceMode} data-tooltip={t.preview.sourceMode}
 					aria-pressed={mode === "source"} disabled={access === "source"} onMouseDown={(event) => event.preventDefault()}
 					onClick={() => { flush(); setSource((on) => !on); }}>

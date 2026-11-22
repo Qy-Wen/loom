@@ -1,6 +1,7 @@
 import type { AssetType } from "@loom/core";
 import { extractMarkdownReferences } from "@loom/core/references";
 import { isMarkdownFile } from "./markdown-file.ts";
+import { isHtmlFile } from "./text-file.ts";
 
 function wikiReference(path: string): string | undefined {
 	const wiki = `[[${path}]]`;
@@ -12,7 +13,7 @@ function wikiReference(path: string): string | undefined {
 export function markdownEmbedLayout(type: AssetType, path?: string): "inline" | "block" | undefined {
 	if (type === "image") return "inline";
 	// These embeds use wiki syntax. Images also support standard Markdown syntax.
-	if ((type === "audio" || type === "video" || (path && isMarkdownFile(path))) &&
+	if ((type === "audio" || type === "video" || (path && (isMarkdownFile(path) || isHtmlFile(path)))) &&
 		(path === undefined || wikiReference(path))) return "block";
 }
 

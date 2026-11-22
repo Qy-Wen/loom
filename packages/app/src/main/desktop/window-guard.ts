@@ -1,4 +1,4 @@
-import type { BrowserWindow } from "electron";
+import type { BrowserWindow, WebPreferences } from "electron";
 
 /** Schemes handed to the system browser or mail client. Anything else (file:, javascript:, data:, custom) is dropped. */
 const EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
@@ -41,6 +41,8 @@ export interface WindowGuardOptions {
 	trusted: TrustedPage;
 	/** Open a URL in the system browser. Injected so tests do not launch one. */
 	openExternal: (url: string) => void | Promise<void>;
+	/** Optionally authorize a guest and set its preferences before attachment. */
+	allowWebview?: (preferences: WebPreferences, params: Record<string, string>) => boolean;
 	/** Called when a navigation or new window was refused, for the app log. */
 	onBlocked?: (reason: string, url: string) => void;
 }
@@ -52,10 +54,10 @@ export interface WindowGuardOptions {
  * - A new window request (`target="_blank"`, `window.open`) is never created. A web or mail link goes to the
  *   system browser; anything else is refused.
  * - A navigation away from the app's page is cancelled; a web link is opened in the system browser instead.
- * - A webview cannot be attached.
+ * - A webview needs explicit authorization from the caller.
  */
 export function guardWindow(win: BrowserWindow, options: WindowGuardOptions): void {
-	const { trusted, openExternal, onBlocked } = options;
+	const { trusted, openExternal, allowWebview, onBlocked } = options;
 	const handOff = (url: string): void => {
 		if (!isExternalUrl(url)) { onBlocked?.("blocked scheme", url); return; }
 		Promise.resolve(openExternal(url)).catch((error) => onBlocked?.(`could not open: ${error instanceof Error ? error.message : String(error)}`, url));
@@ -74,7 +76,8 @@ export function guardWindow(win: BrowserWindow, options: WindowGuardOptions): vo
 		event.preventDefault();
 		onBlocked?.("blocked redirect", url);
 	});
-	win.webContents.on("will-attach-webview", (event) => {
+	win.webContents.on("will-attach-webview", (event, preferences, params) => {
+		if (allowWebview?.(preferences, params)) return;
 		event.preventDefault();
 		onBlocked?.("blocked webview", "");
 	});

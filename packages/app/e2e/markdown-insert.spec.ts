@@ -292,6 +292,29 @@ test("the Markdown editor and embedded notes use the library scrollbar style", a
 	}
 });
 
+test("HTML wiki embeds preview the page in edit and reading modes", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	await writeFile(join(root, "report.html"), `<!doctype html><html><head><style>h1 { color: rgb(20, 60, 100); }</style></head>
+		<body><h1>Quarterly report</h1><p id="status">Static contents</p>
+		<script>document.getElementById("status").textContent = "Changed by script";</script></body></html>`);
+	await writeFile(join(root, "commands.md"), "Before![[report.html|Report preview]]After\n\n| File |\n| --- |\n| ![[report.html]] |\n");
+	await openNote(page);
+	const editor = page.locator(".markdown-editor-input");
+	const preview = editor.locator('iframe[title="Report preview"]');
+	const frame = preview.contentFrame();
+	const heading = frame.getByRole("heading", { name: "Quarterly report" });
+	await expect(heading).toBeVisible();
+	await expect(heading).toHaveCSS("color", "rgb(20, 60, 100)");
+	await expect(preview).toHaveAttribute("sandbox", "");
+	await expect(frame.locator("#status")).toHaveText("Static contents");
+	await expect(editor.locator("iframe")).toHaveCount(1);
+	await expect(editor.locator(".cm-live-table").getByRole("link", { name: "report.html" })).toBeVisible();
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect(heading).toBeVisible();
+	await expect(editor.locator("iframe")).toHaveCount(1);
+});
+
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);

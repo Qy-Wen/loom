@@ -2,6 +2,7 @@ import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
 import { isMarkdownFile } from "../../../shared/markdown-file.ts";
 import { markdownEmbedLayout } from "../../../shared/markdown-reference.ts";
+import { isHtmlFile } from "../../../shared/text-file.ts";
 import { assetPosterUrl, assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 
 type WikiTarget = Pick<WikiLinkMatch, "target" | "label">;
@@ -57,6 +58,10 @@ function videoPreview(embed: EmbedContent): string {
 	return mediaBlock(embed, `<span class="markdown-embed-video">${sizingImage}${player}</span>`);
 }
 
+function htmlPreview(embed: EmbedContent): string {
+	return mediaBlock(embed, `<iframe class="markdown-embed-html" src="${embed.src}" title="${embed.label}" sandbox="" loading="lazy" referrerpolicy="no-referrer"></iframe>`);
+}
+
 const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string>> = {
 	image: imagePreview,
 	video: videoPreview,
@@ -65,9 +70,11 @@ const renderers: Partial<Record<Asset["type"], (content: EmbedContent) => string
 
 /** Shared by the editor and rendered Markdown. Table cells use compact embeds. */
 export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: string | undefined, compact = false): string {
-	const renderer = compact && markdownEmbedLayout(asset.type) === "block" ? undefined : renderers[asset.type];
+	const htmlFile = isHtmlFile(asset.relativePath);
+	const renderer = compact && (htmlFile || markdownEmbedLayout(asset.type) === "block")
+		? fileCard : htmlFile ? htmlPreview : renderers[asset.type] ?? fileCard;
 	const fragment = anchor ? ` data-anchor="${escapeHtml(anchor)}"` : "";
-	const html = (renderer ?? fileCard)({
+	const html = renderer({
 		asset,
 		label: escapeHtml(reference.label || reference.target || asset.filename),
 		extension: fileExtensionLabel(asset, reference),

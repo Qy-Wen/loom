@@ -135,6 +135,17 @@ test("renderMarkdown renders media blocks within a paragraph and compact embeds 
 	assert.doesNotMatch(table, /<video/);
 });
 
+test("HTML wiki embeds render in sandboxed frames and stay compact inside tables", () => {
+	const context = { fromRelativePath: "note.md", assets: [libraryAsset("report", "Report.HTM")] };
+	const preview = renderMarkdown('Before![[Report.HTM|A "quoted" report]]After', context);
+	assert.match(preview, /<iframe class="markdown-embed-html" src="loom-asset:\/\/asset\/report\?v=2-5" title="A &quot;quoted&quot; report" sandbox=""/);
+	assert.match(preview, /data-embed-link data-asset-id="report"/);
+	const table = renderMarkdown("| Report |\n| --- |\n| ![[Report.HTM]] |", context);
+	assert.match(table, /<td><a[^>]*data-asset-id="report"/);
+	assert.doesNotMatch(table, /<iframe/);
+	assert.doesNotMatch(renderMarkdown("[[Report.HTM]]", context), /<iframe/);
+});
+
 const library = [
 	libraryAsset("notes", "产品说明.md"),
 	libraryAsset("deep", "产品/说明.md"),

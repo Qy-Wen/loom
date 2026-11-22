@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { afterEach, beforeEach, test } from "node:test";
-import { MarkdownSave, type MarkdownFiles } from "../src/renderer/workbench/preview/markdown-save.ts";
+import { TextFileSave, type TextFiles } from "../src/renderer/workbench/preview/text-file-save.ts";
 import { flushPendingSaves, removePendingSave } from "../src/renderer/workbench/pending-saves.ts";
-import type { MarkdownSnapshot } from "../src/shared/markdown-file.ts";
+import type { TextFileSnapshot } from "../src/shared/text-file.ts";
 
 let dirtyCalls: boolean[];
 
@@ -16,9 +16,9 @@ afterEach(() => {
 	delete (globalThis as { window?: unknown }).window;
 });
 
-const opened: MarkdownSave[] = [];
-class TrackedSave extends MarkdownSave {
-	constructor(...args: ConstructorParameters<typeof MarkdownSave>) {
+const opened: TextFileSave[] = [];
+class TrackedSave extends TextFileSave {
+	constructor(...args: ConstructorParameters<typeof TextFileSave>) {
 		super(...args);
 		opened.push(this);
 	}
@@ -28,7 +28,7 @@ class TrackedSave extends MarkdownSave {
 function fakeDisk(text: string) {
 	let version = 1;
 	const disk = { text, revision: `r${version}`, saves: [] as string[], failNext: false };
-	const files: MarkdownFiles = {
+	const files: TextFiles = {
 		async read() { return { text: disk.text, revision: disk.revision, byteLength: Buffer.byteLength(disk.text) }; },
 		async save(_id, next, revision) {
 			if (disk.failNext) { disk.failNext = false; throw new Error("disk full"); }
@@ -39,7 +39,7 @@ function fakeDisk(text: string) {
 			return { status: "saved", snapshot: { text: next, revision: disk.revision, byteLength: Buffer.byteLength(next) } };
 		},
 	};
-	const snapshot = (): MarkdownSnapshot => ({ text: disk.text, revision: disk.revision, byteLength: Buffer.byteLength(disk.text) });
+	const snapshot = (): TextFileSnapshot => ({ text: disk.text, revision: disk.revision, byteLength: Buffer.byteLength(disk.text) });
 	const changeOutside = (next: string) => { disk.text = next; disk.revision = `r${++version}`; };
 	return { disk, files, snapshot, changeOutside };
 }
@@ -62,7 +62,7 @@ test("text edited while a save is running is saved right after it", async () => 
 	let release!: () => void;
 	const gate = new Promise<void>((resolve) => { release = resolve; });
 	const base = fakeDisk("a");
-	const files: MarkdownFiles = {
+	const files: TextFiles = {
 		read: base.files.read,
 		async save(id, text, revision) { if (!base.disk.saves.length) await gate; return base.files.save(id, text, revision); },
 	};

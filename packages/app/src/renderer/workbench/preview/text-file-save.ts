@@ -1,21 +1,21 @@
-import type { MarkdownSaveResult, MarkdownSnapshot } from "../../../shared/markdown-file.ts";
+import type { TextFileSaveResult, TextFileSnapshot } from "../../../shared/text-file.ts";
 import { addPendingSave, removePendingSave, type PendingSave } from "../pending-saves.ts";
 
 /** The two calls to the main process a save needs, so a test can stand in for them. */
-export interface MarkdownFiles {
-	read(assetId: string): Promise<MarkdownSnapshot>;
-	save(assetId: string, text: string, revision: string): Promise<MarkdownSaveResult>;
+export interface TextFiles {
+	read(assetId: string): Promise<TextFileSnapshot>;
+	save(assetId: string, text: string, revision: string): Promise<TextFileSaveResult>;
 }
 
-export const MARKDOWN_SAVE_DELAY = 1000;
+const SAVE_DELAY = 1000;
 
-export type MarkdownSaveState = "saved" | "dirty" | "saving" | "conflict" | "error";
+type SaveState = "saved" | "dirty" | "saving" | "conflict" | "error";
 
 /**
- * The editing session of one Markdown file: the text being edited, the revision it was read at, and
+ * The editing session of one text file: the text being edited, the revision it was read at, and
  * the saves that carry it back to disk. A save never overwrites a file that changed since the read.
  */
-export class MarkdownSave implements PendingSave {
+export class TextFileSave implements PendingSave {
 	readonly assetId: string;
 	/** The text in the editor. */
 	text: string;
@@ -23,16 +23,16 @@ export class MarkdownSave implements PendingSave {
 	revision: string;
 	/** Size of the last adopted or saved snapshot, not an outside change that would discard unsaved edits. */
 	byteLength: number;
-	state: MarkdownSaveState = "saved";
+	state: SaveState = "saved";
 	error: string | null = null;
 	private saved: string;
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private running: Promise<void> | undefined;
 	private readonly listeners = new Set<() => void>();
-	private readonly files: MarkdownFiles;
+	private readonly files: TextFiles;
 	private readonly delay: number;
 
-	constructor(assetId: string, snapshot: MarkdownSnapshot, files: MarkdownFiles, delay = MARKDOWN_SAVE_DELAY) {
+	constructor(assetId: string, snapshot: TextFileSnapshot, files: TextFiles, delay = SAVE_DELAY) {
 		this.assetId = assetId;
 		this.text = this.saved = snapshot.text;
 		this.revision = snapshot.revision;
@@ -90,7 +90,7 @@ export class MarkdownSave implements PendingSave {
 	 * The file on disk changed outside this session. With nothing unsaved the new content replaces the text
 	 * and `true` is returned. With unsaved edits nothing is touched: the next save finds the conflict.
 	 */
-	external(snapshot: MarkdownSnapshot): boolean {
+	external(snapshot: TextFileSnapshot): boolean {
 		if (snapshot.revision === this.revision) return false;
 		if (this.dirty || this.running) return false;
 		this.adopt(snapshot);
@@ -140,7 +140,7 @@ export class MarkdownSave implements PendingSave {
 		}
 	}
 
-	private adopt(snapshot: MarkdownSnapshot): void {
+	private adopt(snapshot: TextFileSnapshot): void {
 		clearTimeout(this.timer);
 		this.text = this.saved = snapshot.text;
 		this.revision = snapshot.revision;
@@ -150,7 +150,7 @@ export class MarkdownSave implements PendingSave {
 		this.setState("saved");
 	}
 
-	private setState(state: MarkdownSaveState): void {
+	private setState(state: SaveState): void {
 		this.state = state;
 		for (const listener of this.listeners) listener();
 	}

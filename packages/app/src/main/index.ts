@@ -57,7 +57,7 @@ import { ToolExecutor } from "@loom/agent/tools";
 import { createAppToolCatalog } from "./tools/catalog.ts";
 import { CanvasStore } from "./canvas/store.ts";
 import { saveCanvasBeforeWindowClose } from "./canvas/window-close.ts";
-import { MarkdownStore } from "./markdown/store.ts";
+import { TextFileStore } from "./storage/text-file.ts";
 import { WebToolsService } from "./web/web-service.ts";
 import {
 	mergeMcpServers,
@@ -100,6 +100,9 @@ import { createChatStorage, electronSecretCipher } from "./models/chat-storage.t
 import { DeviceIdStore } from "./models/device-id-store.ts";
 import { setStorageRecoveryLogger } from "./storage/file.ts";
 import { guardWindow, watchRenderer } from "./desktop/window-guard.ts";
+import { allowHtmlPreview, guardHtmlPreview } from "./desktop/html-preview.ts";
+import { HTML_PREVIEW_SCHEME } from "../shared/html-preview.ts";
+import { TEXT_FILE_EDIT_LIMIT_BYTES } from "../shared/text-file.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
@@ -246,11 +249,13 @@ protocol.registerSchemesAsPrivileged([
 		scheme: ASSET_SCHEME,
 		privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true },
 	},
+	{ scheme: HTML_PREVIEW_SCHEME, privileges: { standard: true, secure: true } },
 ]);
 
 const localCore = new LocalCore();
 const canvasStore = new CanvasStore(localCore);
-const markdownStore = new MarkdownStore(localCore);
+const markdownStore = new TextFileStore(localCore, "Markdown");
+const htmlStore = new TextFileStore(localCore, "HTML");
 const toolCatalog = createAppToolCatalog(localCore, {
 	assets: {
 		embedAsset: embedAssetWithSettings,
@@ -314,6 +319,7 @@ const MIME_TYPES: Record<string, string> = {
 	".flac": "audio/flac",
 	".gif": "image/gif",
 	".heic": "image/heic",
+	".htm": "text/html; charset=utf-8",
 	".html": "text/html; charset=utf-8",
 	".jpeg": "image/jpeg",
 	".jpg": "image/jpeg",
@@ -367,12 +373,16 @@ function registerAssetProtocol(): void {
 			const range = parseByteRange(request.headers.get("range"), info.size);
 			const start = range?.start ?? 0;
 			const end = range?.end ?? Math.max(0, info.size - 1);
+			const contentType = MIME_TYPES[extname(filePath).toLowerCase()] ?? "application/octet-stream";
 			const headers = new Headers({
 				"Accept-Ranges": "bytes",
 				"Access-Control-Allow-Origin": "*",
 				"Content-Length": String(info.size === 0 ? 0 : end - start + 1),
-				"Content-Type": MIME_TYPES[extname(filePath).toLowerCase()] ?? "application/octet-stream",
+				"Content-Type": contentType,
 			});
+			if (contentType.startsWith("text/html")) {
+				headers.set("Content-Security-Policy", "sandbox; default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'");
+			}
 			if (range) headers.set("Content-Range", `bytes ${start}-${end}/${info.size}`);
 			if (request.method === "HEAD" || info.size === 0) {
 				return new Response(null, { status: range ? 206 : 200, headers });
@@ -433,6 +443,7 @@ function createWindow(): void {
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
 			sandbox: false,
+			webviewTag: true,
 		},
 	});
 
@@ -441,8 +452,11 @@ function createWindow(): void {
 			? { devOrigin: process.env.ELECTRON_RENDERER_URL }
 			: { rendererDir: pathToFileURL(join(import.meta.dirname, "../renderer") + sep).href },
 		openExternal: (url) => shell.openExternal(url),
+		allowWebview: allowHtmlPreview((id) => localCore.runLibraryTask(async () =>
+			(await htmlStore.read(id, TEXT_FILE_EDIT_LIMIT_BYTES)).text)),
 		onBlocked: (reason, url) => appLog(`${reason}: ${url.slice(0, 200)}`),
 	});
+	win.webContents.on("did-attach-webview", (_event, contents) => guardHtmlPreview(contents));
 	watchRenderer(win, appLog);
 	saveCanvasBeforeWindowClose(win);
 
@@ -817,6 +831,9 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.readMarkdown, (_event, id: string) => localCore.runLibraryTask(() => markdownStore.read(id)));
 	ipcMain.handle(IPC.saveMarkdown, (_event, id: string, text: unknown, revision: unknown) =>
 		localCore.runLibraryTask(() => markdownStore.save(id, text, revision)));
+	ipcMain.handle(IPC.readHtml, (_event, id: string) => localCore.runLibraryTask(() => htmlStore.read(id)));
+	ipcMain.handle(IPC.saveHtml, (_event, id: string, text: unknown, revision: unknown) =>
+		localCore.runLibraryTask(() => htmlStore.save(id, text, revision)));
 
 	ipcMain.handle(IPC.renameFolder, (_event, relativePath: string, name: string) => {
 		return localCore.renameFolder(relativePath, name);

@@ -1,15 +1,19 @@
 import { createHash } from "node:crypto";
+import { isUtf8 } from "node:buffer";
 import { lstatSync, type BigIntStats } from "node:fs";
 import { lstat, readFile, realpath } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import type { LocalCore } from "@loom/core";
 import { LibraryPaths } from "@loom/core/paths";
 import { isCanvasLibraryPath } from "../../shared/canvas.ts";
-import { isMarkdownFile, MARKDOWN_EDIT_LIMIT_BYTES, type MarkdownSaveResult, type MarkdownSnapshot } from "../../shared/markdown-file.ts";
-import { atomicWrite } from "../storage/file.ts";
-import { SerialQueue } from "../storage/serial-queue.ts";
+import { isMarkdownFile } from "../../shared/markdown-file.ts";
+import { isHtmlFile, TEXT_FILE_EDIT_LIMIT_BYTES, type TextFileSaveResult, type TextFileSnapshot } from "../../shared/text-file.ts";
+import { atomicWrite } from "./file.ts";
+import { SerialQueue } from "./serial-queue.ts";
 
-type MarkdownLibrary = Pick<LocalCore, "getLibraryRoot" | "getAsset">;
+type TextFileLibrary = Pick<LocalCore, "getLibraryRoot" | "getAsset">;
+type TextFileFormat = "Markdown" | "HTML";
+const supports = { Markdown: isMarkdownFile, HTML: isHtmlFile };
 
 /** How a file writes its text, so a save can put back exactly what the editor did not touch. */
 interface Layout {
@@ -19,7 +23,7 @@ interface Layout {
 }
 
 interface Loaded {
-	snapshot: MarkdownSnapshot;
+	snapshot: TextFileSnapshot;
 	layout: Layout;
 	before: BigIntStats;
 }
@@ -27,34 +31,36 @@ interface Loaded {
 const revisionOf = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
 
 /**
- * Reads and saves the `.md` files of the open library for the editor.
+ * Reads and saves one type of editable text file from the open library.
  * Saving follows the canvas store: the caller names the revision it read, and a file that changed since
  * is reported as a conflict instead of being overwritten.
  */
-export class MarkdownStore {
+export class TextFileStore {
 	private readonly writes = new SerialQueue();
-	private readonly library: MarkdownLibrary;
+	private readonly library: TextFileLibrary;
+	private readonly format: TextFileFormat;
 
-	constructor(library: MarkdownLibrary) {
+	constructor(library: TextFileLibrary, format: TextFileFormat) {
 		this.library = library;
+		this.format = format;
 	}
 
-	async read(assetId: string): Promise<MarkdownSnapshot> {
-		return (await this.load(await this.filePath(assetId))).snapshot;
+	async read(assetId: string, maxBytes?: number): Promise<TextFileSnapshot> {
+		return (await this.load(await this.filePath(assetId), maxBytes)).snapshot;
 	}
 
-	async save(assetId: string, text: unknown, expectedRevision: unknown): Promise<MarkdownSaveResult> {
-		if (typeof text !== "string") throw new Error("Invalid Markdown text");
-		if (typeof expectedRevision !== "string" || !/^[\da-f]{64}$/.test(expectedRevision)) throw new Error("Invalid Markdown revision");
+	async save(assetId: string, text: unknown, expectedRevision: unknown): Promise<TextFileSaveResult> {
+		if (typeof text !== "string") throw new Error(`Invalid ${this.format} text`);
+		if (typeof expectedRevision !== "string" || !/^[\da-f]{64}$/.test(expectedRevision)) throw new Error(`Invalid ${this.format} revision`);
 		const root = this.library.getLibraryRoot();
 		return this.writes.run(async () => {
-			if (this.library.getLibraryRoot() !== root) throw new Error("The Markdown library changed");
+			if (this.library.getLibraryRoot() !== root) throw new Error(`The ${this.format} library changed`);
 			const path = await this.filePath(assetId);
 			const current = await this.load(path);
 			if (current.snapshot.revision !== expectedRevision) return { status: "conflict" };
-			if (current.before.size > BigInt(MARKDOWN_EDIT_LIMIT_BYTES)) throw new Error("Markdown file exceeds 10 MiB and is read-only");
+			if (current.before.size > BigInt(TEXT_FILE_EDIT_LIMIT_BYTES)) throw new Error(`${this.format} file exceeds 10 MiB and is read-only`);
 			const contents = encode(text.replace(/\r\n?/g, "\n"), current.layout);
-			if (contents.byteLength > MARKDOWN_EDIT_LIMIT_BYTES) throw new Error("Markdown file exceeds 10 MiB");
+			if (contents.byteLength > TEXT_FILE_EDIT_LIMIT_BYTES) throw new Error(`${this.format} file exceeds 10 MiB`);
 			// Nothing changed: leave the file, and so its modification time, alone.
 			if (revisionOf(contents) === current.snapshot.revision) return { status: "saved", snapshot: current.snapshot };
 			let changed = false;
@@ -65,9 +71,9 @@ export class MarkdownStore {
 					if (!now || now.dev !== current.before.dev || now.ino !== current.before.ino || now.size !== current.before.size
 						|| now.mtimeNs !== current.before.mtimeNs || now.ctimeNs !== current.before.ctimeNs) {
 						changed = true;
-						throw new Error("Markdown changed on disk");
+						throw new Error(`${this.format} changed on disk`);
 					}
-				}, "loom-markdown");
+				}, `loom-${this.format.toLowerCase()}`);
 			} catch (error) {
 				if (changed) return { status: "conflict" };
 				throw error;
@@ -76,10 +82,13 @@ export class MarkdownStore {
 		});
 	}
 
-	private async load(path: string): Promise<Loaded> {
+	private async load(path: string, maxBytes?: number): Promise<Loaded> {
 		const before = await lstat(path, { bigint: true });
-		if (!before.isFile()) throw new Error("Markdown is not a regular file");
+		if (!before.isFile()) throw new Error(`${this.format} is not a regular file`);
+		if (maxBytes !== undefined && before.size > BigInt(maxBytes)) throw new Error(`${this.format} file exceeds the preview size limit`);
 		const bytes = await readFile(path);
+		if (maxBytes !== undefined && bytes.byteLength > maxBytes) throw new Error(`${this.format} file exceeds the preview size limit`);
+		if (this.format === "HTML" && !isUtf8(bytes)) throw new Error("HTML source must be encoded as UTF-8 to edit it");
 		const raw = bytes.toString("utf8");
 		const bom = raw.charCodeAt(0) === 0xfeff;
 		const body = bom ? raw.slice(1) : raw;
@@ -91,11 +100,11 @@ export class MarkdownStore {
 
 	private async filePath(assetId: string): Promise<string> {
 		const asset = typeof assetId === "string" ? await this.library.getAsset(assetId) : undefined;
-		if (!asset || !isCanvasLibraryPath(asset.relativePath) || !isMarkdownFile(asset.relativePath)) throw new Error("Markdown file not found");
+		if (!asset || !isCanvasLibraryPath(asset.relativePath) || !supports[this.format](asset.relativePath)) throw new Error(`${this.format} file not found`);
 		const root = await realpath(this.library.getLibraryRoot());
 		const requested = new LibraryPaths(root).toAbsolutePath(asset.relativePath);
 		const directory = await realpath(dirname(requested));
-		if (directory !== root && !isCanvasLibraryPath(new LibraryPaths(root).toRelativePath(directory))) throw new Error("Markdown path is outside the library");
+		if (directory !== root && !isCanvasLibraryPath(new LibraryPaths(root).toRelativePath(directory))) throw new Error(`${this.format} path is outside the library`);
 		return resolve(directory, asset.relativePath.split("/").at(-1)!);
 	}
 }

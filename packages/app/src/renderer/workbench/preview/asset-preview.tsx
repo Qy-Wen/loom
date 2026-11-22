@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import type { Asset } from "@loom/core";
+import { isHtmlFile } from "../../../shared/text-file.ts";
 import { useLocale } from "../../locale.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isGradeableImage, isGradeableVideo } from "@loom/core/grade";
@@ -10,9 +11,10 @@ import { MediaFullscreenButton, MediaViewport } from "./media-viewport.tsx";
 
 const GradeView = lazy(() => import("./grade-view.tsx").then(({ GradeView }) => ({ default: GradeView })));
 const MarkdownEditor = lazy(() => import("./markdown-editor.tsx").then(({ MarkdownEditor }) => ({ default: MarkdownEditor })));
+const HtmlWorkbench = lazy(() => import("./html-workbench.tsx").then(({ HtmlWorkbench }) => ({ default: HtmlWorkbench })));
 
 const TEXT_EXTENSIONS = new Set([
-	".css", ".csv", ".html", ".ini", ".js", ".json", ".jsx", ".log",
+	".css", ".csv", ".ini", ".js", ".json", ".jsx", ".log",
 	".py", ".sh", ".toml", ".ts", ".tsx", ".txt", ".xml", ".yaml", ".yml",
 ]);
 
@@ -174,6 +176,13 @@ export function AssetPreview({
 			<Suspense fallback={<div className="preview-loading" role="status">{t.preview.loadingText}</div>}>
 				<MarkdownEditor key={asset.assetId} asset={asset} assets={assets} favorite={favorite} onToggleFavorite={onToggleFavorite}
 					onOpenAsset={onOpenAsset} registerMarkdown={registerMarkdown} />
+			</Suspense>
+		);
+	}
+	if (isHtmlFile(asset.filename)) {
+		return (
+			<Suspense fallback={<div className="preview-loading" role="status">{t.common.loading}</div>}>
+				<HtmlWorkbench key={asset.assetId} asset={asset} favorite={favorite} onToggleFavorite={onToggleFavorite} />
 			</Suspense>
 		);
 	}

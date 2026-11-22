@@ -4,10 +4,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { LocalCore } from "@loom/core";
-import { MarkdownStore } from "../src/main/markdown/store.ts";
+import { TextFileStore } from "../src/main/storage/text-file.ts";
 import { markdownAccess, MARKDOWN_EDIT_LIMIT_BYTES, MARKDOWN_LIVE_LIMIT_BYTES } from "../src/shared/markdown-file.ts";
 
-async function withLibrary(files: Record<string, string | Buffer>, run: (context: { root: string; store: MarkdownStore; id: (path: string) => Promise<string> }) => Promise<void>): Promise<void> {
+async function withLibrary(files: Record<string, string | Buffer>, run: (context: { root: string; core: LocalCore; store: TextFileStore; id: (path: string) => Promise<string> }) => Promise<void>, format: "Markdown" | "HTML" = "Markdown"): Promise<void> {
 	const root = await mkdtemp(join(tmpdir(), "loom-markdown-"));
 	const core = new LocalCore();
 	try {
@@ -19,7 +19,8 @@ async function withLibrary(files: Record<string, string | Buffer>, run: (context
 		const assets = (await core.getLibrarySnapshot()).assets;
 		await run({
 			root,
-			store: new MarkdownStore(core),
+			core,
+			store: new TextFileStore(core, format),
 			id: async (path) => assets.find((asset) => asset.relativePath === path)!.assetId,
 		});
 	} finally {
@@ -39,6 +40,18 @@ test("read and save round-trip text and report the new revision", async () => {
 		assert.equal(saved.status === "saved" && saved.snapshot.revision, (await store.read(a)).revision);
 		assert.deepEqual(await readdir(join(root, "笔记")), ["a.md"]);
 	});
+});
+
+test("the HTML store saves UTF-8 HTML and rejects other file types and legacy encodings", async () => {
+	await withLibrary({ "page.HTM": "\uFEFF<h1>Before</h1>\r\n", "note.md": "# Note", "legacy.html": Buffer.from([0xe9]) }, async ({ root, store, id }) => {
+		const page = await id("page.HTM");
+		const { text, revision } = await store.read(page);
+		assert.equal(text, "<h1>Before</h1>\n");
+		assert.equal((await store.save(page, "<h1>After</h1>\n", revision)).status, "saved");
+		assert.equal(await readFile(join(root, "page.HTM"), "utf8"), "\uFEFF<h1>After</h1>\r\n");
+		await assert.rejects(store.read(await id("note.md")), /HTML file not found/);
+		await assert.rejects(store.read(await id("legacy.html")), /UTF-8/);
+	}, "HTML");
 });
 
 test("saving unchanged text leaves the file and its modification time alone", async () => {
@@ -147,17 +160,14 @@ test("a file beyond 10 MiB still reads but cannot be saved, even with smaller re
 	});
 });
 
-test("after another library is opened, a file of the old one cannot be saved", async () => {
-	await withLibrary({ "a.md": "x" }, async ({ root, store, id }) => {
+test("after another library is opened, a file of the old one cannot be saved", async (t) => {
+	const other = await mkdtemp(join(tmpdir(), "loom-markdown-other-"));
+	t.after(() => rm(other, { recursive: true, force: true, maxRetries: 3 }));
+	await withLibrary({ "a.md": "x" }, async ({ root, core, store, id }) => {
 		const a = await id("a.md");
 		const { revision } = await store.read(a);
-		const other = await mkdtemp(join(tmpdir(), "loom-markdown-other-"));
-		try {
-			await (store as unknown as { library: LocalCore }).library.openLibrary(other);
-			await assert.rejects(store.save(a, "y", revision), /not found/);
-			assert.equal(await readFile(join(root, "a.md"), "utf8"), "x");
-		} finally {
-			await rm(other, { recursive: true, force: true, maxRetries: 3 });
-		}
+		await core.openLibrary(other);
+		await assert.rejects(store.save(a, "y", revision), /not found/);
+		assert.equal(await readFile(join(root, "a.md"), "utf8"), "x");
 	});
 });
