@@ -68,7 +68,7 @@ const theme = EditorView.theme({
 	// less the line's padding, so padding on the content would put the highlight that far outside the text.
 	".cm-scroller": { fontFamily: '"Segoe UI", system-ui, sans-serif', lineHeight: "1.65", padding: "28px 32px 64px" },
 	// A wide embed must not set the document's minimum width when the workbench shrinks.
-	".cm-content": { minWidth: 0, maxWidth: "656px", margin: "0 auto", padding: "0", caretColor: "var(--lm-text-primary)" },
+	".cm-content": { minWidth: 0, maxWidth: "700px", margin: "0 auto", padding: "0", caretColor: "var(--lm-text-primary)" },
 	".cm-line": { padding: 0 },
 	"&.cm-markdown-source .cm-scroller": { fontFamily: "var(--lm-font-mono)" },
 	"&.cm-markdown-read .cm-content": { caretColor: "transparent" },
