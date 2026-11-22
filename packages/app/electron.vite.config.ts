@@ -3,12 +3,11 @@ import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
 
 /**
- * `pnpm dev` owns `out/`: its windows load the preload script from there. A build for e2e goes to `out-e2e/`
- * (set by `pnpm build:e2e`) so building while a dev server runs does not replace what the dev window loaded.
+ * `pnpm dev` owns `out/`, where its windows load their preload script. `pnpm build:e2e` defaults to `out-e2e/`
+ * so a test build can run alongside the dev server.
  */
-const OUT = process.env.LOOM_BUILD_OUT?.trim() || "out";
-
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+	const out = process.env.LOOM_BUILD_OUT?.trim() || (mode === "e2e" ? "out-e2e" : "out");
 	const preloadInput: Record<string, string> = {
 		index: resolve(__dirname, "src/preload/index.ts"),
 		"dev-trace": resolve(__dirname, "src/preload/dev-trace.ts"),
@@ -16,7 +15,7 @@ export default defineConfig(() => {
 	return {
 		main: {
 			build: {
-				outDir: resolve(__dirname, OUT, "main"),
+				outDir: resolve(__dirname, out, "main"),
 				// Workspace packages expose TypeScript source: bundle them instead of
 				// externalizing (Node cannot load their .ts entry points). Real npm deps
 				// stay external and are required at runtime. Photon stays bundled because
@@ -29,7 +28,7 @@ export default defineConfig(() => {
 		},
 		preload: {
 			build: {
-				outDir: resolve(__dirname, OUT, "preload"),
+				outDir: resolve(__dirname, out, "preload"),
 				rollupOptions: {
 					input: preloadInput,
 				},
@@ -44,7 +43,7 @@ export default defineConfig(() => {
 				strictPort: true,
 			},
 			build: {
-				outDir: resolve(__dirname, OUT, "renderer"),
+				outDir: resolve(__dirname, out, "renderer"),
 				emptyOutDir: true,
 				rollupOptions: {
 					input: { index: resolve(__dirname, "src/renderer/index.html"), "dev-trace": resolve(__dirname, "src/renderer/dev-trace.html"), ...(process.env.LOOM_E2E_PANELS === "1" ? { "panels-fixture": resolve(__dirname, "src/renderer/panels-fixture.html") } : {}) },

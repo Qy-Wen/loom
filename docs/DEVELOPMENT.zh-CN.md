@@ -43,6 +43,13 @@ pnpm test:e2e:attach
 
 将 `e2e/x.spec.ts` 和「名称」替换为真实用例；`--last-failed` 可重跑失败项。attach 命令通过 9344 端口连接正在运行的 `pnpm dev`。
 
+构建和测试需要并行时，为每组命令指定独立的 `LOOM_BUILD_OUT`。测试报告会保存到同级的 `-results` 目录。
+
+```sh
+node scripts/with-env.mjs LOOM_BUILD_OUT=build/run-a -- pnpm --filter @loom/app build:e2e
+node scripts/with-env.mjs LOOM_BUILD_OUT=build/run-a -- pnpm test:e2e
+```
+
 真实模型/工具及 SQLite 重开冒烟测试为 `pnpm --filter @loom/agent try:durable`。它需要根目录 `.env` 中的 `LOOM_CHAT_API_KEY` 或 `DEEPSEEK_API_KEY`，并会调用配置的模型服务。
 
 ## 构建与发布

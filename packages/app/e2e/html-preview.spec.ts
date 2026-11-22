@@ -2,15 +2,8 @@ import { readFile, writeFile } from "node:fs/promises";
 import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
-import type { Locator } from "playwright";
+import { HTML_PREVIEW_LOAD_TIMEOUT, inPreview } from "./html-preview.ts";
 import { expect, test } from "./loom.ts";
-
-function inPreview(preview: Locator, script: string): Promise<unknown> {
-	return preview.evaluate(async (node, script) => {
-		try { return await (node as Electron.WebviewTag).executeJavaScript(script); }
-		catch { return null; } // The guest may still be attaching.
-	}, script);
-}
 
 test("an HTML file opened from the tree can be previewed, edited and saved", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
@@ -30,7 +23,9 @@ test("an HTML file opened from the tree can be previewed, edited and saved", asy
 	await expect(edit).toHaveAttribute("aria-pressed", "true");
 	await edit.hover();
 	await expect(edit).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
-	await expect.poll(() => inPreview(guest, 'document.querySelector("h1")?.textContent')).toBe("Original report");
+	await expect.poll(() => inPreview(guest, 'document.querySelector("h1")?.textContent'), {
+		timeout: HTML_PREVIEW_LOAD_TIMEOUT,
+	}).toBe("Original report");
 	await expect.poll(() => inPreview(guest, 'getComputedStyle(document.querySelector("h1")).color')).toBe("rgb(20, 60, 100)");
 
 	await favorite.click();
@@ -46,7 +41,9 @@ test("an HTML file opened from the tree can be previewed, edited and saved", asy
 	await source.press("ControlOrMeta+a");
 	await page.keyboard.insertText(updated);
 	await preview.click();
-	await expect.poll(() => inPreview(guest, 'document.querySelector("h1[data-script-ran=yes]")?.textContent')).toBe("Updated report");
+	await expect.poll(() => inPreview(guest, 'document.querySelector("h1[data-script-ran=yes]")?.textContent'), {
+		timeout: HTML_PREVIEW_LOAD_TIMEOUT,
+	}).toBe("Updated report");
 	await expect.poll(() => readFile(file, "utf8")).toBe(updated);
 
 	await edit.click();
@@ -97,7 +94,7 @@ test("HTML opens interactively in the workbench with an isolated offline guest",
 		const guest = page.locator('webview[aria-label="Preview drawing.html"]');
 		await expect(guest).toBeVisible();
 		const output = () => inPreview(guest, 'document.querySelector("output")?.textContent');
-		await expect.poll(output).toBe("Drawing ready");
+		await expect.poll(output, { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toBe("Drawing ready");
 		expect(await electronApp!.evaluate(({ BaseWindow }) => BaseWindow.getAllWindows().length)).toBe(1);
 
 		const src = await guest.getAttribute("src");

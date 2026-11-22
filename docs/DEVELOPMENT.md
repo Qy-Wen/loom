@@ -43,6 +43,13 @@ pnpm test:e2e:attach
 
 Replace `e2e/x.spec.ts` and `name` with a real test. `--last-failed` reruns failures. The attach command connects to a running `pnpm dev` at port 9344.
 
+For overlapping builds and test runs, give each pair its own `LOOM_BUILD_OUT`. The test reports go in the sibling `-results` directory.
+
+```sh
+node scripts/with-env.mjs LOOM_BUILD_OUT=build/run-a -- pnpm --filter @loom/app build:e2e
+node scripts/with-env.mjs LOOM_BUILD_OUT=build/run-a -- pnpm test:e2e
+```
+
 The live model/tool and SQLite reopen smoke test is `pnpm --filter @loom/agent try:durable`. It needs a root `.env` with `LOOM_CHAT_API_KEY` or `DEEPSEEK_API_KEY` and calls the configured model service.
 
 ## Build and publish

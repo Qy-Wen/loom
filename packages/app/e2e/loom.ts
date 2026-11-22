@@ -2,7 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test as base, chromium, expect, type Page } from "@playwright/test";
 import { _electron as electron, type ElectronApplication } from "playwright";
@@ -38,7 +38,7 @@ export const E2E_OUT = process.env.LOOM_BUILD_OUT?.trim() || "out-e2e";
  * stalls the run). So popup() answers at once as if the menu was dismissed.
  */
 export async function launchTestElectron(userData: string): Promise<ElectronApplication> {
-	const entry = join(appRoot, E2E_OUT, "main/index.js");
+	const entry = resolve(appRoot, E2E_OUT, "main/index.js");
 	if (!existsSync(entry)) throw new Error("Build the app first: pnpm --filter @loom/app build:e2e");
 	const app = await electron.launch({
 		executablePath: require("electron") as string,

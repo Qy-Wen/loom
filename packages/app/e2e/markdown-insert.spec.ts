@@ -1,6 +1,7 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { Locator, Page } from "playwright";
+import { HTML_PREVIEW_LOAD_TIMEOUT, inPreview } from "./html-preview.ts";
 import { expect, test } from "./loom.ts";
 
 async function libraryPath(page: Page): Promise<string> {
@@ -316,26 +317,22 @@ test("visible HTML wiki embeds run scripts and keep their guest across Markdown 
 	const preview = editor.locator('webview[aria-label="Report preview"]');
 	const delayed = editor.locator('[data-html-preview-title="Delayed preview"]');
 	const delayedPreview = delayed.locator("webview");
-	const run = (guest: Locator, code: string): Promise<unknown> => guest.evaluate(async (node, code) => {
-		try { return await (node as Electron.WebviewTag).executeJavaScript(code); }
-		catch { return null; } // The guest may still be loading.
-	}, code);
-	const status = (guest: Locator) => run(guest, 'document.querySelector("#status")?.textContent');
-	await expect.poll(() => status(preview)).toBe("Running");
-	expect(await run(preview, 'getComputedStyle(document.querySelector("h1")).color')).toBe("rgb(20, 60, 100)");
-	expect(await run(preview, 'typeof window.require + " " + typeof window.loom')).toBe("undefined undefined");
+	const status = (guest: Locator) => inPreview(guest, 'document.querySelector("#status")?.textContent');
+	await expect.poll(() => status(preview), { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toBe("Running");
+	expect(await inPreview(preview, 'getComputedStyle(document.querySelector("h1")).color')).toBe("rgb(20, 60, 100)");
+	expect(await inPreview(preview, 'typeof window.require + " " + typeof window.loom')).toBe("undefined undefined");
 	await expect(delayed).toBeAttached();
 	await expect(delayedPreview).toHaveCount(0);
 	const height = await delayed.evaluate((node) => node.getBoundingClientRect().height);
 	await expect(editor.locator(".cm-live-table").getByRole("link", { name: "report.html" })).toBeVisible();
-	await run(preview, 'document.querySelector("button").click()');
+	await inPreview(preview, 'document.querySelector("button").click()');
 	await expect.poll(() => status(preview)).toBe("Updated");
 	await page.getByRole("textbox", { name: "Edit commands.md" }).press("ArrowRight");
 	await expect.poll(() => status(preview)).toBe("Updated");
 	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
 	await expect.poll(() => status(preview)).toBe("Updated");
 	await delayed.scrollIntoViewIfNeeded();
-	await expect.poll(() => status(delayedPreview)).toBe("Running");
+	await expect.poll(() => status(delayedPreview), { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toBe("Running");
 	expect(await delayed.evaluate((node) => node.getBoundingClientRect().height)).toBe(height);
 });
 
