@@ -23,8 +23,8 @@ test("blank-area menus create and name Markdown files in the sidebar root and br
 	await blank.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
 	const listEditor = sidebar.locator(".rename-editor input");
 	await expect(listEditor).toBeFocused();
-	await expect(listEditor).toHaveValue("Untitled 2");
-	await listEditor.fill("root note");
+	await expect(listEditor).toHaveValue("Untitled 2.md");
+	await listEditor.fill("root note.md");
 	await listEditor.press("Enter");
 	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("root note.md");
 	expect(await readFile(join(root, "Untitled.md"), "utf8")).toBe("keep the existing note");
@@ -37,8 +37,8 @@ test("blank-area menus create and name Markdown files in the sidebar root and br
 	await browser.locator(".browser-empty").click({ button: "right" });
 	const tileEditor = browser.locator(".browser-tile-rename input");
 	await expect(tileEditor).toBeFocused();
-	await expect(tileEditor).toHaveValue("Untitled");
-	await tileEditor.fill("folder note");
+	await expect(tileEditor).toHaveValue("Untitled.md");
+	await tileEditor.fill("folder note.md");
 	await tileEditor.press("Enter");
 	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/folder note.md");
 	await expect(browser.locator(".browser-crumb.current")).toHaveText("notes");
@@ -160,7 +160,7 @@ test("folder menu leads with New Folder, New Markdown File and New Canvas, and c
 		.toEqual(["New Folder", "New Markdown File", "New Canvas"]);
 	const editor = sidebar.locator(".rename-editor input");
 	await expect(editor).toBeFocused();
-	await editor.fill("inside");
+	await editor.fill("inside.md");
 	await editor.press("Enter");
 	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/inside.md");
 });
@@ -201,7 +201,7 @@ test("file menus create Markdown and canvas files next to the clicked file", asy
 		}, label);
 		await file.click({ button: "right" });
 		await expect(editor).toBeFocused();
-		await editor.fill(stem);
+		await editor.fill(`${stem}.${extension}`);
 		await editor.press("Enter");
 		await expect.poll(paths).toContain(`notes/${stem}.${extension}`);
 		expect(await electronApp!.evaluate(() => (globalThis as { createLabels?: string[] }).createLabels))

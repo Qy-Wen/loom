@@ -30,7 +30,7 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	await blank.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
 	const rename = sidebar.locator(".rename-editor input");
 	await expect(rename).toBeFocused();
-	await rename.fill("分镜");
+	await rename.fill("分镜.canvas");
 	await rename.press("Enter");
 	const tab = page.getByRole("tab", { name: "分镜.canvas", exact: true });
 	await expect(tab).toHaveAttribute("aria-selected", "true");
@@ -125,7 +125,7 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	const fileAfter = (await readBoard(path)).nodes.find((node) => node.type === "file")!;
 	expect(fileAfter.x).toBe(fileBefore.x + 8);
 	expect(fileAfter.height).toBe(Math.ceil(fileAfter.width / imageRatio));
-	await page.evaluate((id) => window.loom.renameAsset(id, "参考改名"), reference.assetId);
+	await page.evaluate((id) => window.loom.renameAsset(id, "参考改名.png"), reference.assetId);
 	await expect(fileCard.getByRole("button", { name: "Open preview 参考改名.png" })).toBeVisible();
 	await unlink(join(root, "参考改名.png"));
 	await expect(fileCard.getByText("Missing asset", { exact: true })).toBeVisible();

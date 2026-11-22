@@ -320,7 +320,7 @@ export interface LoomApi {
 	showMarkdownDropMenu: (nativeFilenames?: readonly string[]) => Promise<MarkdownDropAction | null>;
 	/** Use Chromium's clipboard events, including CodeMirror and table-specific formats. */
 	runEditorClipboard: (action: EditorClipboardAction) => Promise<void>;
-	renameAsset: (assetId: string, stem: string) => Promise<Asset>;
+	renameAsset: (assetId: string, filename: string) => Promise<Asset>;
 	duplicateAsset: (assetId: string) => Promise<Asset>;
 	copyAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;
 	moveAssetsInto: (assetIds: string[], destFolder: string) => Promise<Asset[]>;

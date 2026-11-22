@@ -2,7 +2,7 @@ import { useRef } from "react";
 import type { Asset } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../assets/asset-drag.ts";
 import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
-import { extensionOf, filenameStem } from "../assets/asset-utils.ts";
+import { filenameStem } from "../assets/asset-utils.ts";
 import { useLocale } from "../locale.tsx";
 import { assetKey, coversPath } from "./tree-nav.ts";
 import { clickMode, useScrollWhenFocused, useTree, type TreeContextValue } from "./tree-context.tsx";
@@ -74,7 +74,7 @@ function AssetTreeRow({ asset, depth, quiet, besideFolders }: { asset: Asset; de
 	const { tree, selected, focused, renaming, cut, favorite } = useAssetRow(asset, quiet);
 	const rowRef = useRef<HTMLElement | null>(null);
 	useScrollWhenFocused(rowRef, focused, asset.assetId);
-	const renameInput = useInlineRename(filenameStem(asset.filename), renaming, (stem) => tree.onRenameAsset(asset, stem), tree.onCancelRename);
+	const renameInput = useInlineRename(asset.filename, renaming, (filename) => tree.onRenameAsset(asset, filename), tree.onCancelRename, filenameStem(asset.filename).length);
 
 	if (renaming) {
 		return (
@@ -88,7 +88,6 @@ function AssetTreeRow({ asset, depth, quiet, besideFolders }: { asset: Asset; de
 				<AssetThumbnail asset={asset} />
 				<div className="rename-editor">
 					<input {...renameInput} />
-					<span>{extensionOf(asset.filename)}</span>
 				</div>
 			</div>
 		);

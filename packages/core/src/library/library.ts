@@ -143,18 +143,21 @@ export class Library {
 		return asset ? this.paths.toAbsolutePath(asset.relativePath) : undefined;
 	}
 
-	async renameAsset(assetId: string, requestedStem: string): Promise<Asset> {
+	async renameAsset(assetId: string, requestedName: string, mode: "stem" | "filename" = "stem"): Promise<Asset> {
 		const asset = await this.requireAsset(assetId);
-		const stem = requestedStem.trim();
-		if (!stem || stem === "." || stem === ".." || /[\\/\0]/.test(stem)) {
+		const name = requestedName.trim();
+		if (!name || name === "." || name === ".." || /[\\/\0]/.test(name)) {
 			throw new Error("Enter a valid file name");
 		}
-
-		const extension = extname(asset.filename);
-		const filename = `${stem}${extension}`;
+		const filename = mode === "stem" ? `${name}${extname(asset.filename)}` : name;
 		if (filename === asset.filename) return asset;
-		const parent = parentRelative(asset.relativePath);
-		return this.relocateAsset(asset, joinRelative(parent, filename));
+		if (process.platform === "win32" && /[<>:"|?*\x00-\x1f]|\.$/.test(filename)) {
+			throw new Error("Enter a valid file name");
+		}
+		const relativePath = joinRelative(parentRelative(asset.relativePath), filename);
+		const paths = this.requirePaths();
+		if (paths.isIgnoredPath(paths.toAbsolutePath(relativePath))) throw new Error("That name is reserved");
+		return this.relocateAsset(asset, relativePath);
 	}
 
 	async duplicateAsset(assetId: string): Promise<Asset> {
@@ -867,7 +870,7 @@ export class Library {
 
 		// Reserve the new path before fs.rename so watcher add/unlink events keep
 		// the same asset id rather than briefly creating a second identity.
-		const reserved: Asset = { ...asset, filename, relativePath, fileSystemId: oldInfo.fileSystemId };
+		const reserved: Asset = { ...asset, filename, relativePath, type: assetTypeFromPath(relativePath), fileSystemId: oldInfo.fileSystemId };
 		await this.handlers.upsertAsset(reserved);
 		try {
 			await rename(oldPath, newPath);

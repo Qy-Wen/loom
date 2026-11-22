@@ -34,7 +34,7 @@ export interface FolderBrowserProps {
 	onAssetContextMenu: (asset: Asset) => void;
 	onFolderContextMenu: (relativePath: string) => void;
 	onLibraryContextMenu: () => void;
-	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
+	onRenameAsset: (asset: Asset, filename: string) => Promise<void>;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;

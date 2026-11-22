@@ -17,8 +17,8 @@ export function extensionOf(filename: string): string {
 }
 
 export function filenameStem(filename: string): string {
-	const extension = extensionOf(filename);
-	return extension ? filename.slice(0, -extension.length) : filename;
+	const dot = filename.lastIndexOf(".");
+	return dot > 0 ? filename.slice(0, dot) : filename;
 }
 
 type AssetVersion = { assetId: string; modifiedAt?: number; size?: number };

@@ -256,8 +256,8 @@ export class LocalCore {
 		return this.thumbnails.get(assetId, signal, variant);
 	}
 
-	renameAsset(assetId: string, stem: string): Promise<Asset> {
-		return this.library.renameAsset(assetId, stem);
+	renameAsset(assetId: string, name: string, mode?: "stem" | "filename"): Promise<Asset> {
+		return this.library.renameAsset(assetId, name, mode);
 	}
 
 	duplicateAsset(assetId: string): Promise<Asset> {

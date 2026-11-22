@@ -39,7 +39,7 @@ export interface TreeContextValue {
 	onSelectAsset: (assetId: string, mode: PointerMode) => void;
 	onOpenAssetInTab: (assetId: string) => void;
 	onAssetContextMenu: (asset: Asset) => void;
-	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
+	onRenameAsset: (asset: Asset, filename: string) => Promise<void>;
 	onCancelRename: () => void;
 	onDropIntoFolder: (destFolder: string, item: LibraryDrag) => void;
 	onDropFiles: (destFolder: string, files: File[]) => void;

@@ -5,7 +5,7 @@ const pendingSaves = new Map<string, CanvasSave>();
 const SAVE_DELAY = 240;
 
 export class CanvasSave {
-	readonly id: string;
+	readonly assetId: string;
 	revision: string;
 	pending: CanvasDocument | null = null;
 	error: string | null = null;
@@ -14,8 +14,8 @@ export class CanvasSave {
 	private saving: Promise<void> | undefined;
 	private listeners = new Set<() => void>();
 
-	constructor(id: string, revision: string) {
-		this.id = id;
+	constructor(assetId: string, revision: string) {
+		this.assetId = assetId;
 		this.revision = revision;
 	}
 
@@ -27,7 +27,7 @@ export class CanvasSave {
 	enqueue(document: CanvasDocument): void {
 		this.pending = document;
 		addPendingSave(this);
-		pendingSaves.set(this.id, this);
+		pendingSaves.set(this.assetId, this);
 		if (this.error) return;
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => { void this.flush().catch(() => undefined); }, SAVE_DELAY);
@@ -65,7 +65,7 @@ export class CanvasSave {
 	private async writePending(): Promise<void> {
 		while (this.pending) {
 			const document = this.pending;
-			const saved = await window.loom.saveCanvas(this.id, document, this.revision);
+			const saved = await window.loom.saveCanvas(this.assetId, document, this.revision);
 			if (!saved) {
 				this.conflict = true;
 				throw new Error("Canvas changed on disk");
@@ -80,7 +80,7 @@ export class CanvasSave {
 	}
 
 	private clearPending(): void {
-		if (pendingSaves.get(this.id) === this && pendingSaves.delete(this.id)) removePendingSave(this);
+		if (pendingSaves.get(this.assetId) === this && pendingSaves.delete(this.assetId)) removePendingSave(this);
 	}
 }
 

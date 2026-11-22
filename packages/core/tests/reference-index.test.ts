@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -137,6 +137,38 @@ async function edges(core: LocalCore, snapshot: LibrarySnapshot): Promise<Edge[]
 		.map((item) => ({ from: pathOf.get(item.fromAssetId) ?? "?", to: pathOf.get(item.toAssetId) ?? "?", source: item.source, type: item.type }))
 		.sort((a, b) => `${a.from}>${a.to}:${a.source}`.localeCompare(`${b.from}>${b.to}:${b.source}`));
 }
+
+it("renames a full filename, updating its type and references while keeping its ID", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-rename-extension-"));
+	const core = new LocalCore({ graphStore: new InMemoryGraphStore() });
+	try {
+		const text = "[[target.png]]";
+		await writeFile(join(root, "note.txt"), text);
+		await writeFile(join(root, "target.png"), "image fixture");
+		const initial = await core.openLibrary(root);
+		const source = initial.assets.find((asset) => asset.filename === "note.txt")!;
+		await core.setFavorite(source.assetId, true);
+
+		await assert.rejects(core.renameAsset(source.assetId, "target.png", "filename"), /already exists/);
+		const markdown = await core.renameAsset(source.assetId, "note.md", "filename");
+		assert.equal(markdown.assetId, source.assetId);
+		assert.deepEqual(await edges(core, await core.getLibrarySnapshot()), [
+			{ from: "note.md", to: "target.png", source: "markdown", type: "reference" },
+		]);
+
+		const extensionless = await core.renameAsset(source.assetId, "note", "filename");
+		assert.equal(extensionless.assetId, source.assetId);
+		assert.equal(extensionless.filename, "note");
+		assert.equal(extensionless.type, "other");
+		assert.deepEqual(await core.getAsset(source.assetId), extensionless);
+		assert.deepEqual(await core.listGraphRelations(), []);
+		assert.deepEqual((await core.getLibrarySnapshot()).favoriteAssetIds, [source.assetId]);
+		assert.equal(await readFile(join(root, "note"), "utf8"), text);
+	} finally {
+		await core.close();
+		await rm(root, { recursive: true, force: true });
+	}
+});
 
 for (const kind of ["memory", "ladybug"] as const) {
 	describe(`LocalCore references (${kind} graph)`, () => {

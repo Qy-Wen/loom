@@ -10,6 +10,7 @@ export function useInlineRename(
 	renaming: boolean,
 	onCommit: (value: string) => void | Promise<void>,
 	onCancel: () => void,
+	selectionEnd = initial.length,
 ): React.InputHTMLAttributes<HTMLInputElement> {
 	const [value, setValue] = useState(initial);
 	const cancelled = useRef(false);
@@ -24,7 +25,7 @@ export function useInlineRename(
 		autoFocus: true,
 		value,
 		onChange: (event) => setValue(event.target.value),
-		onFocus: (event) => event.currentTarget.select(),
+		onFocus: (event) => event.currentTarget.setSelectionRange(0, selectionEnd),
 		onKeyDown: (event) => {
 			if (isImeComposing(event.nativeEvent)) return;
 			if (event.key === "Enter") event.currentTarget.blur();

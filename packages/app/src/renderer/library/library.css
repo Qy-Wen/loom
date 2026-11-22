@@ -569,12 +569,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	font-size: var(--lm-text-size-sm);
 }
 
-.rename-editor span {
-	padding-left: var(--lm-space-1);
-	color: var(--lm-text-secondary);
-	font-size: var(--lm-text-size-sm);
-}
-
 .asset-thumbnail {
 	position: relative;
 	display: inline-flex;

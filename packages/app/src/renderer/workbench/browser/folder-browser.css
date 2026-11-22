@@ -420,12 +420,6 @@ button.browser-crumb:hover {
 	text-align: center;
 }
 
-.browser-tile-rename span {
-	flex: 0 0 auto;
-	color: var(--lm-text-secondary);
-	font-size: var(--lm-text-size-sm);
-}
-
 .browser-box {
 	position: absolute;
 	z-index: var(--lm-z-base);

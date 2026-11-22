@@ -1,5 +1,6 @@
 /** Something with edits not yet on disk. The window waits for these before it closes or a backup starts. */
 export interface PendingSave {
+	readonly assetId: string;
 	flush(): Promise<void>;
 }
 
@@ -15,7 +16,8 @@ export function removePendingSave(save: PendingSave): void {
 	if (pending.delete(save) && !pending.size) window.loom.setCanvasDirty(false);
 }
 
-/** Write every edit not yet saved. Rejects when one of them cannot be written. */
-export async function flushPendingSaves(): Promise<void> {
-	await Promise.all([...pending].map((save) => save.flush()));
+/** Write pending edits, optionally for one asset. Rejects when a save fails. */
+export async function flushPendingSaves(assetId?: string): Promise<void> {
+	const saves = [...pending].filter((save) => assetId === undefined || save.assetId === assetId);
+	await Promise.all(saves.map((save) => save.flush()));
 }

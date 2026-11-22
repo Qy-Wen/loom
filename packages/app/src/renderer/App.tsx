@@ -1283,14 +1283,17 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function renameAsset(asset: Asset, stem: string): Promise<void> {
+	async function renameAsset(asset: Asset, filename: string): Promise<void> {
+		const sameLibrary = detailRequests.current.libraryGuard();
 		setError(null);
 		try {
-			await window.loom.renameAsset(asset.assetId, stem);
+			if (filename === asset.filename) return;
+			await flushPendingSaves(asset.assetId);
+			if (sameLibrary()) await window.loom.renameAsset(asset.assetId, filename);
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		} finally {
-			setRenamingAssetId(null);
+			if (sameLibrary()) setRenamingAssetId((current) => current === asset.assetId ? null : current);
 		}
 	}
 

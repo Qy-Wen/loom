@@ -800,8 +800,8 @@ function registerIpc(): void {
 		]);
 	});
 
-	ipcMain.handle(IPC.renameAsset, (_event, assetId: string, stem: string) => {
-		return localCore.renameAsset(assetId, stem);
+	ipcMain.handle(IPC.renameAsset, (_event, assetId: string, filename: string) => {
+		return localCore.runLibraryTask(() => localCore.renameAsset(assetId, filename, "filename"));
 	});
 
 	ipcMain.handle(IPC.duplicateAsset, (_event, assetId: string) => {

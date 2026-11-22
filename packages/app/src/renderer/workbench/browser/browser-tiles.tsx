@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import type { Asset, Tag } from "@loom/core";
 import { endLibraryDrag, writeLibraryDrag, type LibraryDrag } from "../../assets/asset-drag.ts";
 import { BrowserAssetThumbnail } from "./browser-asset-thumbnail.tsx";
-import { extensionOf, filenameStem } from "../../assets/asset-utils.ts";
+import { filenameStem } from "../../assets/asset-utils.ts";
 import { BrowserFolderThumbnail } from "./browser-folder-thumbnail.tsx";
 import type { BrowserFolderPreview } from "./browser-folder-preview.ts";
 import { FavoriteMark } from "../../library/asset-rows.tsx";
@@ -26,7 +26,7 @@ export interface TileContext extends FolderDropSurface {
 	onOpenFolder: (relativePath: string) => void;
 	onAssetContextMenu: (asset: Asset) => void;
 	onFolderContextMenu: (relativePath: string) => void;
-	onRenameAsset: (asset: Asset, stem: string) => Promise<void>;
+	onRenameAsset: (asset: Asset, filename: string) => Promise<void>;
 	onRenameFolder: (relativePath: string, name: string) => Promise<void>;
 	onCancelRename: () => void;
 }
@@ -48,7 +48,7 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 	}, [renaming]);
 	const cut = context.cutAssetIds.includes(asset.assetId) || context.cutFolders.some((folder) => asset.relativePath.startsWith(`${folder}/`));
 	const hint = searching ? pathHint(asset.relativePath, base) : null;
-	const rename = useInlineRename(filenameStem(asset.filename), renaming, (stem) => context.onRenameAsset(asset, stem), context.onCancelRename);
+	const rename = useInlineRename(asset.filename, renaming, (filename) => context.onRenameAsset(asset, filename), context.onCancelRename, filenameStem(asset.filename).length);
 	const className = `browser-tile${selected ? " selected" : ""}${cut ? " cut" : ""}`;
 	const thumb = (
 		<span className="browser-tile-thumb">
@@ -62,7 +62,6 @@ export function AssetTile({ asset, context, base, searching }: { asset: Asset; c
 				{thumb}
 				<span className="browser-tile-rename">
 					<input {...rename} />
-					<span>{extensionOf(asset.filename)}</span>
 				</span>
 			</div>
 		);

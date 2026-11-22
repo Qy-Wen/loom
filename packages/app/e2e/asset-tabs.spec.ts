@@ -96,7 +96,7 @@ test("canvas and Markdown previews can be pinned and unpinned from the tab menu"
 	const bounds = (await list.boundingBox())!;
 	await list.click({ button: "right", position: { x: bounds.width / 2, y: bounds.height - 10 } });
 	const rename = list.locator(".rename-editor input");
-	await rename.fill("New board");
+	await rename.fill("New board.canvas");
 	await rename.press("Enter");
 	await expect(names).toHaveText(["New board.canvas"]);
 	await expect(selected).toHaveAccessibleDescription(/Preview tab/);

@@ -53,6 +53,15 @@ export class ReferenceIndex {
 		const changed = new Set(
 			situations.flatMap((situation) => (situation.type === "added" || situation.type === "updated" ? [situation.asset.assetId] : [])),
 		);
+		for (const situation of situations) {
+			if (situation.type !== "moved") continue;
+			const previousKind = referenceSourceKind(situation.previousPath);
+			if (!previousKind || previousKind === referenceSourceKind(situation.asset.relativePath)) continue;
+			const { assetId } = situation.asset;
+			await this.graph.replaceReferences(assetId, previousKind, []);
+			this.raw.delete(assetId);
+			this.written.delete(assetId);
+		}
 		for (const assetId of this.raw.keys()) {
 			if (lookup.byId(assetId)) continue;
 			this.raw.delete(assetId);

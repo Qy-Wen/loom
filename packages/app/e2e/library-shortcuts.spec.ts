@@ -25,35 +25,38 @@ async function prepare(page: Page, mode: "List" | "Icons") {
 }
 
 for (const mode of ["List", "Icons"] as const) {
-	test(`file rename shortcuts preserve extensions and input composition in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
+	test(`file rename shortcuts edit extensions and preserve input composition in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
 		test.skip(!electronApp, "isolated library required");
 		const { root, sidebar } = await prepare(page, mode);
 		const browser = page.locator(".folder-browser");
 		const area = mode === "List" ? sidebar : browser;
 		const row = (filename: string) => area.locator(mode === "List" ? ".asset-row" : ".browser-tile").filter({ has: page.locator(mode === "List" ? ".asset-name" : ".browser-tile-name", { hasText: new RegExp(`^${filename.replaceAll(".", "\\.")}$`) }) });
 		const filename = mode === "List" ? "outside.md" : "note.md";
+		const assets = async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets;
+		const assetId = (await assets()).find((asset) => asset.filename === filename)!.assetId;
 		await row(filename).click();
 		// Return also works when the selected button, rather than its container, has focus.
 		await row(filename).focus();
 		await page.keyboard.press(process.platform === "darwin" ? "Enter" : "F2");
 		const editor = area.locator(mode === "List" ? ".rename-editor input" : ".browser-tile-rename input");
 		await expect(editor).toBeFocused();
-		await expect(editor).toHaveValue(filename.slice(0, -3));
+		await expect(editor).toHaveValue(filename);
+		expect(await editor.evaluate((input: HTMLInputElement) => [input.selectionStart, input.selectionEnd])).toEqual([0, filename.length - 3]);
 		await editor.dispatchEvent("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
 		await expect(editor).toBeFocused();
-		await editor.fill("新名字");
+		await editor.fill("新名字.txt");
 		await editor.press("Enter");
 		await expect(editor).toHaveCount(0);
-		const relativePath = mode === "List" ? "新名字.md" : "source/新名字.md";
-		await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.map((asset) => asset.relativePath)).toContain(relativePath);
+		const relativePath = mode === "List" ? "新名字.txt" : "source/新名字.txt";
+		await expect.poll(async () => (await assets()).find((asset) => asset.assetId === assetId)?.relativePath).toBe(relativePath);
 		expect(await readFile(join(root, relativePath), "utf8")).toBe(mode === "List" ? "outside note" : "source note");
-		await row("新名字.md").click();
-		await row("新名字.md").press("F2");
+		await row("新名字.txt").click();
+		await row("新名字.txt").press("F2");
 		await expect(editor).toBeFocused();
 		await editor.fill("cancelled");
 		await editor.press("Escape");
 		await expect(editor).toHaveCount(0);
-		await expect(row("新名字.md")).toBeVisible();
+		await expect(row("新名字.txt")).toBeVisible();
 		if (mode === "List") await sidebar.focus();
 		else await browser.locator(".browser-scroll").focus();
 		await page.keyboard.press("ControlOrMeta+a");
