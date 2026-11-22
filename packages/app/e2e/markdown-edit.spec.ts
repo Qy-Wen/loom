@@ -605,6 +605,50 @@ test("a selected blank line uses the full paragraph width below a padded code bl
 	await expect.poll(blankEdges).toEqual([{ left: 0, right: 0 }]);
 });
 
+test("a rendered list item fills its wrapped selection rows below a padded code block", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const first = "- **上下文是重建的**：`readContext()` 从 entry 日志按 head marker 划窗，应用 `edits`、过滤 stop reason、排 tool result 顺序、把 system 消息提前。调度器 `#contexts` 缓存 range，只扫新 entry。";
+	await writeFile(join((await library())!, "list-selection.md"), "```ts\nconst header = 1;\n```\n\n" + first + "\n- 下一个列表项。\n");
+	const content = loomPage.locator(".cm-content");
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "list-selection.md" }).click();
+	await content.evaluate((element) => { element.style.maxWidth = "420px"; });
+	await expect(content.locator(".cm-line").first()).toHaveClass(/cm-live-codeblock/);
+	const item = content.locator(".cm-line").filter({ hasText: "readContext()" });
+	const start = (await item.locator(".cm-live-strong").boundingBox())!;
+	const end = (await content.locator(".cm-line").filter({ hasText: "下一个列表项。" }).boundingBox())!;
+	const wrappedRowEdges = () => item.evaluate((line) => {
+		const { left, right } = line.getBoundingClientRect();
+		const walker = document.createTreeWalker(line, NodeFilter.SHOW_TEXT);
+		const range = document.createRange();
+		const rows: number[] = [];
+		for (let text = walker.nextNode(); text; text = walker.nextNode()) {
+			range.selectNodeContents(text);
+			for (const { top, bottom, width } of range.getClientRects()) {
+				const center = (top + bottom) / 2;
+				if (width > 1 && !rows.some((row) => Math.abs(row - center) < 10)) rows.push(center);
+			}
+		}
+		rows.sort((a, b) => a - b);
+		const wrappedRow = rows[1]!;
+		return [...line.closest(".cm-editor")!.querySelectorAll(".cm-selectionBackground, .cm-markdown-inline-selection-fill")]
+			.filter((marker) => getComputedStyle(marker).visibility !== "hidden")
+			.map((marker) => marker.getBoundingClientRect())
+			.filter((rect) => rect.top < wrappedRow && rect.bottom > wrappedRow)
+			.map((rect) => ({ left: rect.left - left, right: right - rect.right }));
+	});
+	await loomPage.mouse.move(start.x + 2, start.y + start.height / 2);
+	await loomPage.mouse.down();
+	await loomPage.mouse.move(end.x + 120, end.y + end.height / 2, { steps: 4 });
+	await expect.poll(() => loomPage.evaluate(() => getSelection()?.toString())).toContain("上下文是重建的");
+	await expect(item.locator(".cm-live-bullet")).toBeVisible();
+	await expect.poll(wrappedRowEdges).toEqual([{ left: 0, right: 0 }]);
+	await loomPage.mouse.up();
+	await expect(item.locator(".cm-live-bullet")).toHaveCount(0);
+	await expect.poll(wrappedRowEdges).toEqual([{ left: 0, right: 0 }]);
+});
+
 test("dragging left from Chinese text after inline code keeps the starting character selected", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(60_000);

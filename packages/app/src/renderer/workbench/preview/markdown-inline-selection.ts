@@ -35,8 +35,9 @@ function textRects(view: EditorView, line: Element, selection: SelectionRange): 
 function selectionOnLine(view: EditorView, line: Element, selection: SelectionRange, origin: Origin): LineSelection | null {
 	const from = view.posAtDOM(line, 0);
 	const to = view.posAtDOM(line, line.childNodes.length);
-	// The native layer also paints the generated content of widgets.
-	if (selection.to <= from || selection.from >= to || line.querySelector('[contenteditable="false"]')) return null;
+	if (selection.to <= from || selection.from >= to) return null;
+	// A list bullet replaces one source character with one glyph. Leave other widgets to the native layer.
+	if (line.querySelector('[contenteditable="false"]:not(.cm-live-bullet)')) return null;
 
 	const { all, selected } = textRects(view, line, selection);
 	if (!selected.length) return null;
