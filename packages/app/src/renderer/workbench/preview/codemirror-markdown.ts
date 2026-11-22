@@ -7,7 +7,7 @@ import { Annotation, Compartment, EditorState, type Extension } from "@codemirro
 import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
-import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveImages, liveLibrary, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
 import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
@@ -134,7 +134,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const rendering = new Compartment();
 	const access = new Compartment();
 	const accessible = new Compartment();
-	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
+	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks];
 	const chooseEmbedAction = (readOnly: boolean, removeEmbed = false) => host.chooseTextAction({
 		embed: true,
 		removeEmbed,
@@ -297,12 +297,14 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		},
 		setMode(next) {
 			if (next === mode) return;
+			// A widget above the viewport can change height when its source is shown or hidden.
+			const scroll = view.scrollSnapshot();
 			closeCompletion(view);
 			const hadCellFocus = leaveCell(view);
 			const effects = [access.reconfigure(modeAccess(next))];
 			if ((next === "source") !== (mode === "source")) effects.push(rendering.reconfigure(next === "source" ? [] : rendered));
 			mode = next;
-			view.dispatch({ effects });
+			view.dispatch({ effects: [...effects, scroll] });
 			if (hadCellFocus && mode !== "read") view.focus();
 			if (mode !== "source") view.dispatch({ effects: setFocused.of(view.hasFocus) });
 		},

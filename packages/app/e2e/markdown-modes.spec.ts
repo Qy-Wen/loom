@@ -83,6 +83,154 @@ test("Markdown opens in edit mode and switches modes in one view without losing 
 	await expect.poll(() => readFile(file, "utf8")).not.toContain("new text!");
 });
 
+test("Markdown mode switching keeps the text at the top of the viewport", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const formula = `$$\n${"x +\n".repeat(24)}y\n$$`;
+	await writeFile(join((await rootPath())!, "scroll.md"), `# Before formula\n\n${formula}\n\nAfter formula\n\n` + "Paragraph\n\n".repeat(80));
+	await selectFile(loomPage, "scroll.md");
+	const editor = loomPage.locator(".cm-editor");
+	const scroller = editor.locator(".cm-scroller");
+	const readingMode = loomPage.getByRole("button", { name: "Reading mode", exact: true });
+	const editMode = loomPage.getByRole("button", { name: "Edit mode", exact: true });
+	const math = editor.locator(".cm-live-math-block");
+	await math.click();
+	await expect(math).toHaveCount(0);
+	await scroller.evaluate((element) => { element.scrollTop = 650; });
+	const marker = editor.locator(".cm-line").filter({ hasText: "After formula" });
+	await marker.evaluate((line) => {
+		const scroll = line.closest(".cm-scroller")!;
+		scroll.scrollTop += line.getBoundingClientRect().top - scroll.getBoundingClientRect().top - 35;
+	});
+	const markerOffset = () => scroller.evaluate((element) => {
+		const line = [...element.querySelectorAll(".cm-line")].find((block) => block.textContent === "After formula");
+		return line ? Math.round(line.getBoundingClientRect().top - element.getBoundingClientRect().top) : null;
+	});
+	await expect.poll(markerOffset).toBe(35);
+	const distanceFromOriginal = async () => Math.abs((await markerOffset() ?? Infinity) - 35);
+	await readingMode.click();
+	await expect(editor).toHaveClass(/cm-markdown-read/);
+	await expect.poll(distanceFromOriginal).toBeLessThan(4);
+	await expect(math).toHaveCount(1);
+	await editMode.click();
+	await expect(editor).toHaveClass(/cm-markdown-edit/);
+	await expect(math).toHaveCount(0);
+	await expect.poll(distanceFromOriginal).toBeLessThan(4);
+});
+
+test("Markdown keeps its scroll height when a table enters the viewport and when modes switch", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const table = "| A | B |\n| --- | --- |\n" + "| Cell | Value |\n".repeat(20);
+	await writeFile(join((await rootPath())!, "table-scroll.md"), "Paragraph\n\n".repeat(100) + table);
+	await selectFile(loomPage, "table-scroll.md");
+	const editor = loomPage.locator(".cm-editor");
+	const scroller = editor.locator(".cm-scroller");
+	const renderedTable = editor.locator(".cm-live-table");
+	const measure = () => scroller.evaluate(async (element) => {
+		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return { top: element.scrollTop, height: element.scrollHeight };
+	});
+	await scroller.evaluate((element) => { element.scrollTop = 900; });
+	await expect.poll(async () => (await measure()).top).toBeGreaterThan(700);
+	await expect(renderedTable).toHaveCount(0);
+	const initialHeight = (await measure()).height;
+	await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+	await expect(renderedTable).toBeInViewport();
+	await scroller.evaluate((element) => { element.scrollTop = 900; });
+	await expect(renderedTable).toHaveCount(0);
+	const before = await measure();
+	expect(Math.abs(before.height - initialHeight)).toBeLessThan(24);
+	const scrollChange = async () => {
+		const after = await measure();
+		return Math.max(Math.abs(after.top - before.top), Math.abs(after.height - before.height));
+	};
+	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect(editor).toHaveClass(/cm-markdown-read/);
+	await expect.poll(scrollChange).toBeLessThan(3);
+	await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
+	await expect(editor).toHaveClass(/cm-markdown-edit/);
+	await expect.poll(scrollChange).toBeLessThan(3);
+});
+
+test("scrolling through Markdown code blocks preserves the document height estimate", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(root).toBeTruthy();
+	const paragraphs = "正文内容用于测试滚动位置。\n\n".repeat(100);
+	const code = "```\n" + "echo ok\n".repeat(70) + "```\n\n";
+	await writeFile(join((await root())!, "code-scroll.md"), paragraphs + code + paragraphs);
+	await selectFile(loomPage, "code-scroll.md");
+	const editor = loomPage.locator(".cm-editor");
+	const scroller = editor.locator(".cm-scroller");
+	const height = () => scroller.evaluate(async (element) => {
+		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return element.scrollHeight;
+	});
+	const before = await height();
+	await scroller.evaluate((element) => { element.scrollTop = 6000; });
+	await expect(editor.locator(".cm-live-codeblock").filter({ hasText: "echo ok" }).first()).toBeVisible();
+	expect(Math.abs((await height()) - before)).toBeLessThan(320);
+});
+
+test("Markdown reserves room for local images before they enter the viewport", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(root).toBeTruthy();
+	const path = (await root())!;
+	for (const [name, width, height] of [["portrait", 320, 640], ["landscape", 800, 360]] as const) {
+		await writeFile(join(path, `${name}.svg`), `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><rect width="100%" height="100%" fill="blue"/></svg>`);
+	}
+	const pictures = "![Portrait](portrait.svg)\n\n![Landscape](landscape.svg)\n\n";
+	await writeFile(join(path, "image-scroll.md"), "Paragraph\n\n".repeat(100) + pictures);
+	await selectFile(loomPage, "image-scroll.md");
+	const editor = loomPage.locator(".cm-editor");
+	const scroller = editor.locator(".cm-scroller");
+	const photos = editor.locator("img.cm-live-image");
+	const measure = () => scroller.evaluate(async (element) => {
+		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return element.scrollHeight;
+	});
+	await scroller.evaluate((element) => { element.scrollTop = 900; });
+	await expect(photos).toHaveCount(0);
+	const before = await measure();
+	await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+	await expect.poll(() => photos.evaluateAll((images) => images.map((element) => (element as HTMLImageElement).naturalWidth))).toEqual([320, 800]);
+	expect(Math.abs((await measure()) - before)).toBeLessThan(60);
+	await scroller.evaluate((element) => { element.scrollTop = 900; });
+	await expect(photos).toHaveCount(0);
+	expect(Math.abs((await measure()) - before)).toBeLessThan(60);
+});
+
+test("rendering a diagram during Markdown scrolling keeps the window width stable", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(root).toBeTruthy();
+	const diagram = "```mermaid\nflowchart TD\n" + Array.from({ length: 18 }, (_, i) => `N${i} --> N${i + 1}`).join("\n") + "\n```";
+	await writeFile(join((await root())!, "diagram-scroll.md"), "Paragraph\n\n".repeat(100) + diagram);
+	await selectFile(loomPage, "diagram-scroll.md");
+	const editor = loomPage.locator(".cm-editor");
+	const scroller = editor.locator(".cm-scroller");
+	await expect(editor.locator(".cm-live-mermaid")).toHaveCount(0);
+	const trace = await loomPage.evaluateHandle(() => {
+		const width = document.documentElement.clientWidth;
+		let minWidth = width;
+		const sample = () => { minWidth = Math.min(minWidth, document.documentElement.clientWidth); };
+		const resize = new ResizeObserver(sample);
+		const additions = new MutationObserver(sample);
+		resize.observe(document.documentElement);
+		additions.observe(document.body, { childList: true });
+		return { finish() { resize.disconnect(); additions.disconnect(); return { width, minWidth }; } };
+	});
+	await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+	await expect(editor.locator(".cm-live-mermaid svg")).toBeInViewport({ timeout: 20000 });
+	const { width, minWidth } = await trace.evaluate((observer) => observer.finish());
+	await trace.dispose();
+	expect(minWidth).toBe(width);
+});
+
 test("reading hides the caret after text clicks but keeps selection, copy and search usable", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await mkdtemp(join(tmpdir(), "loom-md-reading-caret-"));

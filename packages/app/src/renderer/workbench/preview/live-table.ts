@@ -49,6 +49,10 @@ const shown = new WeakMap<HTMLElement, Shown>();
 const heights = new Map<string, number>();
 const MAX_HEIGHTS = 100;
 
+// Before a table is drawn, allow for one text line plus padding and borders per row.
+const ESTIMATED_ROW_HEIGHT = 38;
+const TABLE_PADDING_AND_BORDER = 37;
+
 /** A cell to put the caret in once the table around it has been rebuilt (a row or a column was added). */
 let pendingFocus: { from: number; row: number; column: number } | null = null;
 
@@ -57,11 +61,13 @@ export class TableWidget extends WidgetType {
 	readonly context: TableContext | null;
 	readonly height: number | undefined;
 	readonly readOnly: boolean;
+	private readonly rowCount: number;
 	private readonly hooks: (view: EditorView) => TableHooks | null;
 	private readonly redraw: StateEffectType<null>;
-	constructor(text: string, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>, readOnly = false) {
+	constructor(text: string, rowCount: number, context: TableContext | null, hooks: (view: EditorView) => TableHooks | null, redraw: StateEffectType<null>, readOnly = false) {
 		super();
 		this.text = text;
+		this.rowCount = rowCount;
 		this.context = context;
 		this.height = heights.get(text);
 		this.hooks = hooks;
@@ -70,6 +76,10 @@ export class TableWidget extends WidgetType {
 	}
 	eq(other: TableWidget): boolean {
 		return other.text === this.text && other.context === this.context && other.height === this.height && other.readOnly === this.readOnly;
+	}
+
+	get estimatedHeight(): number {
+		return this.height ?? (TABLE_PADDING_AND_BORDER + this.rowCount * ESTIMATED_ROW_HEIGHT);
 	}
 
 	toDOM(view: EditorView): HTMLElement {

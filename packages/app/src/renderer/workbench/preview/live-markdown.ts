@@ -16,6 +16,7 @@ import { editorHeading } from "./editor-heading.ts";
 import { isPassthroughHref } from "./markdown.ts";
 import { FILE_EXTENSION_CLASS, FILE_LINK_CLASS, fileExtensionLabel, renderAssetEmbed } from "./embed-renderers.ts";
 import { editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
+import { imageLayout, ImageWidget, LIVE_IMAGE_MAX_HEIGHT, liveImageSizing } from "./live-image.ts";
 
 /**
  * Live rendering: Markdown shown in its final look while it is edited. The text itself never changes; only
@@ -30,6 +31,9 @@ import { editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
  */
 const hiddenLead = Decoration.mark({ class: "cm-live-hidden", lead: true });
 const hiddenTrail = Decoration.mark({ class: "cm-live-hidden", lead: false });
+
+// CodeMirror samples unmarked text to estimate the height of lines outside the viewport.
+const styledBlockText = Decoration.mark({ class: "cm-live-block-text" });
 
 /** Where the open file is and what the library holds, so a reference can be checked against real files. */
 export interface LiveLibrary {
@@ -72,33 +76,6 @@ export const liveHandlers = (handlers: LiveHandlers) => handlersFacet.of(handler
 const tableHooksFacet = Facet.define<TableHooks, TableHooks | null>({ combine: (values) => values[0] ?? null });
 /** What the tables drawn in the editor need from the editor's owner: saving, opening a link, and their labels. */
 export const liveTables = (hooks: TableHooks) => tableHooksFacet.of(hooks);
-
-/** An embedded image shown in place of `![[picture.png]]` or `![alt](picture.png)`. */
-class ImageWidget extends WidgetType {
-	readonly src: string;
-	readonly alt: string;
-	constructor(src: string, alt: string) {
-		super();
-		this.src = src;
-		this.alt = alt;
-	}
-	eq(other: ImageWidget): boolean {
-		return other.src === this.src && other.alt === this.alt;
-	}
-	toDOM(view: EditorView): HTMLElement {
-		const image = document.createElement("img");
-		image.className = "cm-live-image";
-		image.src = this.src;
-		image.alt = this.alt;
-		image.draggable = false;
-		enterOnClick(image, view);
-		remeasureOnResize(image, view);
-		return image;
-	}
-	destroy(dom: HTMLElement): void {
-		stopRemeasuring(dom);
-	}
-}
 
 /** A bullet in place of the `-`, `*` or `+` that starts a list item. */
 class BulletWidget extends WidgetType {
@@ -481,6 +458,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				for (let at = node.from; at <= node.to; ) {
 					const text = state.doc.lineAt(at);
 					found.push(Decoration.line({ class: "cm-live-codeblock" }).range(text.from));
+					if (text.length) found.push(styledBlockText.range(text.from, text.to));
 					at = text.to + 1;
 				}
 				return false;
@@ -491,6 +469,7 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 					const text = state.doc.lineAt(at);
 					const info = editorHeading(state, node)!;
 					found.push(Decoration.line({ class: heading, attributes: { role: "heading", "aria-level": String(info.level), "data-heading": info.key } }).range(text.from));
+					if (text.length) found.push(styledBlockText.range(text.from, text.to));
 					at = text.to + 1;
 				}
 				// The `#` marks and the one space after them.
@@ -549,7 +528,6 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 		if (!onLine(start)) for (const mark of quote.marks) found.push(hiddenLead.range(mark.from, mark.to));
 	}
 	wikiLinks(state, from, to, found);
-	markdownImages(state, from, to, found);
 	inlineMath(state, from, to, found);
 	const builder = new RangeSetBuilder<Decoration>();
 	found.sort((a, b) => a.from - b.from || a.value.startSide - b.value.startSide || a.to - b.to);
@@ -577,6 +555,7 @@ function fencedCode(state: EditorState, node: SyntaxNodeRef, found: Range<Decora
 		if (number === last) classes.push("cm-live-codeblock-last");
 		if (fence && !reveal) classes.push("cm-live-fence");
 		found.push(Decoration.line({ class: classes.join(" ") }).range(text.from));
+		if (text.length) found.push(styledBlockText.range(text.from, text.to));
 		if (fence && !reveal) {
 			const start = Math.max(text.from, number === first ? node.from : marks[marks.length - 1].from);
 			if (start < text.to) found.push((number === first ? hiddenLead : hiddenTrail).range(start, text.to));
@@ -647,10 +626,11 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				}
 			} else if (node.name === "Table" && node.node.parent?.name === "Document") {
 				const text = state.doc.sliceString(node.from, node.to);
+				const table = parseTable(text);
 				// A table that reads as one is always drawn. A caret in it, or a selection over it, changes nothing.
-				if (parseTable(text)) {
+				if (table) {
 					const context = state.field(libraryField, false) ?? null;
-					const widget = new TableWidget(text, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks, state.readOnly);
+					const widget = new TableWidget(text, table.rows.length, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks, state.readOnly);
 					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
 				}
 			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
@@ -771,12 +751,14 @@ function stepIntoBlock(direction: "up" | "down") {
 		let nearest: { from: number; to: number; table: boolean } | null = null;
 		const from = Math.min(start, landing);
 		const to = Math.max(start, landing);
-		view.state.field(blockDecorations).between(from, to, (blockFrom, blockTo, decoration) => {
-			// Only a block the move passes over; one that holds the start or the landing is already being edited.
-			if (blockFrom < from || blockTo > to) return;
-			const closer = !nearest || (direction === "down" ? blockFrom < nearest.from : blockTo > nearest.to);
-			if (closer) nearest = { from: blockFrom, to: blockTo, table: decoration.spec.widget instanceof TableWidget };
-		});
+		for (const field of [blockDecorations, imageDecorations]) {
+			view.state.field(field, false)?.between(from, to, (blockFrom, blockTo, decoration) => {
+				// Only a block the move passes over; one that holds the start or the landing is already being edited.
+				if (!decoration.spec.block || blockFrom < from || blockTo > to) return;
+				const closer = !nearest || (direction === "down" ? blockFrom < nearest.from : blockTo > nearest.to);
+				if (closer) nearest = { from: blockFrom, to: blockTo, table: decoration.spec.widget instanceof TableWidget };
+			});
+		}
 		const block = nearest as { from: number; to: number; table: boolean } | null;
 		if (!block) return false;
 		if (block.table && enterTable(view, block.from, direction === "up" ? "last" : "first")) return true;
@@ -939,12 +921,11 @@ function linkAttributes(state: EditorState, href: string): Record<string, string
 }
 
 /** `![alt](picture.png)` with a library path shows the picture; an address that is not in the library is flagged. */
-function markdownImages(state: EditorState, from: number, to: number, found: Range<Decoration>[]): void {
+export function markdownImageDecorations(state: EditorState): DecorationSet {
 	const context = state.field(libraryField, false);
-	if (!context) return;
+	if (!context) return Decoration.none;
+	const found: Range<Decoration>[] = [];
 	syntaxTree(state).iterate({
-		from,
-		to,
 		enter(node) {
 			if (node.name !== "Image") return;
 			const url = node.node.getChild("URL");
@@ -953,15 +934,37 @@ function markdownImages(state: EditorState, from: number, to: number, found: Ran
 			const asset = resolveLinkTarget(context.fromRelativePath, written, context.lookup);
 			const remote = asset === null && /^https?:/i.test(written);
 			if (asset === null && !remote) return;
-			if ((asset || remote) && !touched(state, node.from, node.to)) {
+			const line = state.doc.lineAt(node.from);
+			const block = node.to <= line.to && node.node.parent?.parent?.name === "Document"
+				&& !state.doc.sliceString(line.from, node.from).trim() && !state.doc.sliceString(node.to, line.to).trim();
+			const from = block ? line.from : node.from;
+			const to = block ? line.to : node.to;
+			if ((asset || remote) && !touched(state, from, to)) {
 				const alt = state.doc.sliceString(node.from + 2, state.doc.sliceString(node.from, node.to).indexOf("](") + node.from);
-				found.push(Decoration.replace({ widget: new ImageWidget(asset ? assetPreviewUrl(asset) : written, alt) }).range(node.from, node.to));
+				const widget = new ImageWidget(asset ? assetPreviewUrl(asset) : written, alt, block, state);
+				found.push(Decoration.replace({ widget, block }).range(from, to));
 			} else if (!asset && !remote) {
 				found.push(Decoration.mark({ class: "cm-live-broken" }).range(node.from, node.to));
 			}
 		},
 	});
+	return Decoration.set(found, true);
 }
+
+const imageDecorations = StateField.define<DecorationSet>({
+	create: markdownImageDecorations,
+	update(decorations, { startState, state, docChanged, selection }) {
+		if (docChanged || selection || syntaxTree(startState) !== syntaxTree(state) || startState.readOnly !== state.readOnly
+			|| startState.field(imageLayout) !== state.field(imageLayout) || startState.field(libraryField, false) !== state.field(libraryField, false)
+			|| startState.field(pressState, false) !== state.field(pressState, false) || startState.field(focusState, false) !== state.field(focusState, false)) {
+			return markdownImageDecorations(state);
+		}
+		return decorations;
+	},
+	provide: (field) => EditorView.decorations.from(field),
+});
+
+export const liveImages = liveImageSizing(imageDecorations);
 
 /** Decorations for the part of the document in view, rebuilt when the text, the cursor or the parse changes. */
 export const liveMarkdown = ViewPlugin.fromClass(class {
@@ -1008,7 +1011,7 @@ export const liveMarkdownTheme = EditorView.theme({
 	".cm-live-broken": { whiteSpace: "nowrap", color: "var(--lm-text-danger)", textDecoration: "underline wavy", textUnderlineOffset: "3px" },
 	[referencesInContent.join(", ")]: { cursor: "pointer" },
 	[referencesInContent.map((selector) => `${selector}:hover`).join(", ")]: { textDecorationThickness: "2px" },
-	".cm-live-image": { maxWidth: "100%", maxHeight: "360px", width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
+	".cm-live-image": { maxWidth: "100%", maxHeight: `${LIVE_IMAGE_MAX_HEIGHT}px`, width: "auto", height: "auto", borderRadius: "var(--lm-radius-sm)", verticalAlign: "middle" },
 	".cm-live-codeblock": {
 		position: "relative",
 		fontFamily: "var(--lm-font-mono)",

@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
-import { EditorSelection, EditorState } from "@codemirror/state";
+import { EditorSelection, EditorState, RangeSet } from "@codemirror/state";
 import type { Asset } from "@loom/core";
-import { liveBlockDecorations, liveBlocks, liveDecorations, liveDrag, setFocused, snapToSymbols, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
+import { liveBlockDecorations, liveBlocks, liveDecorations, liveDrag, markdownImageDecorations, setFocused, snapToSymbols, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
 
 const asset = (assetId: string, relativePath: string): Asset => ({
 	assetId, relativePath, filename: relativePath.split("/").pop()!, type: relativePath.endsWith(".png") ? "image" : "text",
@@ -44,7 +44,8 @@ function decorate(text: string, cursor = text.length, anchor = cursor, library =
 	const lines: string[] = [];
 	const widgets: string[] = [];
 	const targets: string[] = [];
-	liveDecorations(state).between(0, state.doc.length, (from, to, value) => {
+	for (const cursor = RangeSet.iter([liveDecorations(state), markdownImageDecorations(state)]); cursor.value; cursor.next()) {
+		const { from, to, value } = cursor;
 		const spec = value.spec as { class?: string; widget?: { src?: string; assetId?: string }; attributes?: Record<string, string> };
 		const name = spec.class ?? spec.attributes?.class ?? "";
 		if (spec.widget) {
@@ -57,7 +58,7 @@ function decorate(text: string, cursor = text.length, anchor = cursor, library =
 			classes.push(`${name}:${text.slice(from, to)}`);
 			if (spec.attributes) targets.push(`${text.slice(from, to)}->${spec.attributes["data-asset-id"] ?? "none"}${spec.attributes["data-anchor"] ? `#${spec.attributes["data-anchor"]}` : ""}`);
 		}
-	});
+	}
 	return { hidden, classes, lines, widgets, targets };
 }
 
@@ -143,7 +144,7 @@ test("code blocks and escaped text are not treated as Markdown", () => {
 	const { hidden, classes } = decorate(text, text.length);
 	// Only the fence lines collapse; nothing inside the block or the escapes is read as Markdown.
 	assert.deepEqual(hidden, ["```", "```"]);
-	assert.deepEqual(classes, []);
+	assert.deepEqual(classes, ["cm-live-block-text:```", "cm-live-block-text:**no** `x` # no", "cm-live-block-text:```"]);
 });
 
 test("decorating never changes the text", () => {

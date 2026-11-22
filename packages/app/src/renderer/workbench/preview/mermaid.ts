@@ -25,6 +25,19 @@ function nextMermaidNode(root: ParentNode): HTMLElement | undefined {
 	);
 }
 
+async function renderDiagram(mermaid: Mermaid, node: HTMLElement, id: string, source: string): Promise<string> {
+	const { ownerDocument } = node;
+	const host = ownerDocument.createElement("div");
+	// Mermaid needs to measure the SVG before returning it. Keep that layout out of the window's scroll area.
+	Object.assign(host.style, { position: "fixed", inset: "0", overflow: "clip", visibility: "hidden" });
+	ownerDocument.body.append(host);
+	try {
+		return (await mermaid.render(id, source, host)).svg;
+	} finally {
+		host.remove();
+	}
+}
+
 async function hydrateOnce(root: ParentNode): Promise<boolean> {
 	let mermaid: Mermaid;
 	try {
@@ -42,7 +55,7 @@ async function hydrateOnce(root: ParentNode): Promise<boolean> {
 		const id = `loom-mermaid-${index}-${Math.random().toString(36).slice(2, 9)}`;
 		index += 1;
 		try {
-			const { svg } = await mermaid.render(id, source);
+			const svg = await renderDiagram(mermaid, node, id, source);
 			if (!node.isConnected) return rendered;
 			node.setAttribute("data-processed", "true");
 			node.innerHTML = svg;
