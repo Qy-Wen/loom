@@ -1030,22 +1030,20 @@
 	margin-bottom: var(--lm-space-2);
 }
 
-/* Streamdown draws github-light and github-dark at once and hides one with Tailwind `dark:` utilities this app
-   does not ship. Prose then paints every pre a dark slate, so the light-theme copy is nearly invisible. Keep the
-   theme that matches the app, on a surface those token colors can sit on. */
-.agent-content .copilotKitAssistantMessage [data-code-block].hidden {
+/* Replies and reasoning both use Streamdown, which renders both syntax themes. Show the one that matches Loom. */
+.agent-content [data-code-block].hidden {
 	display: none;
 }
 
-.dark .agent-content .copilotKitAssistantMessage [data-code-block].dark\:hidden {
+.dark .agent-content [data-code-block].dark\:hidden {
 	display: none;
 }
 
-.dark .agent-content .copilotKitAssistantMessage [data-code-block].dark\:block {
+.dark .agent-content [data-code-block].dark\:block {
 	display: block;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-container] {
+.agent-content [data-code-block-container] {
 	position: relative;
 	display: flex;
 	flex-direction: column;
@@ -1053,16 +1051,16 @@
 	margin: var(--lm-space-6) 0 0;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-header] {
+.agent-content [data-code-block-header] {
 	display: contents;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-container] > div:last-child {
+.agent-content [data-code-block-container] > div:last-child {
 	width: 100%;
 	min-width: 0;
 }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="code-block"] {
+.agent-content [data-streamdown="code-block"] {
 	margin: 0;
 	border: 1px solid var(--lm-border-subtle);
 	border-radius: var(--lm-radius-md);
@@ -1070,9 +1068,10 @@
 	overflow: hidden;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-container] pre {
+.agent-content [data-code-block-container] pre {
 	margin: 0;
 	padding: var(--lm-space-6);
+	overflow-x: auto;
 	border-radius: 0;
 	background: transparent;
 	color: var(--lm-text-primary);
@@ -1082,7 +1081,7 @@
 }
 
 /* The language name sits in the top corner of the block. Copy and download sit below it, with the table actions. */
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > span:not(:empty) {
+.agent-content [data-code-block-header] > span:not(:empty) {
 	position: absolute;
 	z-index: var(--lm-z-raised);
 	top: var(--lm-space-4);
@@ -1095,11 +1094,11 @@
 	pointer-events: none;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-container]:has([data-code-block-header] > span:not(:empty)) pre {
+.agent-content [data-code-block-container]:has([data-code-block-header] > span:not(:empty)) pre {
 	padding-top: calc(var(--lm-space-4) + var(--lm-text-size-xs) + var(--lm-space-6));
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div {
+.agent-content [data-code-block-header] > div {
 	display: flex;
 	justify-content: flex-start;
 	gap: var(--lm-space-2);
@@ -1109,11 +1108,11 @@
 }
 
 /* Streamdown renders download, then copy. Copy stays on the left, as it does under a table. */
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div > button:first-child {
+.agent-content [data-code-block-header] > div > button:first-child {
 	order: 1;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div > button {
+.agent-content [data-code-block-header] > div > button {
 	display: inline-flex;
 	align-items: center;
 	justify-content: center;
@@ -1129,13 +1128,13 @@
 	transition: background-color var(--lm-dur-fast) ease, color var(--lm-dur-fast) ease;
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div > button:hover,
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div > button:focus-visible {
+.agent-content [data-code-block-header] > div > button:hover,
+.agent-content [data-code-block-header] > div > button:focus-visible {
 	background: var(--lm-vendor-copy-hover);
 	color: var(--lm-text-secondary);
 }
 
-.agent-content .copilotKitAssistantMessage [data-code-block-header] > div > button svg {
+.agent-content [data-code-block-header] > div > button svg {
 	width: var(--message-action-icon-size);
 	height: var(--message-action-icon-size);
 }

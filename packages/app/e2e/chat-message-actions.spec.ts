@@ -3,7 +3,8 @@ import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 const REPLY = "Here is a table:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nDone.";
-const CODE_REPLY = "Here is code:\n\n```ts\nconst answer = 42;\n```\n\nDone.";
+const CODE_FENCE = `\`\`\`ts\nconst answer = 42;\nconst longLine = "${"a".repeat(160)}";\n\`\`\``;
+const CODE_REPLY = `Here is code:\n\n${CODE_FENCE}\n\nDone.`;
 /** The text above the copy button leaves a small gap, not the typography's 20px bottom margin. */
 const MAX_GAP_ABOVE_COPY = 8;
 
@@ -100,14 +101,20 @@ test("a reply's table actions sit under the table and match the message copy but
 	}
 });
 
-test("a reply's code block is readable and its actions sit under the block", async ({ loomPage }) => {
+test("reply and reasoning code blocks share readable styling and actions below the code", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+	await loomPage.emulateMedia({ colorScheme: "light" });
 	const server = createServer((request, response) => {
 		request.resume();
 		request.on("end", () => {
 			response.writeHead(200, { "content-type": "text/event-stream" });
 			const chunk = (delta: object, finish: string | null, usage?: object) => `data: ${JSON.stringify({ id: "t", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason: finish }], ...(usage ? { usage } : {}) })}\n\n`;
-			response.end(chunk({ content: CODE_REPLY }, null) + chunk({}, "stop", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 }) + "data: [DONE]\n\n");
+			response.end(
+				chunk({ reasoning_content: `Considering this code:\n\n${CODE_FENCE}` }, null)
+				+ chunk({ content: CODE_REPLY }, null)
+				+ chunk({}, "stop", { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 })
+				+ "data: [DONE]\n\n",
+			);
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -118,29 +125,48 @@ test("a reply's code block is readable and its actions sit under the block", asy
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByText("Done.", { exact: true })).toBeVisible({ timeout: 20_000 });
 
-		// Both themes are in the DOM. Only the one that matches the app is shown.
-		await expect(loomPage.locator("[data-code-block]")).toHaveCount(2);
-		const block = loomPage.locator("[data-code-block]:visible");
-		await expect(block).toHaveCount(1);
-		await expect(block.getByText("const answer = 42;")).toBeVisible();
-		await expect(block).toHaveCSS("background-color", "rgb(240, 240, 237)");
-		await expect(block.getByText("const", { exact: true })).toHaveCSS("color", "rgb(215, 58, 73)");
+		const reasoningToggle = loomPage.getByRole("button", { name: /^Thought for / });
+		await expect(reasoningToggle).toHaveAttribute("aria-expanded", "false");
+		await reasoningToggle.click();
+		const messages = [loomPage.getByTestId("copilot-assistant-message"), reasoningToggle.locator("..")];
+		for (const message of messages) {
+			// Both themes are in the DOM. Only the one that matches the app is shown.
+			await expect(message.locator("[data-code-block]")).toHaveCount(2);
+			const block = message.locator("[data-code-block]:visible");
+			await expect(block).toHaveCount(1);
+			await expect(block.locator(".line").first()).toHaveText("const answer = 42;");
+			await expect(block).toHaveCSS("background-color", "rgb(240, 240, 237)");
+			await expect(block.getByText("const", { exact: true }).first()).toHaveCSS("color", "rgb(215, 58, 73)");
+			const source = block.locator("pre");
+			await expect(source).toHaveCSS("overflow-x", "auto");
+			expect(await source.evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
 
-		const lang = loomPage.locator("[data-code-block-header] > span");
-		const copy = loomPage.locator("[data-code-block-header] > div > button").nth(1);
-		const download = loomPage.locator('button[data-tooltip="Download file"]');
-		await expect(lang).toHaveText("ts");
-		await expect(download).toBeVisible();
-		const [blockBox, langBox, lineBox, copyBox, downloadBox] = [block, lang, block.locator(".line").first(), copy, download].map((locator) => locator.boundingBox());
-		const [code, label, line, copyButton, downloadButton] = [(await blockBox)!, (await langBox)!, (await lineBox)!, (await copyBox)!, (await downloadBox)!];
+			const lang = message.locator("[data-code-block-header] > span");
+			const copy = message.locator("[data-code-block-header] > div > button").nth(1);
+			const download = message.locator('button[data-tooltip="Download file"]');
+			await expect(lang).toHaveText("ts");
+			await expect(download).toBeVisible();
+			const [code, label, line, copyButton, downloadButton] = await Promise.all(
+				[block, lang, block.locator(".line").first(), copy, download].map(async (locator) => (await locator.boundingBox())!),
+			);
 
-		expect([copyButton.width, copyButton.height]).toEqual([26, 26]);
-		expect([downloadButton.width, downloadButton.height]).toEqual([26, 26]);
-		expect(label.y).toBeGreaterThanOrEqual(code.y);
-		expect(label.y + label.height).toBeLessThanOrEqual(line.y + 1);
-		expect(copyButton.y).toBeGreaterThanOrEqual(code.y + code.height);
-		expect(Math.abs(copyButton.x - code.x)).toBeLessThan(1);
-		expect(downloadButton.x).toBeGreaterThan(copyButton.x + copyButton.width - 1);
+			expect([copyButton.width, copyButton.height]).toEqual([26, 26]);
+			expect([downloadButton.width, downloadButton.height]).toEqual([26, 26]);
+			expect(label.y).toBeGreaterThanOrEqual(code.y);
+			expect(label.y + label.height).toBeLessThanOrEqual(line.y + 1);
+			expect(copyButton.y).toBeGreaterThanOrEqual(code.y + code.height);
+			expect(Math.abs(copyButton.x - code.x)).toBeLessThan(1);
+			expect(downloadButton.x).toBeGreaterThan(copyButton.x + copyButton.width - 1);
+		}
+
+		await loomPage.emulateMedia({ colorScheme: "dark" });
+		await expect(loomPage.locator("html")).toHaveAttribute("data-theme", "dark");
+		for (const message of messages) {
+			const block = message.locator("[data-code-block]:visible");
+			await expect(block).toHaveCount(1);
+			await expect(block).toHaveClass(/\bdark:block\b/);
+			await expect(block).toHaveCSS("background-color", "rgb(18, 18, 17)");
+		}
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
