@@ -29,6 +29,8 @@ export interface RunFfprobeArgs {
 export interface GradeImageArgs {
 	path: string;
 	output?: string;
+	/** Render to a temporary file and replace the source once encoding succeeds. */
+	overwriteOriginal?: boolean;
 	/** When `output` is omitted, write beside the source as `name_grade.ext` instead of `outputs/`. */
 	beside?: boolean;
 	grade: unknown;
@@ -45,6 +47,7 @@ export interface GradeImageResult {
 export interface GradeVideoArgs {
 	path: string;
 	output?: string;
+	overwriteOriginal?: boolean;
 	/** When `output` is omitted, write beside the source as `name_grade.mp4` instead of `outputs/`. */
 	beside?: boolean;
 	grade: unknown;

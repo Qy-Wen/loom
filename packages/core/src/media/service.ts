@@ -1,5 +1,7 @@
-import { access, mkdir } from "node:fs/promises";
-import { basename, dirname, join } from "node:path";
+import { randomUUID } from "node:crypto";
+import { access, chmod, lstat, mkdir, open, realpath, rename, rm, stat } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, relative, sep } from "node:path";
+import { retryWindowsFileOperation } from "../fs-retry.ts";
 import {
 	buildGradeImageArgs,
 	buildGradeVideoArgs,
@@ -12,6 +14,7 @@ import {
 	normalizeImageGrade,
 	type ImageGrade,
 } from "../grade/index.ts";
+import { buildGradeImageReplacementArgs, buildGradeVideoReplacementArgs } from "../grade/filters.ts";
 import type { Library } from "../library/library.ts";
 import type {
 	GradeImageArgs,
@@ -32,6 +35,7 @@ export class MediaService {
 	private readonly library: Library;
 	private readonly run: typeof runMediaProcess;
 	private readonly previews = new GradePreview();
+	private readonly replacingGrades = new Set<string>();
 
 	constructor(library: Library, run: typeof runMediaProcess = runMediaProcess) {
 		this.library = library;
@@ -60,6 +64,9 @@ export class MediaService {
 	): Promise<{ input: string; output: string }> {
 		const prepared = this.prepareGrade(args);
 		if (!prepared.filter) throw new TypeError("Grade does not change the image");
+		if (args.overwriteOriginal) {
+			return this.replaceGrade(prepared.input.absolutePath, prepared.filter, buildGradeImageReplacementArgs, signal);
+		}
 		const cwd = this.cwd();
 		const destination = args.output
 			? resolveMediaPath(args.output, cwd)
@@ -82,6 +89,9 @@ export class MediaService {
 	): Promise<{ input: string; output: string }> {
 		const prepared = this.prepareVideoGrade(args);
 		if (!prepared.filter) throw new TypeError("Grade does not change the video");
+		if (args.overwriteOriginal) {
+			return this.replaceGrade(prepared.input.absolutePath, prepared.filter, buildGradeVideoReplacementArgs, signal, 2 * 60 * 60_000);
+		}
 		const cwd = this.cwd();
 		const info = await this.getMediaInfo(prepared.input.path, signal);
 		const destination = args.output
@@ -98,6 +108,53 @@ export class MediaService {
 			timeoutMs: 2 * 60 * 60_000,
 		});
 		return { input: prepared.input.path, output: destination.path };
+	}
+
+	private async replaceGrade(
+		input: string,
+		filter: string,
+		buildArgs: (input: string, output: string, filter: string, format?: string) => string[],
+		signal?: AbortSignal,
+		timeoutMs?: number,
+	): Promise<{ input: string; output: string }> {
+		const paths = this.library.getPaths();
+		const path = paths.toRelativePath(input);
+		const original = await lstat(input, { bigint: true });
+		if (!original.isFile() || paths.isIgnoredPath(input)) throw new Error("Grade source must be a library file");
+		const [root, source] = await Promise.all([realpath(paths.root), realpath(input)]);
+		const sourcePath = relative(root, source);
+		if (isAbsolute(sourcePath) || sourcePath === ".." || sourcePath.startsWith(`..${sep}`)
+			|| paths.isIgnoredPath(join(paths.root, sourcePath))) {
+			throw new Error("Grade source must be a library file");
+		}
+		if (this.replacingGrades.has(source)) throw new Error("A save is already in progress for this file");
+		this.replacingGrades.add(source);
+
+		const output = join(dirname(source), `.loom-grade.${randomUUID()}.tmp${extname(source)}`);
+		let staged = false;
+		try {
+			const handle = await open(output, "wx", 0o600);
+			staged = true;
+			await handle.close();
+			const info = await this.getMediaInfo(source, signal);
+			await this.run({ program: "ffmpeg", args: buildArgs(source, output, filter, info.format), cwd: paths.root, signal, timeoutMs });
+			if ((await stat(output)).size === 0) throw new Error("Grade produced an empty file");
+			await chmod(output, Number(original.mode & 0o777n));
+			await retryWindowsFileOperation(async () => {
+				const current = await lstat(input, { bigint: true });
+				if (current.dev !== original.dev || current.ino !== original.ino || current.size !== original.size
+					|| current.mtimeNs !== original.mtimeNs || current.ctimeNs !== original.ctimeNs) {
+					throw new Error("The source file changed during saving. Try again.");
+				}
+				signal?.throwIfAborted();
+				await rename(output, source);
+			});
+			staged = false;
+			return { input: path, output: path };
+		} finally {
+			this.replacingGrades.delete(source);
+			if (staged) await retryWindowsFileOperation(() => rm(output, { force: true })).catch(() => undefined);
+		}
 	}
 
 	async previewVideoGrade(args: PreviewVideoGradeArgs, signal?: AbortSignal, force = false): Promise<Buffer | null> {

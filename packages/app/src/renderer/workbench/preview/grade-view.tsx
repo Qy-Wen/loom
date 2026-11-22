@@ -180,6 +180,7 @@ export function GradeView({
 	}, []);
 
 	function edit(next: ImageGrade): void {
+		if (saving) return;
 		dirtyRef.current = true;
 		setDirty(true);
 		setGrade(normalizeImageGrade(next));
@@ -218,7 +219,19 @@ export function GradeView({
 				: await window.loom.saveImageGrade(sourceId, grade, lut, output);
 			dirtyRef.current = false;
 			setDirty(false);
-			onGraded?.(result.assetId);
+			if (mode === "save") {
+				setGrade(IDENTITY_IMAGE_GRADE);
+				setLut(undefined);
+				setCropping(false);
+				setComparing(false);
+				triedFallback.current = false;
+				setFallbackUrl((current) => {
+					if (current) URL.revokeObjectURL(current);
+					return null;
+				});
+			} else {
+				onGraded?.(result.assetId);
+			}
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : t.grade.saveFailed);
 		} finally {
@@ -336,7 +349,7 @@ export function GradeView({
 				<div className="grade-lut">
 					<span>{t.grade.lut}</span>
 					<strong data-tooltip={lut}>{lutName}</strong>
-					<button type="button" className="open-button" onClick={() => {
+					<button type="button" className="open-button" disabled={saving !== null} onClick={() => {
 						void window.loom.pickGradeLut().then((picked) => {
 							if (!picked) return;
 							dirtyRef.current = true;
@@ -350,7 +363,7 @@ export function GradeView({
 						{t.grade.importLut}
 					</button>
 					{lut && (
-						<button type="button" className="open-button" onClick={() => {
+						<button type="button" className="open-button" disabled={saving !== null} onClick={() => {
 							dirtyRef.current = true;
 							setDirty(true);
 							setLut(undefined);
@@ -371,7 +384,7 @@ export function GradeView({
 					>
 						{t.grade.before}
 					</button>
-					<button type="button" className="open-button" onClick={() => {
+					<button type="button" className="open-button" disabled={saving !== null} onClick={() => {
 						setLut(undefined);
 						edit(IDENTITY_IMAGE_GRADE);
 					}}

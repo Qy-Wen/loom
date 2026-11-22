@@ -1151,23 +1151,8 @@ function registerIpc(): void {
 			throw error;
 		}
 	});
-	ipcMain.handle(IPC.saveImageGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
-		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		const source = await localCore.getAsset(assetId);
-		if (!source) throw new Error("Asset not found");
-		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, false) : undefined;
-		const result = await localCore.gradeImage({
-			path: source.relativePath,
-			grade,
-			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
-			output: chosen,
-			beside: !chosen,
-		});
-		if (result.sourceAssetId && result.sourceAssetId !== result.assetId) {
-			await localCore.createRelation(result.assetId, result.sourceAssetId, "derived from");
-		}
-		return { assetId: result.assetId, path: result.output };
-	});
+	ipcMain.handle(IPC.saveImageGrade, (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) =>
+		saveAssetGrade(assetId, grade, lut, output, false));
 	ipcMain.handle(IPC.getVideoGradeInfo, async (_event, assetId: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
 		return localCore.getVideoGradeInfo(assetId);
@@ -1192,23 +1177,8 @@ function registerIpc(): void {
 			throw error;
 		}
 	});
-	ipcMain.handle(IPC.saveVideoGrade, async (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) => {
-		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
-		const source = await localCore.getAsset(assetId);
-		if (!source) throw new Error("Asset not found");
-		const chosen = typeof output === "string" && output.trim() ? await gradeOutputPath(output, source.relativePath, true) : undefined;
-		const result = await localCore.gradeVideo({
-			path: source.relativePath,
-			grade,
-			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
-			output: chosen,
-			beside: !chosen,
-		});
-		if (result.sourceAssetId && result.sourceAssetId !== result.assetId) {
-			await localCore.createRelation(result.assetId, result.sourceAssetId, "derived from");
-		}
-		return { assetId: result.assetId, path: result.output };
-	});
+	ipcMain.handle(IPC.saveVideoGrade, (_event, assetId: unknown, grade: unknown, lut: unknown, output: unknown) =>
+		saveAssetGrade(assetId, grade, lut, output, true));
 	ipcMain.handle(IPC.pickGradeOutput, async (event, assetId: unknown) => {
 		if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
 		const snapshot = await localCore.getLibrarySnapshot();
@@ -1744,6 +1714,27 @@ async function applySettingsPatch(patch: SettingsPatch): Promise<{ notes: string
 		}
 		notifySettingsChanged();
 		return { notes, settings: await readPublicSettings() };
+	});
+}
+
+async function saveAssetGrade(assetId: unknown, grade: unknown, lut: unknown, output: unknown, video: boolean) {
+	if (typeof assetId !== "string" || !assetId.trim()) throw new Error("Asset is missing");
+	if (output !== undefined && (typeof output !== "string" || !output.trim())) throw new Error("Output path is missing");
+	return localCore.runLibraryTask(async (signal) => {
+		const source = await localCore.getAsset(assetId);
+		if (!source) throw new Error("Asset not found");
+		const args = {
+			path: source.relativePath,
+			grade,
+			lut: typeof lut === "string" && lut.trim() ? lut : undefined,
+			output: output === undefined ? undefined : await gradeOutputPath(output, source.relativePath, video),
+			overwriteOriginal: output === undefined,
+		};
+		const result = video ? await localCore.gradeVideo(args, signal) : await localCore.gradeImage(args, signal);
+		if (result.sourceAssetId && result.sourceAssetId !== result.assetId) {
+			await localCore.createRelation(result.assetId, result.sourceAssetId, "derived from");
+		}
+		return { assetId: result.assetId, path: result.output };
 	});
 }
 

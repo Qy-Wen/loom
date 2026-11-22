@@ -1,4 +1,4 @@
-import { isFullImageCrop, isIdentityCurve, type ImageGrade } from "./types.ts";
+import { imageExtension, isFullImageCrop, isIdentityCurve, type ImageGrade } from "./types.ts";
 
 /**
  * One filtergraph for preview and export.
@@ -51,6 +51,20 @@ export function buildGradeImageArgs(
 	if (!proxy && /\.webp$/i.test(outputPath)) args.push("-c:v", "libwebp", "-quality", "85");
 	args.push("-update", "1", outputPath);
 	return args;
+}
+
+export function buildGradeImageReplacementArgs(inputPath: string, outputPath: string, filter: string, format?: string): string[] {
+	const args = ["-y", "-i", inputPath, "-vf", filter, "-fps_mode", "passthrough"];
+	switch (format) {
+		case "gif":
+			return [...args, "-f", "gif", outputPath];
+		case "apng":
+			return [...args, "-f", "apng", outputPath];
+		case "webp_anim":
+			return [...args, "-c:v", "libwebp_anim", "-quality", "85", outputPath];
+		default:
+			return buildGradeImageArgs(inputPath, outputPath, filter, false);
+	}
 }
 
 /** JPEG preview bytes go straight to the parent process. */
@@ -124,6 +138,25 @@ export function buildGradeVideoArgs(
 	if (extension === "mp4" || extension === "m4v" || extension === "mov") args.push("-movflags", "+faststart");
 	args.push(outputPath);
 	return args;
+}
+
+export function buildGradeVideoReplacementArgs(inputPath: string, outputPath: string, filter: string, format?: string): string[] {
+	const extension = imageExtension(outputPath);
+	const args = [
+		"-y", "-i", inputPath, "-map", "0", "-c", "copy",
+		"-filter:V:0", `${filter},pad=ceil(iw/2)*2:ceil(ih/2)*2`,
+		"-pix_fmt:V:0", "yuv420p",
+	];
+	if (extension === ".webm") {
+		args.push("-c:V:0", "libvpx-vp9", "-crf:V:0", "24", "-b:V:0", "0");
+	} else if (extension === ".avi" || format === "m4v") {
+		args.push("-c:V:0", "mpeg4", "-q:V:0", "2");
+	} else {
+		args.push("-c:V:0", "libx264", "-preset:V:0", "medium", "-crf:V:0", "18");
+		if (extension === ".mp4" || extension === ".mov" || extension === ".m4v") args.push("-movflags", "+faststart");
+		if (extension === ".m4v") args.push("-f", "mp4");
+	}
+	return [...args, outputPath];
 }
 
 function formatSeconds(value: number): string {
