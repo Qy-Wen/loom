@@ -21,11 +21,12 @@ const ARROW_STEPS: Record<string, Point> = {
 	ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
 };
 
-export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onError }: {
+export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLocate, onError }: {
 	asset: Asset;
 	assets: Asset[];
 	playbackPositions: Map<string, number>;
 	onPreview: (asset: Asset) => void;
+	onLocate: (assetId: string) => void;
 	onError: (error: string) => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
@@ -173,16 +174,19 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onEr
 		if (!board.document || event.defaultPrevented || !(target instanceof Element)
 			|| target.closest("a, audio, video, input, textarea, select, [contenteditable='true']")) return;
 		const card = target.closest<HTMLElement>(".canvas-card[data-node-id]");
+		const node = card && nodes.find((item) => item.id === card.dataset.nodeId);
+		const file = node?.type === "file" ? assetForNode(node) : undefined;
 		const canGroup = selectedNodes.length > 1 && (!card || selectedNodes.includes(card.dataset.nodeId ?? ""));
-		if (target.closest(".canvas-node, button") && (!card || !canGroup)) return;
+		if (target.closest(".canvas-node, button") && !file && (!card || !canGroup)) return;
 		event.preventDefault();
 		const point = event.clientX === 0 && event.clientY === 0 ? centerPoint() : documentPoint(event);
 		surface.current?.focus({ preventScroll: true });
 		try {
-			const action = await window.loom.showCanvasContextMenu(canGroup);
+			const action = await window.loom.showCanvasContextMenu({ canGroup, canLocate: !!file });
 			if (!surface.current) return;
 			if (action === "add_files") setFileSearch({ point });
 			else if (action === "group" && canGroup) groupSelection(selectedNodes);
+			else if (action === "locate" && file) onLocate(file.assetId);
 		} catch (cause) {
 			onError(String(cause));
 		}

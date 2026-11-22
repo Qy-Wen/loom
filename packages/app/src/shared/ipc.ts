@@ -96,7 +96,11 @@ export type FolderContextAction =
 	| "reveal"
 	| "trash";
 export type LibraryContextAction = "paste" | LibraryCreateAction;
-export type CanvasContextAction = "add_files" | "group";
+export type CanvasContextAction = "add_files" | "group" | "locate";
+export interface CanvasContextState {
+	canGroup: boolean;
+	canLocate: boolean;
+}
 export type EditorClipboardAction = "cut" | "copy" | "paste";
 export type EditorContextAction = EditorClipboardAction | "undo" | "redo" | "select_all";
 export interface EditorContextState {
@@ -308,7 +312,7 @@ export interface LoomApi {
 	showAssetTabContextMenu: (pinned: boolean) => Promise<AssetTabContextAction | null>;
 	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
 	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
-	showCanvasContextMenu: (canGroup: boolean) => Promise<CanvasContextAction | null>;
+	showCanvasContextMenu: (state: CanvasContextState) => Promise<CanvasContextAction | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
 	showEditorContextMenu: (state: MarkdownContextState) => Promise<MarkdownContextAction | null>;
 	showMarkdownDropMenu: (nativeFilenames?: readonly string[]) => Promise<MarkdownDropAction | null>;

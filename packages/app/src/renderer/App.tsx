@@ -175,6 +175,7 @@ export function App(): React.JSX.Element {
 	const iconMode = libraryDisplay.fileDisplay === "icons";
 	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
 	const [location, setLocation] = useState<BrowseLocation>(ROOT_LOCATION);
+	const [revealAssetRequest, setRevealAssetRequest] = useState(0);
 	// The file open in the icon-mode preview overlay. List mode has tabs instead.
 	const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
@@ -736,6 +737,19 @@ export function App(): React.JSX.Element {
 
 	function locateAssetInTree(assetId: string): void {
 		setPicked(singleSelection(assetKey(assetId)));
+	}
+
+	function locateCanvasAsset(assetId: string): void {
+		const asset = library.assets.find((item) => item.assetId === assetId);
+		if (!asset) return;
+		locateAssetInTree(assetId);
+		setRevealAssetRequest((current) => current + 1);
+		if (iconMode) {
+			setLocation({ kind: "folder", path: parentFolder(asset.relativePath) });
+			setPreviewAssetId(null);
+		} else if (libraryCollapsed) {
+			toggleLibraryCollapsed();
+		}
 	}
 
 	async function showAssetTabContextMenu(assetId: string): Promise<void> {
@@ -1587,6 +1601,7 @@ export function App(): React.JSX.Element {
 					<CanvasEditor asset={asset} assets={library.assets}
 						playbackPositions={canvasPlaybackPositions}
 						onError={setError}
+						onLocate={locateCanvasAsset}
 						onPreview={(target) => isCanvasFile(target.filename) ? selectAsset(target.assetId) : setCanvasPreviewId(target.assetId)} />
 				</Suspense>
 				{canvasPreview && <PreviewOverlay asset={canvasPreview} onClose={() => setCanvasPreviewId(null)}>
@@ -1688,6 +1703,7 @@ export function App(): React.JSX.Element {
 						selectedKeys={iconMode && !treeOwnsPick ? NO_KEYS : selectedKeys}
 						focusKey={picked.focus}
 						locateToken={picked}
+						revealAssetRequest={revealAssetRequest}
 						renamingAssetId={renamingAssetId}
 						renamingFolder={renamingFolder?.view === "tree" ? renamingFolder.relativePath : null}
 						collapsedFolders={collapsedFolders}
@@ -1765,6 +1781,7 @@ export function App(): React.JSX.Element {
 									onLocation={browseTo}
 									display={display}
 									selection={picked}
+									revealAssetRequest={revealAssetRequest}
 									onSelection={setPicked}
 									onSelect={(key, mode, rows) => setPicked((current) => pointerSelect(current, rows, key, mode))}
 									renamingAssetId={renamingAssetId}

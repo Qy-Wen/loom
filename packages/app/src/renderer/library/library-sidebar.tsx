@@ -40,6 +40,7 @@ interface LibrarySidebarProps {
 	focusKey: string | null;
 	/** Changes on every selection, so a repeat click on the focused file locates it again. */
 	locateToken: unknown;
+	revealAssetRequest: number;
 	renamingAssetId: string | null;
 	renamingFolder: string | null;
 	collapsedFolders: ReadonlySet<string>;
@@ -74,6 +75,7 @@ export function LibrarySidebar({
 	selectedKeys,
 	focusKey,
 	locateToken,
+	revealAssetRequest,
 	renamingAssetId,
 	renamingFolder,
 	collapsedFolders,
@@ -148,6 +150,7 @@ export function LibrarySidebar({
 		setQuery("");
 		setExpandedTagIds(new Set());
 	}, [library.rootPath]);
+	useEffect(() => setQuery(""), [revealAssetRequest]);
 
 	function toggleTag(tagId: string): void {
 		setExpandedTagIds((current) => {

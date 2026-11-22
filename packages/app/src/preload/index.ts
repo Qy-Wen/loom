@@ -30,7 +30,7 @@ const api: LoomApi = {
 	showFolderContextMenu: (relativePath, canPaste, single) =>
 		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
 	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),
-	showCanvasContextMenu: (canGroup) => ipcRenderer.invoke(IPC.showCanvasContextMenu, canGroup),
+	showCanvasContextMenu: (state) => ipcRenderer.invoke(IPC.showCanvasContextMenu, state),
 	showTableContextMenu: (state) => ipcRenderer.invoke(IPC.showTableContextMenu, state),
 	showEditorContextMenu: (state) => ipcRenderer.invoke(IPC.showEditorContextMenu, state),
 	showMarkdownDropMenu: (nativeFilenames) => ipcRenderer.invoke(IPC.showMarkdownDropMenu, nativeFilenames),

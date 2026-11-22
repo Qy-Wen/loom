@@ -22,6 +22,7 @@ export interface FolderBrowserProps {
 	onLocation: (location: BrowseLocation) => void;
 	display: LibraryDisplay;
 	selection: TreeSelection;
+	revealAssetRequest: number;
 	onSelection: (selection: TreeSelection) => void;
 	onSelect: (key: string, mode: PointerMode, rows: readonly TreeRow[]) => void;
 	renamingAssetId: string | null;
@@ -58,7 +59,7 @@ function tileColumns(content: HTMLElement): number {
 
 /** The icon-mode workbench: the contents of one folder (or the favorites / a tag) as tiles, with a path bar and search. */
 export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
-	const { library, location, onLocation, display, selection, onSelection, onSelect } = props;
+	const { library, location, onLocation, display, selection, revealAssetRequest, onSelection, onSelect } = props;
 	const { t } = useLocale();
 	const [iconSize, setIconSize] = useBrowserIconSize();
 	const [query, setQuery] = useState("");
@@ -70,7 +71,7 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 	const searching = query.trim().length > 0;
 	const base = location.kind === "folder" ? location.path : "";
 	const locationId = location.kind === "folder" ? `folder:${location.path}` : location.kind === "tag" ? `tag:${location.tagId}` : location.kind;
-	useEffect(() => { setQuery(""); setSelectedTagId(null); }, [locationId, library.rootPath]);
+	useEffect(() => { setQuery(""); setSelectedTagId(null); }, [locationId, library.rootPath, revealAssetRequest]);
 
 	const listing = useMemo(
 		() => browseListing(library, location, query, display.fileSort, display.fileSortDirection),
@@ -86,14 +87,14 @@ export function FolderBrowser(props: FolderBrowserProps): React.JSX.Element {
 
 	const { box, onPointerDown } = useBoxSelect({ scrollRef, contentRef, selection, onSelection });
 
-	// Keep the focused tile in view as the arrow keys move it.
+	// Keep the focused tile in view, including after clearing a filter that hid it.
 	useLayoutEffect(() => {
 		const focus = location.kind === "tags" ? (selectedTagId ? `tag:${selectedTagId}` : null) : selection.focus;
 		if (!focus) return;
 		for (const element of contentRef.current?.querySelectorAll<HTMLElement>("[data-key]") ?? []) {
 			if (element.dataset.key === focus) element.scrollIntoView({ block: "nearest", inline: "nearest" });
 		}
-	}, [selection.focus, selectedTagId, locationId]);
+	}, [selection.focus, selectedTagId, locationId, query, revealAssetRequest]);
 
 	const context: TileContext = {
 		selectedKeys,

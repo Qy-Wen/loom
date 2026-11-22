@@ -77,7 +77,7 @@ import { AgentInstructionsStore } from "./settings/agent-instructions-store.ts";
 import { AgentSandboxStore } from "./settings/agent-sandbox-store.ts";
 import { AgentStatsStore } from "./chat/agent-stats-store.ts";
 import { parseByteRange } from "./desktop/byte-range.ts";
-import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type CanvasContextAction, type FolderContextAction, type LibraryContextAction, type LibraryCreateAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownDropAction, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
+import { type AgentEndpoint, type AssetContextAction, type AssetTabContextAction, type CanvasContextAction, type CanvasContextState, type FolderContextAction, type LibraryContextAction, type LibraryCreateAction, type EditorClipboardAction, type EditorContextAction, type EditorContextState, type MarkdownContextAction, type MarkdownContextState, type MarkdownDropAction, type MarkdownFormat, type TableContextAction, type TableContextState, type UiSelectionDraft, IPC, markdownFormats } from "../shared/ipc.ts";
 import { markdownEmbedLayout } from "../shared/markdown-reference.ts";
 import { getUiSelection, parseUiSelectionDraft, setUiSelection } from "./composer/ui-selection.ts";
 import { parseGeneralSettingsPatch, resolveAppLanguage } from "../shared/general-settings.ts";
@@ -737,12 +737,13 @@ function registerIpc(): void {
 		},
 	);
 
-	ipcMain.handle(IPC.showCanvasContextMenu, async (event, canGroup: boolean) => {
+	ipcMain.handle(IPC.showCanvasContextMenu, async (event, { canGroup, canLocate }: CanvasContextState) => {
 		const { t } = await uiCopy();
 		const items: ContextMenuItem<CanvasContextAction>[] = [
 			{ label: t.canvas.addFiles, click: () => "add_files" },
 		];
 		if (canGroup) items.push({ label: t.canvas.addGroup, click: () => "group" });
+		if (canLocate) items.unshift({ label: t.canvas.locate, click: () => "locate" });
 		return popupContextMenu(event, items);
 	});
 

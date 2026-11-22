@@ -568,6 +568,50 @@ test("the canvas toolbar and context menu add files from the library", async ({ 
 	await expect.poll(async () => (await readBoard(path)).nodes.map((node) => node.file)).toEqual(["Project/Alpha.md", "Project/Beta.md"]);
 });
 
+test("a canvas file card locates its library file in list and icon mode", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "Project"));
+	await writeFile(join(root, "Project", "Reference.md"), "# Reference");
+	await writeFile(join(root, "Board.canvas"), JSON.stringify({
+		nodes: [{ id: "reference", type: "file", file: "Project/Reference.md", x: 0, y: 0, width: 244, height: 172 }],
+		edges: [],
+	} satisfies CanvasDocument));
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.enabled && item.label === "Locate in Library")?.click();
+			options?.callback?.();
+		};
+	});
+
+	const sidebar = page.locator(".library-sidebar");
+	const row = (name: string) => sidebar.locator(".asset-list .asset-row").filter({ hasText: name });
+	const board = page.getByRole("region", { name: "Canvas Board.canvas" });
+	const card = board.locator(".canvas-handle").filter({ hasText: "Reference.md" });
+	const boardTab = page.getByRole("tab", { name: "Board.canvas", exact: true });
+	await row("Board.canvas").click();
+	await sidebar.locator(".folder-row").filter({ hasText: "Project" }).locator(".folder-chevron.expanded").click();
+	await sidebar.getByRole("button", { name: "Search files", exact: true }).click();
+	await sidebar.getByPlaceholder("Filter files").fill("Board.canvas");
+	await expect(row("Reference.md")).toHaveCount(0);
+	await card.click({ button: "right" });
+	await expect(row("Reference.md")).toHaveClass(/selected/);
+	await expect(row("Reference.md")).toBeInViewport();
+	await expect(boardTab).toHaveAttribute("aria-selected", "true");
+	await expect(page.getByRole("tab", { name: "Reference.md", exact: true })).toHaveCount(0);
+
+	await row("Board.canvas").click();
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await page.locator('.browser-tile[data-tooltip="Board.canvas"]').dblclick();
+	await card.click({ button: "right" });
+	const tile = page.locator('.browser-tile[data-tooltip="Project/Reference.md"]');
+	await expect(tile).toHaveClass(/selected/);
+	await expect(tile).toBeInViewport();
+	await expect(page.getByRole("dialog", { name: "File preview" })).toHaveCount(0);
+});
+
 test("clicking Table rows and Graph nodes selects files without opening them", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
