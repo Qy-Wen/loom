@@ -10,7 +10,7 @@
 - Open files in preview tabs, pin tabs you want to keep, and navigate back and forward through opened files.
 - Follow file references in Graph as Markdown notes and canvas boards change.
 - Back up libraries to Tencent Cloud COS and preview changes before pulling them into your local library.
-- Switch between Markdown documents faster and navigate animated folders in the file tree.
+- Switch between Markdown documents faster. Folders, Favorites, and Tags in the sidebar expand and collapse with matching animations and aligned icons and labels.
 
 ## [v0.1.7]
 

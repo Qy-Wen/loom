@@ -44,7 +44,7 @@ function buildFileTree(snapshot: LibrarySnapshot): FolderNode {
 	return root;
 }
 
-function FolderChildren({ collapsed, depth, children }: { collapsed: boolean; depth: number; children: ReactNode }): React.JSX.Element {
+export function FolderChildren({ collapsed, depth, children }: { collapsed: boolean; depth?: number; children: ReactNode }): React.JSX.Element {
 	const branch = useRef<HTMLDivElement>(null);
 	const [retained, setRetained] = useState(!collapsed);
 	useLayoutEffect(() => {
@@ -67,7 +67,8 @@ function FolderChildren({ collapsed, depth, children }: { collapsed: boolean; de
 
 	return (
 		<div ref={branch} className="folder-children" data-collapsed={collapsed || undefined} inert={collapsed}
-			style={{ "--tree-indent": `${depth * 14}px` } as React.CSSProperties}>
+			data-guide={depth !== undefined || undefined}
+			style={depth === undefined ? undefined : { "--tree-indent": `${depth * 14}px` } as React.CSSProperties}>
 			{(!collapsed || retained) && children}
 		</div>
 	);

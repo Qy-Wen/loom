@@ -1,6 +1,32 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import type { Locator } from "playwright";
 import { expect, test } from "./loom.ts";
+
+function sampleFolderTransition(arrow: Locator, hold = false) {
+	return arrow.evaluate((button, hold) => new Promise<{
+		height: number; fullHeight: number; inert: boolean; rotating: boolean;
+	}>((resolve, reject) => {
+		const branch = button.parentElement!.nextElementSibling as HTMLElement;
+		const observer = new MutationObserver(() => {
+			observer.disconnect();
+			const motion = branch.getAnimations().find((animation) =>
+				animation instanceof CSSTransition && animation.transitionProperty === "height",
+			);
+			if (!motion) { reject(new Error("Missing folder height transition")); return; }
+			motion.pause();
+			motion.currentTime = Number(motion.effect!.getComputedTiming().activeDuration) / 2;
+			const rotating = button.getAnimations().some((animation) =>
+				animation instanceof CSSTransition && animation.transitionProperty === "transform",
+			);
+			resolve({ height: branch.getBoundingClientRect().height, fullHeight: branch.scrollHeight, inert: branch.inert, rotating });
+			if (!hold) motion.play();
+		});
+		observer.observe(branch, { attributeFilter: ["data-collapsed"] });
+		branch.getBoundingClientRect();
+		(button as HTMLButtonElement).click();
+	}), hold);
+}
 
 test("file tree folders animate in both directions and reopen during a collapse", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
@@ -17,37 +43,18 @@ test("file tree folders animate in both directions and reopen during a collapse"
 	await expect(child).toHaveCount(0);
 	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
 
-	const sampleTransition = (hold: boolean) => arrow.evaluate((button, hold) => new Promise<{
-		height: number; fullHeight: number; inert: boolean;
-	}>((resolve, reject) => {
-		const branch = button.parentElement!.nextElementSibling as HTMLElement;
-		const observer = new MutationObserver(() => {
-			observer.disconnect();
-			const motion = branch.getAnimations().find((animation) =>
-				animation instanceof CSSTransition && animation.transitionProperty === "height",
-			);
-			if (!motion) { reject(new Error("Missing folder height transition")); return; }
-			motion.pause();
-			motion.currentTime = Number(motion.effect!.getComputedTiming().activeDuration) / 2;
-			resolve({ height: branch.getBoundingClientRect().height, fullHeight: branch.scrollHeight, inert: branch.inert });
-			if (!hold) motion.play();
-		});
-		observer.observe(branch, { attributeFilter: ["data-collapsed"] });
-		branch.getBoundingClientRect();
-		(button as HTMLButtonElement).click();
-	}), hold);
 	const expanded = () => branch.evaluate((branch) => Math.round(branch.getBoundingClientRect().height) === branch.scrollHeight);
-	const opening = await sampleTransition(false);
+	const opening = await sampleFolderTransition(arrow);
 	expect(opening.height).toBeGreaterThan(0);
 	expect(opening.height).toBeLessThan(opening.fullHeight);
 	await expect.poll(expanded).toBe(true);
 
-	const closing = await sampleTransition(true);
+	const closing = await sampleFolderTransition(arrow, true);
 	expect(closing.height).toBeGreaterThan(0);
 	expect(closing.height).toBeLessThan(closing.fullHeight);
 	expect(closing.inert).toBe(true);
 	await expect(child).toHaveCount(1);
-	await sampleTransition(false);
+	await sampleFolderTransition(arrow);
 	await expect(arrow).toHaveAttribute("aria-expanded", "true");
 	await expect.poll(expanded).toBe(true);
 	await expect(child).toBeVisible();
@@ -120,11 +127,14 @@ test("the fixed divider after collapsed favorites stays in place across file dis
 	}
 });
 
-test("list shortcut folders expand by double-clicking the name or clicking the arrow", async ({ loomPage, electronApp }) => {
+test("shortcut folders align and animate with the file tree in both display modes", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
+	await loomPage.emulateMedia({ reducedMotion: "no-preference" });
 	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
-	await writeFile(join((await rootPath())!, "shortcut.md"), "# Shortcut");
+	const root = (await rootPath())!;
+	await mkdir(join(root, "parent", "child"), { recursive: true });
+	await writeFile(join(root, "shortcut.md"), "# Shortcut");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
 	await loomPage.evaluate(async () => {
 		const { assets } = await window.loom.getLibrarySnapshot();
@@ -134,6 +144,34 @@ test("list shortcut folders expand by double-clicking the name or clicking the a
 	});
 
 	const shortcuts = loomPage.locator(".library-shortcuts");
+	const columns = (button: Locator) => button.evaluate((element) => ({
+		icon: element.querySelector("svg")!.getBoundingClientRect().x,
+		text: element.querySelector(".asset-name")!.getBoundingClientRect().x,
+	}));
+	const expectShortcutAlignment = async () => {
+		const files = loomPage.locator(".asset-list");
+		const rootFolder = await columns(files.getByRole("button", { name: "parent", exact: true }));
+		const childFolder = await columns(files.getByRole("button", { name: "child", exact: true }));
+		for (const name of ["Favorites", "Tags"]) {
+			expect(await columns(shortcuts.getByRole("button", { name, exact: true }))).toEqual(rootFolder);
+		}
+		expect(await columns(shortcuts.getByRole("button", { name: "Picked", exact: true }))).toEqual(childFolder);
+	};
+	const expectShortcutMotion = async (arrow: Locator) => {
+		const branch = arrow.locator("xpath=../following-sibling::*[1]");
+		await expect.poll(() => branch.evaluate((element) => element.getAnimations().length)).toBe(0);
+		const closing = await sampleFolderTransition(arrow);
+		expect(closing.height).toBeGreaterThan(0);
+		expect(closing.height).toBeLessThan(closing.fullHeight);
+		expect(closing.inert).toBe(true);
+		expect(closing.rotating).toBe(true);
+		await expect(branch.locator(":scope > *")).toHaveCount(0);
+		const opening = await sampleFolderTransition(arrow);
+		expect(opening.height).toBeGreaterThan(0);
+		expect(opening.height).toBeLessThan(opening.fullHeight);
+		expect(opening.inert).toBe(false);
+		expect(opening.rotating).toBe(true);
+	};
 	for (const name of ["Favorites", "Tags", "Picked"]) {
 		const label = shortcuts.getByRole("button", { name, exact: true });
 		const row = shortcuts.locator(".shortcut-folder").filter({ has: loomPage.getByRole("button", { name, exact: true }) });
@@ -147,9 +185,14 @@ test("list shortcut folders expand by double-clicking the name or clicking the a
 		await expect(label).toHaveAttribute("aria-expanded", "false");
 		await label.press("Enter");
 		await expect(label).toHaveAttribute("aria-expanded", "true");
+		await expectShortcutMotion(arrow);
 	}
 	await expect(shortcuts.locator(".favorites .asset-row")).toHaveCount(1);
 	await expect(shortcuts.locator(".library-tags .asset-row")).toHaveCount(1);
+	await expectShortcutAlignment();
+	await loomPage.getByRole("group", { name: "File display", exact: true }).getByRole("button", { name: "Icons", exact: true }).click();
+	await expectShortcutMotion(shortcuts.locator(".tags-label .folder-chevron"));
+	await expectShortcutAlignment();
 });
 
 test("expanding tags that fit resizes the shortcuts pane before a frame can show overflow", async ({ loomPage, electronApp }) => {
@@ -305,6 +348,7 @@ test("favorites/tags and files scroll independently, resize with bounds, and pre
 	await top.locator(".tags-label .folder-chevron").click();
 	await top.getByRole("button", { name: "Expand tag", exact: true }).click();
 	await expect(top.locator(".library-tags .asset-row")).toHaveCount(12);
+	await expect.poll(() => top.evaluate((element) => element.getAnimations({ subtree: true }).length)).toBe(0);
 	await top.evaluate((element) => { element.scrollTop = 0; });
 	await expect(moreCue).toBeVisible();
 	await top.evaluate((element) => { element.scrollTop = element.scrollHeight; });

@@ -3,11 +3,13 @@ import { test } from "node:test";
 import { DEFAULT_SHORTCUT_FRACTION, LIBRARY_REGION_HANDLE, libraryRegionSize } from "../src/renderer/library/library-region-size.ts";
 
 test("shortcut content defaults to a 40% cap, leaving the rest for the file tree", () => {
-	assert.deepEqual(libraryRegionSize(400 + LIBRARY_REGION_HANDLE, 1000, DEFAULT_SHORTCUT_FRACTION), { size: 160, min: 64, max: 280, extent: 400 });
+	assert.deepEqual(libraryRegionSize(400 + LIBRARY_REGION_HANDLE, 1000, DEFAULT_SHORTCUT_FRACTION), { size: 160, min: 64, max: 280, extent: 400, limit: 160 });
 });
 
 test("small or folded shortcut groups return their unused space without changing the preference", () => {
-	assert.equal(libraryRegionSize(600 + LIBRARY_REGION_HANDLE, 32, 0.7).size, 32);
+	const folded = libraryRegionSize(600 + LIBRARY_REGION_HANDLE, 32, 0.7);
+	assert.equal(folded.size, 32);
+	assert.equal(folded.limit, 420);
 	assert.equal(libraryRegionSize(600 + LIBRARY_REGION_HANDLE, 500, 0.7).size, 420);
 	assert.equal(libraryRegionSize(600 + LIBRARY_REGION_HANDLE, 0, 0.4).size, 0);
 });

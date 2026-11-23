@@ -46,8 +46,7 @@ export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, 
 		if (size > 0) setHeight(size); // Keep the last measurement while the sidebar is hidden.
 		setContentHeight(content.current?.getBoundingClientRect().height ?? 0);
 	};
-	// React expands/collapses shortcut content before ResizeObserver can resize its scrollport.
-	// Measure each commit before paint so fitting content never flashes a scrollbar for one frame.
+	// Keep the divider's bounds in sync when shortcut content is added or removed.
 	useLayoutEffect(measure);
 	useLayoutEffect(() => {
 		const observer = new ResizeObserver(measure);
@@ -80,7 +79,7 @@ export function LibraryScrollRegions({ shortcuts, filesHeader, children, label, 
 	useEffect(() => { if (!hasShortcuts || !adjustable) endDrag(); }, [hasShortcuts, adjustable, endDrag]);
 	return <div ref={root} className="library-scroll-regions">
 		{hasShortcuts ? <>
-			<div className="library-shortcuts-pane" style={{ height: layout.size }}>
+			<div className="library-shortcuts-pane" style={{ maxHeight: layout.limit }}>
 				<ScrollArea id={paneId} scrollRef={shortcutsScroll} className="library-shortcuts" onScroll={updateMoreBelow}>
 					<div ref={content} className="library-shortcuts-content">{shortcuts}</div>
 				</ScrollArea>

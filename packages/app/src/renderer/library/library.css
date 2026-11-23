@@ -270,6 +270,7 @@
 }
 
 .library-scroll-regions {
+	--tree-label-inset: 1px;
 	display: flex;
 	flex: 1;
 	flex-direction: column;
@@ -374,7 +375,8 @@
 }
 
 .library-shortcuts-pane { position: relative; flex: none; min-height: 0; overflow: hidden; }
-.library-shortcuts { height: 100%; padding: 0 var(--lm-space-3); }
+/* Let the scrollport follow the animated content up to the divider's preferred limit. */
+.library-shortcuts { max-height: inherit; padding: 0 var(--lm-space-3); }
 .library-shortcuts-more { position: absolute; bottom: 0; left: 6px; right: 6px; height: 30px; max-height: 100%; background: linear-gradient(transparent, var(--lm-surface-library) 85%); pointer-events: none; }
 
 .library-shortcuts-content { display: flow-root; }
@@ -426,7 +428,8 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	gap: var(--lm-space-1);
 	min-width: 0;
 	flex: 1;
-	padding: 0;
+	padding-block: 0;
+	padding-inline: var(--tree-label-inset) 7px;
 	border: 0;
 	border-radius: var(--lm-radius-sm);
 	background: transparent;
@@ -442,10 +445,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	padding-right: 0;
 }
 
-.folder-row > .folder-main {
-	padding-inline: 3px 7px;
-}
-
 .asset-list .folder-row {
 	min-height: var(--lm-size-lg);
 	padding-block: 0;
@@ -459,15 +458,12 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	padding-block: 3px;
 }
 
-/*
- * Match the folder name button: it starts after the 7px inset and 8px arrow, and its icon sits 3px in
- * plus 2px to center a 16px icon in the 20px slot. The highlight starts there too, not under the arrow.
- */
+/* Match the folder button's start and the icon centered inside its icon slot. */
 .asset-row.beside-folders {
 	--folder-label-start: 15px;
 	margin-inline-start: calc(var(--tree-indent) + var(--folder-label-start));
 	width: calc(100% - var(--tree-indent) - var(--folder-label-start));
-	padding-inline-start: 5px;
+	padding-inline-start: calc(var(--tree-label-inset) + (var(--lm-size-sm) - var(--lm-size-xs)) / 2);
 }
 
 .asset-list .asset-row .asset-thumbnail {
@@ -475,7 +471,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	height: var(--lm-size-lg);
 }
 
-/* Guide line under the arrow (7px row inset + half the 8px arrow): everything to its right belongs to this folder. */
 .folder-children {
 	position: relative;
 	display: flow-root;
@@ -493,12 +488,13 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 		transition: height var(--lm-dur-fast) ease-out;
 	}
 
-	.folder-row:not(.shortcut-folder) > .folder-chevron {
+	.folder-chevron {
 		transition: transform var(--lm-dur-fast) ease-out;
 	}
 }
 
-.folder-children::before {
+/* Guide line under the arrow (7px row inset + half the 8px arrow): everything to its right belongs to this folder. */
+.folder-children[data-guide]::before {
 	position: absolute;
 	top: 0;
 	bottom: 0;
@@ -653,15 +649,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	margin-bottom: 0;
 	padding-bottom: 0;
 	border-bottom: 0;
-}
-
-.favorites-main,
-.tags-main {
-	display: flex;
-	align-items: center;
-	gap: 3px;
-	min-width: 0;
-	flex: 1;
 }
 
 .favorites-symbol,
@@ -914,7 +901,7 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 .library-nav-item {
 	display: flex;
 	align-items: center;
-	gap: 5px;
+	gap: 0;
 	width: 100%;
 	padding: var(--lm-space-3) 7px var(--lm-space-3) 21px;
 	border: 0;
@@ -934,12 +921,6 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 
 .library-nav-item.selected {
 	background: var(--lm-surface-accent-strong);
-}
-
-/* Match the list view's 21px indent plus its arrow, then the same icon and label gap. */
-.library-nav-item.tag-item {
-	padding-left: 31px;
-	gap: var(--lm-space-1);
 }
 
 .folder-chevron-spacer {

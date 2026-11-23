@@ -12,7 +12,7 @@ import {
 import { useLocale } from "../locale.tsx";
 import { AssetList } from "./asset-rows.tsx";
 import { LoomLogo } from "../components/loom-logo.tsx";
-import { FileTree, FolderChevronIcon, LibraryRootButton } from "./file-tree.tsx";
+import { FileTree, FolderChevronIcon, FolderChildren, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
 import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
 import { sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
@@ -104,6 +104,18 @@ export function LibrarySidebar({
 			<path d="M2.5 7 8 2.5 13.5 7v5.5a1 1 0 0 1-1 1h-9a1 1 0 0 1-1-1ZM6.5 13.5v-4h3v4" />
 		</svg>
 		<span className="library-files-name-label">{rootName}</span>
+	</>;
+	const favoritesLabel = <>
+		<span className="favorites-symbol" aria-hidden="true">
+			<svg viewBox="0 0 16 16" width="16" height="16">
+				<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
+			</svg>
+		</span>
+		<span className="asset-name">{t.library.favorites}</span>
+	</>;
+	const tagsLabel = <>
+		<span className="tags-symbol" aria-hidden="true"><TagIcon /></span>
+		<span className="asset-name">{t.library.tags}</span>
 	</>;
 	const empty = library.assets.length === 0 && library.folders.length === 0;
 	const { fileDisplay, setFileDisplay, fileSort, setFileSort, fileSortDirection, setFileSortDirection } = display;
@@ -362,14 +374,7 @@ export function LibrarySidebar({
 									onClick={() => onLocation({ kind: "favorites" })}
 								>
 									<span className="folder-chevron-spacer" aria-hidden="true" />
-									<span className="favorites-main">
-										<span className="favorites-symbol" aria-hidden="true">
-											<svg viewBox="0 0 16 16" width="16" height="16">
-												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
-											</svg>
-										</span>
-										{t.library.favorites}
-									</span>
+									<span className="folder-main">{favoritesLabel}</span>
 								</button>
 							) : null}
 							{library.tags.length > 0 || location.kind === "tags" ? (
@@ -386,30 +391,32 @@ export function LibrarySidebar({
 										</button>
 										<button
 											type="button"
-											className="folder-main tags-main"
+											className="folder-main"
 											aria-current={location.kind === "tags" ? "location" : undefined}
 											onClick={(event) => {
 												onLocation({ kind: "tags" });
 												if (isTagsDoubleClick(event)) setTagsCollapsed((current) => !current);
 											}}
 										>
-											<span className="tags-symbol" aria-hidden="true">
-												<TagIcon />
-											</span>
-											{t.library.tags}
+											{tagsLabel}
 										</button>
 									</div>
-									{tagsOpen ? library.tags.map((tag) => (
-										<button
-											key={tag.tagId}
-											type="button"
-											className={`library-nav-item tag-item${sameLocation(location, { kind: "tag", tagId: tag.tagId }) ? " selected" : ""}`}
-											onClick={() => onLocation({ kind: "tag", tagId: tag.tagId })}
-										>
-											<span className="tag-symbol"><TagHashIcon /></span>
-											<span className="asset-name">{tag.name}</span>
-										</button>
-									)) : null}
+									<FolderChildren collapsed={!tagsOpen}>
+										{library.tags.map((tag) => (
+											<button
+												key={tag.tagId}
+												type="button"
+												className={`library-nav-item tag-item${sameLocation(location, { kind: "tag", tagId: tag.tagId }) ? " selected" : ""}`}
+												onClick={() => onLocation({ kind: "tag", tagId: tag.tagId })}
+											>
+												<span className="folder-chevron-spacer" aria-hidden="true" />
+												<span className="folder-main">
+													<span className="tag-symbol"><TagHashIcon /></span>
+													<span className="asset-name">{tag.name}</span>
+												</span>
+											</button>
+										))}
+									</FolderChildren>
 								</div>
 							) : null}
 						</div>
@@ -422,16 +429,11 @@ export function LibrarySidebar({
 									chevronLabel={favoritesOpen ? t.library.collapseFolder : t.library.expandFolder}
 									onToggle={() => setFavoritesCollapsed(favoritesOpen)}
 								>
-									<span className="favorites-main">
-										<span className="favorites-symbol" aria-hidden="true">
-											<svg viewBox="0 0 16 16" width="16" height="16">
-												<path fill="currentColor" d="M8 1.6 9.9 5.7l4.5.4-3.4 2.9.1 4.5L8 11.6 4.9 13.5l.1-4.5L1.6 6.1l4.5-.4L8 1.6z" />
-											</svg>
-										</span>
-										{t.library.favorites}
-									</span>
+									{favoritesLabel}
 								</ShortcutFolderRow>
-								{favoritesOpen ? <AssetList assets={favoriteAssets} depth={0} quiet /> : null}
+								<FolderChildren collapsed={!favoritesOpen}>
+									<AssetList assets={favoriteAssets} depth={0} quiet />
+								</FolderChildren>
 							</div>
 						) : null}
 						{visibleTags.length > 0 ? (
@@ -442,30 +444,29 @@ export function LibrarySidebar({
 									chevronLabel={listTagsOpen ? t.library.collapseFolder : t.library.expandFolder}
 									onToggle={() => setTagsCollapsed(listTagsOpen)}
 								>
-									<span className="tags-main">
-										<span className="tags-symbol" aria-hidden="true">
-											<TagIcon />
-										</span>
-										{t.library.tags}
-									</span>
+									{tagsLabel}
 								</ShortcutFolderRow>
-								{listTagsOpen ? visibleTags.map(({ tag, files }) => {
-									const open = queryActive || expandedTagIds.has(tag.tagId);
-									return (
-										<div key={tag.tagId}>
-											<ShortcutFolderRow
-												className="folder-row"
-												expanded={open}
-												chevronLabel={open ? t.library.collapseTag : t.library.expandTag}
-												onToggle={() => toggleTag(tag.tagId)}
-											>
-												<span className="tag-symbol"><TagHashIcon /></span>
-												<span className="asset-name">{tag.name}</span>
-											</ShortcutFolderRow>
-											{open ? <AssetList assets={files} depth={2} quiet /> : null}
-										</div>
-									);
-								}) : null}
+								<FolderChildren collapsed={!listTagsOpen}>
+									{visibleTags.map(({ tag, files }) => {
+										const open = queryActive || expandedTagIds.has(tag.tagId);
+										return (
+											<div key={tag.tagId}>
+												<ShortcutFolderRow
+													className="folder-row"
+													expanded={open}
+													chevronLabel={open ? t.library.collapseTag : t.library.expandTag}
+													onToggle={() => toggleTag(tag.tagId)}
+												>
+													<span className="tag-symbol"><TagHashIcon /></span>
+													<span className="asset-name">{tag.name}</span>
+												</ShortcutFolderRow>
+												<FolderChildren collapsed={!open}>
+													<AssetList assets={files} depth={2} quiet />
+												</FolderChildren>
+											</div>
+										);
+									})}
+								</FolderChildren>
 							</div>
 						) : null}
 					</> : null}
