@@ -1047,12 +1047,17 @@ export function App(): React.JSX.Element {
 	}
 
 	async function showFolderContextMenu(relativePath: string, fromTree = false): Promise<void> {
-		const next = contextSelection(fromTree ? treeSelection() : picked, folderKey(relativePath));
-		setPicked(next);
-		if (iconMode && fromTree) setTreePicked(next);
+		const key = folderKey(relativePath);
+		const next = relativePath ? contextSelection(fromTree ? treeSelection() : picked, key) : singleSelection(key);
+		if (relativePath) {
+			setPicked(next);
+			if (iconMode && fromTree) setTreePicked(next);
+		}
+		const sameLibrary = detailRequests.current.libraryGuard();
 		setError(null);
 		try {
 			const action = await window.loom.showFolderContextMenu(relativePath, next.keys.length === 1);
+			if (!sameLibrary()) return;
 			if (action === "rename" && next.keys.length === 1) {
 				beginFolderRename(relativePath, fromTree);
 			} else if (action === "copy" || action === "cut") {
@@ -1073,7 +1078,7 @@ export function App(): React.JSX.Element {
 				if (await trashSelection(next)) clearLibrarySelection();
 			}
 		} catch (cause) {
-			setError(cause instanceof Error ? cause.message : String(cause));
+			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 		}
 	}
 

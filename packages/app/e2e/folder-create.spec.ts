@@ -1,5 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { readMacFilePaths } from "../src/main/desktop/mac-file-clipboard.ts";
+import { readWindowsFilePaths } from "../src/main/desktop/windows-file-clipboard.ts";
 import { expect, test } from "./loom.ts";
 
 test("blank-area menus create and name Markdown files in the sidebar root and browsed folder", async ({ loomPage: page, electronApp }) => {
@@ -163,6 +165,77 @@ test("folder menu leads with New Folder, New File and New Canvas, and creates Ma
 	await editor.fill("inside.md");
 	await editor.press("Enter");
 	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("notes/inside.md");
+});
+
+test("the library root menu acts on the root while another folder is open", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
+	const root = (await snapshot()).rootPath!;
+	await mkdir(join(root, "notes"));
+	await writeFile(join(root, "notes", "source.md"), "# Paste into the root");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toEqual(["notes/source.md"]);
+	const sidebar = page.locator(".library-sidebar");
+	const rootButton = sidebar.locator(".library-root-button");
+	const browser = page.locator(".folder-browser");
+	await sidebar.getByRole("button", { name: "Icons", exact: true }).click();
+	await sidebar.locator(".folder-main").filter({ hasText: /^notes$/ }).click();
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("notes");
+	const reveal = process.platform === "darwin" ? "Show in Finder" : process.platform === "win32" ? "Show in File Explorer" : "Show in file manager";
+	type MenuState = { action: string; labels: string[]; revealed: string | undefined };
+	await electronApp!.evaluate(({ clipboard, Menu, shell }) => {
+		const state: MenuState = { action: "", labels: [], revealed: undefined };
+		(globalThis as typeof globalThis & { rootMenu: MenuState }).rootMenu = state;
+		clipboard.writeText("Text without file references");
+		shell.showItemInFolder = (path) => { state.revealed = path; };
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			state.labels = this.items.filter((item) => item.type !== "separator").map(({ label, enabled }) => enabled ? label : `${label} (disabled)`);
+			this.items.find((item) => item.label === state.action && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+	const readMenu = () => electronApp!.evaluate(() => (globalThis as typeof globalThis & { rootMenu: MenuState }).rootMenu);
+	const openMenu = async (action: string, keyboard = false) => {
+		await electronApp!.evaluate((_electron, action) => {
+			Object.assign((globalThis as typeof globalThis & { rootMenu: MenuState }).rootMenu, { action, labels: [] });
+		}, action);
+		if (keyboard) await rootButton.press("Shift+F10");
+		else await rootButton.click({ button: "right" });
+		await expect.poll(async () => (await readMenu()).labels.length).toBeGreaterThan(0);
+	};
+
+	await openMenu("Copy Path", true);
+	expect((await readMenu()).labels).toEqual(["New Folder", "New File", "New Canvas", "Copy", "Paste (disabled)", "Copy Path", reveal]);
+	await expect(rootButton).toBeFocused();
+	await expect.poll(() => electronApp!.evaluate(({ clipboard }) => clipboard.readText())).toBe(root);
+	await openMenu(reveal);
+	await expect.poll(async () => (await readMenu()).revealed).toBe(root);
+	await expect(browser.locator(".browser-crumb.current")).toHaveText("notes");
+	if (process.platform === "darwin" || process.platform === "win32") {
+		await openMenu("Copy");
+		const readPaths = process.platform === "darwin" ? readMacFilePaths : readWindowsFilePaths;
+		await expect.poll(() => readPaths()).toEqual([root]);
+	}
+	const source = (await snapshot()).assets.find((asset) => asset.relativePath === "notes/source.md")!;
+	await page.evaluate((id) => window.loom.copyLibraryItems([id], [], false), source.assetId);
+	await openMenu("Paste");
+	await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain("source.md");
+	expect(await readFile(join(root, "source.md"), "utf8")).toBe("# Paste into the root");
+
+	await openMenu("New Folder");
+	const folderEditor = sidebar.locator(".rename-editor input");
+	await expect(folderEditor).toBeFocused();
+	await folderEditor.fill("created at root");
+	await folderEditor.press("Enter");
+	await expect.poll(async () => (await snapshot()).folders).toContain("created at root");
+	for (const [action, name] of [["New File", "root note.md"], ["New Canvas", "root board.canvas"]]) {
+		await openMenu(action);
+		const editor = browser.locator(".browser-tile-rename input");
+		await expect(editor).toBeFocused();
+		await editor.fill(name);
+		await editor.press("Enter");
+		await expect.poll(async () => (await snapshot()).assets.map((asset) => asset.relativePath)).toContain(name);
+	}
 });
 
 test("file menus create Markdown and canvas files next to the clicked file", async ({ loomPage: page, electronApp }) => {

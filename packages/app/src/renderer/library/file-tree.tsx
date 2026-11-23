@@ -192,7 +192,18 @@ export function LibraryRootButton({ children, title, onOpen }: { children: React
 			type="button"
 			data-tooltip={title}
 			aria-current={tree.currentFolder === "" ? "location" : undefined}
+			aria-haspopup="menu"
 			onClick={onOpen}
+			onContextMenu={(event) => {
+				event.preventDefault();
+				event.currentTarget.focus();
+				tree.onFolderContextMenu("");
+			}}
+			onKeyDown={(event) => {
+				if (event.key !== "ContextMenu" && !(event.shiftKey && event.key === "F10")) return;
+				event.preventDefault();
+				tree.onFolderContextMenu("");
+			}}
 		>
 			{children}
 		</button>

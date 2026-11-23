@@ -736,19 +736,26 @@ function registerIpc(): void {
 		async (event, relativePath: string, single: boolean): Promise<FolderContextAction | null> => {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
-			return popupContextMenu<FolderContextAction>(event, [
+			const items: ContextMenuItem<FolderContextAction>[] = [
 				...libraryCreateMenuItems(t, single),
 				{ type: "separator" },
+			];
+			if (relativePath) items.push(
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },
+			);
+			items.push(
 				{ label: t.common.copy, click: () => "copy" },
 				{ label: t.menu.paste, enabled: await clipboardRequests.run(clipboardHasFiles), click: () => "paste" },
 				{ type: "separator" },
 				{ label: t.menu.copyPath, click: () => "copy_path" },
 				{ label: t.menu.reveal(platform), click: () => "reveal" },
+			);
+			if (relativePath) items.push(
 				{ type: "separator" },
 				{ label: t.menu.moveToTrash(platform), click: () => "trash" },
-			]);
+			);
+			return popupContextMenu(event, items);
 		},
 	);
 
