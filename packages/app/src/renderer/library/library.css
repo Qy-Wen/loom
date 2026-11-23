@@ -359,6 +359,11 @@
 	color: inherit;
 }
 
+.library-root-button:focus-visible {
+	outline: 2px solid var(--lm-focus-ring);
+	outline-offset: 2px;
+}
+
 .library-root-button.drop-target {
 	background: var(--lm-surface-success);
 }

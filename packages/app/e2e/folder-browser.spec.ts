@@ -257,6 +257,40 @@ test("icon-mode root heading and sidebar blank area return from folders, favorit
 	await expect(browser.locator(".browser-tile-name")).toHaveText(["empty", "notes.md"]);
 });
 
+test("list-mode sidebar blank area selects the library root and keeps the active file open", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const folder = join((await rootPath())!, "notes");
+	await mkdir(folder);
+	await writeFile(join(folder, "draft.md"), "# Draft");
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(1);
+
+	const sidebar = loomPage.locator(".library-sidebar");
+	const heading = sidebar.locator(".library-root-button");
+	const tree = sidebar.locator(".asset-list");
+	const child = tree.getByRole("button", { name: "notes", exact: true });
+	await child.click();
+	await expect(tree.locator(".folder-row.selected")).toHaveText("notes");
+	await expect(heading).not.toHaveAttribute("aria-current");
+	await tree.locator(".asset-row").filter({ hasText: "draft.md" }).click();
+	const tab = loomPage.getByRole("tab", { name: "draft.md", selected: true });
+	await expect(tab).toBeVisible();
+	await expect(tree.locator(".asset-row.selected .asset-name")).toHaveText("draft.md");
+
+	const bounds = (await tree.boundingBox())!;
+	await tree.click({ position: { x: bounds.width / 2, y: bounds.height - 10 } });
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await expect(tree.locator(".selected")).toHaveCount(0);
+	await expect(tab).toBeVisible();
+
+	await child.click();
+	await expect(heading).not.toHaveAttribute("aria-current");
+	await heading.press("Enter");
+	await expect(heading).toHaveAttribute("aria-current", "location");
+	await expect(tab).toBeVisible();
+});
+
 test("switching between list and icons keeps both on the same folder", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBe(1);

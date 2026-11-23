@@ -182,7 +182,7 @@ function FileTreeRows({ node, depth }: { node: FolderNode; depth: number }): Rea
 	);
 }
 
-/** The icon-mode tree heading opens the root folder and accepts drops into it. */
+/** The tree heading selects the root folder and accepts drops into it. */
 export function LibraryRootButton({ children, title, onOpen }: { children: ReactNode; title: string | undefined; onOpen: () => void }): React.JSX.Element {
 	const tree = useTree();
 	return (

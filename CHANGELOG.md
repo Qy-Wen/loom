@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- Click blank space in the sidebar file list to select the library root while keeping the active file tab open.
+
 ## [v0.1.8]
 
 - Edit Markdown in live, reading, and source modes. Format text with slash commands and context menus, edit tables in place, and embed notes, images, audio, video, and HTML.

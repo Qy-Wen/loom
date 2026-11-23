@@ -15,7 +15,7 @@ import { LoomLogo } from "../components/loom-logo.tsx";
 import { FileTree, FolderChevronIcon, FolderChildren, LibraryRootButton } from "./file-tree.tsx";
 import { TreeProvider } from "./tree-context.tsx";
 import { visibleTreeRows, type PointerMode, type TreeRow } from "./tree-nav.ts";
-import { sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
+import { ROOT_LOCATION, sameLocation, type BrowseLocation } from "../workbench/browser/folder-browser-model.ts";
 import type { LibraryDisplay } from "./use-library-display.ts";
 import { FileSortControl } from "./file-sort-control.tsx";
 import { filterFavorites, filterLibrary, filterTags } from "./library-filter.ts";
@@ -173,6 +173,10 @@ export function LibrarySidebar({
 		});
 	}
 
+	function selectRoot(): void {
+		onLocation(ROOT_LOCATION);
+	}
+
 	function acceptRootDrop(event: React.DragEvent): boolean {
 		if (!hasLibraryDrag(event.dataTransfer) || !canDropLibraryItem("", activeLibraryDrag())) return false;
 		event.preventDefault();
@@ -199,7 +203,7 @@ export function LibrarySidebar({
 			<TreeProvider
 				library={visible}
 				foldersOnly={iconMode}
-				currentFolder={iconMode && location.kind === "folder" ? location.path : null}
+				currentFolder={location.kind === "folder" && (iconMode || selectedKeys.size === 0) ? location.path : null}
 				fileSort={fileSort}
 				fileSortDirection={fileSortDirection}
 				collapsedFolders={queryActive ? NO_FOLDERS : collapsedFolders}
@@ -279,14 +283,9 @@ export function LibrarySidebar({
 					filesHeader={<>
 						<div className="file-heading library-files-heading">
 							<span className="file-heading-title">
-								{iconMode ? (
-									<LibraryRootButton
-										title={library.rootPath ?? undefined}
-										onOpen={() => onLocation({ kind: "folder", path: "" })}
-									>
-										{rootLabel}
-									</LibraryRootButton>
-								) : <span className="library-files-name" data-tooltip={library.rootPath ?? undefined}>{rootLabel}</span>}
+								<LibraryRootButton title={library.rootPath} onOpen={selectRoot}>
+									{rootLabel}
+								</LibraryRootButton>
 							</span>
 							{!iconMode ? (
 								<span className="file-heading-tools">
@@ -337,7 +336,7 @@ export function LibrarySidebar({
 					</>}
 					filesProps={{
 						onClick: (event) => {
-							if (iconMode && event.target === event.currentTarget) onLocation({ kind: "folder", path: "" });
+							if (event.target === event.currentTarget) selectRoot();
 						},
 						onDragOver: (event) => {
 							if (hasOsFileDrag(event.dataTransfer)) {
