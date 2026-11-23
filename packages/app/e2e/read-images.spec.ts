@@ -1,4 +1,4 @@
-import { writeFile, rm } from "node:fs/promises";
+import { writeFile } from "node:fs/promises";
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { join } from "node:path";
@@ -30,13 +30,11 @@ test("bundled Electron read resolves Photon WASM and returns a WebP image", asyn
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
-	let path: string | undefined;
 	try {
 		await expect(loomPage.locator(".shell")).toBeVisible();
 		const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 		expect(root).toBeTruthy();
-		path = join(root!, filename);
-		await writeFile(path, Buffer.from(webp, "base64"));
+		await writeFile(join(root!, filename), Buffer.from(webp, "base64"));
 		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { input: ["text", "image"] });
 		await loomPage.evaluate(() => window.loom.setAgentPermission("full"));
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
@@ -48,7 +46,6 @@ test("bundled Electron read resolves Photon WASM and returns a WebP image", asyn
 		expect(modelImageRequest).toContain(`data:image/webp;base64,${webp}`);
 		expect(modelImageRequest).not.toContain("Cannot find module");
 	} finally {
-		if (path) await rm(path, { force: true });
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}

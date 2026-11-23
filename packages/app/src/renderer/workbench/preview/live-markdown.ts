@@ -1,5 +1,5 @@
 import { syntaxTree } from "@codemirror/language";
-import { EditorSelection, EditorState, Facet, RangeSetBuilder, StateEffect, StateField, type Extension, type Range } from "@codemirror/state";
+import { EditorSelection, EditorState, Facet, RangeSetBuilder, StateEffect, StateField, type Extension, type Range, type SelectionRange } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import type { Asset } from "@loom/core";
 import { isMarkdownFile } from "../../../shared/markdown-file.ts";
@@ -783,6 +783,21 @@ function stepIntoBlock(direction: "up" | "down") {
 	};
 }
 
+/** Keep a geometric move from skipping text lines with collapsed Markdown marks. */
+function adjacentLine(view: EditorView, start: SelectionRange, landing: SelectionRange, forward: boolean): SelectionRange {
+	const { doc } = view.state;
+	const nextLine = doc.lineAt(start.head).number + (forward ? 1 : -1);
+	const landedLine = doc.lineAt(landing.head).number;
+	if (forward ? landedLine <= nextLine : landedLine >= nextLine) return landing;
+	const line = doc.line(nextLine);
+	const block = view.lineBlockAt(line.from);
+	const halfLine = Math.min(block.height, view.defaultLineHeight) / 2;
+	const y = view.documentTop + (forward ? block.top + halfLine : block.bottom - halfLine);
+	const x = view.contentDOM.getBoundingClientRect().left + (landing.goalColumn ?? 0);
+	const position = view.posAtCoords({ x, y }, false);
+	return EditorSelection.cursor(Math.max(line.from, Math.min(line.to, position)), forward ? 1 : -1, undefined, landing.goalColumn);
+}
+
 /**
  * Up and down inside a line that wraps. The caret in a formula shows its source, which is longer than the formula
  * and can push the end of the line onto a second row. Down then lands on that row, outside the formula, the source
@@ -794,13 +809,19 @@ function stepWithinLine(forward: boolean) {
 		const { selection } = view.state;
 		if (selection.ranges.length !== 1 || !selection.main.empty) return false;
 		const range = selection.main;
-		const landing = view.moveVertically(range, forward);
+		const geometric = view.moveVertically(range, forward);
+		const landing = adjacentLine(view, range, geometric, forward);
+		if (geometric !== landing) {
+			view.dispatch({ selection: landing, scrollIntoView: true, userEvent: "select" });
+			return true;
+		}
 		if (landing.head === range.head || view.state.doc.lineAt(landing.head).number !== view.state.doc.lineAt(range.head).number) return false;
 		const before = view.coordsAtPos(range.head, range.assoc || 1)?.top;
 		view.dispatch({ selection: landing, scrollIntoView: true, userEvent: "select" });
 		const after = view.coordsAtPos(landing.head, landing.assoc || 1)?.top;
 		if (before == null || after == null || (forward ? after > before + 2 : after < before - 2)) return true;
-		view.dispatch({ selection: view.moveVertically(view.state.selection.main, forward), scrollIntoView: true, userEvent: "select" });
+		const current = view.state.selection.main;
+		view.dispatch({ selection: adjacentLine(view, current, view.moveVertically(current, forward), forward), scrollIntoView: true, userEvent: "select" });
 		return true;
 	};
 }

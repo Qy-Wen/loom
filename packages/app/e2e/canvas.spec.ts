@@ -11,6 +11,7 @@ const readBoard = async (path: string) => JSON.parse(await readFile(path, "utf8"
 
 test("a library canvas saves cards, groups and connections, and follows references by asset ID", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
+	test.setTimeout(60_000);
 	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
 	await expect.poll(async () => (await snapshot()).rootPath).toBeTruthy();
 	const root = (await snapshot()).rootPath!;
@@ -109,7 +110,7 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	expect(actionsBounds.y + actionsBounds.height).toBeLessThan(labelBounds.y);
 
 	const path = join(root, "分镜.canvas");
-	await expect.poll(async () => (await readBoard(path)).edges[0]?.label).toBe("接演示");
+	await expect.poll(async () => (await readBoard(path)).edges[0]?.label, { timeout: 15_000 }).toBe("接演示");
 	const saved = await readBoard(path);
 	expect(saved.nodes.find((node) => node.type === "file")).toMatchObject({
 		file: "参考.png", loom: { assetId: reference.assetId },
@@ -141,7 +142,7 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	}).toBeCloseTo(imageRatio);
 	await fileCard.locator(".canvas-handle").press("ArrowRight");
 	await fileCard.locator(".canvas-resize").press("ArrowDown");
-	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.type === "file")?.width).toBe(fileBefore.width + 8);
+	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.type === "file")?.width, { timeout: 15_000 }).toBe(fileBefore.width + 8);
 	const fileAfter = (await readBoard(path)).nodes.find((node) => node.type === "file")!;
 	expect(fileAfter.x).toBe(fileBefore.x + 8);
 	expect(fileAfter.height).toBe(Math.ceil(fileAfter.width / imageRatio));

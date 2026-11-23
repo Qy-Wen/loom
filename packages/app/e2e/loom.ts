@@ -55,32 +55,46 @@ export async function launchTestElectron(userData: string): Promise<ElectronAppl
 
 // Each test owns its process, library, settings and renderer storage.
 // Attach mode deliberately keeps using the existing application.
-export const test = base.extend<{ loomPage: Page; electronApp: ElectronApplication | null }>({
+export const test = base.extend<{
+	testRoot: string;
+	unopenedLibraryRoot: string;
+	loomPage: Page;
+	electronApp: ElectronApplication | null;
+}>({
+	testRoot: async ({}, use) => {
+		const root = await mkdtemp(join(tmpdir(), "loom-e2e-"));
+		try {
+			await use(root);
+		} finally {
+			await rm(root, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+		}
+	},
+	// Both libraries are removed by testRoot after Electron releases its database handles.
+	unopenedLibraryRoot: async ({ testRoot }, use) => {
+		const root = join(testRoot, "unopened-library");
+		await mkdir(root);
+		await use(root);
+	},
 	electronApp: [
-		async ({}, use) => {
+		async ({ testRoot }, use) => {
 			if (attach) {
 				await use(null);
 				return;
 			}
-			const e2eRoot = await mkdtemp(join(tmpdir(), "loom-e2e-"));
+			const libraryRoot = join(testRoot, "library");
+			const userData = join(testRoot, "user-data");
+			await mkdir(libraryRoot);
+			await mkdir(userData);
+			await writeFile(join(userData, "last-library.json"), JSON.stringify({ rootPath: libraryRoot }));
+			await writeFile(join(userData, "general.json"), JSON.stringify({ language: "en", reopenLastLibrary: true }));
+			const app = await launchTestElectron(userData);
 			try {
-				const libraryRoot = join(e2eRoot, "library");
-				const userData = join(e2eRoot, "user-data");
-				await mkdir(libraryRoot);
-				await mkdir(userData);
-				await writeFile(join(userData, "last-library.json"), JSON.stringify({ rootPath: libraryRoot }));
-				await writeFile(join(userData, "general.json"), JSON.stringify({ language: "en", reopenLastLibrary: true }));
-				const app = await launchTestElectron(userData);
-				try {
-					await use(app);
-				} finally {
-					await app.evaluate(({ app: electronApp }) => {
-						electronApp.exit(0);
-					}).catch(() => undefined);
-					await app.close().catch(() => undefined);
-				}
+				await use(app);
 			} finally {
-				await rm(e2eRoot, { recursive: true, force: true, maxRetries: 10, retryDelay: 50 });
+				await app.evaluate(({ app: electronApp }) => {
+					electronApp.exit(0);
+				}).catch(() => undefined);
+				await app.close().catch(() => undefined);
 			}
 		},
 		{ scope: "test" },

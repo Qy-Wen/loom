@@ -1,6 +1,5 @@
-import { copyFile, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { copyFile, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
 import type { ElectronApplication, Page } from "playwright";
 import type { Locator } from "@playwright/test";
 import { expect, test } from "./loom.ts";
@@ -50,96 +49,87 @@ async function menu(app: ElectronApplication, target: Locator, label?: string, x
 
 const clipboardText = (app: ElectronApplication) => app.evaluate(({ clipboard }) => clipboard.readText());
 
-test("the Markdown text menu copies, cuts, pastes, selects all and uses the editor undo history", async ({ loomPage: page, electronApp }) => {
+test("the Markdown text menu copies, cuts, pastes, selects all and uses the editor undo history", async ({ loomPage: page, electronApp, unopenedLibraryRoot: root }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	const root = await mkdtemp(join(tmpdir(), "loom-md-context-"));
 	const file = join(root, "a.md");
 	const text = "alpha beta\n\ngamma delta\n";
 	await writeFile(file, text);
-	try {
-		await openFile(page, electronApp!, root);
-		const box = page.getByRole("textbox", { name: "Edit a.md" });
-		const first = box.locator(".cm-line").first();
-		await first.click({ clickCount: 2, position: { x: 20, y: 10 } });
-		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("alpha");
-		await menu(electronApp!, first, "Copy", 20);
-		await expect.poll(() => clipboardText(electronApp!)).toBe("alpha");
-		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("alpha");
+	await openFile(page, electronApp!, root);
+	const box = page.getByRole("textbox", { name: "Edit a.md" });
+	const first = box.locator(".cm-line").first();
+	await first.click({ clickCount: 2, position: { x: 20, y: 10 } });
+	await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("alpha");
+	await menu(electronApp!, first, "Copy", 20);
+	await expect.poll(() => clipboardText(electronApp!)).toBe("alpha");
+	await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("alpha");
 
-		await page.getByRole("button", { name: "Source mode", exact: true }).click();
-		await menu(electronApp!, first, "Select All", 20);
-		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text);
-		await menu(electronApp!, first, "Cut", 20);
-		await expect(box).toHaveText("");
-		await expect.poll(() => clipboardText(electronApp!)).toBe(text);
-		await menu(electronApp!, first, "Paste", 5);
-		await expect(box).toContainText("gamma delta");
-		await menu(electronApp!, first, "Undo", 20);
-		await expect(box).toHaveText("");
-		await menu(electronApp!, first, "Redo", 5);
-		await expect(box).toContainText("gamma delta");
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text);
-	} finally { await rm(root, { recursive: true, force: true }); }
+	await page.getByRole("button", { name: "Source mode", exact: true }).click();
+	await menu(electronApp!, first, "Select All", 20);
+	await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe(text);
+	await menu(electronApp!, first, "Cut", 20);
+	await expect(box).toHaveText("");
+	await expect.poll(() => clipboardText(electronApp!)).toBe(text);
+	await menu(electronApp!, first, "Paste", 5);
+	await expect(box).toContainText("gamma delta");
+	await menu(electronApp!, first, "Undo", 20);
+	await expect(box).toHaveText("");
+	await menu(electronApp!, first, "Redo", 5);
+	await expect(box).toContainText("gamma delta");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
 });
 
-test("the Format submenu toggles inline styles and converts selected paragraphs with one undo", async ({ loomPage: page, electronApp }) => {
+test("the Format submenu toggles inline styles and converts selected paragraphs with one undo", async ({ loomPage: page, electronApp, unopenedLibraryRoot: root }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	const root = await mkdtemp(join(tmpdir(), "loom-md-context-format-"));
 	const file = join(root, "a.md");
 	const text = "alpha beta\n\nsecond line\n";
 	await writeFile(file, text);
-	try {
-		await openFile(page, electronApp!, root);
-		const box = page.getByRole("textbox", { name: "Edit a.md" });
-		const first = box.locator(".cm-line").first();
-		await first.click({ clickCount: 2, position: { x: 20, y: 10 } });
-		const items = await menu(electronApp!, first, "Bold", 20);
-		const formats = items.find((item) => item.label === "Format")?.submenu;
-		expect(formats?.find((item) => item.label === "Bold")?.checked).toBe(false);
-		expect(formats?.find((item) => item.label === "Heading 2")?.enabled).toBe(true);
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe("**alpha** beta\n\nsecond line\n");
-		await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe("alpha");
-		const bold = await menu(electronApp!, first, "Bold", 20);
-		expect(bold.find((item) => item.label === "Format")?.submenu?.find((item) => item.label === "Bold")?.checked).toBe(true);
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text);
-		await box.press("ControlOrMeta+a");
-		await menu(electronApp!, first, "Numbered list", 20);
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe("1. alpha beta\n2. second line\n");
-		await box.press("ControlOrMeta+z");
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text);
-	} finally { await rm(root, { recursive: true, force: true }); }
+	await openFile(page, electronApp!, root);
+	const box = page.getByRole("textbox", { name: "Edit a.md" });
+	const first = box.locator(".cm-line").first();
+	await first.click({ clickCount: 2, position: { x: 20, y: 10 } });
+	const items = await menu(electronApp!, first, "Bold", 20);
+	const formats = items.find((item) => item.label === "Format")?.submenu;
+	expect(formats?.find((item) => item.label === "Bold")?.checked).toBe(false);
+	expect(formats?.find((item) => item.label === "Heading 2")?.enabled).toBe(true);
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe("**alpha** beta\n\nsecond line\n");
+	await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe("alpha");
+	const bold = await menu(electronApp!, first, "Bold", 20);
+	expect(bold.find((item) => item.label === "Format")?.submenu?.find((item) => item.label === "Bold")?.checked).toBe(true);
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
+	await box.press("ControlOrMeta+a");
+	await menu(electronApp!, first, "Numbered list", 20);
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe("1. alpha beta\n2. second line\n");
+	await box.press("ControlOrMeta+z");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
 });
 
-test("reading offers copy and select all but disables clipboard mutations and history", async ({ loomPage: page, electronApp }) => {
+test("reading offers copy and select all but disables clipboard mutations and history", async ({ loomPage: page, electronApp, unopenedLibraryRoot: root }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	const root = await mkdtemp(join(tmpdir(), "loom-md-context-read-"));
 	const file = join(root, "a.md");
 	await writeFile(file, "alpha beta\n");
-	try {
-		await openFile(page, electronApp!, root);
-		const box = page.getByRole("textbox", { name: "Edit a.md" });
-		await box.focus();
-		await box.press("ControlOrMeta+End");
-		await box.pressSequentially("!");
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe("alpha beta\n!");
-		await page.getByRole("button", { name: "Reading mode", exact: true }).click();
-		const first = box.locator(".cm-line").first();
-		await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("forbidden"));
-		const items = await menu(electronApp!, first, "Select All", 20);
-		for (const label of ["Undo", "Redo", "Cut", "Paste"]) expect(items.find((item) => item.label === label)?.enabled).toBe(false);
-		const selectedItems = await menu(electronApp!, first, "Copy", 20);
-		expect(selectedItems.some((item) => item.label === "Format")).toBe(false);
-		await expect.poll(() => clipboardText(electronApp!)).toBe("alpha beta\n!");
-		await menu(electronApp!, first, "Paste", 20);
-		await expect(box).toHaveAttribute("aria-readonly", "true");
-		expect(await readFile(file, "utf8")).toBe("alpha beta\n!");
-	} finally { await rm(root, { recursive: true, force: true }); }
+	await openFile(page, electronApp!, root);
+	const box = page.getByRole("textbox", { name: "Edit a.md" });
+	await box.focus();
+	await box.press("ControlOrMeta+End");
+	await box.pressSequentially("!");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe("alpha beta\n!");
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	const first = box.locator(".cm-line").first();
+	await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("forbidden"));
+	const items = await menu(electronApp!, first, "Select All", 20);
+	for (const label of ["Undo", "Redo", "Cut", "Paste"]) expect(items.find((item) => item.label === label)?.enabled).toBe(false);
+	const selectedItems = await menu(electronApp!, first, "Copy", 20);
+	expect(selectedItems.some((item) => item.label === "Format")).toBe(false);
+	await expect.poll(() => clipboardText(electronApp!)).toBe("alpha beta\n!");
+	await menu(electronApp!, first, "Paste", 20);
+	await expect(box).toHaveAttribute("aria-readonly", "true");
+	expect(await readFile(file, "utf8")).toBe("alpha beta\n!");
 });
 
 test("removing an embed from its menu is undoable and leaves the original file in the library", async ({ loomPage: page, electronApp }) => {
@@ -179,66 +169,68 @@ test("removing an embed from its menu is undoable and leaves the original file i
 
 test("table menus copy and paste cell blocks, keep partial cell text and remain read-only while reading", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
-	const root = await mkdtemp(join(tmpdir(), "loom-md-context-table-"));
+	const libraryPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(libraryPath).toBeTruthy();
+	const root = (await libraryPath())!;
 	const file = join(root, "a.md");
 	const text = "| A | B |\n| - | - |\n| one | two |\n| three | four |\n\nend\n";
 	await writeFile(file, text);
-	try {
-		await openFile(page, electronApp!, root);
-		const box = page.getByRole("textbox", { name: "Edit a.md" });
-		const table = box.locator(".cm-live-table");
-		const one = table.locator('td[data-row="1"][data-column="0"]');
-		const four = table.locator('td[data-row="2"][data-column="1"]');
-		await expect(one).toHaveText("one");
-		await menu(electronApp!, one, "Copy");
-		await expect.poll(() => clipboardText(electronApp!)).toContain("| one |");
+	await page.locator(".asset-row").filter({ hasText: "a.md" }).click();
+	const box = page.getByRole("textbox", { name: "Edit a.md" });
+	const table = box.locator(".cm-live-table");
+	const one = table.locator('td[data-row="1"][data-column="0"]');
+	const four = table.locator('td[data-row="2"][data-column="1"]');
+	await expect(one).toHaveText("one");
+	await menu(electronApp!, one, "Copy");
+	await expect.poll(() => clipboardText(electronApp!)).toContain("| one |");
 
-		await one.click();
-		await page.keyboard.press("Home");
-		await page.keyboard.press("ArrowRight");
-		await page.keyboard.press("Shift+End");
-		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("ne");
-		await menu(electronApp!, one, "Copy", 30);
-		await expect.poll(() => clipboardText(electronApp!)).toBe("ne");
-		await menu(electronApp!, one, "Cut", 30);
-		await expect(one).toHaveText("o");
-		await menu(electronApp!, one, "Paste", 10);
-		await expect(one).toHaveText("one");
-		await menu(electronApp!, one, "Select All", 10);
-		await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("one");
+	await one.click();
+	await page.keyboard.press("Home");
+	await page.keyboard.press("ArrowRight");
+	await page.keyboard.press("Shift+End");
+	await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("ne");
+	await menu(electronApp!, one, "Copy", 30);
+	await expect.poll(() => clipboardText(electronApp!)).toBe("ne");
+	await menu(electronApp!, one, "Cut", 30);
+	await expect(one).toHaveText("o");
+	await menu(electronApp!, one, "Paste", 10);
+	await expect(one).toHaveText("one");
+	await menu(electronApp!, one, "Select All", 10);
+	await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe("one");
 
-		const a = (await one.boundingBox())!;
-		const b = (await four.boundingBox())!;
-		await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
-		await page.mouse.down();
-		await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
-		await page.mouse.up();
-		await expect(table.locator(".cm-live-table-range")).toHaveCount(1);
-		await menu(electronApp!, one, "Copy");
-		await expect.poll(() => clipboardText(electronApp!)).toContain("| three | four |");
-		await menu(electronApp!, one, "Cut");
-		await expect(one).toHaveText("");
-		await expect(four).toHaveText("");
-		await menu(electronApp!, one, "Paste");
-		await expect(one).toHaveText("one");
-		await expect(four).toHaveText("four");
-		await box.press("ControlOrMeta+s");
-		await expect.poll(() => readFile(file, "utf8")).toBe(text);
-		await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("five\tsix\nseven\teight"));
-		await menu(electronApp!, four, "Paste");
-		await expect(table.locator("th")).toHaveCount(3);
-		await expect(table.locator("tbody tr")).toHaveCount(3);
-		await expect(table.locator('td[data-row="3"][data-column="2"]')).toHaveText("eight");
-		await menu(electronApp!, one, "Undo");
-		await expect(table.locator("th")).toHaveCount(2);
-		await expect(four).toHaveText("four");
+	// Collapse the text selection so Chromium starts a cell range drag.
+	await page.keyboard.press("ArrowRight");
+	const a = (await one.boundingBox())!;
+	const b = (await four.boundingBox())!;
+	await page.mouse.move(a.x + a.width / 2, a.y + a.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(b.x + b.width / 2, b.y + b.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await expect(table.locator(".cm-live-table-range")).toHaveCount(1);
+	await menu(electronApp!, one, "Copy");
+	await expect.poll(() => clipboardText(electronApp!)).toContain("| three | four |");
+	await menu(electronApp!, one, "Cut");
+	await expect(one).toHaveText("");
+	await expect(four).toHaveText("");
+	await menu(electronApp!, one, "Paste");
+	await expect(one).toHaveText("one");
+	await expect(four).toHaveText("four");
+	await box.press("ControlOrMeta+s");
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
+	await electronApp!.evaluate(({ clipboard }) => clipboard.writeText("five\tsix\nseven\teight"));
+	await menu(electronApp!, four, "Paste");
+	await expect(table.locator("th")).toHaveCount(3);
+	await expect(table.locator("tbody tr")).toHaveCount(3);
+	await expect(table.locator('td[data-row="3"][data-column="2"]')).toHaveText("eight");
+	await menu(electronApp!, one, "Undo");
+	await expect(table.locator("th")).toHaveCount(2);
+	await expect(four).toHaveText("four");
 
-		await page.getByRole("button", { name: "Reading mode", exact: true }).click();
-		const items = await menu(electronApp!, one, "Select All");
-		for (const label of ["Cut", "Paste", "Undo", "Redo"]) expect(items.find((item) => item.label === label)?.enabled).toBe(false);
-		expect(items.some((item) => item.label.startsWith("Insert row") || item.label.startsWith("Delete"))).toBe(false);
-		await menu(electronApp!, one, "Copy");
-		await expect.poll(() => clipboardText(electronApp!)).toBe(text.split("\n\n")[0].replace("| - | - |", "| --- | --- |"));
-		expect(await readFile(file, "utf8")).toBe(text);
-	} finally { await rm(root, { recursive: true, force: true }); }
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	const items = await menu(electronApp!, one, "Select All");
+	for (const label of ["Cut", "Paste", "Undo", "Redo"]) expect(items.find((item) => item.label === label)?.enabled).toBe(false);
+	expect(items.some((item) => item.label.startsWith("Insert row") || item.label.startsWith("Delete"))).toBe(false);
+	await menu(electronApp!, one, "Copy");
+	await expect.poll(() => clipboardText(electronApp!)).toBe(text.split("\n\n")[0].replace("| - | - |", "| --- | --- |"));
+	await expect.poll(() => readFile(file, "utf8")).toBe(text);
 });

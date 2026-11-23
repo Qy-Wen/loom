@@ -22,7 +22,7 @@ test("preview cache reuses decoded frames, invalidates changed files, and clears
 	const preview = new GradePreview(async (options) => {
 		calls.push(options);
 		return options.input ? { stdout: jpeg, stderr: "" } : { stdout: Buffer.from("frame"), stderr: colorInfo };
-	});
+	}, () => true);
 	try {
 		await preview.render(path, "exposure=exposure=1", root);
 		await preview.render(path, "eq=brightness=0.1", root);
@@ -51,7 +51,7 @@ test("oversized decoded frames fall back without retrying the cache or losing vi
 		assert.equal(options.input, undefined);
 		assert.deepEqual(options.args.slice(0, 2), ["-ss", "1.25"]);
 		return { stdout: jpeg, stderr: "" };
-	});
+	}, () => true);
 	try {
 		await preview.render(path, null, root, undefined, 1.25);
 		await preview.render(path, "exposure=exposure=1", root, undefined, 1.25);
@@ -71,7 +71,7 @@ test("cache evicts least recently used frames to keep decoded memory bounded", a
 		if (options.input) return { stdout: jpeg, stderr: "" };
 		decodes++;
 		return { stdout: large, stderr: colorInfo };
-	});
+	}, () => true);
 	try {
 		await preview.render(path, null, root, undefined, 0);
 		await preview.render(path, null, root, undefined, 1);
@@ -98,7 +98,7 @@ test("a new request recovers when a shared decode was aborted", async () => {
 			await new Promise((_, reject) => options.signal!.addEventListener("abort", () => reject(Object.assign(new Error("cancelled"), { name: "AbortError" })), { once: true }));
 		}
 		return { stdout: Buffer.from("frame"), stderr: colorInfo };
-	});
+	}, () => true);
 	try {
 		const controller = new AbortController();
 		const old = preview.render(path, null, root, controller.signal);

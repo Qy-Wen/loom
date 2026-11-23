@@ -1,6 +1,6 @@
 import { stat } from "node:fs/promises";
 import { buildGradePreviewArgs } from "../grade/filters.ts";
-import { runMediaProcessBuffer } from "./run.ts";
+import { canPipeMediaInput, runMediaProcessBuffer } from "./run.ts";
 
 const MAX_FRAMES = 4;
 const MAX_FRAME_BYTES = 96 * 1024 * 1024;
@@ -27,12 +27,18 @@ interface CachedFrame {
 export class GradePreview {
 	private readonly frames = new Map<string, CachedFrame>();
 	private readonly run: typeof runMediaProcessBuffer;
+	private readonly canPipeInput: () => boolean;
 
-	constructor(run: typeof runMediaProcessBuffer = runMediaProcessBuffer) {
+	constructor(
+		run: typeof runMediaProcessBuffer = runMediaProcessBuffer,
+		canPipeInput: () => boolean = canPipeMediaInput,
+	) {
 		this.run = run;
+		this.canPipeInput = canPipeInput;
 	}
 
 	async render(path: string, filter: string | null, cwd: string, signal?: AbortSignal, timeSeconds?: number): Promise<Buffer> {
+		if (!this.canPipeInput()) return this.direct(path, filter, cwd, signal, timeSeconds);
 		const frame = await this.frame(path, cwd, signal, timeSeconds);
 		if (!frame) return this.direct(path, filter, cwd, signal, timeSeconds);
 		if (filter === null && frame.original) return frame.original;

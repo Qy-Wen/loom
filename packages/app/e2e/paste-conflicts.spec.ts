@@ -59,7 +59,8 @@ test("keyboard paste merges folders; Apply to All covers a mixed batch and reset
 	await page.screenshot({ path: testInfo.outputPath("paste-conflict.png") });
 	await dialog.getByRole("button", { name: "Keep Both", exact: true }).click();
 	await expect(dialog).toHaveCount(0);
-	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.some((asset) => asset.relativePath === "to/bundle/nested/inside 2.md")).toBe(true);
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.map((asset) => asset.relativePath), { timeout: 15_000 })
+		.toEqual(expect.arrayContaining(["to/note 2.md", "to/bundle/nested/inside 2.md", "to/bundle/unique.md"]));
 	expect(await readFile(join(root, "to/note 2.md"), "utf8")).toBe("new note");
 	expect(await readFile(join(root, "to/note.md"), "utf8")).toBe("old note");
 	expect(await readFile(join(root, "to/bundle/unique.md"), "utf8")).toBe("unique");

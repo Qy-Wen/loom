@@ -256,13 +256,14 @@ test("toolbar, view, sidebar, and panel tooltips leave after 80ms and clicks dis
 
 test("Loom and the sidebar actions stay aligned at the bottom while files scroll", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated library required");
-	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "200"));
-	await loomPage.reload();
 	const rootPath = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 	await expect.poll(rootPath).toBeTruthy();
 	const root = (await rootPath())!;
 	const fileCount = 45;
 	await Promise.all(Array.from({ length: fileCount }, (_, index) => writeFile(join(root, `file-${index}.md`), "# Document")));
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(fileCount);
+	await loomPage.evaluate(() => localStorage.setItem("loom.layout.libraryWidth", "200"));
+	await loomPage.reload();
 	const sidebar = loomPage.locator(".library-sidebar");
 	const actions = sidebar.locator("footer");
 	const brand = actions.getByText("Loom", { exact: true });

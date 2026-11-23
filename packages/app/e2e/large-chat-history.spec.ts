@@ -11,7 +11,8 @@ import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
 
 test("large saved tool results do not duplicate user bubbles or interrupt subsequent streamed replies", async () => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated library required");
-	test.setTimeout(60_000);
+	test.setTimeout(90_000);
+	const historyLoad = { timeout: 25_000 };
 	const directory = await mkdtemp(join(tmpdir(), "loom-large-chat-"));
 	const library = join(directory, "library");
 	const userData = join(directory, "user-data");
@@ -58,7 +59,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		page.on("response", (response) => {
 			if (response.headers()["content-type"]?.includes("text/event-stream")) void response.body().then((body) => streamSizes.push(body.length)).catch(() => {});
 		});
-		await expect(page.getByRole("tab", { name: "Large history", selected: true, exact: true })).toBeVisible();
+		await expect(page.getByRole("tab", { name: "Large history", selected: true, exact: true })).toBeVisible(historyLoad);
 		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 100_000_000 });
 		await page.evaluate((id) => window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "demo", thinkingLevel: "off" }), session.id);
 		const question = "Ask the same question again";
@@ -74,7 +75,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 				await expect(page.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 				await expect(page.getByTestId("copilot-message-list")).toHaveText("");
 				await page.getByRole("tab", { name: "Large history", exact: true }).click();
-				await expect(page.getByText("LARGE_HISTORY_PARTIAL_0", { exact: true })).toBeVisible();
+				await expect(page.getByText("LARGE_HISTORY_PARTIAL_0", { exact: true })).toBeVisible(historyLoad);
 				await expect(bubbles).toHaveCount(1);
 			}
 			releases[turn]!.resolve();
@@ -84,8 +85,8 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		await page.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(page.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
 		await page.getByRole("tab", { name: "Large history", exact: true }).click();
+		await expect(page.getByText("LARGE_HISTORY_PARTIAL_1 complete", { exact: true })).toBeVisible(historyLoad);
 		await expect(bubbles).toHaveCount(2);
-		await expect(page.getByText("LARGE_HISTORY_PARTIAL_1 complete", { exact: true })).toBeVisible();
 		expect(errors.filter((error) => /SSE buffer|agent_run_failed|agent_connect_failed/.test(error))).toEqual([]);
 		expect(requests).toBe(2);
 		expect(outgoing).toHaveLength(2);

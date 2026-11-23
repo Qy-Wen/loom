@@ -1,6 +1,6 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { join } from "node:path";
-import { sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
+import { processSandboxEnabled, sandboxedArgv, shellCommand } from "../sandbox/process-sandbox.ts";
 import type { MediaProgram } from "./binaries.ts";
 import { resolveMediaBinary } from "./binaries.ts";
 
@@ -30,6 +30,11 @@ export class MediaOutputLimitError extends Error {
 		super("Media process output exceeds its memory limit");
 		this.name = "MediaOutputLimitError";
 	}
+}
+
+/** The Windows sandbox launcher does not forward a binary stdin stream to FFmpeg. */
+export function canPipeMediaInput(): boolean {
+	return process.platform !== "win32" || !processSandboxEnabled();
 }
 
 /**

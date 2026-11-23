@@ -425,6 +425,7 @@ async function thumbnailResponse(assetId: string, versioned: boolean, request: R
 function createWindow(): void {
 	const mac = process.platform === "darwin";
 	const windows = process.platform === "win32";
+	const hiddenTestWindow = process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1";
 	const windowsPreview = mac && !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
 		&& process.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
 	const colors = windowColors();
@@ -436,13 +437,15 @@ function createWindow(): void {
 		icon: loadAppIcon(),
 		backgroundColor: colors.background,
 		// Test runs open and close many windows. Keep them off the user's desktop (see LOOM_E2E_VISIBLE).
-		show: !(process.env.LOOM_E2E === "1" && process.env.LOOM_E2E_VISIBLE !== "1"),
+		show: !hiddenTestWindow,
 		// In the preview, keep native macOS controls above the simulated Windows toolbar.
 		titleBarStyle: windowsPreview ? "default" : mac ? "hiddenInset" : "hidden",
 		...(mac && !windowsPreview && { trafficLightPosition: { x: 14, y: 13 } }),
 		...(!mac && !windows && { titleBarOverlay: { color: colors.titleBar, symbolColor: colors.titleBarSymbol, height: 40 } }),
 		webPreferences: {
 			preload: join(import.meta.dirname, "../preload/index.mjs"),
+			// Hidden Windows windows need an offscreen surface for Playwright screenshots and input.
+			offscreen: windows && hiddenTestWindow,
 			sandbox: false,
 			webviewTag: true,
 		},
