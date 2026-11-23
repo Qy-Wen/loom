@@ -950,10 +950,10 @@ body.library-resizing-regions, body.library-resizing-regions * { cursor: row-res
 	position: fixed;
 	top: 0;
 	left: 0;
-	z-index: -1;
+	z-index: var(--lm-z-behind);
 	width: max-content;
 	max-width: min(240px, 100vw);
-	padding-top: 24px;
+	padding-top: var(--lm-space-9);
 	pointer-events: none;
 }
 

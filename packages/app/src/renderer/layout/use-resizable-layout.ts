@@ -71,15 +71,19 @@ export function useResizableLayout(): {
 		const bounds = shellRef.current.getBoundingClientRect();
 		const handle = event.currentTarget;
 		const { clientX: startX, pointerId } = event;
+		let dragging = false;
 		let libraryMinimum: number | null = null;
 		const libraryWidthAt = (clientX: number) => libraryWidth + clientX - startX;
 		const shouldCollapseLibraryAt = (clientX: number) => libraryMinimum !== null
 			&& clientX < startX && libraryWidthAt(clientX) <= (libraryMinimum * 2) / 3;
-		handle.classList.add("dragging");
-		document.body.classList.add("resizing-columns");
-
 		const onPointerMove = (moveEvent: PointerEvent) => {
 			if (moveEvent.pointerId !== pointerId) return;
+			if (!dragging) {
+				if (moveEvent.clientX === startX) return;
+				dragging = true;
+				handle.classList.add("dragging");
+				document.body.classList.add("resizing-columns");
+			}
 			const panelsVisible = !shellRef.current?.classList.contains("panels-collapsed");
 			const besideOpen = panelsVisible && !!shellRef.current?.querySelector(".beside-resize");
 			const sideOpen = panelsVisible && !!shellRef.current?.querySelector(".side-resize");

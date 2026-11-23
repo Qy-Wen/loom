@@ -144,6 +144,7 @@
 
 	/* Accent and state */
 	--lm-accent: var(--lm-palette-blue-500);
+	--lm-logo-thread: #c0775a;
 	/* Solid button fill that carries --lm-text-on-fill. --lm-accent is too light for white text. */
 	--lm-accent-solid: var(--lm-palette-blue-700);
 	--lm-accent-solid-hover: var(--lm-palette-blue-600);
@@ -170,6 +171,10 @@
 	--lm-on-media: rgb(255 255 255 / 90%);
 	--lm-media-shade: rgb(0 0 0 / 45%);
 	--lm-media-outline: rgb(0 0 0 / 40%);
+	--lm-media-play-button: rgb(0 0 0 / 62%);
+	--lm-media-play-button-hover: rgb(0 0 0 / 82%);
+	--lm-media-controls-scrim: rgb(0 0 0 / 74%);
+	--lm-media-error-surface: rgb(0 0 0 / 72%);
 	--lm-scrollbar-thumb: #c4c6c8;
 	--lm-scrollbar-thumb-hover: #adb0b4;
 	--lm-glow-brand: rgb(74 74 120 / 20%);
@@ -257,6 +262,7 @@
 	--lm-shadow-brand: 0 14px 32px var(--lm-glow-brand);
 
 	/* Stacking: the numbers are the tiers; keep new layers between existing ones */
+	--lm-z-behind: -1;
 	--lm-z-base: 1;
 	--lm-z-raised: 2;
 	--lm-z-hover: 3;

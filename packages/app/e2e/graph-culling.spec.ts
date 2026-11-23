@@ -11,6 +11,8 @@ test("graph draws only what is on screen and shrinks far-away nodes to plain dot
 	await copyFile(STILL, join(root, "photo.png"));
 	for (let index = 0; index < 60; index++) await writeFile(join(root, `note-${String(index).padStart(2, "0")}.md`), "x");
 	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(61);
+	// The first graph fit uses the assets already received by the renderer.
+	await expect(loomPage.locator(".library-sidebar .asset-row")).toHaveCount(61);
 	await loomPage.locator(".library-views").getByRole("button", { name: "Graph", exact: true }).click();
 
 	const nodes = loomPage.locator(".graph-node");

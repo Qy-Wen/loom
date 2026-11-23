@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { get } from "node:http";
+import { get, Server } from "node:http";
 import { app, safeStorage } from "electron";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
 import { createModels } from "@earendil-works/pi-ai/models";
@@ -32,6 +32,20 @@ async function probeOpenAICallback(provider) {
 	});
 	let callbacks = Promise.resolve();
 	let exchanged = false;
+	let listener;
+	const listen = Server.prototype.listen;
+	// Exercise the real callback server on an OS-assigned port within this probe.
+	Server.prototype.listen = function (...args) {
+		const [port, host, ready] = args;
+		if (port !== 1455 || host !== "127.0.0.1") return listen.apply(this, args);
+		return listen.call(this, 0, host, () => {
+			listener = {
+				port: this.address().port,
+				closed: new Promise((resolve) => this.once("close", resolve)),
+			};
+			ready();
+		});
+	};
 	const disabledFetch = globalThis.fetch;
 	globalThis.fetch = async (url, options) => {
 		assert.equal(String(url), "https://auth.openai.com/api/accounts/oauth/token");
@@ -48,6 +62,8 @@ async function probeOpenAICallback(provider) {
 			assert.equal(auth.searchParams.get("agent_name_hint"), "Loom");
 			assert.equal(auth.searchParams.get("ext_agent_host_id"), `urn:uuid:${deviceId}`);
 			const callback = new URL(auth.searchParams.get("redirect_uri"));
+			assert.equal(callback.port, "1455");
+			callback.port = String(listener.port);
 			callback.search = new URLSearchParams({ code: "p0-fake-code", client_id: "p0-issued-client", state: "wrong-state" }).toString();
 			callbacks = (async () => {
 				assert.equal(await callbackStatus(callback), 400, "reject incorrect state before accepting a valid callback");
@@ -66,12 +82,12 @@ async function probeOpenAICallback(provider) {
 		await assert.rejects(models.login("openai", "oauth", { signal: cancel.signal, prompt, notify: (event) => {
 			if (event.type === "auth_url") cancel.abort(new Error("P0_CANCEL_LOGIN"));
 		} }, { getDeviceId: () => deviceId, agentName: "Loom" }), /P0_CANCEL_LOGIN/);
-		// Allow the provider's cancellation cleanup to release the loopback listener.
-		await new Promise((resolve) => setTimeout(resolve, 50));
-		await assert.rejects(callbackStatus(new URL("http://127.0.0.1:1455/auth/callback")), (error) => error.code === "ECONNREFUSED");
+		await listener.closed;
+		await assert.rejects(callbackStatus(new URL(`http://127.0.0.1:${listener.port}/auth/callback`)), (error) => error.code === "ECONNREFUSED");
 		return "mock-callback-state-validation-and-cancel-passed";
 	} finally {
 		globalThis.fetch = disabledFetch;
+		Server.prototype.listen = listen;
 	}
 }
 

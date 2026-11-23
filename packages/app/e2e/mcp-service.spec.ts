@@ -56,19 +56,19 @@ test("external MCP supports client-owned permissions, optional authentication, e
 	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 	const client = new Client({ name: "Desktop MCP verification", version: "1" });
 	const transport = new StreamableHTTPClientTransport(new URL(service.url));
-	async function verifyConnection(token = "") {
+	async function verifyConnection(expectedToolNames: readonly string[], token = "") {
 		const probe = new Client({ name: "Auth verification", version: "1" });
 		try {
 			await probe.connect(new StreamableHTTPClientTransport(new URL(service.url), { requestInit: { headers: token ? { Authorization: `Bearer ${token}` } : {} } }));
-			expect((await probe.listTools()).tools).toHaveLength(31);
+			const toolNames = (await probe.listTools()).tools.map((tool) => tool.name).sort();
+			expect(toolNames).toEqual(expectedToolNames);
 			expect((await probe.callTool({ name: "list_tags", arguments: {} })).isError).toBeUndefined();
 		} finally { await probe.close(); }
 	}
 	try {
 		await client.connect(transport);
-		const tools = (await client.listTools()).tools;
-		expect(tools).toHaveLength(31);
-		expect(tools.map((tool) => tool.name)).toEqual(expect.arrayContaining(["get_settings", "update_settings"]));
+		const toolNames = (await client.listTools()).tools.map((tool) => tool.name).sort();
+		expect(toolNames).toEqual(expect.arrayContaining(["get_settings", "update_settings"]));
 		const instructions = "Configured through external MCP";
 		expect((await client.callTool({ name: "update_settings", arguments: { instructions } })).isError).toBeUndefined();
 		const current = await client.callTool({ name: "get_settings", arguments: {} });
@@ -95,7 +95,7 @@ test("external MCP supports client-owned permissions, optional authentication, e
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getMcpService())).token).toBe(manualToken);
 		expect((await fetch(service.url)).status).toBe(401);
 		expect(await readFile(join(userData, "mcp-service.json"), "utf8")).not.toContain(manualToken);
-		await verifyConnection(manualToken);
+		await verifyConnection(toolNames, manualToken);
 		await settings.getByRole("button", { name: "Generate", exact: true }).click();
 		const generated = await settings.getByLabel("Access token", { exact: true }).inputValue();
 		expect(generated).toMatch(/^[a-f0-9]{64}$/);
@@ -106,12 +106,12 @@ test("external MCP supports client-owned permissions, optional authentication, e
 		const authenticatedClipboard = await electronApp!.evaluate(({ clipboard }) => clipboard.readText());
 		expect(JSON.parse(authenticatedClipboard).mcpServers.loom.headers.Authorization).toBe(`Bearer ${generated}`);
 		expect((await fetch(service.url, { headers: { Authorization: `Bearer ${manualToken}` } })).status).toBe(401);
-		await verifyConnection(generated);
+		await verifyConnection(toolNames, generated);
 		await settings.getByLabel("Access token", { exact: true }).fill("");
 		await settings.getByRole("button", { name: "Save", exact: true }).click();
 		await expect(settings.getByRole("button", { name: "Save", exact: true })).toBeDisabled();
 		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getMcpService())).token).toBe("");
-		await verifyConnection();
+		await verifyConnection(toolNames);
 		await expect(settings.getByRole("switch", { name: "Enable local MCP service" })).toBeEnabled();
 		await settings.getByRole("switch", { name: "Enable local MCP service" }).locator("..").click();
 		await expect(settings.locator(".settings-slot-head .settings-probe")).toHaveClass(/\bis-idle\b/);

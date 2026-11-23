@@ -3,6 +3,7 @@ import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import { test, expect } from "@playwright/test";
 import type { ElectronApplication } from "playwright";
 import { launchTestElectron, saveChatEndpoint } from "./loom.ts";
@@ -82,6 +83,7 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 		const library = join(root, "library"); const userData = join(root, "user-data");
 		let app: ElectronApplication | undefined;
 		let requests = 0;
+		const partialAnswer = "Unfinished before crash";
 		const modelInputs: unknown[] = [];
 		const server = createServer((request, response) => {
 			let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
@@ -92,7 +94,7 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 				if (boundary === "streaming") {
 					if (requests > 1) { reply(response); return; }
 					response.writeHead(200, { "content-type": "text/event-stream" });
-					response.write(`data: ${JSON.stringify({ id: "partial", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content: "Unfinished before crash" }, finish_reason: null }] })}\n\n`);
+					response.write(`data: ${JSON.stringify({ id: "partial", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: { content: partialAnswer }, finish_reason: null }] })}\n\n`);
 				} else if (parsed.messages.some((message) => message.role === "tool")) reply(response);
 				else reply(response, "bash", { command: "printf 'effect\\n' >> effect.txt; printf started > started.txt; while [ ! -f release.txt ]; do sleep 0.1; done", timeout: 20 });
 			});
@@ -113,8 +115,24 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 				await window.loom.saveAgentSandbox(false);
 			});
 			await page.getByRole("textbox").fill(`Crash during ${boundary}`); await page.getByRole("textbox").press("Enter");
-			if (boundary === "streaming") await expect(page.getByText("Unfinished before crash", { exact: true })).toBeVisible();
-			else await expect.poll(() => readFile(join(library, "started.txt"), "utf8").catch(() => "")).toBe("started");
+			if (boundary === "streaming") {
+				await expect(page.getByText(partialAnswer, { exact: true })).toBeVisible();
+				// The stream can paint before the durable runtime commits its partial reply.
+				const db = new DatabaseSync(join(library, ".loom", "agents", "sessions", "loom.sqlite"), { readOnly: true });
+				try {
+					const partial = db.prepare(`
+						SELECT 1 FROM document_revisions AS revision
+						JOIN documents AS doc ON doc.id = revision.document_id
+						WHERE doc.kind = json_quote('pi.live') AND doc.owner_id = ? AND instr(revision.content, ?) > 0
+						LIMIT 1
+					`);
+					await expect.poll(() => partial.get(session.id, partialAnswer)).toBeDefined();
+				} finally {
+					db.close();
+				}
+			} else {
+				await expect.poll(() => readFile(join(library, "started.txt"), "utf8").catch(() => "")).toBe("started");
+			}
 			expect(requests).toBe(1);
 			await killElectron(app, boundary === "unsafe-bash" ? () => writeFile(join(library, "release.txt"), "release") : undefined); app = undefined;
 			app = await launchTestElectron(userData); page = await app.firstWindow();
@@ -127,7 +145,7 @@ for (const boundary of ["streaming", "unsafe-bash"] as const) {
 			if (boundary === "streaming") {
 				const assistants = record.messages.filter((message) => message.role === "assistant");
 				expect(assistants.map((message) => message.stopReason)).toEqual(["aborted", "stop"]);
-				await expect(page.getByText("Unfinished before crash", { exact: true })).toHaveCount(1);
+				await expect(page.getByText(partialAnswer, { exact: true })).toHaveCount(1);
 				await expect(page.getByText("Recovered and saved.", { exact: true })).toHaveCount(1);
 			} else {
 				expect(await readFile(join(library, "effect.txt"), "utf8")).toBe("effect\n");

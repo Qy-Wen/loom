@@ -19,7 +19,7 @@ export function LoomLogo({ size = 16, className }: LoomLogoProps): React.JSX.Ele
 	return (
 		<svg className={className} viewBox="0 0 20 20" width={size} height={size} aria-hidden="true">
 			<g fill="var(--lm-accent)">{rects(BLUE)}</g>
-			<g fill="#c0775a">{rects(ORANGE)}</g>
+			<g fill="var(--lm-logo-thread)">{rects(ORANGE)}</g>
 		</svg>
 	);
 }
