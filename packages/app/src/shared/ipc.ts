@@ -353,7 +353,7 @@ export interface LoomApi {
 	copyLibraryPaths: (assetIds: string[], folders: string[]) => Promise<void>;
 	copyLibraryItems: (assetIds: string[], folders: string[], move: boolean) => Promise<string>;
 	isLibraryClipboardCurrent: (token: string) => Promise<boolean>;
-	pasteFromClipboard: (destFolder: string) => Promise<PastedLibraryItems | null>;
+	pasteFromClipboard: (destFolder: string, targetIsSelectedFolder?: boolean) => Promise<(PastedLibraryItems & { destinationFolder: string }) | null>;
 	placePathsInto: (absolutePaths: string[], destFolder: string, move: boolean) => Promise<PastedLibraryItems>;
 	onPasteConflict: (listener: (request: { id: number; conflict: PasteConflict | null }) => void) => () => void;
 	resolvePasteConflict: (id: number, choice: PasteChoice, applyAll: boolean) => Promise<void>;

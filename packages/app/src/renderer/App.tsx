@@ -932,13 +932,13 @@ export function App(): React.JSX.Element {
 		}
 	}
 
-	async function pasteInto(destFolder: string): Promise<void> {
+	async function pasteInto(destFolder: string, targetIsSelectedFolder = false): Promise<void> {
 		await whileBusy(t.library.pasting, async () => {
 			const sameLibrary = detailRequests.current.libraryGuard();
 			setError(null);
 			try {
-				const placed = await window.loom.pasteFromClipboard(destFolder);
-				if (sameLibrary() && placed && (placed.assets.length || placed.folders.length)) showPlaced(destFolder, placed);
+				const placed = await window.loom.pasteFromClipboard(destFolder, targetIsSelectedFolder);
+				if (sameLibrary() && placed && (placed.assets.length || placed.folders.length)) showPlaced(placed.destinationFolder, placed);
 			} catch (cause) {
 				if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
 			} finally {
@@ -1058,7 +1058,7 @@ export function App(): React.JSX.Element {
 			} else if (action === "copy" || action === "cut") {
 				await copySelection(next, action === "cut");
 			} else if (action === "paste") {
-				await pasteInto(relativePath);
+				await pasteInto(relativePath, true);
 			} else if (action === "new_folder") {
 				await createFolderIn(relativePath, fromTree);
 			} else if (action === "new_md_file") {
@@ -1242,7 +1242,8 @@ export function App(): React.JSX.Element {
 			void copySelection(selection, key === "x");
 		} else if (mod && !event.altKey && key === "v") {
 			event.preventDefault();
-			void pasteInto(pasteDestination(selection, fromTree));
+			const targetIsSelectedFolder = (!iconMode || fromTree) && selection.focus?.startsWith("folder:");
+			void pasteInto(pasteDestination(selection, fromTree), targetIsSelectedFolder);
 		} else if (mod && !event.altKey && !event.shiftKey && key === "d") {
 			event.preventDefault();
 			void duplicateSelection(selection);

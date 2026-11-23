@@ -5,6 +5,7 @@
 ## [Unreleased]
 
 - Click blank space in the sidebar file list to select the library root while keeping the active file tab open.
+- Copy and paste a selected folder in the sidebar to create a sibling copy in the same directory.
 
 ## [v0.1.8]
 

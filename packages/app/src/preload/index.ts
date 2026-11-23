@@ -69,7 +69,7 @@ const api: LoomApi = {
 	copyLibraryPaths: (assetIds, folders) => ipcRenderer.invoke(IPC.copyLibraryPaths, assetIds, folders),
 	copyLibraryItems: (assetIds, folders, move) => ipcRenderer.invoke(IPC.copyLibraryItems, assetIds, folders, move),
 	isLibraryClipboardCurrent: (token) => ipcRenderer.invoke(IPC.isLibraryClipboardCurrent, token),
-	pasteFromClipboard: (destFolder) => ipcRenderer.invoke(IPC.pasteFromClipboard, destFolder),
+	pasteFromClipboard: (destFolder, targetIsSelectedFolder) => ipcRenderer.invoke(IPC.pasteFromClipboard, destFolder, targetIsSelectedFolder),
 	placePathsInto: (absolutePaths, destFolder, move) => ipcRenderer.invoke(IPC.placePathsInto, absolutePaths, destFolder, move),
 	onPasteConflict: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, request: Parameters<typeof listener>[0]) => listener(request);

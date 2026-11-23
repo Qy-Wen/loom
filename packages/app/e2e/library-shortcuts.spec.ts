@@ -142,6 +142,37 @@ for (const mode of ["List", "Icons"] as const) {
 		expect(await readFile(join(root, "outside.md"), "utf8")).toBe("outside note");
 	});
 
+	test(`pasting onto a copied tree folder creates a sibling in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
+		test.skip(!electronApp, "isolated library required");
+		const { root, folder } = await prepare(page, mode);
+		const nested = mode === "List";
+		const name = nested ? "nested" : "source";
+		const path = nested ? "target/nested" : "source";
+		const contents = nested ? "nested note" : "source note";
+		const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+		if (nested) {
+			await mkdir(join(root, path));
+			await writeFile(join(root, path, "note.md"), contents);
+			await expect.poll(async () => (await snapshot()).assets.some((asset) => asset.relativePath === `${path}/note.md`)).toBe(true);
+		}
+		await folder(name).click();
+		await page.keyboard.press("ControlOrMeta+c");
+		await page.keyboard.press("ControlOrMeta+v");
+		await expect.poll(async () => (await snapshot()).folders).toContain(`${path} copy`);
+		expect(await readFile(join(root, `${path} copy`, "note.md"), "utf8")).toBe(contents);
+		expect(await readFile(join(root, path, "note.md"), "utf8")).toBe(contents);
+
+		await electronApp!.evaluate(({ Menu }) => {
+			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+				this.items.find((item) => item.label === "Paste" && item.enabled)?.click();
+				options?.callback?.();
+			};
+		});
+		await folder(name).click({ button: "right" });
+		await expect.poll(async () => (await snapshot()).folders).toContain(`${path} copy 2`);
+		expect(await readFile(join(root, `${path} copy 2`, "note.md"), "utf8")).toBe(contents);
+	});
+
 	test(`tree copy, cut, paste and new-folder shortcuts use the focused destination in ${mode} mode`, async ({ loomPage: page, electronApp }) => {
 		test.skip(!electronApp, "isolated library required");
 		test.setTimeout(60_000);

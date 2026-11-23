@@ -882,7 +882,7 @@ function registerIpc(): void {
 		resolvePasteConflict(event.sender.id, id, choice, applyAll);
 	});
 
-	ipcMain.handle(IPC.pasteFromClipboard, async (event, destFolder: string) => {
+	ipcMain.handle(IPC.pasteFromClipboard, async (event, destFolder: string, targetIsSelectedFolder = false) => {
 		const root = localCore.getLibraryRoot();
 		const source = await clipboardRequests.run(async () => {
 			const items = readLibraryClipboard();
@@ -891,7 +891,16 @@ function registerIpc(): void {
 			return external && { ...external, token: null };
 		});
 		if (!source || openingLibrary || localCore.getLibraryRoot() !== root) return null;
-		const placed = await pasteWithConflicts(event, source.paths, destFolder, source.move);
+		let destinationFolder = destFolder;
+		// Pasting on a selected copy source creates a sibling in its containing folder.
+		if (targetIsSelectedFolder === true && destFolder && !source.move) {
+			const target = localCore.getFolderFilePath(destFolder);
+			if (source.paths.some((path) => relative(target, path) === "")) {
+				const separator = destFolder.lastIndexOf("/");
+				destinationFolder = separator < 0 ? "" : destFolder.slice(0, separator);
+			}
+		}
+		const placed = await pasteWithConflicts(event, source.paths, destinationFolder, source.move);
 		if (source.move && !placed.cancelled) {
 			await clipboardRequests.run(async () => {
 				if (source.token) {
@@ -908,7 +917,7 @@ function registerIpc(): void {
 				}
 			});
 		}
-		return placed;
+		return { ...placed, destinationFolder };
 	});
 
 	ipcMain.handle(IPC.placePathsInto, (event, absolutePaths: string[], destFolder: string, move: boolean) =>
