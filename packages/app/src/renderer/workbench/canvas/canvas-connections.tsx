@@ -27,8 +27,8 @@ export function CanvasConnections({ edges, nodes, selected, selectedNodes, draft
 	return <>
 		<svg className="canvas-lines" width="1" height="1" aria-hidden="true">
 			<defs>
-				<marker id={marker} markerWidth="7" markerHeight="8" refX="6.5" refY="4" orient="auto-start-reverse">
-					<path d="M 1.5 1.5 L 6.5 4 L 1.5 6.5" fill="none" stroke="context-stroke" strokeLinejoin="round" strokeLinecap="round" />
+				<marker id={marker} markerUnits="userSpaceOnUse" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto-start-reverse">
+					<path d="M 0.75 0.75 L 9 4 L 0.75 7.25 Z" fill="context-stroke" />
 				</marker>
 			</defs>
 			{lines.map(({ edge, path }) => (

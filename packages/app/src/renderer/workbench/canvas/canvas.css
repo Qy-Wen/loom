@@ -249,10 +249,17 @@
 .canvas-card-media {
 	border: 0;
 	background: transparent;
-	outline: 1px solid var(--lm-border-default);
-	outline-offset: -1px;
 }
-.canvas-card.selected > .canvas-card-media { outline-color: var(--lm-accent); }
+/* Paint the stroke over the image. A layout border would change the content ratio and letterbox the picture. */
+.canvas-card-media::after {
+	content: "";
+	position: absolute;
+	inset: 0;
+	border: 1px solid var(--lm-border-default);
+	border-radius: inherit;
+	pointer-events: none;
+}
+.canvas-card.selected > .canvas-card-media::after { border-color: var(--lm-accent); }
 .canvas-card-media .canvas-card-body { padding: 0; }
 .canvas-edge-input { padding: var(--lm-space-1) var(--lm-space-2); width: 12em; min-width: 0; }
 .canvas-asset-preview {
@@ -481,8 +488,8 @@
 	z-index: var(--lm-z-base);
 	display: grid;
 	place-items: center;
-	width: var(--lm-size-xs);
-	height: var(--lm-size-xs);
+	width: 22px;
+	height: 22px;
 	padding: 0;
 	border: 0;
 	border-radius: 50%;
@@ -495,8 +502,8 @@
 }
 .canvas-port::before {
 	content: "";
-	width: 7px;
-	height: 7px;
+	width: 10px;
+	height: 10px;
 	border: 1px solid currentColor;
 	border-radius: 50%;
 	background: var(--lm-surface-raised);
@@ -521,8 +528,8 @@
 .canvas-connection-target {
 	position: absolute;
 	z-index: var(--lm-z-raised);
-	width: var(--lm-space-3);
-	height: var(--lm-space-3);
+	width: 10px;
+	height: 10px;
 	border: 2px solid var(--lm-surface-raised);
 	border-radius: 50%;
 	background: var(--lm-accent);

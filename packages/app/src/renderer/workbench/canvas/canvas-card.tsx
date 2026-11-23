@@ -78,7 +78,7 @@ export function CanvasCard({
 					<input className="canvas-group-title" aria-label={t.canvas.groupLabel} autoFocus value={node.label ?? ""}
 						onKeyDown={finishEditing} onBlur={onGroupTitleBlur} onChange={(event) => onText(node.id, "label", event.target.value)} />
 				) : (
-					<button type="button" className="canvas-handle" title={editNoteFromHandle ? t.canvas.editNoteHint : t.canvas.moveCard}
+					<button type="button" className="canvas-handle"
 						aria-label={openFromHandle ? `${t.canvas.preview} ${name}. ${t.canvas.moveCard}` : `${name}. ${t.canvas.moveCard}`}
 						aria-keyshortcuts={editNoteFromHandle ? "F2" : undefined}
 						aria-pressed={openFromHandle ? undefined : selected}
