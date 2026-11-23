@@ -1,6 +1,6 @@
 import { isImeComposing } from "./components/ime-composition.ts";
 import { DetailRequestScope } from "./details/request-scope.ts";
-import { lazy, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
@@ -103,8 +103,8 @@ function joinWindowCorners(
 	return top + bottom;
 }
 
-type LibraryClipboard = {
-	mode: "copy" | "cut";
+type LibraryCutItems = {
+	token: string;
 	assetIds: string[];
 	folders: string[];
 };
@@ -195,7 +195,18 @@ export function App(): React.JSX.Element {
 	const viewedAssetId = workbenchView === "library" ? libraryAssetId ?? (iconMode ? selectedAssetId : null) : selectedAssetId;
 	const [renamingAssetId, setRenamingAssetId] = useState<string | null>(null);
 	const [renamingFolder, setRenamingFolder] = useState<FolderRename | null>(null);
-	const [libraryClipboard, setLibraryClipboard] = useState<LibraryClipboard | null>(null);
+	const [cutItems, setCutItems] = useState<LibraryCutItems | null>(null);
+	const refreshCutItems = useCallback(async (items: LibraryCutItems) => {
+		if (!await window.loom.isLibraryClipboardCurrent(items.token)) {
+			setCutItems((current) => current === items ? null : current);
+		}
+	}, []);
+	useEffect(() => {
+		if (!cutItems) return;
+		const onFocus = () => { void refreshCutItems(cutItems).catch(() => undefined); };
+		window.addEventListener("focus", onFocus);
+		return () => window.removeEventListener("focus", onFocus);
+	}, [cutItems, refreshCutItems]);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
 	const assetIds = useMemo(() => new Set(library.assets.map((asset) => asset.assetId)), [library.assets]);
@@ -429,6 +440,7 @@ export function App(): React.JSX.Element {
 			if (change.type === "reset") {
 				setCollapsedFolders(new Set(change.snapshot.folders));
 				setPicked(emptyTreeSelection);
+				setCutItems(null);
 				setLocation(ROOT_LOCATION);
 				setPreviewAssetId(null);
 			}
@@ -837,20 +849,16 @@ export function App(): React.JSX.Element {
 		return asset ? parentFolder(asset.relativePath) : "";
 	}
 
-	function clipboardFor(selection: TreeSelection, mode: "copy" | "cut"): LibraryClipboard | null {
+	async function copySelection(selection: TreeSelection, move: boolean): Promise<void> {
 		const items = rootLibraryItems(cursorsForKeys(selection.keys, library.assets));
-		if (items.assetIds.length === 0 && items.folders.length === 0) return null;
-		return { mode, assetIds: items.assetIds, folders: items.folders };
-	}
-
-	function copySelection(selection: TreeSelection = picked): void {
-		const next = clipboardFor(selection, "copy");
-		if (next) setLibraryClipboard(next);
-	}
-
-	function cutSelection(selection: TreeSelection = picked): void {
-		const next = clipboardFor(selection, "cut");
-		if (next) setLibraryClipboard(next);
+		if (items.assetIds.length === 0 && items.folders.length === 0) return;
+		const sameLibrary = detailRequests.current.libraryGuard();
+		try {
+			const token = await window.loom.copyLibraryItems(items.assetIds, items.folders, move);
+			if (sameLibrary()) setCutItems(move ? { ...items, token } : null);
+		} catch (cause) {
+			if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
+		}
 	}
 
 	function revealCreatedFolder(relativePath: string, fromTree: boolean): void {
@@ -926,24 +934,15 @@ export function App(): React.JSX.Element {
 
 	async function pasteInto(destFolder: string): Promise<void> {
 		await whileBusy(t.library.pasting, async () => {
-			if (libraryClipboard) {
-				setError(null);
-				try {
-					const move = libraryClipboard.mode === "cut";
-					const placed = await window.loom.pasteLibraryItems(libraryClipboard.assetIds, libraryClipboard.folders, destFolder, move);
-					if (placed.assets.length || placed.folders.length) showPlaced(destFolder, placed);
-					if (move && !placed.cancelled) setLibraryClipboard(null);
-				} catch (cause) {
-					setError(cause instanceof Error ? cause.message : String(cause));
-				}
-				return;
-			}
+			const sameLibrary = detailRequests.current.libraryGuard();
+			setError(null);
 			try {
-				const clip = await window.loom.readFileClipboard();
-				if (!clip) return;
-				await placeExternalPaths(clip.paths, destFolder, clip.move);
+				const placed = await window.loom.pasteFromClipboard(destFolder);
+				if (sameLibrary() && placed && (placed.assets.length || placed.folders.length)) showPlaced(destFolder, placed);
 			} catch (cause) {
-				setError(cause instanceof Error ? cause.message : String(cause));
+				if (sameLibrary()) setError(cause instanceof Error ? cause.message : String(cause));
+			} finally {
+				if (cutItems) await refreshCutItems(cutItems).catch(() => undefined);
 			}
 		});
 	}
@@ -1004,7 +1003,7 @@ export function App(): React.JSX.Element {
 		setPicked(next);
 		setError(null);
 		try {
-			const action = await window.loom.showAssetContextMenu(asset.assetId, libraryClipboard !== null, next.keys.length === 1, !iconMode);
+			const action = await window.loom.showAssetContextMenu(asset.assetId, next.keys.length === 1, !iconMode);
 			if (!sameLibrary()) return;
 			if (action === "open") {
 				selectAsset(asset.assetId);
@@ -1025,10 +1024,8 @@ export function App(): React.JSX.Element {
 				setRenamingAssetId(asset.assetId);
 			} else if (action === "duplicate") {
 				await duplicateSelection(next);
-			} else if (action === "copy") {
-				copySelection(next);
-			} else if (action === "cut") {
-				cutSelection(next);
+			} else if (action === "copy" || action === "cut") {
+				await copySelection(next, action === "cut");
 			} else if (action === "paste") {
 				await pasteInto(directory);
 			} else if (action === "new_folder") {
@@ -1055,13 +1052,11 @@ export function App(): React.JSX.Element {
 		if (iconMode && fromTree) setTreePicked(next);
 		setError(null);
 		try {
-			const action = await window.loom.showFolderContextMenu(relativePath, libraryClipboard !== null, next.keys.length === 1);
+			const action = await window.loom.showFolderContextMenu(relativePath, next.keys.length === 1);
 			if (action === "rename" && next.keys.length === 1) {
 				beginFolderRename(relativePath, fromTree);
-			} else if (action === "copy") {
-				copySelection(next);
-			} else if (action === "cut") {
-				cutSelection(next);
+			} else if (action === "copy" || action === "cut") {
+				await copySelection(next, action === "cut");
 			} else if (action === "paste") {
 				await pasteInto(relativePath);
 			} else if (action === "new_folder") {
@@ -1087,7 +1082,7 @@ export function App(): React.JSX.Element {
 		const sameLibrary = detailRequests.current.libraryGuard();
 		setError(null);
 		try {
-			const action = await window.loom.showLibraryContextMenu(libraryClipboard !== null);
+			const action = await window.loom.showLibraryContextMenu();
 			if (!sameLibrary()) return;
 			if (action === "new_folder") await createFolderIn(relativePath, fromTree);
 			else if (action === "paste") await pasteInto(relativePath);
@@ -1150,6 +1145,7 @@ export function App(): React.JSX.Element {
 		setError(null);
 		try {
 			await window.loom.copyLibraryPaths(items.assetIds, items.folders);
+			if (cutItems) await refreshCutItems(cutItems);
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
@@ -1241,12 +1237,9 @@ export function App(): React.JSX.Element {
 		} else if (mod && !event.altKey && !event.shiftKey && key === "a") {
 			event.preventDefault();
 			pickRows(selectVisible, rows, fromTree);
-		} else if (mod && !event.altKey && key === "c") {
+		} else if (mod && !event.altKey && (key === "c" || key === "x")) {
 			event.preventDefault();
-			copySelection(selection);
-		} else if (mod && !event.altKey && key === "x") {
-			event.preventDefault();
-			cutSelection(selection);
+			void copySelection(selection, key === "x");
 		} else if (mod && !event.altKey && key === "v") {
 			event.preventDefault();
 			void pasteInto(pasteDestination(selection, fromTree));
@@ -1502,7 +1495,7 @@ export function App(): React.JSX.Element {
 				setTabs(emptyAssetTabs);
 				setRenamingAssetId(null);
 				setRenamingFolder(null);
-				setLibraryClipboard(null);
+				setCutItems(null);
 				setCollapsedFolders(new Set(snapshot.folders));
 				setProperties(propertySnapshot.properties);
 				setPropertyValues(propertySnapshot.values);
@@ -1721,8 +1714,8 @@ export function App(): React.JSX.Element {
 						renamingAssetId={renamingAssetId}
 						renamingFolder={renamingFolder?.view === "tree" ? renamingFolder.relativePath : null}
 						collapsedFolders={collapsedFolders}
-						cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
-						cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
+						cutAssetIds={cutItems?.assetIds ?? []}
+						cutFolders={cutItems?.folders ?? []}
 						selectionDrag={selectionDrag}
 						onToggleFolder={toggleFolder}
 						onSelectAsset={(assetId, mode, rows) => chooseTreeKey(assetKey(assetId), mode, rows)}
@@ -1800,8 +1793,8 @@ export function App(): React.JSX.Element {
 									onSelect={(key, mode, rows) => setPicked((current) => pointerSelect(current, rows, key, mode))}
 									renamingAssetId={renamingAssetId}
 									renamingFolder={renamingFolder?.view === "browser" ? renamingFolder.relativePath : null}
-									cutAssetIds={libraryClipboard?.mode === "cut" ? libraryClipboard.assetIds : []}
-									cutFolders={libraryClipboard?.mode === "cut" ? libraryClipboard.folders : []}
+								cutAssetIds={cutItems?.assetIds ?? []}
+								cutFolders={cutItems?.folders ?? []}
 									selectionDrag={selectionDrag}
 									onOpenAsset={selectAsset}
 									onAssetContextMenu={(asset) => void showAssetContextMenu(asset)}

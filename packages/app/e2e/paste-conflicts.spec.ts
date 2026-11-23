@@ -1,7 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { ElectronApplication } from "playwright";
+import { readMacFilePaths } from "../src/main/desktop/mac-file-clipboard.ts";
+import { readWindowsFilePaths } from "../src/main/desktop/windows-file-clipboard.ts";
 import { expect, test } from "./loom.ts";
+
+const readNativeFilePaths = process.platform === "darwin" ? readMacFilePaths : readWindowsFilePaths;
 
 async function forbidNativeDialogs(app: ElectronApplication) {
 	await app.evaluate(({ dialog }) => {
@@ -33,6 +37,9 @@ test("keyboard paste merges folders; Apply to All covers a mixed batch and reset
 	await page.keyboard.press("ControlOrMeta+a");
 	await expect(browser.locator(".browser-tile.selected")).toHaveCount(2);
 	await page.keyboard.press("ControlOrMeta+c");
+	if (process.platform === "darwin" || process.platform === "win32") {
+		await expect.poll(async () => (await readNativeFilePaths()).sort()).toEqual([join(root, "from", "bundle"), join(root, "from", "note.md")]);
+	}
 	await sidebar.locator(".library-root-button").click();
 	await tile("to").dblclick();
 	await browser.locator(".browser-scroll").focus();
@@ -77,7 +84,10 @@ test("Replace applies to nested files; unchecked choices ask again, and external
 	}
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getLibrarySnapshot())).assets.length).toBe(4);
 	await forbidNativeDialogs(electronApp!);
-	const pasted = page.evaluate(() => window.loom.pasteLibraryItems([], ["source/bundle"], "target", false));
+	const pasted = page.evaluate(async () => {
+		await window.loom.copyLibraryItems([], ["source/bundle"], false);
+		return window.loom.pasteFromClipboard("target");
+	});
 	const dialog = page.locator(".confirmation-dialog");
 	await expect(dialog).toHaveAccessibleName(/a\.md.*already exists\./);
 	await expect(dialog.getByRole("checkbox")).not.toBeChecked();
@@ -85,7 +95,7 @@ test("Replace applies to nested files; unchecked choices ask again, and external
 	await expect(dialog).toHaveAccessibleName(/b\.md.*already exists\./);
 	await expect(dialog.getByRole("checkbox")).not.toBeChecked();
 	await dialog.getByRole("button", { name: "Keep Both", exact: true }).click();
-	expect((await pasted).cancelled).toBe(false);
+	expect((await pasted)?.cancelled).toBe(false);
 	await expect(dialog).toHaveCount(0);
 	expect(await readFile(join(root, "target/bundle/a.md"), "utf8")).toBe("new a");
 	expect(await readFile(join(root, "target/bundle/b.md"), "utf8")).toBe("old b");
@@ -101,4 +111,46 @@ test("Replace applies to nested files; unchecked choices ask again, and external
 	await expect(dialog).toHaveCount(0);
 	expect(await readFile(join(external, "a.md"), "utf8")).toBe("outside");
 	expect(await readFile(join(root, "target/bundle/a.md"), "utf8")).toBe("new a");
+});
+
+test("library paste follows the latest native clipboard write", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp || (process.platform !== "darwin" && process.platform !== "win32"), "native file clipboard required");
+	const snapshot = () => page.evaluate(() => window.loom.getLibrarySnapshot());
+	const root = (await snapshot()).rootPath!;
+	const external = join(dirname(root), "external.md");
+	await mkdir(join(root, "target"));
+	await writeFile(join(root, "library.md"), "copied in Loom");
+	await writeFile(external, "copied outside Loom");
+
+	const sidebar = page.locator(".library-sidebar");
+	const internal = sidebar.locator(".asset-row").filter({ hasText: "library.md" });
+	const target = sidebar.locator(".folder-main").filter({ hasText: "target" });
+	await internal.click();
+	await page.keyboard.press("ControlOrMeta+x");
+	await expect(internal).toHaveClass(/\bcut\b/);
+
+	await electronApp!.evaluate(({ clipboard }, path) => {
+		(clipboard as typeof clipboard & { _writeFilesForTesting: (paths: string[]) => void })._writeFilesForTesting([path]);
+	}, external);
+	await target.click();
+	await page.keyboard.press("ControlOrMeta+v");
+	await expect.poll(async () => (await snapshot()).assets.some((asset) => asset.relativePath === "target/external.md")).toBe(true);
+	await expect(internal).not.toHaveClass(/\bcut\b/);
+	expect(await readFile(join(root, "library.md"), "utf8")).toBe("copied in Loom");
+	expect(await readFile(join(root, "target", "external.md"), "utf8")).toBe("copied outside Loom");
+
+	await electronApp!.evaluate(({ Menu }) => {
+		Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
+			this.items.find((item) => item.label === "Paste" && item.enabled)?.click();
+			options?.callback?.();
+		};
+	});
+	await internal.click();
+	await page.keyboard.press("ControlOrMeta+c");
+	await expect.poll(() => readNativeFilePaths()).toEqual([join(root, "library.md")]);
+	const assetId = (await snapshot()).assets.find((asset) => asset.relativePath === "library.md")!.assetId;
+	await page.evaluate((id) => window.loom.renameAsset(id, "renamed.md"), assetId);
+	await target.click({ button: "right" });
+	await expect.poll(async () => (await snapshot()).assets.some((asset) => asset.relativePath === "target/renamed.md")).toBe(true);
+	expect(await readFile(join(root, "target", "renamed.md"), "utf8")).toBe("copied in Loom");
 });

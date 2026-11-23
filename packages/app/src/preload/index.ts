@@ -24,12 +24,10 @@ const api: LoomApi = {
 	setFavorite: (assetId, favorite) => ipcRenderer.invoke(IPC.setFavorite, assetId, favorite),
 	addAssetTag: (assetId, name) => ipcRenderer.invoke(IPC.addAssetTag, assetId, name),
 	removeAssetTag: (assetId, tagId) => ipcRenderer.invoke(IPC.removeAssetTag, assetId, tagId),
-	showAssetContextMenu: (assetId, canPaste, single, tabs) =>
-		ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, canPaste, single, tabs),
+	showAssetContextMenu: (assetId, single, tabs) => ipcRenderer.invoke(IPC.showAssetContextMenu, assetId, single, tabs),
 	showAssetTabContextMenu: (pinned) => ipcRenderer.invoke(IPC.showAssetTabContextMenu, pinned),
-	showFolderContextMenu: (relativePath, canPaste, single) =>
-		ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, canPaste, single),
-	showLibraryContextMenu: (canPaste) => ipcRenderer.invoke(IPC.showLibraryContextMenu, canPaste),
+	showFolderContextMenu: (relativePath, single) => ipcRenderer.invoke(IPC.showFolderContextMenu, relativePath, single),
+	showLibraryContextMenu: () => ipcRenderer.invoke(IPC.showLibraryContextMenu),
 	showCanvasContextMenu: (state) => ipcRenderer.invoke(IPC.showCanvasContextMenu, state),
 	showTableContextMenu: (state) => ipcRenderer.invoke(IPC.showTableContextMenu, state),
 	showEditorContextMenu: (state) => ipcRenderer.invoke(IPC.showEditorContextMenu, state),
@@ -69,9 +67,10 @@ const api: LoomApi = {
 	trashFolder: (relativePath) => ipcRenderer.invoke(IPC.trashFolder, relativePath),
 	trashLibraryItems: (assetIds, folders) => ipcRenderer.invoke(IPC.trashLibraryItems, assetIds, folders),
 	copyLibraryPaths: (assetIds, folders) => ipcRenderer.invoke(IPC.copyLibraryPaths, assetIds, folders),
-	readFileClipboard: () => ipcRenderer.invoke(IPC.readFileClipboard),
+	copyLibraryItems: (assetIds, folders, move) => ipcRenderer.invoke(IPC.copyLibraryItems, assetIds, folders, move),
+	isLibraryClipboardCurrent: (token) => ipcRenderer.invoke(IPC.isLibraryClipboardCurrent, token),
+	pasteFromClipboard: (destFolder) => ipcRenderer.invoke(IPC.pasteFromClipboard, destFolder),
 	placePathsInto: (absolutePaths, destFolder, move) => ipcRenderer.invoke(IPC.placePathsInto, absolutePaths, destFolder, move),
-	pasteLibraryItems: (assetIds, folders, destFolder, move) => ipcRenderer.invoke(IPC.pasteLibraryItems, assetIds, folders, destFolder, move),
 	onPasteConflict: (listener) => {
 		const handler = (_event: Electron.IpcRendererEvent, request: Parameters<typeof listener>[0]) => listener(request);
 		ipcRenderer.on(IPC.pasteConflict, handler);

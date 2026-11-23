@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
-import { readMacFilePaths } from "../src/main/desktop/mac-file-clipboard.ts";
+import { readMacFilePaths, writeMacFilePaths } from "../src/main/desktop/mac-file-clipboard.ts";
 import { decodeFileNameW, dropEffectIsMove } from "../src/shared/file-clipboard.ts";
 
 describe("file clipboard formats", () => {
@@ -30,7 +30,7 @@ function run([name, ...paths]) {
   ${body}
 }
 `;
-			execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-e", script, "--", name, ...args], { timeout: 10_000 });
+			return execFileSync("/usr/bin/osascript", ["-l", "JavaScript", "-e", script, "--", name, ...args], { timeout: 10_000, encoding: "utf8" });
 		};
 		t.after(() => run("pasteboard.releaseGlobally;"));
 		assert.deepEqual(await readMacFilePaths(name), []);
@@ -43,5 +43,11 @@ pasteboard.clearContents;
 if (!pasteboard.writeObjects(objects)) throw new Error("Could not write URLs to the test pasteboard");
 `, ...paths);
 		assert.deepEqual(await readMacFilePaths(name), paths);
+
+		const copied = ["/tmp/报告 #100%.md", "/tmp/line\nbreak.md", "/tmp"];
+		await writeMacFilePaths(copied, "com.loom.test-file-items", "loom-test-token", name);
+		assert.deepEqual(await readMacFilePaths(name), copied);
+		const token = run('return ObjC.unwrap(pasteboard.stringForType("com.loom.test-file-items"));');
+		assert.equal(token, "loom-test-token\n");
 	});
 });

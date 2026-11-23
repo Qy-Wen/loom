@@ -1,10 +1,41 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
+import { randomUUID } from "node:crypto";
 import { clipboard } from "electron";
 import { decodeFileNameW, dropEffectIsMove } from "../../shared/file-clipboard.ts";
-import { readMacFilePaths } from "./mac-file-clipboard.ts";
+import { readMacFilePaths, writeMacFilePaths } from "./mac-file-clipboard.ts";
+import { readWindowsFilePaths, writeWindowsFilePaths } from "./windows-file-clipboard.ts";
 
-const execFileAsync = promisify(execFile);
+const libraryClipboardFormat = "com.loom.library-items";
+let libraryClipboard: { token: string; assetIds: string[]; folders: string[]; move: boolean } | null = null;
+
+export async function writeLibraryClipboard(assetIds: string[], folders: string[], move: boolean, paths: string[]): Promise<string> {
+	const token = randomUUID();
+	// Keep Loom's cut internal. Copies carry native file references alongside the token.
+	if (move || (process.platform !== "darwin" && process.platform !== "win32")) {
+		clipboard.writeBuffer(libraryClipboardFormat, Buffer.from(token));
+	} else if (process.platform === "darwin") {
+		await writeMacFilePaths(paths, libraryClipboardFormat, token);
+	} else {
+		await writeWindowsFilePaths(paths, libraryClipboardFormat, token);
+	}
+	libraryClipboard = { token, assetIds, folders, move };
+	return token;
+}
+
+export function readLibraryClipboard(): typeof libraryClipboard {
+	if (!libraryClipboard) return null;
+	try {
+		const { token } = libraryClipboard;
+		const stored = clipboard.readBuffer(libraryClipboardFormat);
+		// Windows can pad a custom clipboard format to its allocation size.
+		return stored.subarray(0, token.length).toString() === token ? libraryClipboard : null;
+	} catch {
+		return null;
+	}
+}
+
+export function clearLibraryClipboard(token?: string): void {
+	if (token === undefined || libraryClipboard?.token === token) libraryClipboard = null;
+}
 
 export interface FileClipboard {
 	paths: string[];
@@ -26,9 +57,11 @@ export async function readFileClipboard(): Promise<FileClipboard | null> {
 }
 
 export async function clipboardHasFiles(): Promise<boolean> {
+	if (readLibraryClipboard()) return true;
 	if (process.platform === "win32") {
 		try {
-			return decodeFileNameW(clipboard.readBuffer("FileNameW")).trim().length > 0;
+			return clipboard.availableFormats().includes("text/uri-list")
+				|| decodeFileNameW(clipboard.readBuffer("FileNameW")).trim().length > 0;
 		} catch {
 			return false;
 		}
@@ -49,7 +82,7 @@ async function readWindowsFileClipboard(): Promise<FileClipboard | null> {
 
 	let paths: string[] = [];
 	try {
-		paths = await readWindowsFileDropList();
+		paths = await readWindowsFilePaths();
 	} catch {
 		paths = [];
 	}
@@ -62,25 +95,4 @@ async function readWindowsFileClipboard(): Promise<FileClipboard | null> {
 		}
 	}
 	return paths.length > 0 ? { paths, move } : null;
-}
-
-async function readWindowsFileDropList(): Promise<string[]> {
-	const command = [
-		"[Console]::OutputEncoding = [System.Text.Encoding]::UTF8",
-		"Add-Type -AssemblyName System.Windows.Forms",
-		"foreach ($path in [System.Windows.Forms.Clipboard]::GetFileDropList()) { [Console]::Out.WriteLine($path) }",
-	].join("; ");
-	const { stdout } = await execFileAsync("powershell.exe", [
-		"-STA",
-		"-NoProfile",
-		"-NonInteractive",
-		"-Command",
-		command,
-	], {
-		windowsHide: true,
-		timeout: 15_000,
-		maxBuffer: 16 * 1024 * 1024,
-		encoding: "utf8",
-	});
-	return stdout.replace(/^\uFEFF/, "").split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
 }

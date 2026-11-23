@@ -199,9 +199,10 @@ export const IPC = {
 	trashFolder: "loom:trashFolder",
 	trashLibraryItems: "loom:trashLibraryItems",
 	copyLibraryPaths: "loom:copyLibraryPaths",
-	readFileClipboard: "loom:readFileClipboard",
+	copyLibraryItems: "loom:copyLibraryItems",
+	isLibraryClipboardCurrent: "loom:isLibraryClipboardCurrent",
+	pasteFromClipboard: "loom:pasteFromClipboard",
 	placePathsInto: "loom:placePathsInto",
-	pasteLibraryItems: "loom:pasteLibraryItems",
 	pasteConflict: "loom:pasteConflict",
 	resolvePasteConflict: "loom:resolvePasteConflict",
 	getPropertySnapshot: "loom:getPropertySnapshot",
@@ -312,10 +313,10 @@ export interface LoomApi {
 	onLibraryChanged: (listener: (change: LibraryChange) => void) => () => void;
 	onTrashStarted: (listener: () => void) => () => void;
 	/** `tabs` is true in list mode, where a file can open in a new tab; otherwise the first item opens the preview. */
-	showAssetContextMenu: (assetId: string, canPaste: boolean, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
+	showAssetContextMenu: (assetId: string, single: boolean, tabs: boolean) => Promise<AssetContextAction | null>;
 	showAssetTabContextMenu: (pinned: boolean) => Promise<AssetTabContextAction | null>;
-	showFolderContextMenu: (relativePath: string, canPaste: boolean, single: boolean) => Promise<FolderContextAction | null>;
-	showLibraryContextMenu: (canPaste: boolean) => Promise<LibraryContextAction | null>;
+	showFolderContextMenu: (relativePath: string, single: boolean) => Promise<FolderContextAction | null>;
+	showLibraryContextMenu: () => Promise<LibraryContextAction | null>;
 	showCanvasContextMenu: (state: CanvasContextState) => Promise<CanvasContextAction | null>;
 	showTableContextMenu: (state: TableContextState) => Promise<TableContextAction | null>;
 	showEditorContextMenu: (state: MarkdownContextState) => Promise<MarkdownContextAction | null>;
@@ -350,9 +351,10 @@ export interface LoomApi {
 	trashFolder: (relativePath: string) => Promise<boolean>;
 	trashLibraryItems: (assetIds: string[], folders: string[]) => Promise<boolean>;
 	copyLibraryPaths: (assetIds: string[], folders: string[]) => Promise<void>;
-	readFileClipboard: () => Promise<{ paths: string[]; move: boolean } | null>;
+	copyLibraryItems: (assetIds: string[], folders: string[], move: boolean) => Promise<string>;
+	isLibraryClipboardCurrent: (token: string) => Promise<boolean>;
+	pasteFromClipboard: (destFolder: string) => Promise<PastedLibraryItems | null>;
 	placePathsInto: (absolutePaths: string[], destFolder: string, move: boolean) => Promise<PastedLibraryItems>;
-	pasteLibraryItems: (assetIds: string[], folders: string[], destFolder: string, move: boolean) => Promise<PastedLibraryItems>;
 	onPasteConflict: (listener: (request: { id: number; conflict: PasteConflict | null }) => void) => () => void;
 	resolvePasteConflict: (id: number, choice: PasteChoice, applyAll: boolean) => Promise<void>;
 	getPropertySnapshot: () => Promise<PropertySnapshot>;

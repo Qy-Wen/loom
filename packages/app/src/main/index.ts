@@ -49,7 +49,7 @@ import { importComposerFiles } from "./composer/composer-import.ts";
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from "electron";
 import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
 import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from "./dev-trace-window.ts";
-import { clipboardHasFiles, readFileClipboard } from "./desktop/file-clipboard.ts";
+import { clearLibraryClipboard, clipboardHasFiles, readFileClipboard, readLibraryClipboard, writeLibraryClipboard } from "./desktop/file-clipboard.ts";
 import { pasteConflictResolver, resolvePasteConflict } from "./desktop/paste-conflicts.ts";
 import { type AgentServer, startAgentServer } from "./chat/agent-server.ts";
 import { systemPromptForLibrary } from "./chat/agent-prompt.ts";
@@ -601,6 +601,17 @@ function registerChatIpc(): void {
 }
 
 const activePastes = new Set<number>();
+const clipboardRequests = new SerialQueue();
+
+async function libraryItemPaths(assetIds: string[], folders: string[]): Promise<string[]> {
+	const paths: string[] = [];
+	for (const assetId of assetIds) {
+		const path = await localCore.getAssetFilePath(assetId);
+		if (path) paths.push(path);
+	}
+	for (const folder of folders) paths.push(localCore.getFolderFilePath(folder));
+	return paths;
+}
 
 async function pasteWithConflicts(event: IpcMainInvokeEvent, absolutePaths: string[], destFolder: string, move: boolean) {
 	const owner = BrowserWindow.fromWebContents(event.sender);
@@ -682,7 +693,7 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showAssetContextMenu,
-		async (event, assetId: string, canPaste: boolean, single: boolean, tabs: boolean): Promise<AssetContextAction | null> => {
+		async (event, assetId: string, single: boolean, tabs: boolean): Promise<AssetContextAction | null> => {
 			if (!(await localCore.getAssetFilePath(assetId))) throw new Error("Asset not found");
 			const favorite = (await localCore.getLibrarySnapshot()).favoriteAssetIds.includes(assetId);
 			const { t, platform } = await uiCopy();
@@ -702,7 +713,7 @@ function registerIpc(): void {
 				{ label: t.menu.duplicate, click: () => "duplicate" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
-				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
+				{ label: t.menu.paste, enabled: await clipboardRequests.run(clipboardHasFiles), click: () => "paste" },
 				{ type: "separator" },
 				{ label: t.menu.copyPath, click: () => "copy_path" },
 				{ label: t.menu.reveal(platform), click: () => "reveal" },
@@ -722,7 +733,7 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showFolderContextMenu,
-		async (event, relativePath: string, canPaste: boolean, single: boolean): Promise<FolderContextAction | null> => {
+		async (event, relativePath: string, single: boolean): Promise<FolderContextAction | null> => {
 			localCore.getFolderFilePath(relativePath);
 			const { t, platform } = await uiCopy();
 			return popupContextMenu<FolderContextAction>(event, [
@@ -731,7 +742,7 @@ function registerIpc(): void {
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
-				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
+				{ label: t.menu.paste, enabled: await clipboardRequests.run(clipboardHasFiles), click: () => "paste" },
 				{ type: "separator" },
 				{ label: t.menu.copyPath, click: () => "copy_path" },
 				{ label: t.menu.reveal(platform), click: () => "reveal" },
@@ -743,11 +754,11 @@ function registerIpc(): void {
 
 	ipcMain.handle(
 		IPC.showLibraryContextMenu,
-		async (event, canPaste: boolean): Promise<LibraryContextAction | null> => {
+		async (event): Promise<LibraryContextAction | null> => {
 			const { t } = await uiCopy();
 			return popupContextMenu<LibraryContextAction>(event, [
 				...libraryCreateMenuItems(t),
-				{ label: t.menu.paste, enabled: canPaste || await clipboardHasFiles(), click: () => "paste" },
+				{ label: t.menu.paste, enabled: await clipboardRequests.run(clipboardHasFiles), click: () => "paste" },
 			]);
 		},
 	);
@@ -852,49 +863,69 @@ function registerIpc(): void {
 		return localCore.moveFolderInto(sourceFolder, destFolder);
 	});
 
-	ipcMain.handle(IPC.readFileClipboard, () => readFileClipboard());
+	ipcMain.handle(IPC.copyLibraryItems, (_event, assetIds: string[], folders: string[], move: boolean) => {
+		const root = localCore.getLibraryRoot();
+		return clipboardRequests.run(async () => {
+			const paths = move ? [] : await libraryItemPaths(assetIds, folders);
+			if (openingLibrary || localCore.getLibraryRoot() !== root) throw new Error("Library changed while copying files");
+			if (!move && paths.length === 0) throw new Error("No selected files are available to copy");
+			const token = await writeLibraryClipboard(assetIds, folders, move, paths);
+			if (openingLibrary || localCore.getLibraryRoot() !== root) clearLibraryClipboard(token);
+			return token;
+		});
+	});
+
+	ipcMain.handle(IPC.isLibraryClipboardCurrent, (_event, token: string) =>
+		clipboardRequests.run(async () => readLibraryClipboard()?.token === token));
 
 	ipcMain.handle(IPC.resolvePasteConflict, (event, id: number, choice: import("@loom/core").PasteChoice, applyAll: boolean) => {
 		resolvePasteConflict(event.sender.id, id, choice, applyAll);
 	});
 
-	ipcMain.handle(IPC.pasteLibraryItems, async (event, assetIds: string[], folders: string[], destFolder: string, move: boolean) => {
-		const paths: string[] = [];
-		for (const assetId of assetIds) {
-			const path = await localCore.getAssetFilePath(assetId);
-			if (path) paths.push(path);
-		}
-		for (const folder of folders) paths.push(localCore.getFolderFilePath(folder));
-		return pasteWithConflicts(event, paths, destFolder, move);
-	});
-
-	ipcMain.handle(IPC.placePathsInto, async (event, absolutePaths: string[], destFolder: string, move: boolean) => {
-		const placed = await pasteWithConflicts(event, absolutePaths, destFolder, move);
-		if (move && !placed.cancelled) {
-			try {
-				clipboard.clear();
-			} catch {
-				// The files are already in the library. A second paste skips paths that are gone.
-			}
+	ipcMain.handle(IPC.pasteFromClipboard, async (event, destFolder: string) => {
+		const root = localCore.getLibraryRoot();
+		const source = await clipboardRequests.run(async () => {
+			const items = readLibraryClipboard();
+			if (items) return { paths: await libraryItemPaths(items.assetIds, items.folders), token: items.token, move: items.move };
+			const external = await readFileClipboard();
+			return external && { ...external, token: null };
+		});
+		if (!source || openingLibrary || localCore.getLibraryRoot() !== root) return null;
+		const placed = await pasteWithConflicts(event, source.paths, destFolder, source.move);
+		if (source.move && !placed.cancelled) {
+			await clipboardRequests.run(async () => {
+				if (source.token) {
+					clearLibraryClipboard(source.token);
+					return;
+				}
+				try {
+					const current = await readFileClipboard();
+					if (current?.move && current.paths.length === source.paths.length && current.paths.every((path, index) => path === source.paths[index])) {
+						clipboard.clear();
+					}
+				} catch {
+					// The files are already in the library. A second paste skips paths that are gone.
+				}
+			});
 		}
 		return placed;
 	});
 
-	ipcMain.handle(IPC.copyLibraryPaths, async (_event, assetIds: string[], folders: string[]): Promise<void> => {
-		const lines: string[] = [];
-		for (const folder of folders) lines.push(localCore.getFolderFilePath(folder));
-		for (const assetId of assetIds) {
-			const filePath = await localCore.getAssetFilePath(assetId);
-			if (filePath) lines.push(filePath);
-		}
-		clipboard.writeText(lines.join("\n"));
-	});
+	ipcMain.handle(IPC.placePathsInto, (event, absolutePaths: string[], destFolder: string, move: boolean) =>
+		pasteWithConflicts(event, absolutePaths, destFolder, move));
 
-	ipcMain.handle(IPC.copyAssetPath, async (_event, assetId: string): Promise<void> => {
-		const filePath = await localCore.getAssetFilePath(assetId);
-		if (!filePath) throw new Error("Asset not found");
-		clipboard.writeText(filePath);
-	});
+	ipcMain.handle(IPC.copyLibraryPaths, (_event, assetIds: string[], folders: string[]) =>
+		clipboardRequests.run(async () => {
+			const lines = [...folders.map((folder) => localCore.getFolderFilePath(folder)), ...await libraryItemPaths(assetIds, [])];
+			clipboard.writeText(lines.join("\n"));
+		}));
+
+	ipcMain.handle(IPC.copyAssetPath, (_event, assetId: string) =>
+		clipboardRequests.run(async () => {
+			const filePath = await localCore.getAssetFilePath(assetId);
+			if (!filePath) throw new Error("Asset not found");
+			clipboard.writeText(filePath);
+		}));
 
 	ipcMain.handle(IPC.revealAsset, async (_event, assetId: string): Promise<void> => {
 		const filePath = await localCore.getAssetFilePath(assetId);
@@ -902,9 +933,10 @@ function registerIpc(): void {
 		shell.showItemInFolder(filePath);
 	});
 
-	ipcMain.handle(IPC.copyFolderPath, (_event, relativePath: string): void => {
-		clipboard.writeText(localCore.getFolderFilePath(relativePath));
-	});
+	ipcMain.handle(IPC.copyFolderPath, (_event, relativePath: string) =>
+		clipboardRequests.run(async () => {
+			clipboard.writeText(localCore.getFolderFilePath(relativePath));
+		}));
 
 	ipcMain.handle(IPC.revealFolder, (_event, relativePath: string): void => {
 		shell.showItemInFolder(localCore.getFolderFilePath(relativePath));
@@ -1266,6 +1298,7 @@ function registerIpc(): void {
 	});
 
 	localCore.subscribeLibrary((change: LibraryChange) => {
+		if (change.type === "reset") clearLibraryClipboard();
 		if (openingLibrary) pendingLibraryChanges.push(change);
 		else sendLibraryChange(change);
 	});
