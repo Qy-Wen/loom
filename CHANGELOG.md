@@ -4,8 +4,14 @@
 
 ## [Unreleased]
 
+## [v0.1.9]
+
 - Click blank space in the sidebar file list to select the library root while keeping the active file tab open.
+- Right-click the library root in the sidebar to open its folder menu.
 - Copy and paste a selected folder in the sidebar to create a sibling copy in the same directory.
+- Paste files copied in Finder or File Explorer, and copy library files out through the system clipboard.
+- On Windows, color grade previews render again while the sandbox is on.
+- Moving up and down in Markdown no longer skips lines hidden by collapsed formatting.
 
 ## [v0.1.8]
 
