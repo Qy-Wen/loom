@@ -2,6 +2,9 @@ import type { CanvasEdge, CanvasNode, CanvasSide } from "../../../shared/canvas.
 
 export type Point = { x: number; y: number };
 export type Viewport = Point & { scale: number };
+export type CanvasPort = { nodeId: string; side: CanvasSide; point: Point };
+
+export const CANVAS_PORT_SIDES = ["top", "right", "bottom", "left"] as const;
 
 export function fitMediaNode(node: CanvasNode, ratio?: number): CanvasNode {
 	if (!ratio) return node;
@@ -71,6 +74,19 @@ export function edgePoint(node: CanvasNode, side: CanvasSide): Point {
 	return point;
 }
 
+export function nearestCanvasPort(ports: readonly CanvasPort[], cursor: Point, radius: number): CanvasPort | undefined {
+	let nearest: CanvasPort | undefined;
+	let bestDistance = radius;
+	for (const port of ports) {
+		const distance = Math.hypot(cursor.x - port.point.x, cursor.y - port.point.y);
+		if (distance <= bestDistance) {
+			nearest = port;
+			bestDistance = distance;
+		}
+	}
+	return nearest;
+}
+
 const sideDirections: Record<CanvasSide, Point> = {
 	top: { x: 0, y: -1 }, right: { x: 1, y: 0 }, bottom: { x: 0, y: 1 }, left: { x: -1, y: 0 },
 };
@@ -87,9 +103,7 @@ export function connectionCurve(start: Point, fromSide: CanvasSide, end: Point, 
 	};
 }
 
-export function edgeCurve(edge: CanvasEdge, from: CanvasNode, to: CanvasNode): ReturnType<typeof connectionCurve> {
-	const fromSide = edge.fromSide ?? facingSide(from, to);
-	const toSide = edge.toSide ?? facingSide(to, from);
+export function edgeCurve({ fromSide, toSide }: CanvasEdge, from: CanvasNode, to: CanvasNode): ReturnType<typeof connectionCurve> {
 	return connectionCurve(edgePoint(from, fromSide), fromSide, edgePoint(to, toSide), toSide);
 }
 

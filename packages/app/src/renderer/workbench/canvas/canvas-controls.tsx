@@ -10,11 +10,9 @@ const iconPaths = {
 	fit: "M6 2H2v4m8-4h4v4m0 4v4h-4m-4 0H2v-4",
 	undo: "M5 3 2 6l3 3M2 6h7a4 4 0 0 1 0 8H7",
 	redo: "m11 3 3 3-3 3m3-3H7a4 4 0 0 0 0 8h2",
-	connect: "M6 10l4-4M5.5 7.5l-2 2a2.1 2.1 0 0 0 3 3l2-2m-1-5 2-2a2.1 2.1 0 0 1 3 3l-2 2",
-	remove: "M2.5 4h11M6 4V2h4v2m2.5 0-.7 10H4.2L3.5 4M6.5 7v4m3-4v4",
 	edit: "m3 10-1 4 4-1 7.5-7.5a2.1 2.1 0 0 0-3-3ZM9 4l3 3",
+	remove: "M2.5 4h11M6 4V2h4v2m2.5 0-.7 10H4.2L3.5 4M6.5 7v4m3-4v4",
 	done: "m3 8 3 3 7-7",
-	open: "M9 2h5v5m0-5L7 9m5 0v4H3V4h4",
 };
 
 export function CanvasIcon({ name }: { name: keyof typeof iconPaths }): React.JSX.Element {

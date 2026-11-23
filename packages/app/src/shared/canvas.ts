@@ -21,8 +21,8 @@ export interface CanvasEdge {
 	id: string;
 	fromNode: string;
 	toNode: string;
-	fromSide?: CanvasSide;
-	toSide?: CanvasSide;
+	fromSide: CanvasSide;
+	toSide: CanvasSide;
 	fromEnd?: "none" | "arrow";
 	toEnd?: "none" | "arrow";
 	label?: string;
@@ -95,8 +95,7 @@ export function parseCanvas(value: unknown): CanvasDocument {
 		if (typeof edge.fromNode !== "string" || !nodeIds.has(edge.fromNode)
 			|| typeof edge.toNode !== "string" || !nodeIds.has(edge.toNode)
 			|| (edge.label !== undefined && typeof edge.label !== "string")
-			|| (edge.fromSide !== undefined && !sides.has(edge.fromSide))
-			|| (edge.toSide !== undefined && !sides.has(edge.toSide))
+			|| !sides.has(edge.fromSide) || !sides.has(edge.toSide)
 			|| (edge.fromEnd !== undefined && !ends.has(edge.fromEnd))
 			|| (edge.toEnd !== undefined && !ends.has(edge.toEnd))) throw new Error(`Invalid canvas edge ${edge.id}`);
 	}

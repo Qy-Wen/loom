@@ -18,13 +18,16 @@ test("JSON Canvas preserves standard extensions and validates geometry, referenc
 			id: "source", type: "file", ...geometry, file: "资料/会议.md", subpath: "#摘要",
 			loom: { assetId: "source-id", custom: true },
 		}, { id: "note", type: "text", ...geometry, text: "Hello" }],
-		edges: [{ id: "from-note", fromNode: "note", toNode: "source", fromSide: "bottom", toEnd: "none", custom: 42 }],
+		edges: [{ id: "from-note", fromNode: "note", toNode: "source", fromSide: "bottom", toSide: "top", toEnd: "none", custom: 42 }],
 	};
 	assert.deepEqual(parseCanvas(board), board);
 	assert.deepEqual(parseCanvas({}), { nodes: [], edges: [] });
 	assert.throws(() => parseCanvas({ ...board, nodes: [board.nodes[0], board.nodes[0]] }), /duplicate/);
 	assert.throws(() => parseCanvas({ ...board, nodes: [{ ...board.nodes[0], width: 0 }] }), /geometry/);
 	assert.throws(() => parseCanvas({ ...board, nodes: board.nodes.slice(0, 1) }), /edge/);
+	for (const side of ["fromSide", "toSide"]) {
+		assert.throws(() => parseCanvas({ ...board, edges: [{ ...board.edges[0], [side]: undefined }] }), /edge/);
+	}
 	for (const file of ["../outside.md", "/absolute", "C:\\escape.md", ".loom/identity.json"]) {
 		assert.throws(() => parseCanvas({ nodes: [{ ...board.nodes[0], file }] }), /content/);
 	}
@@ -49,6 +52,7 @@ test("Agent and editor share optimistic saves and preserve other files and canva
 		await core.openLibrary(root);
 		const source = (await core.getLibrarySnapshot()).assets[0]!;
 		const { assetId, relativePath } = await call("create_canvas", { folder: "项目", name: "分镜" }) as { assetId: string; relativePath: string };
+		const path = join(root, relativePath);
 		assert.equal(relativePath, "项目/分镜.canvas");
 		assert.deepEqual(await call("list_canvases", {}), [{ assetId, relativePath }]);
 		await assert.rejects(call("create_canvas", { folder: "../", name: "Outside" }), /Invalid canvas folder/);
@@ -56,17 +60,19 @@ test("Agent and editor share optimistic saves and preserve other files and canva
 		const initial = await call("read_canvas", { assetId }) as CanvasSnapshot;
 		const { nodes, edges } = initial.document;
 		const saved = (await store.save(assetId, { nodes, edges, extension: "retain" }, initial.revision))!;
+		const edge = { id: "link", fromNode: "note", toNode: "source", fromSide: "right", toSide: "left", label: "Use for opening" };
 		const next = await call("edit_canvas", {
 			assetId, revision: saved.revision,
 			nodes: [
 				{ id: "source", type: "file", ...geometry, assetId: source.assetId },
-				{ id: "note", type: "text", ...geometry, text: "# First scene" },
+				{ id: "note", type: "text", ...geometry, x: -240, text: "# First scene" },
 			],
-			edges: [{ id: "link", fromNode: "note", toNode: "source", label: "Use for opening" }],
+			edges: [edge],
 		}) as CanvasSnapshot;
 		assert.equal(next.document.extension, "retain");
 		assert.equal(next.document.nodes[0]!.file, "项目/原始.md");
 		assert.deepEqual(next.document.nodes[0]!.loom, { assetId: source.assetId });
+		assert.deepEqual(next.document.edges, [edge]);
 		assert.deepEqual((await readdir(join(root, "项目"))).sort(), ["分镜.canvas", "原始.md"].sort());
 		assert.equal(await store.save(assetId, saved.document, saved.revision), null);
 		await assert.rejects(call("edit_canvas", { assetId, revision: saved.revision, removeNodes: ["source"] }), /Canvas changed/);
@@ -77,15 +83,16 @@ test("Agent and editor share optimistic saves and preserve other files and canva
 		}) as CanvasSnapshot;
 		assert.equal(afterRename.document.nodes[0]!.file, "项目/新文件名.md");
 		assert.equal(afterRename.document.nodes[1]!.text, "# First scene");
+		assert.deepEqual(parseCanvas(JSON.parse(await readFile(path, "utf8"))).edges, [edge]);
 
 		const afterRemove = await call("edit_canvas", { assetId, revision: afterRename.revision, removeNodes: ["source"] }) as CanvasSnapshot;
 		assert.deepEqual(afterRemove.document.edges, []);
 		assert.equal(await readFile(join(root, "项目", "新文件名.md"), "utf8"), "One source");
 
-		await writeFile(join(root, relativePath), "external edits");
+		await writeFile(path, "external edits");
 		assert.equal(await store.save(assetId, afterRemove.document, afterRemove.revision), null);
 		await assert.rejects(store.read(assetId), SyntaxError);
-		assert.equal(await readFile(join(root, relativePath), "utf8"), "external edits");
+		assert.equal(await readFile(path, "utf8"), "external edits");
 	} finally {
 		await core.close();
 		await rm(root, { recursive: true, force: true });

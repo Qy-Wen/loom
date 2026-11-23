@@ -207,7 +207,6 @@
 	touch-action: none;
 }
 
-.canvas-handle > svg { flex: none; color: var(--lm-text-secondary); }
 .type-text .canvas-handle { color: var(--lm-text-secondary); font-size: var(--lm-text-size-xs); }
 .canvas-handle span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .canvas-handle:active { cursor: grabbing; }
@@ -509,9 +508,28 @@
 .canvas-port.is-left { left: 0; top: 50%; }
 
 .canvas-lines { position: absolute; inset: 0 auto auto 0; overflow: visible; pointer-events: none; }
-.canvas-lines > path { stroke: var(--lm-text-secondary); stroke-width: 1.35; }
-.canvas-lines > path.related { stroke: var(--lm-accent); }
-.canvas-lines > path.selected { stroke: var(--lm-accent); stroke-width: 1.75; }
+.canvas-edge { stroke: var(--lm-text-secondary); stroke-width: 1.35; }
+.canvas-edge.related { stroke: var(--lm-accent); }
+.canvas-edge.selected { stroke: var(--lm-accent); stroke-width: 1.75; }
+.canvas-edge-hit {
+	stroke: transparent;
+	stroke-width: calc(var(--lm-size-md) / var(--canvas-scale));
+	pointer-events: stroke;
+	cursor: pointer;
+}
+.canvas-surface.pan .canvas-edge-hit { pointer-events: none; }
+.canvas-connection-target {
+	position: absolute;
+	z-index: var(--lm-z-raised);
+	width: var(--lm-space-3);
+	height: var(--lm-space-3);
+	border: 2px solid var(--lm-surface-raised);
+	border-radius: 50%;
+	background: var(--lm-accent);
+	box-shadow: 0 0 0 1px var(--lm-accent);
+	transform: translate(-50%, -50%) scale(calc(1 / var(--canvas-scale)));
+	pointer-events: none;
+}
 .canvas-edge-label {
 	position: absolute;
 	transform: translate(-50%, -50%);
@@ -526,21 +544,11 @@
 	color: var(--lm-text-primary);
 	z-index: var(--lm-z-base);
 }
-.canvas-edge-label.is-unlabeled:not(:is(:hover, :focus-visible, [aria-pressed="true"])) {
-	color: transparent;
-	border-color: transparent;
-	background: transparent;
+.canvas-edge-label.is-unlabeled {
+	pointer-events: none;
 }
-.canvas-edge-label.is-unlabeled:not(:is(:hover, :focus-visible, [aria-pressed="true"]))::before {
-	content: "";
-	position: absolute;
-	inset: 50% auto auto 50%;
-	width: 5px;
-	height: 5px;
-	border: 1px solid var(--lm-text-secondary);
-	border-radius: 50%;
-	background: var(--lm-surface-raised);
-	transform: translate(-50%, -50%);
+.canvas-edge-label.is-unlabeled:not(:focus-visible) {
+	clip-path: inset(50%);
 }
 .canvas-edge-label[aria-pressed="true"] { border-color: var(--lm-accent); }
 .canvas-marquee {

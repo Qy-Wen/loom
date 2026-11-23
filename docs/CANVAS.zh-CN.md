@@ -24,7 +24,7 @@
 
 ## 文件格式
 
-每张画板是素材库内一个普通的 UTF-8 JSON 文件，名称使用 `.canvas` 后缀，文件名作为画板标题。基础结构沿用 [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/)。`nodes` 存储卡片与分组，数组顺序表示从底到顶的叠放顺序。`edges` 存储连线，以卡片 ID 指定两端。位置和尺寸记录为画板坐标系中的整数。
+每张画板是素材库内一个普通的 UTF-8 JSON 文件，名称使用 `.canvas` 后缀，文件名作为画板标题。基础结构沿用 [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/)。`nodes` 存储卡片与分组，数组顺序表示从底到顶的叠放顺序。连线以卡片 ID 指定两端，必须用 `fromSide` 和 `toSide` 记录端点所在的边，移动卡片时端点仍接在原来的边上。位置和尺寸记录为画板坐标系中的整数。
 
 ```json
 {
@@ -53,7 +53,9 @@
     {
       "id": "opening-cut",
       "fromNode": "opening-note",
+      "fromSide": "right",
       "toNode": "opening-video",
+      "toSide": "left",
       "label": "接演示片段"
     }
   ]

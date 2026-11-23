@@ -24,7 +24,7 @@ The first acceptance scenario is making a product introduction video. The user c
 
 ## File format
 
-Each canvas is a plain UTF-8 JSON file in the library with a `.canvas` extension, and the file name is the canvas title. The base structure follows [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/). `nodes` stores cards and groups, and array order is the stacking order from bottom to top. `edges` stores edges, with both ends given by card ID. Positions and sizes are integers in canvas coordinates.
+Each canvas is a plain UTF-8 JSON file in the library with a `.canvas` extension, and the file name is the canvas title. The base structure follows [JSON Canvas 1.0](https://jsoncanvas.org/spec/1.0/). `nodes` stores cards and groups, and array order is the stacking order from bottom to top. Each edge identifies both cards by ID and requires `fromSide` and `toSide` to keep the endpoints on their chosen sides as cards move. Positions and sizes are integers in canvas coordinates.
 
 ```json
 {
@@ -53,7 +53,9 @@ Each canvas is a plain UTF-8 JSON file in the library with a `.canvas` extension
     {
       "id": "opening-cut",
       "fromNode": "opening-note",
+      "fromSide": "right",
       "toNode": "opening-video",
+      "toSide": "left",
       "label": "Cut to the demo clip"
     }
   ]

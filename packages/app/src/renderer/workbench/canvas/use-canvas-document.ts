@@ -115,7 +115,7 @@ export function useCanvasDocument(id: string) {
 		saving: !!saver.current?.pending,
 		error: loadError ?? saver.current?.error,
 		conflict: !!saver.current?.conflict,
-		retry: () => { void saver.current?.flush().catch(() => undefined); },
+		flushSave: () => { void saver.current?.flush().catch(() => undefined); },
 		reload,
 	};
 }

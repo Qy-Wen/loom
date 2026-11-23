@@ -72,7 +72,7 @@ export function createCanvasTools(core: LocalCore, store: CanvasStore): LoomTool
 		},
 		{
 			name: "edit_canvas",
-			description: "Apply one set of changes to a canvas using the revision from read_canvas. Supply node and edge changes by ID. For a new node supply type, x, y, width and height. Use assetId for a file node to reference an existing library asset. Existing nodes and edges accept partial updates, and removing a node also removes its incident edges. Use a new ID when placing an existing asset a second time.",
+			description: "Apply one set of changes to a canvas using the revision from read_canvas. Supply node and edge changes by ID. For a new node supply type, x, y, width and height. For a new edge supply fromNode, toNode, fromSide and toSide. Use assetId for a file node to reference an existing library asset. Existing nodes and edges accept partial updates, and removing a node also removes its incident edges. Use a new ID when placing an existing asset a second time.",
 			parameters: schema({ assetId: text, revision: text, nodes: { type: "array", items: nodes }, edges: { type: "array", items: edges }, removeNodes: { type: "array", items: text }, removeEdges: { type: "array", items: text } }, ["assetId", "revision"]),
 			execute: async (raw) => {
 				if (!plainObject(raw)) throw new Error("Invalid canvas edit");

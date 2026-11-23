@@ -1,16 +1,16 @@
 import { memo, useMemo, type CSSProperties, type PointerEvent, type KeyboardEvent } from "react";
 import type { Asset } from "@loom/core";
 import type { CanvasNode, CanvasSide } from "../../../shared/canvas.ts";
+import { AssetFileIcon } from "../../assets/asset-file-icon.tsx";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import { useLocale } from "../../locale.tsx";
 import { renderMarkdown } from "../preview/markdown.ts";
-import { CanvasIcon } from "./canvas-controls.tsx";
+import { CANVAS_PORT_SIDES } from "./canvas-layout.ts";
 import { CanvasMarkdown } from "./canvas-markdown.tsx";
 import { CanvasMedia, type CanvasPlayback } from "./canvas-media.tsx";
 
-const PORTS = ["top", "right", "bottom", "left"] as const;
 export const CANVAS_CARD_HEADER_HEIGHT = 28;
 
 type CanvasCardProps = {
@@ -31,7 +31,8 @@ type CanvasCardProps = {
 	onNudge: (event: KeyboardEvent, id: string, resize: boolean) => void;
 	onEdit: (id: string | null) => void;
 	onText: (id: string, key: "text" | "label", value: string) => void;
-	onBlur: () => void;
+	onGroupTitleBlur: () => void;
+	onNoteBlur: (id: string) => void;
 	onPreview: (asset: Asset) => void;
 	onMediaLoad: (asset: Asset, width: number, height: number) => void;
 	onRelink: (id: string) => void;
@@ -40,7 +41,7 @@ type CanvasCardProps = {
 };
 
 export function CanvasCard({
-	node, asset, assets, selected, editing, showPorts, connecting, connectSide, style, onMove, onResize, onSelect, onNudge, onEdit, onText, onBlur, onPreview, onMediaLoad,
+	node, asset, assets, selected, editing, showPorts, connecting, connectSide, style, onMove, onResize, onSelect, onNudge, onEdit, onText, onGroupTitleBlur, onNoteBlur, onPreview, onMediaLoad,
 	onRelink, onConnect, onConnectDrag, playback, playbackDisabled,
 }: CanvasCardProps): React.JSX.Element {
 	const { t } = useLocale();
@@ -50,6 +51,7 @@ export function CanvasCard({
 	const url = node.type === "link" && /^https?:\/\//i.test(node.url ?? "") ? node.url : undefined;
 	const markdownAsset = node.type === "file" && asset && extensionOf(asset.filename) === ".md" ? asset : undefined;
 	const openFromHandle = markdownAsset && !connecting;
+	const editNoteFromHandle = node.type === "text" && !connecting && !editing;
 	const media = node.type === "file" && (asset?.type === "image" || asset?.type === "video");
 	const playable = node.type === "file" && (asset?.type === "audio" || asset?.type === "video") ? asset : undefined;
 	function finishEditing(event: KeyboardEvent): void {
@@ -74,18 +76,26 @@ export function CanvasCard({
 			<header className="canvas-card-header" style={{ height: CANVAS_CARD_HEADER_HEIGHT }}>
 				{node.type === "group" && editing ? (
 					<input className="canvas-group-title" aria-label={t.canvas.groupLabel} autoFocus value={node.label ?? ""}
-						onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "label", event.target.value)} />
+						onKeyDown={finishEditing} onBlur={onGroupTitleBlur} onChange={(event) => onText(node.id, "label", event.target.value)} />
 				) : (
-					<button type="button" className="canvas-handle" title={t.canvas.moveCard}
+					<button type="button" className="canvas-handle" title={editNoteFromHandle ? t.canvas.editNoteHint : t.canvas.moveCard}
 						aria-label={openFromHandle ? `${t.canvas.preview} ${name}. ${t.canvas.moveCard}` : `${name}. ${t.canvas.moveCard}`}
+						aria-keyshortcuts={editNoteFromHandle ? "F2" : undefined}
 						aria-pressed={openFromHandle ? undefined : selected}
 						onClick={(event) => {
 							if (event.detail !== 0) return;
 							if (openFromHandle) onPreview(markdownAsset);
 							else onSelect(node.id, event.shiftKey);
 						}}
-						onKeyDown={(event) => onNudge(event, node.id, false)}>
-						{node.type === "file" && <CanvasIcon name="document" />}
+						onKeyDown={(event) => {
+							if (editNoteFromHandle && event.key === "F2" && !isImeComposing(event.nativeEvent)) {
+								event.preventDefault();
+								onEdit(node.id);
+								return;
+							}
+							onNudge(event, node.id, false);
+						}}>
+						{node.type === "file" && <AssetFileIcon asset={asset ?? { filename: name ?? "", type: "other" }} />}
 						<span>{name}</span>
 					</button>
 				)}
@@ -113,7 +123,7 @@ export function CanvasCard({
 				)}
 				{node.type === "text" && (
 					editing ? <textarea className="canvas-note-input" aria-label={t.canvas.textLabel} autoFocus value={node.text ?? ""}
-						onKeyDown={finishEditing} onBlur={onBlur} onChange={(event) => onText(node.id, "text", event.target.value)} />
+						onKeyDown={finishEditing} onBlur={() => onNoteBlur(node.id)} onChange={(event) => onText(node.id, "text", event.target.value)} />
 						: <NoteBody text={node.text ?? ""} />
 				)}
 				{node.type === "link" && (
@@ -126,7 +136,7 @@ export function CanvasCard({
 					onKeyDown={(event) => onNudge(event, node.id, true)} />
 			</div>
 		</article>
-		{showPorts && PORTS.map((side) => <button key={side} type="button" className={`canvas-port is-${side}`}
+		{showPorts && CANVAS_PORT_SIDES.map((side) => <button key={side} type="button" className={`canvas-port is-${side}`}
 			aria-label={t.canvas.ports[side]} aria-pressed={connectSide === side}
 			onPointerDown={(event) => onConnectDrag(event, node, side)}
 			onClick={() => onConnect(node.id, side)} />)}

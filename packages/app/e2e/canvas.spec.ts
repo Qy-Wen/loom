@@ -36,19 +36,21 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	await expect(tab).toHaveAttribute("aria-selected", "true");
 
 	const board = page.getByRole("region", { name: "Canvas 分镜.canvas" });
+	const surface = board.locator(".canvas-surface");
 	await board.getByRole("button", { name: "Text", exact: true }).click();
 	await board.getByRole("textbox", { name: "Markdown text" }).fill("## 开场");
-	await board.getByRole("button", { name: "Done", exact: true }).click();
+	await surface.click({ position: { x: 30, y: 42 } });
 	await expect(board.getByRole("heading", { name: "开场" })).toBeVisible();
 
-	const surface = board.locator(".canvas-surface");
 	await sidebar.locator(".asset-row").filter({ hasText: "参考.png" }).dragTo(surface, { targetPosition: { x: 58, y: 45 } });
 	const fileCard = board.locator(".canvas-card.type-file");
 	await expect(fileCard).toHaveCount(1);
+	await expect(fileCard.locator(".canvas-handle .asset-file-icon")).toHaveAttribute("data-kind", "image");
 	const openPreview = fileCard.getByRole("button", { name: "Open preview 参考.png" });
 	const preview = page.getByRole("dialog", { name: "File preview" });
 	await openPreview.click();
 	await expect(fileCard).toHaveClass(/selected/);
+	await expect(board.getByRole("toolbar", { name: "Selection actions" })).toHaveCount(0);
 	await expect(preview).toHaveCount(0);
 
 	const before = (await fileCard.boundingBox())!;
@@ -79,14 +81,32 @@ test("a library canvas saves cards, groups and connections, and follows referenc
 	await board.getByRole("textbox", { name: "Group title" }).fill("素材");
 	await board.getByRole("button", { name: "Done", exact: true }).click();
 	await fileHandle.click();
-	await textHandle.click({ modifiers: ["Shift"] });
-	await board.getByRole("button", { name: "Connect", exact: true }).click();
-	await board.getByRole("textbox", { name: "Connection label" }).fill("接演示");
-	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+	await board.getByRole("button", { name: "Connect from right", exact: true }).press("Enter");
+	await textHandle.click();
+	const edgeActions = board.getByRole("toolbar", { name: "Connection actions" });
+	const editLabel = edgeActions.getByRole("button", { name: "Edit label", exact: true });
+	const labelInput = board.getByRole("textbox", { name: "Connection label" });
+	const edgeLabel = board.locator(".canvas-edge-label");
+	await expect(labelInput).toHaveCount(0);
+	await expect(edgeLabel).toHaveCSS("clip-path", "inset(50%)");
+	await editLabel.click();
+	await expect(labelInput).toBeFocused();
+	await labelInput.fill("接演示");
+	await labelInput.press("Enter");
+	await expect(labelInput).toHaveCount(0);
+	await expect(edgeLabel).toHaveText("接演示");
 	await board.getByRole("button", { name: "Undo", exact: true }).click();
-	await expect(board.locator(".canvas-edge-label")).toHaveText("↗");
+	await expect(edgeLabel).toHaveCSS("clip-path", "inset(50%)");
 	await board.getByRole("button", { name: "Redo", exact: true }).click();
-	await expect(board.locator(".canvas-edge-label")).toHaveText("接演示");
+	await expect(edgeLabel).toHaveText("接演示");
+	await surface.click({ position: { x: 30, y: 42 } });
+	await expect(edgeActions).toHaveCount(0);
+	await edgeLabel.click();
+	await expect(editLabel).toBeVisible();
+	await expect(labelInput).toHaveCount(0);
+	const actionsBounds = (await edgeActions.boundingBox())!;
+	const labelBounds = (await edgeLabel.boundingBox())!;
+	expect(actionsBounds.y + actionsBounds.height).toBeLessThan(labelBounds.y);
 
 	const path = join(root, "分镜.canvas");
 	await expect.poll(async () => (await readBoard(path)).edges[0]?.label).toBe("接演示");
@@ -215,6 +235,8 @@ test("canvas video and audio play inline and resume after switching cards or tab
 	const board = page.getByRole("region", { name: "Canvas Playback.canvas" });
 	const videoCard = board.locator("[data-node-id=video]");
 	const audioCard = board.locator("[data-node-id=audio]");
+	await expect(videoCard.locator(".canvas-handle .asset-file-icon")).toHaveAttribute("data-kind", "video");
+	await expect(audioCard.locator(".canvas-handle .asset-file-icon")).toHaveAttribute("data-kind", "audio");
 	const video = videoCard.locator("video");
 	const audio = audioCard.locator("audio");
 	const videoState = () => video.evaluate((element: HTMLVideoElement) => ({ paused: element.paused, time: element.currentTime }));
@@ -331,9 +353,11 @@ test("a file dropped on a canvas tab opens a preview tab, and a drop on the canv
 	const fileTab = page.getByRole("tab", { name: "文案.md", exact: true });
 	await expect(fileTab).toHaveAttribute("aria-selected", "true");
 	await expect(fileTab).toHaveAccessibleDescription(/Preview tab/);
+	await expect(fileTab.locator(".asset-file-icon")).toHaveAttribute("data-kind", "markdown");
 	await canvasTab.click();
 	await expect(page.locator(".canvas-editor .canvas-empty")).toHaveText("Drag files here or add text to start.");
 	await file.dragTo(page.locator(".canvas-surface"), { targetPosition: { x: 48, y: 56 } });
+	await expect(page.locator(".canvas-handle .asset-file-icon")).toHaveAttribute("data-kind", "markdown");
 	const card = page.locator(".canvas-editor .canvas-file-markdown");
 	const heading = card.getByRole("heading", { name: "文案", exact: true });
 	await expect(heading).toBeVisible();
@@ -417,7 +441,7 @@ test("switching from a canvas tab to icon mode selects the canvas and opens it o
 	await expect(board).toBeVisible();
 	await board.getByRole("button", { name: "Text", exact: true }).click();
 	await board.getByRole("textbox", { name: "Markdown text" }).fill("Edited in the preview");
-	await board.getByRole("button", { name: "Done", exact: true }).click();
+	await board.locator(".canvas-surface").click({ position: { x: 30, y: 42 } });
 	await page.keyboard.press("Escape");
 	await expect(preview).toHaveCount(0);
 	await expect(tile).toBeVisible();
@@ -462,8 +486,17 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 
 	const source = board.locator(".canvas-node").filter({ hasText: "Source" });
 	const target = board.locator(".canvas-node").filter({ hasText: "Target" });
-	await source.locator(".canvas-handle").click();
-	await expect(selection.getByRole("button", { name: "Edit" })).toBeVisible();
+	const sourceHandle = source.locator(".canvas-handle");
+	const targetHandle = target.locator(".canvas-handle");
+	const noteInput = board.getByRole("textbox", { name: "Markdown text" });
+	await sourceHandle.click();
+	await expect(sourceHandle).toHaveAttribute("aria-pressed", "true");
+	await expect(selection).toHaveCount(0);
+	await expect(noteInput).toHaveCount(0);
+	await source.locator(".canvas-note").dblclick();
+	await expect(noteInput).toBeFocused();
+	await expect(selection).toHaveCount(0);
+	await noteInput.fill("Source updated");
 	const surface = board.locator(".canvas-surface");
 	const grid = () => surface.evaluate((element) => {
 		const { backgroundImage, backgroundSize, backgroundPositionX, backgroundPositionY } = getComputedStyle(element);
@@ -475,9 +508,11 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 		};
 	});
 	const beforeGrid = await grid();
-	const beforeZoom = (await selection.boundingBox())!;
-	await board.getByRole("button", { name: "Zoom in" }).click();
-	expect((await selection.boundingBox())!.width).toBe(beforeZoom.width);
+	const zoomIn = board.getByRole("button", { name: "Zoom in" });
+	await zoomIn.click();
+	await expect(noteInput).toHaveCount(0);
+	await expect(zoomIn).toBeFocused();
+	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.id === "source")?.text).toBe("Source updated");
 	const zoomedGrid = await grid();
 	expect(zoomedGrid.spacing).toBeCloseTo(beforeGrid.spacing * 1.25);
 	expect(zoomedGrid.radius).toBeCloseTo(beforeGrid.radius * 1.25);
@@ -489,16 +524,83 @@ test("canvas controls follow selection and connect cards from their ports", asyn
 	}).toPass();
 	await board.getByRole("button", { name: "Fit view" }).click();
 
-	await source.getByRole("button", { name: "Connect from right" }).dragTo(target.locator(".canvas-handle"));
-	await expect(board.getByRole("textbox", { name: "Connection label" })).toBeVisible();
+	const sourcePort = (await source.getByRole("button", { name: "Connect from right" }).boundingBox())!;
+	const targetBounds = (await target.locator(".canvas-card").boundingBox())!;
+	const targetX = targetBounds.x + targetBounds.width / 2;
+	const targetBottom = targetBounds.y + targetBounds.height;
+	const draft = board.locator(".canvas-connection-preview");
+	const targetPort = board.locator(".canvas-connection-target");
+	await page.mouse.move(sourcePort.x + sourcePort.width / 2, sourcePort.y + sourcePort.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(targetX, targetBounds.y + targetBounds.height / 2, { steps: 6 });
+	await expect(draft).toHaveAttribute("d", /^M 150 170 C .* 290 50$/);
+	await expect(targetPort).toBeVisible();
+	await page.mouse.move(targetX, targetBottom + 30);
+	await expect(targetPort).toHaveCount(0);
+	await expect(draft).toHaveAttribute("stroke-dasharray", "5 3");
+	await page.mouse.move(targetX, targetBottom + 12);
+	await expect(draft).toHaveAttribute("d", /^M 150 170 C .* 365 100$/);
+	await expect(targetPort).toBeVisible();
+	await expect(targetPort).toHaveCSS("left", "365px");
+	await expect(targetPort).toHaveCSS("top", "100px");
+	await page.mouse.up();
+	await expect(targetPort).toHaveCount(0);
+	await expect(draft).toHaveCount(0);
+	const edgeActions = board.getByRole("toolbar", { name: "Connection actions" });
+	const labelInput = board.getByRole("textbox", { name: "Connection label" });
+	await expect(edgeActions).toBeVisible();
+	await expect(labelInput).toHaveCount(0);
+	await expect(selection).toHaveCount(0);
 	await expect.poll(async () => (await readBoard(path)).edges[0]).toMatchObject({
-		fromNode: "source", toNode: "target", fromSide: "right",
+		fromNode: "source", toNode: "target", fromSide: "right", toSide: "bottom",
 	});
 
+	const edgePath = board.locator(".canvas-edge");
+	const handleBounds = (await targetHandle.boundingBox())!;
+	const handleX = handleBounds.x + handleBounds.width / 2;
+	const handleY = handleBounds.y + handleBounds.height / 2;
+	const scale = await surface.evaluate((element) => Number(element.style.getPropertyValue("--canvas-scale")));
+	await page.mouse.move(handleX, handleY);
+	await page.mouse.down();
+	await page.mouse.move(handleX - 320 * scale, handleY, { steps: 6 });
+	await expect(edgePath).toHaveAttribute("d", /^M 150 170 C .* 45 100$/);
+	await page.mouse.up();
+	await expect.poll(async () => (await readBoard(path)).nodes.find((node) => node.id === "target")?.x).toBe(-30);
+	await expect(edgePath).toHaveAttribute("d", /^M 150 170 C .* 45 100$/);
+	await board.getByRole("button", { name: "Undo", exact: true }).click();
+	await expect(edgePath).toHaveAttribute("d", /^M 150 170 C .* 365 100$/);
+
 	await surface.dblclick({ position: { x: 38, y: 48 } });
-	await expect(board.getByRole("textbox", { name: "Markdown text" })).toBeFocused();
-	await page.keyboard.press("Escape");
+	await expect(board.locator(".canvas-card")).toHaveCount(2);
 	await expect(board.getByRole("textbox", { name: "Markdown text" })).toHaveCount(0);
+
+	const connection = board.getByRole("button", { name: "Connection", exact: true });
+	await connection.press("Enter");
+	await expect(connection).toHaveAttribute("aria-pressed", "true");
+	await sourceHandle.press("F2");
+	await expect(noteInput).toBeFocused();
+	await noteInput.press("Tab");
+	await expect(noteInput).toHaveCount(0);
+	await expect(selection).toHaveCount(0);
+	const zoomOut = board.getByRole("button", { name: "Zoom out" });
+	await zoomOut.click();
+	await zoomOut.click();
+	const point = await edgePath.evaluate((edge: SVGPathElement) => {
+		const pointOnCurve = edge.getPointAtLength(edge.getTotalLength() / 4);
+		const { x, y } = pointOnCurve.matrixTransform(edge.getScreenCTM()!);
+		return { x, y: y - 10 };
+	});
+	await page.mouse.click(point.x, point.y);
+	await expect(connection).toHaveAttribute("aria-pressed", "true");
+	await expect(edgePath).toHaveClass(/selected/);
+	await expect(board.locator(".canvas-card.selected")).toHaveCount(0);
+	await expect(connection).toHaveCSS("clip-path", "inset(50%)");
+	await expect(labelInput).toHaveCount(0);
+	await expect(edgeActions.getByRole("button")).toHaveText(["Edit label", "Delete"]);
+	await edgeActions.getByRole("button", { name: "Delete", exact: true }).click();
+	await expect(connection).toHaveCount(0);
+	await expect(board.locator(".canvas-card")).toHaveCount(2);
+	await expect.poll(async () => (await readBoard(path)).edges).toEqual([]);
 });
 
 test("the canvas toolbar and context menu add files from the library", async ({ loomPage: page, electronApp }) => {

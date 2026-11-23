@@ -9,14 +9,15 @@ import { LibraryFileSearch } from "../../components/library-file-search.tsx";
 import { useLocale } from "../../locale.tsx";
 import { rectBetween, rectsIntersect, type Rect } from "../browser/folder-browser-model.ts";
 import { CANVAS_CARD_HEADER_HEIGHT, CanvasCard } from "./canvas-card.tsx";
-import { CanvasConnections } from "./canvas-connections.tsx";
+import { CANVAS_EDGE_LABEL_HEIGHT, CanvasConnections, CanvasEdgeActions, type CanvasConnectionDraft } from "./canvas-connections.tsx";
 import { CanvasAction, CanvasSelectionControls, CanvasToolbar } from "./canvas-controls.tsx";
-import { connectionCurve, containsCard, edgeCurve, edgePoint, fitMediaNode, fitNodes, movingCards, nodeBounds, reshapeNode, worldPoint, zoomAt, type Point, type Viewport } from "./canvas-layout.ts";
+import { CANVAS_PORT_SIDES, connectionCurve, containsCard, edgeCurve, edgePoint, facingSide, fitMediaNode, fitNodes, movingCards, nearestCanvasPort, nodeBounds, reshapeNode, worldPoint, zoomAt, type CanvasPort, type Point, type Viewport } from "./canvas-layout.ts";
 import { useCanvasDocument } from "./use-canvas-document.ts";
 import { useCanvasDrag } from "./use-canvas-drag.ts";
 import "./canvas.css";
 
 const EMPTY_NODES: CanvasNode[] = [];
+const CONNECTION_SNAP_RADIUS = 20;
 const ARROW_STEPS: Record<string, Point> = {
 	ArrowLeft: { x: -1, y: 0 }, ArrowRight: { x: 1, y: 0 }, ArrowUp: { x: 0, y: -1 }, ArrowDown: { x: 0, y: 1 },
 };
@@ -42,8 +43,8 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 	const ready = useRef(false);
 	const [selected, setSelected] = useState<Set<string>>(() => new Set());
 	const [edgeId, setEdgeId] = useState<string | null>(null);
-	const [connection, setConnection] = useState<{ id: string; side?: CanvasSide } | null>(null);
-	const [draft, setDraft] = useState<string | null>(null);
+	const [connection, setConnection] = useState<{ id: string; side: CanvasSide } | null>(null);
+	const [draft, setDraft] = useState<CanvasConnectionDraft | null>(null);
 	const [fileSearch, setFileSearch] = useState<{ point: Point } | { replaceId: string } | null>(null);
 	const [editing, setEditing] = useState<string | null>(null);
 	const [box, setBox] = useState<Rect | null>(null);
@@ -68,11 +69,11 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 	const from = edge && visibleNodes.find((node) => node.id === edge.fromNode);
 	const to = edge && visibleNodes.find((node) => node.id === edge.toNode);
 	const midpoint = edge && from && to ? edgeCurve(edge, from, to).midpoint : undefined;
-	const anchor = selection ?? (midpoint && { ...midpoint, width: 0, height: 0 });
+	const labelHeight = edge?.label?.trim() ? CANVAS_EDGE_LABEL_HEIGHT : 0;
+	const anchor = selection ?? (midpoint && { x: midpoint.x, y: midpoint.y - labelHeight / 2, width: 0, height: labelHeight });
 	const anchorTopInset = selection ? CANVAS_CARD_HEADER_HEIGHT : 0;
-	const preview = single && assetForNode(single);
-	const canEdit = single && (single.type === "text" || single.type === "group");
-	const isEditing = canEdit && editing === single.id;
+	const selectedGroup = single?.type === "group" ? single : undefined;
+	const isEditingGroup = editing === selectedGroup?.id;
 	const playback = { boardId: asset.assetId, positions: playbackPositions, activate: activatePlayback };
 
 	function assetForNode(node: CanvasNode): Asset | undefined {
@@ -204,7 +205,8 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 		}
 	}
 
-	function addTextCard(point = centerPoint()): void {
+	function addTextCard(): void {
+		const point = centerPoint();
 		const id = crypto.randomUUID();
 		const x = Math.round(point.x - 120), y = Math.round(point.y - 60);
 		append([{ id, type: "text", x, y, width: 260, height: 160, text: "" }]);
@@ -236,6 +238,12 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 			setEdgeId(null);
 			setConnection(null);
 		}
+	}
+
+	function finishNoteEdit(id: string): void {
+		setEditing((current) => current === id ? null : current);
+		board.endGroup();
+		board.flushSave();
 	}
 
 	function patchNode(id: string, patch: (node: CanvasNode) => CanvasNode, group?: string): void {
@@ -292,6 +300,7 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 			capture.begin(event, moved, (delta) => { if (delta) moved(delta); });
 			return;
 		}
+		if (event.target instanceof Element && event.target.matches(".canvas-edge-hit")) return;
 		const origin = documentPoint(event);
 		const base = event.shiftKey || event.metaKey || event.ctrlKey ? selected : new Set<string>();
 		const rectangle = (delta: Point) => rectBetween(origin.x, origin.y, origin.x + delta.x / view.scale, origin.y + delta.y / view.scale);
@@ -309,12 +318,15 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 		});
 	}
 
-	function addEdge(fromNode: string, toNode: string, fromSide?: CanvasSide): void {
+	function addEdge(fromNode: string, toNode: string, fromSide: CanvasSide, targetSide?: CanvasSide): void {
 		const current = board.live.current?.document;
-		if (!current || fromNode === toNode || !current.nodes.some((node) => node.id === fromNode)
-			|| !current.nodes.some((node) => node.id === toNode)) return;
+		if (!current || fromNode === toNode) return;
+		const from = current.nodes.find((node) => node.id === fromNode);
+		const to = current.nodes.find((node) => node.id === toNode);
+		if (!from || !to) return;
+		const toSide = targetSide ?? facingSide(fitMediaNode(to, mediaRatioForNode(to)), fitMediaNode(from, mediaRatioForNode(from)));
 		const id = crypto.randomUUID();
-		board.commit({ ...current, edges: [...current.edges, { id, fromNode, toNode, ...(fromSide && { fromSide }) }] });
+		board.commit({ ...current, edges: [...current.edges, { id, fromNode, toNode, fromSide, toSide }] });
 		setEdgeId(id);
 		setSelected(new Set());
 		setConnection(null);
@@ -322,23 +334,46 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 		surface.current?.focus({ preventScroll: true });
 	}
 
-	function startConnection(id: string, side?: CanvasSide): void {
+	function startConnection(id: string, side: CanvasSide): void {
 		setConnection(connection?.id === id && connection.side === side ? null : { id, side });
 	}
 
 	function dragConnection(event: PointerEvent, node: CanvasNode, side: CanvasSide): void {
-		if (event.button !== 0 || event.defaultPrevented || capture.drag.current) return;
-		const origin = { clientX: event.clientX, clientY: event.clientY };
+		const canvas = surface.current;
+		if (!canvas || event.button !== 0 || event.defaultPrevented || capture.drag.current) return;
+		const { clientX, clientY } = event;
+		const bounds = canvas.getBoundingClientRect();
 		const start = edgePoint(node, side);
-		const cursor = (delta: Point) => ({ clientX: origin.clientX + delta.x, clientY: origin.clientY + delta.y });
+		const targets = new Map(visibleNodes.filter((target) => target.id !== node.id).map((target) => [target.id, {
+			node: target,
+			ports: CANVAS_PORT_SIDES.map((portSide) => ({ nodeId: target.id, side: portSide, point: edgePoint(target, portSide) })),
+		}]));
+		const ports = Array.from(targets.values()).flatMap((target) => target.ports);
+		const radius = CONNECTION_SNAP_RADIUS / view.scale;
+
+		const destination = (delta: Point): { cursor: Point; port?: CanvasPort } => {
+			const x = clientX + delta.x, y = clientY + delta.y;
+			const cursor = worldPoint(view, { x: x - bounds.left, y: y - bounds.top });
+			const hit = canvas.ownerDocument.elementFromPoint(x, y);
+			if (!hit || !canvas.contains(hit)) return { cursor };
+			const hoveredId = hit.closest<HTMLElement>(".canvas-card")?.dataset.nodeId;
+			if (hoveredId === node.id) return { cursor };
+			const hovered = hoveredId ? targets.get(hoveredId) : undefined;
+			const nearest = nearestCanvasPort(hovered?.ports ?? ports, cursor, radius);
+			if (nearest || !hovered) return { cursor, port: nearest };
+			const targetSide = facingSide(hovered.node, node);
+			return { cursor, port: { nodeId: hovered.node.id, side: targetSide, point: edgePoint(hovered.node, targetSide) } };
+		};
+
 		capture.begin(event, (delta) => {
-			setDraft(connectionCurve(start, side, documentPoint(cursor(delta))).path);
+			const { cursor, port } = destination(delta);
+			const { path } = connectionCurve(start, side, port?.point ?? cursor, port?.side);
+			setDraft({ path, target: port?.point });
 		}, (delta) => {
 			setDraft(null);
 			if (!delta) return;
-			const { clientX, clientY } = cursor(delta);
-			const target = document.elementFromPoint(clientX, clientY)?.closest<HTMLElement>(".canvas-card");
-			if (target?.dataset.nodeId && surface.current?.contains(target)) addEdge(node.id, target.dataset.nodeId, side);
+			const { port } = destination(delta);
+			if (port) addEdge(node.id, port.nodeId, side, port.side);
 		}, 4);
 	}
 
@@ -388,7 +423,7 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 		<section className="canvas-editor" aria-label={`${t.canvas.canvas} ${asset.filename}`} onKeyDown={keyDown}>
 			{board.error && <div className="canvas-save-error" role="alert">
 				<span>{board.conflict ? t.canvas.conflict : board.error}</span>
-				{board.saving && !board.conflict && <button type="button" onClick={board.retry}>{t.canvas.retry}</button>}
+				{board.saving && !board.conflict && <button type="button" onClick={board.flushSave}>{t.canvas.retry}</button>}
 				<button type="button" onClick={() => void reload()}>{t.canvas.reload}</button>
 			</div>}
 			<div className="canvas-viewport">
@@ -403,12 +438,6 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 					onLostPointerCapture={(event) => { if (event.target === event.currentTarget) capture.end(event, true); }}
 					onKeyUp={(event) => { if (event.key === " ") space.current = false; }}
 					onBlur={() => { space.current = false; }}
-					onDoubleClick={(event) => {
-						if (!board.document || pan || event.button !== 0 || !(event.target instanceof Element)
-							|| event.target.closest(".canvas-node, button")) return;
-						const point = documentPoint(event);
-						addTextCard({ x: point.x + 120, y: point.y + 60 });
-					}}
 					onDragOver={(event) => {
 						if (!board.document || !hasLibraryDrag(event.dataTransfer)) return;
 						event.preventDefault();
@@ -454,7 +483,7 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 										: { x: step.x * distance, y: step.y * distance };
 									transform(resize ? ids : movingCards(layoutNodes, ids), delta, resize, ratio);
 								}}
-								onEdit={editCard} onBlur={board.endGroup}
+								onEdit={editCard} onGroupTitleBlur={board.endGroup} onNoteBlur={finishNoteEdit}
 								onText={(id, key, value) => patchNode(id, (current) => ({ ...current, [key]: value }), id)}
 								onPreview={openPreview} onMediaLoad={recordMediaSize} onRelink={(id) => setFileSearch({ replaceId: id })}
 								onConnect={startConnection} onConnectDrag={dragConnection} />
@@ -470,34 +499,24 @@ export function CanvasEditor({ asset, assets, playbackPositions, onPreview, onLo
 					<CanvasAction icon="undo" label={t.canvas.undo} disabled={!board.canUndo} onClick={board.undo} />
 					<CanvasAction icon="redo" label={t.canvas.redo} disabled={!board.canRedo} onClick={board.redo} />
 				</CanvasToolbar>
-				{anchor && !shift && !box && !draft && <CanvasSelectionControls anchor={{
+				{anchor && (selectedGroup || edge) && !shift && !box && !draft && <CanvasSelectionControls anchor={{
 					x: view.x + anchor.x * view.scale, y: view.y + (anchor.y - anchorTopInset) * view.scale,
 					width: anchor.width * view.scale, height: (anchor.height + anchorTopInset) * view.scale,
 				}}>
-					{edge && <input key={edge.id} className="canvas-edge-input" aria-label={t.canvas.edgeLabel} placeholder={t.canvas.edgeLabel}
-						value={edge.label ?? ""} onBlur={board.endGroup}
-						onKeyDown={(event) => {
-							if (event.nativeEvent.isComposing || event.key !== "Enter") return;
-							event.preventDefault();
-							surface.current?.focus({ preventScroll: true });
-						}}
-						onChange={(event) => {
+					{edge && <CanvasEdgeActions key={edge.id} label={edge.label ?? ""}
+						onLabelBlur={board.endGroup} onFinish={() => surface.current?.focus({ preventScroll: true })} onDelete={removeSelection}
+						onLabelChange={(label) => {
 							const current = board.live.current?.document;
-							if (current) board.commit({ ...current, edges: current.edges.map((item) => item.id === edge.id ? { ...item, label: event.target.value } : item) }, edge.id);
+							if (current) board.commit({ ...current, edges: current.edges.map((item) => item.id === edge.id ? { ...item, label } : item) }, edge.id);
 						}} />}
-					<CanvasToolbar className="canvas-selection-tools" label={t.canvas.selectionTools}>
-						{canEdit && <CanvasAction icon={isEditing ? "done" : "edit"} label={isEditing ? t.canvas.done : t.common.edit}
-							showLabel onClick={() => editCard(isEditing ? null : single.id)} />}
-						{preview && <CanvasAction icon="open" label={t.canvas.openCard} showLabel onClick={() => openPreview(preview)} />}
-						{!isEditing && (single || selectedNodes.length === 2) && <CanvasAction icon="connect" label={t.canvas.connect}
-							showLabel pressed={single ? Boolean(connection) : undefined}
-							onClick={() => single ? startConnection(single.id) : addEdge(selectedNodes[0], selectedNodes[1])} />}
-						<CanvasAction icon="remove" label={t.canvas.deleteSelected} onClick={removeSelection} />
-					</CanvasToolbar>
+					{selectedGroup && <CanvasToolbar className="canvas-selection-tools" label={t.canvas.selectionTools}>
+						<CanvasAction icon={isEditingGroup ? "done" : "edit"} label={isEditingGroup ? t.canvas.done : t.common.edit}
+							showLabel onClick={() => editCard(isEditingGroup ? null : selectedGroup.id)} />
+					</CanvasToolbar>}
 				</CanvasSelectionControls>}
 				<div className="canvas-docks" ref={docks}>
 					<CanvasToolbar className="canvas-create" label={t.canvas.createTools}>
-						<CanvasAction icon="text" label={t.canvas.addNote} showLabel disabled={!board.document} onClick={() => addTextCard()} />
+						<CanvasAction icon="text" label={t.canvas.addNote} showLabel disabled={!board.document} onClick={addTextCard} />
 						<CanvasAction icon="document" label={t.canvas.addFiles} showLabel disabled={!board.document} onClick={() => setFileSearch({ point: centerPoint() })} />
 					</CanvasToolbar>
 					<CanvasToolbar className="canvas-view" label={t.canvas.viewTools}>
