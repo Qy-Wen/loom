@@ -302,6 +302,11 @@ h2 { font-size: clamp(30px, 3.3vw, 46px); font-weight: 600; letter-spacing: -.04
 .download-intro h2 { font-size: clamp(30px, 3.1vw, 42px); margin-top: 22px; }
 .download-intro > p:not(.eyebrow) { max-width: 335px; font-size: 12px; line-height: 1.95; color: #7c8770; margin-block: 21px; }
 .download-intro .text-link { font-size: 11px; }
+.release-highlights { margin-top: 26px; padding-top: 20px; border-top: 1px solid #d3dac6; color: #526748; }
+.release-highlights h3 { font-size: 14px; font-weight: 600; }
+.release-highlights ul { margin: 12px 0; padding-inline-start: 1.25em; font-size: 13px; line-height: 1.8; }
+.release-highlights li + li { margin-top: 6px; }
+.release-highlights a { display: inline-block; margin-top: 2px; font-size: 12px; text-decoration: underline; text-underline-offset: 3px; }
 .download-options { align-self: center; min-width: 0; }
 .release-status { margin-bottom: 15px; font-size: 9px; color: #8c967e; }
 .download-row { display: flex; align-items: center; gap: 15px; padding-block: 17px; border-top: 1px solid #d3dac6; }

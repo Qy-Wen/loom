@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import { compareVersions, downloadUrls, installerNames, publishRelease, releaseVersion, validateReleaseConfig, validateReleaseFiles, websiteRelease } from "./release-lib.mjs";
+import { formatReleaseNotes, releaseHighlights } from "./release-notes.mjs";
 
 const example = JSON.parse(await readFile(new URL("../release.config.example.json", import.meta.url), "utf8"));
 const config = validateReleaseConfig({ ...example, cos: { ...example.cos, bucket: "loom-downloads-1250000000" } });
@@ -51,6 +52,16 @@ test("website links include both sources, and refuse a downgrade", () => {
   assert.match(updated.downloads["macos-arm64"].github, /mac-arm64\.dmg$/);
   assert.throws(() => websiteRelease({ ...current, version: "v0.2.0" }, config, tag, files));
   assert.throws(() => websiteRelease({ ...current, repository: "https://github.com/another/project" }, config, tag, files));
+});
+
+test("release highlights select the exact version without exposing unreleased or historical notes", () => {
+  const changelog = ["# Changelog", "## [Unreleased]", "- Next", "## [v0.1.0-alpha.10]", "- Later", `## [${tag}]`, "", "- This one", "- Fixed a bug", "## [v0.0.9]", "- Older"].join("\r\n");
+  const en = releaseHighlights(changelog, tag);
+  assert.deepEqual(en, ["This one", "Fixed a bug"]);
+  assert.equal(releaseHighlights(changelog, "v0.2.0"), null);
+  assert.throws(() => releaseHighlights(`## [${tag}]\n`, tag), /plain-text bullet list/);
+  assert.throws(() => releaseHighlights(`## [${tag}]\n- Item\n## [${tag}]\n- Repeated`, tag), /Duplicate/);
+  assert.equal(formatReleaseNotes({ en, zh: ["本版更新"] }), "## 简体中文\n\n- 本版更新\n\n## English\n\n- This one\n- Fixed a bug\n");
 });
 
 function fakeServices(events, overrides = {}) {

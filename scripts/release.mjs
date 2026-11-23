@@ -6,6 +6,7 @@ import { dirname, isAbsolute, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { compareVersions, downloadUrls, installerNames, publishRelease, releaseVersion, sha256, validateReleaseConfig, validateReleaseFiles, websiteRelease } from "./release-lib.mjs";
+import { formatReleaseNotes, readReleaseHighlights } from "./release-notes.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const websiteConfig = join(root, "website/release-config.js");
@@ -53,7 +54,7 @@ async function main() {
     help: { type: "boolean", default: false },
   } });
   if (values.help) {
-    console.log("npm run release -- --version v0.1.0-alpha.1 [--notes path/to/notes.md] [--dry-run]\nBuild on a Mac, publish identical installers to COS and GitHub, then update and deploy the website.\nRetry the same command to resume. Credentials stay in gh/COSCLI/SSH configuration.");
+    console.log("npm run release -- --version v0.1.8 [--notes path/to/notes.md] [--dry-run]\nBuild on a Mac, publish identical installers to COS and GitHub, then update and deploy the website.\nRelease notes come from the changelogs. --notes overrides the GitHub release body.\nRetry the same command to resume. Credentials stay in gh/COSCLI/SSH configuration.");
     return;
   }
   const version = releaseVersion(values.version);
@@ -85,7 +86,10 @@ async function main() {
     const current = await currentWebsiteRelease();
     if (current.version && compareVersions(version.tag, current.version) < 0) throw new Error(`The website already advertises newer version ${current.version}.`);
     if (current.repository?.replace(/\/$/, "") !== `https://github.com/${config.repository}`) throw new Error("The publishing and website repositories differ.");
-    const notes = values.notes ? await readFile(localPath(values.notes), "utf8") : null;
+    const highlights = await readReleaseHighlights(version.tag);
+    if (!values.notes && !highlights) throw new Error(`Add a [${version.tag}] section to CHANGELOG.md and CHANGELOG.zh-CN.md before releasing.`);
+    const notes = values.notes ? await readFile(localPath(values.notes), "utf8") : formatReleaseNotes(highlights);
+    if (!notes.trim()) throw new Error("The release notes file must contain a description of the changes.");
     const fingerprint = createHash("sha256").update(JSON.stringify({ config, notes })).digest("hex");
     if (state && (state.commit !== commit || state.fingerprint !== fingerprint || state.version !== version.tag)) throw new Error("This version already has a different commit or release configuration in .release-state. Resume with the original inputs or choose a new version.");
     state ||= { schema: 1, version: version.tag, commit, fingerprint };
@@ -164,11 +168,9 @@ async function main() {
           if (!missing(error)) throw error;
           const args = ["release", "create", version.tag, "--repo", config.repository, "--target", commit, "--draft", "--title", `Loom ${version.tag}`];
           if (version.prerelease) args.push("--prerelease");
-          if (notes !== null) {
-            const notesPath = join(directory, "release-notes.md");
-            await writeFile(notesPath, notes);
-            args.push("--notes-file", notesPath);
-          } else args.push("--generate-notes");
+          const notesPath = join(directory, "release-notes.md");
+          await writeFile(notesPath, notes);
+          args.push("--notes-file", notesPath);
           await gh(args);
           release = JSON.parse(await gh(["release", "view", version.tag, "--repo", config.repository, "--json", "databaseId,isDraft"]));
         }

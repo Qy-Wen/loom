@@ -96,6 +96,7 @@ export const english = {
   "download.source": "Explore the source",
   "download.status": "PREVIEW / COMING SOON",
   "download.pending": "Coming soon",
+  "download.releasePage": "View GitHub Release ↗",
   "install.title": "Installing and opening Loom",
   "install.notice": "Loom is free and fully open source, but is not yet signed or notarized due to the high registration costs. Thank you for your understanding. If you see a system prompt during installation or on first launch, follow the instructions for your system below.",
   "install.windows.title": "Windows installation",

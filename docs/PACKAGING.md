@@ -72,7 +72,9 @@ Publish:
 npm run release -- --version v0.1.0-alpha.1
 ```
 
-Optionally add `--notes docs/releases/v0.1.0-alpha.1.md`; otherwise GitHub generates release notes. Prerelease versions are marked as GitHub prereleases; stable releases become latest. The version is injected into the packaged app without editing source package versions.
+Keep user-facing changes under `## [Unreleased]` in [CHANGELOG.md](../CHANGELOG.md) and [CHANGELOG.zh-CN.md](../CHANGELOG.zh-CN.md), one plain-text bullet per line. Before publishing, move those bullets into a `## [vX.Y.Z]` section in both files, then commit and push the changes. The script reads that version for GitHub Release, and the website displays the same entries in the visitor's selected language. Use `--notes path/to/notes.md` to override the GitHub body.
+
+Prerelease versions are marked as GitHub prereleases. Stable releases become latest. The version is injected into the packaged app without editing source package versions.
 
 The workflow checks committed and pushed source, COS access, and website SSH; builds three installers plus `SHA256SUMS`; prepares a GitHub draft; uploads and verifies both download sources; publishes GitHub; generates `website/release-config.js`; then deploys and verifies the website.
 

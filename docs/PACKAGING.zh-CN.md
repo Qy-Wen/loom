@@ -72,13 +72,9 @@ npm run release -- --version v0.1.0-alpha.1 --dry-run
 npm run release -- --version v0.1.0-alpha.1
 ```
 
-可选指定更新说明：
+平时把用户能感知的变化记到 [CHANGELOG.md](../CHANGELOG.md) 和 [CHANGELOG.zh-CN.md](../CHANGELOG.zh-CN.md) 的 `## [Unreleased]` 下，每行写一条纯文本列表项。发布前把条目移到两份文件的 `## [vX.Y.Z]` 对应章节，再提交并推送。脚本读取本版条目写入 GitHub Release，官网按访问者选择的语言展示同一批条目。可通过 `--notes path/to/notes.md` 覆盖 GitHub 正文。
 
-```bash
-npm run release -- --version v0.1.0-alpha.1 --notes docs/releases/v0.1.0-alpha.1.md
-```
-
-未指定说明时使用 GitHub 自动生成的更新说明。带预发布后缀的版本标记为 GitHub prerelease；正式版标记为 latest。应用包的内嵌版本由同一版本参数注入，不修改源码 `package.json` 的版本。
+带预发布后缀的版本标记为 GitHub prerelease，正式版标记为 latest。应用包的内嵌版本由同一版本参数注入，源码 `package.json` 的版本无需调整。
 
 脚本会：检查源码已提交且提交存在于 GitHub → 预检 COS 与网站 SSH → 构建三个安装包和 `SHA256SUMS` → 准备 GitHub 草稿 → 上传并验证 COS/GitHub 文件 → 发布 GitHub Release → 生成 `website/release-config.js` → 部署并验证网站。
 

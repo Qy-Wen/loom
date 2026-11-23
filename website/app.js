@@ -146,6 +146,28 @@ function renderRelease() {
     document.querySelector('[data-i18n="download.eyebrow"]').textContent = text("预览版已就绪", "THE PREVIEW IS READY");
     document.querySelector('[data-i18n="download.description"]').textContent = text("选择适合你系统的预览版安装包。首次使用可参考上方快速开始，模型服务需按需配置。", "Choose a preview installer for your system. Follow the quick start above and configure model services as needed.");
   }
+  renderReleaseHighlights(available);
+}
+
+function renderReleaseHighlights(available) {
+  const section = document.querySelector("#release-highlights");
+  section.hidden = !available || !release.version;
+  if (section.hidden) return;
+
+  section.querySelector("h3").textContent = text(`${release.version} 本版更新`, `What’s new in ${release.version}`);
+  const highlights = release.highlights?.[language] ?? [];
+  const list = section.querySelector("ul");
+  list.replaceChildren(...highlights.map((highlight) => {
+    const item = document.createElement("li");
+    item.textContent = highlight;
+    return item;
+  }));
+  list.hidden = !highlights.length;
+
+  const link = section.querySelector("a");
+  link.hidden = !repository;
+  if (repository) link.href = `${repository.replace(/\/$/, "")}/releases/tag/${encodeURIComponent(release.version)}`;
+  section.hidden = list.hidden && link.hidden;
 }
 
 function applyLanguage(next) {

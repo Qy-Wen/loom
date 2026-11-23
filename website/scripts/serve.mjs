@@ -3,6 +3,7 @@ import { readFile, realpath, stat } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
+import { websiteReleaseModule } from "./release-module.mjs";
 
 const { values } = parseArgs({ options: { port: { type: "string", default: "4173" }, dist: { type: "boolean", default: false } } });
 const port = Number(values.port);
@@ -22,6 +23,12 @@ const server = createServer(async (request, response) => {
   }
   try {
     const pathname = decodeURIComponent(new URL(request.url, "http://localhost").pathname);
+    if (!values.dist && pathname === "/release-config.js") {
+      const body = await websiteReleaseModule();
+      response.writeHead(200, { "Content-Type": types[".js"], "Content-Length": Buffer.byteLength(body), "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" });
+      response.end(request.method === "HEAD" ? undefined : body);
+      return;
+    }
     let path = resolve(root, `.${pathname.replaceAll("\\", "/")}`);
     if (!insideRoot(path)) { response.writeHead(403).end("Forbidden"); return; }
     if ((await stat(path)).isDirectory()) path = join(path, "index.html");

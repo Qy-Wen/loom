@@ -24,6 +24,8 @@ Edit `release-config.js`. Use `null` for unpublished installers; the page displa
 
 修改 `release-config.js`：未发布的安装包保持 `null`，页面显示「准备中」。下载地址只接受 HTTPS。`domestic` 为独立的国内下载地址，优先于可选的 `github` 备用地址。版本和下载状态会同步更新两种语言。
 
+The download section reads the notes for `release.version` from the repository changelogs when previewing or building the site. / 官网预览和构建时，会从仓库的中英文更新记录里读取 `release.version` 对应的条目，显示在下载区。
+
 ```js
 version: "v0.1.0-alpha.1",
 downloads: {
