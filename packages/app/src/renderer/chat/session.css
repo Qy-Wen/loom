@@ -204,33 +204,6 @@
 	font-size: var(--lm-text-size-sm);
 }
 
-.chat-error {
-	width: 100%;
-	margin: var(--lm-space-4) 0 var(--lm-space-2);
-	padding: var(--lm-space-4) var(--lm-space-5) 9px;
-	border: 1px solid var(--lm-border-danger);
-	border-radius: var(--lm-radius-md);
-	background: var(--lm-surface-danger);
-	color: var(--lm-text-danger);
-	box-shadow: none;
-}
-
-.chat-error-label {
-	margin: 0 0 var(--lm-space-2);
-	color: var(--lm-text-danger);
-	font-size: var(--lm-text-size-2xs);
-	font-weight: var(--lm-weight-semibold);
-	letter-spacing: 0.07em;
-	text-transform: uppercase;
-}
-
-.chat-error-body {
-	margin: 0;
-	font-size: var(--lm-text-size-sm);
-	line-height: 1.45;
-	white-space: pre-wrap;
-}
-
 .agent-chat {
 	display: flex;
 	flex-direction: column;
@@ -241,6 +214,30 @@
 }
 
 .session-chat-shell {
+	--agui-chat-border: var(--lm-border-subtle);
+	--agui-chat-focus: var(--lm-focus-ring);
+	--agui-chat-muted: var(--lm-text-muted);
+	--agui-chat-primary: var(--lm-text-primary);
+	--agui-chat-body: var(--lm-text-body);
+	--agui-chat-secondary: var(--lm-text-secondary);
+	--agui-chat-mono-font: var(--lm-font-mono);
+	--agui-chat-card-radius: var(--lm-radius-md);
+	--agui-chat-card-background: var(--lm-surface-app);
+	--agui-tool-hover-background: var(--lm-surface-window);
+	--agui-tool-header-background: var(--lm-surface-hover);
+	--agui-tool-header-hover: var(--lm-surface-active);
+	--agui-tool-chevron: var(--lm-graphic);
+	--agui-chat-error-border: var(--lm-border-danger);
+	--agui-chat-error-background: var(--lm-surface-danger);
+	--agui-chat-error-color: var(--lm-text-danger);
+	--agui-chat-composer-border: var(--lm-border-default);
+	--agui-chat-composer-radius: var(--lm-radius-lg);
+	--agui-chat-composer-background: var(--lm-surface-raised);
+	--agui-chat-composer-shadow: var(--lm-shadow-xs);
+	--agui-chat-composer-action-color: var(--lm-text-inverse);
+	--agui-chat-composer-action-background: var(--lm-surface-inverse);
+	--agui-chat-composer-cancel-hover: var(--lm-surface-subtle);
+
 	display: grid;
 	grid-template-rows: minmax(0, 1fr) auto;
 	flex: 1;
@@ -250,14 +247,12 @@
 }
 
 .session-composer-meta {
-	grid-column: 2;
-	grid-row: 2;
+	flex: 1;
 	display: flex;
 	align-items: center;
 	justify-content: space-between;
 	gap: var(--lm-space-4);
 	min-width: 0;
-	align-self: center;
 	margin-left: -3px;
 }
 
@@ -392,64 +387,6 @@
 	padding-inline: var(--lm-space-1);
 }
 
-.session-composer,
-.session-inline-edit-pill {
-	border: 1px solid var(--lm-border-default);
-	border-radius: var(--lm-radius-lg);
-	background: var(--lm-surface-raised);
-	box-shadow: var(--lm-shadow-xs);
-}
-
-.session-composer {
-	display: grid;
-	grid-template-columns: auto minmax(0, 1fr) auto;
-	align-items: center;
-	padding: var(--lm-space-3) var(--lm-space-5);
-	column-gap: var(--lm-space-5);
-	row-gap: var(--lm-space-2);
-}
-
-.session-composer > .session-inline-input {
-	grid-column: 1 / -1;
-	grid-row: 1;
-	max-height: 240px;
-	overflow: auto;
-}
-
-.session-composer > .session-add-files-wrap { grid-column: 1; grid-row: 2; }
-.session-composer > .session-composer-send { grid-column: 3; grid-row: 2; margin-right: var(--lm-space-2); }
-
-.session-composer .session-inline-input,
-.session-inline-edit .session-inline-input {
-	font-size: var(--lm-text-size-xl);
-	line-height: 24px;
-	padding: var(--lm-space-3) var(--lm-space-2) 3px;
-}
-
-.session-composer-send,
-.session-inline-edit-send {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--lm-size-xl);
-	height: var(--lm-size-xl);
-	padding: 0;
-	border: 0;
-	border-radius: var(--lm-radius-pill);
-	color: var(--lm-text-inverse);
-	background: var(--lm-surface-inverse);
-	cursor: pointer;
-}
-
-.session-composer-send:hover:not(:disabled) { opacity: 0.8; }
-.session-composer-send:disabled { opacity: 0.35; cursor: default; }
-
-.session-composer-send svg,
-.session-inline-edit-send svg {
-	width: var(--lm-size-xs);
-	height: var(--lm-size-xs);
-}
-
 .session-add-files {
 	position: relative;
 	display: flex;
@@ -534,6 +471,11 @@
 }
 
 .session-inline-input {
+	max-height: 240px;
+	font-size: var(--lm-text-size-xl);
+	line-height: 24px;
+	padding: var(--lm-space-3) var(--lm-space-2) 3px;
+	overflow: auto;
 	position: relative;
 	box-sizing: border-box;
 	min-height: var(--lm-size-md);
@@ -674,6 +616,26 @@
 	cursor: text;
 }
 
+.tool-call-gate {
+	display: flex;
+	gap: var(--lm-space-3);
+	margin: var(--lm-space-3) 0 0 13px;
+}
+
+.tool-call-gate button {
+	padding: var(--lm-space-1) var(--lm-space-4);
+	border: 1px solid var(--lm-border-strong);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	font: inherit;
+	cursor: pointer;
+}
+
+.tool-call-gate button:hover {
+	background: var(--lm-surface-window);
+}
+
 .tool-call-images {
 	display: flex;
 	flex-wrap: wrap;
@@ -771,76 +733,6 @@
 	padding-top: 40px;
 }
 
-.session-inline-edit-pill {
-	display: flex;
-	flex-direction: column;
-	gap: var(--lm-space-2);
-	width: 100%;
-	box-sizing: border-box;
-	padding: var(--lm-space-3) var(--lm-space-5);
-}
-
-.session-inline-edit .session-inline-input {
-	min-width: 0;
-	max-height: 240px;
-	box-sizing: border-box;
-	margin: 0;
-	border: 0;
-	background: transparent;
-	color: inherit;
-	overflow: auto;
-	outline: none;
-}
-
-.session-inline-edit-toolbar {
-	display: flex;
-	align-items: center;
-	gap: var(--lm-space-2);
-	min-width: 0;
-}
-
-.session-inline-edit-actions {
-	display: flex;
-	align-items: center;
-	gap: var(--lm-space-1);
-	flex: 0 0 auto;
-	margin-left: auto;
-}
-
-.session-inline-edit-actions button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--lm-size-xl);
-	height: var(--lm-size-xl);
-	padding: 0;
-	border: 0;
-	border-radius: var(--lm-radius-pill);
-	cursor: pointer;
-}
-
-.session-inline-edit-cancel {
-	color: var(--lm-text-body);
-	background: transparent;
-}
-
-.session-inline-edit-cancel:hover:not(:disabled) {
-	background: var(--lm-surface-subtle);
-}
-
-.session-inline-edit-send:hover:not(:disabled) {
-	opacity: 0.7;
-}
-
-.session-inline-edit-actions button:disabled {
-	cursor: default;
-	opacity: 1;
-}
-
-.session-inline-edit-cancel:disabled {
-	opacity: 0.5;
-}
-
 .agent-content > .empty {
 	flex: 1;
 	padding: var(--lm-space-7) var(--lm-space-5);
@@ -851,14 +743,11 @@
 	--agui-chat-bubble-background: var(--lm-chat-user-bubble);
 	--agui-chat-bubble-radius: var(--lm-radius-xl);
 	--agui-chat-overlay-layer: var(--lm-z-raised);
-	--agui-chat-border: var(--lm-border-subtle);
 	--agui-chat-jump-background: var(--lm-surface-raised);
 	--agui-chat-jump-hover: var(--lm-surface-subtle);
 	--agui-chat-jump-color: var(--lm-text-body);
 	--agui-chat-jump-font-size: var(--lm-text-size-sm);
 	--agui-chat-jump-shadow: var(--lm-shadow-xs);
-	--agui-chat-muted: var(--lm-text-muted);
-	--agui-chat-focus: var(--lm-focus-ring);
 	--agui-chat-action-size: 26px;
 	--agui-chat-action-icon-size: 14px;
 	--agui-chat-action-radius: var(--lm-radius-sm);

@@ -1,0 +1,204 @@
+.agui-tool-card {
+	--agui-tool-preview-height: 128px;
+	margin: 8px 0;
+	padding: 0 10px 8px;
+	border: 1px solid var(--agui-chat-border, GrayText);
+	border-radius: var(--agui-chat-card-radius, 8px);
+	background: var(--agui-chat-card-background, Canvas);
+	font-size: 12px;
+	overflow: hidden;
+}
+
+.agui-tool-card:hover {
+	background: var(--agui-tool-hover-background, ButtonFace);
+}
+
+.agui-tool-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	width: calc(100% + 20px);
+	box-sizing: border-box;
+	margin: 0 -10px;
+	padding: 7px 10px;
+	border: 0;
+	border-bottom: 1px solid var(--agui-chat-border, GrayText);
+	background: var(--agui-tool-header-background, ButtonFace);
+	color: var(--agui-chat-muted, GrayText);
+	cursor: default;
+	text-align: left;
+	font: inherit;
+}
+
+button.agui-tool-header {
+	cursor: pointer;
+}
+
+button.agui-tool-header:focus-visible {
+	outline: 2px solid var(--agui-chat-focus, Highlight);
+	outline-offset: -2px;
+}
+
+button.agui-tool-header:hover {
+	background: var(--agui-tool-header-hover, ButtonFace);
+}
+
+.agui-tool-chevron {
+	flex: 0 0 auto;
+	width: 0;
+	height: 0;
+	border-top: 4px solid transparent;
+	border-bottom: 4px solid transparent;
+	border-left: 5px solid var(--agui-tool-chevron, currentColor);
+}
+
+.agui-tool-card[data-expanded="true"] .agui-tool-chevron {
+	transform: rotate(90deg);
+}
+
+.agui-tool-name {
+	flex: 1;
+	min-width: 0;
+	overflow: hidden;
+	color: var(--agui-chat-primary, CanvasText);
+	font-weight: 600;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
+}
+
+.agui-tool-status {
+	flex: 0 0 auto;
+}
+
+.agui-tool-error {
+	margin: 4px 0 0 13px;
+	color: var(--agui-chat-error-color, CanvasText);
+}
+
+.agui-tool-body {
+	position: relative;
+	margin: 4px 0 0;
+	overflow: hidden;
+}
+
+.agui-tool-content {
+	display: flow-root;
+}
+
+.agui-tool-card[data-expanded="false"] .agui-tool-body {
+	max-height: var(--agui-tool-preview-height);
+}
+
+.agui-tool-body[data-preview="true"] {
+	cursor: pointer;
+}
+
+.agui-tool-card[data-expanded="true"] .agui-tool-body {
+	max-height: 280px;
+	overflow: auto;
+}
+
+.agui-tool-body[data-preview="true"]::after {
+	content: "";
+	position: absolute;
+	right: 0;
+	bottom: 0;
+	left: 0;
+	height: 1.6em;
+	pointer-events: none;
+	background: linear-gradient(to bottom, transparent, var(--agui-chat-card-background, Canvas));
+}
+
+.agui-tool-card:hover .agui-tool-body[data-preview="true"]::after {
+	background: linear-gradient(to bottom, transparent, var(--agui-tool-hover-background, ButtonFace));
+}
+
+.agui-chat-activity {
+	margin: 8px 0;
+	padding: 7px 10px 8px;
+	border: 1px solid var(--agui-chat-border, GrayText);
+	border-radius: var(--agui-chat-card-radius, 8px);
+	background: var(--agui-chat-card-background, Canvas);
+	color: var(--agui-chat-secondary, CanvasText);
+	font-size: 12px;
+}
+
+.agui-chat-activity-header {
+	display: flex;
+	align-items: baseline;
+	gap: 8px;
+}
+
+.agui-chat-activity-label {
+	color: var(--agui-chat-body, CanvasText);
+	font-weight: 600;
+}
+
+.agui-chat-activity-meta {
+	color: var(--agui-chat-muted, GrayText);
+}
+
+.agui-chat-activity-detail,
+.agui-chat-activity-output {
+	margin: 6px 0 0;
+	white-space: pre-wrap;
+	word-break: break-word;
+}
+
+.agui-chat-activity-output {
+	max-height: 8em;
+	overflow: auto;
+	font-size: 11px;
+	line-height: 1.35;
+	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
+}
+
+.agui-tool-output {
+	margin: 8px 0 0;
+	border-top: 1px solid var(--agui-chat-border, GrayText);
+}
+
+.agui-tool-label {
+	margin: 8px 0 0 13px;
+	font: 11px / 1.35 var(--agui-chat-mono-font, ui-monospace, monospace);
+}
+
+.agui-tool-arguments,
+.agui-tool-result {
+	margin: 4px 0 0 13px;
+	overflow: visible;
+	white-space: pre-wrap;
+	word-break: break-word;
+	font-size: 11px;
+	line-height: 1.35;
+	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
+}
+
+.agui-chat-error {
+	width: 100%;
+	box-sizing: border-box;
+	margin: 8px 0 4px;
+	padding: 8px 10px 9px;
+	border: 1px solid var(--agui-chat-error-border, MarkText);
+	border-radius: var(--agui-chat-card-radius, 8px);
+	background: var(--agui-chat-error-background, Canvas);
+	color: var(--agui-chat-error-color, CanvasText);
+	box-shadow: none;
+}
+
+.agui-chat-error-label {
+	margin: 0 0 4px;
+	color: var(--agui-chat-error-color, CanvasText);
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.07em;
+	text-transform: uppercase;
+}
+
+.agui-chat-error-body {
+	margin: 0;
+	font-size: 12px;
+	line-height: 1.45;
+	white-space: pre-wrap;
+}

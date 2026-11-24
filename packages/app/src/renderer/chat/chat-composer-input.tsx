@@ -5,7 +5,7 @@ import { useLocale } from "../locale.tsx";
 import { ComposerActionsContext } from "./chat-context.ts";
 import { paintInlineEditor, placeCaretAtStart, readInlineEditor, type ChipLabels } from "./inline-asset-text.tsx";
 
-export function ComposerTextArea({ value, onChange, onSubmit }: { value: string; onChange: (value: string) => void; onSubmit: () => void }) {
+export function ComposerTextArea({ value, onChange }: { value: string; onChange: (value: string) => void }) {
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
@@ -70,7 +70,7 @@ export function ComposerTextArea({ value, onChange, onSubmit }: { value: string;
 			onKeyDown={(event) => {
 				if (event.key !== "Enter" || event.shiftKey || composing.current || isImeComposing(event.nativeEvent)) return;
 				event.preventDefault();
-				onSubmit();
+				event.currentTarget.closest("form")?.requestSubmit();
 			}}
 		/>
 	);

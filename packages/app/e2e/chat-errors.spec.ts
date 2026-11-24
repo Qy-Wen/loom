@@ -65,8 +65,8 @@ test("transport failures appear even without a RUN_ERROR event", async ({ loomPa
 	try {
 		await loomPage.getByRole("textbox").fill("Question over a broken connection");
 		await loomPage.getByRole("textbox").press("Enter");
-		await expect(loomPage.locator(".chat-error[role=alert]")).toBeVisible();
-		await expect(loomPage.locator(".chat-error-body")).toContainText(/network|fetch/i);
+		await expect(loomPage.locator(".agui-chat-error[role=alert]")).toBeVisible();
+		await expect(loomPage.locator(".agui-chat-error-body")).toContainText(/network|fetch/i);
 		await expect(loomPage.getByRole("button", { name: "Conversation model", exact: true })).toBeEnabled();
 	} finally {
 		await loomPage.unroute("**/api/ag-ui/run");
@@ -86,14 +86,14 @@ test("a rejected key shows one error, with the explanation once", async ({ loomP
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
 		await loomPage.getByRole("textbox").fill("hello");
 		await loomPage.getByRole("textbox").press("Enter");
-		const errors = loomPage.locator(".chat-error[role=alert]");
+		const errors = loomPage.locator(".agui-chat-error[role=alert]");
 		await expect(errors.first()).toBeVisible();
 		// The failure reaches history and the live copy gives way to it: one box, not two.
 		await expect(loomPage.getByTestId("chat-assistant-message")).toHaveCount(0);
 		await expect(errors).toHaveCount(1);
 		await loomPage.waitForTimeout(1500);
 		await expect(errors).toHaveCount(1);
-		const body = (await errors.locator(".chat-error-body").innerText());
+		const body = (await errors.locator(".agui-chat-error-body").innerText());
 		expect(body.match(/API key was rejected/g)).toHaveLength(1);
 		expect(body).toContain("****7a01");
 		// The error stays after the session is reloaded from history.

@@ -1,4 +1,5 @@
 import type { Message } from "@ag-ui/core";
+import { ChatError } from "@loom/ag-ui-react";
 import { ChatView } from "@loom/ag-ui-react/chat-view";
 import "@loom/ag-ui-react/markdown.css";
 import type { LoomTranscriptMessage, LoomUserAttachment } from "@loom/agent";
@@ -66,10 +67,7 @@ export function SessionTranscript({ messages, isRunning, libraryRoot }: { messag
 			},
 			assistantMessage(message, text) {
 				if (isChatErrorMessageId(message.id)) return {
-					replacement: <div className="chat-error" role="alert">
-						<div className="chat-error-label">{t.chat.requestFailed}</div>
-						<p className="chat-error-body">{text}</p>
-					</div>,
+					replacement: <ChatError label={t.chat.requestFailed} message={text} />,
 				};
 				if (!turnEnds.has(message.id) || branch.busy) return;
 				return {

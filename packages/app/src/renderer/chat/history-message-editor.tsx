@@ -1,4 +1,4 @@
-import { isImeComposing } from "../components/ime-composition.ts";
+import { ComposerForm, isImeComposing } from "@loom/ag-ui-react";
 import { useLayoutEffect, useRef, useState } from "react";
 import type { LoomSessionModel, LoomUserAttachment } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
@@ -42,8 +42,14 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 	};
 	return (
 		<div className="session-inline-edit" data-testid="chat-user-message">
-			<div className="session-inline-edit-pill">
-				<div
+			<ComposerForm
+				mode="edit"
+				onSubmit={send}
+				submitDisabled={busy || !editableText(draft)}
+				onCancel={onCancel}
+				cancelDisabled={busy}
+				labels={{ cancel: t.common.cancel, send: t.chat.send }}
+				editor={<div
 					ref={editor}
 					className="session-inline-input"
 					role="textbox"
@@ -62,26 +68,17 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 					onKeyDown={(event) => {
 						if (isImeComposing(event.nativeEvent)) return;
 						if (event.key === "Escape") { event.preventDefault(); if (!busy) onCancel(); }
-						if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send(); }
+						if (event.key === "Enter" && !event.shiftKey) {
+							event.preventDefault();
+							event.currentTarget.closest("form")?.requestSubmit();
+						}
 					}}
-				/>
-				<div className="session-inline-edit-toolbar">
+				/>}
+				controls={<>
 					<AgentPermissionSelect />
 					<ChatModelSelect model={draftModel ?? model} onChange={setDraftModel} disabled={busy} />
-					<div className="session-inline-edit-actions">
-						<button type="button" className="session-inline-edit-cancel" aria-label={t.common.cancel} data-tooltip={t.common.cancel} disabled={busy} onClick={onCancel}>
-							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-								<path d="M18 6 6 18M6 6l12 12" />
-							</svg>
-						</button>
-						<button type="button" className="session-inline-edit-send" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
-							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-								<path d="m5 12 7-7 7 7M12 19V5" />
-							</svg>
-						</button>
-					</div>
-				</div>
-			</div>
+				</>}
+			/>
 			{error && <div className="session-branch-note session-branch-error" role="alert">{error}</div>}
 		</div>
 	);

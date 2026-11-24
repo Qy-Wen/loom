@@ -53,9 +53,15 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(loomPage.getByText("Image result received", { exact: true }).first()).toBeVisible();
 		expect(modelReceivedImage).toBe(true);
-		const card = loomPage.locator(".tool-call").filter({ has: image });
-		await expect(card.locator(".tool-call-result")).toContainText("Image from MCP");
-		await expect(card.locator(".tool-call-result")).not.toContainText("base64");
+		const card = loomPage.locator(".agui-tool-card").filter({ has: image });
+		await expect(card.locator(".agui-tool-result")).toContainText("Image from MCP");
+		await expect(card.locator(".agui-tool-result")).not.toContainText("base64");
+		const disclosure = card.locator("button.agui-tool-header");
+		await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+		await disclosure.press("Enter");
+		await expect(disclosure).toHaveAttribute("aria-expanded", "true");
+		await disclosure.press("Space");
+		await expect(disclosure).toHaveAttribute("aria-expanded", "false");
 		await loomPage.reload();
 		await expect(image).toBeVisible();
 		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);

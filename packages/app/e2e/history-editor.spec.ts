@@ -57,7 +57,7 @@ test("history editing shares composer styling and applies its model only to the 
 		expect(await loomPage.evaluate(() => window.loom.listSessions())).toEqual(before);
 		await openEditor();
 		await selectModel();
-		const styles = await loomPage.evaluate(() => [".session-inline-edit-pill", '.session-follow-up-slot [data-testid="chat-composer"]'].map((selector) => {
+		const styles = await loomPage.evaluate(() => [".session-inline-edit form", '.session-follow-up-slot [data-testid="chat-composer"]'].map((selector) => {
 			const style = getComputedStyle(document.querySelector(selector)!);
 			return Object.fromEntries(["border", "border-radius", "background-color", "box-shadow"].map((key) => [key, style.getPropertyValue(key)]));
 		}));
@@ -70,11 +70,11 @@ test("history editing shares composer styling and applies its model only to the 
 		}, enabled);
 		await enableEdited(false);
 		await loomPage.getByRole("textbox", { name: "Edit question", exact: true }).fill("EDITED_MODEL_QUESTION");
-		await loomPage.locator(".session-inline-edit-send").click();
+		await loomPage.locator(".session-inline-edit").getByRole("button", { name: "Send", exact: true }).click();
 		await expect(loomPage.locator(".session-inline-edit").getByRole("alert")).toContainText("disabled");
 		expect(await loomPage.evaluate(() => window.loom.listSessions())).toEqual(before);
 		await enableEdited(true);
-		await loomPage.locator(".session-inline-edit-send").click();
+		await loomPage.getByRole("textbox", { name: "Edit question", exact: true }).press("Enter");
 		await expect(loomPage.getByText("HISTORY_MODEL_REPLY_2", { exact: true })).toBeVisible();
 		expect(requests).toHaveLength(2);
 		expect(requests[1]).toMatchObject({ model: "edited", reasoning_effort: "high" });

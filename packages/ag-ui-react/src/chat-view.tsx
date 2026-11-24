@@ -1,6 +1,6 @@
 import { useLayoutEffect, useMemo, useRef, type ReactNode } from "react";
 import { contentToText, type ActivityMessage, type AssistantMessage, type Message, type UserMessage } from "@ag-ui/client";
-import { MessageList, renderDefaultItem } from "./message-list.tsx";
+import { MessageList, renderDefaultTool } from "./message-list.tsx";
 import { Markdown, type MarkdownProps } from "./markdown.tsx";
 import { MessageRow, ReasoningRow } from "./message-row.tsx";
 import type { TranscriptItem } from "./transcript.ts";
@@ -67,7 +67,7 @@ export function ChatView({ messages, isRunning, threadId, className, emptyState,
 	const waiting = isRunning && (last?.role !== "assistant" || !last.content);
 
 	function renderItem(item: TranscriptItem): ReactNode {
-		if (item.kind === "tool") return slots?.tool ? slots.tool(item) : renderDefaultItem(item);
+		if (item.kind === "tool") return slots?.tool ? slots.tool(item) : renderDefaultTool(item);
 		const { message } = item;
 		switch (message.role) {
 			case "user": {

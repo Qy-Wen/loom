@@ -1,5 +1,6 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { Message } from "@ag-ui/core";
+import { ChatError, ComposerForm } from "@loom/ag-ui-react";
 import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets, referenceKey } from "@loom/agent/attachments";
 import { failureShownInHistory, formatChatError } from "../../shared/chat-error.ts";
@@ -388,10 +389,10 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 			}}
 		>
 			{runError !== null && !failureShownInHistory(stored, runError) && (
-				<div className="chat-error" role="alert">
-					<div className="chat-error-label">{t.chat.requestFailed}</div>
-					<p className="chat-error-body">{runError.trim() === "no_model" ? t.chat.modelRequired : formatChatError(runError)}</p>
-				</div>
+				<ChatError
+					label={t.chat.requestFailed}
+					message={runError.trim() === "no_model" ? t.chat.modelRequired : formatChatError(runError)}
+				/>
 			)}
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
 			{attachmentError && <div className="session-branch-note session-branch-error">{attachmentError}</div>}
@@ -409,27 +410,19 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 					</ol>
 				</section>
 			)}
-			<form className="session-composer" data-testid="chat-composer" onSubmit={(event) => {
-				event.preventDefault();
-				deliver();
-			}}>
-				<ComposerTextArea value={value} onChange={onChange} onSubmit={deliver} />
-				<AddFilesButton />
-				<div className="session-composer-meta">
+			<ComposerForm
+				editor={<ComposerTextArea value={value} onChange={onChange} />}
+				leading={<AddFilesButton />}
+				controls={<div className="session-composer-meta">
 					<AgentPermissionSelect />
 					<SessionModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={isRunning} />
 					<ContextIndicator context={usage} />
-				</div>
-				{isRunning && !hasDraft ? (
-					<button className="session-composer-send" data-testid="chat-send-button" type="button" aria-label={t.chat.stop} data-tooltip={t.chat.stop} onClick={onStop}>
-						<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
-					</button>
-				) : (
-					<button className="session-composer-send" data-testid="chat-send-button" type="submit" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={!hasDraft || !threadReady}>
-						<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7M12 19V5" /></svg>
-					</button>
-				)}
-			</form>
+				</div>}
+				onSubmit={deliver}
+				submitDisabled={!hasDraft || !threadReady}
+				onStop={isRunning && !hasDraft ? onStop : undefined}
+				labels={{ send: t.chat.send, stop: t.chat.stop }}
+			/>
 		</div>
 		</ComposerActionsContext.Provider>
 	);

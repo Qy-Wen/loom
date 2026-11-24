@@ -1,13 +1,15 @@
 import type { ReactNode } from "react";
 import { contentToText, type Message } from "@ag-ui/client";
 import { transcriptItems, type TranscriptItem } from "./transcript.ts";
+import { ToolCard } from "./tool-card.tsx";
 
-export function renderDefaultItem(item: TranscriptItem): ReactNode {
+export function renderDefaultTool(item: Extract<TranscriptItem, { kind: "tool" }>): ReactNode {
+	return <ToolCard name={item.call.function.name} parameters={item.call.function.arguments} result={item.result?.content} />;
+}
+
+function renderDefaultItem(item: TranscriptItem): ReactNode {
 	if (item.kind === "tool") {
-		return <details><summary>{item.call.function.name}</summary>
-			<pre className="agui-message-text">{item.call.function.arguments}</pre>
-			{item.result && <pre className="agui-message-text">{contentToText(item.result.content)}</pre>}
-		</details>;
+		return renderDefaultTool(item);
 	}
 	const { message } = item;
 	if (message.role === "activity" || message.role === "system" || message.role === "developer") return null;

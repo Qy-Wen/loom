@@ -11,7 +11,6 @@
 @import "./workbench/preview/markdown.css";
 @import "./layout/dock.css";
 @import "./chat/session.css";
-@import "./chat/activity.css";
 @import "./details/details.css";
 @import "./workbench/table/table.css";
 @import "./settings/settings.css";

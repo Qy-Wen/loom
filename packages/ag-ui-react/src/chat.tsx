@@ -3,6 +3,7 @@ import type { AbstractAgent } from "@ag-ui/client";
 import { MessageComposer, type MessageComposerProps } from "./composer.tsx";
 import { MessageList, type MessageListProps } from "./message-list.tsx";
 import { useAgent } from "./use-agent.ts";
+import { ChatError } from "./chat-notice.tsx";
 
 export interface ChatProps {
 	agent: AbstractAgent;
@@ -14,10 +15,11 @@ export interface ChatProps {
 export function Chat({ agent, renderItem, labels }: ChatProps) {
 	const { messages, isRunning, send, stop, error } = useAgent(agent);
 	const [failure, setFailure] = useState<string | null>(null);
+	const message = error ?? failure;
 	return <div className="agui-chat">
 		<MessageList messages={messages} renderItem={renderItem} label={labels?.conversation} />
 		<div role="status">{isRunning ? labels?.running ?? "Working…" : ""}</div>
-		{(error ?? failure) && <p role="alert">{error ?? failure}</p>}
+		{message && <ChatError message={message} />}
 		<MessageComposer labels={labels} isRunning={isRunning} onStop={stop} onSend={(text) => {
 			setFailure(null);
 			void send(text).catch((cause: unknown) => {

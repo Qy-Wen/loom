@@ -34,6 +34,10 @@ import "@loom/ag-ui-react/markdown.css";
 
 Pass `slots` for custom Markdown links, message content or actions, tool calls, and activity. User and assistant slots can also replace a row with an editor or error. Theme the view with `--agui-chat-*` and `--agui-md-*` CSS properties.
 
+`ToolCard` is the default tool row and can also be used in the tool slot with custom result content and approval controls. Use `ChatActivity` for progress and `ChatError` for failed requests. These components are available from the main entry and styled by `styles.css`.
+
+Use `ComposerForm` with a host-supplied editor and toolbar controls to share the form and its send, stop, or cancel buttons between composing and editing. The host manages the draft, attachments, and submission.
+
 ## Markdown
 
 To render streaming Markdown with tables and highlighted code, install `streamdown@1.3.0` and use the Markdown entry with a bundler that supports CSS imports.

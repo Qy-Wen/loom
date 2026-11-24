@@ -71,14 +71,14 @@ for (const mode of ["List", "Icons"] as const) {
 			await bubble.hover();
 			await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 			await expect(page.locator('.session-inline-edit [data-folder-path="资料/nested"]')).toHaveCount(1);
-			await page.locator(".session-inline-edit-send").click();
+			await page.locator(".session-inline-edit").getByRole("button", { name: "Send", exact: true }).click();
 			await expect(page.getByText(/FOLDER_REPLY_2/).first()).toBeVisible();
 			expect(JSON.stringify(requests[1]!.messages.findLast((message) => message.role === "user")!.content)).toContain("<folder_ref>");
 			bubble = page.getByTestId("chat-user-message").first();
 			await bubble.hover();
 			await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 			await page.locator(".session-inline-edit").getByRole("button", { name: "Remove nested", exact: true }).click();
-			await page.locator(".session-inline-edit-send").click();
+			await page.locator(".session-inline-edit").getByRole("button", { name: "Send", exact: true }).click();
 			await expect(page.getByText(/FOLDER_REPLY_3/).first()).toBeVisible();
 			expect(JSON.stringify(requests[2]!.messages.findLast((message) => message.role === "user")!.content)).not.toContain("<folder_ref>");
 		} finally {

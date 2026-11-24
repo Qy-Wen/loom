@@ -1,4 +1,5 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useState } from "react";
+import { ToolCard } from "@loom/ag-ui-react";
 import { commandAllowKey, toolCallNeedsApproval, toolPathArg, type CommandAllow, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
 import { toolResultParts } from "../../shared/tool-result-content.ts";
@@ -30,7 +31,6 @@ export function ToolCallCard({
 	const { t } = useLocale();
 	const { level } = useAgentPermission();
 	const gatePending = useToolGatePending(toolCallId);
-	const [open, setOpen] = useState(false);
 	const [acted, setActed] = useState(false);
 	const [gateError, setGateError] = useState<string | null>(null);
 	const pathGated = level === "standard" && (name === "write" || name === "edit");
@@ -41,81 +41,36 @@ export function ToolCallCard({
 	const resultParts = done ? toolResultParts(result) : null;
 	const images = resultParts?.filter((part) => part.type === "image") ?? [];
 	const displayResult = resultParts ? resultParts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n") : result;
-	const argumentsText = formatToolValue(parameters);
-	const resultText = done && !refs && displayResult != null && displayResult !== "" ? formatToolValue(displayResult) : "";
-	const hasResult = refs !== null || images.length > 0 || resultText !== "";
-	const bodyRef = useRef<HTMLDivElement>(null);
-	const contentRef = useRef<HTMLDivElement>(null);
-	const [expandable, setExpandable] = useState(false);
-	useLayoutEffect(() => {
-		const body = bodyRef.current!, content = contentRef.current!;
-		const measure = () => {
-			const limit = Number.parseFloat(getComputedStyle(body).getPropertyValue("--tool-call-preview-height"));
-			setExpandable(content.scrollHeight > limit + 1);
-		};
-		const observer = new ResizeObserver(measure);
-		observer.observe(body);
-		observer.observe(content);
-		measure();
-		return () => observer.disconnect();
-	}, []);
-	const expanded = expandable && open;
-	const Header = expandable ? "button" : "div";
-
-	return (
-		<div className={`tool-call${expanded ? " open" : ""}`}>
-			<Header
-				className="tool-call-head"
-				type={expandable ? "button" : undefined}
-				aria-expanded={expandable ? expanded : undefined}
-				onClick={expandable ? () => setOpen((current) => !current) : undefined}
-			>
-				{expandable ? <span className="tool-call-chevron" aria-hidden="true" /> : null}
-				<span className="tool-call-name">{name}</span>
-				<span className="tool-call-status">{waiting ? t.tool.waiting : done ? t.tool.done : t.chat.working}</span>
-			</Header>
-			{waiting && toolCallId ? (
-				<div className="tool-call-gate">
-					<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
-					{remember ? (
-						<button type="button" onClick={() => { void decide(toolCallId, "approve_always", setActed, setGateError); }}>{t.tool.always}</button>
-					) : null}
-					<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed, setGateError); }}>{t.tool.skip}</button>
+	return <ToolCard
+		name={name}
+		status={waiting ? t.tool.waiting : done ? t.tool.done : t.chat.working}
+		parameters={parameters}
+		result={done && !refs ? displayResult : undefined}
+		resultContent={images.length > 0 || refs !== null ? <>
+			{images.length > 0 && (
+				<div className="tool-call-images">
+					{images.map((part, index) => <img key={index} src={"url" in part ? part.url : `data:${part.mimeType};base64,${part.data}`} loading="lazy" decoding="async" alt={`${t.tool.image} ${index + 1}`} />)}
 				</div>
-			) : null}
-			{gateError ? <p className="tool-call-gate-error">{gateError}</p> : null}
-			<div
-				ref={bodyRef}
-				className={`tool-call-body${!expanded && expandable ? " faded" : ""}`}
-				onClick={!expanded && expandable ? (event) => {
-					if (!(event.target as Element).closest("button, a")) setOpen(true);
-				} : undefined}
-			>
-				<div ref={contentRef} className="tool-call-content">
-					<div className="tool-call-label">arguments</div>
-					<pre className="tool-call-arguments">{argumentsText}</pre>
-					{hasResult ? (
-						<div className="tool-call-output">
-							<div className="tool-call-label">result</div>
-							{resultText !== "" ? <pre className="tool-call-result">{resultText}</pre> : null}
-							{images.length > 0 ? (
-								<div className="tool-call-images">
-									{images.map((part, index) => <img key={index} src={"url" in part ? part.url : `data:${part.mimeType};base64,${part.data}`} loading="lazy" decoding="async" alt={`${t.tool.image} ${index + 1}`} />)}
-								</div>
-							) : null}
-							{refs ? (
-								<div className="tool-call-refs">
-									{refs.length === 0 ? <span className="tool-call-refs-empty">{t.tool.noAssets}</span> : refs.map((ref) => (
-										<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
-									))}
-								</div>
-							) : null}
-						</div>
-					) : null}
+			)}
+			{refs && (
+				<div className="tool-call-refs">
+					{refs.length === 0 ? <span className="tool-call-refs-empty">{t.tool.noAssets}</span> : refs.map((ref) => (
+						<AssetRefButton key={ref.assetId} asset={ref} onOpen={openAsset} />
+					))}
 				</div>
+			)}
+		</> : undefined}
+		actions={waiting && toolCallId ? (
+			<div className="tool-call-gate">
+				<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
+				{remember && (
+					<button type="button" onClick={() => { void decide(toolCallId, "approve_always", setActed, setGateError); }}>{t.tool.always}</button>
+				)}
+				<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed, setGateError); }}>{t.tool.skip}</button>
 			</div>
-		</div>
-	);
+		) : undefined}
+		actionError={gateError}
+	/>;
 }
 
 async function decide(
@@ -147,19 +102,4 @@ function AssetRefButton({ asset, onOpen }: { asset: AssetRef; onOpen: (assetId: 
 			{asset.filename}
 		</button>
 	);
-}
-
-function formatToolValue(value: unknown): string {
-	if (typeof value === "string") {
-		try {
-			return JSON.stringify(JSON.parse(value), null, 2);
-		} catch {
-			return value;
-		}
-	}
-	try {
-		return JSON.stringify(value ?? {}, null, 2);
-	} catch {
-		return String(value);
-	}
 }

@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import type { ActivityMessage } from "@ag-ui/core";
+import { ChatActivity } from "@loom/ag-ui-react";
 import { useLocale } from "../locale.tsx";
 import { setToolGatePending } from "./tool-gate-pending.ts";
 
@@ -37,15 +38,7 @@ function RetryActivity({ content }: { content: RetryContent }): React.JSX.Elemen
 	const label = content.phase === "wait" && content.delayMs !== undefined
 		? t.activity.retryingIn(formatDelay(content.delayMs))
 		: t.activity.retrying;
-	return (
-		<div className="run-activity" role="status">
-			<div className="run-activity-head">
-				<span className="run-activity-label">{label}</span>
-				<span className="run-activity-meta">{attempt}</span>
-			</div>
-			{content.errorMessage ? <p className="run-activity-detail">{content.errorMessage}</p> : null}
-		</div>
-	);
+	return <ChatActivity label={label} meta={attempt} detail={content.errorMessage} />;
 }
 
 function ToolGateActivity({ content }: { content: ToolGateContent }): null {
@@ -57,12 +50,7 @@ function ToolGateActivity({ content }: { content: ToolGateContent }): null {
 
 function ToolProgressActivity({ content }: { content: ToolProgressContent }): React.JSX.Element | null {
 	if (content.hidden || !content.text) return null;
-	return (
-		<div className="run-activity" role="status">
-			<div className="run-activity-label">{content.name}</div>
-			<pre className="run-activity-output">{content.text}</pre>
-		</div>
-	);
+	return <ChatActivity label={content.name} output={content.text} />;
 }
 
 /** Live retry and tool-output rows disappear when the step finishes. */
