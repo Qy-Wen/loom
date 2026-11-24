@@ -164,7 +164,7 @@ export class SqliteMetadataStore implements MetadataStore {
 		return rows.map(toAsset);
 	}
 
-	async replaceAssets(assets: Asset[]): Promise<void> {
+	async replaceAssets(assets: Asset[], invalidatedAssetIds?: readonly string[]): Promise<void> {
 		const database = this.requireDatabase();
 		const replace = database.transaction((values: Asset[]) => {
 			const nextAssetIds = new Set(values.map((asset) => asset.assetId));
@@ -197,6 +197,12 @@ export class SqliteMetadataStore implements MetadataStore {
 			const remove = database.prepare("DELETE FROM assets WHERE asset_id = ?");
 			for (const { asset_id: assetId } of existingAssetIds) {
 				if (!nextAssetIds.has(assetId)) remove.run(assetId);
+			}
+			if (invalidatedAssetIds?.length) {
+				for (const table of ["asset_metadata", "text_embed_jobs", "text_chunks"]) {
+					const clear = database.prepare(`DELETE FROM ${table} WHERE asset_id = ?`);
+					for (const assetId of invalidatedAssetIds) clear.run(assetId);
+				}
 			}
 			deleteUnusedTags(database);
 		});

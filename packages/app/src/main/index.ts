@@ -1407,6 +1407,7 @@ app
 							root = rootPath;
 							try { signal.throwIfAborted(); await localCore.close(); snapshot = await captureSnapshot(rootPath, signal); installation = await action(snapshot); }
 							catch (error) { failure = error; await recoverPull(rootPath); }
+							return installation?.changedContentPaths;
 						});
 					} catch (error) {
 						if (installation) {
@@ -1535,7 +1536,7 @@ async function rerankProviderFromSettings(): Promise<RerankProvider | undefined>
 	return createHttpRerankProvider(slot);
 }
 
-async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (rootPath: string) => Promise<void>): Promise<LibrarySnapshot> {
+async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (rootPath: string) => Promise<ReadonlySet<string> | void>): Promise<LibrarySnapshot> {
 	if (shutdownStarted) throw new Error("App is shutting down");
 	const previous = libraryTransition;
 	let releaseTransition!: () => void;
@@ -1553,12 +1554,12 @@ async function applyOpenedLibrary(rootPath: string | undefined, beforeOpen?: (ro
 		// Cancel Core jobs before awaiting tool shutdown, while storage still belongs to the old root.
 		await localCore.stopLibraryTasks();
 		await requireChat().close();
-		await beforeOpen?.(rootPath);
+		const changedContentPaths = await beforeOpen?.(rootPath);
 		if (!beforeOpen) {
 			const recovered = await recoverPull(rootPath);
 			if (recovered) appLog(`Interrupted cloud update recovered; installed files retained at ${recovered}`);
 		}
-		const snapshot = await localCore.openLibrary(rootPath);
+		const snapshot = await localCore.openLibrary(rootPath, changedContentPaths ?? undefined);
 		await cloudBackup?.openLibrary(snapshot.rootPath);
 		if (snapshot.rootPath) {
 			requireChat().setSystemPrompt(systemPromptForLibrary(snapshot.rootPath));

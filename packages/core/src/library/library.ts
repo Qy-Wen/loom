@@ -67,7 +67,7 @@ export class Library {
 		return this.handlers.metadata;
 	}
 
-	async open(rootPath: string): Promise<LibrarySnapshot> {
+	async open(rootPath: string, changedContentPaths?: ReadonlySet<string>): Promise<LibrarySnapshot> {
 		await this.stopWatching();
 		await this.metadata.close();
 
@@ -82,7 +82,7 @@ export class Library {
 			await mkdir(this.paths.memoryDir, { recursive: true });
 			await this.metadata.open(this.paths);
 			await this.metadata.recoverInterruptedJobs();
-			await this.syncFromDisk(false);
+			await this.syncFromDisk(false, undefined, changedContentPaths);
 
 			const watcher = new LibraryWatcher(this.paths);
 			this.watcher = watcher;
@@ -659,7 +659,7 @@ export class Library {
 		}, REMOVE_GRACE_MS);
 	}
 
-	private async syncFromDisk(notify: boolean, signal?: AbortSignal): Promise<void> {
+	private async syncFromDisk(notify: boolean, signal?: AbortSignal, changedContentPaths?: ReadonlySet<string>): Promise<void> {
 		const paths = this.requirePaths();
 		const folders = new Set<string>();
 		const diskFiles: ReconcileDiskFile[] = [];
@@ -670,9 +670,12 @@ export class Library {
 		const previous = await this.metadata.listAssets();
 		signal?.throwIfAborted();
 		const next = reconcileOpenAssets(previous, diskFiles, trustPath);
+		const invalidatedAssetIds = changedContentPaths?.size
+			? next.filter((asset) => changedContentPaths.has(asset.relativePath)).map((asset) => asset.assetId)
+			: undefined;
 		const previousFolders = this.folders;
 		this.folders = folders;
-		await this.handlers.applyOpenReconcile(previous, next);
+		await this.handlers.applyOpenReconcile(previous, next, invalidatedAssetIds);
 		await this.metadata.setLibraryVolumeId(currentVolumeId);
 		if (!notify) return;
 

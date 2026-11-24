@@ -11,7 +11,7 @@ import { isMetadata, resolvePull, type PullPlan } from "./pull-plan.ts";
 
 const MARKER = ".loom/backup/pull-install.json";
 type Record = { format: 1; root: string; directory: string; transaction: string; libraryId: string; committed: boolean };
-export type PullInstallation = { finish(): Promise<void>; rollback(): Promise<void> };
+export type PullInstallation = { changedContentPaths: ReadonlySet<string>; finish(): Promise<void>; rollback(): Promise<void> };
 const move = (source: string, target: string) => retryWindowsFileOperation(() => rename(source, target));
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 async function statIfPresent(path: string) {
@@ -163,6 +163,7 @@ export async function installPull(snapshot: Snapshot, plan: PullPlan, choices: u
 			throw error;
 		}
 		return {
+			changedContentPaths: selection.changedContentPaths,
 			finish: () => withFileLock(loc.journal, async () => {
 				await atomicWrite(loc.journal, JSON.stringify({ ...record, committed: true }));
 				await rm(join(loc.root, MARKER), { force: true }); await cleanup(loc.journal, record);

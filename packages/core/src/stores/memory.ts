@@ -129,7 +129,7 @@ export class InMemoryMetadataStore implements MetadataStore {
 		);
 	}
 
-	async replaceAssets(assets: Asset[]): Promise<void> {
+	async replaceAssets(assets: Asset[], invalidatedAssetIds: readonly string[] = []): Promise<void> {
 		const nextAssetIds = new Set(assets.map((asset) => asset.assetId));
 		this.assets.clear();
 		this.assetIdByPath.clear();
@@ -138,6 +138,10 @@ export class InMemoryMetadataStore implements MetadataStore {
 			this.assets.set(asset.assetId, asset);
 			this.assetIdByPath.set(asset.relativePath, asset.assetId);
 			if (asset.fileSystemId) this.assetIdByFileSystemId.set(asset.fileSystemId, asset.assetId);
+		}
+		for (const assetId of invalidatedAssetIds) {
+			this.enrichments.delete(assetId);
+			this.clearTextIndex(assetId);
 		}
 		for (const assetId of this.assetProperties.keys()) {
 			if (!nextAssetIds.has(assetId)) this.assetProperties.delete(assetId);

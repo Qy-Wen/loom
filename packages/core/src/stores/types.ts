@@ -25,7 +25,8 @@ export interface MetadataStore {
 	getAssetByPath(relativePath: string): Promise<Asset | undefined>;
 	getAssetByFileSystemId(fileSystemId: string): Promise<Asset | undefined>;
 	listAssets(): Promise<Asset[]>;
-	replaceAssets(assets: Asset[]): Promise<void>;
+	/** Clear extracted metadata and text indexes for assets known to have changed content. */
+	replaceAssets(assets: Asset[], invalidatedAssetIds?: readonly string[]): Promise<void>;
 	removeAsset(assetId: string): Promise<void>;
 	listFavoriteIds(): Promise<string[]>;
 	setFavorite(assetId: string, favorite: boolean): Promise<void>;

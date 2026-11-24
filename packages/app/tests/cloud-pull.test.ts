@@ -4,6 +4,7 @@ import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, sym
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
+import { LocalCore } from "@loom/core";
 import { captureSnapshot, type Snapshot } from "../src/main/cloud-backup/snapshot.ts";
 import { updateMirror, libraryCatalogKey, mirrorRoot, type MirrorManifest } from "../src/main/cloud-backup/mirror.ts";
 import { planPull, resolvePull, SyncBaselines, type PullPlan } from "../src/main/cloud-backup/pull-plan.ts";
@@ -69,6 +70,7 @@ test("pull updates the same folder, downloads changed bytes only and retains pri
 		await put(f.remote, ".loom/agents/command-allows/private.json", "remote permissions"); await mkdir(join(f.remote, "empty")); await f.publish();
 		const { snapshot, plan } = await f.preview(), downloads: string[] = []; f.store.afterDownload = (key) => { downloads.push(key); };
 		const result = await installPull(snapshot, plan, allChoices(plan, "local"), f.store, signal(), () => {}); assert.ok(result);
+		assert.equal(result.changedContentPaths.size, 0, "cloud metadata is selected");
 		assert.equal(await readFile(join(f.local, "local.txt"), "utf8"), "local edit"); assert.equal(await readFile(join(f.local, "conflict.txt"), "utf8"), "local choice"); assert.equal(await readFile(join(f.local, "remote.txt"), "utf8"), "remote edit");
 		assert.equal(await readFile(join(f.local, ".loom/metadata-db/database"), "utf8"), "remote db"); assert.equal(await readFile(join(f.local, ".loom/agents/command-allows/private.json"), "utf8"), "local permissions");
 		assert.equal(JSON.parse(await readFile(join(f.local, ".loom/backup/restore.json"), "utf8")).sourceRoot, await realpath(f.remote)); assert.deepEqual(await readdir(join(f.local, "empty")), []);
@@ -76,6 +78,75 @@ test("pull updates the same folder, downloads changed bytes only and retains pri
 		assert.ok(!(await readdir(f.parent)).some((name) => name.startsWith(".loom-pull-"))); await f.baselines.save(config, plan.manifest, f.local);
 		assert.ok((await f.preview()).plan.preview.changes.every((change) => change.choice === "local"), "kept differences stay pending against new baseline");
 	} finally { await f.close(); }
+});
+
+test("pull refreshes search data for a same-mtime overwrite when keeping local metadata", async () => {
+	const parent = await mkdtemp(join(tmpdir(), "loom-pull-index-"));
+	const local = join(parent, "local"), remote = join(parent, "remote");
+	const core = new LocalCore(), store = new MemoryStore(), baselines = new SyncBaselines(join(parent, "baseline"));
+	const operation = signal(), progress = () => {};
+	const provider = { modelId: "test", embed: async (texts: string[]) => texts.map(() => [1, 0]) };
+	const timestamp = new Date("2024-01-01T00:00:00Z");
+	let snapshot: Snapshot | undefined;
+	try {
+		await put(local, "note.txt", "amber");
+		await put(local, "other.txt", "cobalt");
+		await utimes(join(local, "note.txt"), timestamp, timestamp);
+		const { assets } = await core.openLibrary(local);
+		const [note, other] = assets;
+		assert.ok(note && other);
+		await core.refreshEnrichment(assets);
+		assert.equal((await core.embedTextAsset(note.assetId, provider)).status, "ready");
+		assert.equal((await core.embedTextAsset(other.assetId, provider)).status, "ready");
+		assert.equal((await core.searchAssets({ query: "amber" })).total, 1);
+		assert.equal((await core.deepSearchAssets({ query: "amber" })).total, 1);
+		await core.close();
+
+		let initial!: MirrorManifest;
+		await updateMirror(await captureSnapshot(local, operation), store, "A", operation, progress, undefined, (manifest) => { initial = manifest; });
+		await baselines.save(config, initial, local);
+		await cp(local, remote, { recursive: true, preserveTimestamps: true });
+		await core.openLibrary(local);
+		await core.setFavorite(note.assetId, true);
+		await core.addAssetTag(note.assetId, "local-only");
+		await core.close();
+
+		await put(remote, "note.txt", "ivory");
+		await utimes(join(remote, "note.txt"), timestamp, timestamp);
+		await put(remote, "new.txt", "new from cloud");
+		await updateMirror(await captureSnapshot(remote, operation), store, "B", operation, progress);
+		snapshot = await captureSnapshot(local, operation);
+		const baseline = await baselines.read(config, snapshot.libraryId, local);
+		const plan = await planPull(snapshot, store, baseline, operation, progress);
+		const installation = await installPull(snapshot, plan, allChoices(plan, "local"), store, operation, progress);
+		assert.ok(installation);
+		assert.deepEqual([...installation.changedContentPaths], ["note.txt"]);
+		const reopened = await core.openLibrary(local, installation.changedContentPaths);
+		await installation.finish();
+
+		const updated = reopened.assets.find((asset) => asset.relativePath === "note.txt");
+		assert.equal(await readFile(join(local, "note.txt"), "utf8"), "ivory");
+		assert.equal(updated?.assetId, note.assetId);
+		assert.equal(updated.modifiedAt, note.modifiedAt);
+		assert.ok(reopened.favoriteAssetIds.includes(note.assetId));
+		const tag = reopened.tags.find((tag) => tag.name === "local-only");
+		assert.ok(tag);
+		assert.ok(reopened.assetTags.some(({ assetId, tagId }) => assetId === note.assetId && tagId === tag.tagId));
+		await core.refreshEnrichment(reopened.assets);
+		assert.equal((await core.searchAssets({ query: "amber" })).total, 0);
+		assert.equal((await core.searchAssets({ query: "ivory" })).assets[0]?.assetId, note.assetId);
+		assert.equal((await core.getTextEmbedStatus(note.assetId)).status, "idle");
+		assert.equal((await core.deepSearchAssets({ query: "amber" })).total, 0);
+		const kept = await core.deepSearchAssets({ query: "cobalt" });
+		assert.equal(kept.indexedCount, 1);
+		assert.equal(kept.assets[0]?.assetId, other.assetId);
+		assert.equal((await core.embedTextAsset(note.assetId, provider)).status, "ready");
+		assert.equal((await core.deepSearchAssets({ query: "ivory" })).assets[0]?.assetId, note.assetId);
+	} finally {
+		await core.close();
+		if (snapshot) await rm(snapshot.temporary, { recursive: true, force: true });
+		await rm(parent, { recursive: true, force: true });
+	}
 });
 
 test("directory deletion, replacement and case renames resolve as whole subtrees", async () => {

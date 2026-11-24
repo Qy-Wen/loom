@@ -96,7 +96,14 @@ export async function planPull(snapshot: Snapshot, store: ObjectStore, baseline:
 	return { preview: { id: randomUUID(), libraryId: snapshot.libraryId, rootPath: snapshot.root, checkedAt: new Date().toISOString(), changes, firstSync: !baseline }, local, remote, library, manifest, groups };
 }
 
-export function resolvePull(plan: PullPlan, input: unknown): { remote: PullNode[]; remove: PullNode[]; metadata: boolean; pending: boolean; downloads: PullNode[] } {
+export function resolvePull(plan: PullPlan, input: unknown): {
+	remote: PullNode[];
+	remove: PullNode[];
+	metadata: boolean;
+	pending: boolean;
+	downloads: PullNode[];
+	changedContentPaths: ReadonlySet<string>;
+} {
 	if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("Choose how to resolve each conflict");
 	const choices = input as Record<string, CloudPullChoice>, conflicts = new Set(plan.preview.changes.filter((change) => change.conflict).map((change) => change.id));
 	if (Object.keys(choices).some((id) => !conflicts.has(id) || !["local", "remote"].includes(choices[id]!))) throw new Error("Invalid conflict choice");
@@ -111,5 +118,12 @@ export function resolvePull(plan: PullPlan, input: unknown): { remote: PullNode[
 	}
 	const local = new Map(plan.local.filter((node) => node.type === "file").map((node) => [node.path, node]));
 	const downloads = selected.filter((node) => node.type === "file" && local.get(node.path)?.hash !== node.hash);
-	return { remote: selected, remove, metadata, pending, downloads };
+	const changedContentPaths = new Set<string>();
+	// When keeping the local database, its derived data still describes the overwritten files.
+	if (!metadata) {
+		for (const node of downloads) {
+			if (local.has(node.path)) changedContentPaths.add(node.path);
+		}
+	}
+	return { remote: selected, remove, metadata, pending, downloads, changedContentPaths };
 }

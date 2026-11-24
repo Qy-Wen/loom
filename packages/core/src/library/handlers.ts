@@ -93,8 +93,8 @@ export class LibraryHandlers {
 		this.graph = graph;
 	}
 
-	async applyOpenReconcile(previous: Asset[], next: Asset[]): Promise<void> {
-		await this.metadata.replaceAssets(next);
+	async applyOpenReconcile(previous: Asset[], next: Asset[], invalidatedAssetIds?: readonly string[]): Promise<void> {
+		await this.metadata.replaceAssets(next, invalidatedAssetIds);
 		const situations = diffLibraryAssets(previous, next);
 		await this.dispatch(situations);
 		// Always, even with no situations: the first call after opening reads every source file.

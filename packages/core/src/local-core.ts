@@ -143,7 +143,7 @@ export class LocalCore {
 		return this.metadataStore instanceof SqliteMetadataStore ? this.metadataStore.sqliteVecNote() : undefined;
 	}
 
-	openLibrary(rootPath: string): Promise<LibrarySnapshot> {
+	openLibrary(rootPath: string, changedContentPaths?: ReadonlySet<string>): Promise<LibrarySnapshot> {
 		return this.changeLibrary(async () => {
 			await this.closeCurrentLibrary();
 			this.tasks = new LibraryTaskScope();
@@ -151,7 +151,7 @@ export class LocalCore {
 				if (!(await stat(rootPath)).isDirectory()) throw new Error("Library path is not a directory");
 				await this.graphStore.open(new LibraryPaths(rootPath));
 				this.references.reset();
-				const snapshot = await this.library.open(rootPath);
+				const snapshot = await this.library.open(rootPath, changedContentPaths);
 				void this.thumbnails.prune(snapshot.assets.map((asset) => asset.assetId)).catch(() => undefined);
 				return snapshot;
 			} catch (error) {
