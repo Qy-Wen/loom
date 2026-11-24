@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { clipboard } from "electron";
-import { decodeFileNameW, dropEffectIsMove } from "../../shared/file-clipboard.ts";
+import { decodeFileNameW, decodeWindowsFileDrop, dropEffectIsMove } from "../../shared/file-clipboard.ts";
 import { readMacFilePaths, writeMacFilePaths } from "./mac-file-clipboard.ts";
 import { readWindowsFilePaths, writeWindowsFilePaths } from "./windows-file-clipboard.ts";
 
@@ -44,7 +44,7 @@ export interface FileClipboard {
 
 /**
  * Read file lists through each platform's native clipboard API.
- * Windows: `FileNameW` is only the first path, so PowerShell reads the full drop list.
+ * Windows: CF_HDROP contains the full list and FileNameW contains only the first path.
  * macOS: file URLs are readable. Finder's cut flag is private, so a paste from Finder copies.
  */
 export async function readFileClipboard(): Promise<FileClipboard | null> {
@@ -80,19 +80,23 @@ async function readWindowsFileClipboard(): Promise<FileClipboard | null> {
 		move = false;
 	}
 
-	let paths: string[] = [];
 	try {
-		paths = await readWindowsFilePaths();
-	} catch {
-		paths = [];
-	}
-	if (paths.length === 0) {
-		try {
+		// Windows resolves the numeric clipboard format name to CF_HDROP (15).
+		const paths = decodeWindowsFileDrop(clipboard.readBuffer("#15"));
+		if (paths.length > 0) return { paths, move };
+		if (!clipboard.availableFormats().includes("text/uri-list") && !clipboard.has("FileName")) {
 			const single = decodeFileNameW(clipboard.readBuffer("FileNameW")).trim();
-			if (single) paths = [single];
-		} catch {
-			paths = [];
+			return single ? { paths: [single], move } : null;
 		}
-	}
-	return paths.length > 0 ? { paths, move } : null;
+	} catch { /* If the clipboard was busy, try the native helper. */ }
+
+	// Use the legacy reader for ANSI drop lists and providers that require it.
+	try {
+		const paths = await readWindowsFilePaths();
+		if (paths.length > 0) return { paths, move };
+	} catch { /* Fall back to the standalone filename when available. */ }
+	try {
+		const single = decodeFileNameW(clipboard.readBuffer("FileNameW")).trim();
+		return single ? { paths: [single], move } : null;
+	} catch { return null; }
 }

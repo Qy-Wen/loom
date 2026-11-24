@@ -50,9 +50,12 @@ const REMOVE_GRACE_MS = 500;
 export class Library {
 	private paths: LibraryPaths | null = null;
 	private watcher: LibraryWatcher | null = null;
-	private readonly folders = new Set<string>();
+	private folders = new Set<string>();
 	private readonly listeners = new Set<LibraryListener>();
+	private readonly activeFileChanges = new Map<LibraryPaths, number>();
 	private updateQueue: Promise<void> = Promise.resolve();
+	private reconcilePending = false;
+	private reconcileScan: AbortController | null = null;
 	private liveReconcileTimer: ReturnType<typeof setTimeout> | null = null;
 	private readonly handlers: LibraryHandlers;
 
@@ -364,7 +367,6 @@ export class Library {
 	async pastePathsInto(absolutePaths: string[], destFolder: string, move: boolean, resolveConflict: ResolvePasteConflict, signal?: AbortSignal): Promise<PastedLibraryItems> {
 		const paths = this.requirePaths();
 		await this.requireDirectory(destFolder);
-		const watching = await this.pauseWatcher();
 		const checkActive = () => {
 			signal?.throwIfAborted();
 			if (this.paths !== paths) throw new Error("The library changed during paste");
@@ -413,10 +415,26 @@ export class Library {
 			}
 			return { assets, folders, cancelled: result.cancelled };
 		} finally {
-			if (this.paths === paths) {
-				// Includes partial completion and edits made outside Loom while a dialog was open.
-				try { await this.syncFromDisk(true); }
-				finally { if (watching) await this.resumeWatcher(); }
+			// Placed items are indexed above. Reconcile partial completion and external edits in the background.
+			if (this.paths === paths) this.scheduleReconcile();
+		}
+	}
+
+	/** A foreground file change can interrupt a scan. Wait if reconciliation is already publishing. */
+	async runFileChange<T>(change: () => Promise<T>): Promise<T> {
+		const paths = this.requirePaths();
+		this.activeFileChanges.set(paths, (this.activeFileChanges.get(paths) ?? 0) + 1);
+		this.reconcileScan?.abort();
+		try {
+			await this.updateQueue;
+			if (this.paths !== paths) throw new Error("The library changed before the file operation started");
+			return await change();
+		} finally {
+			const remaining = this.activeFileChanges.get(paths)! - 1;
+			if (remaining > 0) this.activeFileChanges.set(paths, remaining);
+			else {
+				this.activeFileChanges.delete(paths);
+				if (this.paths === paths && this.reconcilePending) this.scheduleReconcile();
 			}
 		}
 	}
@@ -543,11 +561,13 @@ export class Library {
 
 	async stopWatching(): Promise<void> {
 		await this.pauseWatcher();
+		this.reconcilePending = false;
 	}
 
 	private async pauseWatcher(): Promise<boolean> {
 		const watcher = this.watcher;
 		this.watcher = null;
+		this.reconcileScan?.abort();
 		if (this.liveReconcileTimer) {
 			clearTimeout(this.liveReconcileTimer);
 			this.liveReconcileTimer = null;
@@ -562,6 +582,7 @@ export class Library {
 		const watcher = new LibraryWatcher(this.paths);
 		this.watcher = watcher;
 		await watcher.start((event) => this.enqueueFileEvent(event));
+		if (this.watcher === watcher && this.reconcilePending) this.scheduleReconcile();
 	}
 
 	private async volumeWasRelocated(currentVolumeId: string): Promise<boolean> {
@@ -569,16 +590,18 @@ export class Library {
 		return storedVolumeId !== undefined && storedVolumeId !== currentVolumeId;
 	}
 
-	private async collectLibraryFiles(directory: string, files: ReconcileDiskFile[]): Promise<void> {
+	private async collectLibraryFiles(directory: string, files: ReconcileDiskFile[], folders: Set<string>, signal?: AbortSignal): Promise<void> {
+		signal?.throwIfAborted();
 		const paths = this.requirePaths();
 		const entries = await readdir(directory, { withFileTypes: true });
 
 		for (const entry of entries) {
+			signal?.throwIfAborted();
 			const absolutePath = join(directory, entry.name);
 			if (paths.isIgnoredPath(absolutePath) || entry.isSymbolicLink()) continue;
 			if (entry.isDirectory()) {
-				this.folders.add(paths.toRelativePath(absolutePath));
-				await this.collectLibraryFiles(absolutePath, files);
+				folders.add(paths.toRelativePath(absolutePath));
+				await this.collectLibraryFiles(absolutePath, files, folders, signal);
 				continue;
 			}
 			if (!entry.isFile()) continue;
@@ -605,28 +628,50 @@ export class Library {
 			this.emit({ type: "error", message: event.error.message });
 			return;
 		}
+		this.reconcileScan?.abort();
+		this.scheduleReconcile();
+	}
+
+	private scheduleReconcile(): void {
+		const paths = this.paths;
+		if (!paths) return;
+		this.reconcilePending = true;
+		if (!this.watcher || this.activeFileChanges.has(paths)) return;
 		// Wait for the burst to settle, then reuse the same full-disk match as open.
 		if (this.liveReconcileTimer) clearTimeout(this.liveReconcileTimer);
 		this.liveReconcileTimer = setTimeout(() => {
 			this.liveReconcileTimer = null;
 			this.updateQueue = this.updateQueue
-				.then(() => this.syncFromDisk(true))
+				.then(async () => {
+					if (this.paths !== paths || !this.watcher || this.activeFileChanges.has(paths)) return;
+					this.reconcilePending = false;
+					const scan = new AbortController();
+					this.reconcileScan = scan;
+					try { await this.syncFromDisk(true, scan.signal); }
+					catch (error) {
+						if (!scan.signal.aborted || error !== scan.signal.reason) throw error;
+						this.reconcilePending = true;
+					} finally { this.reconcileScan = null; }
+				})
 				.catch((error) => {
 					this.emit({ type: "error", message: error instanceof Error ? error.message : String(error) });
 				});
 		}, REMOVE_GRACE_MS);
 	}
 
-	private async syncFromDisk(notify: boolean): Promise<void> {
+	private async syncFromDisk(notify: boolean, signal?: AbortSignal): Promise<void> {
 		const paths = this.requirePaths();
-		const previousFolders = new Set(this.folders);
-		this.folders.clear();
+		const folders = new Set<string>();
 		const diskFiles: ReconcileDiskFile[] = [];
-		await this.collectLibraryFiles(paths.root, diskFiles);
+		await this.collectLibraryFiles(paths.root, diskFiles, folders, signal);
+		signal?.throwIfAborted();
 		const currentVolumeId = await statVolumeId(paths.root);
 		const trustPath = await this.volumeWasRelocated(currentVolumeId);
 		const previous = await this.metadata.listAssets();
+		signal?.throwIfAborted();
 		const next = reconcileOpenAssets(previous, diskFiles, trustPath);
+		const previousFolders = this.folders;
+		this.folders = folders;
 		await this.handlers.applyOpenReconcile(previous, next);
 		await this.metadata.setLibraryVolumeId(currentVolumeId);
 		if (!notify) return;
@@ -845,7 +890,7 @@ export class Library {
 		const previousFolders = new Set(this.folders);
 		this.folders.add(relativePath);
 		const files: ReconcileDiskFile[] = [];
-		await this.collectLibraryFiles(this.folderAbsolute(relativePath), files);
+		await this.collectLibraryFiles(this.folderAbsolute(relativePath), files, this.folders);
 		for (const folder of [...this.folders].sort((a, b) => a.localeCompare(b))) {
 			if (!previousFolders.has(folder)) this.emit({ type: "folder_upsert", relativePath: folder });
 		}

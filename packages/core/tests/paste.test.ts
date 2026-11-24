@@ -4,10 +4,11 @@ import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:f
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test, type TestContext } from "node:test";
-import { LibraryPaths, LocalCore, type PasteConflict, type ResolvePasteConflict } from "../src/index.ts";
+import { LibraryPaths, LocalCore, type Asset, type PasteConflict, type ResolvePasteConflict } from "../src/index.ts";
 import { pastePaths } from "../src/library/paste.ts";
+import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 
-async function fixture(t: TestContext, files: Record<string, string>) {
+async function fixture(t: TestContext, files: Record<string, string>, metadataStore?: SqliteMetadataStore) {
 	const directory = await mkdtemp(join(tmpdir(), "loom-paste-"));
 	const root = join(directory, "library");
 	await mkdir(root);
@@ -15,7 +16,7 @@ async function fixture(t: TestContext, files: Record<string, string>) {
 		await mkdir(dirname(join(root, path)), { recursive: true });
 		await writeFile(join(root, path), content);
 	}
-	const core = new LocalCore();
+	const core = new LocalCore({ metadataStore });
 	t.after(async () => {
 		await core.close();
 		await rm(directory, { recursive: true, force: true });
@@ -127,6 +128,52 @@ test("a destination modified during the prompt is preserved", async (t) => {
 	}), /changed/);
 	assert.equal(await readFile(join(root, "to/note.md"), "utf8"), "changed while asking");
 	assert.equal(await readFile(join(root, "from/note.md"), "utf8"), "new");
+});
+
+test("paste indexes its result and reconciles unrelated files created during a conflict prompt", { timeout: 10_000 }, async (t) => {
+	const { core, root } = await fixture(t, { "from/note.md": "new", "to/note.md": "old" });
+	const indexed = new Promise<void>((resolve) => {
+		const unsubscribe = core.subscribeLibrary((change) => {
+			if (change.type === "upsert" && change.asset.relativePath === "external.md") resolve();
+		});
+		t.after(unsubscribe);
+	});
+	const result = await core.pastePathsInto([join(root, "from/note.md")], "to", false, async () => {
+		await writeFile(join(root, "external.md"), "created while asking");
+		return "replace";
+	});
+	assert.equal(result.assets[0]?.relativePath, "to/note.md");
+	assert.equal(await readFile(join(root, "to/note.md"), "utf8"), "new");
+	await indexed;
+});
+
+test("copying during post-paste reconciliation discards the stale disk scan", { timeout: 10_000 }, async (t) => {
+	const metadata = new SqliteMetadataStore();
+	const { core, root, initial } = await fixture(t, { "note.md": "original" }, metadata);
+	const scanning = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	const reconciled = Promise.withResolvers<Asset[]>();
+	const getVolume = metadata.getLibraryVolumeId.bind(metadata);
+	const replaceAssets = metadata.replaceAssets.bind(metadata);
+	t.mock.method(metadata, "getLibraryVolumeId", async () => {
+		scanning.resolve();
+		await release.promise;
+		return getVolume();
+	});
+	t.mock.method(metadata, "replaceAssets", async (assets: Asset[]) => {
+		await replaceAssets(assets);
+		reconciled.resolve(assets);
+	});
+	const note = initial.assets[0]!;
+	try {
+		await core.pastePathsInto([join(root, note.relativePath)], "", false, unexpectedConflict);
+		await scanning.promise;
+		const copying = core.duplicateAsset(note.assetId);
+		release.resolve();
+		const copy = await copying;
+		assert.equal(copy.relativePath, "note copy 2.md");
+		assert.equal((await reconciled.promise).find((asset) => asset.relativePath === copy.relativePath)?.assetId, copy.assetId);
+	} finally { release.resolve(); }
 });
 
 test("moving a merged folder retains ignored source contents", async (t) => {

@@ -257,23 +257,23 @@ export class LocalCore {
 	}
 
 	renameAsset(assetId: string, name: string, mode?: "stem" | "filename"): Promise<Asset> {
-		return this.library.renameAsset(assetId, name, mode);
+		return this.library.runFileChange(() => this.library.renameAsset(assetId, name, mode));
 	}
 
 	duplicateAsset(assetId: string): Promise<Asset> {
-		return this.library.duplicateAsset(assetId);
+		return this.library.runFileChange(() => this.library.duplicateAsset(assetId));
 	}
 
 	createFolder(parentRelativePath: string, name?: string): Promise<string> {
-		return this.library.createFolder(parentRelativePath, name);
+		return this.library.runFileChange(() => this.library.createFolder(parentRelativePath, name));
 	}
 
 	createMarkdownFile(parentRelativePath: string): Promise<Asset> {
-		return this.library.createMarkdownFile(parentRelativePath);
+		return this.library.runFileChange(() => this.library.createMarkdownFile(parentRelativePath));
 	}
 
 	createCanvasFile(parentRelativePath: string, name?: string): Promise<Asset> {
-		return this.library.createCanvasFile(parentRelativePath, name);
+		return this.library.runFileChange(() => this.library.createCanvasFile(parentRelativePath, name));
 	}
 
 	getLibraryRoot(): string {
@@ -281,35 +281,35 @@ export class LocalCore {
 	}
 
 	renameFolder(relativePath: string, name: string): Promise<string> {
-		return this.library.renameFolder(relativePath, name);
+		return this.library.runFileChange(() => this.library.renameFolder(relativePath, name));
 	}
 
 	copyAssetsInto(assetIds: string[], destFolder: string): Promise<Asset[]> {
-		return this.library.copyAssetsInto(assetIds, destFolder);
+		return this.library.runFileChange(() => this.library.copyAssetsInto(assetIds, destFolder));
 	}
 
 	copyFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
-		return this.library.copyFolderInto(sourceFolder, destFolder);
+		return this.library.runFileChange(() => this.library.copyFolderInto(sourceFolder, destFolder));
 	}
 
 	moveAssetsInto(assetIds: string[], destFolder: string): Promise<Asset[]> {
-		return this.library.moveAssetsInto(assetIds, destFolder);
+		return this.library.runFileChange(() => this.library.moveAssetsInto(assetIds, destFolder));
 	}
 
 	moveFolderInto(sourceFolder: string, destFolder: string): Promise<string> {
-		return this.library.moveFolderInto(sourceFolder, destFolder);
+		return this.library.runFileChange(() => this.library.moveFolderInto(sourceFolder, destFolder));
 	}
 
 	importExternalFiles(absolutePaths: string[]): Promise<Asset[]> {
-		return this.library.importExternalFiles(absolutePaths);
+		return this.library.runFileChange(() => this.library.importExternalFiles(absolutePaths));
 	}
 
 	placePathsInto(absolutePaths: string[], destFolder: string, move: boolean) {
-		return this.library.placePathsInto(absolutePaths, destFolder, move);
+		return this.library.runFileChange(() => this.library.placePathsInto(absolutePaths, destFolder, move));
 	}
 
 	pastePathsInto(absolutePaths: string[], destFolder: string, move: boolean, resolveConflict: ResolvePasteConflict, signal?: AbortSignal) {
-		return this.library.pastePathsInto(absolutePaths, destFolder, move, resolveConflict, signal);
+		return this.library.runFileChange(() => this.library.pastePathsInto(absolutePaths, destFolder, move, resolveConflict, signal));
 	}
 
 	getFolderFilePath(relativePath: string): string {
@@ -317,11 +317,11 @@ export class LocalCore {
 	}
 
 	forgetFolder(relativePath: string): Promise<void> {
-		return this.library.forgetFolder(relativePath);
+		return this.library.runFileChange(() => this.library.forgetFolder(relativePath));
 	}
 
 	forgetAsset(assetId: string): Promise<void> {
-		return this.library.forgetAsset(assetId);
+		return this.library.runFileChange(() => this.library.forgetAsset(assetId));
 	}
 
 	async getPropertySnapshot(): Promise<PropertySnapshot> {
@@ -708,7 +708,7 @@ export class LocalCore {
 	async gradeImage(args: GradeImageArgs, signal?: AbortSignal): Promise<GradeImageResult> {
 		return this.runLibraryTask(async (jobSignal) => {
 			const job = await this.media.gradeImage(args, jobSignal);
-			const asset = await this.library.indexFile(job.output);
+			const asset = await this.library.runFileChange(() => this.library.indexFile(job.output));
 			if (!asset) throw new Error("Could not index graded image");
 			const source = await this.metadataStore.getAssetByPath(job.input);
 			return {
@@ -723,7 +723,7 @@ export class LocalCore {
 	async gradeVideo(args: GradeVideoArgs, signal?: AbortSignal): Promise<GradeVideoResult> {
 		return this.runLibraryTask(async (jobSignal) => {
 			const job = await this.media.gradeVideo(args, jobSignal);
-			const asset = await this.library.indexFile(job.output);
+			const asset = await this.library.runFileChange(() => this.library.indexFile(job.output));
 			if (!asset) throw new Error("Could not index graded video");
 			const source = await this.metadataStore.getAssetByPath(job.input);
 			return {

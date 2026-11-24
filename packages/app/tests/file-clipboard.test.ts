@@ -3,9 +3,29 @@ import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { describe, it } from "node:test";
 import { readMacFilePaths, writeMacFilePaths } from "../src/main/desktop/mac-file-clipboard.ts";
-import { decodeFileNameW, dropEffectIsMove } from "../src/shared/file-clipboard.ts";
+import { decodeFileNameW, decodeWindowsFileDrop, dropEffectIsMove } from "../src/shared/file-clipboard.ts";
 
 describe("file clipboard formats", () => {
+	it("reads all Unicode file paths from a Windows drop list and ignores allocation padding", () => {
+		const paths = ["C:\\shots\\中文 #100%.md", "\\\\server\\share\\photos"];
+		const header = Buffer.alloc(24);
+		header.writeUInt32LE(header.length, 0);
+		header.writeUInt32LE(1, 16);
+		const data = Buffer.from(`${paths.join("\0")}\0\0`, "utf16le");
+		assert.deepEqual(decodeWindowsFileDrop(Buffer.concat([header, data, Buffer.alloc(16, 0xff)])), paths);
+	});
+
+	it("leaves legacy and invalid Windows drop lists to the fallback", () => {
+		const header = Buffer.alloc(20);
+		header.writeUInt32LE(header.length, 0);
+		assert.deepEqual(decodeWindowsFileDrop(Buffer.concat([header, Buffer.from("C:\\note.md\0\0")])), []);
+		header.writeUInt32LE(1, 16);
+		assert.deepEqual(decodeWindowsFileDrop(Buffer.concat([header, Buffer.from("C:\\note.md\0", "utf16le")])), []);
+		assert.deepEqual(decodeWindowsFileDrop(Buffer.concat([header, Buffer.from("relative.md\0\0", "utf16le")])), []);
+		header.writeUInt32LE(0xffffffff, 0);
+		assert.deepEqual(decodeWindowsFileDrop(Buffer.concat([header, Buffer.from("C:\\note.md\0\0", "utf16le")])), []);
+	});
+
 	it("reads one UTF-16 path and ignores trailing nulls", () => {
 		const encoded = Buffer.from("C:\\shots\\a.txt\0\0", "utf16le");
 		assert.equal(decodeFileNameW(encoded), "C:\\shots\\a.txt");
