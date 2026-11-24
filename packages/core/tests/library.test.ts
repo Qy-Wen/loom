@@ -5,6 +5,7 @@ import { tmpdir } from "node:os";
 import { test } from "node:test";
 import { LocalCore, LibraryPaths, type LibraryChange } from "../src/index.ts";
 import { statVolumeId } from "../src/library/file-identity.ts";
+import { LibraryWatcher } from "../src/library/watcher.ts";
 import { SqliteMetadataStore } from "../src/stores/sqlite.ts";
 
 function waitForChange(
@@ -111,6 +112,56 @@ test("Library keeps the same asset id when a file is moved on disk", async () =>
 	} finally {
 		await Promise.all([core.close(), reopenedCore?.close()]);
 		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Library rechecks missing files before removing them even if no watcher event arrives", async (t) => {
+	const parent = await mkdtemp(join(tmpdir(), "loom-library-recheck-"));
+	const root = join(parent, "library");
+	const store = new SqliteMetadataStore();
+	const core = new LocalCore({ metadataStore: store });
+	t.mock.method(LibraryWatcher.prototype, "start", async () => {});
+	try {
+		await mkdir(join(root, "archive"), { recursive: true });
+		await writeFile(join(root, "moving.md"), "# Moving");
+		await writeFile(join(root, "gone.md"), "# Gone");
+		await writeFile(join(parent, "pasted.md"), "# Pasted");
+		const opened = await core.openLibrary(root);
+		const moving = opened.assets.find((asset) => asset.relativePath === "moving.md");
+		const gone = opened.assets.find((asset) => asset.relativePath === "gone.md");
+		assert.ok(moving && gone);
+		await core.setFavorite(moving.assetId, true);
+		await core.setFavorite(gone.assetId, true);
+		await core.addAssetTag(moving.assetId, "Keep");
+
+		// The first walk sees neither path of the moved file, as when it moves into a directory already visited.
+		const staged = join(parent, "moving.md");
+		await rename(join(root, "moving.md"), staged);
+		await rm(join(root, "gone.md"));
+		const getVolumeId = store.getLibraryVolumeId.bind(store);
+		let firstScan = true;
+		const scans = t.mock.method(store, "getLibraryVolumeId", async () => {
+			if (firstScan) {
+				firstScan = false;
+				await rename(staged, join(root, "archive", "moving.md"));
+			}
+			return getVolumeId();
+		});
+		const removed = waitForChange(core, (change) => change.type === "remove" && change.assetId === gone.assetId);
+		await core.pastePathsInto([join(parent, "pasted.md")], "", false, async () => {
+			assert.fail("Unexpected paste conflict");
+		});
+		await removed;
+
+		const snapshot = await core.getLibrarySnapshot();
+		assert.ok(scans.mock.callCount() >= 2);
+		assert.equal(snapshot.assets.find((asset) => asset.relativePath === "archive/moving.md")?.assetId, moving.assetId);
+		assert.equal(snapshot.assets.some((asset) => asset.assetId === gone.assetId), false);
+		assert.deepEqual(snapshot.favoriteAssetIds, [moving.assetId]);
+		assert.deepEqual(snapshot.assetTags.map(({ assetId }) => assetId), [moving.assetId]);
+	} finally {
+		await core.close();
+		await rm(parent, { recursive: true, force: true });
 	}
 });
 

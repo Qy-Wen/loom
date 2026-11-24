@@ -55,6 +55,7 @@ export class Library {
 	private readonly activeFileChanges = new Map<LibraryPaths, number>();
 	private updateQueue: Promise<void> = Promise.resolve();
 	private reconcilePending = false;
+	private missingAssetsSince = new Map<string, number>();
 	private reconcileScan: AbortController | null = null;
 	private liveReconcileTimer: ReturnType<typeof setTimeout> | null = null;
 	private readonly handlers: LibraryHandlers;
@@ -562,6 +563,7 @@ export class Library {
 	async stopWatching(): Promise<void> {
 		await this.pauseWatcher();
 		this.reconcilePending = false;
+		this.missingAssetsSince.clear();
 	}
 
 	private async pauseWatcher(): Promise<boolean> {
@@ -670,12 +672,17 @@ export class Library {
 		const previous = await this.metadata.listAssets();
 		signal?.throwIfAborted();
 		const next = reconcileOpenAssets(previous, diskFiles, trustPath);
+		if (notify && this.hasUnconfirmedRemovals(previous, next)) {
+			this.scheduleReconcile();
+			return;
+		}
 		const invalidatedAssetIds = changedContentPaths?.size
 			? next.filter((asset) => changedContentPaths.has(asset.relativePath)).map((asset) => asset.assetId)
 			: undefined;
 		const previousFolders = this.folders;
 		this.folders = folders;
 		await this.handlers.applyOpenReconcile(previous, next, invalidatedAssetIds);
+		this.missingAssetsSince.clear();
 		await this.metadata.setLibraryVolumeId(currentVolumeId);
 		if (!notify) return;
 
@@ -689,6 +696,22 @@ export class Library {
 		for (const folder of this.folders) {
 			if (!previousFolders.has(folder)) this.emit({ type: "folder_upsert", relativePath: folder });
 		}
+	}
+
+	private hasUnconfirmedRemovals(previous: Asset[], next: Asset[]): boolean {
+		const nextIds = new Set(next.map((asset) => asset.assetId));
+		const now = performance.now();
+		const missing = new Map<string, number>();
+		let unconfirmed = false;
+		for (const { assetId } of previous) {
+			if (nextIds.has(assetId)) continue;
+			const firstSeenMissing = this.missingAssetsSince.get(assetId) ?? now;
+			missing.set(assetId, firstSeenMissing);
+			if (now - firstSeenMissing < REMOVE_GRACE_MS) unconfirmed = true;
+		}
+		// A directory walk can miss a file moving from an unread directory into one already visited.
+		this.missingAssetsSince = missing;
+		return unconfirmed;
 	}
 
 	private async commitRemoval(asset: Asset, notify: boolean): Promise<void> {
