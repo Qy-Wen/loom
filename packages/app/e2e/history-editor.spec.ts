@@ -37,7 +37,7 @@ test("history editing shares composer styling and applies its model only to the 
 		const sourceRecord = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
 		const before = await loomPage.evaluate(() => window.loom.listSessions());
 		const openEditor = async () => {
-			const bubble = loomPage.getByTestId("copilot-user-message").filter({ hasText: "HISTORY_MODEL_QUESTION" });
+			const bubble = loomPage.getByTestId("chat-user-message").filter({ hasText: "HISTORY_MODEL_QUESTION" });
 			await bubble.hover(); await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 			await expect(loomPage.locator(".session-inline-edit").getByRole("button", { name: "Conversation model", exact: true })).toHaveText("current (e2e-chat)");
 		};
@@ -57,7 +57,7 @@ test("history editing shares composer styling and applies its model only to the 
 		expect(await loomPage.evaluate(() => window.loom.listSessions())).toEqual(before);
 		await openEditor();
 		await selectModel();
-		const styles = await loomPage.evaluate(() => [".session-inline-edit-pill", '.session-follow-up-slot [data-testid="copilot-chat-input"]'].map((selector) => {
+		const styles = await loomPage.evaluate(() => [".session-inline-edit-pill", '.session-follow-up-slot [data-testid="chat-composer"]'].map((selector) => {
 			const style = getComputedStyle(document.querySelector(selector)!);
 			return Object.fromEntries(["border", "border-radius", "background-color", "box-shadow"].map((key) => [key, style.getPropertyValue(key)]));
 		}));

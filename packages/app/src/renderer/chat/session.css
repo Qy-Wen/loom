@@ -240,32 +240,12 @@
 	padding: 0 var(--lm-panel-scroll-inset) 0 18px;
 }
 
-/* Copilot's own side padding is removed so the gutter does not make the left gap larger.
-   Two pixels stay so the hairline shadow is not clipped by the chat's overflow. */
-.agent-chat [data-testid="copilot-input-overlay"] [data-copilotkit] > div {
-	padding-left: var(--lm-space-1);
-	padding-right: var(--lm-space-1);
-}
-
-.agent-chat > * {
-	flex: 1;
-	min-height: 0;
-}
-
 .session-chat-shell {
 	display: grid;
-	grid-template-rows: minmax(0, 1fr);
-	min-height: 0;
-}
-
-/* CopilotChat's root is display:contents; the .copilotKitChat grandchild is the real row-1 item. */
-.session-chat-shell .copilotKitChat {
-	grid-row: 1;
+	grid-template-rows: minmax(0, 1fr) auto;
+	flex: 1;
 	min-height: 0;
 	min-width: 0;
-	height: 100%;
-	overflow: hidden;
-	/* The composer border is a shadow. Without this inset it is clipped flush with the chat. */
 	padding-bottom: var(--lm-space-6);
 }
 
@@ -403,27 +383,16 @@
 	font-variant-numeric: tabular-nums;
 }
 
-/* Composer sits in flow so the scrollbar is not covered by the overlay input. */
-.agent-chat [data-testid="copilot-input-overlay"] {
-	position: relative;
-	inset: auto;
-	margin-right: calc(18px - var(--lm-panel-scroll-inset));
-	pointer-events: auto;
-}
-
-.agent-chat [data-testid="copilot-scroll-content"] {
-	padding-bottom: var(--lm-space-6) !important;
-}
-
+/* The composer is in flow so the transcript scrollbar stays reachable. */
 .session-follow-up-slot {
 	display: flex;
 	flex-direction: column;
 	min-width: 0;
-	pointer-events: auto;
-	cursor: text;
+	margin-right: calc(18px - var(--lm-panel-scroll-inset));
+	padding-inline: var(--lm-space-1);
 }
 
-.session-follow-up-slot [data-testid="copilot-chat-input"],
+.session-composer,
 .session-inline-edit-pill {
 	border: 1px solid var(--lm-border-default);
 	border-radius: var(--lm-radius-lg);
@@ -431,58 +400,51 @@
 	box-shadow: var(--lm-shadow-xs);
 }
 
-.session-follow-up-slot [data-copilotkit] {
-	pointer-events: auto;
-}
-
-/* Plus and send stay under the text, including when the draft is one line. */
-.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] {
-	grid-template-rows: auto auto;
+.session-composer {
+	display: grid;
+	grid-template-columns: auto minmax(0, 1fr) auto;
 	align-items: center;
 	padding: var(--lm-space-3) var(--lm-space-5);
 	column-gap: var(--lm-space-5);
 	row-gap: var(--lm-space-2);
 }
 
-.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(1) {
-	grid-column: 1;
-	grid-row: 2;
-}
-
-.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(2) {
+.session-composer > .session-inline-input {
 	grid-column: 1 / -1;
 	grid-row: 1;
-	min-height: 0;
-	justify-content: flex-start;
+	max-height: 240px;
+	overflow: auto;
 }
 
-.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(3) {
-	grid-column: 3;
-	grid-row: 2;
-}
+.session-composer > .session-add-files-wrap { grid-column: 1; grid-row: 2; }
+.session-composer > .session-composer-send { grid-column: 3; grid-row: 2; margin-right: var(--lm-space-2); }
 
-/* Compact mode only pads the right side, because the add button used to sit on the left. */
-.session-follow-up-slot [data-testid="copilot-chat-textarea"],
+.session-composer .session-inline-input,
 .session-inline-edit .session-inline-input {
 	font-size: var(--lm-text-size-xl);
 	line-height: 24px;
-	padding-top: var(--lm-space-3);
-	padding-left: var(--lm-space-2);
-	padding-right: var(--lm-space-2);
-	padding-bottom: 3px;
+	padding: var(--lm-space-3) var(--lm-space-2) 3px;
 }
 
-.session-follow-up-slot [data-testid="copilot-chat-input"] > [data-layout] > :nth-child(3) > * {
-	margin-right: var(--lm-space-2);
-}
-
-.session-follow-up-slot [data-testid="copilot-send-button"],
+.session-composer-send,
 .session-inline-edit-send {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
 	width: var(--lm-size-xl);
 	height: var(--lm-size-xl);
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-pill);
+	color: var(--lm-text-inverse);
+	background: var(--lm-surface-inverse);
+	cursor: pointer;
 }
 
-.session-follow-up-slot [data-testid="copilot-send-button"] svg,
+.session-composer-send:hover:not(:disabled) { opacity: 0.8; }
+.session-composer-send:disabled { opacity: 0.35; cursor: default; }
+
+.session-composer-send svg,
 .session-inline-edit-send svg {
 	width: var(--lm-size-xs);
 	height: var(--lm-size-xs);
@@ -561,22 +523,6 @@
 .session-add-files:disabled {
 	opacity: 0.4;
 	cursor: default;
-}
-
-.session-composer-box {
-	border-radius: var(--lm-radius-lg);
-	background: var(--lm-surface-raised);
-	box-shadow: var(--lm-shadow-field);
-}
-
-.session-composer-box .copilotKitInput {
-	background: transparent;
-	box-shadow: none;
-}
-
-.session-composer-box .session-asset-chips {
-	margin: 0;
-	padding: var(--lm-space-6) var(--lm-space-7) 0;
 }
 
 .session-asset-chips {
@@ -951,21 +897,17 @@
 	padding: var(--lm-space-7) var(--lm-space-5);
 }
 
-.agent-content .copilotKitAssistantMessage table :is(th, td) {
-	padding: var(--lm-space-4) var(--lm-space-6);
-}
-
-/* Keep message and table actions compact, without changing the composer controls. */
+/* Keep message and Markdown actions the same size. */
 .agent-content {
 	--message-action-size: 26px;
 	--message-action-icon-size: 14px;
 }
 
-.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) {
+.agent-content .session-message-toolbar {
 	margin-bottom: 0;
 }
 
-.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) button {
+.agent-content .session-message-toolbar button {
 	width: var(--message-action-size);
 	height: var(--message-action-size);
 	padding: 0;
@@ -973,183 +915,69 @@
 	border-radius: var(--lm-radius-sm);
 }
 
-.agent-content :is([data-testid="copilot-assistant-toolbar"], [data-testid="copilot-user-toolbar"]) button svg {
+.agent-content .session-message-toolbar button svg {
 	width: var(--message-action-icon-size);
 	height: var(--message-action-icon-size);
 }
 
-/* Table actions sit below the table at its left edge, matching the message actions. */
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] {
-	margin-bottom: 0;
+.chat-markdown {
+	--agui-md-link-color: var(--lm-text-accent);
+	--agui-md-border: var(--lm-border-subtle);
+	--agui-md-overlay-layer: var(--lm-z-raised);
+	--agui-md-menu-border: var(--lm-border-default);
+	--agui-md-menu-background: var(--lm-surface-raised);
+	--agui-md-menu-shadow: var(--lm-shadow-md);
+	--agui-md-menu-hover: var(--lm-surface-hover);
+	--agui-md-action-size: var(--message-action-size);
+	--agui-md-action-icon-size: var(--message-action-icon-size);
+	--agui-md-action-color: var(--lm-text-secondary);
+	--agui-md-action-hover: var(--lm-chat-action-hover);
+	--agui-md-code-background: var(--lm-surface-sunken);
+	--agui-md-code-font: var(--lm-font-mono);
+	--agui-md-muted: var(--lm-text-muted);
 }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] table {
-	margin-top: var(--lm-space-6);
-	margin-bottom: var(--lm-space-2);
-}
+.session-assistant-message > .session-message-toolbar { margin-top: var(--lm-space-2); }
 
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
-	order: 2;
-	justify-content: flex-start;
-	gap: var(--lm-space-2);
-	margin-bottom: 0;
-}
-
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip] {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--message-action-size);
-	height: var(--message-action-size);
-	padding: 0;
-	margin-bottom: 0;
-	border-radius: var(--lm-radius-sm);
-	color: var(--lm-text-secondary);
-	cursor: pointer;
-	transition: background-color var(--lm-dur-fast) ease, color var(--lm-dur-fast) ease;
-}
-
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip]:hover,
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip]:focus-visible {
-	background: var(--lm-vendor-copy-hover);
-	color: var(--lm-text-secondary);
-}
-
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) button[data-tooltip] svg {
-	width: var(--message-action-icon-size);
-	height: var(--message-action-icon-size);
-}
-
-/* The download menu opens upwards and to the right of its button, since the buttons are now below the table. */
-.agent-content .copilotKitAssistantMessage [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) .absolute {
-	top: auto;
-	right: auto;
-	bottom: 100%;
-	left: 0;
-	margin-top: 0;
-	margin-bottom: var(--lm-space-2);
-}
-
-/* Replies and reasoning both use Streamdown, which renders both syntax themes. Show the one that matches Loom. */
-.agent-content [data-code-block].hidden {
-	display: none;
-}
-
-.dark .agent-content [data-code-block].dark\:hidden {
-	display: none;
-}
-
-.dark .agent-content [data-code-block].dark\:block {
-	display: block;
-}
-
-.agent-content [data-code-block-container] {
-	position: relative;
-	display: flex;
-	flex-direction: column;
-	width: 100%;
-	margin: var(--lm-space-6) 0 0;
-}
-
-.agent-content [data-code-block-header] {
-	display: contents;
-}
-
-.agent-content [data-code-block-container] > div:last-child {
-	width: 100%;
-	min-width: 0;
-}
-
-.agent-content [data-streamdown="code-block"] {
-	margin: 0;
-	border: 1px solid var(--lm-border-subtle);
-	border-radius: var(--lm-radius-md);
-	background: var(--lm-surface-sunken);
-	overflow: hidden;
-}
-
-.agent-content [data-code-block-container] pre {
-	margin: 0;
-	padding: var(--lm-space-6);
-	overflow-x: auto;
-	border-radius: 0;
-	background: transparent;
-	color: var(--lm-text-primary);
-	font-family: var(--lm-font-mono);
-	font-size: var(--lm-text-size-sm);
-	line-height: 1.55;
-}
-
-/* The language name sits in the top corner of the block. Copy and download sit below it, with the table actions. */
-.agent-content [data-code-block-header] > span:not(:empty) {
-	position: absolute;
-	z-index: var(--lm-z-raised);
-	top: var(--lm-space-4);
-	left: var(--lm-space-6);
-	color: var(--lm-text-muted);
-	font-family: var(--lm-font-mono);
-	font-size: var(--lm-text-size-xs);
-	line-height: 1.2;
-	text-transform: lowercase;
-	pointer-events: none;
-}
-
-.agent-content [data-code-block-container]:has([data-code-block-header] > span:not(:empty)) pre {
-	padding-top: calc(var(--lm-space-4) + var(--lm-text-size-xs) + var(--lm-space-6));
-}
-
-.agent-content [data-code-block-header] > div {
-	display: flex;
-	justify-content: flex-start;
-	gap: var(--lm-space-2);
-	order: 2;
-	margin-top: var(--lm-space-2);
-	margin-bottom: 0;
-}
-
-/* Streamdown renders download, then copy. Copy stays on the left, as it does under a table. */
-.agent-content [data-code-block-header] > div > button:first-child {
-	order: 1;
-}
-
-.agent-content [data-code-block-header] > div > button {
-	display: inline-flex;
-	align-items: center;
-	justify-content: center;
-	width: var(--message-action-size);
-	height: var(--message-action-size);
-	padding: 0;
-	margin-bottom: 0;
+.session-message-list { padding-bottom: var(--lm-space-6); }
+.session-message-list > .agui-messages { gap: var(--lm-space-6); }
+.session-message-list > .agui-messages > li { width: 100%; }
+.session-message-list > .agui-messages > li:empty { display: none; }
+.session-user-message { display: flex; flex-direction: column; align-items: flex-end; margin-top: var(--lm-space-7); }
+.session-message-toolbar { display: flex; align-items: center; gap: var(--lm-space-2); }
+.session-message-toolbar button {
+	display: inline-grid;
+	place-items: center;
 	border: 0;
-	border-radius: var(--lm-radius-sm);
 	background: transparent;
 	color: var(--lm-text-secondary);
 	cursor: pointer;
-	transition: background-color var(--lm-dur-fast) ease, color var(--lm-dur-fast) ease;
 }
-
-.agent-content [data-code-block-header] > div > button:hover,
-.agent-content [data-code-block-header] > div > button:focus-visible {
-	background: var(--lm-vendor-copy-hover);
-	color: var(--lm-text-secondary);
+.session-message-toolbar button:is(:hover, :focus-visible) { background: var(--lm-chat-action-hover); }
+.session-user-message:not(:hover):not(:focus-within) .session-message-toolbar { opacity: 0; }
+.session-reasoning > button {
+	display: inline-flex;
+	align-items: center;
+	gap: var(--lm-space-3);
+	padding: var(--lm-space-2) 0;
+	border: 0;
+	background: transparent;
+	color: var(--lm-text-muted);
+	cursor: pointer;
 }
-
-.agent-content [data-code-block-header] > div > button svg {
-	width: var(--message-action-icon-size);
-	height: var(--message-action-icon-size);
+.session-reasoning > button[aria-expanded="true"] span { transform: rotate(90deg); }
+.session-working { padding: var(--lm-space-6) 0; }
+.session-working span {
+	display: block;
+	width: 8px;
+	height: 8px;
+	border-radius: 50%;
+	background: var(--lm-text-muted);
 }
-
-/* The last block of a reply keeps the typography's 20px bottom margin, which left a wide gap above the copy
-   button. Drop it and leave a small one. */
-.agent-content .copilotKitAssistantMessage .space-y-4 > :last-child {
-	margin-bottom: 0;
+@media (prefers-reduced-motion: no-preference) {
+	.session-working span { animation: session-working 1.2s ease-in-out infinite alternate; }
 }
-
-/* Keep the hover background inside the chat's left edge. */
-.agent-content .copilotKitAssistantMessage [data-testid="copilot-assistant-toolbar"] {
-	margin-top: var(--lm-space-2);
-	margin-left: 0;
-}
+@keyframes session-working { to { opacity: 0.35; } }
 
 /* Per-conversation model picker (composer toolbar) */
 .session-model-select {

@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { ReactActivityMessageRenderer } from "@copilotkit/react-core/v2";
+import type { ActivityMessage } from "@ag-ui/core";
 import { useLocale } from "../locale.tsx";
 import { setToolGatePending } from "./tool-gate-pending.ts";
 
@@ -20,14 +20,6 @@ type ToolProgressContent = {
 type ToolGateContent = {
 	toolCallId: string;
 	pending: boolean;
-};
-
-const acceptContent = {
-	"~standard": {
-		version: 1 as const,
-		vendor: "loom",
-		validate: (value: unknown) => ({ value }),
-	},
 };
 
 function formatDelay(delayMs: number): string {
@@ -73,21 +65,12 @@ function ToolProgressActivity({ content }: { content: ToolProgressContent }): Re
 	);
 }
 
-/** Live retry and tool-output rows. They replace themselves and disappear when the step finishes. */
-export const runActivityRenderers: ReactActivityMessageRenderer<unknown>[] = [
-	{
-		activityType: "loom.retry",
-		content: acceptContent as ReactActivityMessageRenderer<RetryContent>["content"],
-		render: ({ content }) => <RetryActivity content={content as RetryContent} />,
-	},
-	{
-		activityType: "loom.tool_progress",
-		content: acceptContent as ReactActivityMessageRenderer<ToolProgressContent>["content"],
-		render: ({ content }) => <ToolProgressActivity content={content as ToolProgressContent} />,
-	},
-	{
-		activityType: "loom.tool_gate",
-		content: acceptContent as ReactActivityMessageRenderer<ToolGateContent>["content"],
-		render: ({ content }) => <ToolGateActivity content={content as ToolGateContent} />,
-	},
-];
+/** Live retry and tool-output rows disappear when the step finishes. */
+export function RunActivity({ message }: { message: ActivityMessage }) {
+	switch (message.activityType) {
+		case "loom.retry": return <RetryActivity content={message.content as RetryContent} />;
+		case "loom.tool_progress": return <ToolProgressActivity content={message.content as ToolProgressContent} />;
+		case "loom.tool_gate": return <ToolGateActivity content={message.content as ToolGateContent} />;
+		default: return null;
+	}
+}

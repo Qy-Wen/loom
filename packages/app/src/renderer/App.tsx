@@ -1,7 +1,6 @@
 import { isImeComposing } from "./components/ime-composition.ts";
 import { DetailRequestScope } from "./details/request-scope.ts";
 import { lazy, Suspense, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { CopilotKitProvider } from "@copilotkit/react-core/v2";
 import type {
 	Asset,
 	AssetEnrichment,
@@ -67,7 +66,6 @@ import { FileHistoryButtons, HelpButton, LibraryOpenButton, SettingsButton, Side
 import { WindowCaptionControls } from "./components/window-caption-controls.tsx";
 import { LibrarySidebar } from "./library/library-sidebar.tsx";
 import { ErrorToast } from "./components/error-toast.tsx";
-import { runActivityRenderers } from "./chat/run-activity.tsx";
 import { AgentPanel } from "./chat/agent-panel.tsx";
 import { DetailsPanel } from "./details/details-panel.tsx";
 import { HelpDialog } from "./help/help-dialog.tsx";
@@ -382,7 +380,7 @@ export function App(): React.JSX.Element {
 	}), []);
 	// One product registry supplies identity, content, visibility and first-use policy.
 	const panelViews: PanelView[] = [
-		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel libraryRoot={library.rootPath} assets={library.assets} folders={library.folders} composerAttach={composerAttach} {...chatActions} /> },
+		{ id: "agent", visible: true, title: t.app.agent, render: () => <AgentPanel endpoint={endpoint} libraryRoot={library.rootPath} assets={library.assets} folders={library.folders} composerAttach={composerAttach} {...chatActions} /> },
 		{ id: "details", visible: true, title: t.app.details, initialJoin: ["agent"], render: () => <DetailsPanel
 			asset={viewedAsset} properties={properties} propertyValues={propertyValues}
 			tags={library.tags} assetTags={library.assetTags} onAddTag={addTag} onRemoveTag={removeTag}
@@ -1646,8 +1644,7 @@ export function App(): React.JSX.Element {
 	);
 
 	return (
-		<CopilotKitProvider runtimeUrl={endpoint.runtimeUrl} agentId={endpoint.agentId} renderActivityMessages={runActivityRenderers}>
-			<div className="app">
+		<div className="app">
 				{status && (
 					<div className={`status-toast${error ? " below" : ""}`} role="status">
 						<span className="status-toast-spin" aria-hidden="true" />
@@ -1877,7 +1874,6 @@ export function App(): React.JSX.Element {
 				</div>
 				{helpOpen && <HelpDialog onClose={() => setHelpOpen(false)} />}
 				{settingsOpen && <Suspense fallback={null}><SettingsPage onClose={() => setSettingsOpen(false)} /></Suspense>}
-			</div>
-		</CopilotKitProvider>
+		</div>
 	);
 }

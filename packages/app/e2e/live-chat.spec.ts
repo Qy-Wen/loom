@@ -17,7 +17,7 @@ test("native DeepSeek provider completes two turns with persisted model selectio
 	for (const marker of ["NATIVE_DEEPSEEK_FIRST_OK", "NATIVE_DEEPSEEK_SECOND_OK"]) {
 		await loomPage.getByRole("textbox").fill(`Reply only with ${marker}. Do not use tools.`);
 		await loomPage.getByRole("textbox").press("Enter");
-		await expect(loomPage.getByTestId("copilot-message-list").getByText(marker, { exact: true })).toBeVisible({ timeout: 45_000 });
+		await expect(loomPage.getByTestId("chat-message-list").getByText(marker, { exact: true })).toBeVisible({ timeout: 45_000 });
 		await expect(loomPage.getByRole("button", { name: "Conversation model", exact: true })).toBeEnabled();
 	}
 	const record = await loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id);
@@ -26,7 +26,7 @@ test("native DeepSeek provider completes two turns with persisted model selectio
 	expect(record.model).toEqual({ provider: "deepseek", modelId: "deepseek-flash", thinkingLevel: "off" });
 	expect(record.context?.tokens).toBeGreaterThan(0);
 	await loomPage.reload();
-	await expect(loomPage.getByTestId("copilot-message-list").getByText("NATIVE_DEEPSEEK_SECOND_OK", { exact: true })).toBeVisible();
+	await expect(loomPage.getByTestId("chat-message-list").getByText("NATIVE_DEEPSEEK_SECOND_OK", { exact: true })).toBeVisible();
 	expect((await loomPage.evaluate((sessionId) => window.loom.getSession(sessionId), id)).model).toEqual(record.model);
 });
 
@@ -96,7 +96,7 @@ test("real Chat model streams both first and subsequent turns before RUN_FINISHE
 		const marker = `LOOM_STREAM_CHECK_${turn}`;
 		await composer.fill(`Do not use any tools. Start your answer with ${marker}. Then write 40 numbered sentences explaining how to organize creative assets. Write the answer directly, not into a file.`);
 		await composer.press("Enter");
-		await expect(loomPage.getByTestId("copilot-message-list").getByText(new RegExp(`^${marker}`)).last()).toBeVisible({ timeout: 60_000 });
+		await expect(loomPage.getByTestId("chat-message-list").getByText(new RegExp(`^${marker}`)).last()).toBeVisible({ timeout: 60_000 });
 		await expect.poll(() => loomPage.evaluate(() => (window as unknown as { liveProgress: { partialBeforeFinish: boolean } }).liveProgress.partialBeforeFinish)).toBe(true);
 		const progress = await loomPage.evaluate(() => (window as unknown as { liveProgress: { finished: boolean; partialBeforeFinish: boolean } }).liveProgress);
 		expect(progress.partialBeforeFinish).toBe(true);

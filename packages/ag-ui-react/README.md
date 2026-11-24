@@ -1,0 +1,34 @@
+# @loom/ag-ui-react
+
+React hooks and chat components for [AG-UI](https://docs.ag-ui.com/). Supply an official `HttpAgent` or an `AbstractAgent` with your own transport.
+
+```tsx
+import { HttpAgent } from "@ag-ui/client";
+import { Chat } from "@loom/ag-ui-react";
+import "@loom/ag-ui-react/styles.css";
+
+const agent = new HttpAgent({ url: "/api/agent", threadId: "conversation-1" });
+
+export function App() {
+	return <Chat agent={agent} />;
+}
+```
+
+Create one stable agent per conversation. Use `useAgent(agent)` to observe messages, state, running status, and errors, or render your own UI with `MessageList` and `MessageComposer`. `transcriptItems` pairs tool calls with their results. The optional stylesheet only styles the built-in components.
+
+AG-UI parses and applies protocol events. The host app supplies authentication, persistence, reconnection, and any tool approval UI. The default Stop invokes the supplied agent's `abortRun()`; implement server-side cancellation in the host when the transport can detach while work continues.
+
+## Markdown
+
+To render streaming Markdown with tables and highlighted code, install `streamdown@1.3.0` and use the Markdown entry with a bundler that supports CSS imports.
+
+```tsx
+import { Markdown } from "@loom/ag-ui-react/markdown";
+import "@loom/ag-ui-react/markdown.css";
+
+<Markdown content={text} />
+```
+
+Pass a `linkComponent` to handle app-specific links and use the `dark` class to select the dark code theme. Keep using `Chat` or `MessageList` from the main entry for plain text.
+
+Run `npm pack` in this directory to build and create a standalone ESM package with TypeScript declarations.

@@ -184,8 +184,8 @@
 	--lm-channel-g: #2f8f4e;
 	--lm-channel-b: #2f62b5;
 
-	/* CopilotKit's own copy button hovers to this fixed color; Loom's table actions must match it. */
-	--lm-vendor-copy-hover: #e8e8e8;
+	/* Shared hover surface for chat and Markdown actions. */
+	--lm-chat-action-hover: #e8e8e8;
 
 	/* Audio cover art */
 	--lm-art-audio: linear-gradient(145deg, #8a6cc3, #546ea7);
@@ -362,7 +362,7 @@
 		--lm-channel-r: #e0645b;
 		--lm-channel-g: #4fbf72;
 		--lm-channel-b: #5b8fe0;
-		--lm-vendor-copy-hover: #303030;
+		--lm-chat-action-hover: #303030;
 		--lm-syntax-key: #d79ddf;
 		--lm-syntax-boolean: #e0a0d0;
 

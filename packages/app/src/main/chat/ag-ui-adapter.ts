@@ -89,6 +89,7 @@ export class AgUiAdapter extends AbstractAgent {
 					} });
 					const activity = createConversationActivity(snapshot, submission ? { id: submission.id, existedAtSnapshot: Boolean(turn?.existingRequest) } : undefined);
 					await present(transcript, snapshot, events.onView);
+					if (!submit) emit({ type: EventType.CUSTOM, name: "loom.connected", value: { running: (snapshot.docs["pi.live"] as LiveState | undefined)?.run !== undefined } });
 					stream.start(async (call) => {
 						if (call.kind === "failed") throw call.error;
 						await present(transcript, call.value, events.onView);

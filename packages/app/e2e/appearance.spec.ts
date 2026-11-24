@@ -56,7 +56,7 @@ test("Appearance switches the whole window between light and dark and keeps the 
 	}
 });
 
-test("a saved dark choice is applied on reload, including the third-party chat widget", async ({ loomPage, electronApp }) => {
+test("a saved dark choice is applied to the chat composer on reload", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "needs control of the main process");
 	await followApp(loomPage);
 	const original = await loomPage.evaluate(() => window.loom.getGeneralSettings());
@@ -65,10 +65,9 @@ test("a saved dark choice is applied on reload, including the third-party chat w
 		await loomPage.reload();
 		await followApp(loomPage);
 		await expect.poll(() => loomPage.evaluate(() => document.documentElement.dataset.theme)).toBe("dark");
-		// The chat is a third-party widget; it must be dark too, not a white box in a dark window.
-		const widget = loomPage.locator("[data-copilotkit]").first();
-		await expect(widget).toBeVisible();
-		await expect.poll(() => widget.evaluate((node) => getComputedStyle(node).backgroundColor)).toBe("rgb(24, 24, 23)");
+		const composer = loomPage.getByTestId("chat-composer");
+		await expect(composer).toBeVisible();
+		await expect(composer).toHaveCSS("background-color", "rgb(24, 24, 23)");
 	} finally {
 		await loomPage.evaluate((settings) => window.loom.saveGeneralSettings(settings), original);
 	}

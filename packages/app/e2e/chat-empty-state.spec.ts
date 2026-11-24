@@ -1,5 +1,15 @@
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
+test("confirming IME text does not send the chat draft", async ({ loomPage }) => {
+	const editor = loomPage.getByTestId("chat-composer-editor");
+	await editor.fill("你好");
+	await expect(loomPage.getByRole("button", { name: "Send", exact: true })).toBeEnabled();
+	await editor.dispatchEvent("keydown", { key: "Enter", isComposing: true, bubbles: true, cancelable: true });
+	await editor.dispatchEvent("keydown", { key: "Enter", keyCode: 229, bubbles: true, cancelable: true });
+	await expect(editor).toHaveText("你好");
+	await expect(loomPage.getByTestId("chat-user-message")).toHaveCount(0);
+});
+
 test("an empty conversation points to Settings when no model is usable", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data required");
 	const empty = loomPage.getByTestId("chat-empty");
@@ -14,7 +24,7 @@ test("suggestions fill the composer without sending and never overwrite a draft"
 	const empty = loomPage.getByTestId("chat-empty");
 	const suggestions = empty.locator(".chat-empty-suggestion");
 	await expect(suggestions).toHaveCount(3);
-	const editor = loomPage.getByTestId("copilot-chat-textarea");
+	const editor = loomPage.getByTestId("chat-composer-editor");
 	const [first, second] = [await suggestions.nth(0).innerText(), await suggestions.nth(1).innerText()];
 
 	await suggestions.nth(0).click();

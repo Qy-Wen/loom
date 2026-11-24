@@ -134,8 +134,8 @@ export interface TableContextState extends EditorContextState {
 }
 
 export interface AgentEndpoint {
-	runtimeUrl: string;
-	agentId: string;
+	url: string;
+	token: string;
 }
 
 export interface UiSelectionDraft {

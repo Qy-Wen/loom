@@ -23,11 +23,11 @@ test("branching from a reply asks for confirmation and keeps the source and the 
 		const source = before.find((row) => row.title === "FORK_CONFIRM_QUESTION")!;
 		const original = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
 		await loomPage.getByRole("textbox").fill("UNSENT_DRAFT");
-		const question = loomPage.getByTestId("copilot-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" });
+		const question = loomPage.getByTestId("chat-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" });
 		// Branching lives on the reply, not on the question.
 		await question.hover();
 		await expect(question.getByRole("button", { name: "Branch from here", exact: true })).toHaveCount(0);
-		const answer = loomPage.getByTestId("copilot-assistant-message").filter({ hasText: "FORK_CONFIRM_REPLY" });
+		const answer = loomPage.getByTestId("chat-assistant-message").filter({ hasText: "FORK_CONFIRM_REPLY" });
 		const fork = answer.getByRole("button", { name: "Branch from here", exact: true });
 		for (const approved of [false, true]) {
 			await answer.hover();
@@ -48,7 +48,7 @@ test("branching from a reply asks for confirmation and keeps the source and the 
 		await expect(loomPage.getByRole("tab", { name: `${source.title}（分支）`, selected: true, exact: true })).toBeVisible();
 		// The branch keeps the whole exchange and starts with an empty composer.
 		await expect(loomPage.getByText("FORK_CONFIRM_REPLY", { exact: true })).toBeVisible();
-		await expect(loomPage.getByTestId("copilot-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" })).toBeVisible();
+		await expect(loomPage.getByTestId("chat-user-message").filter({ hasText: "FORK_CONFIRM_QUESTION" })).toBeVisible();
 		await expect(loomPage.getByRole("textbox")).toHaveText("");
 		const after = await loomPage.evaluate(() => window.loom.listSessions());
 		expect(after).toHaveLength(before.length + 1);

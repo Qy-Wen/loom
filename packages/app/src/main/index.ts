@@ -642,7 +642,7 @@ async function pasteWithConflicts(event: IpcMainInvokeEvent, absolutePaths: stri
 function registerIpc(): void {
 	ipcMain.handle(IPC.getAgentEndpoint, (): AgentEndpoint => {
 		if (!agentServer) throw new Error("Agent server not started");
-		return { runtimeUrl: agentServer.runtimeUrl, agentId: agentServer.agentId };
+		return agentServer.endpoint;
 	});
 
 	ipcMain.handle(IPC.isFullscreen, (event): boolean => {
@@ -1457,7 +1457,7 @@ app
 			listMetrics: () => requireChat().listTraceMetrics(),
 			language: async () => generalSettings ? (await generalSettings.load()).language : "system",
 		});
-		agentServer = await startAgentServer(requireChat());
+		agentServer = await startAgentServer(requireChat(), process.env.ELECTRON_RENDERER_URL);
 		registerAssetProtocol();
 		registerIpc();
 		registerChatIpc();

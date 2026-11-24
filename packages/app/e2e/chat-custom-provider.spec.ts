@@ -176,7 +176,7 @@ test("custom provider can be created, authenticated, edited and used for streami
 		await loomPage.getByRole("menuitemradio", { name: `First custom model (${saved.id})`, exact: true }).click();
 		await loomPage.getByRole("textbox").fill("Reply directly without using tools.");
 		await loomPage.getByRole("textbox").press("Enter");
-		await expect(loomPage.getByTestId("copilot-message-list").getByText("CUSTOM_UI_STREAM_OK", { exact: true })).toBeVisible();
+		await expect(loomPage.getByTestId("chat-message-list").getByText("CUSTOM_UI_STREAM_OK", { exact: true })).toBeVisible();
 		expect(requests).toEqual([{ model: "first", authorization: `Bearer ${key}`, url: "/v1/edited/chat/completions" }]);
 		await loomPage.reload();
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();

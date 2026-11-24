@@ -1,0 +1,171 @@
+.agui-markdown {
+	min-inline-size: 0;
+	line-height: 1.55;
+	overflow-wrap: anywhere;
+}
+
+.agui-markdown > * + * { margin-block-start: 12px; }
+.agui-markdown > :last-child,
+.agui-markdown > :last-child > :last-child { margin-block-end: 0; }
+.agui-markdown p { margin: 0; }
+.agui-markdown :is(ul, ol) { padding-inline-start: 1.4em; }
+.agui-markdown a { color: var(--agui-md-link-color, LinkText); }
+.agui-markdown img { max-inline-size: 100%; block-size: auto; }
+
+.agui-markdown [data-streamdown="table-wrapper"] {
+	display: flex;
+	flex-direction: column;
+	max-inline-size: 100%;
+	margin-block-end: 0;
+}
+
+.agui-markdown [data-streamdown="table-wrapper"] > div:last-child {
+	max-inline-size: 100%;
+	overflow-x: auto;
+}
+
+.agui-markdown table {
+	inline-size: 100%;
+	margin-block: 12px 4px;
+	border-collapse: collapse;
+}
+
+.agui-markdown table :is(th, td) {
+	padding: 8px 12px;
+	border: 1px solid var(--agui-md-border, GrayText);
+	text-align: start;
+}
+
+.agui-markdown [data-streamdown="table-wrapper"] > div:first-child:not(:last-child),
+.agui-markdown [data-code-block-header] > div {
+	display: flex;
+	justify-content: flex-start;
+	gap: 4px;
+	order: 2;
+}
+
+.agui-markdown [data-streamdown="table-wrapper"] > div:first-child > div { position: relative; }
+
+.agui-markdown [data-streamdown="table-wrapper"] .absolute {
+	position: absolute;
+	inset-block-end: 100%;
+	inset-inline-start: 0;
+	z-index: var(--agui-md-overlay-layer, 2);
+	min-inline-size: 120px;
+	margin-block-end: 4px;
+	padding: 6px;
+	border: 1px solid var(--agui-md-menu-border, GrayText);
+	border-radius: 5px;
+	background: var(--agui-md-menu-background, Canvas);
+	box-shadow: var(--agui-md-menu-shadow, 0 4px 12px rgb(0 0 0 / 15%));
+}
+
+.agui-markdown [data-streamdown="table-wrapper"] .absolute button {
+	display: block;
+	inline-size: 100%;
+	min-block-size: 28px;
+	padding: 6px 8px;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: inherit;
+	text-align: start;
+	cursor: pointer;
+}
+
+.agui-markdown [data-streamdown="table-wrapper"] .absolute button:is(:hover, :focus-visible) {
+	background: var(--agui-md-menu-hover, ButtonFace);
+}
+
+.agui-markdown :is(
+	[data-streamdown="table-wrapper"] > div:first-child:not(:last-child) > button,
+	[data-streamdown="table-wrapper"] > div:first-child:not(:last-child) > div > button,
+	[data-code-block-header] > div > button
+) {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	inline-size: var(--agui-md-action-size, 26px);
+	block-size: var(--agui-md-action-size, 26px);
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: 5px;
+	background: transparent;
+	color: var(--agui-md-action-color, CanvasText);
+	cursor: pointer;
+	transition: background-color 120ms ease, color 120ms ease;
+}
+
+.agui-markdown :is(
+	[data-streamdown="table-wrapper"] > div:first-child:not(:last-child) > button,
+	[data-streamdown="table-wrapper"] > div:first-child:not(:last-child) > div > button,
+	[data-code-block-header] > div > button
+):is(:hover, :focus-visible) {
+	background: var(--agui-md-action-hover, ButtonFace);
+}
+
+.agui-markdown :is([data-streamdown="table-wrapper"], [data-code-block-header]) button svg {
+	inline-size: var(--agui-md-action-icon-size, 14px);
+	block-size: var(--agui-md-action-icon-size, 14px);
+}
+
+/* Streamdown renders both syntax themes. Match the selected theme on the host element or an ancestor. */
+:is(.dark .agui-markdown, .agui-markdown.dark) { color-scheme: dark; }
+.agui-markdown [data-code-block].hidden { display: none; }
+:is(.dark .agui-markdown, .agui-markdown.dark) [data-code-block].dark\:hidden { display: none; }
+:is(.dark .agui-markdown, .agui-markdown.dark) [data-code-block].dark\:block { display: block; }
+
+.agui-markdown [data-code-block-container] {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	inline-size: 100%;
+	margin-block-start: 12px;
+}
+
+.agui-markdown [data-code-block-header] { display: contents; }
+.agui-markdown [data-code-block-container] > div:last-child { inline-size: 100%; min-inline-size: 0; }
+
+.agui-markdown [data-streamdown="code-block"] {
+	margin: 0;
+	border: 1px solid var(--agui-md-border, GrayText);
+	border-radius: 8px;
+	background: var(--agui-md-code-background, Canvas);
+	overflow: hidden;
+}
+
+.agui-markdown [data-code-block-container] pre {
+	margin: 0;
+	padding: 12px;
+	overflow-x: auto;
+	border-radius: 0;
+	background: transparent;
+	color: inherit;
+	font-family: var(--agui-md-code-font, monospace);
+	font-size: 12px;
+	line-height: 1.55;
+	white-space: pre;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+.agui-markdown [data-code-block-header] > span:not(:empty) {
+	position: absolute;
+	z-index: var(--agui-md-overlay-layer, 2);
+	inset-block-start: 8px;
+	inset-inline-start: 12px;
+	color: var(--agui-md-muted, GrayText);
+	font-family: var(--agui-md-code-font, monospace);
+	font-size: 11px;
+	line-height: 1.2;
+	text-transform: lowercase;
+	pointer-events: none;
+}
+
+.agui-markdown [data-code-block-container]:has([data-code-block-header] > span:not(:empty)) pre {
+	padding-block-start: 31px;
+}
+
+.agui-markdown [data-code-block-header] > div { margin-block: 4px 0; }
+.agui-markdown [data-code-block-header] > div > button:first-child { order: 1; }

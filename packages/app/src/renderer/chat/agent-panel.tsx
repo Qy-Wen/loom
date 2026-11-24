@@ -8,9 +8,10 @@ import { useSessions } from "./use-sessions.ts";
 import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
 import { setCommandAllows } from "./command-allows.ts";
-import { ToolCallViews } from "./tool-call-views.tsx";
+import type { AgentEndpoint } from "../../shared/ipc.ts";
 
 interface AgentPanelProps {
+	endpoint: AgentEndpoint | null;
 	libraryRoot: string | null;
 	assets: Asset[];
 	folders: string[];
@@ -22,6 +23,7 @@ interface AgentPanelProps {
 }
 
 export const AgentPanel = memo(function AgentPanel({
+	endpoint,
 	libraryRoot,
 	assets,
 	folders,
@@ -75,13 +77,15 @@ export const AgentPanel = memo(function AgentPanel({
 							onRefresh={() => void refreshSessions().catch(() => undefined)}
 						/>
 						{sessionError && <div className="session-error">{sessionError}</div>}
-						{sessionId ? (
+						{sessionId && endpoint ? (
 							<AssetOpenProvider onOpen={onOpenAsset} onOpenFolder={onOpenFolder}>
 							<LibraryAssetsProvider assets={assets} folders={folders}>
 							<AgentPermissionProvider>
 							<div className="agent-chat">
-								<ToolCallViews libraryRoot={libraryRoot} />
 								<SessionChat
+									key={libraryRoot}
+									endpoint={endpoint}
+									libraryRoot={libraryRoot}
 									threadId={sessionId}
 									messages={record!.messages}
 									context={record!.context ?? null}

@@ -4,9 +4,8 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import { LocaleProvider } from "./locale.tsx";
 import { ConfirmationProvider } from "./components/confirm-dialog.tsx";
-import "@copilotkit/react-core/v2/styles.css";
+import "@loom/ag-ui-react/styles.css";
 import "./styles.css";
-import "./design/vendor-copilotkit.css";
 import { followColorScheme } from "./design/theme.ts";
 
 followColorScheme();

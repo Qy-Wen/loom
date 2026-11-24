@@ -97,7 +97,7 @@ test("Electron retains pre-compaction chat after reload and can fork before an o
 		expect(lastAnswerContext).not.toContain("HISTORY_QUESTION_1");
 		expect(contextSizes[2]!).toBeLessThan(contextSizes[1]!);
 		await loomPage.reload();
-		await expect(loomPage.getByTestId("copilot-message-list").getByText("HISTORY_QUESTION_0", { exact: true })).toBeVisible();
+		await expect(loomPage.getByTestId("chat-message-list").getByText("HISTORY_QUESTION_0", { exact: true })).toBeVisible();
 		await expect(loomPage.getByText(/OLD_HISTORY_REPLY/)).toBeVisible();
 		const record = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
 		expect(record.messages).toHaveLength(6);
@@ -142,7 +142,7 @@ test(`editing ${editedQuestion} sends once on the new branch and streams before 
 		}
 		const source = (await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.title === "KEEP_QUESTION").sort((a, b) => b.createdAt - a.createdAt)[0]!;
 		const original = await loomPage.evaluate((id) => window.loom.getSession(id), source.id);
-		const bubble = loomPage.getByTestId("copilot-user-message").filter({ hasText: editedQuestion });
+		const bubble = loomPage.getByTestId("chat-user-message").filter({ hasText: editedQuestion });
 		await bubble.getByText(editedQuestion, { exact: true }).hover(); await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 		await loomPage.getByRole("textbox", { name: "Edit question", exact: true }).fill("EDITED_QUESTION");
 		await loomPage.locator(".session-inline-edit-send").click();
@@ -196,7 +196,7 @@ test("Electron streams successive turns after reasoning and durable user admissi
 			await loomPage.getByRole("textbox").fill(`Stream question ${turn}`); await loomPage.getByRole("textbox").press("Enter");
 			await expect.poll(() => requests).toBe(turn + 1);
 			// The provider cannot finish until visible partial text passes this assertion.
-			await expect(loomPage.getByTestId("copilot-message-list").getByText(`STREAM_TURN_${turn}_PARTIAL`, { exact: true })).toBeVisible();
+			await expect(loomPage.getByTestId("chat-message-list").getByText(`STREAM_TURN_${turn}_PARTIAL`, { exact: true })).toBeVisible();
 			const pending = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
 			expect(pending.messages.filter((message) => message.role === "user")).toHaveLength(turn + 1);
 			expect(pending.messages.filter((message) => message.role === "assistant")).toHaveLength(turn);
@@ -292,7 +292,7 @@ test("identical queued follow-ups are admitted once each and stop showing as que
 			releases[turn]!.resolve();
 			await expect(loomPage.getByText(`QUEUED_PARTIAL_${turn} complete`, { exact: true })).toBeVisible();
 		}
-		await expect(loomPage.getByTestId("copilot-user-message").filter({ hasText: "Same queued question" })).toHaveCount(2);
+		await expect(loomPage.getByTestId("chat-user-message").filter({ hasText: "Same queued question" })).toHaveCount(2);
 		expect(requests).toBe(3);
 	} finally {
 		for (const release of releases) release.resolve();

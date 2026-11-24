@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { Message } from "@ag-ui/core";
-import { CopilotChat, useAgent, type CopilotChatViewProps } from "@copilotkit/react-core/v2";
+import type { AgentEndpoint } from "../../shared/ipc.ts";
 import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomSessionRecord, LoomTranscriptMessage } from "@loom/agent";
-import { liveMessagesForSession, mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
+import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { useLocale } from "../locale.tsx";
 import { ChatSessionContext, ChatViewContext, useChatSession, type BranchActions, type DraftRequest, type PendingEdit } from "./chat-context.ts";
 import { SessionScrollView } from "./chat-scroll.tsx";
@@ -11,42 +10,13 @@ import { FollowUpInput } from "./chat-composer.tsx";
 import { useChatStream } from "./use-chat-stream.ts";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
 
-/** Stable slot so CopilotChat does not remount the view on every parent render. */
-function SessionChatView(props: CopilotChatViewProps): React.JSX.Element {
-	const { stored, threadId } = useChatSession();
-	const { agent } = useAgent({ updates: [] });
-	const seenThread = useRef<string | null>(null);
-	const skippedLive = useRef<readonly Message[] | null>(null);
-	const rawLive = props.messages ?? [];
-	// A newly mounted view may reuse an agent from another thread or library.
-	if (seenThread.current !== threadId) {
-		skippedLive.current = rawLive;
-		seenThread.current = threadId;
-	}
-	const live = liveMessagesForSession(threadId, agent.threadId, rawLive, skippedLive.current);
-	const messages = useMemo(
-		() => mergeChatMessages(stored, live),
-		[stored, live],
-	);
-	return (
-		<ChatViewContext.Provider value={{ messages, connecting: Boolean(props.isConnecting), threadReady: agent.threadId === threadId }}>
-			<CopilotChat.View
-				{...props}
-				messages={messages}
-				scrollView={SessionScrollView}
-				messageView={SessionMessageView}
-				input={FollowUpInput}
-			/>
-		</ChatViewContext.Provider>
-	);
-}
-
 function errorText(cause: unknown): string {
 	return cause instanceof Error ? cause.message : String(cause);
 }
 
-/** Draw committed durable history through CopilotChat.View without writing into its agent. */
 export function SessionChat({
+	endpoint,
+	libraryRoot,
 	threadId,
 	messages,
 	context,
@@ -58,6 +28,8 @@ export function SessionChat({
 	onForked,
 	onOpenSettings,
 }: {
+	endpoint: AgentEndpoint;
+	libraryRoot: string;
 	threadId: string;
 	messages: LoomTranscriptMessage[];
 	context: LoomContextUsage | null;
@@ -86,7 +58,8 @@ export function SessionChat({
 	const onFork = useRef(onForked);
 	onRecord.current = onSessionRecord;
 	onFork.current = onForked;
-	const runError = useChatStream(threadId, onHistoryChanged);
+	const stream = useChatStream(endpoint, threadId, onHistoryChanged);
+	const visible = useMemo(() => mergeChatMessages(stored, stream.messages), [stored, stream.messages]);
 
 	useEffect(() => {
 		editingRef.current = null;
@@ -149,10 +122,15 @@ export function SessionChat({
 	}), [busy, editingId, error, threadId, confirm, t.chat.forkTitle, t.chat.forkConfirm, t.chat.forkAction]);
 
 	return (
-		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
-			<div className="session-chat-shell">
-				<CopilotChat threadId={threadId} welcomeScreen={false} chatView={SessionChatView} labels={{ chatInputToolbarAddButtonLabel: t.chat.add }} />
-			</div>
+		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError: stream.error, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
+			<ChatViewContext.Provider value={{ messages: visible, connecting: stream.connecting, threadReady: !stream.connecting }}>
+				<div className="session-chat-shell">
+					<SessionScrollView>
+						<SessionMessageView messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} />
+					</SessionScrollView>
+					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} />
+				</div>
+			</ChatViewContext.Provider>
 		</ChatSessionContext.Provider>
 	);
 }

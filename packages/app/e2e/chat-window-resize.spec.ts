@@ -54,13 +54,13 @@ for (const nativeMaximize of [false, true]) test(`chat stays aligned after ${nat
 		await expect(page.getByRole("textbox")).toBeVisible();
 		await page.getByRole("textbox").fill("Recite a long poem");
 		await page.getByRole("textbox").press("Enter");
-		await expect(page.getByTestId("copilot-assistant-message")).toContainText("第60行");
+		await expect(page.getByTestId("chat-assistant-message")).toContainText("第60行");
 		const window = await electronApp!.browserWindow(page);
 		const geometry = () => page.evaluate(() => {
 			const chat = document.querySelector<HTMLElement>(".agent-chat")!;
 			const scroll = document.querySelector<HTMLElement>(".session-chat-scroll")!;
-			const messages = document.querySelector<HTMLElement>('[data-testid="copilot-message-list"]')!;
-			const composer = document.querySelector<HTMLElement>('[data-testid="copilot-chat-input"]')!;
+			const messages = document.querySelector<HTMLElement>('[data-testid="chat-message-list"]')!;
+			const composer = document.querySelector<HTMLElement>('[data-testid="chat-composer"]')!;
 			const bounds = (element: HTMLElement) => { const { x, width } = element.getBoundingClientRect(); return { x, width }; };
 			return { viewport: innerWidth, chat: bounds(chat), scroll: bounds(scroll), messages: bounds(messages), composer: bounds(composer), scrollLeft: scroll.scrollLeft, clientWidth: scroll.clientWidth };
 		});

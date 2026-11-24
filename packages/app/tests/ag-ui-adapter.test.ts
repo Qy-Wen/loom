@@ -5,12 +5,12 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { test } from "node:test";
 import { EventType } from "@ag-ui/core";
-import type { RunAgentInput } from "@ag-ui/client";
-import { lastValueFrom, timeout, toArray, type Subscription } from "rxjs";
+import { HttpAgent, type RunAgentInput } from "@ag-ui/client";
+import { lastValueFrom, tap, timeout, toArray, type Subscription } from "rxjs";
 import { ChatService } from "../src/main/chat/chat-service.ts";
 import { testChatRuntime } from "./fixtures/test-chat-runtime.ts";
 import { AgUiAdapter } from "../src/main/chat/ag-ui-adapter.ts";
-import { DurableAgentRunner } from "../src/main/chat/durable-agent-runner.ts";
+import { startAgentServer } from "../src/main/chat/agent-server.ts";
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { BACKGROUND_CONTEXT as context, CompactionTask, defineExtension, hook } from "@loom/agent";
 import type { ConversationId } from "@loom/agent";
@@ -220,7 +220,7 @@ test("context reports provider usage, survives reopen, and publishes window-only
 	});
 });
 
-test("CopilotKit clones keep the host and run lifecycle", { timeout: 10_000 }, async () => {
+test("AG-UI adapter clones keep the host and run lifecycle", { timeout: 10_000 }, async () => {
 	await fixture(async (host, adapter) => {
 		const session = await host.createSession();
 		const events = await lastValueFrom(adapter.clone().run(input(session.id)).pipe(toArray()));
@@ -392,32 +392,82 @@ test("text is delivered while the provider is still streaming, not only at messa
 	} finally { nextChunk.resolve(); finish.resolve(); }
 });
 
-test("transport detach preserves work; durable reconnect and exact-run Stop need no memory history", { timeout: 10_000 }, async () => {
+test("AG-UI HTTP detach preserves work and reconnect supports stopping the matching run", { timeout: 10_000 }, async () => {
 	const release = Promise.withResolvers<void>();
-	await fixture(async (host, adapter) => {
+	await fixture(async (host) => {
 		const session = await host.createSession();
-		const runner = new DurableAgentRunner(host, adapter);
-		const first = Promise.withResolvers<void>();
-		const stream = runner.run({ threadId: session.id, agent: adapter, input: input(session.id) });
-		const subscription = stream.subscribe((event) => { if (event.type === EventType.TEXT_MESSAGE_CONTENT) first.resolve(); });
-		await first.promise; subscription.unsubscribe();
-		assert.equal(await runner.isRunning({ threadId: session.id }), true);
-		await host.archiveSession(session.id);
-		assert.equal((await host.listSessions()).find((row) => row.id === session.id)?.status, "archived", "closing a busy sent conversation must keep its history");
-		const fresh = new DurableAgentRunner(host, new AgUiAdapter(host));
-		const connected = lastValueFrom(fresh.connect({ threadId: session.id }).pipe(toArray()));
-		assert.equal(await fresh.stop({ threadId: session.id, runId: "another-run" }), false);
-		assert.equal(await fresh.isRunning({ threadId: session.id }), true);
-		assert.equal(await fresh.stop({ threadId: session.id, runId: input(session.id).runId }), true);
-		const events = await connected;
-		assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
-		assert.equal(await fresh.isRunning({ threadId: session.id }), false);
-		assert.equal((await host.getSession(session.id)).messages.filter((message) => message.role === "user").length, 1);
-		release.resolve();
+		const server = await startAgentServer(host);
+		try {
+			const { url, token } = server.endpoint;
+			const headers = { Authorization: `Bearer ${token}` };
+			const turn = input(session.id);
+			const agent = new HttpAgent({ url: `${url}/run`, headers });
+			const firstText = Promise.withResolvers<void>();
+			const subscription = agent.run(turn).subscribe({
+				next(event) { if (event.type === EventType.TEXT_MESSAGE_CONTENT) firstText.resolve(); },
+				error: firstText.reject,
+			});
+			await firstText.promise;
+			agent.abortRun();
+			subscription.unsubscribe();
+
+			await host.archiveSession(session.id);
+			assert.equal((await host.listSessions()).find((row) => row.id === session.id)?.status, "archived");
+			const restored = Promise.withResolvers<void>();
+			const attachment = new HttpAgent({ url: `${url}/connect`, headers, threadId: session.id });
+			const events = lastValueFrom(attachment.run({ ...turn, messages: [] }).pipe(
+				tap((event) => { if (event.type === EventType.TEXT_MESSAGE_CONTENT) restored.resolve(); }),
+				toArray(),
+			));
+			void events.catch(restored.reject);
+			await restored.promise;
+
+			const stop = async (runId: string) => {
+				const response = await fetch(`${url}/stop`, {
+					method: "POST",
+					headers: { ...headers, "Content-Type": "application/json" },
+					body: JSON.stringify({ threadId: session.id, runId }),
+				});
+				assert.equal(response.status, 200);
+				return response.json();
+			};
+			assert.deepEqual(await stop("another-run"), { stopped: false });
+			assert.equal(await host.isRunning(session.id), true);
+			assert.deepEqual(await stop(turn.runId), { stopped: true });
+			assert.equal((await events).at(-1)?.type, EventType.RUN_FINISHED);
+			assert.equal(await host.isRunning(session.id), false);
+			assert.equal((await host.getSession(session.id)).messages.filter((message) => message.role === "user").length, 1);
+		} finally {
+			release.resolve();
+			await server.close();
+		}
 	}, (_request, response) => {
 		response.writeHead(200, { "content-type": "text/event-stream" });
 		response.write('data: {"id":"stream","object":"chat.completion.chunk","model":"demo","choices":[{"index":0,"delta":{"content":"working"},"finish_reason":null}]}\n\n');
 		void release.promise.then(() => { if (!response.destroyed) response.end("data: [DONE]\n\n"); });
+	});
+});
+
+test("local AG-UI requires a token and restricts renderer origins", { timeout: 10_000 }, async () => {
+	await fixture(async (host) => {
+		const server = await startAgentServer(host, "http://localhost:5273/index.html");
+		try {
+			const { url, token } = server.endpoint;
+			const origin = "http://localhost:5273";
+			const preflight = await fetch(`${url}/run`, { method: "OPTIONS", headers: { Origin: origin } });
+			assert.equal(preflight.status, 204);
+			assert.equal(preflight.headers.get("access-control-allow-origin"), origin);
+			assert.equal(preflight.headers.get("access-control-allow-headers"), "Content-Type, Authorization");
+
+			const post = (headers: Record<string, string>) => fetch(`${url}/run`, { method: "POST", headers, body: "{}" });
+			assert.equal((await post({ Origin: origin })).status, 401);
+			for (const Origin of ["http://localhost:5274", "null"]) {
+				assert.equal((await post({ Origin, Authorization: `Bearer ${token}` })).status, 403);
+			}
+			assert.equal((await post({ Origin: origin, Authorization: `Bearer ${token}` })).status, 400);
+		} finally {
+			await server.close();
+		}
 	});
 });
 

@@ -1,6 +1,5 @@
 import { isImeComposing } from "../components/ime-composition.ts";
 import { useLayoutEffect, useRef, useState } from "react";
-import { CopilotChatInput } from "@copilotkit/react-core/v2";
 import type { LoomSessionModel, LoomUserAttachment } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
 import { useOpenReference } from "./asset-open.tsx";
@@ -42,7 +41,7 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 		onSend(next, draftModel ?? model);
 	};
 	return (
-		<div className="session-inline-edit" data-testid="copilot-user-message">
+		<div className="session-inline-edit" data-testid="chat-user-message">
 			<div className="session-inline-edit-pill">
 				<div
 					ref={editor}
@@ -75,11 +74,11 @@ export function HistoryMessageEditor({ text, assets, model, busy, error, onCance
 								<path d="M18 6 6 18M6 6l12 12" />
 							</svg>
 						</button>
-						<CopilotChatInput.SendButton className="session-inline-edit-send" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
+						<button type="button" className="session-inline-edit-send" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={busy || !editableText(draft)} onClick={send}>
 							<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
 								<path d="m5 12 7-7 7 7M12 19V5" />
 							</svg>
-						</CopilotChatInput.SendButton>
+						</button>
 					</div>
 				</div>
 			</div>

@@ -1,0 +1,9 @@
+.agui-chat { display: grid; gap: 0.75rem; min-width: 0; }
+.agui-messages { display: grid; gap: 0.75rem; margin: 0; padding: 0; list-style: none; }
+.agui-messages > li { min-width: 0; }
+.agui-messages > li[data-role="user"] { justify-self: end; }
+.agui-message-text { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.agui-composer { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: end; gap: 0.5rem; }
+.agui-composer label { grid-column: 1 / -1; }
+.agui-composer textarea { resize: vertical; font: inherit; }
+.agui-composer button { min-height: 2rem; font: inherit; }

@@ -9,9 +9,9 @@ Chat 的 Provider/目录/鉴权、服务商登录和每条对话独立选择模�
 ## 1. 边界
 
 ```
-Renderer：CopilotChat + Loom 会话/工具视图
+Renderer：@loom/ag-ui-react + Loom 会话与工具视图
     │ IPC（纯 DTO）/ localhost HTTP SSE（AG-UI）
-Main：ChatService + DurableAgentRunner + AgUiAdapter
+Main：AG-UI HTTP 服务 + AgUiAdapter + ChatService
     │ @loom/agent
 Loom：LibraryRuntime + extensions/documents/tool adapters
     │ durable-adapter.ts
@@ -24,7 +24,7 @@ Vendor：pi-durable + pi-codemode
 - 调度、inbox、重试、压缩、任务取消和恢复属于 durable。Loom 不重建 lane 或旧 session manager。
 - 检索与索引仍使用 `packages/core` 的独立存储。
 
-`LibraryRuntime` 持有一个素材库的 Harness、Registry 和存储。应用级 `ChatService` 打开/关闭运行时，并负责消息准备与提交、权限、默认配置、历史 DTO 和变更通知。`AgUiAdapter` 与 `DurableAgentRunner` 通过服务处理前端协议和连接生命周期。切换素材库后，旧连接仍绑定原运行时。应用与无界面评测通过 `createChatExtensions()` 共用主对话和子代理的扩展组装。
+`LibraryRuntime` 持有一个素材库的 Harness、Registry 和存储。应用级 `ChatService` 打开/关闭运行时，并负责消息准备与提交、权限、默认配置、历史 DTO 和变更通知。本地 HTTP 服务负责请求路由，`AgUiAdapter` 把持久化运行状态转为 AG-UI 事件。切换素材库后，旧连接仍绑定原运行时。应用与无界面评测通过 `createChatExtensions()` 共用主对话和子代理的扩展组装。
 
 `packages/agent/src` 按职责组织：
 
@@ -116,13 +116,13 @@ Partial 按 block 维护，只发送尚未显示的 text/thinking 后缀。user 
 
 Renderer 中 `session-chat` 只组装会话与分支操作；`use-sessions` 管理选择和已保存历史，`use-chat-stream` 管理实时消息 ID 和提交边界，`chat-composer` / `chat-composer-input` 管理输入和附件，`chat-messages` / `chat-scroll` 分别管理展示和跟随滚动。
 
-CopilotChat 显式接收 `threadId`，使用原生重连，不再手动抢占随机 agent thread。编辑旧问题先 fork-and-switch，等待新线程连接完成后，通过当前 CopilotChat 发送入口提交一次；不复用旧线程发送回调或强制覆盖实时消息。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
+渲染进程为当前线程创建 AG-UI agent，并接入其持久会话流。编辑旧问题时先切换到新分支，等新线程连接后提交一次。子工具等待审批时刷新，卡片和 pending 状态会恢复。从持久化 specialist details 挂载子工具/审批 watcher，并从 snapshot 恢复。子文字不进入父模型历史。follow-up 使用原生 `whenBusy: "followUp"`；Stop 丢弃未接纳输入并取消归属前台工作。
 
-`DurableAgentRunner` 把 run/connect/stop 路由到 adapter 与原生 submission，不使用 CopilotKit 内存历史。传输断开只停止 connect watcher，不取消 durable 工作；显式 Stop 取消匹配的运行。Connect 从 durable snapshot 恢复 partial、工具和子审批，聊天历史由完整 entries 提供，包含主进程崩溃后重开。已完成 submission 重连不等待新的 run-end，即使 answer 已被压缩。
+HTTP 连接断开后，运行会继续。Stop 取消指定会话中匹配的运行。Connect 从持久化快照恢复部分回复、工具和子审批。聊天历史来自已保存的记录，主进程崩溃重启后也能读取。即使答案已压缩，已完成的提交重连时也无需等待新的运行结束。
 
 SIGKILL 后流式请求按已提交 checkpoint 重发；中断 partial 保留为 `aborted` 历史，不进入重发的模型上下文。执行中的 unsafe 工具不重放，返回“可能已部分执行”；操作系统子进程可能独立存活，不承诺外部副作用 exactly-once。
 
-Main 的 HTTP 绑定 `127.0.0.1` 随机端口，只允许 Electron/本地 renderer origin，退出时关闭。边界上只有 AG-UI。开发 trace 使用 Loom extension/commit 观察器和公开模型调用观察，保存到 `.loom/agents/traces/telemetry.sqlite`；Traces 窗口读取历史和实时 revision。时间、隐私、恢复与验收边界见 [TRACE](./TRACE.zh-CN.md)。
+主进程在 `127.0.0.1` 的随机端口提供 HTTP 服务，只允许渲染进程的来源，并通过 IPC 发送每次启动生成的访问令牌。服务在退出时关闭。开发 trace 使用 Loom extension/commit 观察器和公开模型调用观察，保存到 `.loom/agents/traces/telemetry.sqlite`。Traces 窗口读取历史和实时 revision。时间、隐私、恢复与验收边界见 [TRACE](./TRACE.zh-CN.md)。
 
 上下文圆环显示当前模型窗口的估算占用，点击查看 `~百分比 / 窗口`。`contextUsage()` 使用原生活动 `ContextView`，取当前 provider/model、最新 head 之后的有效 assistant usage（含 cache 与输出），再加后续消息估算。新会话、压缩或模型变化后没有适用 usage 时估算活动消息，含 system/tool schema/图像；不使用完整聊天历史或累计消耗。消息提交、压缩和模型设置变化触发刷新；未配置 Chat 时隐藏。模型窗口取设置值，未填默认 128k，数值并非 tokenizer 精确测量。
 

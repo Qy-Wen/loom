@@ -2,7 +2,7 @@ import { createServer } from "node:http";
 import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
-const CURSOR = '[data-testid="copilot-loading-cursor"]';
+const CURSOR = '[data-testid="chat-working"]';
 
 test("the running dot does not flash when sessions are created, switched, or closed, but shows during a real run", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "attach mode shares the running library");

@@ -1,5 +1,4 @@
 import { useCallback, useContext, useLayoutEffect, useRef, useState } from "react";
-import { CopilotChat } from "@copilotkit/react-core/v2";
 import { useLocale } from "../locale.tsx";
 import { ChatViewContext, useChatSession } from "./chat-context.ts";
 import { ChatEmptyState } from "./chat-empty.tsx";
@@ -21,17 +20,7 @@ function canScroll(el: HTMLElement): boolean {
  * view, and the browser clamps scrollTop downward. Scrolling up does, until
  * the reader returns to the bottom or opens another session.
  */
-export function SessionScrollView({
-	children,
-	className,
-	autoScroll: _autoScroll,
-	scrollToBottomButton: _scrollToBottomButton,
-	feather: _feather,
-	inputContainerHeight: _inputContainerHeight,
-	isResizing: _isResizing,
-	onScroll,
-	...props
-}: React.ComponentProps<typeof CopilotChat.View.ScrollView>): React.JSX.Element {
+export function SessionScrollView({ children }: { children: React.ReactNode }): React.JSX.Element {
 	const { t } = useLocale();
 	const { threadId } = useChatSession();
 	const { messages: visible } = useContext(ChatViewContext);
@@ -117,9 +106,8 @@ export function SessionScrollView({
 	return (
 		<div className="session-chat-scroll-host">
 			<div
-				{...props}
 				ref={scrollerRef}
-				className={`session-chat-scroll thin-scroll${className ? ` ${className}` : ""}`}
+				className="session-chat-scroll thin-scroll"
 				onWheel={(event) => {
 					const el = scrollerRef.current;
 					if (!el || event.deltaY >= 0) return;
@@ -155,7 +143,6 @@ export function SessionScrollView({
 						if (delta < -1) setPinned(false);
 						else if (distanceFromBottom(el) < NEAR_BOTTOM_PX) setPinned(true);
 					}
-					onScroll?.(event);
 				}}
 			>
 				{visible.length === 0 && <ChatEmptyState />}

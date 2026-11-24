@@ -337,7 +337,7 @@ Local Core
 
 - Renderer **never** accesses the database directly.
 
-- The Agent channel is a localhost service: Main hosts CopilotKit Runtime, and Renderer connects over AG-UI; see [AGENT](./agent/AGENT.md) §6. The chat UI uses CopilotKit's chat components.
+- Main serves the Agent's AG-UI stream over localhost. The renderer uses Loom components built on `@loom/ag-ui-react`. See [AGENT](./agent/AGENT.md) §6.
 
 ### Capability layers
 

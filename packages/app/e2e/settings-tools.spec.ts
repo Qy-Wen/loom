@@ -49,7 +49,7 @@ test("Agent settings tools confirm language/Chat/key writes and synchronize the 
 			}
 			if (afterSend) await afterSend();
 			await expect.poll(() => toolResults.length).toBe(count + 1);
-			await expect(loomPage.getByTestId("copilot-message-list").getByText("SETTINGS_TOOL_DONE", { exact: true })).toHaveCount(count + 1);
+			await expect(loomPage.getByTestId("chat-message-list").getByText("SETTINGS_TOOL_DONE", { exact: true })).toHaveCount(count + 1);
 			await expect(loomPage.getByRole("button", { name: /^(Conversation model|会话模型)$/, exact: true })).toBeEnabled();
 		}
 		await send("get_settings", {}, false);

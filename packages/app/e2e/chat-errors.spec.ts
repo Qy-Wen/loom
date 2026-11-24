@@ -61,7 +61,7 @@ test("run errors are visible, stay scoped to the session, and clear on retry", a
 
 test("transport failures appear even without a RUN_ERROR event", async ({ loomPage }) => {
 	await expect(loomPage.getByRole("textbox")).toBeVisible();
-	await loomPage.route("**/api/copilotkit/agent/loom/run", (route) => route.abort("connectionfailed"));
+	await loomPage.route("**/api/ag-ui/run", (route) => route.abort("connectionfailed"));
 	try {
 		await loomPage.getByRole("textbox").fill("Question over a broken connection");
 		await loomPage.getByRole("textbox").press("Enter");
@@ -69,7 +69,7 @@ test("transport failures appear even without a RUN_ERROR event", async ({ loomPa
 		await expect(loomPage.locator(".chat-error-body")).toContainText(/network|fetch/i);
 		await expect(loomPage.getByRole("button", { name: "Conversation model", exact: true })).toBeEnabled();
 	} finally {
-		await loomPage.unroute("**/api/copilotkit/agent/loom/run");
+		await loomPage.unroute("**/api/ag-ui/run");
 	}
 });
 
@@ -89,7 +89,7 @@ test("a rejected key shows one error, with the explanation once", async ({ loomP
 		const errors = loomPage.locator(".chat-error[role=alert]");
 		await expect(errors.first()).toBeVisible();
 		// The failure reaches history and the live copy gives way to it: one box, not two.
-		await expect(loomPage.getByTestId("copilot-assistant-message")).toHaveCount(0);
+		await expect(loomPage.getByTestId("chat-assistant-message")).toHaveCount(0);
 		await expect(errors).toHaveCount(1);
 		await loomPage.waitForTimeout(1500);
 		await expect(errors).toHaveCount(1);

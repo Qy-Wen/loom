@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "electron-vite";
+import { defaultClientConditions } from "vite";
 
 /**
  * `pnpm dev` owns `out/`, where its windows load their preload script. `pnpm build:e2e` defaults to `out-e2e/`
@@ -36,6 +37,7 @@ export default defineConfig(({ mode }) => {
 		},
 		renderer: {
 			root: resolve(__dirname, "src/renderer"),
+			resolve: { conditions: ["loom-source", ...defaultClientConditions] },
 			// Keep this off the default 5173 so a second electron-vite app cannot
 			// steal this dev server (that mix-up shows up as esbuild "Invalid loader").
 			server: {

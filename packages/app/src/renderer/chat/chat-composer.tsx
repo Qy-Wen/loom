@@ -1,7 +1,5 @@
 import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { Message } from "@ag-ui/core";
-import { CopilotChatInput, type CopilotChatInputProps } from "@copilotkit/react-core/v2";
 import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets, referenceKey } from "@loom/agent/attachments";
 import { failureShownInHistory, formatChatError } from "../../shared/chat-error.ts";
@@ -13,7 +11,7 @@ import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerActions, type PendingEdit } from "./chat-context.ts";
 import { editableText, placedChips } from "./chat-content.ts";
-import { AddFilesButton, ComposerTextArea, AssetSendButton } from "./chat-composer-input.tsx";
+import { AddFilesButton, ComposerTextArea } from "./chat-composer-input.tsx";
 import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
@@ -30,7 +28,12 @@ function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]):
 }
 
 /** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an asset restores Send. */
-export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ...props }: CopilotChatInputProps) => {
+export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
+	onSubmitMessage: (text: string) => Promise<unknown>;
+	isRunning: boolean;
+	onStop: () => void;
+}) {
+	const [value, onChange] = useState("");
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
@@ -42,17 +45,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const [catalog, setCatalog] = useState<ChatModelView[] | null>(null);
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
-	const valueRef = useRef(value);
-	valueRef.current = value;
 	const editorRef = useRef<HTMLDivElement | null>(null);
 	const openReference = useOpenReference();
 	const libraryAssets = useLibraryAssets();
 	const libraryFolders = useLibraryFolders();
-	const slotRef = useRef<HTMLDivElement>(null);
-	const [toolbar, setToolbar] = useState<HTMLElement | null>(null);
-	useLayoutEffect(() => {
-		setToolbar(slotRef.current?.querySelector<HTMLElement>('[data-testid="copilot-chat-input"] > [data-layout]') ?? null);
-	}, []);
 	useEffect(() => {
 		let cancelled = false;
 		const load = () => {
@@ -63,19 +59,17 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		return () => { cancelled = true; stop(); };
 	}, []);
 	const textOnlyModel = modelLacksImageInput(model, catalog);
-	const hasDraft = editableText(value ?? "") || assets.length > 0;
-	const onChangeRef = useRef(onChange);
-	onChangeRef.current = onChange;
+	const hasDraft = editableText(value) || assets.length > 0;
 	useEffect(() => {
 		setAssets([]);
 		setQueued([]);
 		setAttachmentError(null);
-		onChangeRef.current?.("");
+		onChange("");
 	}, [threadId]);
 	const submittedEdit = useRef<PendingEdit | null>(null);
 	useEffect(() => {
 		// A controlled thread switch connects asynchronously. Never send through the old thread's callback.
-		if (!pendingEdit || pendingEdit.threadId !== threadId || !threadReady || connecting || isRunning || !onSubmitMessage || submittedEdit.current === pendingEdit) return;
+		if (!pendingEdit || pendingEdit.threadId !== threadId || !threadReady || connecting || isRunning || submittedEdit.current === pendingEdit) return;
 		submittedEdit.current = pendingEdit;
 		editSubmitted(pendingEdit);
 		void (async () => {
@@ -92,7 +86,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				await onSubmitMessage(contentWithPlacedAssets(text, chips));
 			} catch (cause) {
 				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
-				onChange?.(text);
+				onChange(text);
 			}
 		})();
 	}, [pendingEdit, editSubmitted, threadId, threadReady, connecting, isRunning, onSubmitMessage, onChange, t.chat.attachFailed]);
@@ -113,7 +107,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				rememberComposerAsset(composerAttach);
 				setAssets((current) => current.some((item) => referenceKey(item) === key) ? current : [...current, composerAttach]);
 				const chip = appendChip(editor, composerAttach, openReference, chipLabels.current);
-				onChange?.(composerLayoutText(readInlineEditor(editor)));
+				onChange(composerLayoutText(readInlineEditor(editor)));
 				const activate = () => {
 					const current = editorRef.current;
 					if (!current?.isConnected) return;
@@ -145,7 +139,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		if (!editor) return;
 		if (!readInlineEditor(editor) && assetsRef.current.length === 0) {
 			paintInlineEditor(editor, draftRequest.text, [], (assetId) => openReference(assetId), chipLabels.current);
-			onChange?.(draftRequest.text);
+			onChange(draftRequest.text);
 		}
 		draftApplied(draftRequest);
 		requestAnimationFrame(() => {
@@ -179,16 +173,17 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	const submitting = useRef(false);
 	const activeThread = useRef(threadId);
 	activeThread.current = threadId;
-	const deliverRef = useRef<(submitted: string) => void>(() => {});
-	deliverRef.current = (submitted) => {
+	const running = useRef(isRunning);
+	running.current = isRunning;
+	const deliver = () => {
 		if (submitting.current) return;
-		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : submitted).replaceAll("\u200b", "");
+		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : value).replaceAll("\u200b", "");
 		const text = editableText(raw) ? raw : "";
 		// Chips can reach the DOM before React commits the attachment state.
 		const assetPayload = editorRef.current ? displayAssetRefs(raw, assetsRef.current) : assetsRef.current;
 		if (!text && assetPayload.length === 0) return;
-		if (!onSubmitMessage || !threadReady) {
-			onChange?.(raw);
+		if (!threadReady) {
+			onChange(raw);
 			return;
 		}
 		submitting.current = true;
@@ -200,9 +195,11 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				setAssets([]);
 				setAttachmentError(null);
 				const body = contentWithPlacedAssets(text, placedChips(assetPayload));
-				if (!isRunning) {
-					void onSubmitMessage(body || "\u200b");
-					onChange?.("");
+				if (!running.current) {
+					onChange("");
+					void onSubmitMessage(body || "\u200b").catch((cause: unknown) => {
+						if (activeThread.current === threadId) setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
+					});
 					return;
 				}
 				queuedId = crypto.randomUUID();
@@ -212,13 +209,13 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 				setQueued((items) => [...items, queued]);
 				await window.loom.followUp(threadId, body, queuedId);
 				setQueued((items) => items.map((item) => item.id === queued.id ? { ...item, ready: true } : item));
-				if (activeThread.current === threadId) onChange?.("");
+				if (activeThread.current === threadId) onChange("");
 			} catch (cause) {
 				if (activeThread.current !== threadId) return;
 				if (queuedId) setQueued((items) => items.filter((item) => item.id !== queuedId));
 				setAssets(assetPayload);
 				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
-				onChange?.(raw);
+				onChange(raw);
 			} finally {
 				submitting.current = false;
 			}
@@ -264,7 +261,7 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			}
 			return next;
 		});
-		if (editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
+		if (editor) onChange(composerLayoutText(readInlineEditor(editor)));
 		const last = parsed.at(-1);
 		const activate = () => {
 			const current = editorRef.current;
@@ -326,10 +323,10 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 			setAssets((current) => current.some((item) => referenceKey(item) === referenceKey(asset)) ? current : [...current, asset]);
 			const editor = editorRef.current;
 			const placed = editor ? insertChipAtPoint(editor, asset, x, y, openReference, chipLabels.current) : false;
-			if (placed && editor) onChange?.(composerLayoutText(readInlineEditor(editor)));
+			if (placed && editor) onChange(composerLayoutText(readInlineEditor(editor)));
 			else if (editor) {
 				appendChip(editor, asset, openReference, chipLabels.current);
-				onChange?.(composerLayoutText(readInlineEditor(editor)));
+				onChange(composerLayoutText(readInlineEditor(editor)));
 			}
 		} catch (cause) {
 			setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
@@ -340,8 +337,6 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 		importFiles: (files) => { void importDroppedFiles(files); },
 		pickLibrary: () => { void pickLibraryFiles(); },
 		pickExternal: () => { void pickExternalFiles(); },
-		sendAssets: () => deliverRef.current((valueRef.current ?? "").trim() || "\u200b"),
-		hasAssets: assets.length > 0,
 		assets,
 		bindEditor: (editor) => {
 			editorRef.current = editor;
@@ -369,7 +364,6 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 	return (
 		<ComposerActionsContext.Provider value={composerActions}>
 		<div
-			ref={slotRef}
 			className="session-follow-up-slot"
 			onDragOver={(event) => {
 				event.preventDefault();
@@ -415,34 +409,28 @@ export const FollowUpInput = (({ onSubmitMessage, isRunning, onChange, value, ..
 					</ol>
 				</section>
 			)}
-			<div>
-				{toolbar && createPortal(
-					<div className="session-composer-meta" onMouseDown={(event) => event.stopPropagation()}>
-						<AgentPermissionSelect />
-						<SessionModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={Boolean(isRunning)} />
-						<ContextIndicator context={usage} />
-					</div>,
-					toolbar,
+			<form className="session-composer" data-testid="chat-composer" onSubmit={(event) => {
+				event.preventDefault();
+				deliver();
+			}}>
+				<ComposerTextArea value={value} onChange={onChange} onSubmit={deliver} />
+				<AddFilesButton />
+				<div className="session-composer-meta">
+					<AgentPermissionSelect />
+					<SessionModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={isRunning} />
+					<ContextIndicator context={usage} />
+				</div>
+				{isRunning && !hasDraft ? (
+					<button className="session-composer-send" data-testid="chat-send-button" type="button" aria-label={t.chat.stop} data-tooltip={t.chat.stop} onClick={onStop}>
+						<svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2" /></svg>
+					</button>
+				) : (
+					<button className="session-composer-send" data-testid="chat-send-button" type="submit" aria-label={t.chat.send} data-tooltip={t.chat.send} disabled={!hasDraft || !threadReady}>
+						<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m5 12 7-7 7 7M12 19V5" /></svg>
+					</button>
 				)}
-				<CopilotChatInput
-					{...props}
-					value={value}
-					isRunning={Boolean(isRunning) && !hasDraft}
-					showDisclaimer={false}
-					onChange={onChange}
-					toolsMenu={[
-						{ label: t.chat.addLibraryFile, action: () => { void pickLibraryFiles(); } },
-						{ label: t.chat.addExternalFile, action: () => { void pickExternalFiles(); } },
-					]}
-					addMenuButton={AddFilesButton}
-					textArea={ComposerTextArea}
-					sendButton={assets.length > 0 ? AssetSendButton : undefined}
-					onSubmitMessage={threadReady && onSubmitMessage ? (submitted) => {
-						deliverRef.current(submitted);
-					} : undefined}
-				/>
-			</div>
+			</form>
 		</div>
 		</ComposerActionsContext.Provider>
 	);
-}) as typeof CopilotChatInput;
+}

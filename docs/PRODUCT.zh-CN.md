@@ -333,7 +333,7 @@ Local Core
 ```
 
 - Renderer **绝不**直接操作 DB。
-- agent 通道是 localhost 服务：main 进程起一个 localhost HTTP server 承载 CopilotKit runtime，renderer 走 AG-UI 连它（见 [AGENT](./agent/AGENT.zh-CN.md) §6）。聊天界面使用 CopilotKit 的聊天组件。
+- 主进程通过 localhost 提供 Agent 的 AG-UI 流。渲染进程使用基于 `@loom/ag-ui-react` 的 Loom 组件。见 [AGENT](./agent/AGENT.zh-CN.md) §6。
 
 ### 能力分层总览
 

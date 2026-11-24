@@ -9,9 +9,9 @@ Chat provider/catalog/auth, provider login, and per-conversation model selection
 ## 1. Boundaries
 
 ```
-Renderer: CopilotChat + Loom session/tool views
+Renderer: @loom/ag-ui-react + Loom session/tool views
     │ IPC (plain DTOs) / localhost HTTP SSE (AG-UI)
-Main: ChatService + DurableAgentRunner + AgUiAdapter
+Main: AG-UI HTTP server + AgUiAdapter + ChatService
     │ @loom/agent
 Loom: LibraryRuntime + extensions/documents/tool adapters
     │ durable-adapter.ts
@@ -24,7 +24,7 @@ Vendor: pi-durable + pi-codemode
 - Durable owns scheduling, inboxes, retry, compaction, task cancellation, and recovery. Loom does not recreate lanes or a session manager.
 - Retrieval/index storage remains separate in `packages/core`.
 
-`LibraryRuntime` owns one library's Harness, Registry, and storage. App-scoped `ChatService` opens/closes that runtime and owns input preparation/submission, permissions, defaults, history DTOs, and notifications. `AgUiAdapter` and `DurableAgentRunner` handle the frontend protocol and connection lifecycle through the service. Connections retain their original library runtime when the app switches libraries. Parent/specialist extension assembly is shared with headless evaluations through `createChatExtensions()`.
+`LibraryRuntime` owns one library's Harness, Registry, and storage. App-scoped `ChatService` opens/closes that runtime and owns input preparation/submission, permissions, defaults, history DTOs, and notifications. The local HTTP server routes requests, and `AgUiAdapter` translates durable state into AG-UI events. Connections retain their original library runtime when the app switches libraries. Parent/specialist extension assembly is shared with headless evaluations through `createChatExtensions()`.
 
 `packages/agent/src` groups by responsibility:
 
@@ -115,13 +115,13 @@ Partial state is maintained per block, emitting only unseen text/thinking suffix
 
 In the renderer, `session-chat` assembles session and branch actions; `use-sessions` owns selection and committed history, `use-chat-stream` owns live ID adoption and submission boundaries, `chat-composer` / `chat-composer-input` own input and attachments, and `chat-messages` / `chat-scroll` own display and scroll following.
 
-CopilotChat receives an explicit `threadId`, enabling native reconnect rather than manually claiming a random agent thread. Editing an earlier question forks and switches first, then submits once through the current CopilotChat send callback after the new thread connects; it does not reuse the old callback or force-replace live messages. Reload while a child waits for approval replays its card and pending state. Child tool/approval watchers attach through persisted specialist details and restore from their snapshots. Child text stays out of parent model history. Follow-ups use native `whenBusy: "followUp"`; Stop drops unadmitted inputs and aborts foreground owned work.
+The renderer creates an AG-UI agent for the active thread and attaches to its durable stream. Editing an earlier question forks and switches first, then submits once after the new thread connects. Reload while a child waits for approval replays its card and pending state. Child tool/approval watchers attach through persisted specialist details and restore from their snapshots. Child text stays out of parent model history. Follow-ups use native `whenBusy: "followUp"`; Stop drops unadmitted inputs and aborts foreground owned work.
 
-`DurableAgentRunner` routes run/connect/stop to the adapter and native submissions; it does not use CopilotKit's in-memory history. Transport detach stops a connect watcher, not durable work; explicit Stop aborts the matching run. Connect restores partials, tools, and child approvals from durable snapshots and chat history from full entries, including after a main-process crash. Reconnecting a completed submission does not wait for a new run-end, even if its answer was compacted.
+Work continues after the HTTP client detaches. Stop aborts the matching run in its thread. Connect restores partials, tools, and child approvals from durable snapshots. Chat history comes from persisted entries, including after a main-process crash. A completed submission reconnects without waiting for a new run to finish, even if its answer was compacted.
 
 After SIGKILL, a streaming request is resent from its committed checkpoint. Interrupted partial text remains as `aborted` history but is excluded from the resent model context. An executing unsafe tool is not replayed and reports that it may have partially run. OS children may survive independently; external effects are not guaranteed exactly-once.
 
-Main binds HTTP to `127.0.0.1` on a random port, permits Electron/local renderer origins, and closes on quit. Only AG-UI crosses this boundary. Development traces use a Loom extension/commit observer and public model-call instrumentation, persisted at `.loom/agents/traces/telemetry.sqlite`; the Traces window reads history and live revisions. See [TRACE](./TRACE.md) for timing, privacy, recovery, and validation boundaries.
+Main binds HTTP to `127.0.0.1` on a random port, allows the renderer's origin, and requires a per-launch token passed to the renderer over IPC. The server closes on quit. Development traces use a Loom extension/commit observer and public model-call instrumentation, persisted at `.loom/agents/traces/telemetry.sqlite`. The Traces window reads history and live revisions. See [TRACE](./TRACE.md) for timing, privacy, recovery, and validation boundaries.
 
 The context ring estimates current-model window occupancy; click for `~percent / window`. `contextUsage()` reads native active `ContextView`, uses applicable current-provider/model assistant usage after the latest head (including cache and output), then estimates trailing messages. Without applicable usage after creation, compaction, or model changes, it estimates active messages, including system/tool schemas/images, not full chat history or cumulative spend. Committed messages, compaction, and model settings changes refresh it; unconfigured Chat hides it. The model window comes from settings, defaulting to 128k; this is not an exact tokenizer measurement.
 

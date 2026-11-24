@@ -155,27 +155,8 @@ export function adoptMessageId(messages: readonly Message[], fromId: string, ent
 	});
 }
 
-/**
- * One shared agent holds a single thread. Its live messages belong to
- * `agentSessionId`. Another open session must not paint them: a send would
- * otherwise sit under the previous transcript, and opening that session
- * would show the new turn.
- * `hidden` is the list captured at the switch; it stays hidden until the
- * agent replaces it.
- */
-export function liveMessagesForSession(
-	sessionId: string,
-	agentSessionId: string,
-	live: readonly Message[],
-	hidden: readonly Message[] | null,
-): Message[] {
-	if (!sessionId || agentSessionId !== sessionId) return [];
-	if (hidden !== null && live === hidden) return [];
-	return live as Message[];
-}
-
 /** Durable rows are authoritative. Overlay only uncommitted/live rows, using IDs rather than text or list lengths. */
-export function mergeChatMessages(stored: Message[], live: Message[]): Message[] {
+export function mergeChatMessages(stored: Message[], live: readonly Message[]): Message[] {
 	const committed = new Set(stored.map((message) => message.id));
 	for (const message of stored) {
 		const clientId = message.metadata?.["loom.clientMessageId"];

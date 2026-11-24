@@ -34,7 +34,7 @@ for (const mode of ["List", "Icons"] as const) {
 			const display = sidebar.getByRole("group", { name: "File display", exact: true });
 			await display.getByRole("button", { name: mode, exact: true }).click();
 			const row = (name: string) => sidebar.locator(".folder-row").filter({ hasText: new RegExp(`^${name}$`) });
-			const input = page.getByTestId("copilot-chat-textarea");
+			const input = page.getByTestId("chat-composer-editor");
 			const browser = page.locator(".folder-browser");
 			const source = mode === "List" ? row("nested").locator(".folder-main") : browser.locator('[data-key="folder:资料/nested"]');
 			if (mode === "Icons") {
@@ -67,14 +67,14 @@ for (const mode of ["List", "Icons"] as const) {
 				await expect(display.getByRole("button", { name: mode, exact: true })).toHaveAttribute("aria-pressed", "true");
 				if (mode === "Icons") await expect(browser.locator(".browser-crumb.current")).toHaveText("nested");
 			}
-			let bubble = page.getByTestId("copilot-user-message").first();
+			let bubble = page.getByTestId("chat-user-message").first();
 			await bubble.hover();
 			await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 			await expect(page.locator('.session-inline-edit [data-folder-path="资料/nested"]')).toHaveCount(1);
 			await page.locator(".session-inline-edit-send").click();
 			await expect(page.getByText(/FOLDER_REPLY_2/).first()).toBeVisible();
 			expect(JSON.stringify(requests[1]!.messages.findLast((message) => message.role === "user")!.content)).toContain("<folder_ref>");
-			bubble = page.getByTestId("copilot-user-message").first();
+			bubble = page.getByTestId("chat-user-message").first();
 			await bubble.hover();
 			await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 			await page.locator(".session-inline-edit").getByRole("button", { name: "Remove nested", exact: true }).click();

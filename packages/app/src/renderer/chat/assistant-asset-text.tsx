@@ -1,31 +1,26 @@
-import { CopilotChatAssistantMessage } from "@copilotkit/react-core/v2";
+import { Markdown, type MarkdownLinkProps } from "@loom/ag-ui-react/markdown";
+import "@loom/ag-ui-react/markdown.css";
 import { useMemo } from "react";
 import { prepareAssistantContent } from "../../shared/assistant-asset-refs.ts";
 import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 
 /** Assistant markdown. An `<asset_ref>` block links by asset id, then by path. */
-export const AssistantMarkdown: typeof CopilotChatAssistantMessage.MarkdownRenderer = ({ content, ...props }) => {
+export function AssistantMarkdown({ content }: { content: string }) {
 	const library = useLibraryAssets();
 	const folders = useLibraryFolders();
 	const { markdown, rawTail } = useMemo(
-		() => prepareAssistantContent(content ?? "", library, folders),
+		() => prepareAssistantContent(content, library, folders),
 		[content, library, folders],
 	);
 	return (
 		<>
-			{markdown ? (
-				<CopilotChatAssistantMessage.MarkdownRenderer
-					{...props}
-					content={markdown}
-					components={{ a: AssistantAssetLink }}
-				/>
-			) : null}
+			{markdown && <Markdown content={markdown} className="chat-markdown" linkComponent={AssistantAssetLink} />}
 			{rawTail ? <span className="assistant-asset-raw">{rawTail}</span> : null}
 		</>
 	);
-};
+}
 
-function AssistantAssetLink({ href, children }: { href?: string; children?: React.ReactNode }) {
+function AssistantAssetLink({ href, children }: MarkdownLinkProps) {
 	const openReference = useOpenReference();
 	const library = useLibraryAssets();
 	const folders = useLibraryFolders();

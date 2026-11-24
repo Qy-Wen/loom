@@ -18,14 +18,14 @@ function reply(response: ServerResponse, text: string, finish = true): void {
 }
 
 async function pasteImage(page: Page, data: string, kind: "paste" | "drop" = "paste"): Promise<void> {
-	await page.getByTestId("copilot-chat-textarea").evaluate((editor, { data, kind }) => {
+	await page.getByTestId("chat-composer-editor").evaluate((editor, { data, kind }) => {
 		const file = new File([Uint8Array.from(atob(data), (c) => c.charCodeAt(0))], "clipboard.png", { type: "image/png" });
 		const transfer = new DataTransfer(); transfer.items.add(file);
 		editor.dispatchEvent(kind === "paste"
 			? new ClipboardEvent("paste", { clipboardData: transfer, bubbles: true, cancelable: true })
 			: new DragEvent("drop", { dataTransfer: transfer, bubbles: true, cancelable: true }));
 	}, { data, kind });
-	await expect(page.getByTestId("copilot-chat-textarea").locator("[data-asset-id]")).toHaveCount(1);
+	await expect(page.getByTestId("chat-composer-editor").locator("[data-asset-id]")).toHaveCount(1);
 }
 
 function lastUser(request: Request) {
@@ -65,11 +65,11 @@ for (const source of ["paste", "drop", "library", "external"] as const) {
 				}, path);
 				await loomPage.getByRole("button", { name: "Add", exact: true }).click();
 				await loomPage.getByRole("menuitem", { name: source === "library" ? "Library file" : "External file", exact: true }).click();
-				await expect(loomPage.getByTestId("copilot-chat-textarea").locator("[data-asset-id]")).toHaveCount(1);
+				await expect(loomPage.getByTestId("chat-composer-editor").locator("[data-asset-id]")).toHaveCount(1);
 			}
-			const assetId = await loomPage.getByTestId("copilot-chat-textarea").locator("[data-asset-id]").getAttribute("data-asset-id");
+			const assetId = await loomPage.getByTestId("chat-composer-editor").locator("[data-asset-id]").getAttribute("data-asset-id");
 			await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
-			await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
+			await loomPage.getByTestId("chat-composer-editor").press("Enter");
 			await expect(loomPage.getByText(`COMPOSER_${source}_1`, { exact: true }).first()).toBeVisible();
 			expect(requests).toHaveLength(1);
 			expect(lastUser(requests[0]!).content).toEqual(expect.arrayContaining([
@@ -82,8 +82,8 @@ for (const source of ["paste", "drop", "library", "external"] as const) {
 			const user = record.messages.find((message) => message.role === "user")!;
 			expect(user.content).toEqual(expect.arrayContaining([expect.objectContaining({ type: "image", url: expect.stringContaining("loom-asset://chat-image/") })]));
 			expect(JSON.stringify(user.content)).not.toContain(data);
-			await loomPage.getByTestId("copilot-chat-textarea").fill("plain next turn");
-			await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
+			await loomPage.getByTestId("chat-composer-editor").fill("plain next turn");
+			await loomPage.getByTestId("chat-composer-editor").press("Enter");
 			await expect(loomPage.getByText(`COMPOSER_${source}_2`, { exact: true }).first()).toBeVisible();
 			expect(JSON.stringify(lastUser(requests[1]!).content)).not.toContain("image_url");
 			await loomPage.reload();
@@ -91,13 +91,13 @@ for (const source of ["paste", "drop", "library", "external"] as const) {
 			expect(requests).toHaveLength(2);
 			if (source === "paste") {
 				// Editing an image question forks and reconstructs chips from stored text.
-				const bubble = loomPage.getByTestId("copilot-user-message").first();
+				const bubble = loomPage.getByTestId("chat-user-message").first();
 				await bubble.hover();
 				await bubble.getByRole("button", { name: "Edit", exact: true }).click();
 				await loomPage.locator(".session-inline-edit-send").click();
 				await expect(loomPage.getByText(`COMPOSER_${source}_3`, { exact: true }).first()).toBeVisible();
 				expect(lastUser(requests[2]!).content).toEqual(expect.arrayContaining([{ type: "image_url", image_url: { url: `data:image/png;base64,${data}` } }]));
-				const editedBubble = loomPage.getByTestId("copilot-user-message").first();
+				const editedBubble = loomPage.getByTestId("chat-user-message").first();
 				await editedBubble.hover();
 				await editedBubble.getByRole("button", { name: "Edit", exact: true }).click();
 				const editor = loomPage.locator(".session-inline-edit");
@@ -132,7 +132,7 @@ test("a text-only model keeps the library reference and receives an omitted-imag
 		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
 		await pasteImage(loomPage, data);
 		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toBeVisible();
-		await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
+		await loomPage.getByTestId("chat-composer-editor").press("Enter");
 		await expect(loomPage.getByText("COMPOSER_TEXT_ONLY", { exact: true })).toBeVisible();
 		await expect(loomPage.getByRole("status").filter({ hasText: "does not accept images" })).toHaveCount(0);
 		const content = JSON.stringify(lastUser(requests[0]!).content);
@@ -162,11 +162,11 @@ test("a pasted image queues into an active run and reaches the next model reques
 		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { input: ["text", "image"] });
 		await loomPage.getByRole("button", { name: "New session", exact: true }).click();
 		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
-		await loomPage.getByTestId("copilot-chat-textarea").fill("start working");
-		await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
+		await loomPage.getByTestId("chat-composer-editor").fill("start working");
+		await loomPage.getByTestId("chat-composer-editor").press("Enter");
 		await expect(loomPage.getByText("COMPOSER_WORKING", { exact: true })).toBeVisible();
 		await pasteImage(loomPage, data);
-		await loomPage.getByTestId("copilot-chat-textarea").press("Enter");
+		await loomPage.getByTestId("chat-composer-editor").press("Enter");
 		await expect(loomPage.locator(".session-follow-up")).toBeVisible();
 		finish.resolve();
 		await expect(loomPage.getByText("COMPOSER_FOLLOWUP_IMAGE", { exact: true })).toBeVisible();

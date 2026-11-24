@@ -2,8 +2,7 @@
  * Mirror the resolved light/dark theme onto <html>.
  *
  * The stylesheet switches on `prefers-color-scheme`, which the main process drives through `nativeTheme.themeSource`.
- * `data-theme` and the `dark` class exist for code that cannot read a media query: CopilotKit's stylesheet looks for a
- * `.dark` ancestor, and tests read `data-theme`. Returns a function that stops listening.
+ * Streamdown's code blocks use a `.dark` ancestor. Tests read `data-theme`.
  */
 export function followColorScheme(root: HTMLElement = document.documentElement): () => void {
 	const query = window.matchMedia("(prefers-color-scheme: dark)");

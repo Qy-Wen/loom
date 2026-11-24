@@ -29,7 +29,7 @@ test("a reply's table actions sit under the table and match the message copy but
 		const table = loomPage.locator('[data-streamdown="table-wrapper"] table');
 		const copyTable = loomPage.locator('button[data-tooltip="Copy table as markdown"]');
 		const downloadTable = loomPage.locator('button[data-tooltip="Download table"]');
-		const messageCopy = loomPage.locator('[data-testid="copilot-copy-button"]');
+		const messageCopy = loomPage.locator('[data-testid="chat-copy-button"]');
 		await expect(copyTable).toBeVisible();
 		await expect(messageCopy).toBeVisible();
 		await messageCopy.hover();
@@ -55,15 +55,15 @@ test("a reply's table actions sit under the table and match the message copy but
 			await expect(button).toHaveCSS("margin-bottom", "0px");
 		}
 		await expect(loomPage.locator('[data-streamdown="table-wrapper"]')).toHaveCSS("margin-bottom", "0px");
-		await expect(loomPage.locator('[data-testid="copilot-assistant-toolbar"]')).toHaveCSS("margin-bottom", "0px");
-		const userMessage = loomPage.locator('[data-testid="copilot-user-message"]');
+		await expect(loomPage.locator('[data-testid="chat-assistant-toolbar"]')).toHaveCSS("margin-bottom", "0px");
+		const userMessage = loomPage.locator('[data-testid="chat-user-message"]');
 		await userMessage.hover();
-		const userCopy = userMessage.locator('[data-testid="copilot-user-copy-button"]');
+		const userCopy = userMessage.locator('[data-testid="chat-user-copy-button"]');
 		const userBox = (await userCopy.boundingBox())!;
 		expect([userBox.width, userBox.height]).toEqual([26, 26]);
 		const userIcon = (await userCopy.locator("svg").boundingBox())!;
 		expect([userIcon.width, userIcon.height]).toEqual([14, 14]);
-		await expect(userMessage.locator('[data-testid="copilot-user-toolbar"]')).toHaveCSS("margin-bottom", "0px");
+		await expect(userMessage.locator('[data-testid="chat-user-toolbar"]')).toHaveCSS("margin-bottom", "0px");
 		expect(c.y).toBeGreaterThanOrEqual(t.y + t.height);
 		expect(Math.abs(c.x - t.x)).toBeLessThan(1);
 		expect(d.x).toBeGreaterThan(c.x + c.width - 1);
@@ -87,7 +87,7 @@ test("a reply's table actions sit under the table and match the message copy but
 		// The copy button sits close under the last line of the reply.
 		const gap = await loomPage.evaluate(() => {
 			const done = [...document.querySelectorAll("p")].find((paragraph) => paragraph.textContent === "Done.")!;
-			const button = document.querySelector('[data-testid="copilot-copy-button"]')!;
+			const button = document.querySelector('[data-testid="chat-copy-button"]')!;
 			return button.getBoundingClientRect().top - done.getBoundingClientRect().bottom;
 		});
 		expect(gap).toBeLessThanOrEqual(MAX_GAP_ABOVE_COPY);
@@ -125,10 +125,10 @@ test("reply and reasoning code blocks share readable styling and actions below t
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByText("Done.", { exact: true })).toBeVisible({ timeout: 20_000 });
 
-		const reasoningToggle = loomPage.getByRole("button", { name: /^Thought for / });
+		const reasoningToggle = loomPage.getByRole("button", { name: "Reasoning", exact: true });
 		await expect(reasoningToggle).toHaveAttribute("aria-expanded", "false");
 		await reasoningToggle.click();
-		const messages = [loomPage.getByTestId("copilot-assistant-message"), reasoningToggle.locator("..")];
+		const messages = [loomPage.getByTestId("chat-assistant-message"), reasoningToggle.locator("..")];
 		for (const message of messages) {
 			// Both themes are in the DOM. Only the one that matches the app is shown.
 			await expect(message.locator("[data-code-block]")).toHaveCount(2);

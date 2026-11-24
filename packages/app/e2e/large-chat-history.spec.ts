@@ -63,7 +63,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 		await saveChatEndpoint(page, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`, { contextWindow: 100_000_000 });
 		await page.evaluate((id) => window.loom.setSessionModel(id, { provider: "e2e-chat", modelId: "demo", thinkingLevel: "off" }), session.id);
 		const question = "Ask the same question again";
-		const bubbles = page.getByTestId("copilot-user-message").filter({ hasText: question });
+		const bubbles = page.getByTestId("chat-user-message").filter({ hasText: question });
 		for (let turn = 0; turn < 2; turn++) {
 			await page.getByRole("textbox").fill(question);
 			await page.getByRole("textbox").press("Enter");
@@ -73,7 +73,7 @@ test("large saved tool results do not duplicate user bubbles or interrupt subseq
 			if (turn === 0) {
 				await page.getByRole("button", { name: "New session", exact: true }).click();
 				await expect(page.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
-				await expect(page.getByTestId("copilot-message-list")).toHaveText("");
+				await expect(page.getByTestId("chat-message-list")).toHaveText("");
 				await page.getByRole("tab", { name: "Large history", exact: true }).click();
 				await expect(page.getByText("LARGE_HISTORY_PARTIAL_0", { exact: true })).toBeVisible(historyLoad);
 				await expect(bubbles).toHaveCount(1);

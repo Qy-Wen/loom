@@ -146,8 +146,8 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		await activate("ALPHA"); await send("ALPHA", 3);
 		await activate("BETA"); await send("BETA", 2);
 		await activate("ALPHA");
-		const stop = page.getByTestId("copilot-send-button");
-		await expect(stop.locator("svg.lucide-square")).toBeVisible();
+		const stop = page.getByTestId("chat-send-button");
+		await expect(stop).toHaveAccessibleName("Stop");
 		await stop.click();
 		await expect.poll(async () => (await record("ALPHA")).messages.filter((row) => row.role === "assistant").at(-1)?.stopReason).toBe("aborted");
 		await expect.poll(() => held.find((entry) => entry.lane === "ALPHA" && entry.turn === 3)!.response.destroyed).toBe(true);
