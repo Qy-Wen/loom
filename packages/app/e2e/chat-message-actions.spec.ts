@@ -4,12 +4,13 @@ import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 const REPLY = "Here is a table:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nDone.";
 const CODE_FENCE = `\`\`\`ts\nconst answer = 42;\nconst longLine = "${"a".repeat(160)}";\n\`\`\``;
-const CODE_REPLY = `Here is code:\n\n${CODE_FENCE}\n\nDone.`;
+const CODE_REPLY = `Here is code for \`pi.compaction\`:\n\n${CODE_FENCE}\n\nDone.`;
 /** The text above the copy button leaves a small gap, not the typography's 20px bottom margin. */
 const MAX_GAP_ABOVE_COPY = 8;
 
 test("a reply's table actions sit under the table and match the message copy button", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+	await loomPage.emulateMedia({ colorScheme: "light" });
 	const server = createServer((request, response) => {
 		request.resume();
 		request.on("end", () => {
@@ -57,6 +58,8 @@ test("a reply's table actions sit under the table and match the message copy but
 		await expect(loomPage.locator('[data-streamdown="table-wrapper"]')).toHaveCSS("margin-bottom", "0px");
 		await expect(loomPage.locator('[data-testid="chat-assistant-toolbar"]')).toHaveCSS("margin-bottom", "0px");
 		const userMessage = loomPage.locator('[data-testid="chat-user-message"]');
+		const userBubble = userMessage.locator(".session-user-bubble");
+		await expect(userBubble).toHaveCSS("background-color", "rgb(247, 247, 245)");
 		await userMessage.hover();
 		const userCopy = userMessage.locator('[data-testid="chat-user-copy-button"]');
 		const userBox = (await userCopy.boundingBox())!;
@@ -95,6 +98,9 @@ test("a reply's table actions sit under the table and match the message copy but
 		// The message copy button's hover background is not clipped on the left.
 		const clipLeft = await loomPage.evaluate(() => document.querySelector(".session-chat-scroll")!.getBoundingClientRect().left);
 		expect(m.x).toBeGreaterThanOrEqual(clipLeft - 0.5);
+
+		await loomPage.emulateMedia({ colorScheme: "dark" });
+		await expect(userBubble).toHaveCSS("background-color", "rgb(53, 53, 51)");
 	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
@@ -124,10 +130,14 @@ test("reply and reasoning code blocks share readable styling and actions below t
 		await loomPage.getByRole("textbox").fill("some code please");
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByText("Done.", { exact: true })).toBeVisible({ timeout: 20_000 });
+		const inlineCode = loomPage.locator('[data-streamdown="inline-code"]').filter({ hasText: /^pi\.compaction$/ });
+		await expect(inlineCode).toHaveCSS("background-color", "rgb(240, 240, 237)");
 
 		const reasoningToggle = loomPage.getByRole("button", { name: "Reasoning", exact: true });
 		await expect(reasoningToggle).toHaveAttribute("aria-expanded", "false");
 		await reasoningToggle.click();
+		const reasoningText = loomPage.getByText("Considering this code:", { exact: true });
+		await expect(reasoningText).toHaveCSS("color", "rgb(99, 102, 107)");
 		const messages = [loomPage.getByTestId("chat-assistant-message"), reasoningToggle.locator("..")];
 		for (const message of messages) {
 			// Both themes are in the DOM. Only the one that matches the app is shown.
@@ -161,6 +171,8 @@ test("reply and reasoning code blocks share readable styling and actions below t
 
 		await loomPage.emulateMedia({ colorScheme: "dark" });
 		await expect(loomPage.locator("html")).toHaveAttribute("data-theme", "dark");
+		await expect(inlineCode).toHaveCSS("background-color", "rgb(53, 53, 51)");
+		await expect(reasoningText).toHaveCSS("color", "rgb(163, 163, 159)");
 		for (const message of messages) {
 			const block = message.locator("[data-code-block]:visible");
 			await expect(block).toHaveCount(1);

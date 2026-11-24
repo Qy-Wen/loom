@@ -184,7 +184,9 @@
 	--lm-channel-g: #2f8f4e;
 	--lm-channel-b: #2f62b5;
 
-	/* Shared hover surface for chat and Markdown actions. */
+	/* Chat surfaces */
+	--lm-chat-user-bubble: var(--lm-surface-subtle);
+	--lm-chat-inline-code: var(--lm-surface-sunken);
 	--lm-chat-action-hover: #e8e8e8;
 
 	/* Audio cover art */
@@ -362,6 +364,8 @@
 		--lm-channel-r: #e0645b;
 		--lm-channel-g: #4fbf72;
 		--lm-channel-b: #5b8fe0;
+		--lm-chat-user-bubble: var(--lm-palette-night-6);
+		--lm-chat-inline-code: var(--lm-palette-night-6);
 		--lm-chat-action-hover: #303030;
 		--lm-syntax-key: #d79ddf;
 		--lm-syntax-boolean: #e0a0d0;
