@@ -4,7 +4,15 @@
 
 ## [Unreleased]
 
+## [v0.1.10]
+
 - Delete individual cloud library copies from Settings while keeping local files.
+- Paste files into the library faster. A file that only disappears for a moment stays until the library confirms it is gone.
+- Click below a Markdown table at the end of a note and keep typing.
+- On Windows, cloud backup compares file contents when only the creation time changes, so a timestamp change alone is not treated as an edit.
+- Pulling a cloud backup refreshes search data for files overwritten while the local library database is kept.
+- Chat messages use clearer type and stronger contrast in dark mode.
+- The main window opens wider.
 
 ## [v0.1.9]
 
