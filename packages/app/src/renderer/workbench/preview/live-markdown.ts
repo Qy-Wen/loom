@@ -800,7 +800,10 @@ const selectAfterLastTable = EditorView.mouseSelectionStyle.of((view, event) => 
 });
 
 const pressAfterLastTable = ViewPlugin.fromClass(class {
-	constructor(readonly view: EditorView) {
+	readonly view: EditorView;
+
+	constructor(view: EditorView) {
+		this.view = view;
 		// CodeMirror only starts mouse selections inside the editable content.
 		view.scrollDOM.addEventListener("mousedown", this.press);
 	}
