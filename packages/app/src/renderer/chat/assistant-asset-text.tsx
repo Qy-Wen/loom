@@ -1,23 +1,20 @@
-import { Markdown, type MarkdownLinkProps } from "@loom/ag-ui-react/markdown";
-import "@loom/ag-ui-react/markdown.css";
+import type { ChatMarkdownOptions } from "@loom/ag-ui-react/chat-view";
+import type { MarkdownLinkProps } from "@loom/ag-ui-react/markdown";
 import { useMemo } from "react";
 import { prepareAssistantContent } from "../../shared/assistant-asset-refs.ts";
 import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 
-/** Assistant markdown. An `<asset_ref>` block links by asset id, then by path. */
-export function AssistantMarkdown({ content }: { content: string }) {
+/** An `<asset_ref>` block links by asset id, then by path. */
+export function useAssistantAssetMarkdown(): ChatMarkdownOptions {
 	const library = useLibraryAssets();
 	const folders = useLibraryFolders();
-	const { markdown, rawTail } = useMemo(
-		() => prepareAssistantContent(content, library, folders),
-		[content, library, folders],
-	);
-	return (
-		<>
-			{markdown && <Markdown content={markdown} className="chat-markdown" linkComponent={AssistantAssetLink} />}
-			{rawTail ? <span className="assistant-asset-raw">{rawTail}</span> : null}
-		</>
-	);
+	return useMemo(() => ({
+		linkComponent: AssistantAssetLink,
+		prepareContent(content: string) {
+			const { markdown, rawTail } = prepareAssistantContent(content, library, folders);
+			return { markdown, trailing: rawTail ? <span className="assistant-asset-raw">{rawTail}</span> : null };
+		},
+	}), [library, folders]);
 }
 
 function AssistantAssetLink({ href, children }: MarkdownLinkProps) {

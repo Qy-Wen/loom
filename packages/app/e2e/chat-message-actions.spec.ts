@@ -58,7 +58,7 @@ test("a reply's table actions sit under the table and match the message copy but
 		await expect(loomPage.locator('[data-streamdown="table-wrapper"]')).toHaveCSS("margin-bottom", "0px");
 		await expect(loomPage.locator('[data-testid="chat-assistant-toolbar"]')).toHaveCSS("margin-bottom", "0px");
 		const userMessage = loomPage.locator('[data-testid="chat-user-message"]');
-		const userBubble = userMessage.locator(".session-user-bubble");
+		const userBubble = userMessage.locator(".agui-chat-bubble");
 		await expect(userBubble).toHaveCSS("background-color", "rgb(247, 247, 245)");
 		await userMessage.hover();
 		const userCopy = userMessage.locator('[data-testid="chat-user-copy-button"]');
@@ -96,7 +96,7 @@ test("a reply's table actions sit under the table and match the message copy but
 		expect(gap).toBeLessThanOrEqual(MAX_GAP_ABOVE_COPY);
 
 		// The message copy button's hover background is not clipped on the left.
-		const clipLeft = await loomPage.evaluate(() => document.querySelector(".session-chat-scroll")!.getBoundingClientRect().left);
+		const clipLeft = await loomPage.evaluate(() => document.querySelector(".agui-chat-viewport")!.getBoundingClientRect().left);
 		expect(m.x).toBeGreaterThanOrEqual(clipLeft - 0.5);
 
 		await loomPage.emulateMedia({ colorScheme: "dark" });

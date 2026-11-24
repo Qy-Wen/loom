@@ -7,3 +7,116 @@
 .agui-composer label { grid-column: 1 / -1; }
 .agui-composer textarea { resize: vertical; font: inherit; }
 .agui-composer button { min-height: 2rem; font: inherit; }
+
+.agui-chat-view {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1;
+	min-block-size: 0;
+	max-block-size: 100%;
+}
+
+.agui-chat-viewport {
+	flex: 1;
+	min-block-size: 0;
+	padding-inline-end: var(--agui-chat-scroll-inset, 0px);
+	overflow-x: hidden;
+	overflow-y: auto;
+	overflow-anchor: none;
+}
+
+.agui-chat-jump {
+	position: absolute;
+	inset-inline: 0 var(--agui-chat-scroll-inset, 0px);
+	inset-block-end: 0.625rem;
+	margin-inline: auto;
+	inline-size: max-content;
+	min-block-size: 1.75rem;
+	z-index: var(--agui-chat-overlay-layer, 2);
+	padding: 0 0.625rem;
+	border: 1px solid var(--agui-chat-border, GrayText);
+	border-radius: 999px;
+	background: var(--agui-chat-jump-background, Canvas);
+	color: var(--agui-chat-jump-color, CanvasText);
+	font: inherit;
+	font-size: var(--agui-chat-jump-font-size, 0.75rem);
+	line-height: 2;
+	cursor: pointer;
+	box-shadow: var(--agui-chat-jump-shadow, none);
+}
+
+.agui-chat-jump:hover { background: var(--agui-chat-jump-hover, ButtonFace); }
+.agui-chat-transcript { padding-block-end: 0.75rem; }
+.agui-chat-transcript > .agui-messages > li { inline-size: 100%; }
+.agui-chat-transcript > .agui-messages > li:empty { display: none; }
+.agui-chat-user { display: flex; flex-direction: column; align-items: flex-end; margin-block-start: 1rem; }
+
+.agui-chat-bubble {
+	display: inline-block;
+	max-inline-size: 80%;
+	padding: 0.5rem 0.875rem;
+	border-radius: var(--agui-chat-bubble-radius, 1.25rem);
+	background: var(--agui-chat-bubble-background, ButtonFace);
+	cursor: text;
+	user-select: text;
+	-webkit-user-select: text;
+}
+
+.agui-chat-assistant > .agui-chat-toolbar { margin-block-start: 0.25rem; }
+.agui-chat-toolbar { display: flex; align-items: center; gap: 0.25rem; }
+.agui-chat-toolbar button {
+	display: inline-grid;
+	place-items: center;
+	min-inline-size: var(--agui-chat-action-size, 26px);
+	min-block-size: var(--agui-chat-action-size, 26px);
+	margin: 0;
+	padding: 0;
+	border: 0;
+	border-radius: var(--agui-chat-action-radius, 5px);
+	background: transparent;
+	color: var(--agui-chat-action-color, ButtonText);
+	cursor: pointer;
+}
+
+.agui-chat-toolbar button svg {
+	inline-size: var(--agui-chat-action-icon-size, 14px);
+	block-size: var(--agui-chat-action-icon-size, 14px);
+}
+
+.agui-chat-toolbar button:is(:hover, :focus-visible) { background: var(--agui-chat-action-hover, ButtonFace); }
+@media (hover: hover) {
+	.agui-chat-user:not(:hover):not(:focus-within) .agui-chat-toolbar { opacity: 0; }
+}
+
+.agui-chat-reasoning { color: var(--agui-chat-muted, GrayText); }
+.agui-chat-reasoning > button {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.375rem;
+	padding: 0.25rem 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	font: inherit;
+	cursor: pointer;
+}
+
+.agui-chat-reasoning > button[aria-expanded="true"] span { transform: rotate(90deg); }
+.agui-chat-view :is(.agui-chat-jump, .agui-chat-toolbar button, .agui-chat-reasoning > button):focus-visible {
+	outline: 2px solid var(--agui-chat-focus, Highlight);
+	outline-offset: -2px;
+}
+
+.agui-chat-working { padding-block: 0.75rem; }
+.agui-chat-working span {
+	display: block;
+	inline-size: 8px;
+	block-size: 8px;
+	border-radius: 50%;
+	background: var(--agui-chat-muted, GrayText);
+}
+@media (prefers-reduced-motion: no-preference) {
+	.agui-chat-working span { animation: agui-chat-working 1.2s ease-in-out infinite alternate; }
+}
+@keyframes agui-chat-working { to { opacity: 0.35; } }

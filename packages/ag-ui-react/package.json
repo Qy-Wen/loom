@@ -12,6 +12,11 @@
       "import": "./dist/index.js"
     },
     "./styles.css": "./src/styles.css",
+    "./chat-view": {
+      "loom-source": "./src/chat-view.tsx",
+      "types": "./dist/chat-view.d.ts",
+      "import": "./dist/chat-view.js"
+    },
     "./markdown": {
       "loom-source": "./src/markdown.tsx",
       "types": "./dist/markdown.d.ts",

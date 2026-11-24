@@ -20,6 +20,20 @@ AG-UI parses and applies protocol events. The host app supplies authentication, 
 
 For a custom transcript, spread `scrollerProps` from `useChatScroll()` onto a scrollable `<div>` with `overflow-y: auto` and `overflow-anchor: none`. Use `showJumpToLatest` to show a jump button and `scrollToBottom` to resume following the transcript.
 
+## ChatView
+
+Use the controlled message area when the host supplies messages and manages its own composer. Install `streamdown@1.3.0` for the Markdown-backed view.
+
+```tsx
+import { ChatView } from "@loom/ag-ui-react/chat-view";
+import "@loom/ag-ui-react/styles.css";
+import "@loom/ag-ui-react/markdown.css";
+
+<ChatView messages={messages} isRunning={isRunning} threadId={threadId} />
+```
+
+Pass `slots` for custom Markdown links, message content or actions, tool calls, and activity. User and assistant slots can also replace a row with an editor or error. Theme the view with `--agui-chat-*` and `--agui-md-*` CSS properties.
+
 ## Markdown
 
 To render streaming Markdown with tables and highlighted code, install `streamdown@1.3.0` and use the Markdown entry with a bundler that supports CSS imports.

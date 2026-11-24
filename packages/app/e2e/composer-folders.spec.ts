@@ -53,12 +53,12 @@ for (const mode of ["List", "Icons"] as const) {
 			expect(sent).toContain("资料/nested");
 			expect(sent).not.toContain("private-note.md");
 			expect(sent).not.toContain("FOLDER_CONTENT_SHOULD_NOT_BE_ATTACHED");
-			await expect(page.locator(".session-user-bubble .session-asset-chip")).toHaveCount(1);
+			await expect(page.locator(".agui-chat-bubble .session-asset-chip")).toHaveCount(1);
 			await expect(page.locator(".folder-ref")).toHaveText("资料/nested");
 			await page.reload();
 			await expect(page.locator(".folder-ref")).toBeVisible();
 			// Both a user chip and an assistant link reveal and unfold the folder in the current mode.
-			for (const link of [page.locator(".session-user-bubble .asset-ref"), page.locator(".folder-ref")]) {
+			for (const link of [page.locator(".agui-chat-bubble .asset-ref"), page.locator(".folder-ref")]) {
 				const collapse = row("资料").getByRole("button", { name: "Collapse folder" });
 				if (await collapse.count()) await collapse.click();
 				await link.click();

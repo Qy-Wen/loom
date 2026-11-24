@@ -25,7 +25,7 @@ test("streaming chat follows the bottom, pauses while reading, and resumes from 
 		await composer.fill("Write a long answer");
 		await composer.press("Enter");
 
-		const scroller = loomPage.locator(".session-chat-scroll");
+		const scroller = loomPage.locator(".agui-chat-viewport");
 		const reply = loomPage.getByTestId("chat-assistant-message");
 		const latest = loomPage.getByRole("button", { name: "Latest", exact: true });
 		const distanceFromBottom = () => scroller.evaluate((element) => element.scrollHeight - element.scrollTop - element.clientHeight);

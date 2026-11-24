@@ -4,8 +4,7 @@ import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomSessio
 import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
 import { useLocale } from "../locale.tsx";
 import { ChatSessionContext, ChatViewContext, useChatSession, type BranchActions, type DraftRequest, type PendingEdit } from "./chat-context.ts";
-import { SessionScrollView } from "./chat-scroll.tsx";
-import { SessionMessageView } from "./chat-messages.tsx";
+import { SessionTranscript } from "./session-transcript.tsx";
 import { FollowUpInput } from "./chat-composer.tsx";
 import { useChatStream } from "./use-chat-stream.ts";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
@@ -125,9 +124,7 @@ export function SessionChat({
 		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError: stream.error, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<ChatViewContext.Provider value={{ messages: visible, connecting: stream.connecting, threadReady: !stream.connecting }}>
 				<div className="session-chat-shell">
-					<SessionScrollView>
-						<SessionMessageView messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} />
-					</SessionScrollView>
+					<SessionTranscript messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} />
 					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} />
 				</div>
 			</ChatViewContext.Provider>

@@ -58,7 +58,7 @@ for (const nativeMaximize of [false, true]) test(`chat stays aligned after ${nat
 		const window = await electronApp!.browserWindow(page);
 		const geometry = () => page.evaluate(() => {
 			const chat = document.querySelector<HTMLElement>(".agent-chat")!;
-			const scroll = document.querySelector<HTMLElement>(".session-chat-scroll")!;
+			const scroll = document.querySelector<HTMLElement>(".agui-chat-viewport")!;
 			const messages = document.querySelector<HTMLElement>('[data-testid="chat-message-list"]')!;
 			const composer = document.querySelector<HTMLElement>('[data-testid="chat-composer"]')!;
 			const bounds = (element: HTMLElement) => { const { x, width } = element.getBoundingClientRect(); return { x, width }; };
