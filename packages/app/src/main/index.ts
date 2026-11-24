@@ -46,7 +46,7 @@ import { composerAssetsAtSend, takeComposerAssets } from "./composer/composer-as
 import { composerAssetsFromPickedFiles, draftsFromAssets } from "./composer/composer-library-pick.ts";
 import { stageComposerInput, takeComposerImages } from "./composer/composer-images.ts";
 import { importComposerFiles } from "./composer/composer-import.ts";
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from "electron";
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, protocol, screen, shell, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from "electron";
 import { applyAppIcon, loadAppIcon } from "./desktop/app-icon.ts";
 import { publishDevTrace, publishDevTraceLanguage, registerDevTraceIpc } from "./dev-trace-window.ts";
 import { clearLibraryClipboard, clipboardHasFiles, readFileClipboard, readLibraryClipboard, writeLibraryClipboard } from "./desktop/file-clipboard.ts";
@@ -429,9 +429,10 @@ function createWindow(): void {
 	const windowsPreview = mac && !app.isPackaged && Boolean(process.env.ELECTRON_RENDERER_URL)
 		&& process.env.VITE_LOOM_WINDOWS_PREVIEW === "1";
 	const colors = windowColors();
+	const workArea = screen.getPrimaryDisplay().workAreaSize;
 	const win = new BrowserWindow({
-		width: 1200,
-		height: 800,
+		width: Math.min(1380, workArea.width),
+		height: Math.min(800, workArea.height),
 		minWidth: 860,
 		minHeight: 600,
 		icon: loadAppIcon(),
