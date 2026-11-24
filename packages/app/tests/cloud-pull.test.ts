@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { createHash, randomUUID } from "node:crypto";
-import { cp, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, writeFile } from "node:fs/promises";
+import { cp, lstat, mkdir, mkdtemp, readFile, readdir, realpath, rename, rm, symlink, utimes, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { test } from "node:test";
@@ -108,6 +108,49 @@ for (const failure of ["checksum", "source edit", "cloud revision", "cancel", "l
 		assert.equal(await readFile(join(f.local, "remote.txt"), "utf8"), "base"); assert.equal(await readFile(join(f.local, ".loom/metadata-db/database"), "utf8"), "base db"); assert.ok(!(await readdir(f.parent)).some((name) => name.startsWith(".loom-pull-")));
 	} finally { await f.close(); }
 });
+
+for (const change of ["timestamps", "previewed file contents", "private file contents"] as const) {
+	test(`Windows pull checks ${change} when only ctime differs`, { skip: process.platform !== "win32" }, async () => {
+		const f = await setup();
+		try {
+			const tracked = join(f.local, "remote.txt");
+			const privateFile = join(f.local, ".loom/agents/command-allows/private.json");
+			const mtime = new Date("2024-01-01T00:00:00Z");
+			for (const path of [tracked, privateFile]) await utimes(path, mtime, mtime);
+			await put(f.remote, "remote.txt", "remote edit");
+			await f.publish();
+			const { snapshot, plan } = await f.preview();
+			const changeFile = async (path: string, contents?: string) => {
+				const before = await lstat(path);
+				if (contents !== undefined) await writeFile(path, contents);
+				await utimes(path, new Date("2024-01-02T00:00:00Z"), mtime);
+				const after = await lstat(path);
+				assert.equal(after.size, before.size);
+				assert.equal(after.mtimeMs, before.mtimeMs);
+				assert.equal(after.ino, before.ino);
+				assert.notEqual(after.ctimeMs, before.ctimeMs);
+			};
+			if (change !== "private file contents") await changeFile(tracked, change === "previewed file contents" ? "edit" : undefined);
+			const download = f.store.download.bind(f.store);
+			f.store.download = async (...args) => {
+				await download(...args);
+				if (args[0] === `${mirrorRoot(snapshot.libraryId)}remote.txt`) {
+					await changeFile(privateFile, change === "private file contents" ? "other permissions" : undefined);
+				}
+			};
+			const result = installPull(snapshot, plan, {}, f.store, signal(), () => {});
+			if (change === "timestamps") {
+				await (await result)!.finish();
+				assert.equal(await readFile(tracked, "utf8"), "remote edit");
+				assert.equal(await readFile(privateFile, "utf8"), "local permissions");
+			} else {
+				await assert.rejects(result, /Local files changed/);
+				assert.equal(await readFile(tracked, "utf8"), change === "previewed file contents" ? "edit" : "base");
+				assert.equal(await readFile(privateFile, "utf8"), change === "private file contents" ? "other permissions" : "local permissions");
+			}
+		} finally { await f.close(); }
+	});
+}
 
 test("rollback and crash recovery preserve original databases and retain an installed tree", async () => {
 	for (const gap of [false, true]) {

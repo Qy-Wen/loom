@@ -7,8 +7,8 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { isAssetTemporaryFile } from "@loom/core/paths";
 import type { CloudJob } from "../../shared/cloud-backup.ts";
-type Fingerprint = { size: number; mtimeMs: number; ctimeMs: number; ino: number; dev: number };
-type SourceFile = Fingerprint & { path: string; source: string; original?: Fingerprint };
+export type FileStamp = { size: number; mtimeMs: number; ctimeMs: number; ino: number; dev: number };
+type SourceFile = FileStamp & { path: string; source: string; original?: FileStamp; hash?: string };
 export type Snapshot = { root: string; sourceRoot: string; temporary: string; libraryId: string; directories: string[]; files: SourceFile[] };
 export type Progress = (patch: Partial<CloudJob>) => void;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
@@ -23,8 +23,13 @@ export function included(path: string): boolean {
 export function trackedBackupPath(path: string): boolean {
 	return included(path) && !(path.startsWith(".loom/") && (path.endsWith("-shm") || path.endsWith(".lock")));
 }
-function fingerprint(value: Fingerprint): Fingerprint { return { size: value.size, mtimeMs: value.mtimeMs, ctimeMs: value.ctimeMs, ino: value.ino, dev: value.dev }; }
-function same(a: Fingerprint, b: Fingerprint): boolean { return Object.keys(fingerprint(a)).every((key) => a[key as keyof Fingerprint] === b[key as keyof Fingerprint]); }
+function fingerprint(value: FileStamp): FileStamp { return { size: value.size, mtimeMs: value.mtimeMs, ctimeMs: value.ctimeMs, ino: value.ino, dev: value.dev }; }
+
+/** On Windows, ctime alone is ambiguous. Callers verify the bytes when they have a content baseline. */
+export function sameFileVersion(a: FileStamp, b: FileStamp): boolean {
+	return a.size === b.size && a.mtimeMs === b.mtimeMs && a.ino === b.ino && a.dev === b.dev
+		&& (a.ctimeMs === b.ctimeMs || process.platform === "win32");
+}
 export function validateRelativePath(path: string, windows = process.platform === "win32"): void {
 	if (typeof path !== "string" || !path || path.length > 4096 || /[\\\x00-\x1f]/.test(path) || path.startsWith("/") || path.split("/").some((part) => !part || part === "." || part === "..") || /^[a-z]:/i.test(path)) throw new Error("Unsafe path in backup");
 	if (windows && path.split("/").some((part) => /[<>:"|?*]|[. ]$/.test(part) || /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(part))) throw new Error(`File name is incompatible with Windows: ${path}`);
@@ -76,10 +81,19 @@ export async function captureSnapshot(root: string, signal: AbortSignal): Promis
 					const staged = join(temporary, "metadata", path);
 					await mkdir(dirname(staged), { recursive: true });
 					await copyFile(source, staged);
-					if (!same(stat, await lstat(source))) throw new Error(`Metadata changed during backup. Retry: ${path}`);
+					const after = await lstat(source);
+					if (!after.isFile() || !sameFileVersion(stat, after)) throw new Error(`Metadata changed during backup. Retry: ${path}`);
+					let hash: string | undefined;
+					if (stat.ctimeMs !== after.ctimeMs) {
+						const stagedContents = await hashFile(staged, signal, stat.size);
+						if (stagedContents.size !== stat.size || !await matchesFileHash(source, after, stagedContents.hash, signal)) {
+							throw new Error(`Metadata changed during backup. Retry: ${path}`);
+						}
+						hash = stagedContents.hash;
+					}
 					await utimes(staged, stat.atime, stat.mtime);
 					const copied = await lstat(staged);
-					files.push({ path, source: staged, ...fingerprint(copied), original: fingerprint(stat) });
+					files.push({ path, source: staged, ...fingerprint(copied), original: fingerprint(after), hash });
 				} else files.push({ path, source, ...fingerprint(stat) });
 			}
 		}
@@ -97,13 +111,46 @@ export async function hashFile(file: string, signal: AbortSignal, maximumBytes =
 	}
 	return { hash: hash.digest("hex"), size };
 }
+
+export async function matchesFileHash(path: string, expected: FileStamp, hash: string, signal: AbortSignal): Promise<boolean> {
+	let before = await lstat(path);
+	if (!before.isFile() || !sameFileVersion(expected, before)) return false;
+	for (let attempt = 0; attempt < 2; attempt++) {
+		const contents = await hashFile(path, signal, expected.size);
+		const after = await lstat(path);
+		if (!after.isFile() || !sameFileVersion(before, after) || contents.size !== expected.size || contents.hash !== hash) return false;
+		if (before.ctimeMs === after.ctimeMs) return true;
+		before = after;
+	}
+	return false;
+}
+
+async function recordRead(file: SourceFile, before: FileStamp, contents: { hash: string; size: number }, signal: AbortSignal): Promise<boolean> {
+	const after = await lstat(file.source);
+	if (!after.isFile() || !sameFileVersion(file, after) || contents.size !== file.size) return false;
+	if (file.hash !== undefined && file.hash !== contents.hash) return false;
+	// A metadata change during the read is ambiguous. Confirm the hash with a fresh, stable read.
+	if (before.ctimeMs !== after.ctimeMs && !await matchesFileHash(file.source, after, contents.hash, signal)) return false;
+	file.hash = contents.hash;
+	return true;
+}
+
 export async function hashSnapshotFile(file: Snapshot["files"][number], signal: AbortSignal): Promise<{ hash: string; size: number }> {
 	const before = await lstat(file.source);
-	if (!before.isFile() || !same(file, before)) throw new Error(`File changed during preview. Retry: ${file.path}`);
+	if (!before.isFile() || !sameFileVersion(file, before)) throw new Error(`File changed during preview. Retry: ${file.path}`);
 	const result = await hashFile(file.source, signal, file.size);
-	if (result.size !== file.size || !same(file, await lstat(file.source))) throw new Error(`File changed during preview. Retry: ${file.path}`);
+	if (!await recordRead(file, before, result, signal)) throw new Error(`File changed during preview. Retry: ${file.path}`);
 	return result;
 }
+
+/** Return a fresh stamp for the live source when it still matches the captured file. */
+export async function unchangedSourceStamp(file: SourceFile, source: string, signal: AbortSignal): Promise<FileStamp | undefined> {
+	const stat = await lstat(source), expected = file.original ?? file;
+	if (!stat.isFile() || !sameFileVersion(expected, stat)) return undefined;
+	if (expected.ctimeMs !== stat.ctimeMs && (file.hash === undefined || !await matchesFileHash(source, expected, file.hash, signal))) return undefined;
+	return fingerprint(stat);
+}
+
 /** Metadata is an immutable capture; check the still-live original files and directory inventory. */
 export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: AbortSignal, includeMetadata = false): Promise<boolean> {
 	const files = new Map(snapshot.files.filter((file) => includeMetadata || !file.path.startsWith(".loom/")).map((file) => [file.path, file]));
@@ -115,7 +162,11 @@ export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: Abort
 			if ((!includeMetadata && path === ".loom") || !included(path)) continue;
 			if (entry.isSymbolicLink()) return false;
 			if (entry.isDirectory()) { if (!directories.delete(path) || !await walk(path)) return false; }
-			else if (trackedBackupPath(path)) { const file = files.get(path); if (!file || !same(includeMetadata ? file.original ?? file : file, await lstat(join(snapshot.root, path)))) return false; files.delete(path); }
+			else if (trackedBackupPath(path)) {
+				const file = files.get(path);
+				if (!file || !await unchangedSourceStamp(file, join(snapshot.root, path), signal)) return false;
+				files.delete(path);
+			}
 		}
 		return true;
 	}
@@ -126,15 +177,16 @@ export async function snapshotSourcesUnchanged(snapshot: Snapshot, signal: Abort
 export async function stageSnapshotFile(file: Snapshot["files"][number], target: string, signal: AbortSignal): Promise<{ path: string; size: number; mtimeMs: number; hash: string }> {
 	signal.throwIfAborted();
 	const stat = await lstat(file.source);
-	if (!stat.isFile() || !same(file, stat)) throw new Error(`File changed during backup. Retry: ${file.path}`);
+	if (!stat.isFile() || !sameFileVersion(file, stat)) throw new Error(`File changed during backup. Retry: ${file.path}`);
 	const hash = createHash("sha256"); let size = 0;
 	await pipeline(createReadStream(file.source), new Transform({ transform(chunk, _encoding, callback) {
 		size += chunk.length;
 		if (size > file.size) { callback(new Error(`File changed during backup. Retry: ${file.path}`)); return; }
 		hash.update(chunk); callback(null, chunk);
 	} }), createWriteStream(target, { mode: 0o600 }), { signal });
-	if (size !== file.size || !same(file, await lstat(file.source))) throw new Error(`File changed during backup. Retry: ${file.path}`);
-	return { path: file.path, size, mtimeMs: file.mtimeMs, hash: hash.digest("hex") };
+	const contents = { size, hash: hash.digest("hex") };
+	if (!await recordRead(file, stat, contents, signal)) throw new Error(`File changed during backup. Retry: ${file.path}`);
+	return { path: file.path, mtimeMs: file.mtimeMs, ...contents };
 }
 
 /** Conversation working directories are persisted as absolute paths. Map descendants across OSes. */

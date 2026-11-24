@@ -152,6 +152,9 @@ test("COS settings, latest cloud copy, interrupted retry, deletion and restore w
 	// A snapshot error must reopen both databases and leave the current library usable.
 	const identity = join(restored, ".loom/backup/identity.json");
 	const originalIdentity = await readFile(identity);
+	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).localLibrary).toMatchObject({
+		rootPath: restored, libraryId: JSON.parse(originalIdentity.toString()).id,
+	});
 	await writeFile(identity, '{"id":"invalid"}');
 	await settings.getByRole("button", { name: "Update cloud copy", exact: true }).click();
 	await expect.poll(async () => (await page.evaluate(() => window.loom.getCloudBackup())).job?.status).toBe("failed");

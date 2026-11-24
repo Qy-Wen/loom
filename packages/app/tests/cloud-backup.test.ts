@@ -72,6 +72,7 @@ test("preview is read-only and detects content changes, deletions, empty folders
 
 test("local status survives restart, separates libraries and destinations, and keeps edits during upload pending", async () => {
 	const first = await workspace(), second = await workspace(), parent = await mkdtemp(join(tmpdir(), "loom-cloud-state-"));
+	const note = join(first, "notes/one.md"), noteMtime = new Date("2024-01-01T00:00:00Z");
 	const settings = new CloudConfigStore(join(parent, "settings.json"), testChatCipher());
 	const config = { provider: "cos" as const, bucket: "loom-1250000000", region: "ap-shanghai", credentials: { secretId: "id", secretKey: "key" } };
 	await settings.save(config);
@@ -85,6 +86,7 @@ test("local status survives restart, separates libraries and destinations, and k
 	}
 	async function run(operation: "backup" | "preview") { await controller.start(operation); await waitUntil(async () => (await controller.view()).job?.status !== "running"); const view = await controller.view(); assert.equal(view.job?.status, "completed", view.job?.error); return view.localLibrary!; }
 	try {
+		if (process.platform === "win32") await utimes(note, noteMtime, noteMtime);
 		await controller.openLibrary(first); assert.equal((await controller.view()).localLibrary?.status, "never");
 		assert.ok((await run("preview")).preview!.changes.length > 0); assert.equal(store.uploads.length, 0);
 		const backedUp = await run("backup"); assert.ok(backedUp.lastBackupAt);
@@ -94,9 +96,10 @@ test("local status survives restart, separates libraries and destinations, and k
 		assert.equal((await controller.view()).localLibrary?.status, "unchecked", "matching stat attributes alone do not prove content equality");
 		assert.equal((await run("preview")).preview!.changes.length, 0);
 		assert.equal((await controller.view()).localLibrary?.status, "current");
+		if (process.platform === "win32") await utimes(note, new Date("2024-01-02T00:00:00Z"), noteMtime);
 		await put(first, ".loom/thumbnails/a.webp", "new cache");
 		await new Promise((resolve) => setTimeout(resolve, 100));
-		assert.equal((await controller.view()).localLibrary?.status, "current", "cache edits do not invalidate backups");
+		assert.equal((await controller.view()).localLibrary?.status, "current", "cache and timestamp changes keep the verified copy current");
 		await put(first, ".loom/agents/memory/MEMORY.md", "new memory");
 		await waitUntil(async () => (await controller.view()).localLibrary?.preview?.stale === true);
 		assert.equal((await controller.view()).localLibrary?.status, "changed", "persistent metadata is watched too");

@@ -6,7 +6,7 @@ import type { CloudLibrary, CloudBackupView, CloudConfigDraft, CloudJob, CloudPr
 import type { CloudConfigStore } from "./config.ts";
 import type { ObjectStoreFactory } from "./providers.ts";
 import type { ObjectStore } from "./object-store.ts";
-import { snapshotSourcesUnchanged, type Snapshot } from "./snapshot.ts";
+import type { Snapshot } from "./snapshot.ts";
 import { deleteMirror, listCloudLibraries, restoreMirror, updateMirror, type MirrorManifest } from "./mirror.ts";
 import { previewMirror } from "./preview.ts";
 import { LocalBackupState } from "./local-state.ts";
@@ -88,16 +88,20 @@ export class CloudBackupController {
 						if (operation === "preview") {
 							try {
 								const { preview, baseline } = await previewMirror(snapshot, store, abort.signal, progress);
-								if (!await snapshotSourcesUnchanged(snapshot, abort.signal) && this.#local?.view()?.rootPath === snapshot.root) this.#local.invalidate();
-								await this.#local?.preview(snapshot, preview, baseline, generation, config.config);
+								if (this.#local) {
+									const verified = await this.#local.verifySources(snapshot, generation, abort.signal);
+									await this.#local.preview(snapshot, preview, baseline, verified, config.config);
+								}
 							} finally { await rm(snapshot.temporary, { recursive: true, force: true, maxRetries: 3 }); }
 						} else {
 							let manifest: MirrorManifest | undefined;
 							await updateMirror(snapshot, store, hostname(), abort.signal, progress, (next) => {
 								this.#libraries = [next, ...this.#libraries.filter((item) => item.libraryId !== next.libraryId)]; publish(true);
 							}, (next) => { manifest = next; }, { resumeFile: this.#progressDirectory ? uploadJournalPath(this.#progressDirectory, config.config, snapshot.libraryId) : undefined });
-							if (!await snapshotSourcesUnchanged(snapshot, abort.signal) && this.#local?.view()?.rootPath === snapshot.root) this.#local.invalidate();
-							await this.#local?.backedUp(snapshot, manifest!, generation, config.config);
+							if (this.#local) {
+								const verified = await this.#local.verifySources(snapshot, generation, abort.signal);
+								await this.#local.backedUp(snapshot, manifest!, verified, config.config);
+							}
 							await this.#baselines?.save(config.config, manifest!, snapshot.root);
 						}
 					} else if (operation === "pull") {

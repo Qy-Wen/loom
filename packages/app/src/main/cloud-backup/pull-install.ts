@@ -6,7 +6,7 @@ import { basename, dirname, join, resolve } from "node:path";
 import { atomicWrite, readOptionalFile, withFileLock } from "../storage/file.ts";
 import type { ObjectStore } from "./object-store.ts";
 import { mirrorRoot, readLibrary } from "./mirror.ts";
-import { hashFile, PERSISTENT_ROOTS, snapshotSourcesUnchanged, type Progress, type Snapshot } from "./snapshot.ts";
+import { hashFile, matchesFileHash, PERSISTENT_ROOTS, sameFileVersion, snapshotSourcesUnchanged, type FileStamp, type Progress, type Snapshot } from "./snapshot.ts";
 import { isMetadata, resolvePull, type PullPlan } from "./pull-plan.ts";
 
 const MARKER = ".loom/backup/pull-install.json";
@@ -14,7 +14,11 @@ type Record = { format: 1; root: string; directory: string; transaction: string;
 export type PullInstallation = { finish(): Promise<void>; rollback(): Promise<void> };
 const move = (source: string, target: string) => retryWindowsFileOperation(() => rename(source, target));
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
-async function exists(path: string): Promise<boolean> { try { await lstat(path); return true; } catch (e) { if ((e as NodeJS.ErrnoException).code === "ENOENT") return false; throw e; } }
+async function statIfPresent(path: string) {
+	try { return await lstat(path); }
+	catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; }
+}
+const exists = async (path: string): Promise<boolean> => !!await statIfPresent(path);
 async function location(root: string) {
 	try { root = await realpath(root); }
 	catch (error) { if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error; root = join(await realpath(dirname(resolve(root))), basename(root)); }
@@ -66,7 +70,7 @@ export async function recoverPull(root: string): Promise<string | undefined> {
 	});
 }
 
-type Stamp = { path: string; size: number; mtimeMs: number; ctimeMs: number; ino: number; dev: number; directory: boolean };
+type Stamp = FileStamp & { path: string; directory: boolean };
 async function inventory(root: string, signal: AbortSignal, target?: string): Promise<Stamp[]> {
 	const stamps: Stamp[] = [];
 	async function walk(parent: string) {
@@ -84,6 +88,26 @@ async function inventory(root: string, signal: AbortSignal, target?: string): Pr
 		}
 	}
 	await walk(""); return stamps.sort((a, b) => a.path.localeCompare(b.path));
+}
+
+async function inventoryUnchanged(snapshot: Snapshot, staged: string, stamps: Stamp[], signal: AbortSignal): Promise<boolean> {
+	const current = await inventory(snapshot.root, signal);
+	if (current.length !== stamps.length) return false;
+	const files = new Map(snapshot.files.map((file) => [file.path, file]));
+	for (const [index, stamp] of stamps.entries()) {
+		const now = current[index]!;
+		if (now.path !== stamp.path || now.directory !== stamp.directory || !sameFileVersion(stamp, now)) return false;
+		if (stamp.directory || stamp.ctimeMs === now.ctimeMs) continue;
+		// Tracked files have a preview hash. For private files, compare with the copy kept for installation.
+		let hash = files.get(stamp.path)?.hash;
+		if (hash === undefined) {
+			const copied = join(staged, stamp.path);
+			if (!(await statIfPresent(copied))?.isFile()) return false;
+			hash = (await hashFile(copied, signal, stamp.size)).hash;
+		}
+		if (!await matchesFileHash(join(snapshot.root, stamp.path), stamp, hash, signal)) return false;
+	}
+	return true;
 }
 
 /** The app holds Core and Chat closed until finish/rollback and reopening have completed. */
@@ -127,7 +151,7 @@ export async function installPull(snapshot: Snapshot, plan: PullPlan, choices: u
 			if (selection.metadata) await writeFile(join(staged, ".loom/backup/restore.json"), JSON.stringify({ version: 1, sourceRoot: plan.manifest.sourceRoot, sourceAliases: plan.manifest.sourceAliases }));
 			const current = await readLibrary(snapshot.libraryId, store, snapshot.temporary, signal);
 			if (current?.state !== "ready" || current.revision !== plan.library.revision || current.manifestHash !== plan.library.manifestHash) throw new Error("The cloud library changed during pull. Check again.");
-			if (!await snapshotSourcesUnchanged(snapshot, signal, true) || JSON.stringify(stamps) !== JSON.stringify(await inventory(loc.root, signal))) throw new Error("Local files changed during pull. Check again.");
+			if (!await snapshotSourcesUnchanged(snapshot, signal, true) || !await inventoryUnchanged(snapshot, staged, stamps, signal)) throw new Error("Local files changed during pull. Check again.");
 			await writeFile(join(staged, MARKER), JSON.stringify({ transaction: record.transaction }));
 			signal.throwIfAborted(); checkLock(); progress({ phase: "apply", currentFile: undefined });
 			await move(loc.root, join(directory, "old"));

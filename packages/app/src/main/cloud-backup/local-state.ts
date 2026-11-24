@@ -4,11 +4,14 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import type { CloudConfig, CloudPreview, LocalCloudLibrary } from "../../shared/cloud-backup.ts";
 import { JsonFile } from "../storage/file.ts";
+import { SerialQueue } from "../storage/serial-queue.ts";
 import type { MirrorManifest } from "./mirror.ts";
-import { trackedBackupPath, type Snapshot } from "./snapshot.ts";
+import { snapshotSourcesUnchanged, trackedBackupPath, unchangedSourceStamp, type Snapshot } from "./snapshot.ts";
 
 type FileStamp = { path: string; size: number; mtimeMs: number };
 type Baseline = { scope: string; libraryId: string; updatedAt?: string; files: FileStamp[]; directories: string[]; error?: string; retryOperation?: "backup" | "preview" };
+type WatchedFile = FileStamp | Snapshot["files"][number];
+type WatchedSources = { files: Map<string, WatchedFile>; directories: Set<string>; pending: Set<string>; queue: SerialQueue; abort: AbortController };
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/;
 function destination(config: CloudConfig): string { return createHash("sha256").update(JSON.stringify(config)).digest("hex"); }
 function parseCache(input: unknown): Baseline[] {
@@ -39,8 +42,11 @@ function sameInventory(a: { files: FileStamp[]; directories: string[] }, b: { fi
 	if (a.files.length !== b.files.length || a.directories.length !== b.directories.length) return false;
 	const files = new Map(a.files.map((file) => [file.path, file]));
 	const directories = new Set(a.directories);
-	// Metadata staging can round sub-millisecond timestamps. This comparison is only a hint.
-	return b.directories.every((path) => directories.has(path)) && b.files.every((file) => { const old = files.get(file.path); return old?.size === file.size && Math.abs(old.mtimeMs - file.mtimeMs) < 1; });
+	return b.directories.every((path) => directories.has(path)) && b.files.every((file) => sameFileHint(files.get(file.path), file));
+}
+// Metadata staging can round sub-millisecond timestamps. This comparison is only a hint.
+function sameFileHint(before: FileStamp | undefined, after: Pick<FileStamp, "size" | "mtimeMs">): boolean {
+	return before?.size === after.size && Math.abs(before.mtimeMs - after.mtimeMs) < 1;
 }
 
 /** A disposable local cache plus conservative filesystem hints. Only explicit previews establish content equality. */
@@ -51,6 +57,7 @@ export class LocalBackupState {
 	#epoch = 0;
 	#generation = 0;
 	#watcher?: FSWatcher;
+	#watched?: WatchedSources;
 	#timer?: ReturnType<typeof setTimeout>;
 	#view?: LocalCloudLibrary;
 	#root: string | null = null;
@@ -60,6 +67,7 @@ export class LocalBackupState {
 	get rootPath(): string | null { return this.#root; }
 	async open(root: string | null, config: CloudConfig): Promise<void> {
 		this.#watcher?.close(); this.#watcher = undefined; clearTimeout(this.#timer);
+		this.#watched?.abort.abort(); this.#watched = undefined;
 		const epoch = ++this.#epoch;
 		this.#scope = destination(config); this.#generation++;
 		this.#root = root;
@@ -67,10 +75,12 @@ export class LocalBackupState {
 		this.#changed();
 		if (!root || config.provider === "none") return;
 		try {
-			this.#watcher = watch(root, { recursive: true }, (_event, filename) => {
+			this.#watcher = watch(root, { recursive: true }, (event, filename) => {
 				if (epoch !== this.#epoch) return;
 				const path = filename?.toString().replace(/\\/g, "/");
-				if (!path || trackedBackupPath(path)) this.invalidate();
+				if (path && !trackedBackupPath(path)) return;
+				if (path && event === "change" && this.#watched) void this.#verifyChange(root, path, this.#watched);
+				else this.invalidate();
 			});
 			this.#watcher.on("error", () => { if (epoch === this.#epoch) this.invalidate(); });
 			let id: string | undefined;
@@ -81,6 +91,7 @@ export class LocalBackupState {
 			if (epoch !== this.#epoch) return;
 			Object.assign(this.#view!, { libraryId: id, lastBackupAt: baseline?.updatedAt, status: baseline?.error ? "failed" : id ? "unchecked" : "never", error: baseline?.error, retryOperation: baseline?.retryOperation });
 			if (baseline?.updatedAt && !baseline.error) {
+				if (process.platform === "win32") this.#watchSources(baseline);
 				const current = await inventory(root);
 				if (epoch !== this.#epoch) return;
 				if (!sameInventory(baseline, current)) this.#view!.status = "changed";
@@ -90,6 +101,47 @@ export class LocalBackupState {
 			this.#view!.status = "unchecked"; this.#view!.error = error instanceof Error ? error.message : "Cannot check local library";
 		}
 		if (epoch === this.#epoch) this.#changed();
+	}
+	#watchSources({ files, directories }: { files: WatchedFile[]; directories: string[] }): void {
+		this.#watched?.abort.abort();
+		this.#watched = {
+			files: new Map(files.map((file) => [file.path, file])), directories: new Set(directories),
+			pending: new Set(), queue: new SerialQueue(), abort: new AbortController(),
+		};
+	}
+	async #verifyChange(root: string, path: string, watched: WatchedSources): Promise<void> {
+		if (watched.pending.has(path)) return;
+		watched.pending.add(path);
+		try {
+			const unchanged = await watched.queue.run(async () => {
+				watched.abort.signal.throwIfAborted();
+				const source = join(root, path), file = watched.files.get(path);
+				if (!file) return watched.directories.has(path) && (await lstat(source)).isDirectory();
+				if (!("source" in file)) {
+					const stat = await lstat(source);
+					return stat.isFile() && sameFileHint(file, stat);
+				}
+				const stamp = await unchangedSourceStamp(file, source, watched.abort.signal);
+				if (stamp) watched.files.set(path, { ...file, original: stamp });
+				return !!stamp;
+			});
+			if (unchanged) return;
+		} catch { /* A missing or unreadable source must be checked again by a preview. */ }
+		finally { watched.pending.delete(path); }
+		if (this.#watched === watched) this.invalidate();
+	}
+	async verifySources(snapshot: Snapshot, generation: number, signal: AbortSignal): Promise<number> {
+		if (this.#view?.rootPath !== snapshot.root) return generation;
+		const windows = process.platform === "win32";
+		if (windows) {
+			// Windows reports attribute changes and directory access as change events. Verify the snapshot
+			// against disk before reconciling events received during the preview or upload.
+			this.#watchSources(snapshot);
+			generation = this.#generation;
+		}
+		const epoch = this.#epoch;
+		if (!await snapshotSourcesUnchanged(snapshot, signal, windows) && epoch === this.#epoch) this.invalidate();
+		return generation;
 	}
 	invalidate(): void {
 		this.#generation++;
@@ -145,5 +197,5 @@ export class LocalBackupState {
 			return { value: [...entries.filter((entry) => entry !== old), { scope, libraryId: id, files: [], directories: [], ...old, error, retryOperation: error ? retryOperation : undefined }], result: undefined };
 		});
 	}
-	close(): void { this.#epoch++; clearTimeout(this.#timer); this.#watcher?.close(); this.#watcher = undefined; }
+	close(): void { this.#epoch++; clearTimeout(this.#timer); this.#watcher?.close(); this.#watcher = undefined; this.#watched?.abort.abort(); this.#watched = undefined; }
 }
