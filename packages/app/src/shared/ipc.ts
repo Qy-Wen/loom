@@ -300,7 +300,7 @@ export interface LoomApi {
 	getCloudBackupConfig: (provider?: CloudProviderId) => Promise<CloudConfigDraft>;
 	openRestoredCloudBackup: () => Promise<void>;
 	saveCloudBackup: (config: CloudConfigDraft) => Promise<CloudBackupView>;
-	startCloudBackup: (operation: CloudJob["operation"], libraryId?: string) => Promise<void>;
+	startCloudBackup: (operation: CloudJob["operation"], libraryId?: string, revision?: string) => Promise<void>;
 	cancelCloudBackup: () => Promise<void>;
 	resolveCloudPull: (id: string, choices: Record<string, CloudPullChoice>) => Promise<void>;
 	onCloudBackupChanged: (listener: (view: CloudBackupView) => void) => () => void;

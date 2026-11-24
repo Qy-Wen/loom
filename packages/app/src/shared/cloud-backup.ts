@@ -79,7 +79,7 @@ export interface LocalCloudLibrary {
 }
 export type BackupPhase = "snapshot" | "upload" | "delete" | "download" | "verify" | "list" | "test" | "conflicts" | "apply";
 export interface CloudJob {
-	operation: "backup" | "preview" | "restore" | "list" | "test" | "pull";
+	operation: "backup" | "preview" | "restore" | "delete" | "list" | "test" | "pull";
 	rootPath?: string;
 	libraryId?: string;
 	status: "running" | "completed" | "failed" | "cancelled";

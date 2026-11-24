@@ -1,8 +1,9 @@
 import { useEffect, useId, useState } from "react";
-import { CLOUD_PROVIDER_IDS, defaultCloudConfig, type CloudBackupView, type CloudConfigDraft, type CloudJob, type CloudPreview, type CloudProviderId } from "../../shared/cloud-backup.ts";
+import { CLOUD_PROVIDER_IDS, defaultCloudConfig, type CloudBackupView, type CloudConfigDraft, type CloudJob, type CloudLibrary, type CloudPreview, type CloudProviderId } from "../../shared/cloud-backup.ts";
 import { useLocale } from "../locale.tsx";
 import { CloudProviderFields } from "./settings-cloud-providers.tsx";
 import { TooltipText } from "../components/tooltip-text.tsx";
+import { useConfirmation } from "../components/confirm-dialog.tsx";
 import { CloudPullPreviewPanel } from "./settings-cloud-pull.tsx";
 import { flushPendingSaves } from "../workbench/pending-saves.ts";
 
@@ -53,9 +54,10 @@ function JobProgress({ job, busy, onCancel, onOpen }: { job: CloudJob; busy: boo
 	const { t } = useLocale(); const text = t.settings.cloud;
 	const statusId = useId();
 	const showProgress = job.status === "running" && job.phase !== "conflicts" && job.totalFiles > 0;
+	const phase = job.operation === "delete" ? text.deleting : text.phases[job.phase];
 	return <section className="cloud-progress" data-status={job.status} aria-label={text.progress}>
-		<div className="cloud-progress-heading"><span className="cloud-state-dot" /><strong>{text.operations[job.operation]}</strong><span id={statusId} aria-live="polite">{job.status === "running" ? text.phases[job.phase] : text.status[job.status]}</span>{job.status === "running" && <button className="settings-button" type="button" onClick={onCancel}>{text.cancel}</button>}</div>
-		{showProgress && <><progress aria-labelledby={statusId} max={job.totalBytes || job.totalFiles} value={job.totalBytes ? job.completedBytes : job.completedFiles} /><span className="cloud-progress-amount">{job.completedFiles} / {job.totalFiles} · {size(job.completedBytes)} / {size(job.totalBytes)}</span></>}
+		<div className="cloud-progress-heading"><span className="cloud-state-dot" /><strong>{text.operations[job.operation]}</strong><span id={statusId} aria-live="polite">{job.status === "running" ? phase : text.status[job.status]}</span>{job.status === "running" && <button className="settings-button" type="button" onClick={onCancel}>{text.cancel}</button>}</div>
+		{showProgress && <><progress aria-labelledby={statusId} max={job.totalBytes || job.totalFiles} value={job.totalBytes ? job.completedBytes : job.completedFiles} /><span className="cloud-progress-amount">{job.completedFiles} / {job.totalFiles}{job.operation !== "delete" && ` · ${size(job.completedBytes)} / ${size(job.totalBytes)}`}</span></>}
 		{job.operation === "backup" && job.uploadedBytes !== undefined && <span className="cloud-progress-amount">{text.uploaded}: {size(job.uploadedBytes)} · {text.skippedFiles(job.skippedFiles ?? 0)}</span>}
 		{job.status === "running" && job.rootPath && <code className="cloud-job-path">{job.rootPath}</code>}
 		{(job.status === "running" || job.status === "failed") && job.currentFile && <code className="cloud-job-path">{job.currentFile}</code>}
@@ -71,6 +73,7 @@ export function SettingsCloud(): React.JSX.Element {
 	const [draft, setDraft] = useState<CloudConfigDraft | null>(null);
 	const [error, setError] = useState<string | null>(null);
 	const [pending, setPending] = useState(false);
+	const { confirm } = useConfirmation(JSON.stringify(view?.config));
 	useEffect(() => {
 		let alive = true, received = false;
 		const unsubscribe = window.loom.onCloudBackupChanged((next) => { received = true; if (alive) setView(next); });
@@ -109,6 +112,11 @@ export function SettingsCloud(): React.JSX.Element {
 		if (operation === "backup" || operation === "preview" || operation === "pull") await flushPendingSaves();
 		await window.loom.startCloudBackup(operation, id);
 	});
+	async function deleteLibrary(library: CloudLibrary): Promise<void> {
+		if (await confirm({ title: text.deleteTitle, description: text.deleteDescription(library.libraryName), confirmLabel: t.common.delete, tone: "danger" })) {
+			await run(() => window.loom.startCloudBackup("delete", library.libraryId, library.revision));
+		}
+	}
 	const local = view?.localLibrary;
 	const disabled = busy || dirty || !view?.hasCredentials;
 	const job = view?.job;
@@ -134,7 +142,7 @@ export function SettingsCloud(): React.JSX.Element {
 							{local.status === "failed" && <button type="button" disabled={disabled} onClick={() => void start(local.retryOperation ?? "preview")}><CloudGlyph kind="refresh" />{text.retry}</button>}
 							<button type="button" className="primary-button" disabled={disabled} onClick={() => void start("backup")}><CloudGlyph kind="upload" />{text.backup}</button>
 						</div>
-						{job && job.operation !== "test" && job.operation !== "list" && progress}
+						{job && job.operation !== "test" && job.operation !== "list" && job.operation !== "delete" && progress}
 						{view.pull && job?.status === "running" && job.phase === "conflicts" ? <CloudPullPreviewPanel preview={view.pull} disabled={pending} onApply={(choices) => void run(async () => {
 							await flushPendingSaves();
 							await window.loom.resolveCloudPull(view.pull!.id, choices);
@@ -144,12 +152,15 @@ export function SettingsCloud(): React.JSX.Element {
 				</section>
 				<section className="settings-slot cloud-panel" aria-label={text.libraries}>
 					<div className="cloud-panel-heading"><h3>{text.libraries}</h3><button className="settings-button cloud-quiet-button" type="button" disabled={disabled} onClick={() => void start("list")}><CloudGlyph kind="refresh" />{text.refresh}</button></div>
-					{job?.operation === "list" && progress}
+					{(job?.operation === "list" || job?.operation === "delete") && progress}
 					{view.libraries.length === 0 && <div className="cloud-empty"><CloudGlyph kind="cloud" /><p>{text.empty}</p></div>}
 					{view.libraries.map((library) => <article className="cloud-library" key={library.libraryId}>
 						<span className="cloud-icon-tile"><CloudGlyph kind="folder" /></span>
 						<div className="cloud-library-info"><strong>{library.libraryName}</strong><time dateTime={library.updatedAt}>{new Date(library.updatedAt).toLocaleString()}</time><span>{library.deviceName} · {library.fileCount} {text.files} · {size(library.totalBytes)}</span>{library.state !== "ready" && <span className="cloud-incomplete">{text.incomplete}</span>}</div>
-						<button className="settings-button" type="button" disabled={busy || dirty || library.state !== "ready"} onClick={() => void start("restore", library.libraryId)}><CloudGlyph kind="download" />{text.restore}</button>
+						<div className="cloud-library-actions">
+							<button className="settings-button" type="button" disabled={disabled || library.state !== "ready"} onClick={() => void start("restore", library.libraryId)}><CloudGlyph kind="download" />{text.restore}</button>
+							<button className="settings-button cloud-delete-button" type="button" disabled={disabled} aria-label={`${t.common.delete} ${library.libraryName}`} onClick={() => void deleteLibrary(library)}>{t.common.delete}</button>
+						</div>
 					</article>)}
 				</section>
 			</>}

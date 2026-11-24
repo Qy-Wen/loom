@@ -7,7 +7,7 @@ import type { CloudConfigStore } from "./config.ts";
 import type { ObjectStoreFactory } from "./providers.ts";
 import type { ObjectStore } from "./object-store.ts";
 import { snapshotSourcesUnchanged, type Snapshot } from "./snapshot.ts";
-import { listCloudLibraries, restoreMirror, updateMirror, type MirrorManifest } from "./mirror.ts";
+import { deleteMirror, listCloudLibraries, restoreMirror, updateMirror, type MirrorManifest } from "./mirror.ts";
 import { previewMirror } from "./preview.ts";
 import { LocalBackupState } from "./local-state.ts";
 import { uploadJournalPath } from "./upload-journal.ts";
@@ -57,17 +57,18 @@ export class CloudBackupController {
 		});
 	}
 	#assertIdle() { if (this.#closed) throw new Error("Cloud backup is closing"); if (this.#abort) throw new Error("A cloud operation is already running"); }
-	async start(operation: CloudJob["operation"], libraryId?: string): Promise<void> {
+	async start(operation: CloudJob["operation"], libraryId?: string, revision?: string): Promise<void> {
 		await this.#settingsQueue.run(async () => {
 			this.#assertIdle();
 			const store = this.#factory(await this.#settings.load());
 			const config = await this.#settings.view();
 			this.#assertIdle();
-			const library = operation === "restore" ? this.#libraries.find((r) => r.libraryId === libraryId) : undefined;
+			const library = this.#libraries.find((r) => r.libraryId === libraryId);
 			if (operation === "restore" && (!library || library.state !== "ready")) throw new Error("Refresh cloud libraries and choose a completed copy before restoring");
+			if (operation === "delete" && (!library || library.revision !== revision)) throw new Error("Refresh cloud libraries and choose a copy before deleting");
 			const abort = new AbortController(); this.#abort = abort;
 			this.#pull = undefined;
-			this.#job = { operation, rootPath: operation === "backup" || operation === "preview" || operation === "pull" ? this.#local?.view()?.rootPath : undefined, status: "running", phase: operation === "backup" || operation === "preview" || operation === "pull" ? "snapshot" : operation === "restore" ? "download" : operation, completedBytes: 0, totalBytes: 0, completedFiles: 0, totalFiles: 0 };
+			this.#job = { operation, libraryId: library?.libraryId, rootPath: operation === "backup" || operation === "preview" || operation === "pull" ? this.#local?.view()?.rootPath : undefined, status: "running", phase: operation === "backup" || operation === "preview" || operation === "pull" ? "snapshot" : operation === "restore" ? "download" : operation, completedBytes: 0, totalBytes: 0, completedFiles: 0, totalFiles: 0 };
 			// Capture the public configuration once. No credentials are sent to renderer events.
 			let lastEvent = 0;
 			const publish = (force = false) => {
@@ -128,6 +129,14 @@ export class CloudBackupController {
 						let restored: MirrorManifest | undefined;
 						this.#job!.restoredPath = await restoreMirror(library!.libraryId, parent!, store, abort.signal, progress, (manifest) => { restored = manifest; });
 						await this.#baselines?.save(config.config, restored!, this.#job!.restoredPath);
+					} else if (operation === "delete") {
+						await deleteMirror(library!, store, abort.signal, progress, (deleting) => {
+							this.#libraries = this.#libraries.map((item) => item.libraryId === deleting.libraryId ? deleting : item);
+							if (this.#local?.view()?.libraryId === deleting.libraryId) this.#local.invalidate();
+							publish(true);
+						});
+						this.#libraries = this.#libraries.filter((item) => item.libraryId !== library!.libraryId);
+						await this.#local?.forget(library!.libraryId, config.config);
 					} else if (operation === "list") this.#libraries = await listCloudLibraries(store, abort.signal);
 					else await this.#test(store, abort.signal);
 					this.#job!.status = "completed";

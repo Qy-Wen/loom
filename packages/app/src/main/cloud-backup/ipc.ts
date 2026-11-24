@@ -13,9 +13,9 @@ export function registerCloudBackupIpc(controller: CloudBackupController): void 
 		return controller.configuration(provider);
 	});
 	ipcMain.handle(IPC.saveCloudBackup, (_event, config) => controller.save(config));
-	ipcMain.handle(IPC.startCloudBackup, (_event, operation: CloudJob["operation"], libraryId?: string) => {
-		if (!["backup", "preview", "pull", "restore", "test", "list"].includes(operation) || (libraryId !== undefined && typeof libraryId !== "string")) throw new Error("Invalid cloud backup operation");
-		return controller.start(operation, libraryId);
+	ipcMain.handle(IPC.startCloudBackup, (_event, operation: CloudJob["operation"], libraryId?: string, revision?: string) => {
+		if (!["backup", "preview", "pull", "restore", "delete", "test", "list"].includes(operation) || (libraryId !== undefined && typeof libraryId !== "string") || (revision !== undefined && typeof revision !== "string")) throw new Error("Invalid cloud backup operation");
+		return controller.start(operation, libraryId, revision);
 	});
 	ipcMain.handle(IPC.cancelCloudBackup, () => controller.cancel());
 	ipcMain.handle(IPC.resolveCloudPull, (_event, id, choices) => {

@@ -122,6 +122,16 @@ export class LocalBackupState {
 		Object.assign(this.#view, { libraryId: snapshot.libraryId, lastBackupAt: manifest.library.updatedAt, preview: undefined, status: generation === this.#generation ? "current" : "changed", error: undefined, retryOperation: undefined });
 		this.#changed();
 	}
+	async forget(libraryId: string, config: CloudConfig): Promise<void> {
+		const scope = destination(config);
+		await this.#cache.update(async (entries = []) => {
+			const remaining = entries.filter((entry) => entry.scope !== scope || entry.libraryId !== libraryId);
+			return { value: remaining.length !== entries.length ? remaining : undefined, result: undefined };
+		});
+		if (this.#scope !== scope || this.#view?.libraryId !== libraryId) return;
+		Object.assign(this.#view, { lastBackupAt: undefined, preview: undefined, status: "never", error: undefined, retryOperation: undefined });
+		this.#changed();
+	}
 	async failed(root: string, error?: string, id?: string, retryOperation?: "backup" | "preview"): Promise<void> {
 		const scope = this.#scope;
 		if (this.#view?.rootPath === root) {

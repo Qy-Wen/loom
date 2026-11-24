@@ -1152,7 +1152,10 @@
 .cloud-library-info time,
 .cloud-library-info > span { color: var(--lm-text-muted); font-size: var(--lm-text-size-xs); }
 .cloud-library-info > .cloud-incomplete { color: var(--lm-text-warning); }
-.cloud-library > .settings-button { min-height: var(--lm-size-lg); padding: var(--lm-space-3) var(--lm-space-4); font-size: var(--lm-text-size-xs); }
+.cloud-library-actions { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--lm-space-3); margin-left: auto; }
+.cloud-library-actions > .settings-button { min-height: var(--lm-size-lg); padding: var(--lm-space-3) var(--lm-space-4); font-size: var(--lm-text-size-xs); }
+.cloud-library-actions > .cloud-delete-button { color: var(--lm-text-danger); }
+.cloud-library-actions > .cloud-delete-button:hover:not(:disabled) { background: var(--lm-surface-danger); }
 .cloud-connection-grid { display: grid; grid-template-columns: minmax(0, 1fr); gap: var(--lm-space-6); }
 .cloud-connection-grid label { margin: 0; min-width: 0; }
 .cloud-connection-grid input,
@@ -1171,5 +1174,4 @@
 	.cloud-upload-estimate dd { font-size: var(--lm-text-size-md); }
 	.cloud-backup-meta { flex-direction: column; }
 	.cloud-library { flex-wrap: wrap; }
-	.cloud-library > .settings-button { margin-left: auto; }
 }

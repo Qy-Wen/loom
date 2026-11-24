@@ -232,6 +232,39 @@ export async function listCloudLibraries(store: ObjectStore, signal: AbortSignal
 	} finally { await rm(temporary, { recursive: true, force: true }); }
 }
 
+/** Keep interrupted deletions discoverable while preventing restore from a partial copy. */
+export async function deleteMirror(library: CloudLibrary, store: ObjectStore, signal: AbortSignal, progress: Progress, changed: (library: CloudLibrary) => void): Promise<void> {
+	const base = mirrorRoot(library.libraryId);
+	const catalog = libraryCatalogKey(library.libraryId);
+	const temporary = await mkdtemp(join(tmpdir(), "loom-cloud-delete-"));
+	try {
+		const keys: string[] = [];
+		for await (const key of store.list(base, signal)) {
+			if (!key.startsWith(base)) throw new Error("Refusing to delete outside the selected cloud library");
+			if (key !== base) validateRelativePath(key.slice(base.length).replace(/\/$/, ""), false);
+			keys.push(key);
+		}
+		await assertCurrent(library, store, temporary, signal);
+		// Let catalog writes settle so cancellation cannot leave the list out of sync with a completed request.
+		const catalogSignal = new AbortController().signal;
+		const deleting: CloudLibrary = { ...library, state: "updating", revision: randomUUID(), manifestHash: undefined };
+		signal.throwIfAborted();
+		await writeJson(store, catalog, deleting, temporary, catalogSignal);
+		changed(deleting);
+		await assertCurrent(deleting, store, temporary, signal);
+		let completedFiles = 0;
+		progress({ totalFiles: keys.length });
+		await parallelFiles(keys, 3, signal, async (key, _index, _worker, transfer) => {
+			await store.remove(key, transfer);
+			progress({ completedFiles: ++completedFiles });
+		});
+		for await (const _key of store.list(base, signal)) throw new Error("Cloud library still contains files. Refresh and retry.");
+		await assertCurrent(deleting, store, temporary, signal);
+		signal.throwIfAborted();
+		await store.remove(catalog, catalogSignal);
+	} finally { await rm(temporary, { recursive: true, force: true, maxRetries: 3 }); }
+}
+
 /** Verify a complete current copy, and publish only a new local directory. */
 export async function restoreMirror(libraryId: string, parent: string, store: ObjectStore, signal: AbortSignal, progress: Progress, completed: (manifest: MirrorManifest) => void = () => {}): Promise<string> {
 	parent = await realpath(parent);

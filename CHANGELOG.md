@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+- Delete individual cloud library copies from Settings while keeping local files.
+
 ## [v0.1.9]
 
 - Click blank space in the sidebar file list to select the library root while keeping the active file tab open.

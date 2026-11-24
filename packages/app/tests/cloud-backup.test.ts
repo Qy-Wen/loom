@@ -13,7 +13,7 @@ import { CloudConfigStore } from "../src/main/cloud-backup/config.ts";
 import { CloudBackupController } from "../src/main/cloud-backup/controller.ts";
 import { captureSnapshot, readRestoreMarker, relocatedCwd, validateBackupPath } from "../src/main/cloud-backup/snapshot.ts";
 import { MemoryStore } from "./fixtures/cloud-store.ts";
-import { listCloudLibraries, restoreMirror, updateMirror, mirrorRoot, mirrorManifestKey, libraryCatalogKey, type MirrorManifest } from "../src/main/cloud-backup/mirror.ts";
+import { deleteMirror, listCloudLibraries, restoreMirror, updateMirror, mirrorRoot, mirrorManifestKey, libraryCatalogKey, type MirrorManifest } from "../src/main/cloud-backup/mirror.ts";
 import type { CloudLibrary } from "../src/shared/cloud-backup.ts";
 import { testChatCipher } from "./fixtures/chat-storage-cipher.ts";
 import { previewMirror } from "../src/main/cloud-backup/preview.ts";
@@ -322,6 +322,36 @@ test("deletion rejects a listing outside this library and restore rejects a conc
 		await assert.rejects(restoreMirror(ready.libraryId, parent, store, signal(), () => {}), /changed on another device/);
 		assert.deepEqual(await readdir(parent), []);
 	} finally { await rm(root, { recursive: true, force: true }); await rm(parent, { recursive: true, force: true }); }
+});
+
+test("deleting a cloud copy checks the selected revision and keeps a partial deletion retryable", async () => {
+	const root = await workspace(), other = await workspace(), store = new MemoryStore();
+	try {
+		const stale = await updateMirror(await captureSnapshot(root, signal()), store, "device", signal(), () => {});
+		const selected = await updateMirror(await captureSnapshot(root, signal()), store, "device", signal(), () => {});
+		const retained = await updateMirror(await captureSnapshot(other, signal()), store, "device", signal(), () => {});
+		const base = mirrorRoot(selected.libraryId), otherKey = `${mirrorRoot(retained.libraryId)}notes/one.md`;
+		const remove = (library: CloudLibrary) => deleteMirror(library, store, signal(), () => {}, () => {});
+		await assert.rejects(remove(stale), /changed on another device/);
+		const list = store.list.bind(store);
+		store.list = async function* (prefix, signal) { yield* list(prefix, signal); yield otherKey; };
+		await assert.rejects(remove(selected), /outside the selected cloud library/);
+		assert.deepEqual(store.removed, []);
+		store.list = list;
+		store.failRemove = (key) => key === `${base}notes/one.md`;
+		await assert.rejects(remove(selected), /Simulated delete failure/);
+		const partial = (await listCloudLibraries(store, signal())).find((library) => library.libraryId === selected.libraryId)!;
+		assert.equal(partial.state, "updating");
+		assert.notEqual(partial.revision, selected.revision);
+		assert.ok(store.objects.has(`${base}notes/one.md`));
+		assert.ok(store.removed.length > 0);
+		store.failRemove = undefined;
+		await remove(partial);
+		assert.deepEqual([...store.objects.keys()].filter((key) => key.startsWith(base)), []);
+		assert.deepEqual(await listCloudLibraries(store, signal()), [retained]);
+		assert.equal(store.objects.get(otherKey)?.toString(), "hello backup");
+		assert.equal(await readFile(join(root, "notes/one.md"), "utf8"), "hello backup");
+	} finally { await Promise.all([root, other].map((path) => rm(path, { recursive: true, force: true }))); }
 });
 
 test("restore verifies file hashes, rejects untrusted paths and cleans failed/cancelled downloads", async () => {
