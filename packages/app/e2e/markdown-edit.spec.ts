@@ -933,8 +933,10 @@ test("a table at the start or end of the file gets a blank line when the caret l
 	const table = ["| 名称 | 数量 |", "| :--- | ---: |", "| 苹果 | 3 |"].join("\n");
 	const first = join(root, "头.md");
 	const last = join(root, "尾.md");
+	const only = join(root, "单表.md");
 	await writeFile(first, `${table}\n\n中间`);
 	await writeFile(last, `中间\n\n${table}`);
+	await writeFile(only, `${table}\n`);
 	await electronApp!.evaluate(({ dialog }, path) => {
 		const open = dialog.showOpenDialog;
 		dialog.showOpenDialog = (async () => {
@@ -983,6 +985,56 @@ test("a table at the start or end of the file gets a blank line when the caret l
 	await loomPage.keyboard.press("ControlOrMeta+z");
 	await loomPage.keyboard.press("ControlOrMeta+z");
 	await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}`);
+
+	const tableBlock = box.locator(".cm-live-table");
+	const clickBelowTable = async () => {
+		const bounds = (await tableBlock.boundingBox())!;
+		const y = bounds.y + bounds.height + 12;
+		const cursor = loomPage.locator(".cm-cursor-primary");
+		const caretTop = () => cursor.evaluate((node) => node.getBoundingClientRect().top);
+		await loomPage.mouse.move(bounds.x + 80, y);
+		await loomPage.mouse.down();
+		let beforeRelease: number;
+		try {
+			await expect.poll(() => cursor.evaluate((node, y) => {
+				const { top, bottom } = node.getBoundingClientRect();
+				return top <= y && y < bottom;
+			}, y)).toBe(true);
+			beforeRelease = await caretTop();
+		} finally {
+			await loomPage.mouse.up();
+		}
+		await expect.poll(caretTop).toBe(beforeRelease);
+		return y;
+	};
+	const clickY = await clickBelowTable();
+	await expect(box).toBeFocused();
+	await loomPage.keyboard.type("后文");
+	await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}\n\n后文`);
+	await expect.poll(() => box.locator(".cm-line").filter({ hasText: "后文" }).evaluate((node, y) => {
+		const { top, bottom } = node.getBoundingClientRect();
+		return top <= y && y < bottom;
+	}, clickY)).toBe(true);
+	await loomPage.keyboard.press("ControlOrMeta+z");
+	await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}\n\n`);
+	await loomPage.keyboard.press("Backspace");
+	await expect(tableBlock).toHaveCount(0);
+	await expect.poll(() => readFile(last, "utf8")).toBe("中间\n\n");
+	await loomPage.keyboard.press("ControlOrMeta+z");
+	await expect(tableBlock).toHaveCount(1);
+	await expect.poll(() => readFile(last, "utf8")).toBe(`中间\n\n${table}\n\n`);
+	await box.locator(".cm-line").filter({ hasText: "中间" }).click();
+	await clickBelowTable();
+
+	await loomPage.locator(".library-sidebar, aside").first().locator(".asset-row").filter({ hasText: "单表.md" }).first().click();
+	box = loomPage.getByRole("textbox", { name: "Edit 单表.md" });
+	await box.locator(".cm-live-table td").last().click();
+	await loomPage.keyboard.press("ArrowDown");
+	await expect(box).toBeFocused();
+	await expect.poll(() => readFile(only, "utf8")).toBe(`${table}\n\n`);
+	await loomPage.keyboard.press("Backspace");
+	await expect(box.locator(".cm-live-table")).toHaveCount(0);
+	await expect.poll(() => readFile(only, "utf8")).toBe("");
 });
 
 test("up and down move by line even when the caret's formula source wraps the line", async ({ loomPage, electronApp, unopenedLibraryRoot: root }) => {

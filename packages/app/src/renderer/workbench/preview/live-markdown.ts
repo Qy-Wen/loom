@@ -1,5 +1,6 @@
+import { isolateHistory } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import { EditorSelection, EditorState, Facet, RangeSetBuilder, StateEffect, StateField, type Extension, type Range, type SelectionRange } from "@codemirror/state";
+import { EditorSelection, EditorState, Facet, MapMode, RangeSetBuilder, StateEffect, StateField, type Extension, type Range, type SelectionRange } from "@codemirror/state";
 import { Decoration, type DecorationSet, EditorView, keymap, ViewPlugin, type ViewUpdate, WidgetType } from "@codemirror/view";
 import type { Asset } from "@loom/core";
 import { isMarkdownFile } from "../../../shared/markdown-file.ts";
@@ -9,7 +10,7 @@ import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
 import { searchSelection } from "./markdown-find-widgets.ts";
 import { liveReferenceSelectors, pressedReference } from "./live-reference.ts";
-import { enterTable, liveTableAccess, TableWidget, type TableHooks } from "./live-table.ts";
+import { enterTable, focusAfterTable, liveTableAccess, tableSeparatorEnd, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
 import { parseTable } from "./table.ts";
 import { editorHeading } from "./editor-heading.ts";
@@ -619,12 +620,28 @@ function mathBlock(state: EditorState, paragraph: SyntaxNodeRef): { tex: string 
 	return match && match.end === text.length ? { tex: match.tex } : null;
 }
 
+function trailingTable(state: EditorState) {
+	const last = syntaxTree(state).topNode.lastChild;
+	return last?.name === "Table" && !/\S/.test(state.doc.sliceString(last.to)) ? last : null;
+}
+
+// Keep the separator folded when typing a new paragraph after the table moves it away from EOF.
+const continuedTable = StateField.define<number | null>({
+	create: () => null,
+	update(value, transaction) {
+		if (!transaction.docChanged) return value;
+		const from = trailingTable(transaction.startState)?.from ?? value;
+		return from === null ? null : transaction.changes.mapPos(from, 1, MapMode.TrackAfter);
+	},
+});
+
 /**
  * Whole blocks drawn in place of their text: a formula on its own lines, a Mermaid diagram and a table. A replacement
  * that spans lines may only come from a state field, so this is kept apart from {@link liveDecorations}.
  */
 export function liveBlockDecorations(state: EditorState): DecorationSet {
 	const builder = new RangeSetBuilder<Decoration>();
+	const foldedTable = state.readOnly ? null : trailingTable(state)?.from ?? state.field(continuedTable, false);
 	syntaxTree(state).iterate({
 		enter(node) {
 			if (node.name === "Document") return;
@@ -640,7 +657,8 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 				if (table) {
 					const context = state.field(libraryField, false) ?? null;
 					const widget = new TableWidget(text, table.rows.length, context, (view) => view.state.facet(tableHooksFacet), redrawBlocks);
-					builder.add(node.from, node.to, Decoration.replace({ widget, block: true }));
+					const end = node.from === foldedTable ? tableSeparatorEnd(state.doc, node.to) : node.to;
+					builder.add(node.from, end, Decoration.replace({ widget, block: true }));
 				}
 			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
 				const info = node.node.getChild("CodeInfo");
@@ -680,8 +698,9 @@ const snapSelection = EditorState.transactionFilter.of((transaction) => {
 	const drawn = transaction.state.field(blockDecorations, false);
 	if (!drawn) return transaction;
 	const tables: { from: number; to: number }[] = [];
-	drawn.between(0, transaction.state.doc.length, (from, to, decoration) => {
-		if (decoration.spec.widget instanceof TableWidget) tables.push({ from, to });
+	drawn.between(0, transaction.state.doc.length, (from, _to, decoration) => {
+		const widget = decoration.spec.widget;
+		if (widget instanceof TableWidget) tables.push({ from, to: from + widget.text.length });
 	});
 	if (!tables.length) return transaction;
 	let moved = false;
@@ -740,7 +759,66 @@ const markSelectedTables = ViewPlugin.fromClass(class {
 	}
 });
 
-export const liveBlocks: Extension = [blockDecorations, liveTableAccess, snapSelection, markSelectedTables];
+function lastDrawnTable(state: EditorState) {
+	const last = trailingTable(state);
+	if (!last) return null;
+	const block = state.field(blockDecorations).iter(last.from);
+	return block.from === last.from && block.value?.spec.widget instanceof TableWidget ? last : null;
+}
+
+function caretAfterLastTable(view: EditorView, event: MouseEvent) {
+	const { state } = view;
+	if (state.readOnly || event.defaultPrevented || event.button !== 0 || event.detail !== 1 || event.shiftKey || event.altKey || event.ctrlKey || event.metaKey) return null;
+	const last = lastDrawnTable(state);
+	if (!last) return null;
+	const table = Array.from(view.contentDOM.querySelectorAll<HTMLElement>(".cm-live-table")).at(-1);
+	if (!table || view.posAtDOM(table) !== last.from || event.clientY < table.getBoundingClientRect().bottom) return null;
+	const { doc } = state;
+	const clicked = view.posAtCoords({ x: event.clientX, y: event.clientY });
+	const separatorEnd = tableSeparatorEnd(doc, last.to);
+	// A click on an existing paragraph line already has the right caret position.
+	if (separatorEnd > last.to && clicked !== null && clicked > separatorEnd && event.target !== view.scrollDOM) return null;
+	const anchor = Math.min(doc.length, Math.max(clicked ?? doc.length, separatorEnd + 1));
+	return { end: last.to, anchor };
+}
+
+const selectAfterLastTable = EditorView.mouseSelectionStyle.of((view, event) => {
+	const target = caretAfterLastTable(view, event);
+	if (!target) return null;
+	focusAfterTable(view, target.end, target.anchor);
+	let anchor = view.state.selection.main.head;
+	return {
+		get(current) {
+			if (current === event) return EditorSelection.single(anchor);
+			const head = view.posAtCoords({ x: current.clientX, y: current.clientY }, false);
+			return EditorSelection.single(anchor, head);
+		},
+		update(update) {
+			if (update.docChanged) anchor = update.changes.mapPos(anchor);
+		},
+	};
+});
+
+const pressAfterLastTable = ViewPlugin.fromClass(class {
+	constructor(readonly view: EditorView) {
+		// CodeMirror only starts mouse selections inside the editable content.
+		view.scrollDOM.addEventListener("mousedown", this.press);
+	}
+
+	destroy(): void {
+		this.view.scrollDOM.removeEventListener("mousedown", this.press);
+	}
+
+	private press = (event: MouseEvent): void => {
+		if (event.target !== this.view.scrollDOM) return;
+		const target = caretAfterLastTable(this.view, event);
+		if (!target) return;
+		event.preventDefault();
+		focusAfterTable(this.view, target.end, target.anchor);
+	};
+});
+
+export const liveBlocks: Extension = [continuedTable, blockDecorations, liveTableAccess, snapSelection, markSelectedTables, selectAfterLastTable, pressAfterLastTable];
 
 /** Keeps what a drag sweeps over drawn until the button is let go. Add it before {@link liveMarkdown} and {@link liveBlocks}. */
 export const liveDrag: Extension = [
@@ -845,8 +923,26 @@ function stepIntoTable(forward: boolean) {
 	};
 }
 
+function deleteLastTable(view: EditorView): boolean {
+	const { state } = view;
+	const { selection, doc } = state;
+	if (state.readOnly || selection.ranges.length !== 1 || !selection.main.empty) return false;
+	const table = lastDrawnTable(state);
+	const caret = selection.main.head;
+	if (!table || caret < table.to || (caret > table.to && caret !== doc.lineAt(caret).from)) return false;
+	view.dispatch({
+		changes: { from: table.from, to: doc.length },
+		selection: { anchor: table.from },
+		annotations: isolateHistory.of("full"),
+		userEvent: "delete.backward",
+		scrollIntoView: true,
+	});
+	return true;
+}
+
 /** Add this next to {@link liveBlocks}. */
 export const liveBlockKeys = keymap.of([
+	{ key: "Backspace", run: deleteLastTable },
 	{ key: "ArrowUp", run: stepIntoBlock("up") },
 	{ key: "ArrowDown", run: stepIntoBlock("down") },
 	{ key: "ArrowUp", run: stepWithinLine(false) },
