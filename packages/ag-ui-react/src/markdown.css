@@ -1,16 +1,59 @@
 .agui-markdown {
 	min-inline-size: 0;
-	line-height: 1.55;
+	font-size: var(--agui-md-font-size, inherit);
+	line-height: 1.65;
 	overflow-wrap: anywhere;
 }
 
-.agui-markdown > * + * { margin-block-start: 12px; }
+.agui-markdown :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, hr) { margin: 0; }
+.agui-markdown > :where(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote) { max-inline-size: 72ch; }
+.agui-markdown > * + * { margin-block-start: 0.625rem; }
 .agui-markdown > :last-child,
 .agui-markdown > :last-child > :last-child { margin-block-end: 0; }
-.agui-markdown p { margin: 0; }
+.agui-markdown p { text-wrap: pretty; }
+
+.agui-markdown :where(h1, h2, h3, h4, h5, h6) {
+	font-size: inherit;
+	font-weight: 600;
+	line-height: 1.35;
+	text-wrap: balance;
+}
+
+.agui-markdown h1 { font-size: var(--agui-md-h1-size, 1.4em); }
+.agui-markdown h2 { font-size: var(--agui-md-h2-size, 1.15em); }
+.agui-markdown > * + :is(h1, h2, h3, h4, h5, h6) { margin-block-start: 1rem; }
+.agui-markdown > :is(h1, h2, h3, h4, h5, h6) + * { margin-block-start: 0.375rem; }
+
 .agui-markdown :is(ul, ol) { padding-inline-start: 1.4em; }
-.agui-markdown a { color: var(--agui-md-link-color, LinkText); }
+.agui-markdown :where(li, blockquote) > * + *,
+.agui-markdown li + li { margin-block-start: 0.25rem; }
+.agui-markdown li::marker { color: var(--agui-md-muted, currentColor); }
+.agui-markdown strong { font-weight: 600; }
+
+.agui-markdown blockquote {
+	padding-inline-start: 0.75rem;
+	border-inline-start: 2px solid var(--agui-md-quote-border, var(--agui-md-border, GrayText));
+}
+
+.agui-markdown hr {
+	border: 0;
+	border-block-start: 1px solid var(--agui-md-border, GrayText);
+}
+
+.agui-markdown a {
+	color: var(--agui-md-link-color, LinkText);
+	text-underline-offset: 0.16em;
+}
+
 .agui-markdown img { max-inline-size: 100%; block-size: auto; }
+
+.agui-markdown [data-streamdown="inline-code"] {
+	padding: 0.125rem 0.25rem;
+	border-radius: var(--agui-md-inline-code-radius, 0.25rem);
+	background: var(--agui-md-inline-code-background, ButtonFace);
+	font-family: var(--agui-md-code-font, monospace);
+	font-size: 0.9em;
+}
 
 .agui-markdown [data-streamdown="table-wrapper"] {
 	display: flex;
@@ -26,14 +69,21 @@
 
 .agui-markdown table {
 	inline-size: 100%;
-	margin-block: 12px 4px;
+	margin-block: 0 0.25rem;
 	border-collapse: collapse;
+	font-size: var(--agui-md-table-font-size, 0.9375em);
 }
 
 .agui-markdown table :is(th, td) {
-	padding: 8px 12px;
-	border: 1px solid var(--agui-md-border, GrayText);
+	padding: 0.375rem 0.625rem;
+	border: 0;
+	border-block-end: 1px solid var(--agui-md-border, GrayText);
 	text-align: start;
+}
+
+.agui-markdown th {
+	background: var(--agui-md-table-header-background, ButtonFace);
+	font-weight: 600;
 }
 
 .agui-markdown [data-streamdown="table-wrapper"] > div:first-child:not(:last-child),
@@ -121,7 +171,6 @@
 	display: flex;
 	flex-direction: column;
 	inline-size: 100%;
-	margin-block-start: 12px;
 }
 
 .agui-markdown [data-code-block-header] { display: contents; }

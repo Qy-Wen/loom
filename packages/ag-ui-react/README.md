@@ -18,6 +18,8 @@ Create one stable agent per conversation. Use `useAgent(agent)` to observe messa
 
 AG-UI parses and applies protocol events. The host app supplies authentication, persistence, reconnection, and any tool approval UI. The default Stop invokes the supplied agent's `abortRun()`; implement server-side cancellation in the host when the transport can detach while work continues.
 
+For a custom transcript, spread `scrollerProps` from `useChatScroll()` onto a scrollable `<div>` with `overflow-y: auto` and `overflow-anchor: none`. Use `showJumpToLatest` to show a jump button and `scrollToBottom` to resume following the transcript.
+
 ## Markdown
 
 To render streaming Markdown with tables and highlighted code, install `streamdown@1.3.0` and use the Markdown entry with a bundler that supports CSS imports.
@@ -30,5 +32,7 @@ import "@loom/ag-ui-react/markdown.css";
 ```
 
 Pass a `linkComponent` to handle app-specific links and use the `dark` class to select the dark code theme. Keep using `Chat` or `MessageList` from the main entry for plain text.
+
+Set CSS properties such as `--agui-md-font-size`, `--agui-md-link-color`, and `--agui-md-inline-code-background` on the Markdown container to match the host theme.
 
 Run `npm pack` in this directory to build and create a standalone ESM package with TypeScript declarations.
