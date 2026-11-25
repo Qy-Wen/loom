@@ -17,6 +17,7 @@ import {
 } from "@loom/core/grade";
 import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
+import { useConfirmation } from "../../components/confirm-dialog.tsx";
 import { useLocale } from "../../locale.tsx";
 import { GradeCurve } from "./grade-curve.tsx";
 
@@ -43,6 +44,7 @@ export function GradeView({
 	actions?: ReactNode;
 }): React.JSX.Element {
 	const { t } = useLocale();
+	const { confirm } = useConfirmation(asset.assetId);
 	const [grade, setGrade] = useState<ImageGrade>(IDENTITY_IMAGE_GRADE);
 	const [sourceId, setSourceId] = useState(asset.assetId);
 	const [lut, setLut] = useState<string | undefined>();
@@ -205,6 +207,15 @@ export function GradeView({
 	}
 
 	async function save(mode: "save" | "saveAs"): Promise<void> {
+		if (mode === "save") {
+			const confirmed = await confirm({
+				title: t.grade.overwriteTitle,
+				description: t.grade.overwriteDescription(source.filename),
+				confirmLabel: t.grade.overwrite,
+				tone: "danger",
+			});
+			if (!confirmed) return;
+		}
 		setSaving(mode);
 		setError(null);
 		try {

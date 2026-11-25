@@ -2,7 +2,7 @@ import { copyFile, readFile, readdir } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, test } from "./loom.ts";
 
-test("saving a grade replaces the image and video while keeping library metadata", async ({ loomPage: page, electronApp }) => {
+test("saving a grade replaces the image and video only after confirmation and keeps library metadata", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(60_000);
 	const root = (await page.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
@@ -31,7 +31,20 @@ test("saving a grade replaces the image and video while keeping library metadata
 		const slider = panel.locator('input[type="range"]').first();
 		await slider.press("End");
 		await expect(slider).toHaveValue("3");
-		await panel.getByRole("button", { name: "Save", exact: true }).click();
+		const save = panel.getByRole("button", { name: "Save", exact: true });
+		const confirmation = page.getByRole("dialog", { name: "Overwrite original file?", exact: true });
+		const cancel = confirmation.getByRole("button", { name: "Cancel", exact: true });
+		await save.click();
+		await expect(confirmation).toContainText(name);
+		await expect(cancel).toBeFocused();
+		expect(await readFile(path)).toEqual(original);
+		await cancel.click();
+		await expect(confirmation).toBeHidden();
+		await expect(save).toBeFocused();
+		await expect(slider).toHaveValue("3");
+		expect(await readFile(path)).toEqual(original);
+		await save.click();
+		await confirmation.getByRole("button", { name: "Overwrite", exact: true }).click();
 		await expect.poll(async () => ({
 			value: await slider.inputValue(),
 			errors: await panel.locator(".grade-error").allTextContents(),
