@@ -4,6 +4,17 @@
 
 ## [Unreleased]
 
+## [v0.2.0]
+
+- Embed a canvas board in a Markdown note and preview its cards and connections. Scrolling past the preview stays steady.
+- HTML embeds in Markdown fit the width of the note, and titles of embedded notes sit centered under their frames.
+- Click below a block at the end of a note and keep typing.
+- HTML file cards on a canvas show the page itself.
+- The button that collapses the right sidebar stays clickable.
+- In macOS full screen, the toolbar sits farther from the top edge.
+- Saving a color grade asks before replacing the original file.
+- The Agent writes Loom wiki links and content embeds in Markdown.
+
 ## [v0.1.10]
 
 - Delete individual cloud library copies from Settings while keeping local files.
