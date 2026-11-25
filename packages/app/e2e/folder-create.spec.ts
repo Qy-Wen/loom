@@ -265,10 +265,8 @@ test("file menus create Markdown and canvas files next to the clicked file", asy
 		}
 		await electronApp!.evaluate(({ Menu }, label) => {
 			Menu.prototype.popup = function (this: Electron.Menu, options?: Electron.PopupOptions) {
-				const start = this.items.findIndex((item) => item.label === "New Folder");
-				const items = this.items.slice(start, start + 3);
-				(globalThis as { createLabels?: string[] }).createLabels = items.map((item) => item.label);
-				items.find((item) => item.label === label && item.enabled)?.click();
+				(globalThis as { fileMenuLabels?: string[] }).fileMenuLabels = this.items.map((item) => item.label);
+				this.items.find((item) => item.label === label && item.enabled)?.click();
 				options?.callback?.();
 			};
 		}, label);
@@ -277,7 +275,10 @@ test("file menus create Markdown and canvas files next to the clicked file", asy
 		await editor.fill(`${stem}.${extension}`);
 		await editor.press("Enter");
 		await expect.poll(paths).toContain(`notes/${stem}.${extension}`);
-		expect(await electronApp!.evaluate(() => (globalThis as { createLabels?: string[] }).createLabels))
-			.toEqual(["New Folder", "New File", "New Canvas"]);
+		const labels = await electronApp!.evaluate(() => (globalThis as { fileMenuLabels?: string[] }).fileMenuLabels ?? []);
+		const createStart = labels.indexOf("New Folder");
+		expect(labels.slice(createStart, createStart + 3)).toEqual(["New Folder", "New File", "New Canvas"]);
+		expect(labels).toContain("Copy");
+		expect(labels).not.toContain("Duplicate");
 	}
 });

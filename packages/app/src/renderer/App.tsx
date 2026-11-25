@@ -1020,8 +1020,6 @@ export function App(): React.JSX.Element {
 				});
 			} else if (action === "rename" && next.keys.length === 1) {
 				setRenamingAssetId(asset.assetId);
-			} else if (action === "duplicate") {
-				await duplicateSelection(next);
 			} else if (action === "copy" || action === "cut") {
 				await copySelection(next, action === "cut");
 			} else if (action === "paste") {

@@ -78,7 +78,6 @@ export type AssetContextAction =
 	| "favorite"
 	| "unfavorite"
 	| "rename"
-	| "duplicate"
 	| "cut"
 	| "copy"
 	| "paste"

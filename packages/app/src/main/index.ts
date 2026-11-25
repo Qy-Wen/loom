@@ -714,7 +714,6 @@ function registerIpc(): void {
 				...libraryCreateMenuItems(t),
 				{ type: "separator" },
 				{ label: t.menu.rename, enabled: single, click: () => "rename" },
-				{ label: t.menu.duplicate, click: () => "duplicate" },
 				{ label: t.menu.cut, click: () => "cut" },
 				{ label: t.common.copy, click: () => "copy" },
 				{ label: t.menu.paste, enabled: await clipboardRequests.run(clipboardHasFiles), click: () => "paste" },
