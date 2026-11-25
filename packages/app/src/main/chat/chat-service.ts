@@ -9,6 +9,7 @@ import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, ti
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ChatSelection } from "@loom/agent/chat-models";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
+import type { SessionCompactionResult } from "../../shared/ipc.ts";
 import { clearRestoreMarker, readRestoreMarker, relocatedCwd } from "../cloud-backup/snapshot.ts";
 
 export type ChatServiceOptions = LoomAgentOptions & {
@@ -290,6 +291,28 @@ export class ChatService {
 		return this.getSession(String(conversation.id));
 	}
 	async openSession(id: string) { await this.ensureModel(await this.conversation(id)); return this.getSession(id); }
+
+	async compactSession(id: string): Promise<SessionCompactionResult> {
+		const runtime = this.requireRuntime();
+		const conversation = await this.conversation(id);
+		await this.ensureModel(conversation);
+		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		const task = await conversation.compact(undefined, context);
+		const { outcome } = (await runtime.harness.waitForTask(task, context)).state;
+		if (outcome.status === "aborted") return "cancelled";
+		if (outcome.status !== "completed") throw new Error(outcome.error?.message ?? outcome.reason);
+		if (outcome.result.submissionId === undefined) return outcome.result.entryId === undefined ? "unchanged" : "compacted";
+
+		// The summary can wait in the inbox for the active turn to reach a boundary.
+		const submission = await runtime.harness.submission(outcome.result.submissionId, context);
+		if (!submission) throw new Error("Compaction summary submission was not found.");
+		const result = await submission.wait(context);
+		if (result.status === "done") return "compacted";
+		if (result.reason === "stale") return "unchanged";
+		if (result.reason === "aborted") return "cancelled";
+		throw new Error(typeof result.detail === "string" ? result.detail : result.reason);
+	}
+
 	async getChatImage(id: string, entryId: string, contentIndex: number): Promise<{ data: string; mimeType: string } | undefined> {
 		if (!Number.isSafeInteger(contentIndex) || contentIndex < 0) return undefined;
 		const conversation = await this.conversation(id);

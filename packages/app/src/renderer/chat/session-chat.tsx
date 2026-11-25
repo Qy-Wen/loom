@@ -24,6 +24,7 @@ export function SessionChat({
 	onComposerAttachApplied,
 	onSessionRecord,
 	onHistoryChanged,
+	onNewSession,
 	onForked,
 	onOpenSettings,
 }: {
@@ -37,6 +38,7 @@ export function SessionChat({
 	onComposerAttachApplied: () => void;
 	onSessionRecord: (record: LoomSessionRecord) => void;
 	onHistoryChanged: () => void;
+	onNewSession: (() => Promise<void>) | undefined;
 	onForked: (record: LoomSessionRecord) => void;
 	onOpenSettings: () => void;
 }): React.JSX.Element {
@@ -125,7 +127,7 @@ export function SessionChat({
 			<ChatViewContext.Provider value={{ messages: visible, connecting: stream.connecting, threadReady: !stream.connecting }}>
 				<div className="session-chat-shell">
 					<SessionTranscript messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} />
-					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} />
+					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} onNewSession={onNewSession} />
 				</div>
 			</ChatViewContext.Provider>
 		</ChatSessionContext.Provider>

@@ -102,6 +102,7 @@ const api: LoomApi = {
 	describeAudio: (assetId) => ipcRenderer.invoke(IPC.describeAudio, assetId),
 	listSessions: () => ipcRenderer.invoke(IPC.listSessions),
 	createSession: () => ipcRenderer.invoke(IPC.createSession),
+	compactSession: (id) => ipcRenderer.invoke(IPC.compactSession, id),
 	openSession: (id) => ipcRenderer.invoke(IPC.openSession, id),
 	getSession: (id, afterEntryId) => ipcRenderer.invoke(IPC.getSession, id, afterEntryId),
 	stageComposerAssets: (id, assets) => ipcRenderer.invoke(IPC.stageComposerAssets, id, assets),

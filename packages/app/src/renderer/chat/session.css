@@ -494,6 +494,67 @@
 	animation: session-caret-blink 1.06s linear infinite;
 }
 
+.session-composer-input {
+	position: relative;
+}
+
+.session-slash-commands {
+	position: absolute;
+	inset-block-end: calc(100% + var(--lm-space-5));
+	inset-inline-start: 0;
+	z-index: var(--lm-z-dropdown);
+	inline-size: max-content;
+	max-inline-size: 100%;
+	box-sizing: border-box;
+	margin: 0;
+	padding: var(--lm-space-2);
+	list-style: none;
+	border: 1px solid var(--lm-border-subtle);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-raised);
+	box-shadow: var(--lm-shadow-md);
+	color: var(--lm-text-primary);
+	font-size: var(--lm-text-size-md);
+}
+
+.session-slash-commands li {
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-5);
+	min-block-size: 32px;
+	padding: var(--lm-space-2) var(--lm-space-4);
+	box-sizing: border-box;
+	border-radius: var(--lm-radius-sm);
+	cursor: pointer;
+}
+
+.session-slash-commands code {
+	min-inline-size: 8ch;
+	font-family: var(--lm-font-mono);
+}
+
+.session-slash-commands span {
+	color: var(--lm-text-secondary);
+	font-size: var(--lm-text-size-sm);
+	overflow-wrap: anywhere;
+}
+
+.session-slash-commands [aria-selected="true"] {
+	background: var(--lm-surface-hover);
+}
+
+.session-slash-commands [aria-disabled="true"] {
+	color: var(--lm-text-muted);
+	cursor: default;
+}
+
+@media (forced-colors: active) {
+	.session-slash-commands [aria-selected="true"] {
+		outline: 1px solid Highlight;
+		outline-offset: -1px;
+	}
+}
+
 @keyframes session-caret-blink {
 	0%, 50% { caret-color: currentColor; }
 	50.01%, 100% { caret-color: transparent; }

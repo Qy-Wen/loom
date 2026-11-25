@@ -181,6 +181,101 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
+test("chat slash commands open a fresh tab and compact only model context", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated user data and library required");
+	const turns: unknown[] = [];
+	let summaries = 0;
+	const server = createServer((request, response) => {
+		let body = "";
+		request.setEncoding("utf8");
+		request.on("data", (part: string) => { body += part; });
+		request.on("end", () => {
+			const { messages } = JSON.parse(body) as { messages: Array<{ role: string; content: unknown }> };
+			const summary = JSON.stringify(messages[0]?.content).includes("context summarization assistant");
+			if (summary) summaries++;
+			else turns.push(messages.findLast((message) => message.role === "user")?.content);
+			const content = summary ? "Earlier chat summarized." : turns.length === 1 ? "history ".repeat(16_000) : "Recent reply.";
+			const chunk = (delta: object, finish_reason: string | null) => `data: ${JSON.stringify({ id: "slash", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.end(chunk({ content }, null) + chunk({}, "stop") + "data: [DONE]\n\n");
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		const list = () => loomPage.evaluate(() => window.loom.listSessions());
+		const before = await list();
+		const editor = loomPage.getByTestId("chat-composer-editor");
+		const submit = async (text: string) => {
+			await editor.fill(text);
+			await expect(loomPage.getByTestId("chat-send-button")).toBeEnabled();
+			await editor.press("Enter");
+		};
+		await submit("/new");
+		await expect.poll(async () => (await list()).length).toBe(before.length + 1);
+		const session = (await list()).find((row) => !before.some((item) => item.id === row.id))!;
+		const record = () => loomPage.evaluate((id) => window.loom.getSession(id), session.id);
+		await expect(editor).toBeEmpty();
+		await editor.fill("/");
+		const commands = loomPage.getByRole("listbox", { name: "Chat commands" });
+		const newCommand = commands.getByRole("option", { name: "/new New session" });
+		const compactCommand = commands.getByRole("option", { name: "/compact Compact context" });
+		await expect(newCommand).toBeVisible();
+		const menuWidth = (await commands.boundingBox())!.width;
+		const upper = (await compactCommand.boundingBox())!;
+		const lower = (await newCommand.boundingBox())!;
+		expect(lower.x).toBe(upper.x);
+		expect(lower.y).toBeGreaterThanOrEqual(upper.y + upper.height);
+		expect(lower.y + lower.height).toBeLessThan((await editor.boundingBox())!.y);
+		await editor.press("ArrowDown");
+		await expect(newCommand).toHaveAttribute("aria-selected", "true");
+		await editor.press("ArrowUp");
+		await expect(compactCommand).toHaveAttribute("aria-selected", "true");
+		await expect(editor).toBeFocused();
+		await editor.press("Escape");
+		await expect(commands).toBeHidden();
+		await expect(editor).toHaveText("/");
+		await editor.fill("/n");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		expect((await commands.boundingBox())!.width).toBeLessThan(menuWidth);
+		await editor.fill("/c");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		await expect(compactCommand).toHaveAttribute("aria-selected", "true");
+		await editor.dispatchEvent("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+		await expect(compactCommand).toBeVisible();
+		await editor.press("Enter");
+		await expect(loomPage.getByText("No context was compacted.")).toBeVisible();
+		expect(turns).toHaveLength(0);
+
+		await submit("First question");
+		await expect.poll(async () => (await record()).messages.length).toBe(2);
+		await submit("/compact is a command");
+		await expect.poll(async () => (await record()).messages.length).toBe(4);
+		expect(summaries).toBe(0);
+		expect(turns.map((turn) => JSON.stringify(turn)).at(-1)).toContain("/compact is a command");
+		const original = await record();
+		await submit("/compact");
+		await expect(loomPage.getByText("Context compacted.")).toBeVisible();
+		const compacted = await record();
+		expect(summaries).toBe(1);
+		expect(turns).toHaveLength(2);
+		expect(compacted.messages).toEqual(original.messages);
+		expect(compacted.context!.tokens).toBeLessThan(original.context!.tokens!);
+
+		await editor.fill("/");
+		await newCommand.click();
+		await expect.poll(async () => (await list()).length).toBe(before.length + 2);
+		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
+		await expect(editor).toBeFocused();
+		await loomPage.getByRole("tab", { name: original.title, exact: true }).click();
+		await expect(loomPage.getByTestId("chat-message-list").getByText("First question", { exact: true })).toBeVisible();
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
 test("Electron retains pre-compaction chat after reload and can fork before an old question", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
 	test.setTimeout(60_000);

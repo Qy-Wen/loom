@@ -1022,6 +1022,7 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.createSession, async () => {
 		return chatRecord(await requireChat().createSession());
 	});
+	ipcMain.handle(IPC.compactSession, (_event, id: string) => requireChat().compactSession(id));
 	ipcMain.handle(IPC.openSession, async (_event, id: string) => chatRecord(await requireChat().openSession(id)));
 	ipcMain.handle(IPC.getSession, async (_event, id: string, afterEntryId?: string) => chatRecord(await requireChat().getSession(id, afterEntryId)));
 	ipcMain.handle(IPC.stageComposerAssets, async (_event, id: string, assets: unknown) => {

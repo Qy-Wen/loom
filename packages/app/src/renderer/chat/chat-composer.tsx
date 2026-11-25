@@ -5,6 +5,7 @@ import type { LoomUserAttachment } from "@loom/agent";
 import { contentWithPlacedAssets, referenceKey } from "@loom/agent/attachments";
 import { failureShownInHistory, formatChatError } from "../../shared/chat-error.ts";
 import type { ChatModelView } from "../../shared/chat-models.ts";
+import type { SessionCompactionResult } from "../../shared/ipc.ts";
 import { assetRefBlocks, composerLayoutText, displayAssetRefs, inlineReferenceKeys, parseComposerAssetInputs, storedAssetRefs, stripInlineAssetRefs } from "@loom/agent/composer-asset";
 import { endLibraryDrag, hasLibraryDrag, readComposerDrag } from "../assets/asset-drag.ts";
 import { useLocale } from "../locale.tsx";
@@ -12,7 +13,7 @@ import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerActions, type PendingEdit } from "./chat-context.ts";
 import { editableText, placedChips } from "./chat-content.ts";
-import { AddFilesButton, ComposerTextArea } from "./chat-composer-input.tsx";
+import { AddFilesButton, ComposerTextArea, type SlashCommand } from "./chat-composer-input.tsx";
 import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
@@ -29,10 +30,11 @@ function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]):
 }
 
 /** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an asset restores Send. */
-export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
+export function FollowUpInput({ onSubmitMessage, isRunning, onStop, onNewSession }: {
 	onSubmitMessage: (text: string) => Promise<unknown>;
 	isRunning: boolean;
 	onStop: () => void;
+	onNewSession: (() => Promise<void>) | undefined;
 }) {
 	const [value, onChange] = useState("");
 	const { t } = useLocale();
@@ -43,6 +45,8 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	const [queued, setQueued] = useState<QueuedFollowUp[]>([]);
 	const [assets, setAssets] = useState<LoomUserAttachment[]>([]);
 	const [attachmentError, setAttachmentError] = useState<string | null>(null);
+	const [compactionFeedback, setCompactionFeedback] = useState<{ result: SessionCompactionResult } | { error: string } | null>(null);
+	const pendingCompactions = useRef(new Set<string>());
 	const [catalog, setCatalog] = useState<ChatModelView[] | null>(null);
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
@@ -61,10 +65,13 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	}, []);
 	const textOnlyModel = modelLacksImageInput(model, catalog);
 	const hasDraft = editableText(value) || assets.length > 0;
+	const bareSlash = value.trim() === "/" && assets.length === 0;
+	const compacting = pendingCompactions.current.has(threadId);
 	useEffect(() => {
 		setAssets([]);
 		setQueued([]);
 		setAttachmentError(null);
+		setCompactionFeedback(null);
 		onChange("");
 	}, [threadId]);
 	const submittedEdit = useRef<PendingEdit | null>(null);
@@ -176,7 +183,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	activeThread.current = threadId;
 	const running = useRef(isRunning);
 	running.current = isRunning;
-	const deliver = () => {
+	const deliver = (shortcut?: SlashCommand) => {
 		if (submitting.current) return;
 		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : value).replaceAll("\u200b", "");
 		const text = editableText(raw) ? raw : "";
@@ -187,6 +194,37 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 			onChange(raw);
 			return;
 		}
+		const command = assetPayload.length === 0 ? raw.trim() : "";
+		if (shortcut && (!command.startsWith("/") || !shortcut.startsWith(raw.trimStart()))) return;
+		const action = shortcut ?? command;
+		if (action === "/") return;
+		if (action === "/new") {
+			if (!onNewSession) return;
+			if (shortcut) editorRef.current?.focus();
+			submitting.current = true;
+			void onNewSession().finally(() => { submitting.current = false; });
+			return;
+		}
+		if (action === "/compact") {
+			if (pendingCompactions.current.has(threadId)) return;
+			pendingCompactions.current.add(threadId);
+			if (shortcut) editorRef.current?.focus();
+			setAttachmentError(null);
+			setCompactionFeedback(null);
+			onChange("");
+			void (async () => {
+				try {
+					const result = await window.loom.compactSession(threadId);
+					if (activeThread.current === threadId) setCompactionFeedback({ result });
+				} catch (cause) {
+					if (activeThread.current === threadId) setCompactionFeedback({ error: formatChatError(cause) });
+				} finally {
+					pendingCompactions.current.delete(threadId);
+				}
+			})();
+			return;
+		}
+		setCompactionFeedback(null);
 		submitting.current = true;
 		void (async () => {
 			let queuedId: string | null = null;
@@ -396,6 +434,11 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 			)}
 			{branch?.error && !branch.editingId && <div className="session-branch-note session-branch-error">{branch.error}</div>}
 			{attachmentError && <div className="session-branch-note session-branch-error">{attachmentError}</div>}
+			{compacting
+				? <div className="session-branch-note" role="status">{t.chat.compaction.pending}</div>
+				: compactionFeedback && ("error" in compactionFeedback
+					? <ChatError label={t.chat.compaction.failed} message={compactionFeedback.error} />
+					: <div className="session-branch-note" role="status">{t.chat.compaction[compactionFeedback.result]}</div>)}
 			{textOnlyModel && hasImageAsset(assets) && <div className="session-branch-note" role="status">{t.chat.modelNoImages}</div>}
 			{queued.length > 0 && (
 				<section className="session-follow-up" aria-label={t.chat.queued}>
@@ -411,16 +454,24 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 				</section>
 			)}
 			<ComposerForm
-				editor={<ComposerTextArea value={value} onChange={onChange} />}
+				editor={<ComposerTextArea
+					value={value}
+					onChange={onChange}
+					commands={assets.length ? [] : [
+						{ command: "/compact", label: t.chat.compaction.action, disabled: !threadReady || compacting },
+						{ command: "/new", label: t.sessions.new, disabled: !threadReady || !onNewSession },
+					]}
+					onCommand={deliver}
+				/>}
 				leading={<AddFilesButton />}
 				controls={<div className="session-composer-meta">
 					<AgentPermissionSelect />
 					<SessionModelSelect sessionId={threadId} model={model} onChange={onModelChanged} disabled={isRunning} />
 					<ContextIndicator context={usage} />
 				</div>}
-				onSubmit={deliver}
-				submitDisabled={!hasDraft || !threadReady}
-				onStop={isRunning && !hasDraft ? onStop : undefined}
+				onSubmit={() => deliver()}
+				submitDisabled={!hasDraft || !threadReady || bareSlash}
+				onStop={isRunning && (!hasDraft || bareSlash) ? onStop : undefined}
 				labels={{ send: t.chat.send, stop: t.chat.stop }}
 			/>
 		</div>

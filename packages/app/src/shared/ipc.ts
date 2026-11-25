@@ -132,6 +132,8 @@ export interface TableContextState extends EditorContextState {
 	align: "left" | "center" | "right" | "";
 }
 
+export type SessionCompactionResult = "compacted" | "unchanged" | "cancelled";
+
 export interface AgentEndpoint {
 	url: string;
 	token: string;
@@ -225,6 +227,7 @@ export const IPC = {
 	describeAudio: "loom:describeAudio",
 	listSessions: "loom:listSessions",
 	createSession: "loom:createSession",
+	compactSession: "loom:compactSession",
 	openSession: "loom:openSession",
 	getSession: "loom:getSession",
 	stageComposerAssets: "loom:stageComposerAssets",
@@ -382,6 +385,7 @@ export interface LoomApi {
 	describeAudio: (assetId: string) => Promise<AudioWriteupStatus>;
 	listSessions: () => Promise<SessionSummary[]>;
 	createSession: () => Promise<SessionRecord>;
+	compactSession: (id: string) => Promise<SessionCompactionResult>;
 	openSession: (id: string) => Promise<SessionRecord>;
 	/** Load full history initially, then only entries after the last committed ID. */
 	getSession: (id: string, afterEntryId?: string) => Promise<SessionRecord>;

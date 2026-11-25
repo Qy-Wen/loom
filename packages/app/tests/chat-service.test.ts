@@ -215,9 +215,7 @@ test("compaction and reopen preserve paginated chat history and forks before com
 		})] }));
 		await conversation.configure({ extensions: { add: [{ name: "test.summary" }] } }, context);
 		const beforeUsage = (await host.getSession(session.id)).context!;
-		const task = await conversation.compact(undefined, context);
-		assert.equal((await host.requireRuntime().harness.waitForTask(task, context)).state.outcome.status, "completed");
-		await conversation.waitForIdle(context);
+		assert.equal(await host.compactSession(session.id), "compacted");
 		const active = await conversation.context(context);
 		assert.ok(active.head, "a real compaction head must be placed");
 		assert.ok(!active.entries.some((entry) => entry.id === entries[1]!.id), "old question must leave model context");

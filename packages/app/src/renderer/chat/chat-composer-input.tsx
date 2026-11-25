@@ -1,17 +1,33 @@
 import { isImeComposing } from "@loom/ag-ui-react";
-import { useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { composerLayoutText } from "@loom/agent/composer-asset";
 import { useLocale } from "../locale.tsx";
 import { ComposerActionsContext } from "./chat-context.ts";
 import { paintInlineEditor, placeCaretAtStart, readInlineEditor, type ChipLabels } from "./inline-asset-text.tsx";
 
-export function ComposerTextArea({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export type SlashCommand = "/compact" | "/new";
+
+export function ComposerTextArea({ value, onChange, commands, onCommand }: {
+	value: string;
+	onChange: (value: string) => void;
+	commands: readonly { command: SlashCommand; label: string; disabled: boolean }[];
+	onCommand: (command: SlashCommand) => void;
+}) {
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
 	chipLabels.current = { remove: t.common.remove, removeNamed: t.chat.removeNamed };
 	const actions = useContext(ComposerActionsContext);
 	const editorRef = useRef<HTMLDivElement>(null);
 	const composing = useRef(false);
+	const listId = useId();
+	const [focused, setFocused] = useState(false);
+	const [dismissed, setDismissed] = useState(false);
+	const [highlighted, setHighlighted] = useState<SlashCommand | null>(null);
+	const prefix = value.trimStart();
+	const matches = focused && !dismissed && prefix.startsWith("/") ? commands.filter(({ command }) => command.startsWith(prefix)) : [];
+	const enabled = matches.filter(({ disabled }) => !disabled);
+	const active = enabled.find(({ command }) => command === highlighted) ?? enabled[0];
+	const optionId = (command: SlashCommand) => `${listId}-${command.slice(1)}`;
 	const actionsRef = useRef(actions);
 	actionsRef.current = actions;
 	const setEditor = useCallback((node: HTMLDivElement | null) => {
@@ -27,52 +43,121 @@ export function ComposerTextArea({ value, onChange }: { value: string; onChange:
 		if (next && composerLayoutText(current) === next) return;
 		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openReference(assetId), chipLabels.current);
 	}, [value]);
-	return (
-		<div
-			ref={setEditor}
-			role="textbox"
-			aria-multiline="true"
-			data-testid="chat-composer-editor"
-			aria-label={t.chat.placeholder}
-			data-placeholder={t.chat.placeholder}
-			data-empty={value ? "false" : "true"}
-			contentEditable
-			suppressContentEditableWarning
-			className="session-inline-input"
-			onCompositionStart={() => { composing.current = true; }}
-			onCompositionEnd={(event) => {
-				composing.current = false;
-				onChange(composerLayoutText(readInlineEditor(event.currentTarget)));
-			}}
-			onInput={(event) => {
-				const editor = event.currentTarget;
-				const empty = !readInlineEditor(editor);
-				editor.dataset.empty = empty ? "true" : "false";
-				if (empty) placeCaretAtStart(editor);
-				actionsRef.current?.syncAssets();
-				if (!composing.current) onChange(composerLayoutText(readInlineEditor(editor)));
-			}}
-			onFocus={(event) => {
-				if (!readInlineEditor(event.currentTarget)) placeCaretAtStart(event.currentTarget);
-			}}
-			onPaste={(event) => {
-				const files = [...event.clipboardData.files];
-				if (files.length > 0) {
+
+	function updateDraft(editor: HTMLDivElement) {
+		setDismissed(false);
+		setHighlighted(null);
+		onChange(composerLayoutText(readInlineEditor(editor)));
+	}
+
+	function chooseCommand(command: SlashCommand) {
+		setDismissed(true);
+		setHighlighted(null);
+		onCommand(command);
+	}
+
+	function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+		if (composing.current || isImeComposing(event.nativeEvent)) return;
+		const { key } = event;
+		if (matches.length > 0) {
+			if (key === "Escape") {
+				event.preventDefault();
+				event.stopPropagation();
+				setDismissed(true);
+				return;
+			}
+			if (!event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+				if (key === "ArrowUp" || key === "ArrowDown") {
+					if (!active) return;
 					event.preventDefault();
-					actions?.importFiles(files);
+					const step = key === "ArrowUp" ? -1 : 1;
+					const index = (enabled.indexOf(active) + step + enabled.length) % enabled.length;
+					setHighlighted(enabled[index]!.command);
 					return;
 				}
-				const pasted = event.clipboardData.getData("text/plain");
-				if (!pasted) return;
-				event.preventDefault();
-				document.execCommand("insertText", false, pasted);
-			}}
-			onKeyDown={(event) => {
-				if (event.key !== "Enter" || event.shiftKey || composing.current || isImeComposing(event.nativeEvent)) return;
-				event.preventDefault();
-				event.currentTarget.closest("form")?.requestSubmit();
-			}}
-		/>
+				if (key === "Enter") {
+					event.preventDefault();
+					if (active && !event.repeat) chooseCommand(active.command);
+					return;
+				}
+			}
+		}
+		if (key !== "Enter" || event.shiftKey) return;
+		event.preventDefault();
+		event.currentTarget.closest("form")?.requestSubmit();
+	}
+
+	return (
+		<div className="session-composer-input">
+			<div
+				ref={setEditor}
+				role="textbox"
+				aria-multiline="true"
+				aria-autocomplete="list"
+				aria-haspopup="listbox"
+				aria-controls={listId}
+				aria-activedescendant={active ? optionId(active.command) : undefined}
+				data-testid="chat-composer-editor"
+				aria-label={t.chat.placeholder}
+				data-placeholder={t.chat.placeholder}
+				data-empty={value ? "false" : "true"}
+				contentEditable
+				suppressContentEditableWarning
+				className="session-inline-input"
+				onCompositionStart={() => { composing.current = true; }}
+				onCompositionEnd={(event) => {
+					composing.current = false;
+					updateDraft(event.currentTarget);
+				}}
+				onInput={(event) => {
+					const editor = event.currentTarget;
+					const empty = !readInlineEditor(editor);
+					editor.dataset.empty = empty ? "true" : "false";
+					if (empty) placeCaretAtStart(editor);
+					actionsRef.current?.syncAssets();
+					if (!composing.current) updateDraft(editor);
+				}}
+				onFocus={(event) => {
+					setFocused(true);
+					if (!readInlineEditor(event.currentTarget)) placeCaretAtStart(event.currentTarget);
+				}}
+				onBlur={() => {
+					setFocused(false);
+					setDismissed(false);
+					setHighlighted(null);
+				}}
+				onPaste={(event) => {
+					const files = [...event.clipboardData.files];
+					if (files.length > 0) {
+						event.preventDefault();
+						actions?.importFiles(files);
+						return;
+					}
+					const pasted = event.clipboardData.getData("text/plain");
+					if (!pasted) return;
+					event.preventDefault();
+					document.execCommand("insertText", false, pasted);
+				}}
+				onKeyDown={onKeyDown}
+			/>
+			<ul id={listId} className="session-slash-commands" role="listbox" aria-label={t.chat.slashCommands} hidden={matches.length === 0}>
+				{matches.map(({ command, label, disabled }) => (
+					<li
+						key={command}
+						id={optionId(command)}
+						role="option"
+						aria-selected={active?.command === command}
+						aria-disabled={disabled || undefined}
+						onMouseDown={(event) => event.preventDefault()}
+						onPointerMove={() => { if (!disabled) setHighlighted(command); }}
+						onClick={() => { if (!disabled) chooseCommand(command); }}
+					>
+						<code>{command}</code>
+						<span>{label}</span>
+					</li>
+				))}
+			</ul>
+		</div>
 	);
 }
 
