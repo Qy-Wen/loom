@@ -11,6 +11,22 @@ test.beforeEach(async ({ loomPage }) => {
 	await expect(loomPage.locator(".shell")).toBeVisible({ timeout: 30_000 });
 });
 
+test("the right sidebar can be reopened from the workbench header", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron window required");
+	const shell = page.locator(".shell");
+	const dock = shell.locator('[data-region="dock"]');
+	await expect(dock).toBeVisible();
+	await shell.getByRole("button", { name: "Collapse panels" }).click();
+	await expect(dock).toBeHidden();
+	const expand = shell.getByRole("button", { name: "Expand panels" });
+	await expect(expand).toHaveAttribute("aria-expanded", "false");
+	// Playwright can click through an Electron drag region that intercepts native clicks.
+	await expect(expand).toHaveCSS("-webkit-app-region", "no-drag");
+	await expand.click();
+	await expect(dock).toBeVisible();
+	await expect(shell.getByRole("button", { name: "Collapse panels" })).toHaveAttribute("aria-expanded", "true");
+});
+
 async function savedPanel(page: Page, id: string) {
 	return page.evaluate((id) => {
 		const state = JSON.parse(localStorage.getItem("loom.layout.panels")!);

@@ -124,7 +124,7 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 .shell.library-collapsed > .panel-region.above-band { margin-left: 0; }
 .shell.library-collapsed > .workbench { --workbench-start-inset: 0px; }
 
-.panel-collapse { position: absolute; z-index: var(--lm-z-top); top: 5px; right: 6px; display: grid; place-items: center; width: var(--lm-size-lg); height: var(--lm-size-lg); padding: 0; border: 0; border-radius: var(--lm-radius-sm); color: var(--lm-text-secondary); background: transparent; cursor: pointer; }
+.panel-collapse { position: absolute; z-index: var(--lm-z-top); top: 5px; right: 6px; display: grid; place-items: center; width: var(--lm-size-lg); height: var(--lm-size-lg); padding: 0; border: 0; border-radius: var(--lm-radius-sm); color: var(--lm-text-secondary); background: transparent; cursor: pointer; -webkit-app-region: no-drag; }
 .panel-collapse:hover { background: var(--lm-surface-hover); }
 .shell.panel-collapse-bottom > .panel-collapse { top: calc(100% - var(--bottom-height) + 5px); }
 .shell.panel-collapse-above > .panel-collapse { top: calc(100% - var(--above-height) + 5px); }
