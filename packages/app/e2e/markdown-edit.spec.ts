@@ -347,6 +347,60 @@ test("code blocks, formulas and diagrams render live and give the source back un
 	expect(await readFile(file, "utf8")).toBe(original);
 });
 
+test("a rendered Markdown code block copies its body without moving the selection", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(library).toBeTruthy();
+	const file = join((await library())!, "copy-code.md");
+	const code = "  let value = 1;  \n\n\tconsole.log(value);";
+	const original = `# Examples\n\n\`\`\`ts\n${code}\n\`\`\`\n\n> ~~~\n>   quoted();\n>\n> next();\n> ~~~\n\n    indented();\n`;
+	await writeFile(file, original);
+	await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: "copy-code.md" }).click();
+	const box = loomPage.getByRole("textbox", { name: "Edit copy-code.md" });
+	const copy = box.getByRole("button", { name: "Copy code", exact: true });
+	await expect(copy).toHaveCount(3);
+	const opening = box.locator(".cm-live-codeblock-first").first();
+	const languageCaption = () => opening.evaluate((line) => getComputedStyle(line, "::after").content);
+	await expect(opening).toHaveAttribute("data-code-language", "ts");
+	await expect.poll(languageCaption).toBe('"ts"');
+	const [lineBox, buttonBox] = await Promise.all([opening.boundingBox(), copy.first().boundingBox()]);
+	expect(lineBox).not.toBeNull();
+	expect(buttonBox).not.toBeNull();
+	expect(buttonBox!.y - lineBox!.y).toBeLessThan(8);
+	expect(lineBox!.x + lineBox!.width - buttonBox!.x - buttonBox!.width).toBeLessThan(10);
+
+	const body = box.locator(".cm-live-codeblock").filter({ hasText: "let value" });
+	await body.click({ position: { x: 36, y: 8 } });
+	await expect(opening).toContainText("```ts");
+	await expect.poll(languageCaption).toBe("none");
+	await loomPage.keyboard.press("Shift+ArrowRight");
+	const selection = () => box.evaluate(() => document.getSelection()?.toString());
+	const selected = await selection();
+	expect(selected).toHaveLength(1);
+	const clipboard = () => electronApp!.evaluate(({ clipboard }) => clipboard.readText());
+	await electronApp!.evaluate(({ clipboard }) => clipboard.clear());
+	await copy.first().click();
+	await expect.poll(clipboard).toBe(code);
+	await expect(box.getByRole("status").filter({ hasText: "Copied" })).toBeVisible();
+	await expect(box).toBeFocused();
+	expect(await selection()).toBe(selected);
+
+	await copy.nth(1).click();
+	await expect.poll(clipboard).toBe("  quoted();\n\nnext();");
+	await copy.nth(2).click();
+	await expect.poll(clipboard).toBe("indented();");
+	expect(await readFile(file, "utf8")).toBe(original);
+
+	await loomPage.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await expect.poll(languageCaption).toBe('"ts"');
+	await copy.first().focus();
+	await loomPage.keyboard.press("Enter");
+	await expect.poll(clipboard).toBe(code);
+	await loomPage.getByRole("button", { name: "Edit mode", exact: true }).click();
+	await loomPage.getByRole("button", { name: "Source mode", exact: true }).click();
+	await expect(copy).toHaveCount(0);
+});
+
 test("dragging across block and inline code keeps the selection visible", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const library = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

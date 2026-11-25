@@ -7,6 +7,7 @@ import { Annotation, Compartment, EditorState, type Extension } from "@codemirro
 import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
+import { liveCodeCopyTheme } from "./live-code-copy.ts";
 import { initialLiveLibrary, liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveEmbeds, liveHandlers, liveImages, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
@@ -35,12 +36,13 @@ export interface MarkdownEditorEvents {
 	onOpenAsset(assetId: string, anchor: string | undefined): void;
 }
 
-/** Table labels and the search panel's localized phrases. */
+/** Localized labels for editor controls. */
 export interface MarkdownEditorLabels {
 	addRow: string;
 	addColumn: string;
 	moveRow: string;
 	moveColumn: string;
+	codeCopy: { label: string; copied: string; failed: string };
 	searchPhrases: Record<string, string>;
 	find: MarkdownFindLabels;
 	insertCommands: Messages["preview"]["insertCommands"];
@@ -135,7 +137,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const rendering = new Compartment();
 	const access = new Compartment();
 	const accessible = new Compartment();
-	const rendered: Extension = [liveEmbeds, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks, markdownInlineSelection];
+	const rendered: Extension = [liveEmbeds, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveCodeCopyTheme, liveClicks, markdownInlineSelection];
 	const chooseEmbedAction = (readOnly: boolean, removeEmbed = false) => host.chooseTextAction({
 		embed: true,
 		removeEmbed,
@@ -180,7 +182,12 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 		panels({ topContainer: findContainer }),
 		markdownInsert(labels.insertCommands, host.pickAsset),
 		markdownFileDrop(host),
-		EditorState.phrases.of(labels.searchPhrases),
+		EditorState.phrases.of({
+			...labels.searchPhrases,
+			"Copy code": labels.codeCopy.label,
+			"Copied": labels.codeCopy.copied,
+			"Copy failed": labels.codeCopy.failed,
+		}),
 		theme,
 		accessible.of(EditorView.contentAttributes.of({ "aria-label": label, spellcheck: "false" })),
 		keymap.of([

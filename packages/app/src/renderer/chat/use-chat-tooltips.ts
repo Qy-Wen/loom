@@ -4,7 +4,7 @@ import { useLocale } from "../locale.tsx";
 /** Adapt vendor controls to Loom's tooltip attributes without changing the vendor package. */
 export function useChatTooltips(): void {
 	const { t } = useLocale();
-	const copyCode = t.chat.copyCode;
+	const copyCode = t.common.copyCode;
 	useEffect(() => {
 		const codeCopyButton = "[data-code-block-header] > div > button:not(:has(> svg.lucide-download))";
 		const selector = `[data-slot="tooltip-trigger"][aria-label], button[title], ${codeCopyButton}`;

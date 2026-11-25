@@ -11,6 +11,7 @@ import { anchorOf } from "./heading-key.ts";
 import { matchBlockMath, matchInlineMath, renderMath } from "./math.ts";
 import { searchSelection } from "./markdown-find-widgets.ts";
 import { continuedBlockSeparator, focusAfterBlock, paragraphSeparatorEnd } from "./live-block-caret.ts";
+import { codeCopyButton } from "./live-code-copy.ts";
 import { liveReferenceSelectors, pressedReference } from "./live-reference.ts";
 import { enterTable, liveTableAccess, TableWidget, type TableHooks } from "./live-table.ts";
 import { hydrateMermaid } from "./mermaid.ts";
@@ -463,10 +464,12 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 				return;
 			}
 			if (node.name === "FencedCode") {
+				if (node.node.getChild("CodeText") && !mermaidCode(state, node.node)) found.push(codeCopyButton.range(node.from));
 				fencedCode(state, node.node, found);
 				return false;
 			}
 			if (node.name === "CodeBlock") {
+				if (node.node.getChild("CodeText")) found.push(codeCopyButton.range(node.from));
 				for (let at = node.from; at <= node.to; ) {
 					const text = state.doc.lineAt(at);
 					found.push(Decoration.line({ class: "cm-live-codeblock" }).range(text.from));
@@ -557,6 +560,7 @@ type SyntaxNodeRef = ReturnType<ReturnType<typeof syntaxTree>["resolveInner"]>;
 function fencedCode(state: EditorState, node: SyntaxNodeRef, found: Range<Decoration>[]): void {
 	const first = state.doc.lineAt(node.from).number;
 	const last = state.doc.lineAt(node.to).number;
+	const language = codeLanguage(state, node);
 	const marks = node.getChildren("CodeMark");
 	const closed = marks.length > 1;
 	const reveal = touched(state, node.from, node.to);
@@ -567,7 +571,8 @@ function fencedCode(state: EditorState, node: SyntaxNodeRef, found: Range<Decora
 		if (number === first) classes.push("cm-live-codeblock-first");
 		if (number === last) classes.push("cm-live-codeblock-last");
 		if (fence && !reveal) classes.push("cm-live-fence");
-		found.push(Decoration.line({ class: classes.join(" ") }).range(text.from));
+		const attributes = number === first && language ? { "data-code-language": language } : undefined;
+		found.push(Decoration.line({ class: classes.join(" "), attributes }).range(text.from));
 		if (text.length) found.push(styledBlockText.range(text.from, text.to));
 		if (fence && !reveal) {
 			const start = Math.max(text.from, number === first ? node.from : marks[marks.length - 1].from);
@@ -623,6 +628,17 @@ function mathBlock(state: EditorState, paragraph: SyntaxNodeRef): { tex: string 
 	return match && match.end === text.length ? { tex: match.tex } : null;
 }
 
+function codeLanguage(state: EditorState, node: SyntaxNodeRef): string | undefined {
+	const info = node.getChild("CodeInfo");
+	return info ? state.doc.sliceString(info.from, info.to).trim().split(/\s+/, 1)[0] : undefined;
+}
+
+function mermaidCode(state: EditorState, node: SyntaxNodeRef): SyntaxNodeRef | null {
+	if (node.parent?.name !== "Document") return null;
+	const language = codeLanguage(state, node)?.toLowerCase();
+	return language === "mermaid" && node.getChildren("CodeMark").length > 1 ? node.getChild("CodeText") : null;
+}
+
 function trailingTable(state: EditorState) {
 	const last = syntaxTree(state).topNode.lastChild;
 	return last?.name === "Table" && !/\S/.test(state.doc.sliceString(last.to)) ? last : null;
@@ -663,11 +679,9 @@ export function liveBlockDecorations(state: EditorState): DecorationSet {
 					const end = node.from === foldedTable ? paragraphSeparatorEnd(state.doc, node.to) : node.to;
 					builder.add(node.from, end, Decoration.replace({ widget, block: true }));
 				}
-			} else if (node.name === "FencedCode" && node.node.parent?.name === "Document") {
-				const info = node.node.getChild("CodeInfo");
-				const language = info ? state.doc.sliceString(info.from, info.to).trim().split(/\s+/)[0]?.toLowerCase() : "";
-				const code = node.node.getChild("CodeText");
-				if (language === "mermaid" && code && node.node.getChildren("CodeMark").length > 1 && !revealWidgetSource(state, node.from, node.to)) {
+			} else if (node.name === "FencedCode") {
+				const code = mermaidCode(state, node.node);
+				if (code && !revealWidgetSource(state, node.from, node.to)) {
 					builder.add(node.from, node.to, Decoration.replace({ widget: new MermaidWidget(state.doc.sliceString(code.from, code.to), node.to - node.from), block: true }));
 				}
 			}

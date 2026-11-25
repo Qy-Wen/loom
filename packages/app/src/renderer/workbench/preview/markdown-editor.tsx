@@ -99,6 +99,7 @@ export function MarkdownEditor({ asset, assets, favorite, onToggleFavorite, onOp
 		}, t.preview.editorLabel(filename), libraryRef.current, {
 			addRow: t.preview.tableAddRow, addColumn: t.preview.tableAddColumn,
 			moveRow: t.preview.tableMoveRow, moveColumn: t.preview.tableMoveColumn,
+			codeCopy: { label: t.common.copyCode, copied: t.common.copied, failed: t.common.copyFailed },
 			searchPhrases: t.preview.searchPhrases,
 			find: t.find,
 			insertCommands: t.preview.insertCommands,
