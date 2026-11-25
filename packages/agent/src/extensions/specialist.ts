@@ -3,6 +3,7 @@ import { AssistantEntry, configure, defineExtension, defineTool, type Extension,
 import { userTextFromContent } from "../context/attachments.ts";
 import type { LoomTool } from "../types.ts";
 import { isMcpToolName } from "../tools/tool-permission.ts";
+import { markdownAuthoringSection } from "./markdown-authoring.ts";
 
 export const RETRIEVE_AGENT_TOOL = "run_retrieve_agent";
 export const CREATE_AGENT_TOOL = "run_create_agent";
@@ -87,7 +88,7 @@ export function specialistDescription(role: SpecialistRole): string {
 
 /** Foreground owned conversations: durable controls Stop, busy state, and restart ownership. */
 export function createSpecialistExtension(role: SpecialistRole, tools: readonly ToolRegistration[], permission: Extension, extensions: readonly Extension[] = []) {
-	const child = defineExtension({ name: `loom.${role}`, tools });
+	const child = defineExtension({ name: `loom.${role}`, tools, sections: role === "create" ? [markdownAuthoringSection] : [] });
 	const tool = defineTool({
 		name: role === "retrieve" ? RETRIEVE_AGENT_TOOL : CREATE_AGENT_TOOL,
 		description: specialistDescription(role), parameters: specialistParameters(), replay: "safe",

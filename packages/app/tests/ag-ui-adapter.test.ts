@@ -34,6 +34,34 @@ async function fixture(run: (host: ChatService, adapter: AgUiAdapter) => Promise
 }
 const input = (threadId: string): RunAgentInput => ({ threadId, runId: `run-${threadId}`, messages: [{ id: "user", role: "user", content: "question" }], state: {}, tools: [], context: [], forwardedProps: {} });
 
+test("main and create agents receive Loom Markdown authoring instructions", { timeout: 10_000 }, async () => {
+	const prompts = new Map<string, string>();
+	await fixture(async (host, adapter) => {
+		const session = await host.createSession();
+		const events = await lastValueFrom(adapter.run(input(session.id)).pipe(toArray()));
+		assert.equal(events.at(-1)?.type, EventType.RUN_FINISHED);
+		for (const role of ["main", "create"]) {
+			const prompt = prompts.get(role);
+			assert.ok(prompt, `missing ${role} agent prompt`);
+			for (const text of ["`[[notes/Brief]]`", "`![[notes/Brief]]`", "`![[images/cover.png]]`", "from the library root", "Preserve existing wiki links and embeds"]) {
+				assert.ok(prompt.includes(text), `${role} agent prompt should include ${text}`);
+			}
+		}
+	}, (request, response) => {
+		let body = "";
+		request.setEncoding("utf8");
+		request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const parsed = JSON.parse(body) as { tools?: Array<{ function: { name: string } }>; messages: Array<{ role: string; content: string }> };
+			if (parsed.messages.some((message) => message.role === "tool")) { reply(response); return; }
+			const main = parsed.tools?.some((tool) => tool.function.name === "run_create_agent");
+			prompts.set(main ? "main" : "create", parsed.messages.filter((message) => message.role === "system").map((message) => message.content).join("\n"));
+			if (main) reply(response, "run_create_agent", { goal: "Draft a Markdown note" });
+			else reply(response);
+		});
+	});
+});
+
 for (const caller of ["main", "retrieve", "create"] as const) {
 	test(`large ${caller} results use shared storage and survive fork/reopen`, { timeout: 10_000 }, async () => {
 		const full = "result line\n".repeat(6_000) + "END_FULL_OUTPUT";

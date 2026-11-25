@@ -12,6 +12,7 @@ import {
 } from "./library-auto-memory.ts";
 import { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "../tools/pi-tools.ts";
 import { formatSkillsForSystemPrompt, loadLibrarySkills } from "./library-skills.ts";
+import { markdownAuthoringSection } from "./markdown-authoring.ts";
 import type { LoomTool } from "../types.ts";
 
 /** Memory stays frozen per conversation. Forks retain the source snapshot, not the current file. */
@@ -66,6 +67,7 @@ export async function createLibraryExtension(root: string, options: LibraryExten
 				const saved = await input.read.snapshot(LoomMemoryDoc, input.conversationId, context);
 				return formatAutoMemoryForSystemPrompt(saved?.snapshot ?? "") || undefined;
 			}, { tag: false })] : []),
+			markdownAuthoringSection,
 		],
 	});
 	return {
