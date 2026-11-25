@@ -60,7 +60,7 @@ body {
 }
 
 .shell[data-mac-fullscreen] {
-	--mac-window-controls-inset: var(--lm-space-2);
+	--mac-window-controls-inset: var(--lm-space-4);
 }
 
 .mac-window-actions {
