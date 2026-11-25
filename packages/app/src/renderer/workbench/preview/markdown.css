@@ -665,11 +665,20 @@
 	background: var(--lm-surface-raised);
 }
 
-.markdown-embed-html[data-html-preview-src] { overflow: hidden; }
+.markdown-embed-html[data-html-preview-src] {
+	position: relative;
+	block-size: auto;
+	aspect-ratio: 16 / 9;
+	overflow: hidden;
+}
 
 .markdown-embed-html > webview {
+	position: absolute;
+	inset: 0 auto auto 0;
 	inline-size: 100%;
 	block-size: 100%;
+	transform-origin: top left;
+	scale: 1;
 }
 
 .markdown-embed-media :is(video, audio) {

@@ -1,3 +1,5 @@
+/// <reference types="electron-vite/node" />
+
 interface ImportMetaEnv {
 	readonly DEV: boolean;
 	readonly VITE_LOOM_WINDOWS_PREVIEW?: string;

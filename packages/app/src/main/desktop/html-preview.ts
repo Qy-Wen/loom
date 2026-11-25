@@ -1,5 +1,6 @@
 import { session, webContents, type Session, type WebContents, type WebPreferences } from "electron";
-import { HTML_PREVIEW_PARTITION, HTML_PREVIEW_SCHEME } from "../../shared/html-preview.ts";
+import { HTML_PREVIEW_FIT_PARAM, HTML_PREVIEW_PARTITION, HTML_PREVIEW_SCHEME } from "../../shared/html-preview.ts";
+import sizePreload from "../../preload/html-preview-size.cjs?asset";
 
 const policy = "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:; base-uri 'none'; form-action 'none'";
 
@@ -59,6 +60,7 @@ export function allowHtmlPreview(readHtml: (assetId: string) => Promise<string>)
 			nodeIntegration: false,
 			webSecurity: true,
 		} satisfies WebPreferences);
+		if (new URL(params.src).searchParams.has(HTML_PREVIEW_FIT_PARAM)) preferences.preload = sizePreload;
 		delete params.httpreferrer;
 		delete params.useragent;
 		return true;
