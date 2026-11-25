@@ -1,4 +1,5 @@
 import { useState } from "react";
+import type { ToolMessage } from "@ag-ui/core";
 import { ToolCard } from "@loom/ag-ui-react";
 import { commandAllowKey, toolCallNeedsApproval, toolPathArg, type CommandAllow, type ToolGateDecision } from "@loom/agent/tool-permission";
 import { assetRefsFromTool, type AssetRef } from "../../shared/asset-refs.ts";
@@ -12,18 +13,18 @@ const decidedCalls = new Set<string>();
 
 export function ToolCallCard({
 	name,
-	done,
 	parameters,
 	result,
 	toolCallId,
+	startedAt,
 	libraryRoot,
 	allows,
 }: {
 	name: string;
-	done: boolean;
 	parameters?: unknown;
-	result?: unknown;
+	result?: ToolMessage;
 	toolCallId?: string;
+	startedAt?: number;
 	libraryRoot: string | null;
 	allows: readonly CommandAllow[];
 }) {
@@ -33,19 +34,29 @@ export function ToolCallCard({
 	const gatePending = useToolGatePending(toolCallId);
 	const [acted, setActed] = useState(false);
 	const [gateError, setGateError] = useState<string | null>(null);
+	const done = result !== undefined;
+	const failed = result?.metadata?.["loom.toolError"] === true;
+	const duration = result?.metadata?.["loom.toolDurationMs"];
 	const pathGated = level === "standard" && (name === "write" || name === "edit");
-	const waiting = Boolean(toolCallId) && !done && !acted && !decidedCalls.has(toolCallId ?? "")
+	const waiting = Boolean(toolCallId) && !done && startedAt === undefined && !acted && !decidedCalls.has(toolCallId ?? "")
 		&& (gatePending || (toolCallNeedsApproval(level, name, libraryRoot, parameters, allows) && (!pathGated || toolPathArg(parameters) !== undefined)));
 	const remember = waiting ? commandAllowKey(name, parameters, libraryRoot) : undefined;
-	const refs = done ? assetRefsFromTool(name, result) : null;
-	const resultParts = done ? toolResultParts(result) : null;
+	const refs = done && !failed ? assetRefsFromTool(name, result.content) : null;
+	const resultParts = toolResultParts(result?.content);
 	const images = resultParts?.filter((part) => part.type === "image") ?? [];
-	const displayResult = resultParts ? resultParts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n") : result;
+	const displayResult = resultParts ? resultParts.flatMap((part) => part.type === "text" ? [part.text] : []).join("\n") : result?.content;
 	return <ToolCard
 		name={name}
-		status={waiting ? t.tool.waiting : done ? t.tool.done : t.chat.working}
+		state={failed ? "failed" : done ? "done" : waiting ? "waiting" : "running"}
+		status={failed ? t.tool.failed : done ? t.tool.done : waiting ? t.tool.waiting : t.chat.working}
+		startedAt={done ? undefined : startedAt}
+		durationMs={typeof duration === "number" ? duration : undefined}
+		defaultOpen={!done || failed}
 		parameters={parameters}
 		result={done && !refs ? displayResult : undefined}
+		labels={{ arguments: t.tool.arguments, result: t.tool.result, duration: t.tool.duration, elapsed: t.tool.elapsed,
+			copyArguments: t.tool.copyArguments, copyResult: t.tool.copyResult, copied: t.common.copied, copyFailed: t.common.copyFailed,
+			emptyResult: done ? (failed ? t.tool.emptyError : t.tool.emptyResult) : undefined }}
 		resultContent={images.length > 0 || refs !== null ? <>
 			{images.length > 0 && (
 				<div className="tool-call-images">

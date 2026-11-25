@@ -18,7 +18,7 @@ test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", ()
 				{ type: "toolCall", id: "call-1", name: "search_assets", arguments: { query: "x" } },
 			],
 		},
-		{ role: "toolResult", toolCallId: "call-1", content: "ok" },
+		{ role: "toolResult", toolCallId: "call-1", content: "failed", isError: true, durationMs: 620 },
 		{ role: "system", content: "ignore" },
 	]);
 	assert.deepEqual(
@@ -26,10 +26,11 @@ test("toAgUiMessages maps user/assistant/toolResult and skips unknown roles", ()
 		[
 			{ role: "user", content: "hello" },
 			{ role: "assistant", content: "hi there" },
-			{ role: "tool", content: "ok" },
+			{ role: "tool", content: "failed" },
 		],
 	);
 	assert.equal(transcriptText([{ type: "text", text: "a" }]), "a");
+	assert.deepEqual(messages[2]?.metadata, { "loom.toolError": true, "loom.toolDurationMs": 620 });
 	const assistant = messages[1];
 	assert.ok(assistant && assistant.role === "assistant");
 	assert.deepEqual(assistant.role === "assistant" ? assistant.toolCalls : undefined, [

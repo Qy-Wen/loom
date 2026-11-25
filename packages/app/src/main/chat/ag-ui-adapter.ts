@@ -68,7 +68,8 @@ export class AgUiAdapter extends AbstractAgent {
 						for (let gap = merged.items.find((item) => item.kind === "gap"); gap?.kind === "gap" && !cancelled; gap = merged.items.find((item) => item.kind === "gap")) merged = await transcript.fillGap(gap, context);
 						if (!cancelled) await render(merged);
 					};
-					const events = createAgUiEvents(emit, { threadId: input.threadId, submit, replay: Boolean(turn?.existingRequest), optimisticUser, watchChild: async (id) => {
+					const events = createAgUiEvents(emit, { threadId: input.threadId, submit, replay: Boolean(turn?.existingRequest), optimisticUser,
+						toolStartedAt: (conversationId, callId) => this.service.toolStartedAt(conversationId, callId), watchChild: async (id) => {
 						if (watchedChildren.has(id) || cancelled) return;
 						watchedChildren.add(id);
 						const attached = await connection.watch(String(id));

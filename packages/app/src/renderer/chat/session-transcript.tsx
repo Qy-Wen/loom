@@ -30,6 +30,12 @@ export function SessionTranscript({ messages, isRunning, libraryRoot }: { messag
 	const { t } = useLocale();
 	const markdown = useAssistantAssetMarkdown();
 	const turnEnds = turnEndReplyIds(stored);
+	const toolStarts = new Map<string, number>();
+	if (isRunning) for (const message of messages) {
+		if (message.role !== "activity" || message.activityType !== "loom.tool_progress" || message.content.hidden === true) continue;
+		const { toolCallId, startedAt } = message.content;
+		if (typeof toolCallId === "string" && typeof startedAt === "number" && Number.isFinite(startedAt)) toolStarts.set(toolCallId, startedAt);
+	}
 
 	return <ChatView
 		messages={messages}
@@ -79,7 +85,8 @@ export function SessionTranscript({ messages, isRunning, libraryRoot }: { messag
 					</button>,
 				};
 			},
-			tool: ({ call, result }) => <ToolCallCard name={call.function.name} parameters={call.function.arguments} result={result?.content} toolCallId={call.id} done={Boolean(result)} libraryRoot={libraryRoot} allows={allows} />,
+			tool: ({ call, result }) => <ToolCallCard name={call.function.name} parameters={call.function.arguments} result={result}
+				toolCallId={call.id} startedAt={toolStarts.get(call.id)} libraryRoot={libraryRoot} allows={allows} />,
 			activity: (message) => <RunActivity message={message} />,
 		}}
 	/>;

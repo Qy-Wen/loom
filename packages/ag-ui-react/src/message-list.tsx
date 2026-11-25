@@ -4,7 +4,7 @@ import { transcriptItems, type TranscriptItem } from "./transcript.ts";
 import { ToolCard } from "./tool-card.tsx";
 
 export function renderDefaultTool(item: Extract<TranscriptItem, { kind: "tool" }>): ReactNode {
-	return <ToolCard name={item.call.function.name} parameters={item.call.function.arguments} result={item.result?.content} />;
+	return <ToolCard name={item.call.function.name} parameters={item.call.function.arguments} result={item.result?.content} defaultOpen={!item.result} />;
 }
 
 function renderDefaultItem(item: TranscriptItem): ReactNode {

@@ -1,60 +1,66 @@
 .agui-tool-card {
-	--agui-tool-preview-height: 128px;
-	margin: 8px 0;
-	padding: 0 10px 8px;
+	min-inline-size: 0;
+	margin-block: 8px;
 	border: 1px solid var(--agui-chat-border, GrayText);
 	border-radius: var(--agui-chat-card-radius, 8px);
 	background: var(--agui-chat-card-background, Canvas);
 	font-size: 12px;
 	overflow: hidden;
+	overflow: clip;
 }
 
-.agui-tool-card:hover {
-	background: var(--agui-tool-hover-background, ButtonFace);
+.agui-tool-card[data-state="failed"] {
+	border-color: var(--agui-chat-error-border, MarkText);
 }
 
 .agui-tool-header {
 	display: flex;
 	align-items: center;
-	gap: 8px;
-	width: calc(100% + 20px);
-	box-sizing: border-box;
-	margin: 0 -10px;
-	padding: 7px 10px;
-	border: 0;
-	border-bottom: 1px solid var(--agui-chat-border, GrayText);
-	background: var(--agui-tool-header-background, ButtonFace);
+	gap: 7px;
+	padding: 6px 9px;
+	min-block-size: 32px;
 	color: var(--agui-chat-muted, GrayText);
-	cursor: default;
-	text-align: left;
-	font: inherit;
-}
-
-button.agui-tool-header {
 	cursor: pointer;
+	list-style: none;
 }
 
-button.agui-tool-header:focus-visible {
+.agui-tool-header::-webkit-details-marker { display: none; }
+
+.agui-tool-header:focus-visible,
+.agui-tool-copy button:focus-visible {
 	outline: 2px solid var(--agui-chat-focus, Highlight);
 	outline-offset: -2px;
 }
 
-button.agui-tool-header:hover {
+.agui-tool-header:hover {
 	background: var(--agui-tool-header-hover, ButtonFace);
 }
 
-.agui-tool-chevron {
-	flex: 0 0 auto;
-	width: 0;
-	height: 0;
-	border-top: 4px solid transparent;
-	border-bottom: 4px solid transparent;
-	border-left: 5px solid var(--agui-tool-chevron, currentColor);
+.agui-tool-card[data-state="failed"] .agui-tool-header {
+	background: var(--agui-chat-error-background, Canvas);
 }
 
-.agui-tool-card[data-expanded="true"] .agui-tool-chevron {
-	transform: rotate(90deg);
+.agui-tool-chevron {
+	flex: none;
+	inline-size: 12px;
+	block-size: 12px;
+	color: var(--agui-tool-chevron, currentColor);
 }
+
+.agui-tool-card[open] .agui-tool-chevron { rotate: 90deg; }
+.agui-tool-card:not([open]):dir(rtl) .agui-tool-chevron { rotate: 180deg; }
+
+.agui-tool-dot {
+	flex: none;
+	inline-size: 5px;
+	block-size: 5px;
+	border-radius: 50%;
+	background: currentColor;
+}
+
+.agui-tool-card[data-state="running"] .agui-tool-dot { color: var(--agui-chat-focus, Highlight); }
+.agui-tool-card[data-state="waiting"] :is(.agui-tool-dot, .agui-tool-status) { color: var(--agui-tool-waiting, currentColor); }
+.agui-tool-card[data-state="failed"] :is(.agui-tool-dot, .agui-tool-status) { color: var(--agui-chat-error-color, MarkText); }
 
 .agui-tool-name {
 	flex: 1;
@@ -67,51 +73,21 @@ button.agui-tool-header:hover {
 	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
 }
 
-.agui-tool-status {
-	flex: 0 0 auto;
-}
+.agui-tool-time,
+.agui-tool-status { flex: none; white-space: nowrap; font-size: 11px; }
+.agui-tool-time { font-variant-numeric: tabular-nums; }
 
 .agui-tool-error {
-	margin: 4px 0 0 13px;
+	margin: 0;
 	color: var(--agui-chat-error-color, CanvasText);
 }
 
 .agui-tool-body {
-	position: relative;
-	margin: 4px 0 0;
-	overflow: hidden;
-}
-
-.agui-tool-content {
-	display: flow-root;
-}
-
-.agui-tool-card[data-expanded="false"] .agui-tool-body {
-	max-height: var(--agui-tool-preview-height);
-}
-
-.agui-tool-body[data-preview="true"] {
-	cursor: pointer;
-}
-
-.agui-tool-card[data-expanded="true"] .agui-tool-body {
-	max-height: 280px;
-	overflow: auto;
-}
-
-.agui-tool-body[data-preview="true"]::after {
-	content: "";
-	position: absolute;
-	right: 0;
-	bottom: 0;
-	left: 0;
-	height: 1.6em;
-	pointer-events: none;
-	background: linear-gradient(to bottom, transparent, var(--agui-chat-card-background, Canvas));
-}
-
-.agui-tool-card:hover .agui-tool-body[data-preview="true"]::after {
-	background: linear-gradient(to bottom, transparent, var(--agui-tool-hover-background, ButtonFace));
+	display: grid;
+	gap: 6px;
+	min-inline-size: 0;
+	padding: 4px 9px 9px;
+	border-block-start: 1px solid var(--agui-chat-border, GrayText);
 }
 
 .agui-chat-activity {
@@ -154,25 +130,73 @@ button.agui-tool-header:hover {
 	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
 }
 
-.agui-tool-output {
-	margin: 8px 0 0;
-	border-top: 1px solid var(--agui-chat-border, GrayText);
-}
+.agui-tool-section { min-inline-size: 0; }
 
 .agui-tool-label {
-	margin: 8px 0 0 13px;
-	font: 11px / 1.35 var(--agui-chat-mono-font, ui-monospace, monospace);
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	min-block-size: 24px;
+	gap: 8px;
+	color: var(--agui-chat-muted, GrayText);
+	font-size: 11px;
+}
+
+.agui-tool-data {
+	max-block-size: min(18rem, 50vh);
+	overflow: auto;
+	padding: 6px 8px;
+	border-radius: 4px;
+	background: var(--agui-tool-data-background, ButtonFace);
 }
 
 .agui-tool-arguments,
 .agui-tool-result {
-	margin: 4px 0 0 13px;
-	overflow: visible;
+	margin: 0;
 	white-space: pre-wrap;
-	word-break: break-word;
+	overflow-wrap: anywhere;
 	font-size: 11px;
 	line-height: 1.35;
 	font-family: var(--agui-chat-mono-font, ui-monospace, monospace);
+}
+
+.agui-tool-empty { margin: 0; color: var(--agui-chat-muted, GrayText); }
+
+.agui-tool-copy { position: relative; flex: none; }
+.agui-tool-copy button {
+	display: grid;
+	place-items: center;
+	min-inline-size: 24px;
+	min-block-size: 24px;
+	padding: 0;
+	border: 0;
+	border-radius: 4px;
+	background: transparent;
+	color: var(--agui-chat-secondary, CanvasText);
+	cursor: pointer;
+}
+
+.agui-tool-copy button:is(:hover, :focus-visible) { background: var(--agui-tool-header-hover, ButtonFace); }
+.agui-tool-copy svg { inline-size: 14px; block-size: 14px; }
+.agui-tool-copy-feedback {
+	position: absolute;
+	z-index: 1;
+	inset-inline-end: calc(100% + 4px);
+	inset-block-start: 50%;
+	translate: 0 -50%;
+	padding: 3px 6px;
+	border-radius: 4px;
+	background: var(--agui-tool-data-background, ButtonFace);
+	color: var(--agui-chat-secondary, CanvasText);
+	white-space: nowrap;
+	pointer-events: none;
+}
+.agui-tool-copy-feedback:empty { opacity: 0; }
+
+@media (hover: hover) and (pointer: fine) {
+	.agui-tool-copy button { opacity: 0; }
+	.agui-tool-section:is(:hover, :focus-within) .agui-tool-copy button,
+	.agui-tool-copy[data-copy-state] button { opacity: 1; }
 }
 
 .agui-chat-error {

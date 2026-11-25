@@ -3,7 +3,7 @@ import {
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
-	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LoomSessionRecord, type LoomSessionSummary,
+	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LiveState, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type ComposerReference, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
 import type { Models } from "@earendil-works/pi-ai/models";
@@ -44,6 +44,7 @@ export class ChatService {
 	#instructions = "";
 	readonly #agentDefaults: { -readonly [Key in keyof AgentChange]: AgentChange[Key] } = {};
 	#observation: CommitObservation | undefined;
+	readonly #toolStarts = new Map<ConversationId, Map<string, number>>();
 	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
 	#revision = 0;
 	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
@@ -98,6 +99,19 @@ export class ChatService {
 	pendingCommandAllow(id: string) { return this.runtime ? this.gate.pendingCommandAllow(id, this.runtime.libraryPath) : undefined; }
 	resolveToolGate(id: string, decision: ToolGateDecision) { return this.gate.resolve(id, decision); }
 	setSystemPrompt(prompt: string) { this.#options.systemPrompt = prompt; }
+	toolStartedAt(id: ConversationId, callId: string): number | undefined { return this.#toolStarts.get(id)?.get(callId); }
+
+	/** Keep running timestamps with the library so attaching another chat view doesn't restart the clock. */
+	private trackToolStarts(id: ConversationId, live: LiveState): void {
+		const previous = this.#toolStarts.get(id);
+		const next = new Map<string, number>();
+		const now = Date.now();
+		for (const slot of [...live.tools ?? [], ...live.nestedTools ?? []]) {
+			if (slot.status === "running") next.set(slot.callId, previous?.get(slot.callId) ?? now);
+		}
+		if (next.size > 0) this.#toolStarts.set(id, next);
+		else this.#toolStarts.delete(id);
+	}
 
 	async openLibrary(root: string): Promise<void> {
 		await this.close();
@@ -156,6 +170,11 @@ export class ChatService {
 		const baseline = await this.runtime.harness.usage(context);
 		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];
 		this.#observation = this.runtime.harness.observeCommits({ advance: (publication) => {
+			for (const change of publication.changes) {
+				if (change.type !== "document" || change.record.kind !== LiveDoc.definition.kind || change.conversationId === undefined) continue;
+				if (change.kind === "change") this.trackToolStarts(change.conversationId, change.value as LiveState);
+				else this.#toolStarts.delete(change.conversationId);
+			}
 			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
 			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
 		}, end: () => {} });
@@ -165,6 +184,7 @@ export class ChatService {
 	async close(): Promise<void> {
 		const runtime = this.runtime;
 		this.#observation?.detach(); this.#observation = undefined;
+		this.#toolStarts.clear();
 		try { if (runtime) await runtime.close(context); }
 		finally { this.#trace?.stop(); this.#trace = undefined; this.#tracePublisher?.(null); }
 		if (this.runtime === runtime) this.runtime = undefined;

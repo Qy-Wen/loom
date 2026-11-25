@@ -3,6 +3,12 @@ import type { LoomTranscriptMessage } from "@loom/agent";
 import { CHAT_ERROR_ID_PREFIX, formatChatError } from "./chat-error.ts";
 import { toolResultParts } from "./tool-result-content.ts";
 
+export function toolResultMetadata(isError: unknown, durationMs: unknown): Message["metadata"] {
+	const duration = typeof durationMs === "number" && Number.isFinite(durationMs) && durationMs >= 0 ? durationMs : undefined;
+	if (isError !== true && duration === undefined) return undefined;
+	return { ...(isError === true ? { "loom.toolError": true } : {}), ...(duration === undefined ? {} : { "loom.toolDurationMs": duration }) };
+}
+
 export function toolResultContent(content: unknown): string {
 	return Array.isArray(content) && toolResultParts(content) ? JSON.stringify({ content }) : transcriptText(content);
 }
@@ -130,11 +136,13 @@ export function toAgUiMessages(messages: LoomTranscriptMessage[]): Message[] {
 			continue;
 		}
 		if (message.role === "toolResult" || message.role === "tool") {
+			const metadata = toolResultMetadata(message.isError, message.durationMs);
 			out.push({
 				id,
 				role: "tool",
 				toolCallId: String(message.toolCallId ?? id),
 				content: toolResultContent(message.content),
+				...(metadata ? { metadata } : {}),
 			});
 		}
 	}

@@ -40,12 +40,13 @@ test("parent and child calls keep distinct IDs, deduplicate starts, and publish 
 	await presenter.onChildView(2, child);
 	await presenter.onChildView(2, view([{
 		id: 7 as EntryId, conversationId: 2 as ConversationId, kind: "pi.toolResult",
-		model: [{ role: "toolResult", toolCallId: "same", toolName: "read", content: [{ type: "image", mimeType: "image/png", data: "bytes-stay-in-storage" }], isError: false, timestamp: 1 }],
+		model: [{ role: "toolResult", toolCallId: "same", toolName: "read", content: [{ type: "image", mimeType: "image/png", data: "bytes-stay-in-storage" }], isError: false, timestamp: 1, durationMs: 620 }],
 	}], {}, 2));
 	assert.deepEqual(children, [2]);
 	assert.deepEqual(output.filter((event) => event.type === EventType.TOOL_CALL_START).map((event) => event.toolCallId), ["1/same", "2/same"]);
 	const result = output.find((event) => event.type === EventType.TOOL_CALL_RESULT)!;
 	assert.equal(result.toolCallId, "2/same");
+	assert.deepEqual(result.metadata, { "loom.toolDurationMs": 620 });
 	assert.ok(String(result.content).includes("loom-asset://chat-image/2/7/0"));
 	assert.ok(!String(result.content).includes("bytes-stay-in-storage"));
 });
@@ -66,4 +67,24 @@ test("a coalesced view preserves completed tool rounds and separate assistant me
 	const starts = output.filter((event) => event.type === EventType.TEXT_MESSAGE_START);
 	assert.equal(starts.length, 2);
 	assert.notEqual(starts[0]?.messageId, starts[1]?.messageId);
+});
+
+test("running tool progress includes a stable timestamp even before the first output", async () => {
+	const output: Array<Record<string, unknown>> = [];
+	const presenter = createAgUiEvents((event) => output.push(event as Record<string, unknown>), {
+		threadId: "1", submit: false, replay: false, watchChild: async () => {}, toolStartedAt: () => 1200,
+	});
+	const progress = () => output.filter((event) => event.activityType === "loom.tool_progress").map((event) => event.content);
+	await presenter.onView(view([], { tools: [{ callId: "read", name: "read", status: "pending" }] }));
+	assert.deepEqual(progress(), []);
+	const running = view([], { tools: [{ callId: "read", name: "read", status: "running" }] });
+	await presenter.onView(running);
+	await presenter.onView(running);
+	await presenter.onView(view([], { tools: [{ callId: "read", name: "read", status: "running", output: "partial" }] }));
+	assert.deepEqual(progress(), [
+		{ toolCallId: "1/read", name: "read", text: "", hidden: false, startedAt: 1200 },
+		{ toolCallId: "1/read", name: "read", text: "partial", hidden: false, startedAt: 1200 },
+	]);
+	await presenter.onView(view());
+	assert.deepEqual(progress().at(-1), { name: "read", text: "", hidden: true });
 });

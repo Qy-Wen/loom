@@ -223,9 +223,9 @@
 	--agui-chat-mono-font: var(--lm-font-mono);
 	--agui-chat-card-radius: var(--lm-radius-md);
 	--agui-chat-card-background: var(--lm-surface-app);
-	--agui-tool-hover-background: var(--lm-surface-window);
-	--agui-tool-header-background: var(--lm-surface-hover);
-	--agui-tool-header-hover: var(--lm-surface-active);
+	--agui-tool-header-hover: var(--lm-surface-hover);
+	--agui-tool-data-background: var(--lm-surface-sunken);
+	--agui-tool-waiting: var(--lm-text-warning);
 	--agui-tool-chevron: var(--lm-graphic);
 	--agui-chat-error-border: var(--lm-border-danger);
 	--agui-chat-error-background: var(--lm-surface-danger);
@@ -618,8 +618,8 @@
 
 .tool-call-gate {
 	display: flex;
+	flex-wrap: wrap;
 	gap: var(--lm-space-3);
-	margin: var(--lm-space-3) 0 0 13px;
 }
 
 .tool-call-gate button {
@@ -640,8 +640,9 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--lm-space-4);
-	margin: var(--lm-space-4) 0 0 13px;
 }
+
+.agui-tool-result + .tool-call-images { margin-block-start: var(--lm-space-4); }
 
 .tool-call-images img {
 	max-width: 100%;
@@ -655,7 +656,6 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: var(--lm-space-3);
-	margin: var(--lm-space-3) 0 0 13px;
 }
 
 .tool-call-refs-empty {

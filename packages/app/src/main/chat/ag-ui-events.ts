@@ -1,6 +1,6 @@
 import { EventType, type Message } from "@ag-ui/core";
 import { toolEventId, type ConversationId, type EntryRecord, type LiveState, type PendingToolApproval, type TranscriptView } from "@loom/agent";
-import { toolResultContent, transcriptText } from "../../shared/ag-ui-messages.ts";
+import { toolResultContent, toolResultMetadata, transcriptText } from "../../shared/ag-ui-messages.ts";
 import { chatContent } from "./chat-record.ts";
 
 let next = 0;
@@ -12,9 +12,10 @@ export function createAgUiEvents(emit: (event: object) => void, options: {
 	submit: boolean;
 	replay: boolean;
 	optimisticUser?: Message;
+	toolStartedAt?: (conversationId: ConversationId, callId: string) => number | undefined;
 	watchChild: (id: number) => Promise<void>;
 }) {
-	const { threadId, submit, replay, optimisticUser, watchChild } = options;
+	const { threadId, submit, replay, optimisticUser, toolStartedAt, watchChild } = options;
 	let messageId = temporaryMessageId();
 	let textOpen = false;
 	let reasoningOpen = false;
@@ -23,7 +24,7 @@ export function createAgUiEvents(emit: (event: object) => void, options: {
 	let submittedEntry: string | undefined;
 	const knownTools = new Set<string>();
 	const endedTools = new Set<string>();
-	const progress = new Map<string, string>();
+	const progress = new Map<string, { text: string; startedAt?: number }>();
 	const lastEntries = new Map<number, number>();
 	const previousLive = new Map<number, LiveState>();
 	const close = () => {
@@ -49,14 +50,19 @@ export function createAgUiEvents(emit: (event: object) => void, options: {
 		emit({ type: EventType.TOOL_CALL_START, toolCallId: id, toolCallName: name, parentMessageId });
 		emit({ type: EventType.TOOL_CALL_ARGS, toolCallId: id, delta: JSON.stringify(args) });
 	};
-	const endTool = (id: string, name: string, entry?: EntryRecord, error = "") => {
+	const endTool = (id: string, name: string, entry?: EntryRecord, error = "", summary?: { isError: boolean; durationMs?: number; error?: string }) => {
 		if (endedTools.has(id)) return;
 		endedTools.add(id); progress.delete(id);
-		const result = entry?.model?.[0];
+		const message = entry?.model?.[0];
+		const result = message?.role === "toolResult" ? message : undefined;
+		const metadata = toolResultMetadata(result?.isError ?? summary?.isError ?? Boolean(error), result?.durationMs ?? summary?.durationMs);
+		const content = entry && result
+			? toolResultContent(chatContent(result.content, id.split("/")[0]!, String(entry.id)))
+			: error || summary?.error || "";
 		emit({ type: EventType.TOOL_CALL_END, toolCallId: id });
 		emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: `loom-tool-${id}`, activityType: "loom.tool_progress", content: { name, text: "", hidden: true } });
-		emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(entry?.id ?? id), toolCallId: id, role: "tool", content: result?.role === "toolResult" ? toolResultContent(chatContent(result.content, id.split("/")[0]!, String(entry!.id))) : error });
-		if (result?.role === "toolResult" && result.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: id, toolName: name, isError: result.isError, details: result.details } });
+		emit({ type: EventType.TOOL_CALL_RESULT, messageId: String(entry?.id ?? id), toolCallId: id, role: "tool", content, ...(metadata ? { metadata } : {}) });
+		if (result?.details !== undefined) emit({ type: EventType.CUSTOM, name: "loom.tool_result", value: { toolCallId: id, toolName: name, isError: result.isError, details: result.details } });
 	};
 	const present = async (id: number, view: TranscriptView, child: boolean) => {
 		const live = (view.docs["pi.live"] ?? {}) as LiveState;
@@ -107,10 +113,20 @@ export function createAgUiEvents(emit: (event: object) => void, options: {
 			const childId = (slot.details as { conversationId?: number } | undefined)?.conversationId;
 			if (childId) await watchChild(childId);
 			if (slot.status === "done") {
-				if (knownTools.has(toolId)) endTool(toolId, slot.name, "entry" in slot ? entries.find((entry) => entry.id === slot.entry) : undefined, slot.diagnostics?.map((item) => item.message).join("\n"));
-			} else if (slot.output !== undefined && progress.get(toolId) !== slot.output) {
-				progress.set(toolId, slot.output);
-				emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: `loom-tool-${toolId}`, activityType: "loom.tool_progress", content: { name: slot.name, text: slot.output, hidden: false } });
+				if (knownTools.has(toolId)) {
+					const resultEntry = "entry" in slot ? entries.find((entry) => entry.id === slot.entry) : undefined;
+					const diagnostics = slot.diagnostics?.map((item) => item.message).join("\n");
+					endTool(toolId, slot.name, resultEntry, diagnostics, "summary" in slot ? slot.summary : undefined);
+				}
+			} else if (slot.status === "running" || slot.output !== undefined) {
+				const previous = progress.get(toolId);
+				const startedAt = slot.status === "running" ? previous?.startedAt ?? toolStartedAt?.(id as ConversationId, slot.callId) ?? Date.now() : undefined;
+				const text = slot.output ?? "";
+				if (!previous || previous.text !== text || previous.startedAt !== startedAt) {
+					progress.set(toolId, { text, startedAt });
+					emit({ type: EventType.ACTIVITY_SNAPSHOT, messageId: `loom-tool-${toolId}`, activityType: "loom.tool_progress",
+						content: { toolCallId: toolId, name: slot.name, text, hidden: false, ...(startedAt === undefined ? {} : { startedAt }) } });
+				}
 			}
 		}
 		for (const slot of [...before?.tools ?? [], ...before?.nestedTools ?? []]) {

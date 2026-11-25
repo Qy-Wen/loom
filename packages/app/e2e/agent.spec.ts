@@ -1,6 +1,6 @@
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFile } from "node:fs/promises";
+import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
@@ -9,6 +9,127 @@ function reply(response: ServerResponse, tool?: string, args = {}) {
 	const delta = tool ? { tool_calls: [{ index: 0, id: `call-${tool}`, type: "function", function: { name: tool, arguments: JSON.stringify(args) } }] } : { content: "Generated and saved the result." };
 	response.end(`data: ${JSON.stringify({ id: "test", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason: null }] })}\n\ndata: ${JSON.stringify({ id: "test", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta: {}, finish_reason: tool ? "tool_calls" : "stop" }] })}\n\ndata: [DONE]\n\n`);
 }
+
+test("tool cards summarize results and copy each section independently", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated user data and library required");
+	const server = createServer((request, response) => {
+		let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const { messages } = JSON.parse(body) as { messages: Array<{ role: string }> };
+			const done = messages.some((message) => message.role === "tool");
+			const delta = done ? { content: "Finished both reads." } : {
+				tool_calls: ["visible.txt", "missing.txt"].map((path, index) => ({
+					index, id: `read-${index}`, type: "function", function: { name: "read", arguments: JSON.stringify({ path }) },
+				})),
+			};
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			const chunk = (delta: object, finish: string | null) => `data: ${JSON.stringify({ id: "read", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason: finish }] })}\n\n`;
+			response.end(chunk(delta, null) + chunk({}, done ? "stop" : "tool_calls") + "data: [DONE]\n\n");
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+		await writeFile(join(root, "visible.txt"), Array.from({ length: 60 }, (_, index) => `Result line ${index + 1}`).join("\n"));
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+		const composer = loomPage.getByRole("textbox");
+		await composer.fill("Read both example files");
+		await loomPage.getByRole("button", { name: "Send", exact: true }).click();
+		await expect(loomPage.getByText("Finished both reads.", { exact: true })).toBeVisible();
+
+		const success = loomPage.locator('.agui-tool-card[data-state="done"]');
+		const failure = loomPage.locator('.agui-tool-card[data-state="failed"]');
+		await expect(success).toHaveCount(1);
+		await expect(success).not.toHaveAttribute("open", "");
+		await expect(failure).toHaveAttribute("open", "");
+		await expect(failure).toHaveCSS("overflow", "clip");
+		await expect(failure).not.toHaveCSS("border-top-left-radius", "0px");
+		await expect(failure.locator("summary")).toContainText("Failed");
+		await expect(failure.locator(".agui-tool-result")).toContainText("missing.txt");
+		await expect(success.locator("time")).toHaveAttribute("datetime", /^PT[\d.]+S$/);
+		await expect(success.locator("time")).toHaveText(/^\d+\.\ds$/);
+
+		await success.locator("summary").press("Enter");
+		await expect(success).toHaveAttribute("open", "");
+		const output = success.locator(".agui-tool-result");
+		await expect(output).toContainText("Result line 60");
+		const section = output.locator("..");
+		expect(await section.evaluate((element) => element.scrollHeight > element.clientHeight)).toBe(true);
+		const copyArgs = success.getByRole("button", { name: "Copy tool arguments" });
+		await copyArgs.focus();
+		await expect(copyArgs).toHaveCSS("opacity", "1");
+		await loomPage.keyboard.press("Enter");
+		const clipboard = () => electronApp!.evaluate(({ clipboard }) => clipboard.readText());
+		await expect.poll(clipboard).toBe(JSON.stringify({ path: "visible.txt" }, null, 2));
+		await expect(success.getByRole("status").filter({ hasText: "Copied" })).toBeVisible();
+		await success.getByRole("button", { name: "Copy tool result" }).click();
+		await expect.poll(clipboard).toBe(await output.textContent());
+		await expect(failure).toHaveAttribute("open", "");
+
+		await loomPage.reload();
+		await expect(success).not.toHaveAttribute("open", "");
+		await expect(success.locator("time")).toHaveAttribute("datetime", /^PT[\d.]+S$/);
+		await expect(failure).toHaveAttribute("open", "");
+	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
+});
+
+test("tool elapsed time starts after approval and continues after reload", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated user data and library required");
+	test.setTimeout(60_000);
+	const release = "release-tool.txt";
+	const server = createServer((request, response) => {
+		let body = ""; request.setEncoding("utf8"); request.on("data", (chunk: string) => { body += chunk; });
+		request.on("end", () => {
+			const parsed = JSON.parse(body) as { tools?: Array<{ function: { name: string } }>; messages: Array<{ role: string }> };
+			if (parsed.messages.some((message) => message.role === "tool")) { reply(response); return; }
+			const powershell = parsed.tools?.some((tool) => tool.function.name === "powershell");
+			const command = powershell
+				? `while (!(Test-Path '${release}')) { Start-Sleep -Milliseconds 100 }; Write-Output ready`
+				: `while [ ! -f '${release}' ]; do sleep 0.1; done; printf ready`;
+			reply(response, powershell ? "powershell" : "bash", { command, timeout: 30 });
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await loomPage.evaluate(() => window.loom.setAgentPermission("basic"));
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+		await loomPage.getByRole("textbox").fill("Wait for the fixture to be released");
+		await loomPage.getByRole("button", { name: "Send", exact: true }).click();
+		const card = loomPage.locator(".agui-tool-card");
+		const time = card.locator("time");
+		const approve = card.getByRole("button", { name: "Approve", exact: true });
+		await expect(approve).toBeVisible();
+		await expect(time).toHaveCount(0);
+		await approve.click();
+		await expect(time).toHaveText(/^\d+s$/);
+		await expect(time).toHaveAttribute("datetime", /^PT\d+S$/);
+		await expect(time).toHaveAttribute("title", "Elapsed");
+		const seconds = async () => Number.parseInt(await time.textContent() ?? "", 10);
+		const initial = await seconds();
+		await expect.poll(seconds).toBeGreaterThan(initial);
+		const beforeReload = await seconds();
+		await loomPage.reload();
+		await expect(time).toHaveAttribute("title", "Elapsed");
+		await expect(approve).toHaveCount(0);
+		await expect.poll(seconds).toBeGreaterThanOrEqual(beforeReload);
+		await expect.poll(seconds).toBeGreaterThan(beforeReload);
+		await expect(time).toHaveText(/^\d+s$/);
+		await writeFile(join(root, release), "release");
+		await expect(card).toHaveAttribute("data-state", "done");
+		await expect(time).toHaveAttribute("title", "Duration");
+		await expect(time).toHaveText(/^\d+\.\ds$/);
+		const finished = await time.textContent();
+		await expect(loomPage.getByTestId("chat-assistant-message").getByText("Generated and saved the result.", { exact: true })).toBeVisible();
+		await expect(time).toHaveText(finished!);
+	} finally {
+		await writeFile(join(root, release), "release").catch(() => undefined);
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
 
 test("Electron reconnects to an owned specialist approval, restores history, and forks before the question", async ({ loomPage }) => {
 	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
@@ -44,13 +165,14 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 		const argumentsText = await parentCard.locator(".agui-tool-arguments").innerText();
 		expect(JSON.parse(argumentsText.replace(/^arguments\s*/, ""))).toEqual({ goal: "save generated.txt" });
 		await loomPage.getByRole("button", { name: "Approve", exact: true }).click();
-		await expect(loomPage.getByText("Generated and saved the result.", { exact: true }).first()).toBeVisible();
+		const assistantReply = loomPage.getByTestId("chat-assistant-message").getByText("Generated and saved the result.", { exact: true });
+		await expect(assistantReply).toBeVisible();
 		const record = await loomPage.evaluate((id) => window.loom.getSession(id), session.id);
 		expect(record.messages.filter((message) => message.role === "user")).toHaveLength(1);
 		const root = await loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
 		expect(await readFile(join(root!, "generated.txt"), "utf8")).toBe("generated");
 		await loomPage.reload();
-		await expect(loomPage.getByText("Generated and saved the result.", { exact: true }).first()).toBeVisible();
+		await expect(assistantReply).toBeVisible();
 		const first = record.messages.find((message) => message.role === "user")!;
 		const fork = await loomPage.evaluate(({ id, entry }) => window.loom.branchBefore(id, entry), { id: record.id, entry: String(first.id) });
 		expect(fork.title).toBe(record.title);

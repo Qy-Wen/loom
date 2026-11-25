@@ -47,24 +47,27 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 		await composer.fill(question);
 		await composer.press("Enter");
 		const image = loomPage.locator(".tool-call-images img").first();
-		await expect(image).toBeVisible();
+		const card = loomPage.locator(".agui-tool-card").filter({ has: image });
+		const disclosure = card.locator("summary.agui-tool-header");
+		await expect(card).toHaveAttribute("data-state", "done");
+		await expect(card).not.toHaveAttribute("open", "");
+		const showImage = async () => {
+			await disclosure.press("Enter");
+			await expect(card).toHaveAttribute("open", "");
+			await expect(image).toBeVisible();
+			await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		};
+		await showImage();
 		await expect(image).toHaveAttribute("src", /^loom-asset:\/\/chat-image\//);
 		const sessionId = new URL((await image.getAttribute("src"))!).pathname.split("/")[1]!;
-		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		await expect(loomPage.getByText("Image result received", { exact: true }).first()).toBeVisible();
 		expect(modelReceivedImage).toBe(true);
-		const card = loomPage.locator(".agui-tool-card").filter({ has: image });
 		await expect(card.locator(".agui-tool-result")).toContainText("Image from MCP");
 		await expect(card.locator(".agui-tool-result")).not.toContainText("base64");
-		const disclosure = card.locator("button.agui-tool-header");
-		await expect(disclosure).toHaveAttribute("aria-expanded", "false");
-		await disclosure.press("Enter");
-		await expect(disclosure).toHaveAttribute("aria-expanded", "true");
 		await disclosure.press("Space");
-		await expect(disclosure).toHaveAttribute("aria-expanded", "false");
+		await expect(image).toBeHidden();
 		await loomPage.reload();
-		await expect(image).toBeVisible();
-		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await showImage();
 		await loomPage.getByRole("textbox").fill("Keep the previous image in a branch");
 		await loomPage.getByRole("textbox").press("Enter");
 		await expect(loomPage.getByText("Image result received", { exact: true })).toHaveCount(2);
@@ -74,8 +77,7 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 			await window.loom.branchBefore(sessionId, String(latestUser.id));
 		}, sessionId);
 		await loomPage.reload();
-		await expect(image).toBeVisible();
-		await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
+		await showImage();
 	} finally {
 		await loomPage.evaluate(async () => {
 			const draft = (await window.loom.getMcpSettings()).servers.find((server) => server.id === "fixture");
