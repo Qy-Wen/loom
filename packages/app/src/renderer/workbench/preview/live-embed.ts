@@ -1,7 +1,7 @@
 import { StateEffect, StateField } from "@codemirror/state";
 import { WidgetType, type EditorView } from "@codemirror/view";
 import { observeHtmlEmbeds } from "./markdown-html-embed.ts";
-import { embeddedReference, hydrateMarkdownNoteEmbeds } from "./markdown-note-embed.ts";
+import { embeddedReference, hydrateMarkdownEmbeds } from "./markdown-embeds.ts";
 import type { MarkdownRenderContext } from "./markdown.ts";
 
 interface SourceRange {
@@ -44,20 +44,20 @@ export class WikiEmbedWidget extends WidgetType {
 	readonly anchor: string | undefined;
 	readonly html: string;
 	readonly open: ((assetId: string, anchor?: string) => void) | undefined;
-	readonly noteContext: MarkdownRenderContext | undefined;
+	readonly context: MarkdownRenderContext | undefined;
 
-	constructor(length: number, assetId: string, anchor: string | undefined, html: string, open?: (assetId: string, anchor?: string) => void, noteContext?: MarkdownRenderContext) {
+	constructor(length: number, assetId: string, anchor: string | undefined, html: string, open?: (assetId: string, anchor?: string) => void, context?: MarkdownRenderContext) {
 		super();
 		this.length = length;
 		this.assetId = assetId;
 		this.anchor = anchor;
 		this.html = html;
 		this.open = open;
-		this.noteContext = noteContext;
+		this.context = context;
 	}
 
 	eq(other: WikiEmbedWidget): boolean {
-		return this.length === other.length && this.html === other.html && this.noteContext === other.noteContext;
+		return this.length === other.length && this.html === other.html && this.context === other.context;
 	}
 
 	toDOM(view: EditorView): HTMLElement {
@@ -74,7 +74,7 @@ export class WikiEmbedWidget extends WidgetType {
 		});
 		const controller = new AbortController();
 		loads.set(element, controller);
-		if (this.noteContext) void hydrateMarkdownNoteEmbeds(element, { ...this.noteContext, interactiveHtml: true }, controller.signal);
+		if (this.context) void hydrateMarkdownEmbeds(element, { ...this.context, interactiveHtml: true }, controller.signal);
 		else observeHtmlEmbeds(element, controller.signal);
 		const observer = new ResizeObserver(() => view.requestMeasure());
 		observer.observe(element);

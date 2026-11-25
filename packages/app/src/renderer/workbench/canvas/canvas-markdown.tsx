@@ -3,15 +3,16 @@ import type { Asset } from "@loom/core";
 import { assetPreviewUrl } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
 import { EMBED_IMAGE_SELECTOR } from "../preview/embed-renderers.ts";
-import { embeddedReference, hydrateMarkdownNoteEmbeds } from "../preview/markdown-note-embed.ts";
+import { embeddedReference, hydrateMarkdownEmbeds } from "../preview/markdown-embeds.ts";
 import { renderMarkdown } from "../preview/markdown.ts";
 
 const PREVIEW_BYTES = 16 * 1024;
 type Excerpt = { text: string; truncated: boolean };
 
-export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, onOpenAsset }: {
+export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, canvasId, onOpenAsset }: {
 	asset: Asset;
 	assets: Asset[];
+	canvasId: string;
 	onOpenAsset(asset: Asset): void;
 }): React.JSX.Element {
 	const { t } = useLocale();
@@ -61,9 +62,9 @@ export const CanvasMarkdown = memo(function CanvasMarkdown({ asset, assets, onOp
 	useEffect(() => {
 		if (!markup || !root.current) return;
 		const controller = new AbortController();
-		void hydrateMarkdownNoteEmbeds(root.current, context, controller.signal);
+		void hydrateMarkdownEmbeds(root.current, context, controller.signal, [canvasId]);
 		return () => controller.abort();
-	}, [context, markup]);
+	}, [canvasId, context, markup]);
 	const openImageMenu = (event: React.MouseEvent | React.KeyboardEvent) => {
 		const image = event.target instanceof Element ? event.target.closest<HTMLImageElement>(EMBED_IMAGE_SELECTOR) : null;
 		if (!image) return;

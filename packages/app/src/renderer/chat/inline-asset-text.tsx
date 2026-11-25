@@ -1,7 +1,8 @@
 import type { LoomUserAttachment } from "@loom/agent";
 import { formatAssetRefBlock, formatComposerReference, referenceKey } from "@loom/agent/attachments";
 import { splitStoredAssetText } from "@loom/agent/composer-asset";
-import { AssetThumbnail, createAssetThumbnailElement } from "../assets/asset-thumbnail.tsx";
+import { createAssetThumbnailElement } from "../assets/asset-thumbnail-element.ts";
+import { AssetThumbnail } from "../assets/asset-thumbnail.tsx";
 import { useLocale } from "../locale.tsx";
 import { useOpenReference } from "./asset-open.tsx";
 

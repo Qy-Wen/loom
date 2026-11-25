@@ -269,6 +269,72 @@ test("wiki note embeds render a whole document or heading and stop at cycles", a
 	await expect(page.getByRole("textbox", { name: "Edit Report.md", exact: true }).locator('[data-heading="highlights"]')).toBeInViewport();
 });
 
+test("Markdown embeds live Canvas previews and stops each cyclic branch at a file link", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = await libraryPath(page);
+	await mkdir(join(root, "boards"));
+	const storyboard = join(root, "boards", "分镜.canvas");
+	const detail = join(root, "boards", "Detail.canvas");
+	const board = (title: string) => ({
+		nodes: [
+			{ id: "setup", type: "text", x: -400, y: -200, width: 180, height: 110, text: `## ${title}` },
+			{ id: "notes", type: "file", x: -120, y: -200, width: 220, height: 110, file: "notes.md" },
+			{ id: "root", type: "file", x: 140, y: -200, width: 180, height: 110, file: "commands.md" },
+			{ id: "detail", type: "file", x: -400, y: -50, width: 360, height: 230, file: "boards/Detail.canvas" },
+			{ id: "image", type: "file", x: 140, y: -50, width: 180, height: 130, file: "still.png" },
+		],
+		edges: [{ id: "next", fromNode: "setup", toNode: "notes", fromSide: "right", toSide: "left", label: "Next scene" }],
+	});
+	await writeFile(storyboard, JSON.stringify(board("Opening scene")));
+	await writeFile(detail, JSON.stringify({ nodes: [
+		{ id: "back", type: "file", x: 0, y: 0, width: 180, height: 70, file: "boards/分镜.canvas" },
+	], edges: [] }));
+	await copyFile(new URL("../../core/tests/fixtures/media/still.png", import.meta.url), join(root, "still.png"));
+	await writeFile(join(root, "notes.md"), "Scene notes\n\n![[boards/分镜.canvas|Back to storyboard]]");
+	await writeFile(join(root, "commands.md"), [
+		"| Board |\n| --- |\n| ![[boards/分镜.canvas]] |",
+		"![[boards/分镜.canvas|Storyboard]]",
+		"![[boards/分镜.canvas|Second preview]]",
+	].join("\n\n"));
+	await openNote(page);
+
+	const editor = page.locator(".markdown-editor-input");
+	const previews = editor.locator(".cm-wiki-embed > .markdown-canvas-embed");
+	const first = previews.filter({ has: page.getByRole("link", { name: "Storyboard", exact: true }) });
+	const preview = first.locator(":scope > .markdown-canvas-embed-content");
+	const scene = preview.locator(":scope > .markdown-canvas-plane");
+	await expect(scene.getByRole("heading", { name: "Opening scene" })).toBeVisible();
+	const previewBox = (await preview.boundingBox())!;
+	const titleBox = (await first.getByRole("link", { name: "Storyboard", exact: true }).boundingBox())!;
+	expect(titleBox.y).toBeGreaterThan(previewBox.y + previewBox.height);
+	expect(titleBox.x + titleBox.width / 2).toBeCloseTo(previewBox.x + previewBox.width / 2, 0);
+	const canvasContent = (link: Locator) => link.locator("xpath=..").locator(":scope > .markdown-canvas-embed-content");
+	await expect(scene.locator(":scope > .markdown-canvas-lines > path")).toHaveCount(1);
+	await expect(scene.getByText("Next scene", { exact: true })).toBeVisible();
+	await expect(scene.getByText("Scene notes", { exact: true })).toBeVisible();
+	await expect.poll(() => scene.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+	await expect(canvasContent(scene.getByRole("link", { name: "Back to storyboard" }))).toBeEmpty();
+	await expect(scene.getByRole("link", { name: "commands.md" }).locator("+ .markdown-note-embed-content")).toBeEmpty();
+	const nested = scene.locator(".markdown-canvas-plane");
+	await expect(canvasContent(nested.getByRole("link", { name: "分镜.canvas" }))).toBeEmpty();
+	await expect(nested).toHaveCount(1);
+	await expect(editor.locator(".cm-live-table").getByRole("link", { name: "分镜.canvas" })).toBeVisible();
+	await expect(editor.locator(".cm-live-table .markdown-canvas-embed")).toHaveCount(0);
+
+	const second = previews.filter({ has: page.getByRole("link", { name: "Second preview", exact: true }) });
+	await second.scrollIntoViewIfNeeded();
+	await expect(second.getByRole("heading", { name: "Opening scene" })).toBeVisible();
+	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
+	await writeFile(storyboard, JSON.stringify(board("Revised scene")));
+	await expect(second.getByRole("heading", { name: "Revised scene" })).toBeVisible();
+	await second.getByRole("link", { name: "Back to storyboard", exact: true }).click();
+	const canvas = page.getByRole("region", { name: "Canvas 分镜.canvas" });
+	await expect(canvas.getByRole("heading", { name: "Revised scene" })).toBeVisible();
+	const back = canvas.locator(".canvas-file-markdown").getByRole("link", { name: "Back to storyboard" });
+	await expect(back).toBeVisible();
+	await expect(canvasContent(back)).toBeEmpty();
+});
+
 test("the Markdown editor and embedded notes use the library scrollbar style", async ({ loomPage: page, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = await libraryPath(page);

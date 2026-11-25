@@ -105,7 +105,7 @@ export function CanvasCard({
 				)}
 			</header>
 			<div className={`canvas-card-frame${media ? " canvas-card-media" : ""}`}>
-				{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
+				{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} canvasId={playback.boardId} onOpenAsset={onPreview} />}
 				{htmlAsset && <HtmlPagePreview src={assetPreviewUrl(htmlAsset)} title={t.preview.title(htmlAsset.filename)}
 					readOnly={htmlAsset.size > TEXT_FILE_EDIT_LIMIT_BYTES} lazy inert={playbackDisabled} />}
 				{playable && <CanvasMedia key={`${playable.type}:${assetPreviewUrl(playable)}`} asset={playable} nodeId={node.id}

@@ -36,33 +36,3 @@ export function AssetThumbnail({ asset, variant = "square", onMediaLoad }: {
 
 	return <span className={`asset-thumbnail asset-badge type-${asset.type}`}>{assetBadgeLabel(asset.filename, asset.type)}</span>;
 }
-
-function paintBadge(host: HTMLElement, asset: AssetPreview): void {
-	host.className = `asset-thumbnail asset-badge type-${asset.type}`;
-	host.replaceChildren();
-	host.textContent = assetBadgeLabel(asset.filename, asset.type);
-}
-
-/** Same preview as AssetThumbnail, for chips painted into a contenteditable. */
-export function createAssetThumbnailElement(asset: AssetPreview): HTMLSpanElement {
-	const wrap = document.createElement("span");
-	if (asset.type === "image" || asset.type === "video") {
-		wrap.className = `asset-thumbnail media-thumbnail${asset.type === "video" ? " video-thumbnail" : ""}`;
-		const img = document.createElement("img");
-		img.alt = "";
-		img.loading = "lazy";
-		img.decoding = "async";
-		const sources = [assetThumbnailUrl(asset), ...(asset.type === "image" ? [assetPreviewUrl(asset)] : [])];
-		let next = 0;
-		const advance = () => {
-			if (next < sources.length) img.src = sources[next++]!;
-			else paintBadge(wrap, asset);
-		};
-		img.addEventListener("error", advance);
-		wrap.append(img);
-		advance();
-		return wrap;
-	}
-	paintBadge(wrap, asset);
-	return wrap;
-}

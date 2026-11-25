@@ -1,5 +1,6 @@
 import type { Asset } from "@loom/core";
 import type { WikiLinkMatch } from "@loom/core/references";
+import { isCanvasFile } from "../../../shared/canvas.ts";
 import { isMarkdownFile } from "../../../shared/markdown-file.ts";
 import { markdownEmbedLayout } from "../../../shared/markdown-reference.ts";
 import { isHtmlFile, TEXT_FILE_EDIT_LIMIT_BYTES } from "../../../shared/text-file.ts";
@@ -20,6 +21,7 @@ interface EmbedContent {
 export const EMBED_LINK_SELECTOR = "a[data-embed-link]";
 export const EMBED_IMAGE_SELECTOR = "img[data-embed-image-id]";
 export const NOTE_EMBED_SELECTOR = ".markdown-note-embed[data-note-asset-id]";
+export const CANVAS_EMBED_SELECTOR = ".markdown-canvas-embed[data-canvas-asset-id]";
 export const FILE_LINK_CLASS = "markdown-file-link";
 export const FILE_EXTENSION_CLASS = "markdown-file-link-extension";
 
@@ -77,7 +79,8 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 	compact = false, interactiveHtml = false,
 }: { compact?: boolean; interactiveHtml?: boolean } = {}): string {
 	const htmlFile = isHtmlFile(asset.relativePath);
-	const renderer = compact && (htmlFile || markdownEmbedLayout(asset.type) === "block")
+	const canvasFile = isCanvasFile(asset.relativePath);
+	const renderer = compact && (htmlFile || canvasFile || markdownEmbedLayout(asset.type) === "block")
 		? fileCard : htmlFile ? htmlPreview : renderers[asset.type] ?? fileCard;
 	const fragment = anchor ? ` data-anchor="${escapeHtml(anchor)}"` : "";
 	const html = renderer({
@@ -89,6 +92,10 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		compact,
 		interactiveHtml,
 	});
-	if (compact || !isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
+	if (compact) return html;
+	if (canvasFile) {
+		return `<span class="markdown-canvas-embed" data-canvas-asset-id="${escapeHtml(asset.assetId)}"><span class="markdown-canvas-embed-content"></span>${html}</span>`;
+	}
+	if (!isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
 	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body thin-scroll"></span></span>`;
 }
