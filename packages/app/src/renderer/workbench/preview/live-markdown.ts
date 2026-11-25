@@ -17,7 +17,7 @@ import { parseTable } from "./table.ts";
 import { editorHeading } from "./editor-heading.ts";
 import { isPassthroughHref } from "./markdown.ts";
 import { FILE_EXTENSION_CLASS, FILE_LINK_CLASS, fileExtensionLabel, renderAssetEmbed } from "./embed-renderers.ts";
-import { editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
+import { canvasEmbedHeight, canvasEmbedSizing, editingEmbed, WikiEmbedWidget } from "./live-embed.ts";
 import { imageLayout, ImageWidget, LIVE_IMAGE_MAX_HEIGHT, liveImageSizing } from "./live-image.ts";
 
 /**
@@ -538,7 +538,8 @@ export function liveDecorations(state: EditorState, from = 0, to = state.doc.len
 		found.push(Decoration.line({ class: "cm-live-quote", attributes: { style: `padding-left:${quote.depth * 16}px;background:${bars}` } }).range(start));
 		if (!onLine(start)) for (const mark of quote.marks) found.push(hiddenLead.range(mark.from, mark.to));
 	}
-	wikiLinks(state, from, to, found);
+	const context = state.field(libraryField, false);
+	if (context) wikiReferences(state, from, to, (match, range) => decorateWiki(state, context, match, range, found));
 	inlineMath(state, from, to, found);
 	const builder = new RangeSetBuilder<Decoration>();
 	found.sort((a, b) => a.from - b.from || a.value.startSide - b.value.startSide || a.to - b.to);
@@ -962,16 +963,17 @@ const LITERAL = new Set(["InlineCode", "FencedCode", "CodeBlock", "CommentBlock"
  * Wiki links and embeds. Lezer reads `[[x]]` as an ordinary link, so they are found in the text instead,
  * skipping code, escapes and addresses. The shared matcher decides what counts as one.
  */
-function wikiLinks(state: EditorState, from: number, to: number, found: Range<Decoration>[]): void {
-	const context = state.field(libraryField, false);
-	if (!context) return;
+type WikiMatch = NonNullable<ReturnType<typeof matchWikiLink>>;
+type WikiRange = { from: number; to: number };
+
+function wikiReferences(state: EditorState, from: number, to: number, visit: (match: WikiMatch, range: WikiRange) => void, embedsOnly = false): void {
 	const tree = syntaxTree(state);
 	const first = state.doc.lineAt(from).from;
 	const last = state.doc.lineAt(to).to;
 	for (let at = first; at <= last; ) {
 		const line = state.doc.lineAt(at);
 		at = line.to + 1;
-		if (!line.text.includes("[[")) continue;
+		if (!line.text.includes(embedsOnly ? "![[" : "[[")) continue;
 		for (let offset = line.text.indexOf("[["); offset !== -1; offset = line.text.indexOf("[[", offset + 1)) {
 			const start = offset > 0 && line.text[offset - 1] === "!" ? offset - 1 : offset;
 			const match = matchWikiLink(line.text, start);
@@ -979,7 +981,7 @@ function wikiLinks(state: EditorState, from: number, to: number, found: Range<De
 			const range = { from: line.from + match.from, to: line.from + match.end };
 			if (insideLiteral(tree, range.from, range.to)) continue;
 			offset = match.end - 1;
-			decorateWiki(state, context, match, range, found);
+			if (!embedsOnly || match.embed) visit(match, range);
 		}
 	}
 }
@@ -994,24 +996,61 @@ export function insideLiteral(tree: ReturnType<typeof syntaxTree>, from: number,
 	return escaped;
 }
 
-function decorateWiki(state: EditorState, context: LiveContext, match: ReturnType<typeof matchWikiLink> & object, range: { from: number; to: number }, found: Range<Decoration>[]): void {
+function wikiAnchor(target: string): string | undefined {
+	const hash = target.indexOf("#");
+	return hash === -1 ? undefined : anchorOf(target.slice(hash + 1));
+}
+
+/** Static replacements let CodeMirror account for embed heights beyond the current viewport. */
+export function wikiEmbedDecorations(state: EditorState): DecorationSet {
+	const context = state.field(libraryField, false);
+	if (!context) return Decoration.none;
+	const found: Range<Decoration>[] = [];
+	const editing = state.field(editingEmbed, false);
+	const canvasHeight = state.field(canvasEmbedHeight, false);
+	const open = state.facet(handlersFacet)?.openAsset;
+	wikiReferences(state, 0, state.doc.length, (match, range) => {
+		if (editing?.from === range.from) return;
+		const asset = resolveWikiTarget(match.target, context.lookup);
+		if (!asset || asset.relativePath === context.fromRelativePath) return;
+		const anchor = wikiAnchor(match.target);
+		const html = renderAssetEmbed(asset, match, anchor, { interactiveHtml: true });
+		const canvas = isCanvasFile(asset.relativePath);
+		const documentContext = canvas || isMarkdownFile(asset.relativePath) ? context : undefined;
+		const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, open, documentContext, canvas ? canvasHeight : undefined);
+		const line = state.doc.lineAt(range.from);
+		const block = canvas && range.from === line.from && range.to === line.to;
+		found.push(Decoration.replace({ widget, block }).range(range.from, range.to));
+	}, true);
+	return Decoration.set(found);
+}
+
+const embedDecorations = StateField.define<DecorationSet>({
+	create: wikiEmbedDecorations,
+	update(value, { startState, state, docChanged }) {
+		return docChanged || syntaxTree(startState) !== syntaxTree(state)
+			|| startState.field(libraryField, false) !== state.field(libraryField, false)
+			|| startState.field(editingEmbed, false) !== state.field(editingEmbed, false)
+			|| startState.field(canvasEmbedHeight, false) !== state.field(canvasEmbedHeight, false)
+			? wikiEmbedDecorations(state) : value;
+	},
+	provide: (field) => EditorView.decorations.from(field),
+});
+
+export const liveEmbeds = [editingEmbed, canvasEmbedHeight, embedDecorations, canvasEmbedSizing];
+
+function decorateWiki(state: EditorState, context: LiveContext, match: WikiMatch, range: WikiRange, found: Range<Decoration>[]): void {
 	const asset = resolveWikiTarget(match.target, context.lookup);
-	const hash = match.target.indexOf("#");
-	const anchor = hash === -1 ? undefined : anchorOf(match.target.slice(hash + 1));
-	const localHeading = hash === 0 && !!anchor;
+	const anchor = wikiAnchor(match.target);
+	const localHeading = match.target.startsWith("#") && !!anchor;
 	if (asset === null && !localHeading) return;
 	const editing = touched(state, range.from, range.to);
 	const missing = asset === undefined;
 
 	if (match.embed && !localHeading && asset?.relativePath !== context.fromRelativePath) {
-		if (asset && state.field(editingEmbed, false)?.from !== range.from) {
-			const html = renderAssetEmbed(asset, match, anchor, { interactiveHtml: true });
-			const documentContext = isMarkdownFile(asset.relativePath) || isCanvasFile(asset.relativePath) ? context : undefined;
-			const widget = new WikiEmbedWidget(range.to - range.from, asset.assetId, anchor, html, state.facet(handlersFacet)?.openAsset, documentContext);
-			found.push(Decoration.replace({ widget }).range(range.from, range.to));
-			return;
+		if (!asset || state.field(editingEmbed, false)?.from === range.from) {
+			found.push(Decoration.mark({ class: missing ? "cm-live-broken" : "cm-live-link" }).range(range.from, range.to));
 		}
-		found.push(Decoration.mark({ class: missing ? "cm-live-broken" : "cm-live-link" }).range(range.from, range.to));
 		return;
 	}
 	const open = range.from + (match.embed ? 3 : 2);

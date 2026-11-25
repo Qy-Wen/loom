@@ -4,7 +4,7 @@ import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
 import { ensureSyntaxTree } from "@codemirror/language";
 import { EditorSelection, EditorState, RangeSet } from "@codemirror/state";
 import type { Asset } from "@loom/core";
-import { liveBlockDecorations, liveBlocks, liveDecorations, liveDrag, markdownImageDecorations, setFocused, snapToSymbols, liveLibrary, updateLibrary } from "../src/renderer/workbench/preview/live-markdown.ts";
+import { liveBlockDecorations, liveBlocks, liveDecorations, liveDrag, markdownImageDecorations, setFocused, snapToSymbols, liveLibrary, updateLibrary, wikiEmbedDecorations } from "../src/renderer/workbench/preview/live-markdown.ts";
 
 const asset = (assetId: string, relativePath: string): Asset => ({
 	assetId, relativePath, filename: relativePath.split("/").pop()!, type: relativePath.endsWith(".png") ? "image" : "text",
@@ -44,7 +44,7 @@ function decorate(text: string, cursor = text.length, anchor = cursor, library =
 	const lines: string[] = [];
 	const widgets: string[] = [];
 	const targets: string[] = [];
-	for (const cursor = RangeSet.iter([liveDecorations(state), markdownImageDecorations(state)]); cursor.value; cursor.next()) {
+	for (const cursor = RangeSet.iter([liveDecorations(state), markdownImageDecorations(state), wikiEmbedDecorations(state)]); cursor.value; cursor.next()) {
 		const { from, to, value } = cursor;
 		const spec = value.spec as { class?: string; widget?: { src?: string; assetId?: string }; attributes?: Record<string, string> };
 		const name = spec.class ?? spec.attributes?.class ?? "";

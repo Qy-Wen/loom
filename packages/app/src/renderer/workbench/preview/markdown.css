@@ -507,16 +507,33 @@
 	max-block-size: none;
 }
 
-.cm-wiki-embed:has(> .markdown-canvas-embed > .markdown-canvas-embed-content:not(:empty)) {
+.cm-wiki-embed:has(> .markdown-canvas-embed) {
 	inline-size: 100%;
 }
 
+.markdown-canvas-embed, .markdown-canvas-embed-measure {
+	--markdown-canvas-preview-height: clamp(12rem, 45vh, 24rem);
+	--markdown-canvas-title-height: var(--lm-size-xl);
+}
+
+.markdown-canvas-embed-measure {
+	position: absolute;
+	inset: 0 auto auto 0;
+	inline-size: 0;
+	block-size: calc(var(--markdown-canvas-preview-height) + var(--lm-space-3) + var(--markdown-canvas-title-height));
+	visibility: hidden;
+	pointer-events: none;
+}
+
+.cm-wiki-embed > .markdown-canvas-embed,
 .markdown-canvas-embed:has(> .markdown-canvas-embed-content:not(:empty)) { display: block; }
-.markdown-canvas-embed-content:empty { display: none; }
+
+.markdown-canvas-embed-content { display: none; }
+.cm-wiki-embed > .markdown-canvas-embed > .markdown-canvas-embed-content,
 .markdown-canvas-embed-content:not(:empty) {
 	position: relative;
 	display: block;
-	block-size: clamp(12rem, 45vh, 24rem);
+	block-size: var(--markdown-canvas-preview-height);
 	margin-block-end: var(--lm-space-3);
 	overflow: hidden;
 	isolation: isolate;
@@ -525,11 +542,17 @@
 	background: var(--lm-surface-canvas);
 }
 
+.cm-wiki-embed > .markdown-canvas-embed > .markdown-embed-file,
 .markdown-canvas-embed-content:not(:empty) + .markdown-embed-file {
 	display: flex;
 	flex: none;
 	inline-size: fit-content;
 	margin-inline: auto;
+}
+
+.cm-wiki-embed > .markdown-canvas-embed > .markdown-embed-file {
+	align-items: center;
+	block-size: var(--markdown-canvas-title-height);
 }
 
 .markdown-canvas-plane, .markdown-canvas-lines, .markdown-canvas-card, .markdown-canvas-edge-label {

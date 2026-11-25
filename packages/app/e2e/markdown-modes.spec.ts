@@ -228,6 +228,37 @@ test("Markdown reserves room for local images before they enter the viewport", a
 	expect(Math.abs((await measure()) - before)).toBeLessThan(60);
 });
 
+test("Markdown keeps the scrollbar stable as Canvas previews enter the viewport after an edit", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const root = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(root).toBeTruthy();
+	const path = (await root())!;
+	const paragraphs = "Paragraph\n\n".repeat(100);
+	await writeFile(join(path, "Board.canvas"), JSON.stringify({
+		nodes: [{ id: "card", type: "text", x: 0, y: 0, width: 180, height: 110, text: "Canvas card" }], edges: [],
+	}));
+	await writeFile(join(path, "canvas-scroll.md"), `${paragraphs}![[Board.canvas]]\n\n${paragraphs}`);
+	await selectFile(loomPage, "canvas-scroll.md");
+	const editor = loomPage.getByRole("textbox", { name: "Edit canvas-scroll.md" });
+	const scroller = loomPage.locator(".cm-scroller");
+	const preview = editor.locator(".markdown-canvas-plane");
+	const measure = () => scroller.evaluate(async (element) => {
+		await new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+		return { top: element.scrollTop, height: element.scrollHeight };
+	});
+	await editor.press("ControlOrMeta+Home");
+	await loomPage.keyboard.insertText("![[Board.canvas]]\n\n");
+	await expect(preview).toHaveCount(1);
+	await expect(preview).toBeInViewport();
+	const before = await measure();
+	const embedOffset = 5_250;
+	await scroller.evaluate((element, offset) => { element.scrollTop = offset; }, embedOffset);
+	await expect(preview).toBeInViewport();
+	const after = await measure();
+	expect(Math.abs(after.height - before.height)).toBeLessThan(40);
+	expect(Math.abs(after.top - embedOffset)).toBeLessThan(40);
+});
+
 test("rendering a diagram during Markdown scrolling keeps the window width stable", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	const root = () => loomPage.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);

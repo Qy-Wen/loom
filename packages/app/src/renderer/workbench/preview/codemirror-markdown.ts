@@ -7,7 +7,7 @@ import { Annotation, Compartment, EditorState, type Extension } from "@codemirro
 import { drawSelection, EditorView, keymap, panels } from "@codemirror/view";
 import { tags } from "@lezer/highlight";
 import type { Asset } from "@loom/core";
-import { initialLiveLibrary, liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveHandlers, liveImages, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
+import { initialLiveLibrary, liveBlockKeys, liveBlocks, liveClicks, liveDrag, liveEmbeds, liveHandlers, liveImages, liveMarkdown, liveMarkdownTheme, liveTables, setFocused, updateLibrary, type LiveHandlers, type LiveLibrary } from "./live-markdown.ts";
 import { leaveCell, type TableHooks } from "./live-table.ts";
 import { findEditorHeading } from "./editor-heading.ts";
 import { MarkdownFindPanel, type MarkdownFindLabels } from "./markdown-find.ts";
@@ -135,7 +135,7 @@ export function createMarkdownEditor(parent: HTMLElement, findContainer: HTMLEle
 	const rendering = new Compartment();
 	const access = new Compartment();
 	const accessible = new Compartment();
-	const rendered: Extension = [editingEmbed, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks, markdownInlineSelection];
+	const rendered: Extension = [liveEmbeds, liveDrag, liveMarkdown, liveImages, liveBlocks, liveBlockKeys, liveMarkdownTheme, liveClicks, markdownInlineSelection];
 	const chooseEmbedAction = (readOnly: boolean, removeEmbed = false) => host.chooseTextAction({
 		embed: true,
 		removeEmbed,
