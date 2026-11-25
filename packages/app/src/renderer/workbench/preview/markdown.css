@@ -473,25 +473,19 @@
 .markdown-note-embed:has(> .markdown-note-embed-content:not(:empty)) {
 	display: block;
 	margin-block: var(--lm-space-2);
-	padding: var(--lm-space-4) var(--lm-space-5);
-	border: 1px solid var(--lm-border-default);
-	border-inline-start: 2px solid var(--lm-text-accent);
-	border-radius: var(--lm-radius-sm);
-	background: var(--lm-surface-subtle);
-}
-
-.markdown-note-embed:has(> .markdown-note-embed-content:not(:empty)) > .markdown-embed-file {
-	font-size: var(--lm-text-size-sm);
-	font-weight: var(--lm-weight-medium);
 }
 
 .markdown-note-embed > .markdown-note-embed-content:not(:empty) {
 	display: block;
 	max-inline-size: none;
 	max-block-size: min(28rem, 60vh);
-	margin: var(--lm-space-3) 0 0;
-	padding: var(--lm-space-3) 0 0;
-	border-block-start: 1px solid var(--lm-border-default);
+	margin-block: 0 var(--lm-space-3);
+	margin-inline: 0;
+	padding: var(--lm-space-4) var(--lm-space-5);
+	border: 1px solid var(--lm-border-default);
+	border-inline-start: 2px solid var(--lm-text-accent);
+	border-radius: var(--lm-radius-sm);
+	background: var(--lm-surface-subtle);
 	overflow: auto;
 	overflow-wrap: anywhere;
 	white-space: normal;
@@ -543,7 +537,7 @@
 }
 
 .cm-wiki-embed > .markdown-canvas-embed > .markdown-embed-file,
-.markdown-canvas-embed-content:not(:empty) + .markdown-embed-file {
+:is(.markdown-canvas-embed-content, .markdown-note-embed-content):not(:empty) + .markdown-embed-file {
 	display: flex;
 	flex: none;
 	inline-size: fit-content;

@@ -97,5 +97,5 @@ export function renderAssetEmbed(asset: Asset, reference: WikiTarget, anchor: st
 		return `<span class="markdown-canvas-embed" data-canvas-asset-id="${escapeHtml(asset.assetId)}"><span class="markdown-canvas-embed-content"></span>${html}</span>`;
 	}
 	if (!isMarkdownFile(asset.relativePath) || (!anchor && reference.target.includes("#"))) return html;
-	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}">${html}<span class="markdown-note-embed-content markdown-preview-body thin-scroll"></span></span>`;
+	return `<span class="markdown-note-embed" data-note-asset-id="${escapeHtml(asset.assetId)}"><span class="markdown-note-embed-content markdown-preview-body thin-scroll"></span>${html}</span>`;
 }

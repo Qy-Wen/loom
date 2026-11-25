@@ -256,16 +256,25 @@ test("wiki note embeds render a whole document or heading and stop at cycles", a
 	await expect(excerpt.getByText("Out of scope.")).toHaveCount(0);
 	await expect(fullNote.getByText("Whole-note introduction.")).toBeVisible();
 	await expect(fullNote.getByText("Out of scope.")).toBeVisible();
+	const title = excerpt.getByRole("link", { name: "Project excerpt", exact: true });
+	const preview = excerpt.locator(":scope > .markdown-note-embed-content");
+	await expect(preview).toHaveCSS("border-inline-start-width", "2px");
+	await expect(excerpt).toHaveCSS("border-inline-start-width", "0px");
+	const previewBox = (await preview.boundingBox())!;
+	const titleBox = (await title.boundingBox())!;
+	expect(titleBox.y).toBeGreaterThan(previewBox.y + previewBox.height);
+	expect(titleBox.x + titleBox.width / 2).toBeCloseTo(previewBox.x + previewBox.width / 2, 0);
 	await expect(excerpt.getByRole("link", { name: "Follow-up", exact: true })).toHaveAttribute("data-asset-id", /.+/);
-	await expect(excerpt.getByRole("link", { name: "commands", exact: false })).toBeVisible();
-	await expect(excerpt.getByRole("link", { name: "commands", exact: false }).locator("+ .markdown-note-embed-content")).toBeEmpty();
+	const cyclicLink = excerpt.getByRole("link", { name: "commands", exact: false });
+	await expect(cyclicLink).toBeVisible();
+	await expect(cyclicLink.locator("xpath=..").locator(":scope > .markdown-note-embed-content")).toBeEmpty();
 	await expect(editor.locator(".cm-live-wiki").filter({ hasText: "commands" })).toHaveCount(1);
 
 	await page.getByRole("button", { name: "Reading mode", exact: true }).click();
 	await expect(excerpt.locator("strong")).toHaveText("latest");
 	await writeFile(report, source.replace("**latest**", "**updated**"));
 	await expect(excerpt.locator("strong")).toHaveText("updated");
-	await excerpt.getByRole("link", { name: "Project excerpt", exact: true }).click();
+	await title.click();
 	await expect(page.getByRole("textbox", { name: "Edit Report.md", exact: true }).locator('[data-heading="highlights"]')).toBeInViewport();
 });
 
@@ -314,7 +323,7 @@ test("Markdown embeds live Canvas previews and stops each cyclic branch at a fil
 	await expect(scene.getByText("Scene notes", { exact: true })).toBeVisible();
 	await expect.poll(() => scene.locator("img").evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
 	await expect(canvasContent(scene.getByRole("link", { name: "Back to storyboard" }))).toBeEmpty();
-	await expect(scene.getByRole("link", { name: "commands.md" }).locator("+ .markdown-note-embed-content")).toBeEmpty();
+	await expect(scene.getByRole("link", { name: "commands.md" }).locator("xpath=..").locator(":scope > .markdown-note-embed-content")).toBeEmpty();
 	const nested = scene.locator(".markdown-canvas-plane");
 	await expect(canvasContent(nested.getByRole("link", { name: "分镜.canvas" }))).toBeEmpty();
 	await expect(nested).toHaveCount(1);
