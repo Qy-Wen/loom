@@ -1,9 +1,10 @@
-import { isolateHistory, undo, redo, undoDepth, redoDepth } from "@codemirror/commands";
+import { undo, redo, undoDepth, redoDepth } from "@codemirror/commands";
 import { syntaxTree } from "@codemirror/language";
-import type { StateEffectType, Text } from "@codemirror/state";
+import type { StateEffectType } from "@codemirror/state";
 import { EditorView, WidgetType } from "@codemirror/view";
 import type { AssetLookup } from "@loom/core/references";
 import { EMBED_IMAGE_SELECTOR, EMBED_LINK_SELECTOR } from "./embed-renderers.ts";
+import { focusAfterBlock } from "./live-block-caret.ts";
 import { pressedReference } from "./live-reference.ts";
 import { renderInlineMarkdown } from "./markdown.ts";
 import type { EditorClipboardAction, MarkdownContextAction, TableContextAction, TableContextState } from "../../../shared/ipc.ts";
@@ -1069,36 +1070,10 @@ function leaveTable(view: EditorView, wrap: HTMLElement, cell: HTMLElement, side
 	if (view.state.readOnly || !range) return;
 	cell.blur();
 	if (side === "after") {
-		focusAfterTable(view, range.to, view.lineBlockAt(range.to).to + 1);
+		focusAfterBlock(view, range.to, view.lineBlockAt(range.to).to + 1, false);
 		return;
 	}
 	if (range.from === 0) view.dispatch({ changes: { from: 0, insert: "\n" }, selection: { anchor: 0 }, scrollIntoView: true, userEvent: "input" });
 	else view.dispatch({ selection: { anchor: range.from - 1 }, scrollIntoView: true });
-	view.focus();
-}
-
-/** Include the first blank line in the drawn table when there is an editable line after it. */
-export function tableSeparatorEnd(doc: Text, end: number): number {
-	if (end >= doc.length) return end;
-	const line = doc.lineAt(end + 1);
-	return line.from === end + 1 && line.to < doc.length && !line.text.trim() ? line.to : end;
-}
-
-export function focusAfterTable(view: EditorView, end: number, anchor: number): void {
-	const { doc } = view.state;
-	const following = end < doc.length ? doc.lineAt(end + 1) : null;
-	if (!following || (following.number === doc.lines && !following.text.trim())) {
-		// Leave a blank separator so the text typed after the table starts a new block.
-		const insert = following ? "\n" : "\n\n";
-		view.dispatch({
-			changes: { from: doc.length, insert },
-			selection: { anchor: doc.length + insert.length },
-			annotations: isolateHistory.of("full"),
-			userEvent: "input",
-			scrollIntoView: true,
-		});
-	} else {
-		view.dispatch({ selection: { anchor }, scrollIntoView: true });
-	}
 	view.focus();
 }

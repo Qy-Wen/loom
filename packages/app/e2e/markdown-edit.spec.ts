@@ -1037,6 +1037,67 @@ test("a table at the start or end of the file gets a blank line when the caret l
 	await expect.poll(() => readFile(only, "utf8")).toBe("");
 });
 
+test("clicking below a trailing rendered block puts the caret on a new paragraph", async ({ loomPage, electronApp, unopenedLibraryRoot: root }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	test.setTimeout(90000);
+	const fixtures = [
+		{ name: "画板嵌入.md", source: "![[board.canvas]]", selector: ".cm-wiki-embed .markdown-canvas-embed" },
+		{ name: "笔记嵌入.md", source: "![[excerpt.md]]\n", selector: ".cm-wiki-embed .markdown-note-embed-content p", clickEmptyLine: true },
+		{ name: "网页嵌入.md", source: "![[page.html]]", selector: ".cm-wiki-embed webview" },
+		{ name: "图片.md", source: "![图](picture.svg)\n\n", selector: ".cm-live-image" },
+		{ name: "公式.md", source: "$$\nx^2\n$$", selector: ".cm-live-math-block" },
+		{ name: "图表.md", source: "```mermaid\ngraph TD; A-->B\n```", selector: ".cm-live-mermaid svg" },
+		{ name: "代码.md", source: "```js\nconst answer = 42;\n```", selector: ".cm-live-codeblock-last.cm-live-fence" },
+		{ name: "分隔线.md", source: "---", selector: ".cm-live-rule" },
+	];
+	await Promise.all([
+		...fixtures.map(({ name, source }) => writeFile(join(root, name), `前文\n\n${source}`)),
+		writeFile(join(root, "board.canvas"), '{"nodes":[],"edges":[]}'),
+		writeFile(join(root, "excerpt.md"), "嵌入内容"),
+		writeFile(join(root, "page.html"), "<!doctype html><title>页面</title><p>网页内容</p>"),
+		writeFile(join(root, "picture.svg"), '<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32"><rect width="32" height="32"/></svg>'),
+	]);
+	await electronApp!.evaluate(({ dialog }, path) => {
+		const open = dialog.showOpenDialog;
+		dialog.showOpenDialog = (async () => {
+			dialog.showOpenDialog = open;
+			return { canceled: false, filePaths: [path] };
+		}) as typeof dialog.showOpenDialog;
+	}, root);
+	await loomPage.evaluate(() => window.loom.openLibrary());
+	await expect.poll(async () => (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath).toBe(root);
+
+	for (const { name, source, selector, clickEmptyLine } of fixtures) {
+		await loomPage.locator(".library-sidebar .asset-row").filter({ hasText: name }).click();
+		const box = loomPage.getByRole("textbox", { name: `Edit ${name}` });
+		const widget = box.locator(selector);
+		await expect(widget).toBeVisible();
+		const clickBelow = async () => {
+			const { x, y, width, height } = (await box.boundingBox())!;
+			await loomPage.mouse.click(x + width / 2, y + height + 10);
+		};
+		if (clickEmptyLine) {
+			await box.locator(".cm-line").last().click();
+		} else {
+			await clickBelow();
+		}
+		await expect(box).toBeFocused();
+		const emptyLines = box.locator(".cm-line:has(> br:only-child)");
+		await expect(emptyLines, name).toHaveCount(2); // The blank line above the block and the new line below it.
+		if (name === fixtures[0].name) {
+			await loomPage.keyboard.press("Backspace");
+			await expect.poll(() => readFile(join(root, name), "utf8")).toBe(`前文\n\n${source}`);
+			await expect(widget).toBeVisible();
+			await loomPage.keyboard.press("ControlOrMeta+z");
+			await expect(emptyLines).toHaveCount(2);
+		}
+		await loomPage.keyboard.type("后文");
+		await expect.poll(() => readFile(join(root, name), "utf8"), { message: name }).toBe(`前文\n\n${source.trimEnd()}\n\n后文`);
+		await expect(emptyLines, name).toHaveCount(1);
+		await expect(widget).toBeVisible();
+	}
+});
+
 test("up and down move by line even when the caret's formula source wraps the line", async ({ loomPage, electronApp, unopenedLibraryRoot: root }) => {
 	test.skip(!electronApp, "isolated Electron required");
 	test.setTimeout(90000);
