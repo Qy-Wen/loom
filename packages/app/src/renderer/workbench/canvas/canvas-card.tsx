@@ -1,11 +1,13 @@
 import { memo, useMemo, type CSSProperties, type PointerEvent, type KeyboardEvent } from "react";
 import type { Asset } from "@loom/core";
 import type { CanvasNode, CanvasSide } from "../../../shared/canvas.ts";
+import { isHtmlFile, TEXT_FILE_EDIT_LIMIT_BYTES } from "../../../shared/text-file.ts";
 import { AssetFileIcon } from "../../assets/asset-file-icon.tsx";
 import { AssetThumbnail } from "../../assets/asset-thumbnail.tsx";
 import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { isImeComposing } from "../../components/ime-composition.ts";
 import { useLocale } from "../../locale.tsx";
+import { HtmlPagePreview } from "../preview/html-page-preview.tsx";
 import { renderMarkdown } from "../preview/markdown.ts";
 import { CANVAS_PORT_SIDES } from "./canvas-layout.ts";
 import { CanvasMarkdown } from "./canvas-markdown.tsx";
@@ -50,7 +52,9 @@ export function CanvasCard({
 			: node.type === "link" ? node.url : t.canvas.note;
 	const url = node.type === "link" && /^https?:\/\//i.test(node.url ?? "") ? node.url : undefined;
 	const markdownAsset = node.type === "file" && asset && extensionOf(asset.filename) === ".md" ? asset : undefined;
-	const openFromHandle = markdownAsset && !connecting;
+	const htmlAsset = node.type === "file" && asset && isHtmlFile(asset.filename) ? asset : undefined;
+	const documentAsset = markdownAsset ?? htmlAsset;
+	const openFromHandle = documentAsset && !connecting;
 	const editNoteFromHandle = node.type === "text" && !connecting && !editing;
 	const media = node.type === "file" && (asset?.type === "image" || asset?.type === "video");
 	const playable = node.type === "file" && (asset?.type === "audio" || asset?.type === "video") ? asset : undefined;
@@ -63,13 +67,13 @@ export function CanvasCard({
 	return <div className={`canvas-node${node.type === "group" ? " canvas-group" : ""}`} style={style}>
 		<article className={`canvas-card type-${node.type}${selected ? " selected" : ""}`} data-node-id={node.id}
 			onPointerDown={(event) => {
-				if (event.target instanceof Element && event.target.closest("a, audio, video, input, textarea, button:not(.canvas-handle, .canvas-asset-preview)")) return;
+				if (event.target instanceof Element && event.target.closest("a, audio, video, input, textarea, .html-page-preview, button:not(.canvas-handle, .canvas-asset-preview)")) return;
 				onMove(event, node.id);
 			}}
 			onDragStart={(event) => event.preventDefault()}
 			onDoubleClick={(event) => {
 				if (event.button !== 0 || (event.target instanceof Element
-					&& event.target.closest("a, audio, video, input, textarea, .canvas-resize, .canvas-player button"))) return;
+					&& event.target.closest("a, audio, video, input, textarea, .html-page-preview, .canvas-resize, .canvas-player button"))) return;
 				if (asset && node.type === "file") onPreview(asset);
 				if (node.type === "text" || node.type === "group") onEdit(node.id);
 			}}>
@@ -84,7 +88,7 @@ export function CanvasCard({
 						aria-pressed={openFromHandle ? undefined : selected}
 						onClick={(event) => {
 							if (event.detail !== 0) return;
-							if (openFromHandle) onPreview(markdownAsset);
+							if (openFromHandle) onPreview(documentAsset);
 							else onSelect(node.id, event.shiftKey);
 						}}
 						onKeyDown={(event) => {
@@ -102,9 +106,11 @@ export function CanvasCard({
 			</header>
 			<div className={`canvas-card-frame${media ? " canvas-card-media" : ""}`}>
 				{markdownAsset && <CanvasMarkdown asset={markdownAsset} assets={assets} onOpenAsset={onPreview} />}
+				{htmlAsset && <HtmlPagePreview src={assetPreviewUrl(htmlAsset)} title={t.preview.title(htmlAsset.filename)}
+					readOnly={htmlAsset.size > TEXT_FILE_EDIT_LIMIT_BYTES} lazy inert={playbackDisabled} />}
 				{playable && <CanvasMedia key={`${playable.type}:${assetPreviewUrl(playable)}`} asset={playable} nodeId={node.id}
 					playback={playback} disabled={playbackDisabled} onSize={(width, height) => onMediaLoad(playable, width, height)} />}
-				{node.type === "file" && !markdownAsset && !playable && (
+				{node.type === "file" && !documentAsset && !playable && (
 					<div className="canvas-card-body">
 						{asset ? (
 							<button type="button" className="canvas-asset-preview" aria-label={`${t.canvas.preview} ${asset.filename}`}

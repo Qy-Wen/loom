@@ -220,6 +220,8 @@
 	padding: var(--lm-space-2) var(--lm-space-3);
 }
 
+.canvas-card-frame > .html-page-preview { cursor: auto; }
+.canvas-card-frame > .html-page-preview[inert] { pointer-events: none; }
 .canvas-file-markdown { overscroll-behavior: contain; }
 .canvas-file-markdown .markdown-preview-body {
 	max-width: none;

@@ -4,6 +4,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import { resolveMediaBinary } from "../../core/src/media/binaries.ts";
 import type { CanvasDocument } from "../src/shared/canvas.ts";
+import { HTML_PREVIEW_LOAD_TIMEOUT, inPreview } from "./html-preview.ts";
 import { expect, test } from "./loom.ts";
 
 const still = new URL("../../core/tests/fixtures/media/still.png", import.meta.url);
@@ -404,6 +405,63 @@ test("a file dropped on a canvas tab opens a preview tab, and a drop on the canv
 	await writeFile(scriptPath, "# 改过的文案");
 	await expect(card.getByRole("heading", { name: "改过的文案" })).toBeVisible();
 	await expect.poll(async () => (await readBoard(join(root, "项目", "Untitled.canvas"))).nodes[0]?.file).toBe("项目/文案.md");
+});
+
+test("an HTML file renders interactively inside its canvas card", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated library required");
+	const rootPath = () => page.evaluate(async () => (await window.loom.getLibrarySnapshot()).rootPath);
+	await expect.poll(rootPath).toBeTruthy();
+	const root = (await rootPath())!;
+	const filename = "报告.HTM";
+	const file = join(root, filename);
+	const boardFile = join(root, "Board.canvas");
+	await writeFile(file, `<!doctype html><button type="button" style="position:fixed;inset:0 0 50%;width:100%">Run</button>
+		<output style="position:fixed;top:55%">Ready</output>
+		<script>document.querySelector("button").addEventListener("click", () => { document.querySelector("output").textContent = "Clicked"; });</script>`);
+	await writeFile(boardFile, JSON.stringify({
+		nodes: [{ id: "report", type: "file", file: filename, x: 0, y: 0, width: 320, height: 200 }],
+		edges: [],
+	} satisfies CanvasDocument));
+	await page.locator(".library-sidebar .asset-row").filter({ hasText: "Board.canvas" }).click();
+
+	const board = page.getByRole("region", { name: "Canvas Board.canvas" });
+	const card = board.locator('[data-node-id="report"]');
+	const handle = card.locator(".canvas-handle");
+	const guest = card.locator("webview");
+	const output = () => inPreview(guest, 'document.querySelector("output")?.textContent');
+	await expect(guest).toHaveAccessibleName(`Preview ${filename}`);
+	await expect.poll(output, { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toBe("Ready");
+	await guest.click({ position: { x: 20, y: 20 } });
+	await expect.poll(output).toBe("Clicked");
+
+	const surface = board.locator(".canvas-surface");
+	const pan = board.getByRole("button", { name: "Pan", exact: true });
+	await pan.click();
+	const panel = (await guest.boundingBox())!;
+	await page.mouse.move(panel.x + 30, panel.y + 30);
+	await page.mouse.down();
+	await page.mouse.move(panel.x + 65, panel.y + 60, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(async () => (await guest.boundingBox())!.x).toBeGreaterThan(panel.x);
+	await expect(surface).toHaveClass(/pan/);
+	await pan.click();
+
+	const before = (await handle.boundingBox())!;
+	await page.mouse.move(before.x + 20, before.y + before.height / 2);
+	await page.mouse.down();
+	await page.mouse.move(before.x + 52, before.y + before.height / 2, { steps: 5 });
+	await page.mouse.up();
+	await expect.poll(async () => (await readBoard(boardFile)).nodes[0]!.x).toBeGreaterThan(0);
+	await expect.poll(output).toBe("Clicked");
+
+	const preview = page.getByRole("dialog", { name: "File preview" });
+	await handle.press("Enter");
+	await expect(preview.getByRole("toolbar", { name: "HTML view" })).toBeVisible();
+	await page.keyboard.press("Escape");
+	await expect(preview).toHaveCount(0);
+
+	await writeFile(file, "<!doctype html><output>Updated report</output>");
+	await expect.poll(output, { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toBe("Updated report");
 });
 
 test("switching from a canvas tab to icon mode selects the canvas and opens it on double-click", async ({ loomPage: page, electronApp }) => {

@@ -15,7 +15,7 @@ import { assetPreviewUrl, extensionOf } from "../../assets/asset-utils.ts";
 import { useLocale } from "../../locale.tsx";
 import { DocumentModeButton } from "./document-mode-button.tsx";
 import { FavoriteButton } from "./favorite-button.tsx";
-import { createHtmlPreviewGuest } from "./html-preview-guest.ts";
+import { HtmlPagePreview } from "./html-page-preview.tsx";
 import { TextFileSave, type TextFiles } from "./text-file-save.ts";
 import { TextPreview } from "./text-preview.tsx";
 
@@ -53,18 +53,6 @@ function sourceLanguage(extension: string): Extension {
 
 function flush(save: TextFileSave): void {
 	void save.flush().catch(() => undefined);
-}
-
-function InteractiveHtmlPreview({ src, title }: { src: string; title: string }): React.JSX.Element {
-	const hostRef = useRef<HTMLDivElement>(null);
-	useEffect(() => {
-		const host = hostRef.current;
-		if (!host) return;
-		const guest = createHtmlPreviewGuest(host.ownerDocument, src, title);
-		host.append(guest);
-		return () => guest.remove();
-	}, [src, title]);
-	return <div ref={hostRef} className="html-page-preview" />;
 }
 
 export function TextWorkbench({ asset, html: renderHtml, favorite, onToggleFavorite }: {
@@ -191,11 +179,8 @@ export function TextWorkbench({ asset, html: renderHtml, favorite, onToggleFavor
 					}} />
 			</div>
 			{readOnly && <div className="markdown-mode-notice" role="note">{t.preview.editorReadOnly}</div>}
-			{!editing && (renderHtml ? (
-				readOnly
-					? <iframe className="html-page-preview" src={url.href} title={title} sandbox="" referrerPolicy="no-referrer" />
-					: <InteractiveHtmlPreview src={url.href} title={title} />
-			) : <TextPreview asset={asset} url={url.href} />)}
+			{!editing && (renderHtml ? <HtmlPagePreview src={url.href} title={title} readOnly={readOnly} />
+				: <TextPreview asset={asset} url={url.href} />)}
 			<div className="source-editor" ref={hostRef} hidden={!editing || !save || readOnly} />
 			{editing && !save && (error
 				? <div className="markdown-editor-status" role="alert"><span className="markdown-editor-problem">{error}</span><button type="button" onClick={() => retryLoad((attempt) => attempt + 1)}>{t.preview.editorRetry}</button></div>
