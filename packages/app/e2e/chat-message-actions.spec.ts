@@ -3,7 +3,8 @@ import type { AddressInfo } from "node:net";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
 const REPLY = "Here is a table:\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\nDone.";
-const CODE_FENCE = `\`\`\`ts\nconst answer = 42;\nconst longLine = "${"a".repeat(160)}";\n\`\`\``;
+const CODE_SOURCE = `const answer = 42;\nconst longLine = "${"a".repeat(160)}";`;
+const CODE_FENCE = `\`\`\`ts\n${CODE_SOURCE}\n\`\`\``;
 const CODE_REPLY = `Here is code for \`pi.compaction\`:\n\n${CODE_FENCE}\n\nDone.`;
 /** The text above the copy button leaves a small gap, not the typography's 20px bottom margin. */
 const MAX_GAP_ABOVE_COPY = 8;
@@ -107,8 +108,8 @@ test("a reply's table actions sit under the table and match the message copy but
 	}
 });
 
-test("reply and reasoning code blocks share readable styling and actions below the code", async ({ loomPage }) => {
-	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated user data and library required");
+test("reply and reasoning code blocks put Copy at the top right", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated user data and library required");
 	await loomPage.emulateMedia({ colorScheme: "light" });
 	const server = createServer((request, response) => {
 		request.resume();
@@ -152,21 +153,26 @@ test("reply and reasoning code blocks share readable styling and actions below t
 			expect(await source.evaluate((pre) => pre.scrollWidth > pre.clientWidth)).toBe(true);
 
 			const lang = message.locator("[data-code-block-header] > span");
-			const copy = message.locator("[data-code-block-header] > div > button").nth(1);
-			const download = message.locator('button[data-tooltip="Download file"]');
+			const copy = message.getByRole("button", { name: "Copy code", exact: true });
 			await expect(lang).toHaveText("ts");
-			await expect(download).toBeVisible();
-			const [code, label, line, copyButton, downloadButton] = await Promise.all(
-				[block, lang, block.locator(".line").first(), copy, download].map(async (locator) => (await locator.boundingBox())!),
+			await expect(copy).toBeVisible();
+			await expect(message.locator("[data-code-block-header] button:visible")).toHaveCount(1);
+			const [code, label, line, copyButton] = await Promise.all(
+				[block, lang, block.locator(".line").first(), copy].map(async (locator) => (await locator.boundingBox())!),
 			);
 
 			expect([copyButton.width, copyButton.height]).toEqual([26, 26]);
-			expect([downloadButton.width, downloadButton.height]).toEqual([26, 26]);
 			expect(label.y).toBeGreaterThanOrEqual(code.y);
 			expect(label.y + label.height).toBeLessThanOrEqual(line.y + 1);
-			expect(copyButton.y).toBeGreaterThanOrEqual(code.y + code.height);
-			expect(Math.abs(copyButton.x - code.x)).toBeLessThan(1);
-			expect(downloadButton.x).toBeGreaterThan(copyButton.x + copyButton.width - 1);
+			expect(copyButton.y - code.y).toBeGreaterThanOrEqual(0);
+			expect(copyButton.y - code.y).toBeLessThan(12);
+			expect(copyButton.y + copyButton.height).toBeLessThanOrEqual(line.y);
+			const rightInset = code.x + code.width - copyButton.x - copyButton.width;
+			expect(rightInset).toBeGreaterThanOrEqual(0);
+			expect(rightInset).toBeLessThan(12);
+			await electronApp!.evaluate(({ clipboard }) => clipboard.clear());
+			await copy.click();
+			await expect.poll(async () => (await electronApp!.evaluate(({ clipboard }) => clipboard.readText())).trimEnd()).toBe(CODE_SOURCE);
 		}
 
 		await loomPage.emulateMedia({ colorScheme: "dark" });

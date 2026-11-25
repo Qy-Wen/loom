@@ -86,8 +86,7 @@
 	font-weight: 600;
 }
 
-.agui-markdown [data-streamdown="table-wrapper"] > div:first-child:not(:last-child),
-.agui-markdown [data-code-block-header] > div {
+.agui-markdown [data-streamdown="table-wrapper"] > div:first-child:not(:last-child) {
 	display: flex;
 	justify-content: flex-start;
 	gap: 4px;
@@ -168,12 +167,9 @@
 
 .agui-markdown [data-code-block-container] {
 	position: relative;
-	display: flex;
-	flex-direction: column;
 	inline-size: 100%;
 }
 
-.agui-markdown [data-code-block-header] { display: contents; }
 .agui-markdown [data-code-block-container] > div:last-child { inline-size: 100%; min-inline-size: 0; }
 
 .agui-markdown [data-streamdown="code-block"] {
@@ -187,6 +183,7 @@
 .agui-markdown [data-code-block-container] pre {
 	margin: 0;
 	padding: 12px;
+	padding-block-start: calc(max(24px, var(--agui-md-action-size, 26px)) + 8px);
 	overflow-x: auto;
 	border-radius: 0;
 	background: transparent;
@@ -199,22 +196,30 @@
 	word-break: normal;
 }
 
-.agui-markdown [data-code-block-header] > span:not(:empty) {
+.agui-markdown [data-code-block-header] {
 	position: absolute;
 	z-index: var(--agui-md-overlay-layer, 2);
-	inset-block-start: 8px;
-	inset-inline-start: 12px;
+	inset-block-start: 4px;
+	inset-inline: 12px 6px;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	pointer-events: none;
+}
+
+.agui-markdown [data-code-block-header] > span {
 	color: var(--agui-md-muted, GrayText);
 	font-family: var(--agui-md-code-font, monospace);
 	font-size: 11px;
 	line-height: 1.2;
 	text-transform: lowercase;
-	pointer-events: none;
 }
 
-.agui-markdown [data-code-block-container]:has([data-code-block-header] > span:not(:empty)) pre {
-	padding-block-start: 31px;
+.agui-markdown [data-code-block-header] > div > button {
+	min-inline-size: 24px;
+	min-block-size: 24px;
+	pointer-events: auto;
 }
 
-.agui-markdown [data-code-block-header] > div { margin-block: 4px 0; }
-.agui-markdown [data-code-block-header] > div > button:first-child { order: 1; }
+/* Streamdown 1.3 enables code copy and download through the same option. */
+.agui-markdown [data-code-block-container] [data-code-block-header] > div > button:has(> svg.lucide-download) { display: none; }
