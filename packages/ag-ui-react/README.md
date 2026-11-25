@@ -1,3 +1,5 @@
+**English** | [简体中文](./README.zh-CN.md)
+
 # @loom/ag-ui-react
 
 React hooks and chat components for [AG-UI](https://docs.ag-ui.com/). Supply an official `HttpAgent` or an `AbstractAgent` with your own transport.
