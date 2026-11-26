@@ -11,7 +11,7 @@ function canScroll(element: HTMLElement): boolean {
 }
 
 /** Follow growing content until the reader scrolls up. Call scrollToBottom to resume following. */
-export function useChatScroll() {
+export function useChatScroll(onScrollUp?: (element: HTMLDivElement) => void) {
 	const [scroller, setScroller] = useState<HTMLDivElement | null>(null);
 	const pinned = useRef(true);
 	const applying = useRef(false);
@@ -74,7 +74,15 @@ export function useChatScroll() {
 		follow();
 	}, [follow, setPinned]);
 
+	const restoreReadingPosition = useCallback((top: number) => {
+		if (!scroller) return;
+		scroller.scrollTop = top;
+		lastTop.current = scroller.scrollTop;
+		setPinned(!noteOverflow(scroller));
+	}, [scroller, noteOverflow, setPinned]);
+
 	return {
+		scroller,
 		scrollerProps: {
 			ref: setScroller,
 			onWheel(event: WheelEvent<HTMLDivElement>) {
@@ -98,12 +106,15 @@ export function useChatScroll() {
 				// A transcript that stops overflowing clamps scrollTop down on its own.
 				if (!noteOverflow(element) || distanceFromBottom(element) < 1) setPinned(true);
 				else if (!applying.current && event.nativeEvent.isTrusted) {
-					if (delta < -1) setPinned(false);
-					else if (distanceFromBottom(element) < NEAR_BOTTOM_PX) setPinned(true);
+					if (delta < -1) {
+						setPinned(false);
+						onScrollUp?.(element);
+					} else if (delta > 0 && distanceFromBottom(element) < NEAR_BOTTOM_PX) setPinned(true);
 				}
 			},
 		},
 		scrollToBottom,
+		restoreReadingPosition,
 		showJumpToLatest: away && overflowing,
 	};
 }

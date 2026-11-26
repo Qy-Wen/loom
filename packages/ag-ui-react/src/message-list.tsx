@@ -1,6 +1,6 @@
-import type { ReactNode } from "react";
+import type { ReactNode, Ref } from "react";
 import { contentToText, type Message } from "@ag-ui/client";
-import { transcriptItems, type TranscriptItem } from "./transcript.ts";
+import { transcriptItemKey, transcriptItems, type TranscriptItem } from "./transcript.ts";
 import { ToolCard } from "./tool-card.tsx";
 
 export function renderDefaultTool(item: Extract<TranscriptItem, { kind: "tool" }>): ReactNode {
@@ -25,9 +25,22 @@ export interface MessageListProps {
 	label?: string;
 }
 
-export function MessageList({ messages, renderItem = renderDefaultItem, label = "Conversation" }: MessageListProps) {
-	return <ol className="agui-messages" aria-label={label}>{transcriptItems(messages).map((item) => {
+export function TranscriptList({ items, renderItem = renderDefaultItem, label = "Conversation", listRef }: Omit<MessageListProps, "messages"> & {
+	items: readonly TranscriptItem[];
+	listRef?: Ref<HTMLOListElement>;
+}) {
+	return <ol className="agui-messages" aria-label={label} ref={listRef}>{items.map((item) => {
 		const content = renderItem(item);
-		return content == null ? null : <li key={item.kind === "tool" ? `tool:${item.call.id}` : item.message.id} data-role={item.kind === "tool" ? "tool" : item.message.role}>{content}</li>;
+		if (content == null) return null;
+		return <li
+			key={transcriptItemKey(item)}
+			data-message-id={item.kind === "tool" ? item.result?.id : item.message.id}
+			data-role={item.kind === "tool" ? "tool" : item.message.role}
+			tabIndex={-1}
+		>{content}</li>;
 	})}</ol>;
+}
+
+export function MessageList({ messages, ...props }: MessageListProps) {
+	return <TranscriptList items={transcriptItems(messages)} {...props} />;
 }

@@ -41,9 +41,10 @@ export function SessionTranscript({ messages, isRunning, libraryRoot }: { messag
 		messages={messages}
 		isRunning={isRunning}
 		threadId={threadId}
+		historyPageSize={40}
 		className="loom-chat-view thin-scroll"
 		emptyState={<ChatEmptyState />}
-		labels={{ conversation: t.chat.conversation, working: t.chat.working, latest: t.chat.latest, reasoning: t.chat.reasoning, copy: t.common.copy }}
+		labels={{ conversation: t.chat.conversation, working: t.chat.working, latest: t.chat.latest, earlier: t.chat.earlier, reasoning: t.chat.reasoning, copy: t.common.copy }}
 		slots={{
 			markdown,
 			userMessage(message, text) {

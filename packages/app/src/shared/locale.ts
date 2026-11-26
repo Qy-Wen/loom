@@ -375,6 +375,7 @@ export const messages = defineLocale(
 		},
 		chat: {
 			latest: "Latest",
+			earlier: "Show earlier messages",
 			emptyTitle: "What would you like to do with your library?",
 			emptyHint: "I can search your assets, add tags and relations, edit table fields, and process media with FFmpeg. Pick one to start, or type your own.",
 			emptyNoModelTitle: "Connect a model to start chatting",
@@ -1220,6 +1221,7 @@ export const messages = defineLocale(
 		},
 		chat: {
 			latest: "最新",
+			earlier: "显示更早的消息",
 			emptyTitle: "想用素材库做点什么？",
 			emptyHint: "可以检索素材、添加标签和关系、修改表格字段，也能用 FFmpeg 处理媒体。选一个开始，或直接输入。",
 			emptyNoModelTitle: "先连接一个模型，才能开始对话",

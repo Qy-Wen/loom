@@ -29,14 +29,10 @@
 	overflow-anchor: none;
 }
 
-.agui-chat-jump {
-	position: absolute;
-	inset-inline: 0 var(--agui-chat-scroll-inset, 0px);
-	inset-block-end: 0.625rem;
+.agui-chat-jump, .agui-chat-earlier {
 	margin-inline: auto;
 	inline-size: max-content;
 	min-block-size: 1.75rem;
-	z-index: var(--agui-chat-overlay-layer, 2);
 	padding: 0 0.625rem;
 	border: 1px solid var(--agui-chat-border, GrayText);
 	border-radius: 999px;
@@ -49,7 +45,15 @@
 	box-shadow: var(--agui-chat-jump-shadow, none);
 }
 
-.agui-chat-jump:hover { background: var(--agui-chat-jump-hover, ButtonFace); }
+.agui-chat-jump {
+	position: absolute;
+	inset-inline: 0 var(--agui-chat-scroll-inset, 0px);
+	inset-block-end: 0.625rem;
+	z-index: var(--agui-chat-overlay-layer, 2);
+}
+
+.agui-chat-earlier { display: block; margin-block: 0.5rem; }
+:is(.agui-chat-jump, .agui-chat-earlier):hover { background: var(--agui-chat-jump-hover, ButtonFace); }
 .agui-chat-transcript { padding-block-end: 0.75rem; }
 .agui-chat-transcript > .agui-messages > li { inline-size: 100%; }
 .agui-chat-transcript > .agui-messages > li:empty { display: none; }
@@ -106,7 +110,7 @@
 }
 
 .agui-chat-reasoning > button[aria-expanded="true"] span { transform: rotate(90deg); }
-.agui-chat-view :is(.agui-chat-jump, .agui-chat-toolbar button, .agui-chat-reasoning > button):focus-visible {
+.agui-chat-view :is(.agui-chat-jump, .agui-chat-earlier, .agui-chat-toolbar button, .agui-chat-reasoning > button):focus-visible {
 	outline: 2px solid var(--agui-chat-focus, Highlight);
 	outline-offset: -2px;
 }

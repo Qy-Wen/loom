@@ -4,6 +4,22 @@ export type TranscriptItem =
 	| { kind: "message"; message: Message }
 	| { kind: "tool"; call: ToolCall; result?: ToolMessage };
 
+export function transcriptItemKey(item: TranscriptItem): string {
+	return item.kind === "tool" ? `tool:${item.call.id}` : item.message.id;
+}
+
+/** Prefer a turn boundary when there is one near the start of the page. */
+export function transcriptPageStart(items: readonly TranscriptItem[], end: number, size: number): number {
+	const start = Math.max(0, end - size);
+	const boundaryLimit = start + Math.floor(size / 4);
+	if (start === 0) return 0;
+	for (let index = start; index <= boundaryLimit && index < end; index++) {
+		const item = items[index];
+		if (item?.kind === "message" && item.message.role === "user") return index;
+	}
+	return start;
+}
+
 /** Keep calls next to their parent message and pair results by tool call ID. */
 export function transcriptItems(messages: readonly Message[]): TranscriptItem[] {
 	const results = new Map<string, ToolMessage>();
