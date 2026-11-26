@@ -646,14 +646,17 @@
 }
 
 .session-inline-input {
+	--composer-padding-top: var(--lm-space-3);
+	--composer-padding-bottom: 3px;
+	/* The absolutely positioned placeholder does not size the empty editor. */
+	min-height: calc(1lh + var(--composer-padding-top) + var(--composer-padding-bottom));
 	max-height: 240px;
 	font-size: var(--lm-text-size-xl);
 	line-height: 24px;
-	padding: var(--lm-space-3) var(--lm-space-2) 3px;
+	padding: var(--composer-padding-top) var(--lm-space-2) var(--composer-padding-bottom);
 	overflow: auto;
 	position: relative;
 	box-sizing: border-box;
-	min-height: var(--lm-size-md);
 	white-space: pre-wrap;
 	word-break: break-word;
 	outline: none;
