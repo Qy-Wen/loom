@@ -94,3 +94,62 @@ test("history editing shares composer styling and applies its model only to the 
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}
 });
+
+test("sending an edited history message does not flash empty state, ghost tabs, or missing model controls", async ({ loomPage }) => {
+	test.skip(Boolean(process.env.LOOM_CDP_URL?.trim()), "isolated library and settings required");
+	let count = 0;
+	const server = createServer((request, response) => {
+		request.resume();
+		request.on("end", () => {
+			count++;
+			const chunk = (delta: object, finish_reason: string | null) => `data: ${JSON.stringify({ id: `flash-${count}`, object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
+			response.writeHead(200, { "content-type": "text/event-stream" });
+			response.end(chunk({ content: `NO_FLASH_REPLY_${count}` }, null) + chunk({}, "stop") + "data: [DONE]\n\n");
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		await expect.poll(async () => (await loomPage.evaluate(() => window.loom.listSessions())).length).toBeGreaterThan(0);
+
+		await loomPage.getByRole("textbox").fill("FIRST_EDITABLE_QUESTION");
+		await loomPage.getByRole("textbox").press("Enter");
+		await expect(loomPage.getByText("NO_FLASH_REPLY_1", { exact: true })).toBeVisible({ timeout: 20_000 });
+		const strip = loomPage.getByRole("tablist", { name: "Sessions" });
+		const tabs = strip.getByRole("tab");
+		await expect(tabs).toHaveCount(1);
+
+		const bubble = loomPage.getByTestId("chat-user-message").filter({ hasText: "FIRST_EDITABLE_QUESTION" });
+		await bubble.hover();
+		await bubble.getByRole("button", { name: "Edit", exact: true }).click();
+		const editor = loomPage.getByRole("textbox", { name: "Edit question", exact: true });
+		await editor.fill("EDITED_NO_FLASH_QUESTION");
+
+		await loomPage.evaluate(() => {
+			const issues: string[] = [];
+			const check = () => {
+				if (document.querySelector(".chat-empty")) issues.push("empty-state-flashed");
+				if (document.querySelectorAll('[data-testid="chat-user-message"]').length === 0) issues.push("user-message-missing");
+				const tabButtons = [...document.querySelectorAll<HTMLButtonElement>('.session-tabs [role="tab"]')];
+				if (tabButtons.length !== 1) issues.push(`tab-count:${tabButtons.length}`);
+				if (tabButtons.some((tab) => tab.textContent?.includes("（分支）"))) issues.push("branch-suffix-tab");
+				if (!document.querySelector('.session-follow-up-slot .session-model-select > button')) issues.push("composer-model-missing");
+			};
+			const observer = new MutationObserver(check);
+			observer.observe(document.querySelector(".agent-content")!, { childList: true, subtree: true, attributes: true, characterData: true });
+			check();
+			(window as unknown as { __editFlashStop?: () => string[] }).__editFlashStop = () => {
+				observer.disconnect();
+				return issues;
+			};
+		});
+
+		await editor.press("Enter");
+		await expect(loomPage.getByText("NO_FLASH_REPLY_2", { exact: true })).toBeVisible({ timeout: 20_000 });
+		const issues = await loomPage.evaluate(() => (window as unknown as { __editFlashStop?: () => string[] }).__editFlashStop?.() ?? []);
+		expect(issues).toEqual([]);
+	} finally {
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});

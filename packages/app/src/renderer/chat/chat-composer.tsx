@@ -79,7 +79,6 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 		// A controlled thread switch connects asynchronously. Never send through the old thread's callback.
 		if (!pendingEdit || pendingEdit.threadId !== threadId || !threadReady || connecting || isRunning || compacting || submittedEdit.current === pendingEdit) return;
 		submittedEdit.current = pendingEdit;
-		editSubmitted(pendingEdit);
 		void (async () => {
 			const text = pendingEdit.text;
 			const chips = placedChips([
@@ -91,8 +90,16 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 			]);
 			try {
 				await window.loom.stageComposerAssets(threadId, chips);
-				await onSubmitMessage(contentWithPlacedAssets(text, chips));
+				if (activeThread.current !== pendingEdit.threadId) {
+					editSubmitted(pendingEdit);
+					return;
+				}
+				const submitted = onSubmitMessage(contentWithPlacedAssets(text, chips));
+				editSubmitted(pendingEdit);
+				await submitted;
 			} catch (cause) {
+				editSubmitted(pendingEdit);
+				if (activeThread.current !== pendingEdit.threadId) return;
 				setAttachmentError(cause instanceof Error ? cause.message : t.chat.attachFailed);
 				onChange(text);
 			}

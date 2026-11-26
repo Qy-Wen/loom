@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { Message } from "@ag-ui/core";
 import type { AgentEndpoint } from "../../shared/ipc.ts";
 import type { AssetRefAttachment, LoomContextUsage, LoomSessionModel, LoomSessionRecord, LoomTranscriptMessage } from "@loom/agent";
 import { mergeChatMessages, toAgUiMessages } from "../../shared/ag-ui-messages.ts";
@@ -62,7 +63,15 @@ export function SessionChat({
 	onRecord.current = onSessionRecord;
 	onFork.current = onForked;
 	const stream = useChatStream(endpoint, threadId, onHistoryChanged);
-	const visible = useMemo(() => mergeChatMessages(stored, stream.messages), [stored, stream.messages]);
+	const pendingMessage = useMemo<Message | null>(() => (
+		pendingEdit && pendingEdit.threadId === threadId && stream.messages.length === 0
+			? { id: `pending-edit-${threadId}`, role: "user", content: pendingEdit.text.replaceAll("\u200b", "") }
+			: null
+	), [pendingEdit, threadId, stream.messages.length]);
+	const visible = useMemo(() => {
+		const merged = mergeChatMessages(stored, stream.messages);
+		return pendingMessage ? [...merged, pendingMessage] : merged;
+	}, [stored, stream.messages, pendingMessage]);
 
 	useEffect(() => {
 		editingRef.current = null;
@@ -128,7 +137,7 @@ export function SessionChat({
 		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError: stream.error, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<ChatViewContext.Provider value={{ messages: visible, connecting: stream.connecting, threadReady: !stream.connecting }}>
 				<div className="session-chat-shell">
-					<SessionTranscript key={threadId} messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} findRequest={findRequest} onCloseFind={onCloseFind} />
+					<SessionTranscript key={threadId} messages={visible} isRunning={stream.isRunning || pendingMessage !== null} libraryRoot={libraryRoot} findRequest={findRequest} onCloseFind={onCloseFind} />
 					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} />
 				</div>
 			</ChatViewContext.Provider>

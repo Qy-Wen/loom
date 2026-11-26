@@ -62,6 +62,8 @@ export class ChatService {
 	readonly #observedBusy = new Map<ConversationId, boolean>();
 	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
 	#revision = 0;
+	#publishHold = 0;
+	#publishDirty = false;
 	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
 	#usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };
 	#trace?: DurableTrace;
@@ -201,7 +203,10 @@ export class ChatService {
 				}
 			}
 			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
-			if (busyChanged || publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
+			if (busyChanged || publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) {
+				if (this.#publishHold > 0) this.#publishDirty = true;
+				else void this.publish();
+			}
 		}, end: () => {} });
 		this.runtime.harness.resume();
 		await this.publish();
@@ -481,15 +486,17 @@ export class ChatService {
 	 * messages can still be read by id. (forkAfter is the other action: it leaves both sessions visible.)
 	 */
 	async branchBefore(id: string, entryId: string, model?: ChatSelection) {
-		const fork = await this.forkBefore(id, entryId, model);
-		await this.requireRuntime().harness.commit(async (tx) => {
-			const source = await tx.doc(LoomConversationDoc, idOf(id));
-			const branch = await tx.doc(LoomConversationDoc, idOf(fork.id));
-			branch.title = source.title;
-			if (source.titleIsCustom) branch.titleIsCustom = true;
-			source.hidden = true;
-		}, context);
-		return this.getSession(fork.id);
+		return this.withHeldPublish(async () => {
+			const fork = await this.forkBefore(id, entryId, model);
+			await this.requireRuntime().harness.commit(async (tx) => {
+				const source = await tx.doc(LoomConversationDoc, idOf(id));
+				const branch = await tx.doc(LoomConversationDoc, idOf(fork.id));
+				branch.title = source.title;
+				if (source.titleIsCustom) branch.titleIsCustom = true;
+				source.hidden = true;
+			}, context);
+			return this.getSession(fork.id);
+		});
 	}
 	#models: Models | undefined;
 	/** Guard Provider edits/publication atomically against public Session admission; no scheduler queue. */
@@ -574,8 +581,21 @@ export class ChatService {
 		return createChatExtensions(root, { systemPrompt: this.#options.systemPrompt, tools: this.#options.tools, userSkillsDir: this.#options.userSkillsDir, permission, sharedExtensions });
 	}
 
+	private async withHeldPublish<T>(action: () => Promise<T>): Promise<T> {
+		this.#publishHold++;
+		try {
+			return await action();
+		} finally {
+			if (--this.#publishHold === 0 && this.#publishDirty) {
+				this.#publishDirty = false;
+				void this.publish();
+			}
+		}
+	}
+
 	subscribeSessions(listener: (rows: LoomSessionSummary[]) => void) { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }
 	async publish() {
+		this.#publishDirty = false;
 		const revision = ++this.#revision;
 		try { const rows = await this.listSessions(); if (revision === this.#revision) for (const listener of this.#listeners) listener(rows); }
 		catch { /* A closing library will publish its empty list after close. */ }

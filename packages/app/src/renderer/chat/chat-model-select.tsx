@@ -14,6 +14,8 @@ type ModelChoice = {
 };
 type ThinkingMenu = { model: ModelChoice; anchor: HTMLButtonElement; focus: boolean };
 
+let cachedModels: ModelChoice[] | null = null;
+
 /** Move within one menu; the submenu owns its own keyboard navigation. */
 function navigateMenu(event: KeyboardEvent<HTMLDivElement>): void {
 	const items = [...event.currentTarget.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
@@ -39,7 +41,7 @@ export function ChatModelSelect({ model, onChange, disabled }: {
 }): React.JSX.Element | null {
 	const { t } = useLocale();
 	const menuId = useId();
-	const [models, setModels] = useState<ModelChoice[] | null>(null);
+	const [models, setModels] = useState<ModelChoice[] | null>(() => cachedModels);
 	const [open, setOpen] = useState(false);
 	const [submenu, setSubmenu] = useState<ThinkingMenu | null>(null);
 	const [error, setError] = useState<string | null>(null);
@@ -54,11 +56,13 @@ export function ChatModelSelect({ model, onChange, disabled }: {
 		let cancelled = false;
 		const load = () => {
 			void window.loom.getChatSettings().then((view) => {
-				if (cancelled) return;
-				setModels(view.models.filter((row) => row.enabled && row.available).map((row) => ({
+				const next = view.models.filter((row) => row.enabled && row.available).map((row) => ({
 					provider: row.provider, modelId: row.id,
 					label: `${row.name} (${row.provider})`, thinkingLevels: row.thinkingLevels,
-				})));
+				}));
+				cachedModels = next;
+				if (cancelled) return;
+				setModels(next);
 				setSubmenu(null);
 			}).catch(() => { if (!cancelled) { setModels([]); setSubmenu(null); } });
 		};
