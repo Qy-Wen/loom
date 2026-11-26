@@ -74,6 +74,27 @@
 	white-space: nowrap;
 }
 
+.session-tab.renaming > button {
+	visibility: hidden;
+}
+
+.session-tab-rename {
+	position: absolute;
+	z-index: 1;
+	align-self: center;
+	inset-inline: var(--lm-space-1);
+	width: calc(100% - 2 * var(--lm-space-1));
+	box-sizing: border-box;
+	padding: var(--lm-space-1) var(--lm-space-2);
+	border: 1px solid var(--lm-border-accent);
+	border-radius: var(--lm-radius-xs);
+	outline: 2px solid var(--lm-selection);
+	background: var(--lm-surface-raised);
+	color: var(--lm-text-primary);
+	font: inherit;
+	font-size: var(--lm-text-size-sm);
+}
+
 .session-tab-status {
 	box-sizing: border-box;
 	flex: 0 0 auto;
@@ -162,7 +183,7 @@
 	background: var(--lm-surface-sunken);
 }
 
-.session-tab:hover > button:not(:disabled) {
+.session-tab:hover > button:not(:disabled, [aria-disabled="true"]) {
 	color: var(--lm-text-primary);
 	background: transparent;
 }
@@ -181,7 +202,7 @@
 	background: var(--lm-surface-sunken);
 }
 
-.session-bar button:disabled {
+.session-bar button:is(:disabled, [aria-disabled="true"]) {
 	cursor: default;
 	opacity: 0.45;
 }

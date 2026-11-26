@@ -74,6 +74,35 @@ test("normal turns and follow-ups share image/ref preparation; replay never cons
 	} finally { await service.close(); await rm(path, { recursive: true, force: true }); }
 });
 
+test("the first message preserves a manual title chosen during turn preparation", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-chat-manual-title-"));
+	const faux = fauxProvider();
+	const models = createModels();
+	models.setProvider(faux.provider);
+	const composing = Promise.withResolvers<void>();
+	const resume = Promise.withResolvers<void>();
+	const service = new ChatService({
+		models,
+		chatDefault: { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" },
+		composer: { takeAssets: async () => { composing.resolve(); await resume.promise; return []; } },
+	});
+	try {
+		await service.openLibrary(path);
+		const session = await service.createSession();
+		const pending = service.prepareTurn(session.id, "This should not become the title");
+		await Promise.race([composing.promise, pending]);
+		await service.setSessionName(session.id, "  New session  ");
+		resume.resolve();
+		await pending;
+		await service.close();
+		await service.openLibrary(path);
+		const [restored] = await service.listSessions();
+		assert.equal(restored?.id, session.id);
+		assert.equal(restored?.title, "New session");
+		assert.equal(restored?.titleIsCustom, true);
+	} finally { resume.resolve(); await service.close(); await rm(path, { recursive: true, force: true }); }
+});
+
 test("a connection from the previous library cannot submit to or cancel the new library", { timeout: 10_000 }, async () => {
 	const first = await mkdtemp(join(tmpdir(), "loom-chat-first-"));
 	const second = await mkdtemp(join(tmpdir(), "loom-chat-second-"));

@@ -9,7 +9,7 @@ import { FavoriteMark } from "../../library/asset-rows.tsx";
 import { folderDropProps, type FolderDropSurface } from "../../library/folder-drop.ts";
 import { clickMode } from "../../library/tree-context.tsx";
 import { assetKey, folderKey, type PointerMode } from "../../library/tree-nav.ts";
-import { useInlineRename } from "../../library/use-inline-rename.ts";
+import { useInlineRename } from "../../components/use-inline-rename.ts";
 import { TagHashIcon } from "../../components/tag-icon.tsx";
 
 /** What a tile needs from the browser around it. */

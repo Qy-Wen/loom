@@ -1,4 +1,4 @@
-import { isImeComposing } from "../components/ime-composition.ts";
+import { isImeComposing } from "./ime-composition.ts";
 import { useEffect, useRef, useState } from "react";
 
 /**

@@ -6,7 +6,7 @@ import { AssetList } from "./asset-rows.tsx";
 import { folderDropProps } from "./folder-drop.ts";
 import { clickMode, folderHeightTransition, useScrollWhenFocused, useTree } from "./tree-context.tsx";
 import { compareAssetPaths, compareFolderPaths, coversPath, folderKey } from "./tree-nav.ts";
-import { useInlineRename } from "./use-inline-rename.ts";
+import { useInlineRename } from "../components/use-inline-rename.ts";
 import { useFolderDoubleClick } from "./use-folder-double-click.ts";
 
 interface FolderNode {

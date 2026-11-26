@@ -6,7 +6,7 @@ import { filenameStem } from "../assets/asset-utils.ts";
 import { useLocale } from "../locale.tsx";
 import { assetKey, coversPath } from "./tree-nav.ts";
 import { clickMode, useScrollWhenFocused, useTree, type TreeContextValue } from "./tree-context.tsx";
-import { useInlineRename } from "./use-inline-rename.ts";
+import { useInlineRename } from "../components/use-inline-rename.ts";
 
 /** Middle-click opens the file in a pinned tab. */
 export function openInTabHandlers(open: () => void): Pick<React.ButtonHTMLAttributes<HTMLButtonElement>, "onMouseDown" | "onAuxClick"> {

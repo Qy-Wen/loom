@@ -240,6 +240,7 @@ export const IPC = {
 	cancelFollowUp: "loom:cancelFollowUp",
 	branchBefore: "loom:branchBefore",
 	setSessionModel: "loom:setSessionModel",
+	renameSession: "loom:renameSession",
 	forkAfter: "loom:forkAfter",
 	archiveSession: "loom:archiveSession",
 	unarchiveSession: "loom:unarchiveSession",
@@ -409,6 +410,7 @@ export interface LoomApi {
 	branchBefore: (id: string, entryId: string, model?: SessionRecord["model"]) => Promise<SessionRecord>;
 	/** Persist this conversation's model/thinking; applies from the next request. Rejects while busy. */
 	setSessionModel: (id: string, selection: { provider: string; modelId: string; thinkingLevel?: string }) => Promise<SessionRecord>;
+	renameSession: (root: string, id: string, title: string) => Promise<void>;
 	/** Open a new session from the history up to and including this entry (a reply). */
 	forkAfter: (id: string, entryId: string) => Promise<SessionRecord>;
 	archiveSession: (id: string) => Promise<void>;

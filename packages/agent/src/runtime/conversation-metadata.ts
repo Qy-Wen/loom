@@ -10,7 +10,7 @@ import {
 import { DEFAULT_SESSION_TITLE } from "./session-title.ts";
 
 export const FORK_TITLE_SUFFIX = "（分支）";
-export type LoomConversationMetadata = { title: string; archived: boolean; hidden: boolean; createdAt: number };
+export type LoomConversationMetadata = { title: string; titleIsCustom?: true; archived: boolean; hidden: boolean; createdAt: number };
 
 /** Latest metadata, outside the transcript. Forks copy the title; creation resets archive and adds a suffix. */
 export const LoomConversationDoc = defineDoc<LoomConversationMetadata>({
@@ -57,20 +57,23 @@ export function listLoomConversations(
 		const rows: LoomConversationSummary[] = [];
 		for (const conversation of conversations) {
 			if (!options.includeOwned && conversation.owner !== undefined) continue;
-			const { title, archived, hidden, createdAt } = await tx.doc(LoomConversationDoc, conversation.id);
+			const { title, titleIsCustom, archived, hidden, createdAt } = await tx.doc(LoomConversationDoc, conversation.id);
 			if (hidden) continue;
 			if (options.archived !== undefined && archived !== options.archived) continue;
-			rows.push({ ...conversation, title, archived, hidden, createdAt });
+			rows.push({ ...conversation, title, titleIsCustom, archived, hidden, createdAt });
 		}
 		return rows;
 	}, context);
 }
 
-export function setConversationTitle(harness: Harness, id: ConversationId, title: string, context: Context): Promise<void> {
+export function setConversationTitle(harness: Harness, id: ConversationId, title: string, context: Context, source: "manual" | "first-message" = "manual"): Promise<void> {
 	const normalized = title.trim() || DEFAULT_SESSION_TITLE;
 	return harness.commit(async (tx) => {
 		if (await tx.conversation(id) === undefined) throw new Error(`Unknown conversation: ${id}`);
-		(await tx.doc(LoomConversationDoc, id)).title = normalized;
+		const metadata = await tx.doc(LoomConversationDoc, id);
+		if (source === "first-message" && (metadata.titleIsCustom || metadata.title !== DEFAULT_SESSION_TITLE)) return;
+		metadata.title = normalized;
+		if (source === "manual") metadata.titleIsCustom = true;
 	}, context);
 }
 

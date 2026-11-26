@@ -115,6 +115,7 @@ const api: LoomApi = {
 	cancelFollowUp: (id, clientMessageId) => ipcRenderer.invoke(IPC.cancelFollowUp, id, clientMessageId),
 	branchBefore: (id, entryId, model) => ipcRenderer.invoke(IPC.branchBefore, id, entryId, model),
 	setSessionModel: (id, selection) => ipcRenderer.invoke(IPC.setSessionModel, id, selection),
+	renameSession: (root, id, title) => ipcRenderer.invoke(IPC.renameSession, root, id, title),
 	forkAfter: (id, entryId) => ipcRenderer.invoke(IPC.forkAfter, id, entryId),
 	archiveSession: (id) => ipcRenderer.invoke(IPC.archiveSession, id),
 	unarchiveSession: (id) => ipcRenderer.invoke(IPC.unarchiveSession, id),

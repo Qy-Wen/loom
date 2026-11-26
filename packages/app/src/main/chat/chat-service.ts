@@ -266,7 +266,9 @@ export class ChatService {
 		const folded = foldUserText(body, attachments);
 		const prompt = skills + folded;
 		if (!folded.trim() && !images.length) throw new Error("Enter a message first.");
-		if (record.title === DEFAULT_SESSION_TITLE && raw.trim()) await setConversationTitle(runtime.harness, conversation.id, titleFromUserText(raw), context);
+		if (record.title === DEFAULT_SESSION_TITLE && !record.titleIsCustom && raw.trim()) {
+			await setConversationTitle(runtime.harness, conversation.id, titleFromUserText(raw), context, "first-message");
+		}
 		const content = images.length ? [{ type: "text" as const, text: prompt }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : prompt;
 		return {
 			existingRequest,
@@ -329,7 +331,7 @@ export class ChatService {
 		const runtime = this.runtime;
 		if (!runtime) return [];
 		return Promise.all((await listLoomConversations(runtime.harness, {}, context)).map(async (row) => ({
-			id: String(row.id), title: row.title, status: row.archived ? "archived" as const : "open" as const, createdAt: row.createdAt,
+			id: String(row.id), title: row.title, titleIsCustom: row.titleIsCustom, status: row.archived ? "archived" as const : "open" as const, createdAt: row.createdAt,
 			updatedAt: await this.lastMessageTimestamp((await runtime.harness.conversation(row.id, context))!) ?? row.createdAt,
 			busy: isSessionBusy(await runtime.harness.snapshot(LiveDoc, row.id, context)),
 		})));
@@ -389,7 +391,7 @@ export class ChatService {
 		const model = ref && this.#models?.getModel(ref.provider, ref.modelId);
 		const usage = ref && model && model.contextWindow > 0 ? contextUsage(await conversation.context(context), ref, model.contextWindow) : undefined;
 		const busy = isSessionBusy(await runtime.harness.snapshot(LiveDoc, conversation.id, context));
-		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", busy, createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage,
+		return { id, title: metadata?.title ?? DEFAULT_SESSION_TITLE, titleIsCustom: metadata?.titleIsCustom, status: metadata?.archived ? "archived" : "open", busy, createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage,
 			model: ref ? { provider: ref.provider, modelId: ref.modelId, ...(agent.thinkingLevel ? { thinkingLevel: agent.thinkingLevel } : {}) } : undefined };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireRuntime().harness, idOf(id), title, context); }
@@ -468,7 +470,9 @@ export class ChatService {
 		const fork = await this.forkBefore(id, entryId, model);
 		await this.requireRuntime().harness.commit(async (tx) => {
 			const source = await tx.doc(LoomConversationDoc, idOf(id));
-			(await tx.doc(LoomConversationDoc, idOf(fork.id))).title = source.title;
+			const branch = await tx.doc(LoomConversationDoc, idOf(fork.id));
+			branch.title = source.title;
+			if (source.titleIsCustom) branch.titleIsCustom = true;
 			source.hidden = true;
 		}, context);
 		return this.getSession(fork.id);

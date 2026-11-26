@@ -1082,6 +1082,12 @@ function registerIpc(): void {
 		return chatRecord(record);
 	});
 	ipcMain.handle(IPC.forkAfter, async (_event, id: string, entryId: string) => chatRecord(await requireChat().forkAfter(id, entryId)));
+	ipcMain.handle(IPC.renameSession, (_event, root: string, id: string, title: string) => {
+		if (openingLibrary || shutdownStarted || typeof root !== "string" || localCore.getLibraryRoot() !== root) throw new Error("The open library changed.");
+		if (typeof id !== "string" || !/^\d+$/.test(id)) throw new Error("Invalid conversation ID");
+		if (typeof title !== "string" || !title.trim()) throw new Error("Enter a session name.");
+		return requireChat().setSessionName(id, title);
+	});
 	ipcMain.handle(IPC.archiveSession, (_event, id: string) => requireChat().archiveSession(id));
 	ipcMain.handle(IPC.unarchiveSession, (_event, id: string) => requireChat().unarchiveSession(id));
 	ipcMain.handle(IPC.getModelSettings, async () => {

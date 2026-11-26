@@ -3,6 +3,7 @@ import type { LoomSessionRecord, LoomSessionSummary } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
 import { readWorkspacePreference, writeWorkspacePreference } from "../library/workspace-storage.ts";
+import { sessionTitle } from "./session-title.ts";
 
 /** Own session selection and committed history. Live output never writes into this state. */
 export function useSessions(libraryRoot: string | null) {
@@ -123,6 +124,17 @@ export function useSessions(libraryRoot: string | null) {
 		await perform(async () => { activateRecord(await window.loom.createSession()); await refreshSessions(); });
 	}
 
+	async function renameSession(id: string, title: string) {
+		if (!libraryRoot || library.current !== libraryRoot) return;
+		setError(null);
+		try {
+			await window.loom.renameSession(libraryRoot, id, title);
+			if (library.current === libraryRoot) await refreshSessions();
+		} catch (cause) {
+			if (library.current === libraryRoot) setError(cause instanceof Error ? cause.message : String(cause));
+		}
+	}
+
 	async function archiveSession(id: string) {
 		await perform(async () => {
 			await window.loom.archiveSession(id);
@@ -137,7 +149,7 @@ export function useSessions(libraryRoot: string | null) {
 	async function deleteSession(id: string) {
 		const session = sessions.find((item) => item.id === id);
 		if (!session) return;
-		const name = session.title === "New session" ? t.sessions.untitled : session.title;
+		const name = sessionTitle(session, t.sessions.untitled);
 		if (!await confirm({
 			title: t.sessions.deleteTitle,
 			description: t.sessions.deleteConfirm(name),
@@ -154,5 +166,5 @@ export function useSessions(libraryRoot: string | null) {
 		});
 	}
 
-	return { sessions, record: recordLibrary.current === libraryRoot ? record : null, busy, error, activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession };
+	return { sessions, record: recordLibrary.current === libraryRoot ? record : null, busy, error, activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, renameSession, archiveSession, deleteSession };
 }

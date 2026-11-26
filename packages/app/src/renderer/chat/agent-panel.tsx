@@ -37,7 +37,7 @@ export const AgentPanel = memo(function AgentPanel({
 	const { t } = useLocale();
 	const {
 		sessions, record, busy: sessionBusy, error: sessionError,
-		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession,
+		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, renameSession, archiveSession, deleteSession,
 	} = useSessions(libraryRoot);
 	const sessionId = record?.id ?? null;
 	const [findRequest, setFindRequest] = useState<{ threadId: string; returnFocus: HTMLElement | null } | null>(null);
@@ -91,12 +91,14 @@ export const AgentPanel = memo(function AgentPanel({
 				{libraryRoot ? (
 					<>
 						<SessionBar
+							key={libraryRoot}
 							sessions={sessions}
 							currentId={sessionId}
 							currentEmpty={record?.messages.length === 0}
 							busy={sessionBusy}
 							onCreate={() => void createSession()}
 							onSelect={(id) => void selectSession(id)}
+							onRename={(id, title) => void renameSession(id, title)}
 							onArchive={(id) => void archiveSession(id)}
 							onUnarchive={(id) => void selectSession(id)}
 							onDelete={(id) => void deleteSession(id)}
