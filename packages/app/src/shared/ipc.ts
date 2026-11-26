@@ -133,6 +133,7 @@ export interface TableContextState extends EditorContextState {
 }
 
 export type SessionCompactionResult = "compacted" | "unchanged" | "cancelled";
+export type LibrarySkillSummary = { name: string; description: string };
 
 export interface AgentEndpoint {
 	url: string;
@@ -226,6 +227,7 @@ export const IPC = {
 	getAudioWriteupStatus: "loom:getAudioWriteupStatus",
 	describeAudio: "loom:describeAudio",
 	listSessions: "loom:listSessions",
+	listLibrarySkills: "loom:listLibrarySkills",
 	createSession: "loom:createSession",
 	compactSession: "loom:compactSession",
 	openSession: "loom:openSession",
@@ -384,6 +386,7 @@ export interface LoomApi {
 	getAudioWriteupStatus: (assetId: string) => Promise<AudioWriteupStatus>;
 	describeAudio: (assetId: string) => Promise<AudioWriteupStatus>;
 	listSessions: () => Promise<SessionSummary[]>;
+	listLibrarySkills: () => Promise<LibrarySkillSummary[]>;
 	createSession: () => Promise<SessionRecord>;
 	compactSession: (id: string) => Promise<SessionCompactionResult>;
 	openSession: (id: string) => Promise<SessionRecord>;

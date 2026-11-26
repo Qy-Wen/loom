@@ -18,6 +18,9 @@ export interface SkillDiagnostic {
 	path: string;
 	message: string;
 }
+export function isSkillName(name: string): boolean {
+	return name.length <= 64 && /^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name);
+}
 const posix = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
 const escapeXml = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
@@ -50,7 +53,7 @@ export async function loadLibrarySkills(env: ExecutionEnv, libraryRoot: string, 
 			const description = typeof fields.description === "string" ? fields.description.trim() : "";
 			if (!description) { if (declared) warn(path, "description is required"); return; }
 			const name = typeof fields.name === "string" && fields.name ? fields.name : directoryName;
-			if (name.length > 64 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(name)) warn(path, "Invalid skill name (1–64 lowercase letters, numbers, and single hyphens)");
+			if (!isSkillName(name)) warn(path, "Invalid skill name (1–64 lowercase letters, numbers, and single hyphens)");
 			if (declared && name !== directoryName) warn(path, "Skill name does not match its directory");
 			if (description.length > 1024) warn(path, "Skill description exceeds 1024 characters");
 			if (names.has(name)) { warn(path, `Duplicate skill name: ${name}`); return; }

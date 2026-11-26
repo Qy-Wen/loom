@@ -13,7 +13,7 @@ import { AgentPermissionSelect } from "./agent-permission.tsx";
 import { useLibraryAssets, useLibraryFolders, useOpenReference } from "./asset-open.tsx";
 import { ChatViewContext, ComposerActionsContext, useChatSession, type ComposerActions, type PendingEdit } from "./chat-context.ts";
 import { editableText, placedChips } from "./chat-content.ts";
-import { AddFilesButton, ComposerTextArea, type SlashCommand } from "./chat-composer-input.tsx";
+import { AddFilesButton, ComposerTextArea } from "./chat-composer-input.tsx";
 import { composerFileInputs } from "./composer-files.ts";
 import { ContextIndicator } from "./chat-context-usage.tsx";
 import { SessionModelSelect } from "./chat-model-select.tsx";
@@ -182,7 +182,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	activeThread.current = threadId;
 	const running = useRef(isRunning);
 	running.current = isRunning;
-	const deliver = (shortcut?: SlashCommand) => {
+	const deliver = (shortcut?: "/compact") => {
 		if (submitting.current) return;
 		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : value).replaceAll("\u200b", "");
 		const text = editableText(raw) ? raw : "";
@@ -448,10 +448,9 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 				editor={<ComposerTextArea
 					value={value}
 					onChange={onChange}
-					commands={assets.length ? [] : [
-						{ command: "/compact", label: t.chat.compaction.action, disabled: !threadReady || compacting },
-					]}
-					onCommand={deliver}
+					compactAvailable={assets.length === 0}
+					compactDisabled={!threadReady || compacting}
+					onCompact={() => deliver("/compact")}
 				/>}
 				leading={<AddFilesButton />}
 				controls={<div className="session-composer-meta">

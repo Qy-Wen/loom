@@ -1,6 +1,6 @@
 import { createServer, type ServerResponse } from "node:http";
 import type { AddressInfo } from "node:net";
-import { readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { expect, saveChatEndpoint, test } from "./loom.ts";
 
@@ -181,7 +181,7 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
-test("chat offers only /compact and keeps the full transcript", async ({ loomPage, electronApp }) => {
+test("chat offers only /compact without skills and keeps the full transcript", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated user data and library required");
 	const finishSummary = Promise.withResolvers<void>();
 	const turns: unknown[] = [];
@@ -267,6 +267,123 @@ test("chat offers only /compact and keeps the full transcript", async ({ loomPag
 		await expect(loomPage.getByTestId("chat-message-list").getByText("First question", { exact: true })).toBeVisible();
 	} finally {
 		finishSummary.resolve();
+		server.closeAllConnections();
+		await new Promise<void>((resolve) => server.close(() => resolve()));
+	}
+});
+
+test("chat lists and invokes library skills by slash name", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated user data and library required");
+	const requests: Array<Array<{ role: string; content: unknown }>> = [];
+	const marker = "MANUAL_SKILL_BODY";
+	const server = createServer((request, response) => {
+		let body = "";
+		request.setEncoding("utf8");
+		request.on("data", (part: string) => { body += part; });
+		request.on("end", () => {
+			const { messages } = JSON.parse(body) as { messages: (typeof requests)[number] };
+			requests.push(messages);
+			if (requests.length === 1) reply(response, "read", { path: ".loom/agents/skills/review-copy/SKILL.md" });
+			else reply(response);
+		});
+	});
+	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+	try {
+		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
+		const editor = loomPage.getByTestId("chat-composer-editor");
+		const send = loomPage.getByTestId("chat-send-button");
+		const commands = loomPage.getByRole("listbox", { name: "Chat commands" });
+		await editor.fill("/");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		await expect(send).toBeDisabled();
+		await editor.press("Escape");
+		await expect(commands).toBeHidden();
+
+		const root = (await loomPage.evaluate(() => window.loom.getLibrarySnapshot())).rootPath!;
+		const skillsRoot = join(root, ".loom", "agents", "skills");
+		for (const skill of ["brand-voice", "compact", "review-copy"]) {
+			await mkdir(join(skillsRoot, skill), { recursive: true });
+			const manual = skill === "review-copy" ? "disable-model-invocation: true\n" : "";
+			await writeFile(join(skillsRoot, skill, "SKILL.md"), `---\nname: ${skill}\ndescription: Instructions for ${skill}.\n${manual}---\n\n${marker}\n`);
+		}
+		const review = commands.getByRole("option", { name: "/review-copy Instructions for review-copy." });
+		await editor.fill("/rev");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		await expect(review).toBeVisible();
+		await editor.fill("/");
+		await expect(commands.getByRole("option")).toHaveCount(3);
+		await expect(commands.getByRole("option", { name: "/compact Compact context" })).toBeVisible();
+		await editor.press("ArrowUp");
+		await expect(review).toHaveAttribute("aria-selected", "true");
+		await editor.dispatchEvent("keydown", { key: "Enter", isComposing: true, keyCode: 229 });
+		await expect(review).toBeVisible();
+		await editor.press("Enter");
+		const chip = editor.locator(".session-skill-chip");
+		await expect(chip).toHaveText("/review-copy");
+		await expect(chip).toHaveAttribute("contenteditable", "false");
+		await expect(editor).toHaveText("/review-copy ");
+		await expect(editor).toBeFocused();
+		await expect(commands).toBeHidden();
+		await editor.dispatchEvent("keydown", { key: "Enter", repeat: true });
+		await expect(editor).toHaveText("/review-copy ");
+		await editor.pressSequentially("Polish the headline");
+		await expect(editor).toHaveText("/review-copy Polish the headline");
+		const removeSkill = chip.getByRole("button", { name: "Remove /review-copy" });
+		await editor.press("Tab");
+		await expect(removeSkill).toBeFocused();
+		await removeSkill.press("Enter");
+		await expect(chip).toHaveCount(0);
+		await expect(editor).toHaveText("Polish the headline");
+		await expect(editor).toBeFocused();
+
+		await editor.fill("Polish/re");
+		await expect(commands).toBeHidden();
+		await editor.fill("Polish the headline for launch");
+		for (const _ of "for launch") await editor.press("ArrowLeft");
+		await editor.pressSequentially("/");
+		await expect(commands.getByRole("option")).toHaveCount(2);
+		await expect(commands.getByRole("option", { name: "/compact Compact context" })).toBeHidden();
+		await editor.pressSequentially("rev");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		await review.click();
+		await expect(chip).toHaveText("/review-copy");
+		await expect(editor).toHaveText("Polish the headline /review-copy for launch");
+		await removeSkill.click();
+		await expect(editor).toHaveText("Polish the headline for launch");
+		await editor.pressSequentially("/rev");
+		await expect(review).toBeVisible();
+		await editor.press("Enter");
+		await expect(editor).toHaveText("Polish the headline /review-copy for launch");
+		for (const _ of "for launch") await editor.press("ArrowRight");
+		await editor.pressSequentially(" /bra");
+		await expect(commands.getByRole("option", { name: "/brand-voice Instructions for brand-voice." })).toBeVisible();
+		await editor.press("Enter");
+		await expect(chip).toHaveText(["/review-copy", "/brand-voice"]);
+		const submitted = "Polish the headline /review-copy for launch /brand-voice";
+		await expect(editor).toHaveText(submitted);
+		expect(requests).toHaveLength(0);
+		await send.click();
+		await expect(loomPage.getByText("Generated and saved the result.")).toBeVisible();
+
+		const firstMessages = requests[0]!;
+		const userMessage = JSON.stringify(firstMessages.findLast(({ role }) => role === "user")?.content);
+		expect(userMessage).toContain("Use the library skill");
+		expect(userMessage).toContain("/.loom/agents/skills/review-copy/SKILL.md");
+		expect(userMessage).toContain("/.loom/agents/skills/brand-voice/SKILL.md");
+		expect(userMessage).toContain(submitted);
+		expect(JSON.stringify(firstMessages)).not.toContain(marker);
+		expect(JSON.stringify(firstMessages.filter(({ role }) => role === "system"))).not.toContain("<name>review-copy</name>");
+		expect(JSON.stringify(requests[1]?.filter(({ role }) => role === "tool"))).toContain(marker);
+		await expect(loomPage.getByTestId("chat-message-list").getByText(submitted, { exact: true })).toBeVisible();
+
+		await editor.fill("/brand-voice");
+		await expect(commands.getByRole("option", { name: "/brand-voice Instructions for brand-voice." })).toBeVisible();
+		await editor.press("Enter");
+		await expect.poll(() => requests.length).toBe(3);
+		const direct = JSON.stringify(requests[2]!.findLast(({ role }) => role === "user")?.content);
+		expect(direct).toContain('Use the library skill \\"brand-voice\\"');
+		expect(direct).toContain("/.loom/agents/skills/brand-voice/SKILL.md");
+	} finally {
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}

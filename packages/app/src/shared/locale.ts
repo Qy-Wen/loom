@@ -397,6 +397,7 @@ export const messages = defineLocale(
 			conversation: "Conversation",
 			send: "Send",
 			slashCommands: "Chat commands",
+			skillListFailed: "Could not load library skills.",
 			compaction: {
 				action: "Compact context",
 				pending: "Compacting context…",
@@ -1247,6 +1248,7 @@ export const messages = defineLocale(
 			conversation: "对话记录",
 			send: "发送",
 			slashCommands: "聊天命令",
+			skillListFailed: "无法加载素材库技能。",
 			compaction: {
 				action: "压缩上下文",
 				pending: "正在压缩上下文…",

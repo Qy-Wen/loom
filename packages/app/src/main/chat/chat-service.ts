@@ -1,15 +1,17 @@
 import {
 	BACKGROUND_CONTEXT as context, clearPendingApprovals, configure,
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
+	isSkillName, loadLibrarySkills, NodeExecutionEnv,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
 	DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
 	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LiveState, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type ComposerReference, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
+import { composerLayoutText } from "@loom/agent/composer-asset";
 import type { Models } from "@earendil-works/pi-ai/models";
 import type { ChatSelection } from "@loom/agent/chat-models";
 import type { AgentPermissionLevel, CommandAllow, ToolGateDecision } from "@loom/agent/tool-permission";
-import type { SessionCompactionResult } from "../../shared/ipc.ts";
+import type { LibrarySkillSummary, SessionCompactionResult } from "../../shared/ipc.ts";
 import { clearRestoreMarker, readRestoreMarker, relocatedCwd } from "../cloud-backup/snapshot.ts";
 
 export type ChatServiceOptions = LoomAgentOptions & {
@@ -39,6 +41,10 @@ const idOf = <T extends ConversationId | EntryId>(id: string): T => {
 
 function isSessionBusy(live: LiveState | undefined): boolean {
 	return Boolean(live?.run || live?.compactions?.length);
+}
+
+function isSkillCommand(name: string): boolean {
+	return name !== "compact" && isSkillName(name);
 }
 
 /** App-scoped chat rules and lifecycle; LibraryRuntime and durable own execution and recovery. */
@@ -209,6 +215,31 @@ export class ChatService {
 		await this.publish();
 	}
 	requireRuntime(): LibraryRuntime { if (!this.runtime) throw new Error("Open a library first."); return this.runtime; }
+	private async readLibrarySkills(runtime: LibraryRuntime) {
+		const root = runtime.libraryPath;
+		const { skills } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, context);
+		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		return skills.filter(({ name }) => isSkillCommand(name));
+	}
+
+	async listLibrarySkills(): Promise<LibrarySkillSummary[]> {
+		const skills = await this.readLibrarySkills(this.requireRuntime());
+		return skills.map(({ name, description }) => ({ name, description })).sort((a, b) => a.name.localeCompare(b.name));
+	}
+
+	private async skillInstructions(runtime: LibraryRuntime, text: string): Promise<string> {
+		if (!text.includes("/")) return "";
+		const names = new Set([...composerLayoutText(text).matchAll(/(?:^|\s)\/(\S+)/g)].map((match) => match[1]!).filter(isSkillCommand));
+		if (names.size === 0) return "";
+		const skills = new Map((await this.readLibrarySkills(runtime)).map((skill) => [skill.name, skill]));
+		const instructions = [...names].flatMap((name) => {
+			const skill = skills.get(name);
+			if (!skill) return [];
+			return [`Use the library skill "${name}" for this request. First read ${JSON.stringify(skill.filePath.replaceAll("\\", "/"))} and resolve supporting files relative to the skill's directory.`];
+		});
+		return instructions.length ? `${instructions.join("\n")}\n\n` : "";
+	}
+
 	async conversation(id: string): Promise<Conversation> {
 		const handle = await this.requireRuntime().harness.conversation(idOf(id), context);
 		if (!handle) throw new Error(`Conversation not found: ${id}`);
@@ -225,16 +256,18 @@ export class ChatService {
 		await this.ensureModel(conversation);
 		const record = await this.getSession(id);
 		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		const raw = text.replaceAll("\u200b", "");
+		const skills = await this.skillInstructions(runtime, raw);
 		const images = await this.#options.composer?.takeImages?.(id) ?? [];
 		const chips = await this.#options.composer?.takeAssets?.(id) ?? [];
 		if (this.runtime !== runtime) throw new Error("The open library changed.");
-		const raw = text.replaceAll("\u200b", "");
 		const body = contentWithPlacedAssets(raw.trim() ? raw : "", chips);
 		const attachments = implicitSelectionAttachments(chips, this.#options.composer?.getSelection?.(), record.messages);
 		const folded = foldUserText(body, attachments);
+		const prompt = skills + folded;
 		if (!folded.trim() && !images.length) throw new Error("Enter a message first.");
 		if (record.title === DEFAULT_SESSION_TITLE && raw.trim()) await setConversationTitle(runtime.harness, conversation.id, titleFromUserText(raw), context);
-		const content = images.length ? [{ type: "text" as const, text: folded }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : folded;
+		const content = images.length ? [{ type: "text" as const, text: prompt }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : prompt;
 		return {
 			existingRequest,
 			submit: () => conversation.submit({ type: "input", content, whenBusy: options.whenBusy ?? "reject", requestId, entry: { kind: "loom.user", data: { text: body, clientMessageId: options.clientMessageId ?? "" } } }, context),

@@ -10,7 +10,7 @@ export { createToolResultStorage } from "./tools/tool-result-storage.ts";
 export { createLibraryExtension, LoomMemoryDoc, type LibraryExtensionOptions } from "./extensions/library-extension.ts";
 export { createChatExtensions } from "./extensions/chat-extensions.ts";
 export { createSpecialistExtension, partitionLibraryTools } from "./extensions/specialist.ts";
-export { loadLibrarySkills, formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR } from "./extensions/library-skills.ts";
+export { loadLibrarySkills, formatSkillsForSystemPrompt, isSkillName, LIBRARY_SKILLS_DIR } from "./extensions/library-skills.ts";
 export type { Skill, SkillDiagnostic } from "./extensions/library-skills.ts";
 export { createAutoMemoryTool } from "./extensions/library-auto-memory.ts";
 export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tools/tool-gate.ts";

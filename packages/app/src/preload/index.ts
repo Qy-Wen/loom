@@ -101,6 +101,7 @@ const api: LoomApi = {
 	getAudioWriteupStatus: (assetId) => ipcRenderer.invoke(IPC.getAudioWriteupStatus, assetId),
 	describeAudio: (assetId) => ipcRenderer.invoke(IPC.describeAudio, assetId),
 	listSessions: () => ipcRenderer.invoke(IPC.listSessions),
+	listLibrarySkills: () => ipcRenderer.invoke(IPC.listLibrarySkills),
 	createSession: () => ipcRenderer.invoke(IPC.createSession),
 	compactSession: (id) => ipcRenderer.invoke(IPC.compactSession, id),
 	openSession: (id) => ipcRenderer.invoke(IPC.openSession, id),

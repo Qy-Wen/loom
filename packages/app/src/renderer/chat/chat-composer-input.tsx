@@ -1,17 +1,19 @@
 import { isImeComposing } from "@loom/ag-ui-react";
 import { useCallback, useContext, useEffect, useId, useLayoutEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { composerLayoutText } from "@loom/agent/composer-asset";
+import type { LibrarySkillSummary } from "../../shared/ipc.ts";
 import { useLocale } from "../locale.tsx";
 import { ComposerActionsContext } from "./chat-context.ts";
-import { paintInlineEditor, placeCaretAtStart, readInlineEditor, type ChipLabels } from "./inline-asset-text.tsx";
+import { paintInlineEditor, placeCaretAtStart, placeSkillChip, readInlineEditor, slashAtCaret, type ChipLabels } from "./inline-asset-text.tsx";
 
-export type SlashCommand = "/compact";
+type SlashOption = { value: string; label: string; disabled?: boolean };
 
-export function ComposerTextArea({ value, onChange, commands, onCommand }: {
+export function ComposerTextArea({ value, onChange, compactAvailable, compactDisabled, onCompact }: {
 	value: string;
 	onChange: (value: string) => void;
-	commands: readonly { command: SlashCommand; label: string; disabled: boolean }[];
-	onCommand: (command: SlashCommand) => void;
+	compactAvailable: boolean;
+	compactDisabled: boolean;
+	onCompact: () => void;
 }) {
 	const { t } = useLocale();
 	const chipLabels = useRef<ChipLabels>({ remove: t.common.remove, removeNamed: t.chat.removeNamed });
@@ -22,12 +24,22 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 	const listId = useId();
 	const [focused, setFocused] = useState(false);
 	const [dismissed, setDismissed] = useState(false);
-	const [highlighted, setHighlighted] = useState<SlashCommand | null>(null);
-	const prefix = value.trimStart();
-	const matches = focused && !dismissed && prefix.startsWith("/") ? commands.filter(({ command }) => command.startsWith(prefix)) : [];
+	const [highlighted, setHighlighted] = useState<string | null>(null);
+	const [skills, setSkills] = useState<LibrarySkillSummary[] | "error">();
+	const [prefix, setPrefix] = useState<string | null>(null);
+	const showCommands = focused && !dismissed && prefix !== null;
+	const matches: SlashOption[] = showCommands && Array.isArray(skills)
+		? skills.filter(({ name }) => `/${name}`.startsWith(prefix)).map(({ name, description }) => ({ value: `/${name}`, label: description }))
+		: [];
+	if (showCommands && compactAvailable && value.trimStart() === prefix && "/compact".startsWith(prefix)) {
+		matches.unshift({ value: "/compact", label: t.chat.compaction.action, disabled: compactDisabled });
+	}
+	const skillLoadFailed = showCommands && skills === "error";
 	const enabled = matches.filter(({ disabled }) => !disabled);
-	const active = enabled.find(({ command }) => command === highlighted) ?? enabled[0];
-	const optionId = (command: SlashCommand) => `${listId}-${command.slice(1)}`;
+	const active = enabled.find((option) => option.value === highlighted)
+		?? enabled.find((option) => option.value === prefix)
+		?? enabled[0];
+	const optionId = (option: SlashOption) => `${listId}-${option.value.slice(1)}`;
 	const actionsRef = useRef(actions);
 	actionsRef.current = actions;
 	const setEditor = useCallback((node: HTMLDivElement | null) => {
@@ -42,24 +54,59 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 		if (current === next) return;
 		if (next && composerLayoutText(current) === next) return;
 		paintInlineEditor(editor, next, actionsRef.current?.assets ?? [], (assetId) => actionsRef.current?.openReference(assetId), chipLabels.current);
+		setPrefix(null);
 	}, [value]);
+	useEffect(() => {
+		const editor = editorRef.current;
+		if (!focused || !editor) return;
+		const doc = editor.ownerDocument;
+		const syncCaret = () => {
+			if (!composing.current && doc.activeElement === editor) setPrefix(slashAtCaret(editor)?.prefix ?? null);
+		};
+		doc.addEventListener("selectionchange", syncCaret);
+		syncCaret();
+		return () => doc.removeEventListener("selectionchange", syncCaret);
+	}, [focused]);
+	useEffect(() => {
+		if (!showCommands) {
+			setSkills(undefined);
+			return;
+		}
+		let current = true;
+		void window.loom.listLibrarySkills().then(
+			(items) => { if (current) setSkills(items); },
+			() => { if (current) setSkills("error"); },
+		);
+		return () => { current = false; };
+	}, [showCommands]);
 
 	function updateDraft(editor: HTMLDivElement) {
 		setDismissed(false);
 		setHighlighted(null);
+		setPrefix(slashAtCaret(editor)?.prefix ?? null);
 		onChange(composerLayoutText(readInlineEditor(editor)));
 	}
 
-	function chooseCommand(command: SlashCommand) {
-		setDismissed(true);
+	function chooseOption(option: SlashOption) {
 		setHighlighted(null);
-		onCommand(command);
+		if (option.value === "/compact") {
+			setDismissed(true);
+			onCompact();
+			return;
+		}
+		const editor = editorRef.current;
+		if (!editor) return;
+		const slash = slashAtCaret(editor);
+		if (!slash || !option.value.startsWith(slash.prefix)) return;
+		placeSkillChip(editor, slash.range, option.value, chipLabels.current);
+		updateDraft(editor);
 	}
 
 	function onKeyDown(event: ReactKeyboardEvent<HTMLDivElement>) {
+		if (event.target !== event.currentTarget) return;
 		if (composing.current || isImeComposing(event.nativeEvent)) return;
 		const { key } = event;
-		if (matches.length > 0) {
+		if (matches.length > 0 || skillLoadFailed) {
 			if (key === "Escape") {
 				event.preventDefault();
 				event.stopPropagation();
@@ -72,19 +119,21 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 					event.preventDefault();
 					const step = key === "ArrowUp" ? -1 : 1;
 					const index = (enabled.indexOf(active) + step + enabled.length) % enabled.length;
-					setHighlighted(enabled[index]!.command);
+					const next = enabled[index]!;
+					setHighlighted(next.value);
+					document.getElementById(optionId(next))?.scrollIntoView({ block: "nearest" });
 					return;
 				}
-				if (key === "Enter") {
+				if (key === "Enter" && matches.length > 0 && (active?.value !== prefix || highlighted === active?.value || prefix === "/compact")) {
 					event.preventDefault();
-					if (active && !event.repeat) chooseCommand(active.command);
+					if (active && !event.repeat) chooseOption(active);
 					return;
 				}
 			}
 		}
 		if (key !== "Enter" || event.shiftKey) return;
 		event.preventDefault();
-		event.currentTarget.closest("form")?.requestSubmit();
+		if (!event.repeat) event.currentTarget.closest("form")?.requestSubmit();
 	}
 
 	return (
@@ -96,7 +145,7 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 				aria-autocomplete="list"
 				aria-haspopup="listbox"
 				aria-controls={listId}
-				aria-activedescendant={active ? optionId(active.command) : undefined}
+				aria-activedescendant={active ? optionId(active) : undefined}
 				data-testid="chat-composer-editor"
 				aria-label={t.chat.placeholder}
 				data-placeholder={t.chat.placeholder}
@@ -118,6 +167,7 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 					if (!composing.current) updateDraft(editor);
 				}}
 				onFocus={(event) => {
+					if (event.target !== event.currentTarget) return;
 					setFocused(true);
 					if (!readInlineEditor(event.currentTarget)) placeCaretAtStart(event.currentTarget);
 				}}
@@ -125,6 +175,7 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 					setFocused(false);
 					setDismissed(false);
 					setHighlighted(null);
+					setPrefix(null);
 				}}
 				onPaste={(event) => {
 					const files = [...event.clipboardData.files];
@@ -140,23 +191,26 @@ export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 				}}
 				onKeyDown={onKeyDown}
 			/>
-			<ul id={listId} className="session-slash-commands" role="listbox" aria-label={t.chat.slashCommands} hidden={matches.length === 0}>
-				{matches.map(({ command, label, disabled }) => (
-					<li
-						key={command}
-						id={optionId(command)}
-						role="option"
-						aria-selected={active?.command === command}
-						aria-disabled={disabled || undefined}
-						onMouseDown={(event) => event.preventDefault()}
-						onPointerMove={() => { if (!disabled) setHighlighted(command); }}
-						onClick={() => { if (!disabled) chooseCommand(command); }}
-					>
-						<code>{command}</code>
-						<span>{label}</span>
-					</li>
-				))}
-			</ul>
+			<div className="session-slash-menu" hidden={!skillLoadFailed && matches.length === 0}>
+				<ul id={listId} className="session-slash-commands" role="listbox" aria-label={t.chat.slashCommands} hidden={matches.length === 0}>
+					{matches.map((option) => (
+						<li
+							key={option.value}
+							id={optionId(option)}
+							role="option"
+							aria-selected={active === option}
+							aria-disabled={option.disabled || undefined}
+							onMouseDown={(event) => event.preventDefault()}
+							onPointerMove={() => { if (!option.disabled) setHighlighted(option.value); }}
+							onClick={() => { if (!option.disabled) chooseOption(option); }}
+						>
+							<code>{option.value}</code>
+							<span>{option.label}</span>
+						</li>
+					))}
+				</ul>
+				{skillLoadFailed && <div className="session-slash-status" role="status">{t.chat.skillListFailed}</div>}
+			</div>
 		</div>
 	);
 }

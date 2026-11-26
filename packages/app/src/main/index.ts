@@ -1019,6 +1019,7 @@ function registerIpc(): void {
 	}));
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId, undefined, { force: true }));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
+	ipcMain.handle(IPC.listLibrarySkills, () => requireChat().listLibrarySkills());
 	ipcMain.handle(IPC.createSession, async () => {
 		return chatRecord(await requireChat().createSession());
 	});

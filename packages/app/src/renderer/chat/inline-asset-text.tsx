@@ -136,6 +136,13 @@ function serializeInline(node: Node): string {
 			continue;
 		}
 		if (!(child instanceof HTMLElement)) continue;
+		const skillCommand = child.dataset.skillCommand;
+		if (skillCommand) {
+			out += skillCommand;
+			if (!/^\u200b*\s/.test(child.nextSibling?.textContent ?? "")) out += " ";
+			lineStart = false;
+			continue;
+		}
 		const folderPath = child.dataset.folderPath;
 		if (folderPath) {
 			out += formatComposerReference({ type: "folder_ref", path: folderPath });
@@ -168,6 +175,31 @@ function serializeInline(node: Node): string {
 		lineStart = false;
 	}
 	return out;
+}
+
+/** Return the slash prefix immediately to the left of the editor's caret. */
+export function slashAtCaret(root: HTMLElement): { prefix: string; range: Range } | null {
+	const selection = root.ownerDocument.getSelection();
+	if (!selection?.isCollapsed || selection.rangeCount === 0) return null;
+	const { startContainer, startOffset } = selection.getRangeAt(0);
+	if (!root.contains(startContainer)) return null;
+	const node = startContainer instanceof Text ? startContainer : startContainer.childNodes[startOffset - 1];
+	if (!(node instanceof Text) || node.parentElement?.closest('[contenteditable="false"]')) return null;
+	const offset = node === startContainer ? startOffset : node.length;
+	const match = /(^|\s)\u200b*(\/[a-z0-9-]*)$/.exec(node.data.slice(0, offset));
+	if (!match) return null;
+	const prefix = match[2]!;
+	const start = offset - prefix.length;
+	const range = root.ownerDocument.createRange();
+	if (!match[1]) {
+		range.setStart(root, 0);
+		range.setEnd(node, 0);
+		const before = serializeInline(range.cloneContents()).replaceAll("\u200b", "");
+		if (before && !/\s$/.test(before)) return null;
+	}
+	range.setStart(node, start);
+	range.setEnd(node, offset);
+	return { prefix, range };
 }
 
 export function rangeFromPoint(x: number, y: number): Range | null {
@@ -218,9 +250,15 @@ function chipElement(asset: LoomUserAttachment, openReference: (reference: LoomU
 		event.stopPropagation();
 		openReference(asset);
 	});
+	const remove = editorChipRemoveButton(chip, label, labels);
+	remove.tabIndex = -1;
+	chip.append(name, remove);
+	return chip;
+}
+
+function editorChipRemoveButton(chip: HTMLElement, label: string, labels: ChipLabels, onRemoved?: (next: Node | null) => void): HTMLButtonElement {
 	const remove = document.createElement("button");
 	remove.type = "button";
-	remove.tabIndex = -1;
 	remove.className = "session-asset-chip-remove";
 	remove.setAttribute("aria-label", labels.removeNamed(label));
 	remove.dataset.tooltip = labels.remove;
@@ -230,11 +268,37 @@ function chipElement(asset: LoomUserAttachment, openReference: (reference: LoomU
 		event.preventDefault();
 		event.stopPropagation();
 		const parent = chip.parentElement;
+		const next = chip.nextSibling;
 		chip.remove();
+		onRemoved?.(next);
 		parent?.dispatchEvent(new InputEvent("input", { bubbles: true }));
 	});
+	return remove;
+}
+
+/** Replace just the typed slash prefix and keep the caret next to the inserted skill. */
+export function placeSkillChip(root: HTMLElement, range: Range, command: string, labels: ChipLabels): void {
+	const chip = document.createElement("span");
+	chip.className = "session-skill-chip";
+	chip.contentEditable = "false";
+	chip.dataset.skillCommand = command;
+	const name = document.createElement("code");
+	name.textContent = command;
+	const selection = root.ownerDocument.getSelection();
+	const remove = editorChipRemoveButton(chip, command, labels, (next) => {
+		if (next instanceof Text && /^[ \u00a0]/.test(next.data)) next.deleteData(0, 1);
+		root.focus({ preventScroll: true });
+		if (next instanceof Text) selection?.collapse(next, 0);
+		else placeCaretAtStart(root);
+	});
 	chip.append(name, remove);
-	return chip;
+	range.deleteContents();
+	range.insertNode(chip);
+	const after = textNodeAfter(root, chip);
+	const needsSpace = !/^[ \u00a0]/.test(after.data);
+	if (needsSpace) after.insertData(0, " ");
+	root.focus({ preventScroll: true });
+	selection?.collapse(after, needsSpace ? 1 : 0);
 }
 
 export function paintInlineEditor(root: HTMLElement, text: string, assets: readonly LoomUserAttachment[], openReference: (reference: LoomUserAttachment) => void, labels: ChipLabels): void {
