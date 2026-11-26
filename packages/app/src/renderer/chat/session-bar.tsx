@@ -14,6 +14,8 @@ interface SessionBarProps {
 	onUnarchive: (id: string) => void;
 	onDelete: (id: string) => void;
 	onRefresh: () => void;
+	onFind?: () => void;
+	findOpen: boolean;
 }
 
 /** The main process stores this exact string for unnamed sessions (DEFAULT_SESSION_TITLE in @loom/agent). */
@@ -30,6 +32,8 @@ export function SessionBar({
 	onUnarchive,
 	onDelete,
 	onRefresh,
+	onFind,
+	findOpen,
 }: SessionBarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const titleOf = (session: SessionSummary) => session.title === DEFAULT_TITLE ? t.sessions.untitled : session.title;
@@ -111,6 +115,16 @@ export function SessionBar({
 			>
 				+
 			</button>
+			{onFind && <button
+				type="button"
+				className="session-tab-find"
+				aria-label={t.chat.find}
+				aria-expanded={findOpen}
+				data-tooltip={t.chat.find}
+				onClick={onFind}
+			>
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8" /><path d="m15 15 4 4" /></svg>
+			</button>}
 			{archived.length > 0 && (
 				<div className="session-archived" ref={menuRef}>
 					<button
@@ -119,9 +133,13 @@ export function SessionBar({
 						disabled={busy}
 						aria-expanded={menuOpen}
 						aria-haspopup="menu"
+						aria-label={t.sessions.archived}
+						data-tooltip={t.sessions.archived}
 						onClick={() => setMenuOpen((openMenu) => !openMenu)}
 					>
-						{t.sessions.archived}
+						<svg className="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+							<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2" />
+						</svg>
 					</button>
 					{menuOpen && (
 						<div className="session-archived-menu" role="menu">

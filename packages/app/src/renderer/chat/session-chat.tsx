@@ -26,6 +26,8 @@ export function SessionChat({
 	onHistoryChanged,
 	onForked,
 	onOpenSettings,
+	findRequest,
+	onCloseFind,
 }: {
 	endpoint: AgentEndpoint;
 	libraryRoot: string;
@@ -39,6 +41,8 @@ export function SessionChat({
 	onHistoryChanged: () => void;
 	onForked: (record: LoomSessionRecord) => void;
 	onOpenSettings: () => void;
+	findRequest: object | null;
+	onCloseFind: () => void;
 }): React.JSX.Element {
 	const { t } = useLocale();
 	const { confirm } = useConfirmation(threadId);
@@ -124,7 +128,7 @@ export function SessionChat({
 		<ChatSessionContext.Provider value={{ threadId, stored, transcript: messages, branch: actions, runError: stream.error, pendingEdit, editSubmitted, composerAttach, onComposerAttachApplied, requestDraft: setDraftRequest, draftRequest, draftApplied, onOpenSettings, usage: context, model, onModelChanged: () => { void onHistoryChanged(); } }}>
 			<ChatViewContext.Provider value={{ messages: visible, connecting: stream.connecting, threadReady: !stream.connecting }}>
 				<div className="session-chat-shell">
-					<SessionTranscript messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} />
+					<SessionTranscript key={threadId} messages={visible} isRunning={stream.isRunning} libraryRoot={libraryRoot} findRequest={findRequest} onCloseFind={onCloseFind} />
 					<FollowUpInput onSubmitMessage={stream.send} isRunning={stream.isRunning} onStop={stream.stop} />
 				</div>
 			</ChatViewContext.Provider>

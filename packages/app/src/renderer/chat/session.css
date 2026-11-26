@@ -47,6 +47,7 @@
 
 .session-tab button,
 .session-tab-new,
+.session-tab-find,
 .session-archived > button {
 	border: 0;
 	color: var(--lm-text-muted);
@@ -142,6 +143,7 @@
 }
 
 .session-tab-new,
+.session-tab-find,
 .session-archived > button {
 	flex: 0 0 auto;
 	padding: 0 var(--lm-space-4);
@@ -150,6 +152,13 @@
 .session-tab-new {
 	font-size: var(--lm-text-size-xl);
 	line-height: 1;
+}
+
+.session-tab-find,
+.session-archived > button {
+	display: grid;
+	place-items: center;
+	padding-inline: var(--lm-space-3);
 }
 
 .session-archived {
@@ -175,6 +184,7 @@
 
 .session-archived > button.active,
 .session-tab-new:hover:not(:disabled),
+.session-tab-find:is(:hover, [aria-expanded="true"]),
 .session-archived > button:hover:not(:disabled),
 .session-archived-row .session-tab-close:hover:not(:disabled) {
 	color: var(--lm-text-primary);
@@ -280,6 +290,55 @@
 	min-width: 0;
 	padding-bottom: var(--lm-space-6);
 }
+
+.session-find {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: var(--lm-space-2);
+	margin: var(--lm-space-2) var(--agui-chat-scroll-inset) var(--lm-space-2) 0;
+	padding: var(--lm-space-2);
+	border: 1px solid var(--lm-border-default);
+	border-radius: var(--lm-radius-md);
+	background: var(--lm-surface-raised);
+}
+
+.session-find input {
+	flex: 1;
+	min-width: 0;
+	padding: var(--lm-space-2);
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
+	color: var(--lm-text-primary);
+	font: inherit;
+	font-size: var(--lm-text-size-sm);
+}
+
+.session-find [role="status"] {
+	color: var(--lm-text-muted);
+	font-size: var(--lm-text-size-xs);
+	white-space: nowrap;
+}
+
+.session-find button {
+	flex: 0 0 auto;
+	inline-size: var(--lm-size-md);
+	block-size: var(--lm-size-md);
+	padding: 0;
+	border: 0;
+	border-radius: var(--lm-radius-sm);
+	background: transparent;
+	color: var(--lm-text-secondary);
+	cursor: pointer;
+}
+
+.session-find button:disabled { opacity: 0.45; cursor: default; }
+.session-find button:hover:not(:disabled) { background: var(--lm-surface-sunken); }
+.session-find :is(input, button):focus-visible { outline: 2px solid var(--lm-focus-ring); outline-offset: -2px; }
+
+::highlight(loom-chat-find) { background-color: var(--lm-warning); color: inherit; }
+.loom-chat-view [data-chat-find-current] { outline: 1px solid var(--lm-warning); outline-offset: -1px; }
 
 .session-composer-meta {
 	flex: 1;

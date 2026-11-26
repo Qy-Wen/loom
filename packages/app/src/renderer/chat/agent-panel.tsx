@@ -1,4 +1,4 @@
-import { memo, useEffect } from "react";
+import { memo, useEffect, useState } from "react";
 import type { Asset } from "@loom/core";
 import type { AssetRefAttachment } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
@@ -9,6 +9,7 @@ import { AgentPermissionProvider } from "./agent-permission.tsx";
 import { AssetOpenProvider, LibraryAssetsProvider } from "./asset-open.tsx";
 import { setCommandAllows } from "./command-allows.ts";
 import type { AgentEndpoint } from "../../shared/ipc.ts";
+import { isImeComposing } from "../components/ime-composition.ts";
 
 interface AgentPanelProps {
 	endpoint: AgentEndpoint | null;
@@ -39,6 +40,22 @@ export const AgentPanel = memo(function AgentPanel({
 		activateRecord, refreshSessions, refreshCurrent, createSession, selectSession, archiveSession, deleteSession,
 	} = useSessions(libraryRoot);
 	const sessionId = record?.id ?? null;
+	const [findRequest, setFindRequest] = useState<{ threadId: string; returnFocus: HTMLElement | null } | null>(null);
+	const activeFind = findRequest?.threadId === sessionId ? findRequest : null;
+	function openFind() {
+		if (!sessionId || !endpoint) return;
+		const previous = document.activeElement;
+		setFindRequest({ threadId: sessionId, returnFocus: activeFind ? activeFind.returnFocus : previous instanceof HTMLElement ? previous : null });
+	}
+
+	function closeFind() {
+		setFindRequest(null);
+		activeFind?.returnFocus?.focus({ preventScroll: true });
+	}
+
+	useEffect(() => {
+		setFindRequest((request) => request?.threadId === sessionId ? request : null);
+	}, [sessionId]);
 
 	useEffect(() => {
 		if (!libraryRoot) {
@@ -61,7 +78,16 @@ export const AgentPanel = memo(function AgentPanel({
 
 	return (
 		<div className="side-panel">
-			<div className="panel-content agent-content active">
+			<div className="panel-content agent-content active" tabIndex={-1} onKeyDown={(event) => {
+				if (event.defaultPrevented || isImeComposing(event.nativeEvent)) return;
+				if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === "f" && sessionId && endpoint) {
+					event.preventDefault();
+					openFind();
+				} else if (event.key === "Escape" && activeFind) {
+					event.preventDefault();
+					closeFind();
+				}
+			}}>
 				{libraryRoot ? (
 					<>
 						<SessionBar
@@ -75,6 +101,8 @@ export const AgentPanel = memo(function AgentPanel({
 							onUnarchive={(id) => void selectSession(id)}
 							onDelete={(id) => void deleteSession(id)}
 							onRefresh={() => void refreshSessions().catch(() => undefined)}
+							onFind={sessionId && endpoint ? openFind : undefined}
+							findOpen={activeFind !== null}
 						/>
 						{sessionError && <div className="session-error">{sessionError}</div>}
 						{sessionId && endpoint ? (
@@ -95,6 +123,8 @@ export const AgentPanel = memo(function AgentPanel({
 									onSessionRecord={activateRecord}
 									onHistoryChanged={() => { void refreshCurrent(); }}
 									onOpenSettings={onOpenSettings}
+									findRequest={activeFind}
+									onCloseFind={closeFind}
 									onForked={(record) => {
 										activateRecord(record);
 										void refreshSessions().catch(() => undefined);

@@ -53,6 +53,7 @@
 }
 
 .agui-chat-earlier { display: block; margin-block: 0.5rem; }
+.agui-chat-later { margin-block-end: 2.25rem; }
 :is(.agui-chat-jump, .agui-chat-earlier):hover { background: var(--agui-chat-jump-hover, ButtonFace); }
 .agui-chat-transcript { padding-block-end: 0.75rem; }
 .agui-chat-transcript > .agui-messages > li { inline-size: 100%; }

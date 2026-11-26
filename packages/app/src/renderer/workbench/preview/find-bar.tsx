@@ -42,7 +42,7 @@ export function FindBar({
 		function onKeyDown(event: KeyboardEvent): void {
 			const target = event.target;
 			const inFind = target === inputRef.current;
-			if (isImeComposing(event) || target instanceof HTMLTextAreaElement) return;
+			if (event.defaultPrevented || isImeComposing(event) || target instanceof HTMLTextAreaElement) return;
 			if (target instanceof HTMLInputElement && !inFind) return;
 
 			const mod = event.metaKey || event.ctrlKey;

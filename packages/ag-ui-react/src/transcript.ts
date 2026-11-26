@@ -8,6 +8,10 @@ export function transcriptItemKey(item: TranscriptItem): string {
 	return item.kind === "tool" ? `tool:${item.call.id}` : item.message.id;
 }
 
+export function transcriptMessageId(item: TranscriptItem): string | undefined {
+	return item.kind === "tool" ? item.result?.id : item.message.id;
+}
+
 /** Prefer a turn boundary when there is one near the start of the page. */
 export function transcriptPageStart(items: readonly TranscriptItem[], end: number, size: number): number {
 	const start = Math.max(0, end - size);

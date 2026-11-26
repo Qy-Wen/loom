@@ -26,9 +26,12 @@ test("long chats open at the latest page and keep the reading position while rev
 		await conversation.commit(async (tx) => {
 			for (let turn = 1; turn <= 45; turn++) {
 				const text = `History question ${turn}`;
+				const answer = `History answer ${turn}` + (turn === 2
+					? "\n\n**Needle** found near the start. Another needle found here."
+					: turn === 44 ? "\n\nneedle found near the end." : "");
 				await tx.appendEntry(conversation.id, { kind: "loom.user", data: { text }, model: [{ role: "user", content: text, timestamp: turn * 2 }] });
 				await tx.appendEntry(conversation.id, { kind: "test.assistant", model: [{
-					role: "assistant", content: [{ type: "text", text: `History answer ${turn}` }],
+					role: "assistant", content: [{ type: "text", text: answer }],
 					api: "openai-completions", provider: "loom-chat", model: "demo", stopReason: "stop",
 					usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
 					timestamp: turn * 2 + 1,
@@ -73,6 +76,52 @@ test("long chats open at the latest page and keep the reading position while rev
 		await page.getByRole("tab", { name: "Paged history", exact: true }).click();
 		await expect(users).toHaveCount(20);
 		await expect(latest).toBeInViewport();
+
+		const tab = page.getByRole("tab", { name: "Paged history", exact: true });
+		const oldAnswer = viewport.getByText("Needle found near the start. Another needle found here.", { exact: true });
+		const recentAnswer = viewport.getByText("needle found near the end.", { exact: true });
+		const search = page.getByRole("search", { name: "Find in conversation" });
+		const input = search.getByRole("textbox");
+		const count = search.getByRole("status");
+		const highlighted = () => page.evaluate(() => Array.from(CSS.highlights.get("loom-chat-find") ?? [], (range) => range.toString()));
+		await expect(oldAnswer).toHaveCount(0);
+		await tab.press(process.platform === "darwin" ? "Meta+f" : "Control+f");
+		await expect(input).toBeFocused();
+		await input.fill("needle found");
+		await expect(count).toHaveText("1/3");
+		await expect(oldAnswer).toBeInViewport();
+		await expect(users).toHaveCount(20);
+		await expect(recentAnswer).toHaveCount(0);
+		await expect.poll(highlighted).toEqual(["Needle found"]);
+
+		await input.press("Enter");
+		await expect(count).toHaveText("2/3");
+		await expect.poll(highlighted).toEqual(["needle found"]);
+		await search.getByRole("button", { name: "Next match" }).click();
+		await expect(count).toHaveText("3/3");
+		await expect(recentAnswer).toBeInViewport();
+		await expect(users).toHaveCount(20);
+
+		await input.press("Shift+Enter");
+		await expect(count).toHaveText("2/3");
+		await expect(oldAnswer).toBeInViewport();
+		await input.press("Escape");
+		await expect(search).toHaveCount(0);
+		await expect(tab).toBeFocused();
+		await expect(oldAnswer).toBeInViewport();
+		await expect.poll(highlighted).toEqual([]);
+		await viewport.getByRole("button", { name: "Show later messages" }).click();
+		await expect(users).toHaveCount(40);
+		await expect(latest).toHaveCount(0);
+		await page.getByRole("button", { name: "Latest", exact: true }).click();
+		await expect(latest).toBeInViewport();
+
+		await page.getByRole("button", { name: "Find in conversation", exact: true }).click();
+		await input.fill("no such answer");
+		await expect(count).toHaveText("No matches");
+		await expect(search.getByRole("button", { name: "Next match" })).toBeDisabled();
+		await page.getByRole("tab", { name: "New session", exact: true }).click();
+		await expect(search).toHaveCount(0);
 	} finally {
 		await app?.evaluate(({ app }) => app.exit(0)).catch(() => {});
 		await app?.close().catch(() => {});

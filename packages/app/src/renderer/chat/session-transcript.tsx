@@ -17,6 +17,7 @@ import { HistoryMessageEditor } from "./history-message-editor.tsx";
 import { InlineMessageBody } from "./inline-asset-text.tsx";
 import { RunActivity } from "./run-activity.tsx";
 import { ToolCallCard } from "./tool-call-views.tsx";
+import { useSessionFind } from "./session-find.tsx";
 
 function messageAssets(entryId: string | undefined, transcript: readonly LoomTranscriptMessage[]): LoomUserAttachment[] {
 	if (!entryId) return [];
@@ -24,12 +25,19 @@ function messageAssets(entryId: string | undefined, transcript: readonly LoomTra
 	return storedAssetRefs(message && "attachments" in message ? message.attachments : undefined);
 }
 
-export function SessionTranscript({ messages, isRunning, libraryRoot }: { messages: readonly Message[]; isRunning: boolean; libraryRoot: string }) {
+export function SessionTranscript({ messages, isRunning, libraryRoot, findRequest, onCloseFind }: {
+	messages: readonly Message[];
+	isRunning: boolean;
+	libraryRoot: string;
+	findRequest: object | null;
+	onCloseFind: () => void;
+}) {
 	const { threadId, stored, transcript, model, branch } = useChatSession();
 	const { allows } = useCommandAllows();
 	const { t } = useLocale();
 	const markdown = useAssistantAssetMarkdown();
 	const turnEnds = turnEndReplyIds(stored);
+	const find = useSessionFind(messages, findRequest, onCloseFind);
 	const toolStarts = new Map<string, number>();
 	if (isRunning) for (const message of messages) {
 		if (message.role !== "activity" || message.activityType !== "loom.tool_progress" || message.content.hidden === true) continue;
@@ -42,9 +50,11 @@ export function SessionTranscript({ messages, isRunning, libraryRoot }: { messag
 		isRunning={isRunning}
 		threadId={threadId}
 		historyPageSize={40}
+		header={find.header}
+		reveal={find.reveal}
 		className="loom-chat-view thin-scroll"
 		emptyState={<ChatEmptyState />}
-		labels={{ conversation: t.chat.conversation, working: t.chat.working, latest: t.chat.latest, earlier: t.chat.earlier, reasoning: t.chat.reasoning, copy: t.common.copy }}
+		labels={{ conversation: t.chat.conversation, working: t.chat.working, latest: t.chat.latest, earlier: t.chat.earlier, later: t.chat.later, reasoning: t.chat.reasoning, copy: t.common.copy }}
 		slots={{
 			markdown,
 			userMessage(message, text) {

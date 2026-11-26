@@ -1,6 +1,6 @@
 import type { ReactNode, Ref } from "react";
 import { contentToText, type Message } from "@ag-ui/client";
-import { transcriptItemKey, transcriptItems, type TranscriptItem } from "./transcript.ts";
+import { transcriptItemKey, transcriptItems, transcriptMessageId, type TranscriptItem } from "./transcript.ts";
 import { ToolCard } from "./tool-card.tsx";
 
 export function renderDefaultTool(item: Extract<TranscriptItem, { kind: "tool" }>): ReactNode {
@@ -34,7 +34,7 @@ export function TranscriptList({ items, renderItem = renderDefaultItem, label = 
 		if (content == null) return null;
 		return <li
 			key={transcriptItemKey(item)}
-			data-message-id={item.kind === "tool" ? item.result?.id : item.message.id}
+			data-message-id={transcriptMessageId(item)}
 			data-role={item.kind === "tool" ? "tool" : item.message.role}
 			tabIndex={-1}
 		>{content}</li>;
