@@ -1,5 +1,5 @@
 import { isImeComposing } from "../components/ime-composition.ts";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ChatLoginPrompt, ChatProviderCatalogEntry, ChatSettingsView } from "../../shared/ipc.ts";
 import type { ChatCustomProviderConfig } from "@loom/agent/chat-models";
 import type { ChatModelView } from "../../shared/chat-models.ts";
@@ -17,25 +17,13 @@ interface LoginUiState {
 	prompt: LoginPromptEvent;
 }
 
-/** Chat providers save immediately; they are not part of the Models save batch. */
-export function SettingsChat(): React.JSX.Element {
-	const { t } = useLocale();
-	const { confirm } = useConfirmation();
+export function useSettingsChatData() {
 	const [view, setView] = useState<ChatSettingsView | null>(null);
 	const [catalog, setCatalog] = useState<ChatProviderCatalogEntry[] | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [busy, setBusy] = useState(false);
-	const [login, setLogin] = useState<LoginUiState | null>(null);
-	const [loginInput, setLoginInput] = useState("");
-	const [loginBusy, setLoginBusy] = useState(false);
-	const [loginAnswerBusy, setLoginAnswerBusy] = useState(false);
-	const [collapsedModels, setCollapsedModels] = useState<ReadonlySet<string>>(() => new Set());
-	const [customEditor, setCustomEditor] = useState<{ id: string; provider?: ChatCustomProviderConfig } | null>(null);
-	const loginWindow = useRef<Window | null>(null);
-	const loginAttempt = useRef<{ cancelled: boolean } | null>(null);
 
 	/** `keepError`: a refresh after a failed action must not wipe the error that action just reported. */
-	async function reload(keepError = false): Promise<void> {
+	const reload = useCallback(async (keepError = false): Promise<void> => {
 		try {
 			const [next, entries] = await Promise.all([
 				window.loom.getChatSettings(),
@@ -47,14 +35,35 @@ export function SettingsChat(): React.JSX.Element {
 		} catch (cause) {
 			setError(cause instanceof Error ? cause.message : String(cause));
 		}
-	}
+	}, []);
 
 	useEffect(() => {
 		void reload();
 		const unsubscribe = window.loom.onChatSettingsChanged(() => { void reload(); });
 		return unsubscribe;
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, []);
+	}, [reload]);
+
+	return { view, catalog, error, setView, setError, reload };
+}
+
+type SettingsChatProps = Omit<ReturnType<typeof useSettingsChatData>, "view" | "catalog"> & {
+	view: ChatSettingsView;
+	catalog: ChatProviderCatalogEntry[];
+};
+
+/** Chat providers save immediately; they are not part of the Models save batch. */
+export function SettingsChat({ view, catalog, error, setView, setError, reload }: SettingsChatProps): React.JSX.Element {
+	const { t } = useLocale();
+	const { confirm } = useConfirmation();
+	const [busy, setBusy] = useState(false);
+	const [login, setLogin] = useState<LoginUiState | null>(null);
+	const [loginInput, setLoginInput] = useState("");
+	const [loginBusy, setLoginBusy] = useState(false);
+	const [loginAnswerBusy, setLoginAnswerBusy] = useState(false);
+	const [collapsedModels, setCollapsedModels] = useState<ReadonlySet<string>>(() => new Set());
+	const [customEditor, setCustomEditor] = useState<{ id: string; provider?: ChatCustomProviderConfig } | null>(null);
+	const loginWindow = useRef<Window | null>(null);
+	const loginAttempt = useRef<{ cancelled: boolean } | null>(null);
 
 	useEffect(() => {
 		const unsubscribe = window.loom.onChatLoginPrompt((prompt) => {
@@ -151,12 +160,10 @@ export function SettingsChat(): React.JSX.Element {
 	}
 
 	async function addBuiltin(entry: ChatProviderCatalogEntry): Promise<void> {
-		if (!view) return;
 		await save({ upsert: [{ kind: "builtin", id: entry.id, enabled: true }] });
 	}
 
 	async function saveCustom(provider: ChatCustomProviderConfig): Promise<boolean> {
-		if (!view) return false;
 		const original = customEditor?.provider;
 		const fields = original ? changedFields(original, provider) : provider;
 		const patch: ChatProviderPatch = { ...fields, id: provider.id };
@@ -170,27 +177,23 @@ export function SettingsChat(): React.JSX.Element {
 	}
 
 	async function removeProvider(providerId: string): Promise<void> {
-		if (!view) return;
 		await save({ remove: [providerId] });
 	}
 
 	async function setModelEnabled(providerId: string, modelId: string, enabled: boolean): Promise<void> {
-		if (!view) return;
 		await save({ upsert: [{ id: providerId, modelEnabled: { [modelId]: enabled } }] });
 	}
 
-	const authByProvider = useMemo(() => new Map((view?.auth ?? []).map((row) => [row.providerId, row])), [view?.auth]);
+	const authByProvider = useMemo(() => new Map(view.auth.map((row) => [row.providerId, row])), [view.auth]);
 	const modelsByProvider = useMemo(() => {
 		const map = new Map<string, ChatModelView[]>();
-		for (const model of view?.models ?? []) {
+		for (const model of view.models) {
 			const list = map.get(model.provider) ?? [];
 			list.push(model);
 			map.set(model.provider, list);
 		}
 		return map;
-	}, [view?.models]);
-
-	if (!view || !catalog) return <div className="empty">{t.common.loading}</div>;
+	}, [view.models]);
 
 	const availableBuiltin = catalog.filter((entry) => !view.config.providers.some((provider) => provider.id === entry.id));
 

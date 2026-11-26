@@ -13,8 +13,7 @@ import { SettingsGeneral } from "./settings-general.tsx";
 import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsAccess } from "./settings-access.tsx";
 import { SettingsCloud } from "./settings-cloud.tsx";
-import { SettingsChat } from "./settings-chat.tsx";
-import { SettingsModels } from "./settings-models.tsx";
+import { SettingsModelsPane } from "./settings-models.tsx";
 import { SettingsStats } from "./settings-stats.tsx";
 import { SettingsSaveQueue } from "./settings-save-queue.ts";
 
@@ -24,7 +23,7 @@ const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "
 export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.Element {
 	const { t, commitLanguage } = useLocale();
 	const [tab, setTab] = useState<SettingsTab>("models");
-	const [draft, setDraft] = useState<ModelSettingsDraft | null>(null);
+	const [draft, setDraft] = useState<ModelSettingsDraft | null>();
 	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
 	const [stats, setStats] = useState<AgentStatsView | null>(null);
 	const [instructions, setInstructions] = useState<string | null>(null);
@@ -123,7 +122,9 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 				generalDraft.current = generalView; setGeneral(generalView);
 				commitLanguage(generalView.language);
 			} catch (cause) {
-				if (!cancelled) setError(cause instanceof Error ? cause.message : String(cause));
+				if (cancelled) return;
+				setDraft((current) => current ?? null);
+				setError(cause instanceof Error ? cause.message : String(cause));
 			}
 		};
 		void load();
@@ -277,10 +278,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 								{tab === "access" && <SettingsAccess />}
 								{tab === "cloud" && <SettingsCloud />}
 								{tab === "general" && (general ? <SettingsGeneral value={general} onChange={patchGeneral} /> : <div className="empty">{t.common.loading}</div>)}
-								{tab === "models" && <div className="settings-models-scroll">
-									<SettingsChat />
-									{draft ? <SettingsModels draft={draft} onChange={patchModel} onCommit={commitModel} /> : <div className="empty">{t.common.loading}</div>}
-								</div>}
+								{tab === "models" && <SettingsModelsPane draft={draft} onChange={patchModel} onCommit={commitModel} />}
 								{tab === "mcp" && (mcp ? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} onSave={commitMcp} onRemove={removeMcp} /> : <div className="empty">{t.common.loading}</div>)}
 								{tab === "agent" && (instructions !== null && sandboxEnabled !== null ? <SettingsAgent sandboxEnabled={sandboxEnabled} instructions={instructions} onSandboxChange={patchSandbox} onInstructionsChange={patchInstructions} /> : <div className="empty">{t.common.loading}</div>)}
 								{tab === "stats" && (stats ? <SettingsStats stats={stats} resetting={resetting} onReset={() => void resetStats()} /> : <div className="empty">{t.common.loading}</div>)}

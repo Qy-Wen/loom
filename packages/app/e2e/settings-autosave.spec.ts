@@ -1,6 +1,26 @@
 import { fileURLToPath } from "node:url";
 import { expect, test } from "./loom.ts";
 
+test("Models shows one loading state until both sections are ready", async ({ loomPage, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const chat = await loomPage.evaluate(() => window.loom.getChatSettings());
+	await electronApp!.evaluate(({ ipcMain }, view) => {
+		const ready = new Promise<void>((resolve) => ipcMain.once("loom-test-release-chat-settings", () => resolve()));
+		ipcMain.removeHandler("loom:getChatSettings");
+		ipcMain.handle("loom:getChatSettings", async () => { await ready; return view; });
+	}, chat);
+	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+	const panel = loomPage.getByRole("tabpanel", { name: "Models", exact: true });
+	const loading = panel.getByRole("status");
+	await expect(loading).toHaveText("Loading…");
+	await expect(loading).toHaveCSS("opacity", "1");
+	await expect(panel.getByRole("group")).toHaveCount(0);
+	await electronApp!.evaluate(({ ipcMain }) => { ipcMain.emit("loom-test-release-chat-settings"); });
+	await expect(panel.getByRole("group", { name: "Text embedding", exact: true })).toBeVisible();
+	await expect(panel.locator(".settings-chat-form")).toBeVisible();
+	await expect(loading).toHaveCount(0);
+});
+
 test("General changes persist immediately and closing does not revert them", async ({ loomPage }) => {
 	const original = await loomPage.evaluate(() => window.loom.getGeneralSettings());
 	try {

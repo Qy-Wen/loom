@@ -43,6 +43,12 @@
 	overflow: auto;
 }
 
+.settings-pane > .settings-form:not(.settings-form-docked),
+.settings-form-scroll,
+.settings-models-scroll {
+	padding-inline-end: var(--lm-panel-scroll-inset);
+}
+
 .settings-body {
 	display: grid;
 	grid-template-columns: 152px minmax(0, 1fr);
@@ -741,6 +747,15 @@
 	display: grid;
 	gap: var(--lm-space-6);
 	align-content: start;
+}
+
+.settings-models-loading {
+	animation: settings-models-show-loading 0s 150ms both;
+}
+
+@keyframes settings-models-show-loading {
+	from { opacity: 0; }
+	to { opacity: 1; }
 }
 
 .settings-chat-form {

@@ -4,6 +4,7 @@ import { MODEL_REQUEST_PLACEHOLDERS, MODEL_SLOTS, type ModelSettingsDraft, type 
 import { useLocale } from "../locale.tsx";
 import { SettingsSwitch, type ProbeState } from "./settings-switch.tsx";
 import { SettingsApiKey } from "./settings-api-key.tsx";
+import { SettingsChat, useSettingsChatData } from "./settings-chat.tsx";
 
 interface SettingsModelsProps {
 	draft: ModelSettingsDraft;
@@ -11,7 +12,23 @@ interface SettingsModelsProps {
 	onCommit: (id: ModelSlotId, patch?: Partial<ModelSlotDraft>) => Promise<boolean>;
 }
 
-export function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProps): React.JSX.Element {
+export function SettingsModelsPane({ draft, onChange, onCommit }: Omit<SettingsModelsProps, "draft"> & {
+	draft: ModelSettingsDraft | null | undefined;
+}): React.JSX.Element {
+	const { t } = useLocale();
+	const chat = useSettingsChatData();
+	const loading = draft === undefined || (!chat.view && chat.error === null);
+	return <div className="settings-models-scroll">
+		{loading ? <div className="empty settings-models-loading" role="status">{t.common.loading}</div> : <>
+			{chat.view && chat.catalog
+				? <SettingsChat {...chat} view={chat.view} catalog={chat.catalog} />
+				: <div className="session-error" role="alert">{chat.error}</div>}
+			{draft && <SettingsModels draft={draft} onChange={onChange} onCommit={onCommit} />}
+		</>}
+	</div>;
+}
+
+function SettingsModels({ draft, onChange, onCommit }: SettingsModelsProps): React.JSX.Element {
 	const [probes, setProbes] = useState<Record<ModelSlotId, { state: ProbeState; error?: string }>>({ embedding: { state: "idle" }, rerank: { state: "idle" }, vlm: { state: "idle" }, audio: { state: "idle" } });
 	const generation = useRef<Record<ModelSlotId, number>>({ embedding: 0, rerank: 0, vlm: 0, audio: 0 });
 	const draftRef = useRef(draft);
