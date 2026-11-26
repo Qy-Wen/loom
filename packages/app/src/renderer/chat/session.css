@@ -713,16 +713,23 @@
 }
 
 .session-slash-commands code {
-	min-inline-size: 8ch;
+	flex: none;
+	max-inline-size: 50%;
+	min-inline-size: 0;
+	overflow: hidden;
 	font-family: var(--lm-font-mono);
-	overflow-wrap: anywhere;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .session-slash-commands span {
+	flex: 1 1 auto;
 	min-inline-size: 0;
+	overflow: hidden;
 	color: var(--lm-text-secondary);
 	font-size: var(--lm-text-size-sm);
-	overflow-wrap: anywhere;
+	text-overflow: ellipsis;
+	white-space: nowrap;
 }
 
 .session-slash-commands [aria-selected="true"] {

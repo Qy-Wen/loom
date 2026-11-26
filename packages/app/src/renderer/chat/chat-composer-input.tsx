@@ -202,6 +202,7 @@ export function ComposerTextArea({ value, onChange, compactAvailable, compactDis
 							role="option"
 							aria-selected={active === option}
 							aria-disabled={option.disabled || undefined}
+							data-tooltip={option.label || undefined}
 							onMouseDown={(event) => event.preventDefault()}
 							onPointerMove={() => { if (!option.disabled) setHighlighted(option.value); }}
 							onClick={() => { if (!option.disabled) chooseOption(option); }}
