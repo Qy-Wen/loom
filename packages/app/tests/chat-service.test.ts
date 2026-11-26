@@ -268,6 +268,47 @@ test("compaction and reopen preserve paginated chat history and forks before com
 	} finally { await host.close(); await rm(path, { recursive: true, force: true }); }
 });
 
+test("a turn is refused while context is compacting", { timeout: 10_000 }, async () => {
+	const path = await mkdtemp(join(tmpdir(), "loom-host-compact-busy-"));
+	const faux = fauxProvider();
+	const models = createModels();
+	models.setProvider(faux.provider);
+	const host = new ChatService({ models, chatDefault: { provider: faux.models[0].provider, modelId: faux.models[0].id, thinkingLevel: "off" } });
+	const entered = Promise.withResolvers<void>();
+	const release = Promise.withResolvers<void>();
+	try {
+		await host.openLibrary(path);
+		const session = await host.createSession();
+		const conversation = await host.conversation(session.id);
+		await conversation.commit(async (tx) => {
+			for (let i = 0; i < 12; i++) await tx.appendEntry(conversation.id, {
+				kind: "loom.user", data: { text: `question ${i}` },
+				model: [{ role: "user", content: `question ${i}: ${"history ".repeat(2000)}`, timestamp: Date.now() + i }],
+			});
+		}, context);
+		host.requireRuntime().registry.install(defineExtension({ name: "test.hold-compact", hooks: [hook(CompactionTask, {
+			beforeCompact: async () => {
+				entered.resolve();
+				await release.promise;
+				return { summary: "Held summary." };
+			},
+		})] }));
+		await conversation.configure({ extensions: { add: [{ name: "test.hold-compact" }] } }, context);
+		const compacting = host.compactSession(session.id);
+		await entered.promise;
+		await assert.rejects(host.prepareTurn(session.id, "sent during compaction"), /busy/i);
+		assert.equal(JSON.stringify(await host.getSession(session.id)).includes("sent during compaction"), false);
+		release.resolve();
+		assert.equal(await compacting, "compacted");
+		faux.setResponses([fauxAssistantMessage("after")]);
+		assert.equal((await host.waitForTurn(await (await host.prepareTurn(session.id, "after compaction")).submit())).status, "done");
+	} finally {
+		release.resolve();
+		await host.close();
+		await rm(path, { recursive: true, force: true });
+	}
+});
+
 test("closing empty conversations hides them, while sent or inherited history remains archived", { timeout: 10_000 }, async () => {
 	const path = await mkdtemp(join(tmpdir(), "loom-host-empty-close-"));
 	const host = new ChatService({ models: createModels() });

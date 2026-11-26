@@ -1,4 +1,4 @@
-import { useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { Message } from "@ag-ui/core";
 import { ChatError, ComposerForm } from "@loom/ag-ui-react";
 import type { LoomUserAttachment } from "@loom/agent";
@@ -46,6 +46,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	const [attachmentError, setAttachmentError] = useState<string | null>(null);
 	const [compactionFeedback, setCompactionFeedback] = useState<{ result: SessionCompactionResult } | { error: string } | null>(null);
 	const pendingCompactions = useRef(new Set<string>());
+	const [compactionEpoch, setCompactionEpoch] = useState(0);
 	const [catalog, setCatalog] = useState<ChatModelView[] | null>(null);
 	const assetsRef = useRef(assets);
 	assetsRef.current = assets;
@@ -65,7 +66,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	const textOnlyModel = modelLacksImageInput(model, catalog);
 	const hasDraft = editableText(value) || assets.length > 0;
 	const bareSlash = value.trim() === "/" && assets.length === 0;
-	const compacting = pendingCompactions.current.has(threadId);
+	const compacting = useMemo(() => pendingCompactions.current.has(threadId), [compactionEpoch, threadId]);
 	useEffect(() => {
 		setAssets([]);
 		setQueued([]);
@@ -76,7 +77,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	const submittedEdit = useRef<PendingEdit | null>(null);
 	useEffect(() => {
 		// A controlled thread switch connects asynchronously. Never send through the old thread's callback.
-		if (!pendingEdit || pendingEdit.threadId !== threadId || !threadReady || connecting || isRunning || submittedEdit.current === pendingEdit) return;
+		if (!pendingEdit || pendingEdit.threadId !== threadId || !threadReady || connecting || isRunning || compacting || submittedEdit.current === pendingEdit) return;
 		submittedEdit.current = pendingEdit;
 		editSubmitted(pendingEdit);
 		void (async () => {
@@ -96,7 +97,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 				onChange(text);
 			}
 		})();
-	}, [pendingEdit, editSubmitted, threadId, threadReady, connecting, isRunning, onSubmitMessage, onChange, t.chat.attachFailed]);
+	}, [pendingEdit, editSubmitted, threadId, threadReady, connecting, isRunning, compacting, onSubmitMessage, onChange, t.chat.attachFailed]);
 
 	useLayoutEffect(() => {
 		if (!composerAttach) return;
@@ -183,7 +184,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	const running = useRef(isRunning);
 	running.current = isRunning;
 	const deliver = (shortcut?: "/compact") => {
-		if (submitting.current) return;
+		if (submitting.current || pendingCompactions.current.has(threadId)) return;
 		const raw = (editorRef.current ? readInlineEditor(editorRef.current) : value).replaceAll("\u200b", "");
 		const text = editableText(raw) ? raw : "";
 		// Chips can reach the DOM before React commits the attachment state.
@@ -196,8 +197,8 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 		const command = assetPayload.length === 0 ? raw.trim() : "";
 		if (shortcut && (!command.startsWith("/") || !shortcut.startsWith(raw.trimStart()))) return;
 		if ((shortcut ?? command) === "/compact") {
-			if (pendingCompactions.current.has(threadId)) return;
 			pendingCompactions.current.add(threadId);
+			setCompactionEpoch((epoch) => epoch + 1);
 			if (shortcut) editorRef.current?.focus();
 			setAttachmentError(null);
 			setCompactionFeedback(null);
@@ -210,6 +211,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 					if (activeThread.current === threadId) setCompactionFeedback({ error: formatChatError(cause) });
 				} finally {
 					pendingCompactions.current.delete(threadId);
+					setCompactionEpoch((epoch) => epoch + 1);
 				}
 			})();
 			return;
@@ -459,7 +461,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 					<ContextIndicator context={usage} />
 				</div>}
 				onSubmit={() => deliver()}
-				submitDisabled={!hasDraft || !threadReady || bareSlash}
+				submitDisabled={!hasDraft || !threadReady || bareSlash || compacting}
 				onStop={isRunning && (!hasDraft || bareSlash) ? onStop : undefined}
 				labels={{ send: t.chat.send, stop: t.chat.stop }}
 			/>

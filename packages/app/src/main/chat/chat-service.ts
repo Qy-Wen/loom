@@ -3,7 +3,7 @@ import {
 	createChatExtensions, createToolResultStorage, LibraryRuntime, LoomApprovalsDoc, LoomConversationDoc,
 	isSkillName, loadLibrarySkills, NodeExecutionEnv,
 	listLoomConversations, setConversationArchived, setConversationTitle, ToolGate, toolEventId, CompactionEntry, contextUsage, AgentDoc, LiveDoc, InboxDoc,
-	DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
+	ConversationBusy, DurableTrace, TraceStore, type LoomTraceMetric, type LoomTraceRecord, type LoomTraceConversation, type Submission, type SubmissionId, type SubmissionRecord, type Extension,
 	type AgentChange, type CommitObservation, type Conversation, type ConversationId, type Cursor, type EntryId, type EntryRecord, type LiveState, type LoomSessionRecord, type LoomSessionSummary,
 } from "@loom/agent/durable";
 import { contentWithPlacedAssets, implicitSelectionAttachments, foldUserText, titleFromUserText, DEFAULT_SESSION_TITLE, type ComposerReference, type ComposerImageInput, type UiSelectionFields, type LoomAgentOptions, type LoomTool } from "@loom/agent";
@@ -256,6 +256,8 @@ export class ChatService {
 		await this.ensureModel(conversation);
 		const record = await this.getSession(id);
 		if (this.runtime !== runtime) throw new Error("The open library changed.");
+		const live = await runtime.harness.snapshot(LiveDoc, conversation.id, context);
+		if (live?.run === undefined && (live?.compactions?.length ?? 0) > 0) throw new ConversationBusy(conversation.id);
 		const raw = text.replaceAll("\u200b", "");
 		const skills = await this.skillInstructions(runtime, raw);
 		const images = await this.#options.composer?.takeImages?.(id) ?? [];
@@ -272,7 +274,17 @@ export class ChatService {
 		const content = images.length ? [{ type: "text" as const, text: prompt }, ...images.map((image) => ({ type: "image" as const, data: image.data, mimeType: image.mimeType }))] : prompt;
 		return {
 			existingRequest,
-			submit: () => conversation.submit({ type: "input", content, whenBusy: options.whenBusy ?? "reject", requestId, entry: { kind: "loom.user", data: { text: body, clientMessageId: options.clientMessageId ?? "" } } }, context),
+			submit: async () => {
+				// Compaction has no run, so the harness would admit this turn beside the summary.
+				const admitted = await conversation.commit(async (tx) => {
+					const live = await tx.doc(LiveDoc, conversation.id);
+					if (live.run === undefined && (live.compactions?.length ?? 0) > 0) throw new ConversationBusy(conversation.id);
+					return conversation.submit(tx, { type: "input", content, whenBusy: options.whenBusy ?? "reject", requestId, entry: { kind: "loom.user", data: { text: body, clientMessageId: options.clientMessageId ?? "" } } });
+				}, context);
+				const submission = await runtime.harness.submission(admitted, context);
+				if (!submission) throw new Error("Admitted submission was not found.");
+				return submission;
+			},
 		};
 	}
 
