@@ -235,6 +235,14 @@ test("chat offers only /compact without skills and keeps the full transcript", a
 		await expect(editor).toHaveText("/");
 		await editor.fill("/n");
 		await expect(commands).toBeHidden();
+		for (const shortcut of ["Control+Enter", "Meta+Enter"]) {
+			await editor.fill("/c");
+			await expect(compactCommand).toBeVisible();
+			await editor.press(shortcut);
+			await loomPage.keyboard.insertText("Next line");
+			expect(await editor.innerText()).toBe("/c\nNext line");
+			await expect(commands).toBeHidden();
+		}
 		await editor.fill("/c");
 		await expect(commands.getByRole("option")).toHaveCount(1);
 		await expect(compactCommand).toHaveAttribute("aria-selected", "true");

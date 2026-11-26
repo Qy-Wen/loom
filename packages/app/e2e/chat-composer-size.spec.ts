@@ -32,3 +32,20 @@ test("the empty chat editor fits its placeholder and only scrolls after its text
 	await expect(editor).toHaveAttribute("data-empty", "true");
 	await expect.poll(dimensions).toEqual({ height: emptyHeight, overflow: 0 });
 });
+
+test("newline shortcuts move the caret to the next line of an empty chat editor", async ({ loomPage: page, electronApp }) => {
+	test.skip(!electronApp, "isolated Electron required");
+	const editor = page.getByTestId("chat-composer-editor");
+	const height = () => editor.evaluate((element) => element.clientHeight);
+	const emptyHeight = await height();
+	for (const shortcut of ["Control+Enter", "Meta+Enter", "Shift+Enter"]) {
+		await editor.fill("");
+		await editor.press(shortcut);
+		await expect.poll(height).toBeGreaterThan(emptyHeight);
+		await editor.press("Backspace");
+		await expect.poll(height).toBe(emptyHeight);
+		await editor.press(shortcut);
+		await page.keyboard.insertText("Second line");
+		expect(await editor.innerText()).toBe("\nSecond line");
+	}
+});

@@ -4,7 +4,7 @@ import { composerLayoutText } from "@loom/agent/composer-asset";
 import type { LibrarySkillSummary } from "../../shared/ipc.ts";
 import { useLocale } from "../locale.tsx";
 import { ComposerActionsContext } from "./chat-context.ts";
-import { paintInlineEditor, placeCaretAtStart, placeSkillChip, readInlineEditor, slashAtCaret, type ChipLabels } from "./inline-asset-text.tsx";
+import { paintInlineEditor, placeSkillChip, readInlineEditor, slashAtCaret, type ChipLabels } from "./inline-asset-text.tsx";
 
 type SlashOption = { value: string; label: string; disabled?: boolean };
 
@@ -133,6 +133,10 @@ export function ComposerTextArea({ value, onChange, compactAvailable, compactDis
 		}
 		if (key !== "Enter" || event.shiftKey) return;
 		event.preventDefault();
+		if (!event.altKey && (event.ctrlKey || event.metaKey)) {
+			event.currentTarget.ownerDocument.execCommand("insertLineBreak");
+			return;
+		}
 		if (!event.repeat) event.currentTarget.closest("form")?.requestSubmit();
 	}
 
@@ -162,14 +166,12 @@ export function ComposerTextArea({ value, onChange, compactAvailable, compactDis
 					const editor = event.currentTarget;
 					const empty = !readInlineEditor(editor);
 					editor.dataset.empty = empty ? "true" : "false";
-					if (empty) placeCaretAtStart(editor);
 					actionsRef.current?.syncAssets();
 					if (!composing.current) updateDraft(editor);
 				}}
 				onFocus={(event) => {
 					if (event.target !== event.currentTarget) return;
 					setFocused(true);
-					if (!readInlineEditor(event.currentTarget)) placeCaretAtStart(event.currentTarget);
 				}}
 				onBlur={() => {
 					setFocused(false);
