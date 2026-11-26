@@ -20,12 +20,14 @@ export function useSessions(libraryRoot: string | null) {
 	const recordLibrary = useRef(libraryRoot);
 	const generation = useRef(0);
 	const listRevision = useRef(0);
+	const pendingSelect = useRef<string | null>(null);
 	const refreshing = useRef(false);
 	const refreshPending = useRef(false);
 
 	const activateRecord = useCallback((next: LoomSessionRecord) => {
 		if (library.current !== libraryRoot) return;
 		generation.current++;
+		pendingSelect.current = null;
 		recordLibrary.current = libraryRoot;
 		current.current = next;
 		setRecord(next);
@@ -71,6 +73,7 @@ export function useSessions(libraryRoot: string | null) {
 		listRevision.current++;
 		let active = true;
 		current.current = null;
+		pendingSelect.current = null;
 		setRecord(null);
 		setSessions([]);
 		setError(null);
@@ -105,6 +108,8 @@ export function useSessions(libraryRoot: string | null) {
 	}, [libraryRoot, activateRecord, refreshSessions, refreshCurrent]);
 
 	async function perform(action: () => Promise<void>) {
+		generation.current++;
+		pendingSelect.current = null;
 		setBusy(true);
 		setError(null);
 		try { await action(); }
@@ -113,12 +118,32 @@ export function useSessions(libraryRoot: string | null) {
 	}
 
 	async function selectSession(id: string) {
-		if (current.current?.id === id) return;
-		await perform(async () => {
-			if (sessions.find((session) => session.id === id)?.status === "archived") await window.loom.unarchiveSession(id);
-			activateRecord(await window.loom.openSession(id));
-			await refreshSessions();
-		});
+		if (pendingSelect.current === id) return;
+		if (current.current?.id === id) {
+			if (pendingSelect.current !== null) {
+				generation.current++;
+				pendingSelect.current = null;
+			}
+			return;
+		}
+		const version = ++generation.current;
+		pendingSelect.current = id;
+		setError(null);
+		try {
+			const archived = sessions.find((session) => session.id === id)?.status === "archived";
+			if (archived) await window.loom.unarchiveSession(id);
+			if (library.current !== libraryRoot || version !== generation.current) return;
+			const next = await window.loom.openSession(id);
+			if (library.current !== libraryRoot || version !== generation.current) return;
+			pendingSelect.current = null;
+			activateRecord(next);
+			if (archived) await refreshSessions();
+		} catch (cause) {
+			if (library.current === libraryRoot && version === generation.current) {
+				pendingSelect.current = null;
+				setError(cause instanceof Error ? cause.message : String(cause));
+			}
+		}
 	}
 
 	async function createSession() {

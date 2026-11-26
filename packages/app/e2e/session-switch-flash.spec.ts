@@ -24,24 +24,41 @@ test("the running dot does not flash when sessions are created, switched, or clo
 		await loomPage.reload();
 		await expect(loomPage.getByRole("tablist", { name: "Sessions" }).getByRole("tab").first()).toBeVisible();
 		await loomPage.evaluate((selector) => {
-			const scope = window as typeof window & { cursorAdds?: number };
+			const scope = window as typeof window & { cursorAdds?: number; barDimmed?: number; tabDisabledOnSwitch?: number; switching?: boolean };
 			scope.cursorAdds = 0;
+			scope.barDimmed = 0;
+			scope.tabDisabledOnSwitch = 0;
+			scope.switching = false;
 			new MutationObserver((records) => {
 				for (const record of records) for (const node of record.addedNodes) {
 					if (node instanceof Element && (node.matches(selector) || node.querySelector(selector))) scope.cursorAdds!++;
 				}
 			}).observe(document.body, { childList: true, subtree: true });
+			const bar = document.querySelector(".session-bar");
+			if (bar) {
+				new MutationObserver(() => {
+					for (const button of bar.querySelectorAll("button")) {
+						if (Number.parseFloat(getComputedStyle(button).opacity) < 1) scope.barDimmed!++;
+						if (scope.switching && button.getAttribute("role") === "tab" && button.getAttribute("aria-disabled") === "true") scope.tabDisabledOnSwitch!++;
+					}
+				}).observe(bar, { attributes: true, attributeFilter: ["disabled", "aria-disabled", "class"], childList: true, subtree: true });
+			}
 		}, CURSOR);
-		const adds = () => loomPage.evaluate(() => (window as typeof window & { cursorAdds?: number }).cursorAdds ?? 0);
+		const metrics = () => loomPage.evaluate(() => {
+			const scope = window as typeof window & { cursorAdds?: number; barDimmed?: number; tabDisabledOnSwitch?: number };
+			return { cursorAdds: scope.cursorAdds ?? 0, barDimmed: scope.barDimmed ?? 0, tabDisabledOnSwitch: scope.tabDisabledOnSwitch ?? 0 };
+		});
 		const settle = () => loomPage.waitForTimeout(600);
 
 		const create = loomPage.getByRole("button", { name: "New session", exact: true });
 		await create.click(); await settle();
 		await create.click(); await settle();
+		await loomPage.evaluate(() => { (window as typeof window & { switching?: boolean }).switching = true; });
 		await loomPage.locator(".session-tab").first().getByRole("tab").click(); await settle();
 		await loomPage.locator(".session-tab").last().getByRole("tab").click(); await settle();
+		await loomPage.evaluate(() => { (window as typeof window & { switching?: boolean }).switching = false; });
 		await loomPage.locator(".session-tab.active .session-tab-close").click(); await settle();
-		expect(await adds()).toBe(0);
+		expect(await metrics()).toEqual({ cursorAdds: 0, barDimmed: 0, tabDisabledOnSwitch: 0 });
 
 		// A real run still shows it.
 		await loomPage.getByRole("textbox").fill("FLASH_QUESTION");

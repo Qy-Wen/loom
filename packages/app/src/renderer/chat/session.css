@@ -243,7 +243,6 @@
 
 .session-bar button:is(:disabled, [aria-disabled="true"]) {
 	cursor: default;
-	opacity: 0.45;
 }
 
 .session-archived-menu {

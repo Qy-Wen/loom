@@ -168,9 +168,9 @@ export function SessionBar({
 								}}
 								onDragEnd={() => setDrag(null)}
 								onClick={() => {
-									// A selection in progress blocks another switch while the tab can still receive a double-click.
+									// A session mutation in progress blocks switching while the tab can still receive a double-click.
 									if (!busy) onSelect(session.id);
-							}}
+								}}
 								onDoubleClick={(event) => startRename(event.currentTarget)}
 							onKeyDown={(event) => {
 									if (isImeComposing(event.nativeEvent)) return;
