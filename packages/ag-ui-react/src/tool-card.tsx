@@ -23,28 +23,34 @@ export function ToolCard({ name, status, state, startedAt, durationMs, defaultOp
 	const expanded = userOpen ?? defaultOpen;
 	const resultText = result != null && result !== "" ? formatToolValue(result) : undefined;
 	const feedback = { copied: labels?.copied ?? "Copied", failed: labels?.copyFailed ?? "Copy failed" };
-	return <details className="agui-tool-card" data-state={state} open={expanded} onToggle={(event) => {
-		if (event.currentTarget.open !== expanded) setUserOpen(event.currentTarget.open);
-	}}>
-		<summary className="agui-tool-header">
-			<svg className="agui-tool-chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m4.5 3 3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
-			{state && <span className="agui-tool-dot" aria-hidden="true" />}
-			<span className="agui-tool-name">{name}</span>
-			{durationMs !== undefined ? <ToolTime durationMs={durationMs} label={labels?.duration ?? "Duration"} />
-				: startedAt !== undefined && <RunningToolTime key={startedAt} startedAt={startedAt} label={labels?.elapsed ?? "Elapsed"} />}
-			{status != null && <span className="agui-tool-status">{status}</span>}
-		</summary>
-		<div className="agui-tool-body">
+	const showArguments = parameters !== undefined;
+	const showResult = resultText !== undefined || resultContent != null || Boolean(labels?.emptyResult);
+	return <div className="agui-tool-card" data-state={state}>
+		<details open={expanded} onToggle={(event) => {
+			if (event.currentTarget.open !== expanded) setUserOpen(event.currentTarget.open);
+		}}>
+			<summary className="agui-tool-header">
+				<svg className="agui-tool-chevron" viewBox="0 0 12 12" fill="none" aria-hidden="true"><path d="m4.5 3 3 3-3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" /></svg>
+				{state && <span className="agui-tool-dot" aria-hidden="true" />}
+				<span className="agui-tool-name">{name}</span>
+				{durationMs !== undefined ? <ToolTime durationMs={durationMs} label={labels?.duration ?? "Duration"} />
+					: startedAt !== undefined && <RunningToolTime key={startedAt} startedAt={startedAt} label={labels?.elapsed ?? "Elapsed"} />}
+				{status != null && <span className="agui-tool-status">{status}</span>}
+			</summary>
+			{(showArguments || showResult) && <div className="agui-tool-body">
+				{showArguments && <ToolSection label={labels?.arguments ?? "Arguments"} copyLabel={labels?.copyArguments ?? "Copy tool arguments"}
+					text={formatToolValue(parameters)} textClass="agui-tool-arguments" feedback={feedback} />}
+				{showResult && <ToolSection label={labels?.result ?? "Result"}
+					copyLabel={labels?.copyResult ?? "Copy tool result"} text={resultText} textClass="agui-tool-result" feedback={feedback}>
+					{resultContent ?? (resultText === undefined && labels?.emptyResult && <p className="agui-tool-empty">{labels.emptyResult}</p>)}
+				</ToolSection>}
+			</div>}
+		</details>
+		{(actions != null || actionError) && <div className="agui-tool-actions">
 			{actions}
 			{actionError && <p className="agui-tool-error" role="alert">{actionError}</p>}
-			{parameters !== undefined && <ToolSection label={labels?.arguments ?? "Arguments"} copyLabel={labels?.copyArguments ?? "Copy tool arguments"}
-				text={formatToolValue(parameters)} textClass="agui-tool-arguments" feedback={feedback} />}
-			{(resultText !== undefined || resultContent != null || labels?.emptyResult) && <ToolSection label={labels?.result ?? "Result"}
-				copyLabel={labels?.copyResult ?? "Copy tool result"} text={resultText} textClass="agui-tool-result" feedback={feedback}>
-				{resultContent ?? (resultText === undefined && labels?.emptyResult && <p className="agui-tool-empty">{labels.emptyResult}</p>)}
-			</ToolSection>}
-		</div>
-	</details>;
+		</div>}
+	</div>;
 }
 
 function ToolTime({ durationMs, label, fractionDigits = 1 }: { durationMs: number; label: string; fractionDigits?: 0 | 1 }) {

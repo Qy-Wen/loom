@@ -41,8 +41,10 @@ test("tool cards summarize results and copy each section independently", async (
 		const success = loomPage.locator('.agui-tool-card[data-state="done"]');
 		const failure = loomPage.locator('.agui-tool-card[data-state="failed"]');
 		await expect(success).toHaveCount(1);
-		await expect(success).not.toHaveAttribute("open", "");
-		await expect(failure).toHaveAttribute("open", "");
+		await expect(success.locator("details")).not.toHaveAttribute("open", "");
+		await expect(failure.locator("details")).not.toHaveAttribute("open", "");
+		await failure.locator("summary").press("Enter");
+		await expect(failure.locator("details")).toHaveAttribute("open", "");
 		await expect(failure).toHaveCSS("overflow", "clip");
 		await expect(failure).not.toHaveCSS("border-top-left-radius", "0px");
 		await expect(failure.locator("summary")).toContainText("Failed");
@@ -51,7 +53,7 @@ test("tool cards summarize results and copy each section independently", async (
 		await expect(success.locator("time")).toHaveText(/^\d+\.\ds$/);
 
 		await success.locator("summary").press("Enter");
-		await expect(success).toHaveAttribute("open", "");
+		await expect(success.locator("details")).toHaveAttribute("open", "");
 		const output = success.locator(".agui-tool-result");
 		await expect(output).toContainText("Result line 60");
 		const section = output.locator("..");
@@ -65,12 +67,12 @@ test("tool cards summarize results and copy each section independently", async (
 		await expect(success.getByRole("status").filter({ hasText: "Copied" })).toBeVisible();
 		await success.getByRole("button", { name: "Copy tool result" }).click();
 		await expect.poll(clipboard).toBe(await output.textContent());
-		await expect(failure).toHaveAttribute("open", "");
+		await expect(failure.locator("details")).toHaveAttribute("open", "");
 
 		await loomPage.reload();
-		await expect(success).not.toHaveAttribute("open", "");
+		await expect(success.locator("details")).not.toHaveAttribute("open", "");
 		await expect(success.locator("time")).toHaveAttribute("datetime", /^PT[\d.]+S$/);
-		await expect(failure).toHaveAttribute("open", "");
+		await expect(failure.locator("details")).not.toHaveAttribute("open", "");
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
@@ -162,6 +164,7 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 		await loomPage.reload();
 		await expect(loomPage.getByRole("button", { name: "Approve", exact: true })).toBeVisible();
 		const parentCard = loomPage.locator(".agui-tool-card").filter({ has: loomPage.locator(".agui-tool-name", { hasText: "run_create_agent" }) });
+		await parentCard.locator("summary").click();
 		const argumentsText = await parentCard.locator(".agui-tool-arguments").innerText();
 		expect(JSON.parse(argumentsText.replace(/^arguments\s*/, ""))).toEqual({ goal: "save generated.txt" });
 		await loomPage.getByRole("button", { name: "Approve", exact: true }).click();

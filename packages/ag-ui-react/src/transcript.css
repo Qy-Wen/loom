@@ -1,4 +1,7 @@
 .agui-tool-card {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr);
+	grid-template-rows: auto auto auto;
 	min-inline-size: 0;
 	margin-block: 8px;
 	border: 1px solid var(--agui-chat-border, GrayText);
@@ -9,12 +12,26 @@
 	overflow: clip;
 }
 
+/* Actions sit between the summary and the disclosure. The details box spans every row, so clicks pass through it. */
+.agui-tool-card > details {
+	display: grid;
+	grid-column: 1;
+	grid-row: 1 / -1;
+	grid-template-rows: subgrid;
+	min-inline-size: 0;
+	pointer-events: none;
+}
+
+.agui-tool-header,
+.agui-tool-card > details::details-content { pointer-events: auto; }
+
 .agui-tool-card[data-state="failed"] {
 	border-color: var(--agui-chat-error-border, MarkText);
 }
 
 .agui-tool-header {
 	display: flex;
+	grid-row: 1;
 	align-items: center;
 	gap: 7px;
 	padding: 6px 9px;
@@ -47,8 +64,8 @@
 	color: var(--agui-tool-chevron, currentColor);
 }
 
-.agui-tool-card[open] .agui-tool-chevron { rotate: 90deg; }
-.agui-tool-card:not([open]):dir(rtl) .agui-tool-chevron { rotate: 180deg; }
+.agui-tool-card details[open] .agui-tool-chevron { rotate: 90deg; }
+.agui-tool-card details:not([open]):dir(rtl) .agui-tool-chevron { rotate: 180deg; }
 
 .agui-tool-dot {
 	flex: none;
@@ -81,6 +98,20 @@
 	margin: 0;
 	color: var(--agui-chat-error-color, CanvasText);
 }
+
+.agui-tool-card > details::details-content { grid-row: 3; min-inline-size: 0; }
+
+.agui-tool-actions {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	grid-column: 1;
+	grid-row: 2;
+	min-inline-size: 0;
+	padding: 8px 9px 10px;
+}
+
+.agui-tool-card:has(details[open]) .agui-tool-actions { padding-block-end: 6px; }
 
 .agui-tool-body {
 	display: grid;

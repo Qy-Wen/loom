@@ -50,10 +50,10 @@ for (const toolName of ["image", "embedded_image"]) test(`MCP ${toolName} reache
 		const card = loomPage.locator(".agui-tool-card").filter({ has: image });
 		const disclosure = card.locator("summary.agui-tool-header");
 		await expect(card).toHaveAttribute("data-state", "done");
-		await expect(card).not.toHaveAttribute("open", "");
+		await expect(card.locator("details")).not.toHaveAttribute("open", "");
 		const showImage = async () => {
 			await disclosure.press("Enter");
-			await expect(card).toHaveAttribute("open", "");
+			await expect(card.locator("details")).toHaveAttribute("open", "");
 			await expect(image).toBeVisible();
 			await expect.poll(() => image.evaluate((element) => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
 		};

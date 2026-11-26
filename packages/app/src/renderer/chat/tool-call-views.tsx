@@ -51,7 +51,6 @@ export function ToolCallCard({
 		status={failed ? t.tool.failed : done ? t.tool.done : waiting ? t.tool.waiting : t.chat.working}
 		startedAt={done ? undefined : startedAt}
 		durationMs={typeof duration === "number" ? duration : undefined}
-		defaultOpen={!done || failed}
 		parameters={parameters}
 		result={done && !refs ? displayResult : undefined}
 		labels={{ arguments: t.tool.arguments, result: t.tool.result, duration: t.tool.duration, elapsed: t.tool.elapsed,
@@ -73,11 +72,11 @@ export function ToolCallCard({
 		</> : undefined}
 		actions={waiting && toolCallId ? (
 			<div className="tool-call-gate">
-				<button type="button" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
+				<button type="button" className="tool-call-approve" onClick={() => { void decide(toolCallId, "approve", setActed, setGateError); }}>{t.tool.approve}</button>
 				{remember && (
-					<button type="button" onClick={() => { void decide(toolCallId, "approve_always", setActed, setGateError); }}>{t.tool.always}</button>
+					<button type="button" className="tool-call-always" onClick={() => { void decide(toolCallId, "approve_always", setActed, setGateError); }}>{t.tool.always}</button>
 				)}
-				<button type="button" onClick={() => { void decide(toolCallId, "reject", setActed, setGateError); }}>{t.tool.skip}</button>
+				<button type="button" className="tool-call-skip" onClick={() => { void decide(toolCallId, "reject", setActed, setGateError); }}>{t.tool.skip}</button>
 			</div>
 		) : undefined}
 		actionError={gateError}
