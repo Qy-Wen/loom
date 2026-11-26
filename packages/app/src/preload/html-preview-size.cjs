@@ -15,9 +15,11 @@ window.addEventListener("DOMContentLoaded", () => {
 		frame = 0;
 		const scroller = document.scrollingElement ?? root;
 		const width = scroller.scrollWidth;
-		const height = scroller.scrollHeight > scroller.clientHeight
+		const roundedHeight = scroller.scrollHeight > scroller.clientHeight
 			? scroller.scrollHeight
 			: root.offsetHeight;
+		// Integer scroll metrics can miss fractional overflow on high-DPI displays.
+		const height = Math.max(roundedHeight, Math.ceil(root.getBoundingClientRect().height));
 		const resized = viewportWidth !== window.innerWidth || viewportHeight !== window.innerHeight;
 		viewportWidth = window.innerWidth;
 		viewportHeight = window.innerHeight;

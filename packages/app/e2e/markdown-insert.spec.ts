@@ -416,8 +416,8 @@ test("wide and tall HTML embeds scale to the Markdown width and grow with their 
 	const root = await libraryPath(page);
 	await writeFile(join(root, "wide.html"), `<!doctype html><style>
 		body { margin: 0; }
-		main { position: relative; width: 1600px; height: 1100px; }
-		main.expanded { height: 1500px; }
+		main { position: relative; width: 1600px; height: 1100.25px; }
+		main.expanded { height: 1500.25px; }
 		button { position: absolute; left: 32px; top: 32px; width: 140px; height: 64px; }
 		footer { position: absolute; right: 0; bottom: 0; }
 	</style><main><button>Expand</button><footer>End of report</footer></main>
@@ -429,29 +429,30 @@ test("wide and tall HTML embeds scale to the Markdown width and grow with their 
 	const documentSize = () => inPreview(guest, `({ width: innerWidth, height: innerHeight,
 		scrollWidth: document.documentElement.scrollWidth, scrollHeight: document.documentElement.scrollHeight })`);
 	await expect.poll(documentSize, { timeout: HTML_PREVIEW_LOAD_TIMEOUT }).toEqual({
-		width: 1600, height: 1100, scrollWidth: 1600, scrollHeight: 1100,
+		width: 1600, height: 1101, scrollWidth: 1600, scrollHeight: 1101,
 	});
 	const size = () => frame.evaluate((node) => ({ width: node.clientWidth, height: node.clientHeight }));
 	const before = await size();
 	expect(before.width).toBeLessThan(1600);
-	expect(Math.abs(before.height - before.width * 1100 / 1600)).toBeLessThan(2);
+	expect(Math.abs(before.height - before.width * 1101 / 1600)).toBeLessThan(2);
 	const bounds = (await guest.boundingBox())!;
 	const scale = bounds.width / 1600;
 	await page.mouse.click(bounds.x + 100 * scale, bounds.y + 64 * scale);
-	await expect.poll(documentSize).toEqual({ width: 1600, height: 1500, scrollWidth: 1600, scrollHeight: 1500 });
+	await expect.poll(documentSize).toEqual({ width: 1600, height: 1501, scrollWidth: 1600, scrollHeight: 1501 });
 	await expect.poll(async () => (await size()).height).toBeGreaterThan(before.height);
 
 	await electronApp!.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setSize(920, 800));
 	await expect.poll(async () => (await size()).width).toBeLessThan(before.width);
 	await expect.poll(async () => {
 		const { width, height } = await size();
-		return Math.abs(height - width * 1500 / 1600);
+		return Math.abs(height - width * 1501 / 1600);
 	}).toBeLessThan(2);
-	expect(await documentSize()).toEqual({ width: 1600, height: 1500, scrollWidth: 1600, scrollHeight: 1500 });
+	expect(await documentSize()).toEqual({ width: 1600, height: 1501, scrollWidth: 1600, scrollHeight: 1501 });
 	const resizedBounds = (await guest.boundingBox())!;
 	await page.mouse.move(resizedBounds.x + resizedBounds.width / 2, resizedBounds.y + 100);
 	await page.mouse.wheel(0, 300);
 	await expect.poll(() => page.locator(".markdown-editor-input .cm-scroller").evaluate((node) => node.scrollTop)).toBeGreaterThan(100);
+	expect(await inPreview(guest, "scrollY")).toBe(0);
 });
 
 test("wiki embeds play media, open files and reveal only the chosen source", async ({ loomPage: page, electronApp }) => {
