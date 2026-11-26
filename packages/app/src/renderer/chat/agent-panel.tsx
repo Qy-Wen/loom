@@ -92,6 +92,7 @@ export const AgentPanel = memo(function AgentPanel({
 					<>
 						<SessionBar
 							key={libraryRoot}
+							libraryRoot={libraryRoot}
 							sessions={sessions}
 							currentId={sessionId}
 							currentEmpty={record?.messages.length === 0}

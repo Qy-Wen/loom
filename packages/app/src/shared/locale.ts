@@ -500,6 +500,7 @@ export const messages = defineLocale(
 		sessions: {
 			label: "Sessions",
 			rename: "Rename session",
+			reordered: (title: string, position: number, total: number) => `${title} moved to position ${position} of ${total}.`,
 			busy: "Busy",
 			idle: "Idle",
 			close: (title: string) => `Close ${title}`,
@@ -1352,6 +1353,7 @@ export const messages = defineLocale(
 		sessions: {
 			label: "会话",
 			rename: "重命名会话",
+			reordered: (title, position, total) => `${title}已移到第 ${position} 个位置，共 ${total} 个会话。`,
 			busy: "忙碌",
 			idle: "空闲",
 			close: (title) => `关闭 ${title}`,

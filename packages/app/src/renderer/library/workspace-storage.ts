@@ -1,4 +1,4 @@
-type WorkspacePreference = "workbench" | "activeSession";
+type WorkspacePreference = "workbench" | "activeSession" | "sessionTabOrder";
 
 function storageKey(root: string, preference: WorkspacePreference): string {
 	return `loom.workspace.${preference}:${root}`;

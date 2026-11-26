@@ -4,6 +4,7 @@ import { useLocale } from "../locale.tsx";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
 import { readWorkspacePreference, writeWorkspacePreference } from "../library/workspace-storage.ts";
 import { sessionTitle } from "./session-title.ts";
+import { orderedOpenSessions, readSessionTabOrder } from "./session-tab-order.ts";
 
 /** Own session selection and committed history. Live output never writes into this state. */
 export function useSessions(libraryRoot: string | null) {
@@ -81,7 +82,7 @@ export function useSessions(libraryRoot: string | null) {
 			try {
 				const list = await window.loom.listSessions();
 				if (!active || version !== generation.current) return;
-				const open = list.filter((session) => session.status === "open");
+				const open = orderedOpenSessions(list, readSessionTabOrder(libraryRoot));
 				const savedId = readWorkspacePreference(libraryRoot, "activeSession");
 				const selected = open.find((session) => session.id === savedId) ?? open[0];
 				const next = selected ? await window.loom.openSession(selected.id) : await window.loom.createSession();
@@ -140,7 +141,7 @@ export function useSessions(libraryRoot: string | null) {
 			await window.loom.archiveSession(id);
 			const list = await refreshSessions();
 			if (current.current?.id !== id) return;
-			const next = list.find((session) => session.status === "open");
+			const next = orderedOpenSessions(list, readSessionTabOrder(libraryRoot))[0];
 			activateRecord(next ? await window.loom.openSession(next.id) : await window.loom.createSession());
 			await refreshSessions();
 		});
@@ -158,7 +159,7 @@ export function useSessions(libraryRoot: string | null) {
 		}) || library.current !== libraryRoot) return;
 		await perform(async () => {
 			if (current.current?.id === id) {
-				const next = sessions.find((session) => session.id !== id && session.status === "open");
+				const next = orderedOpenSessions(sessions, readSessionTabOrder(libraryRoot)).find((session) => session.id !== id);
 				activateRecord(next ? await window.loom.openSession(next.id) : await window.loom.createSession());
 			}
 			await window.loom.deleteSession(id);

@@ -1,12 +1,19 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type DragEvent } from "react";
 import type { LoomSessionSummary as SessionSummary } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
 import { useInlineRename } from "../components/use-inline-rename.ts";
 import { isImeComposing } from "../components/ime-composition.ts";
+import { moveTabBefore } from "../components/tab-order.ts";
+import { writeWorkspacePreference } from "../library/workspace-storage.ts";
 import { SessionHistory } from "./session-history.tsx";
+import { orderedOpenSessions, readSessionTabOrder } from "./session-tab-order.ts";
 import { sessionTitle } from "./session-title.ts";
 
+const SESSION_TAB_DRAG = "application/x-loom-session-tab";
+type TabDrag = { id: string; button: HTMLButtonElement; beforeId?: string | null };
+
 interface SessionBarProps {
+	libraryRoot: string;
 	sessions: SessionSummary[];
 	currentId: string | null;
 	/** Whether the current session has no messages yet. */
@@ -24,6 +31,7 @@ interface SessionBarProps {
 }
 
 export function SessionBar({
+	libraryRoot,
 	sessions,
 	currentId,
 	currentEmpty,
@@ -40,13 +48,33 @@ export function SessionBar({
 }: SessionBarProps): React.JSX.Element {
 	const { t } = useLocale();
 	const titleOf = (session: SessionSummary) => sessionTitle(session, t.sessions.untitled);
-	const open = sessions.filter((session) => session.status === "open");
+	const [order, setOrder] = useState(() => readSessionTabOrder(libraryRoot));
+	const open = orderedOpenSessions(sessions, order);
 	const archived = sessions.filter((session) => session.status === "archived");
 	// Closing the only session, while it is still empty, would just swap it for another empty one.
 	const closable = !(open.length === 1 && open[0]!.id === currentId && currentEmpty);
 	const tabsRef = useRef<HTMLDivElement>(null);
 	const [rename, setRename] = useState<{ id: string; title: string; tab: HTMLButtonElement } | null>(null);
 	const focusAfterRename = useRef<HTMLButtonElement | null>(null);
+	const [drag, setDrag] = useState<TabDrag | null>(null);
+	const draggedIndex = drag ? open.findIndex((session) => session.id === drag.id) : -1;
+	const dropMarker = draggedIndex >= 0 && drag?.beforeId !== drag?.id && drag?.beforeId !== (open[draggedIndex + 1]?.id ?? null)
+		? drag?.beforeId : undefined;
+	const statusRef = useRef<HTMLSpanElement>(null);
+	const movedTab = useRef<{ button: HTMLButtonElement; focused: boolean; announcement: string } | null>(null);
+
+	useLayoutEffect(() => {
+		const move = movedTab.current;
+		if (!move) return;
+		movedTab.current = null;
+		move.button.parentElement?.scrollIntoView({ block: "nearest", inline: "nearest" });
+		if (move.focused) move.button.focus({ preventScroll: true });
+		const status = statusRef.current;
+		if (!status) return;
+		status.textContent = "";
+		const announce = window.setTimeout(() => { status.textContent = move.announcement; }, 300);
+		return () => window.clearTimeout(announce);
+	}, [order]);
 
 	useLayoutEffect(() => {
 		if (rename) return;
@@ -63,37 +91,99 @@ export function SessionBar({
 		tabsRef.current?.querySelector(".session-tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}, [currentId, open.length]);
 
+	function moveTab(id: string, beforeId: string | null, button: HTMLButtonElement): void {
+		const ids = open.map((session) => session.id);
+		const next = moveTabBefore(ids, id, beforeId);
+		if (next === ids) return;
+		const session = open[ids.indexOf(id)]!;
+		movedTab.current = {
+			button,
+			focused: button === document.activeElement,
+			announcement: t.sessions.reordered(titleOf(session), next.indexOf(id) + 1, next.length),
+		};
+		setOrder(next);
+		writeWorkspacePreference(libraryRoot, "sessionTabOrder", next);
+	}
+
+	function dropBefore(event: DragEvent<HTMLDivElement>): string | null {
+		const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-session-tab]") : null;
+		if (!target) return null;
+		const bounds = target.getBoundingClientRect();
+		const before = event.clientX < bounds.left + bounds.width / 2 ? target : target.nextElementSibling;
+		return before?.getAttribute("data-session-tab") ?? null;
+	}
+
 	return (
 		<div className="session-bar" onPointerEnter={onRefresh}>
-			<div className="session-tabs" ref={tabsRef} role="tablist" aria-label={t.sessions.label}>
-				{open.map((session) => {
+			<div
+				className="session-tabs"
+				ref={tabsRef}
+				role="tablist"
+				aria-label={t.sessions.label}
+				onDragOver={(event) => {
+					if (draggedIndex < 0 || !event.dataTransfer.types.includes(SESSION_TAB_DRAG)) return;
+					event.preventDefault();
+					event.dataTransfer.dropEffect = "move";
+					const beforeId = dropBefore(event);
+					setDrag((current) => current && current.beforeId !== beforeId ? { ...current, beforeId } : current);
+				}}
+				onDragLeave={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget as Node | null)) {
+						setDrag((current) => current && current.beforeId !== undefined ? { id: current.id, button: current.button } : current);
+					}
+				}}
+				onDrop={(event) => {
+					if (!drag || !event.dataTransfer.types.includes(SESSION_TAB_DRAG)) return;
+					event.preventDefault();
+					if (event.dataTransfer.getData(SESSION_TAB_DRAG) === drag.id) moveTab(drag.id, dropBefore(event), drag.button);
+					setDrag(null);
+				}}
+			>
+				{open.map((session, index) => {
 					const selected = session.id === currentId;
 					const title = titleOf(session);
 					const activity = session.busy ? t.sessions.busy : t.sessions.idle;
 				const editing = rename?.id === session.id ? rename : null;
 					const startRename = (tab: HTMLButtonElement) => setRename({ id: session.id, title, tab });
+					const marker = dropMarker === session.id ? " drop-before" : dropMarker === null && index === open.length - 1 ? " drop-after" : "";
 					return (
 						<div
 							key={session.id}
-						className={`session-tab${selected ? " active" : ""}${editing ? " renaming" : ""}`}
+							className={`session-tab${selected ? " active" : ""}${editing ? " renaming" : ""}${index === draggedIndex ? " dragging" : ""}${marker}`}
+							data-session-tab={session.id}
 						>
 							<button
 								type="button"
 								role="tab"
 								aria-selected={selected}
 								aria-description={activity}
-							aria-keyshortcuts="F2"
+								aria-keyshortcuts="F2 Alt+Shift+ArrowLeft Alt+Shift+ArrowRight"
 								aria-disabled={busy}
 								data-tooltip={`${title} · ${activity}`}
+								draggable={!busy && open.length > 1}
+								onDragStart={(event) => {
+									event.dataTransfer.effectAllowed = "move";
+									event.dataTransfer.setData(SESSION_TAB_DRAG, session.id);
+									setDrag({ id: session.id, button: event.currentTarget });
+								}}
+								onDragEnd={() => setDrag(null)}
 								onClick={() => {
 									// A selection in progress blocks another switch while the tab can still receive a double-click.
 									if (!busy) onSelect(session.id);
 							}}
 								onDoubleClick={(event) => startRename(event.currentTarget)}
 							onKeyDown={(event) => {
-								if (event.key !== "F2" || isImeComposing(event.nativeEvent)) return;
-								event.preventDefault();
-									startRename(event.currentTarget);
+									if (isImeComposing(event.nativeEvent)) return;
+									if (event.key === "F2") {
+										event.preventDefault();
+										startRename(event.currentTarget);
+										return;
+									}
+									if (busy || !event.altKey || !event.shiftKey || event.ctrlKey || event.metaKey) return;
+									if (event.key !== "ArrowLeft" && event.key !== "ArrowRight") return;
+									event.preventDefault();
+									if (event.key === "ArrowLeft" && index > 0) moveTab(session.id, open[index - 1]!.id, event.currentTarget);
+									if (event.key === "ArrowRight" && index < open.length - 1) moveTab(session.id, open[index + 2]?.id ?? null, event.currentTarget);
 							}}
 							>
 								{session.busy ? <span className="session-tab-status session-tab-spinner" aria-hidden="true" /> : (
@@ -129,6 +219,7 @@ export function SessionBar({
 					);
 				})}
 			</div>
+			<span className="session-tab-order-status" role="status" ref={statusRef} />
 			<button
 				type="button"
 				className="session-tab-new"

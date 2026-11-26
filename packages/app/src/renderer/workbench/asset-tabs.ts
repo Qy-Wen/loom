@@ -1,3 +1,5 @@
+import { moveTabBefore } from "../components/tab-order.ts";
+
 /** Tabs for the library workbench. A file appears at most once. */
 export interface AssetTabs {
 	/** Open asset ids, left to right. */
@@ -64,13 +66,8 @@ export function closeTab(tabs: AssetTabs, assetId: string): AssetTabs {
  * Which tab is active does not change, and an unknown id or a no-op move returns the same object.
  */
 export function moveTab(tabs: AssetTabs, assetId: string, beforeId: string | null): AssetTabs {
-	const from = tabs.ids.indexOf(assetId);
-	if (from < 0 || assetId === beforeId) return tabs;
-	if (beforeId !== null && !tabs.ids.includes(beforeId)) return tabs;
-	const rest = tabs.ids.filter((id) => id !== assetId);
-	const at = beforeId === null ? rest.length : rest.indexOf(beforeId);
-	if (at === from) return tabs;
-	return { ...tabs, ids: [...rest.slice(0, at), assetId, ...rest.slice(at)] };
+	const ids = moveTabBefore(tabs.ids, assetId, beforeId);
+	return ids === tabs.ids ? tabs : { ...tabs, ids };
 }
 
 /**

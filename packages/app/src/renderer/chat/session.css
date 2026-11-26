@@ -74,6 +74,45 @@
 	white-space: nowrap;
 }
 
+.session-tab.dragging {
+	opacity: 0.45;
+}
+
+.session-tab:is(.drop-before, .drop-after)::before {
+	position: absolute;
+	inset-block: 6px;
+	z-index: var(--lm-z-base);
+	width: 2px;
+	border-radius: var(--lm-radius-line);
+	background: var(--lm-accent);
+	content: "";
+	pointer-events: none;
+}
+
+.session-tab.drop-before::before {
+	left: 0;
+}
+
+.session-tab.drop-after::before {
+	right: 0;
+}
+
+@media (forced-colors: active) {
+	.session-tab:is(.drop-before, .drop-after)::before {
+		forced-color-adjust: none;
+		background: Highlight;
+	}
+}
+
+.session-tab-order-status {
+	position: absolute;
+	width: 1px;
+	height: 1px;
+	overflow: hidden;
+	clip-path: inset(50%);
+	white-space: nowrap;
+}
+
 .session-tab.renaming > button {
 	visibility: hidden;
 }
