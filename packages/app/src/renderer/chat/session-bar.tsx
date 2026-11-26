@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type { LoomSessionSummary as SessionSummary } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
+import { SessionHistory } from "./session-history.tsx";
 
 interface SessionBarProps {
 	sessions: SessionSummary[];
@@ -41,23 +42,12 @@ export function SessionBar({
 	const archived = sessions.filter((session) => session.status === "archived");
 	// Closing the only session, while it is still empty, would just swap it for another empty one.
 	const closable = !(open.length === 1 && open[0]!.id === currentId && currentEmpty);
-	const [menuOpen, setMenuOpen] = useState(false);
-	const menuRef = useRef<HTMLDivElement>(null);
 	const tabsRef = useRef<HTMLDivElement>(null);
 
 	// With many tabs the strip scrolls, so keep the current one in view.
 	useEffect(() => {
 		tabsRef.current?.querySelector(".session-tab.active")?.scrollIntoView({ block: "nearest", inline: "nearest" });
 	}, [currentId, open.length]);
-
-	useEffect(() => {
-		if (!menuOpen) return;
-		function onPointerDown(event: PointerEvent): void {
-			if (!menuRef.current?.contains(event.target as Node)) setMenuOpen(false);
-		}
-		document.addEventListener("pointerdown", onPointerDown);
-		return () => document.removeEventListener("pointerdown", onPointerDown);
-	}, [menuOpen]);
 
 	return (
 		<div className="session-bar" onPointerEnter={onRefresh}>
@@ -127,55 +117,7 @@ export function SessionBar({
 			>
 				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true"><circle cx="10.8" cy="10.8" r="5.8" /><path d="m15 15 4 4" /></svg>
 			</button>}
-			{archived.length > 0 && (
-				<div className="session-archived" ref={menuRef}>
-					<button
-						type="button"
-						className={menuOpen ? "active" : ""}
-						disabled={busy}
-						aria-expanded={menuOpen}
-						aria-haspopup="menu"
-						aria-label={t.sessions.archived}
-						data-tooltip={t.sessions.archived}
-						onClick={() => setMenuOpen((openMenu) => !openMenu)}
-					>
-						<svg className="icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-							<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5M12 7v5l3 2" />
-						</svg>
-					</button>
-					{menuOpen && (
-						<div className="session-archived-menu" role="menu">
-							{archived.map((session) => (
-								<div key={session.id} className="session-archived-row" role="none">
-									<button
-										type="button"
-										role="menuitem"
-										disabled={busy}
-										data-tooltip={titleOf(session)}
-										onClick={() => {
-											setMenuOpen(false);
-											onUnarchive(session.id);
-										}}
-									>
-										{titleOf(session)}
-									</button>
-									<button
-										type="button"
-										className="session-tab-close"
-										disabled={busy}
-										aria-label={t.sessions.delete(titleOf(session))}
-										onClick={() => {
-											onDelete(session.id);
-										}}
-									>
-										×
-									</button>
-								</div>
-							))}
-						</div>
-					)}
-				</div>
-			)}
+			{archived.length > 0 && <SessionHistory sessions={archived} busy={busy} titleOf={titleOf} onOpen={onUnarchive} onDelete={onDelete} />}
 		</div>
 	);
 }

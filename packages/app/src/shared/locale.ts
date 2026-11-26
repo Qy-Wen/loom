@@ -505,6 +505,8 @@ export const messages = defineLocale(
 			/** Stored default title for a session nobody has named; shown translated, never rewritten. */
 			untitled: "New session",
 			archived: "History",
+			searchHistory: "Search history",
+			noMatchingHistory: "No matching sessions",
 			delete: (title: string) => `Delete ${title}`,
 			deleteTitle: "Delete session?",
 			deleteConfirm: (name: string) => `“${name}” and its messages will be permanently deleted. This cannot be undone.`,
@@ -1352,6 +1354,8 @@ export const messages = defineLocale(
 			new: "新会话",
 			untitled: "新会话",
 			archived: "历史",
+			searchHistory: "搜索历史会话",
+			noMatchingHistory: "没有匹配的会话",
 			delete: (title) => `删除 ${title}`,
 			deleteTitle: "删除会话？",
 			deleteConfirm: (name) => `“${name}”及其消息将被永久删除，此操作无法撤销。`,
