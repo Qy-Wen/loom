@@ -38,11 +38,15 @@ export function SessionTranscript({ messages, isRunning, libraryRoot, findReques
 	const markdown = useAssistantAssetMarkdown();
 	const turnEnds = turnEndReplyIds(stored);
 	const find = useSessionFind(messages, findRequest, onCloseFind);
-	const toolStarts = new Map<string, number>();
+	const toolProgress = new Map<string, { startedAt?: number; output?: string }>();
 	if (isRunning) for (const message of messages) {
 		if (message.role !== "activity" || message.activityType !== "loom.tool_progress" || message.content.hidden === true) continue;
-		const { toolCallId, startedAt } = message.content;
-		if (typeof toolCallId === "string" && typeof startedAt === "number" && Number.isFinite(startedAt)) toolStarts.set(toolCallId, startedAt);
+		const { toolCallId, startedAt, text } = message.content;
+		if (typeof toolCallId !== "string") continue;
+		const progress: { startedAt?: number; output?: string } = {};
+		if (typeof startedAt === "number" && Number.isFinite(startedAt)) progress.startedAt = startedAt;
+		if (typeof text === "string" && text.length > 0) progress.output = text;
+		if (progress.startedAt !== undefined || progress.output !== undefined) toolProgress.set(toolCallId, progress);
 	}
 
 	return <ChatView
@@ -96,9 +100,12 @@ export function SessionTranscript({ messages, isRunning, libraryRoot, findReques
 					</button>,
 				};
 			},
-			tool: ({ call, result }) => <ToolCallCard name={call.function.name} parameters={call.function.arguments} result={result}
-				toolCallId={call.id} startedAt={toolStarts.get(call.id)} libraryRoot={libraryRoot} allows={allows} />,
-			activity: (message) => <RunActivity message={message} />,
+			tool: ({ call, result }) => {
+				const progress = toolProgress.get(call.id);
+				return <ToolCallCard name={call.function.name} parameters={call.function.arguments} result={result}
+					toolCallId={call.id} startedAt={progress?.startedAt} liveOutput={progress?.output} libraryRoot={libraryRoot} allows={allows} />;
+			},
+			activity: (message) => message.activityType === "loom.tool_progress" ? null : <RunActivity message={message} />,
 		}}
 	/>;
 }

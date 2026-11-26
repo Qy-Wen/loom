@@ -17,6 +17,7 @@ export function ToolCallCard({
 	result,
 	toolCallId,
 	startedAt,
+	liveOutput,
 	libraryRoot,
 	allows,
 }: {
@@ -25,6 +26,7 @@ export function ToolCallCard({
 	result?: ToolMessage;
 	toolCallId?: string;
 	startedAt?: number;
+	liveOutput?: string;
 	libraryRoot: string | null;
 	allows: readonly CommandAllow[];
 }) {
@@ -48,11 +50,12 @@ export function ToolCallCard({
 	return <ToolCard
 		name={name}
 		state={failed ? "failed" : done ? "done" : waiting ? "waiting" : "running"}
+		defaultOpen={waiting}
 		status={failed ? t.tool.failed : done ? t.tool.done : waiting ? t.tool.waiting : t.chat.working}
 		startedAt={done ? undefined : startedAt}
 		durationMs={typeof duration === "number" ? duration : undefined}
 		parameters={parameters}
-		result={done && !refs ? displayResult : undefined}
+		result={done ? (!refs ? displayResult : undefined) : liveOutput}
 		labels={{ arguments: t.tool.arguments, result: t.tool.result, duration: t.tool.duration, elapsed: t.tool.elapsed,
 			copyArguments: t.tool.copyArguments, copyResult: t.tool.copyResult, copied: t.common.copied, copyFailed: t.common.copyFailed,
 			emptyResult: done ? (failed ? t.tool.emptyError : t.tool.emptyResult) : undefined }}

@@ -12,12 +12,6 @@ type RetryContent = {
 	errorMessage?: string;
 };
 
-type ToolProgressContent = {
-	name: string;
-	text: string;
-	hidden: boolean;
-};
-
 type ToolGateContent = {
 	toolCallId: string;
 	pending: boolean;
@@ -48,16 +42,10 @@ function ToolGateActivity({ content }: { content: ToolGateContent }): null {
 	return null;
 }
 
-function ToolProgressActivity({ content }: { content: ToolProgressContent }): React.JSX.Element | null {
-	if (content.hidden || !content.text) return null;
-	return <ChatActivity label={content.name} output={content.text} />;
-}
-
-/** Live retry and tool-output rows disappear when the step finishes. */
+/** Live retry rows disappear when the step finishes. */
 export function RunActivity({ message }: { message: ActivityMessage }) {
 	switch (message.activityType) {
 		case "loom.retry": return <RetryActivity content={message.content as RetryContent} />;
-		case "loom.tool_progress": return <ToolProgressActivity content={message.content as ToolProgressContent} />;
 		case "loom.tool_gate": return <ToolGateActivity content={message.content as ToolGateContent} />;
 		default: return null;
 	}

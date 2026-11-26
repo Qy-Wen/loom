@@ -87,8 +87,8 @@ test("tool elapsed time starts after approval and continues after reload", async
 			if (parsed.messages.some((message) => message.role === "tool")) { reply(response); return; }
 			const powershell = parsed.tools?.some((tool) => tool.function.name === "powershell");
 			const command = powershell
-				? `while (!(Test-Path '${release}')) { Start-Sleep -Milliseconds 100 }; Write-Output ready`
-				: `while [ ! -f '${release}' ]; do sleep 0.1; done; printf ready`;
+				? `Write-Output 'working...'; while (!(Test-Path '${release}')) { Start-Sleep -Milliseconds 100 }; Write-Output ready`
+				: `printf 'working...\\n'; while [ ! -f '${release}' ]; do sleep 0.1; done; printf ready`;
 			reply(response, powershell ? "powershell" : "bash", { command, timeout: 30 });
 		});
 	});
@@ -104,16 +104,22 @@ test("tool elapsed time starts after approval and continues after reload", async
 		const time = card.locator("time");
 		const approve = card.getByRole("button", { name: "Approve", exact: true });
 		await expect(approve).toBeVisible();
+		await expect(card.locator("details")).toHaveAttribute("open", "");
 		await expect(time).toHaveCount(0);
 		await approve.click();
+		await expect(card.locator("details")).not.toHaveAttribute("open", "");
 		await expect(time).toHaveText(/^\d+s$/);
 		await expect(time).toHaveAttribute("datetime", /^PT\d+S$/);
 		await expect(time).toHaveAttribute("title", "Elapsed");
 		const seconds = async () => Number.parseInt(await time.textContent() ?? "", 10);
 		const initial = await seconds();
 		await expect.poll(seconds).toBeGreaterThan(initial);
+		await expect(loomPage.locator(".agui-chat-activity-output")).toHaveCount(0);
+		await card.locator("summary").click();
+		await expect(card.locator(".agui-tool-result")).toContainText("working...");
 		const beforeReload = await seconds();
 		await loomPage.reload();
+		await expect(card.locator("details")).not.toHaveAttribute("open", "");
 		await expect(time).toHaveAttribute("title", "Elapsed");
 		await expect(approve).toHaveCount(0);
 		await expect.poll(seconds).toBeGreaterThanOrEqual(beforeReload);
@@ -121,11 +127,14 @@ test("tool elapsed time starts after approval and continues after reload", async
 		await expect(time).toHaveText(/^\d+s$/);
 		await writeFile(join(root, release), "release");
 		await expect(card).toHaveAttribute("data-state", "done");
+		await expect(loomPage.locator(".agui-chat-activity-output")).toHaveCount(0);
 		await expect(time).toHaveAttribute("title", "Duration");
 		await expect(time).toHaveText(/^\d+\.\ds$/);
 		const finished = await time.textContent();
 		await expect(loomPage.getByTestId("chat-assistant-message").getByText("Generated and saved the result.", { exact: true })).toBeVisible();
 		await expect(time).toHaveText(finished!);
+		await card.locator("summary").click();
+		await expect(card.locator(".agui-tool-result")).toContainText("ready");
 	} finally {
 		await writeFile(join(root, release), "release").catch(() => undefined);
 		server.closeAllConnections();
