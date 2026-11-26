@@ -5,7 +5,7 @@ import { useLocale } from "../locale.tsx";
 import { ComposerActionsContext } from "./chat-context.ts";
 import { paintInlineEditor, placeCaretAtStart, readInlineEditor, type ChipLabels } from "./inline-asset-text.tsx";
 
-export type SlashCommand = "/compact" | "/new";
+export type SlashCommand = "/compact";
 
 export function ComposerTextArea({ value, onChange, commands, onCommand }: {
 	value: string;

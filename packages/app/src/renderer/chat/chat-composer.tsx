@@ -30,11 +30,10 @@ function reconcileQueued(items: QueuedFollowUp[], messages: readonly Message[]):
 }
 
 /** Enter while a run is active queues a follow-up. Empty input keeps Stop; text or an asset restores Send. */
-export function FollowUpInput({ onSubmitMessage, isRunning, onStop, onNewSession }: {
+export function FollowUpInput({ onSubmitMessage, isRunning, onStop }: {
 	onSubmitMessage: (text: string) => Promise<unknown>;
 	isRunning: boolean;
 	onStop: () => void;
-	onNewSession: (() => Promise<void>) | undefined;
 }) {
 	const [value, onChange] = useState("");
 	const { t } = useLocale();
@@ -196,16 +195,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop, onNewSession
 		}
 		const command = assetPayload.length === 0 ? raw.trim() : "";
 		if (shortcut && (!command.startsWith("/") || !shortcut.startsWith(raw.trimStart()))) return;
-		const action = shortcut ?? command;
-		if (action === "/") return;
-		if (action === "/new") {
-			if (!onNewSession) return;
-			if (shortcut) editorRef.current?.focus();
-			submitting.current = true;
-			void onNewSession().finally(() => { submitting.current = false; });
-			return;
-		}
-		if (action === "/compact") {
+		if ((shortcut ?? command) === "/compact") {
 			if (pendingCompactions.current.has(threadId)) return;
 			pendingCompactions.current.add(threadId);
 			if (shortcut) editorRef.current?.focus();
@@ -224,6 +214,7 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop, onNewSession
 			})();
 			return;
 		}
+		if (command === "/") return;
 		setCompactionFeedback(null);
 		submitting.current = true;
 		void (async () => {
@@ -459,7 +450,6 @@ export function FollowUpInput({ onSubmitMessage, isRunning, onStop, onNewSession
 					onChange={onChange}
 					commands={assets.length ? [] : [
 						{ command: "/compact", label: t.chat.compaction.action, disabled: !threadReady || compacting },
-						{ command: "/new", label: t.sessions.new, disabled: !threadReady || !onNewSession },
 					]}
 					onCommand={deliver}
 				/>}

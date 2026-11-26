@@ -181,7 +181,7 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 	} finally { server.closeAllConnections(); await new Promise<void>((resolve) => server.close(() => resolve())); }
 });
 
-test("chat slash commands open a fresh tab and compact only model context", async ({ loomPage, electronApp }) => {
+test("chat offers only /compact and keeps the full transcript", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated user data and library required");
 	const turns: unknown[] = [];
 	let summaries = 0;
@@ -203,7 +203,8 @@ test("chat slash commands open a fresh tab and compact only model context", asyn
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
 	try {
 		await saveChatEndpoint(loomPage, `http://127.0.0.1:${(server.address() as AddressInfo).port}/v1`);
-		await expect(loomPage.getByRole("button", { name: "New session", exact: true })).toBeEnabled();
+		const newSession = loomPage.getByRole("button", { name: "New session", exact: true });
+		await expect(newSession).toBeEnabled();
 		const list = () => loomPage.evaluate(() => window.loom.listSessions());
 		const before = await list();
 		const editor = loomPage.getByTestId("chat-composer-editor");
@@ -212,33 +213,25 @@ test("chat slash commands open a fresh tab and compact only model context", asyn
 			await expect(loomPage.getByTestId("chat-send-button")).toBeEnabled();
 			await editor.press("Enter");
 		};
-		await submit("/new");
+		await newSession.click();
 		await expect.poll(async () => (await list()).length).toBe(before.length + 1);
+		await expect(newSession).toBeEnabled();
 		const session = (await list()).find((row) => !before.some((item) => item.id === row.id))!;
 		const record = () => loomPage.evaluate((id) => window.loom.getSession(id), session.id);
 		await expect(editor).toBeEmpty();
 		await editor.fill("/");
 		const commands = loomPage.getByRole("listbox", { name: "Chat commands" });
-		const newCommand = commands.getByRole("option", { name: "/new New session" });
 		const compactCommand = commands.getByRole("option", { name: "/compact Compact context" });
-		await expect(newCommand).toBeVisible();
-		const menuWidth = (await commands.boundingBox())!.width;
-		const upper = (await compactCommand.boundingBox())!;
-		const lower = (await newCommand.boundingBox())!;
-		expect(lower.x).toBe(upper.x);
-		expect(lower.y).toBeGreaterThanOrEqual(upper.y + upper.height);
-		expect(lower.y + lower.height).toBeLessThan((await editor.boundingBox())!.y);
-		await editor.press("ArrowDown");
-		await expect(newCommand).toHaveAttribute("aria-selected", "true");
-		await editor.press("ArrowUp");
+		await expect(commands.getByRole("option")).toHaveCount(1);
+		const option = (await compactCommand.boundingBox())!;
+		expect(option.y + option.height).toBeLessThan((await editor.boundingBox())!.y);
 		await expect(compactCommand).toHaveAttribute("aria-selected", "true");
 		await expect(editor).toBeFocused();
 		await editor.press("Escape");
 		await expect(commands).toBeHidden();
 		await expect(editor).toHaveText("/");
 		await editor.fill("/n");
-		await expect(commands.getByRole("option")).toHaveCount(1);
-		expect((await commands.boundingBox())!.width).toBeLessThan(menuWidth);
+		await expect(commands).toBeHidden();
 		await editor.fill("/c");
 		await expect(commands.getByRole("option")).toHaveCount(1);
 		await expect(compactCommand).toHaveAttribute("aria-selected", "true");
@@ -250,10 +243,11 @@ test("chat slash commands open a fresh tab and compact only model context", asyn
 
 		await submit("First question");
 		await expect.poll(async () => (await record()).messages.length).toBe(2);
-		await submit("/compact is a command");
+		await submit("/new");
 		await expect.poll(async () => (await record()).messages.length).toBe(4);
 		expect(summaries).toBe(0);
-		expect(turns.map((turn) => JSON.stringify(turn)).at(-1)).toContain("/compact is a command");
+		expect(JSON.stringify(turns.at(-1))).toContain("/new");
+		expect(await list()).toHaveLength(before.length + 1);
 		const original = await record();
 		await submit("/compact");
 		await expect(loomPage.getByText("Context compacted.")).toBeVisible();
@@ -262,13 +256,6 @@ test("chat slash commands open a fresh tab and compact only model context", asyn
 		expect(turns).toHaveLength(2);
 		expect(compacted.messages).toEqual(original.messages);
 		expect(compacted.context!.tokens).toBeLessThan(original.context!.tokens!);
-
-		await editor.fill("/");
-		await newCommand.click();
-		await expect.poll(async () => (await list()).length).toBe(before.length + 2);
-		await expect(loomPage.getByRole("tab", { name: "New session", selected: true, exact: true })).toBeVisible();
-		await expect(editor).toBeFocused();
-		await loomPage.getByRole("tab", { name: original.title, exact: true }).click();
 		await expect(loomPage.getByTestId("chat-message-list").getByText("First question", { exact: true })).toBeVisible();
 	} finally {
 		server.closeAllConnections();

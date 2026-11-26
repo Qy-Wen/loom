@@ -94,7 +94,6 @@ export const AgentPanel = memo(function AgentPanel({
 									onComposerAttachApplied={onComposerAttachApplied}
 									onSessionRecord={activateRecord}
 									onHistoryChanged={() => { void refreshCurrent(); }}
-									onNewSession={sessionBusy ? undefined : createSession}
 									onOpenSettings={onOpenSettings}
 									onForked={(record) => {
 										activateRecord(record);
