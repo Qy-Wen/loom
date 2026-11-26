@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LoomSessionRecord, LoomSessionSummary } from "@loom/agent";
 import { useLocale } from "../locale.tsx";
 import { useConfirmation } from "../components/confirm-dialog.tsx";
+import { readWorkspacePreference, writeWorkspacePreference } from "../library/workspace-storage.ts";
 
 /** Own session selection and committed history. Live output never writes into this state. */
 export function useSessions(libraryRoot: string | null) {
@@ -26,6 +27,7 @@ export function useSessions(libraryRoot: string | null) {
 		recordLibrary.current = libraryRoot;
 		current.current = next;
 		setRecord(next);
+		if (libraryRoot) writeWorkspacePreference(libraryRoot, "activeSession", next.id);
 	}, [libraryRoot]);
 
 	const refreshSessions = useCallback(async () => {
@@ -78,8 +80,10 @@ export function useSessions(libraryRoot: string | null) {
 			try {
 				const list = await window.loom.listSessions();
 				if (!active || version !== generation.current) return;
-				const first = list.find((session) => session.status === "open");
-				const next = first ? await window.loom.openSession(first.id) : await window.loom.createSession();
+				const open = list.filter((session) => session.status === "open");
+				const savedId = readWorkspacePreference(libraryRoot, "activeSession");
+				const selected = open.find((session) => session.id === savedId) ?? open[0];
+				const next = selected ? await window.loom.openSession(selected.id) : await window.loom.createSession();
 				if (!active || version !== generation.current) return;
 				activateRecord(next);
 				await refreshSessions();

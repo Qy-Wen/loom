@@ -79,7 +79,8 @@ import { useLibraryDisplay, type LibraryDisplay } from "./library/use-library-di
 import { TableView } from "./workbench/table/table-view.tsx";
 import { TabStrip } from "./workbench/tab-strip.tsx";
 import { useAssetHistory } from "./workbench/asset-history.ts";
-import { activateTab, closeTab, emptyAssetTabs, insertTabs, moveTab, openInNewTab, pruneTabs, setTabPinned, showPreviewTab, type AssetTabs, type TabOpenMode } from "./workbench/asset-tabs.ts";
+import { activateTab, closeTab, insertTabs, moveTab, openInNewTab, setTabPinned, showPreviewTab, type TabOpenMode } from "./workbench/asset-tabs.ts";
+import { useWorkbenchState } from "./workbench/use-workbench-state.ts";
 
 const SettingsPage = lazy(() => import("./settings/settings-page.tsx").then(({ SettingsPage }) => ({ default: SettingsPage })));
 const GraphView = lazy(() => import("./workbench/graph/graph-view.tsx").then(({ GraphView }) => ({ default: GraphView })));
@@ -88,7 +89,6 @@ const CanvasEditor = lazy(() => import("./workbench/canvas/canvas-editor.tsx").t
 const EMPTY_LIBRARY: LibrarySnapshot = { rootPath: null, folders: [], assets: [], favoriteAssetIds: [], tags: [], assetTags: [] };
 const NO_KEYS: ReadonlySet<string> = new Set();
 const EMPTY_RELATIONS: AssetRelationsResult = { links: [] };
-type WorkbenchView = "library" | "table" | "graph";
 type FolderRename = { relativePath: string; view: "tree" | "browser" };
 
 function joinWindowCorners(
@@ -171,15 +171,14 @@ export function App(): React.JSX.Element {
 	const libraryDisplay = useLibraryDisplay();
 	const display: LibraryDisplay = { ...libraryDisplay, setFileDisplay: changeFileDisplay };
 	const iconMode = libraryDisplay.fileDisplay === "icons";
-	const [workbenchView, setWorkbenchView] = useState<WorkbenchView>("library");
+	const assetIds = useMemo(() => new Set(library.assets.map((asset) => asset.assetId)), [library.assets]);
+	const { workbenchView, setWorkbenchView, tabs, setTabs } = useWorkbenchState(library.rootPath, assetIds);
 	const [location, setLocation] = useState<BrowseLocation>(ROOT_LOCATION);
 	const [revealAssetRequest, setRevealAssetRequest] = useState(0);
 	// The file open in the icon-mode preview overlay. List mode has tabs instead.
 	const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 	const selectedAssetId = picked.focus?.startsWith("asset:") ? picked.focus.slice("asset:".length) : null;
 	const selectedFolder = picked.focus?.startsWith("folder:") ? picked.focus.slice("folder:".length) : null;
-	// The list workbench shows the active tab. Right-click, select all, and tree drops can move focus independently.
-	const [tabs, setTabs] = useState<AssetTabs>(emptyAssetTabs);
 	const [canvasPreviewId, setCanvasPreviewId] = useState<string | null>(null);
 	const canvasPlaybackPositions = useMemo(() => new Map<string, number>(), [library.rootPath]);
 	const canvasIds = useMemo(() => new Set(library.assets.filter((asset) => isCanvasFile(asset.filename)).map((asset) => asset.assetId)), [library.assets]);
@@ -188,6 +187,7 @@ export function App(): React.JSX.Element {
 		[iconMode, library.assets, tabs.active, canvasIds],
 	);
 	const canvasPreview = useMemo(() => library.assets.find((asset) => asset.assetId === canvasPreviewId), [library.assets, canvasPreviewId]);
+	// The list workbench shows the active tab. Right-click, select all, and tree drops can move focus independently.
 	const libraryAssetId = iconMode ? previewAssetId : tabs.active;
 	// Table and Graph details follow the selection independently of the open file.
 	const viewedAssetId = workbenchView === "library" ? libraryAssetId ?? (iconMode ? selectedAssetId : null) : selectedAssetId;
@@ -207,7 +207,6 @@ export function App(): React.JSX.Element {
 	}, [cutItems, refreshCutItems]);
 	const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(() => new Set());
 	const [composerAttach, setComposerAttach] = useState<AssetRefAttachment | null>(null);
-	const assetIds = useMemo(() => new Set(library.assets.map((asset) => asset.assetId)), [library.assets]);
 	const visibleAssetId = workbenchView === "library" && libraryAssetId && assetIds.has(libraryAssetId) ? libraryAssetId : null;
 	const navigation = useAssetHistory(library.rootPath, visibleAssetId, assetIds);
 	const platform = uiPlatform(navigator.userAgent);
@@ -303,9 +302,7 @@ export function App(): React.JSX.Element {
 		() => library.assets.find((asset) => asset.assetId === viewedAssetId) ?? null,
 		[library.assets, viewedAssetId],
 	);
-	// A file that left the library (deleted, trashed, folder removed, library replaced) closes its tab.
 	useLayoutEffect(() => {
-		setTabs((current) => pruneTabs(current, (assetId) => assetIds.has(assetId)));
 		setPreviewAssetId((current) => current && assetIds.has(current) ? current : null);
 	}, [assetIds]);
 	// A folder or tag that is gone leaves the browser on the nearest place that still exists.
@@ -1494,7 +1491,6 @@ export function App(): React.JSX.Element {
 				const propertySnapshot = await window.loom.getPropertySnapshot();
 				setLibrary(snapshot);
 				clearLibrarySelection();
-				setTabs(emptyAssetTabs);
 				setRenamingAssetId(null);
 				setRenamingFolder(null);
 				setCutItems(null);

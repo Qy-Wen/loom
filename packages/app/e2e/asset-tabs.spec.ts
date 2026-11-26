@@ -438,7 +438,7 @@ test("asset tabs can be opened, moved and closed with their files", async ({ loo
 		await expect(names).toHaveText(["beta.png", "notes.md"]);
 		await expect(strip.getByRole("tab", { selected: true })).toHaveAccessibleName("beta.png");
 
-		// Switching library forgets every tab.
+		// Tabs from this library do not appear in the other library.
 		await file("beta.png").click();
 		await expect(strip.getByRole("tab")).toHaveCount(2);
 		await open(previousRoot);
