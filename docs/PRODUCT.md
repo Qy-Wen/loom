@@ -99,7 +99,7 @@ Everything Loom writes to the system temp directory lives under one root, never 
 Only `core/src/temp.ts` builds these paths, and none is hard-coded to `/tmp` (the process sandbox may write only the library and `os.tmpdir()`). At startup the app deletes anything older than 24 hours. Grading previews use a lossless decoded-frame cache in memory (up to four frames and 96 MiB of pixel data), invalidated when a source changes or the library closes. FFmpeg pipes JPEG bytes directly to the app; preview IPC uses binary data.
 
 - The user owns asset names, locations, and nesting.
-- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. `.loom/` is user data, not a cache, except `.loom/thumbnails/`, which can be deleted at any time. Tags, favorites, properties, relations, chat sessions, memory, and skills exist only there, with no backup or export, and each asset's id is stored there too. If `.loom/` is lost or damaged, search indexes and write-ups can be rebuilt, but the rest is gone; asset files are unaffected. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
+- **Portable workspace:** copying the whole library directory, including `.loom/`, to another computer and choosing `Open Asset Library` restores the workspace. `.loom/` is user data, not a cache, except `.loom/thumbnails/`, which can be deleted at any time. Tags, favorites, properties, relations, chat sessions, memory, and library skills exist only there, with no backup or export, and each asset's id is stored there too. App-wide skills live in `~/.loom/skills/` and do not travel with the library. If `.loom/` is lost or damaged, search indexes and write-ups can be rebuilt, but the rest is gone; asset files are unaffected. Chat, embedding, rerank, and VLM endpoints live in app Settings, not in `.loom/`; see [SETTINGS.md](./SETTINGS.md).
 
 ### 3.2 SQLite — Metadata Store and Hybrid Search
 
@@ -361,7 +361,7 @@ Local Core
 
 ## 10. Technical areas in place
 
-- **Skills:** load Agent Skills (`SKILL.md`) from `<library>/.loom/agents/skills/` into the creative Agent. Do not vendor pi's coding-agent shell. See [AGENT](./agent/AGENT.md).
+- **Skills:** load Agent Skills (`SKILL.md`) from `<library>/.loom/agents/skills/` and from `~/.loom/skills/` into the creative Agent. A library skill with the same name overrides the home skill. Do not vendor pi's coding-agent shell. See [AGENT](./agent/AGENT.md).
 - **Multi-Agent:** chat Agent plus retrieve and create specialists. Independent calls in one turn run together. See [AGENT](./agent/AGENT.md).
 - **Sandboxing:** bash and FFmpeg run inside it. Generation stays MCP and is not wrapped in this sandbox. See [PERMISSION](./agent/PERMISSION.md).
 - **MCP settings UI:** Settings → MCP tab.

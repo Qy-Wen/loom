@@ -8,7 +8,7 @@
 
 ## 1. 权限
 
-对话底部是 **Basic**、**Standard**（默认）、**Full**。存在应用用户数据 `agent-permission.json`，不进库。整个应用一份。
+对话底部是 **Basic**、**Standard**（默认）、**Full**。存在 `~/.loom/agent-permission.json`，不进库。整个应用一份。
 
 | 档位 | 先等 Approve / Skip |
 |---|---|
@@ -30,7 +30,7 @@ Stop 取消这次等待。切到 Full 时再确认一次：进程沙箱这次不
 
 ## 2. 沙箱
 
-设置 → Agent 里有进程沙箱开关，默认开，存在应用用户数据 `agent-sandbox.json`。下一条命令就用这个值。
+设置 → Agent 里有进程沙箱开关，默认开，存在 `~/.loom/agent-sandbox.json`。下一条命令就用这个值。
 
 开着时，`bash`、`ffmpeg`、`ffprobe` 跑在沙箱里：
 

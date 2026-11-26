@@ -24,6 +24,8 @@ export type ChatServiceOptions = LoomAgentOptions & {
 		takeImages?: (id: string) => Promise<ComposerImageInput[]>;
 		takeAssets?: (id: string) => Promise<ComposerReference[]>;
 	};
+	/** Home skills directory, normally ~/.loom/skills. Applies to every library opened by this service. */
+	userSkillsDir?: string;
 };
 export type PreparedChatTurn = {
 	readonly existingRequest: SubmissionRecord | undefined;
@@ -217,7 +219,7 @@ export class ChatService {
 	requireRuntime(): LibraryRuntime { if (!this.runtime) throw new Error("Open a library first."); return this.runtime; }
 	private async readLibrarySkills(runtime: LibraryRuntime) {
 		const root = runtime.libraryPath;
-		const { skills } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, context);
+		const { skills } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, context, this.#options.userSkillsDir);
 		if (this.runtime !== runtime) throw new Error("The open library changed.");
 		return skills.filter(({ name }) => isSkillCommand(name));
 	}
@@ -235,7 +237,7 @@ export class ChatService {
 		const instructions = [...names].flatMap((name) => {
 			const skill = skills.get(name);
 			if (!skill) return [];
-			return [`Use the library skill "${name}" for this request. First read ${JSON.stringify(skill.filePath.replaceAll("\\", "/"))} and resolve supporting files relative to the skill's directory.`];
+			return [`Use the skill "${name}" for this request. First read ${JSON.stringify(skill.filePath.replaceAll("\\", "/"))} and resolve supporting files relative to the skill's directory.`];
 		});
 		return instructions.length ? `${instructions.join("\n")}\n\n` : "";
 	}
@@ -569,7 +571,7 @@ export class ChatService {
 		} catch { /* A closing runtime cannot publish usage. */ }
 	}
 	private assemble(root: string, permission: Extension, sharedExtensions: readonly Extension[] = [createToolResultStorage(root), ...(this.#trace ? [this.#trace.extension] : [])]) {
-		return createChatExtensions(root, { systemPrompt: this.#options.systemPrompt, tools: this.#options.tools, permission, sharedExtensions });
+		return createChatExtensions(root, { systemPrompt: this.#options.systemPrompt, tools: this.#options.tools, userSkillsDir: this.#options.userSkillsDir, permission, sharedExtensions });
 	}
 
 	subscribeSessions(listener: (rows: LoomSessionSummary[]) => void) { this.#listeners.add(listener); return () => this.#listeners.delete(listener); }

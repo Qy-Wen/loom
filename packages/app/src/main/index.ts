@@ -6,6 +6,7 @@ import { basename, extname, isAbsolute, join, relative, resolve, sep } from "nod
 import { pathToFileURL } from "node:url";
 import { Readable } from "node:stream";
 import { ensureWindowsSandboxInstalled, setProcessSandboxEnabled, setProcessSandboxFailureHandler } from "@loom/core/sandbox";
+import { loomConfigDir, migrateLoomHome } from "./loom-home.ts";
 import { processSandboxActive } from "../shared/agent-sandbox.ts";
 import {
 	LocalCore,
@@ -1354,27 +1355,33 @@ app
 			if (existsSync(envFile)) process.loadEnvFile(envFile);
 		}
 
-		modelSettings = new ModelSettingsStore(join(app.getPath("userData"), "model-settings.json"), electronSecretCipher);
+		const configDir = loomConfigDir(process.env.LOOM_E2E === "1", app.getPath("userData"));
+		if (process.env.LOOM_E2E !== "1") {
+			const moved = await migrateLoomHome(app.getPath("userData"), configDir);
+			if (moved.length > 0) appLog(`Moved settings to ${configDir}: ${moved.join(", ")}`);
+		}
+		const configFile = (name: string) => join(configDir, name);
+		modelSettings = new ModelSettingsStore(configFile("model-settings.json"), electronSecretCipher);
 		await modelSettings.protect().then((rewritten) => { if (rewritten) appLog("Encrypted the model API keys that were stored in plain text."); }, (error) => appLog(`Could not encrypt stored model API keys: ${logErrorText(error)}`));
-		const chatStores = createChatStorage(app.getPath("userData"));
-		const deviceId = new DeviceIdStore(join(app.getPath("userData"), "device-id.json"));
+		const chatStores = createChatStorage(configDir);
+		const deviceId = new DeviceIdStore(configFile("device-id.json"));
 		chatModels = new ChatModelService(chatStores, { deviceId: () => deviceId.get(), withIdleProviders: (ids, operation) => requireChat().withIdleChatProviders(ids, operation) });
-		chat = new ChatService({ ...AGENT_OPTIONS, models: chatModels.models, chatDefault: () => requireChatModels().selectionForNewSession(), composer: {
+		chat = new ChatService({ ...AGENT_OPTIONS, userSkillsDir: configFile("skills"), models: chatModels.models, chatDefault: () => requireChatModels().selectionForNewSession(), composer: {
 			getSelection: getUiSelection,
 			takeImages: takeComposerImages,
 			takeAssets: takeLiveComposerAssets,
 		} }, (usage) => { void agentStats?.record(usage); });
 		await chatModels.initialize(process.env);
 		chatModels.onSecrets((values) => requireChat().setChatSecrets(values));
-		agentStats = new AgentStatsStore(join(app.getPath("userData"), "agent-stats.json"));
-		lastLibrary = new LastLibraryStore(join(app.getPath("userData"), "last-library.json"));
-		generalSettings = new GeneralSettingsStore(join(app.getPath("userData"), "general.json"));
-		agentPermission = new AgentPermissionStore(join(app.getPath("userData"), "agent-permission.json"));
+		agentStats = new AgentStatsStore(configFile("agent-stats.json"));
+		lastLibrary = new LastLibraryStore(configFile("last-library.json"));
+		generalSettings = new GeneralSettingsStore(configFile("general.json"));
+		agentPermission = new AgentPermissionStore(configFile("agent-permission.json"));
 		commandAllows = new CommandAllowStore();
 		requireChat().setPermissionLevel(await agentPermission.load());
-		agentInstructions = new AgentInstructionsStore(join(app.getPath("userData"), "AGENTS.md"));
+		agentInstructions = new AgentInstructionsStore(configFile("AGENTS.md"));
 		await requireChat().setInstructions(await agentInstructions.load());
-		agentSandbox = new AgentSandboxStore(join(app.getPath("userData"), "agent-sandbox.json"));
+		agentSandbox = new AgentSandboxStore(configFile("agent-sandbox.json"));
 		setProcessSandboxFailureHandler(async (reason) => {
 			const store = agentSandbox!;
 			let message = reason.message;
@@ -1395,7 +1402,7 @@ app
 		await applyProcessSandbox();
 		mcpSettings = new McpSettingsStore(mcpConfigPath());
 		mcpHost = new McpHost();
-		mcpService = new McpServiceController(new McpServiceStore(join(app.getPath("userData"), "mcp-service.json"), electronSecretCipher), {
+		mcpService = new McpServiceController(new McpServiceStore(configFile("mcp-service.json"), electronSecretCipher), {
 			executor: toolExecutor,
 			bindLibrary: async () => {
 				if (openingLibrary || shutdownStarted) throw new Error("Library is changing or closing");
@@ -1404,7 +1411,7 @@ app
 			},
 		}, (view) => { for (const window of BrowserWindow.getAllWindows()) if (!window.isDestroyed()) window.webContents.send(IPC.mcpServiceChanged, view); });
 		await mcpService.initialize();
-		cloudBackup = new CloudBackupController(new CloudConfigStore(join(app.getPath("userData"), "cloud-backup.json"), electronSecretCipher), {
+		cloudBackup = new CloudBackupController(new CloudConfigStore(configFile("cloud-backup.json"), electronSecretCipher), {
 			updateCurrent: async (signal, action) => {
 				let snapshot: BackupSnapshot | undefined, installation: PullInstallation | undefined;
 				let root: string | undefined, failure: unknown;
@@ -1455,7 +1462,7 @@ app
 				return parent;
 			},
 			openRestored: async (path) => { await applyOpenedLibrary(path); },
-		}, publishCloudBackup, createObjectStore, join(app.getPath("userData"), "cloud-backup-state.json"));
+		}, publishCloudBackup, createObjectStore, configFile("cloud-backup-state.json"));
 		registerCloudBackupIpc(cloudBackup);
 		requireChat().setTracePublisher(publishDevTrace);
 		registerDevTraceIpc(join(import.meta.dirname, "../preload/dev-trace.mjs"), {
@@ -1684,7 +1691,7 @@ async function syncWebTools(): Promise<void> {
 }
 
 function mcpConfigPath(): string {
-	return process.env.LOOM_MCP_CONFIG?.trim() || join(app.getPath("userData"), "mcp.json");
+	return process.env.LOOM_MCP_CONFIG?.trim() || join(loomConfigDir(process.env.LOOM_E2E === "1", app.getPath("userData")), "mcp.json");
 }
 
 async function mcpSettingsView() {

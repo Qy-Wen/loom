@@ -8,7 +8,7 @@
 
 ## 1. Permission
 
-The chat footer is **Basic**, **Standard** (default), or **Full**. Stored in app user data `agent-permission.json`, not in the library. One setting for the app.
+The chat footer is **Basic**, **Standard** (default), or **Full**. Stored in `~/.loom/agent-permission.json`, not in the library. One setting for the app.
 
 | Level | Waits for Approve / Skip |
 |---|---|
@@ -30,7 +30,7 @@ The `loom.permission` extension installs a cancellable `ToolTask.beforeTool` hoo
 
 ## 2. Sandbox
 
-Settings → Agent has a process-sandbox switch, on by default, in app user data `agent-sandbox.json`. The next command uses it.
+Settings → Agent has a process-sandbox switch, on by default, in `~/.loom/agent-sandbox.json`. The next command uses it.
 
 On, `bash`, `ffmpeg`, and `ffprobe` run in the sandbox:
 

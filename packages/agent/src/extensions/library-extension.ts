@@ -15,10 +15,12 @@ import { formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR, loadLibrarySkills } fr
 import { markdownAuthoringSection } from "./markdown-authoring.ts";
 import type { LoomTool } from "../types.ts";
 
-const SKILL_AUTHORING_GUIDE =
-	`When asked to create a library skill, use write to create ${LIBRARY_SKILLS_DIR}/<skill-name>/SKILL.md relative to the library root. ` +
-	"Use a lowercase name with hyphens between words. Include YAML frontmatter with name matching the directory and description explaining when to use the skill. " +
-	"Keep supporting files in the skill directory and reference them by relative path.";
+function skillDirectories(userSkillsDir?: string): string {
+	const home = userSkillsDir?.replaceAll("\\", "/").replace(/\/+$/, "");
+	const library = `${LIBRARY_SKILLS_DIR}/ relative to the library root`;
+	if (!home) return `Skills for this library are in ${library}.`;
+	return `Skills for every library are in ${home}/. Skills for this library only are in ${library}. A library skill with the same name is used instead. When creating a skill, create it in ${home}/ by default.`;
+}
 
 /** Memory stays frozen per conversation. Forks retain the source snapshot, not the current file. */
 export const LoomMemoryDoc = defineDoc<{ snapshot: string }>({
@@ -40,6 +42,8 @@ export type LibraryExtensionOptions = {
 	autoMemory?: boolean;
 	/** Discover the library catalog on each request; bodies are loaded only through read. */
 	skills?: boolean;
+	/** Home skills directory, normally ~/.loom/skills. Applies to every library; a library skill with the same name wins. */
+	userSkillsDir?: string;
 };
 
 /** Assemble tools and stable prompt sections; pass conversationCreated to LibraryRuntime.open(). */
@@ -65,9 +69,10 @@ export async function createLibraryExtension(root: string, options: LibraryExten
 			section("preamble", () => systemPrompt || undefined, { tag: false }),
 			...(options.skills !== false ? [section("skills", async (input, context) => {
 				if (!input.env) return undefined;
-				const { skills } = await loadLibrarySkills(input.env, root, context);
+				const { skills } = await loadLibrarySkills(input.env, root, context, options.userSkillsDir);
 				const catalog = formatSkillsForSystemPrompt(skills);
-				return catalog ? `${SKILL_AUTHORING_GUIDE}\n\n${catalog}` : SKILL_AUTHORING_GUIDE;
+				const guide = skillDirectories(options.userSkillsDir);
+				return catalog ? `${guide}\n\n${catalog}` : guide;
 			}, { tag: false })] : []),
 			...(memory ? [section("auto_memory", async (input, context) => {
 				const saved = await input.read.snapshot(LoomMemoryDoc, input.conversationId, context);

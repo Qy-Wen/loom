@@ -15,7 +15,7 @@
 
 平台和捆绑的 FFmpeg 一致：`darwin-arm64`、`darwin-x64`、`win32-x64`。`.dmg` 用 macOS 的磁盘工具生成，所以 `dist` 在 Mac 上跑，同一次打出 Windows 的 NSIS 安装程序。
 
-应用 id 是 `com.loom.app`，和 Windows 任务栏用的是同一个。产品名是 `Loom`。安装后的应用使用自己的用户数据目录。
+应用 id 是 `com.loom.app`，和 Windows 任务栏用的是同一个。产品名是 `Loom`。Electron 仍使用自己的用户数据目录放缓存。Loom 的设置在 `~/.loom/`。
 
 ### 包里有什么
 

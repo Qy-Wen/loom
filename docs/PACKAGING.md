@@ -15,7 +15,7 @@ Installable macOS and Windows builds. electron-builder packs the existing `elect
 
 Platforms match bundled FFmpeg: `darwin-arm64`, `darwin-x64`, `win32-x64`. The `.dmg` is built with macOS disk tools, so `dist` runs on a Mac and emits the Windows NSIS installer in the same run.
 
-App id is `com.loom.app`, the same id the Windows taskbar uses. Product name is `Loom`. The installed app keeps its own user-data directory.
+App id is `com.loom.app`, the same id the Windows taskbar uses. Product name is `Loom`. Electron keeps its own user-data directory for cache. Loom settings live in `~/.loom/`.
 
 ### Package contents
 

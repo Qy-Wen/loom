@@ -101,6 +101,59 @@ test("skills honor scoped ignores, stop at a skill root, diagnose malformed/dupl
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
+async function writeSkillAt(skillsRoot: string, name: string, description: string, body: string): Promise<void> {
+	const dir = join(skillsRoot, name);
+	await mkdir(dir, { recursive: true });
+	await writeFile(join(dir, "SKILL.md"), `---\nname: ${name}\ndescription: ${description}\n---\n\n${body}\n`);
+}
+
+test("app skills apply to every library and a library skill overrides the same name", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-skills-library-"));
+	const user = await mkdtemp(join(tmpdir(), "loom-skills-user-"));
+	try {
+		await writeSkillAt(user, "shared", "App-wide instructions.", BODY);
+		await writeSkillAt(user, "app-only", "Only in app data.", BODY);
+		await writeSkill(root, "shared", "Library instructions.", BODY);
+		const { skills, diagnostics } = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT, user);
+		assert.equal(skills.length, 2);
+		assert.equal(skills.find((skill) => skill.name === "shared")?.description, "Library instructions.");
+		assert.equal(skills.find((skill) => skill.name === "app-only")?.description, "Only in app data.");
+		assert.ok(diagnostics.some((row) => row.message === "Library skill overrides the app skill: shared"));
+		const missing = join(user, "missing");
+		const empty = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT, missing);
+		assert.equal(empty.skills.length, 1);
+		assert.equal(empty.diagnostics.length, 0);
+	} finally {
+		await rm(root, { recursive: true, force: true });
+		await rm(user, { recursive: true, force: true });
+	}
+});
+
+test("the skills prompt gives the app skills path and lists an app skill", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-skills-app-prompt-"));
+	const user = await mkdtemp(join(tmpdir(), "loom-skills-app-dir-"));
+	let owner: LibraryRuntime | undefined;
+	try {
+		await writeSkillAt(user, "app-only", "Only in app data.", BODY);
+		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
+		const assembly = await createLibraryExtension(root, { autoMemory: false, workspace: { images: false }, userSkillsDir: user });
+		owner = await LibraryRuntime.open(root, { models, extensions: [assembly.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, BACKGROUND_CONTEXT);
+		const conversation = await owner.createConversation({}, BACKGROUND_CONTEXT);
+		faux.setResponses([(request) => {
+			const prompt = JSON.stringify(request.messages.findLast((message) => message.role === "system"));
+			const home = `${user.replaceAll("\\", "/")}/`;
+			assert.ok(prompt.includes(`Skills for every library are in ${home}`), prompt);
+			assert.ok(prompt.includes(`Skills for this library only are in ${LIBRARY_SKILLS_DIR}/ relative to the library root.`), prompt);
+			assert.ok(prompt.includes(`When creating a skill, create it in ${home} by default.`), prompt);
+			assert.match(prompt, /<name>app-only<\/name>/);
+			assert.doesNotMatch(prompt, new RegExp(BODY));
+			return fauxAssistantMessage("done");
+		}]);
+		const result = await (await conversation.submit({ type: "input", content: "What skills are available?" }, BACKGROUND_CONTEXT)).wait(BACKGROUND_CONTEXT);
+		assert.equal(result.status, "done", JSON.stringify(result));
+	} finally { await owner?.close(BACKGROUND_CONTEXT); await rm(root, { recursive: true, force: true }); await rm(user, { recursive: true, force: true }); }
+});
+
 test("the skills prompt guides creation in an empty library and refreshes the catalog", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-section-"));
 	let owner: LibraryRuntime | undefined;
@@ -117,7 +170,7 @@ test("the skills prompt guides creation in an empty library and refreshes the ca
 		const skillContent = `---\nname: brand-voice\ndescription: A & B < C\n---\n\n${BODY}\n`;
 		faux.setResponses([(request) => {
 			const prompt = JSON.stringify(request.messages.findLast((message) => message.role === "system"));
-			assert.ok(prompt.includes(`${LIBRARY_SKILLS_DIR}/<skill-name>/SKILL.md`), prompt);
+			assert.ok(prompt.includes(`Skills for this library are in ${LIBRARY_SKILLS_DIR}/ relative to the library root.`), prompt);
 			assert.doesNotMatch(prompt, /<available_skills>/);
 			return fauxAssistantMessage(fauxToolCall("write", { path: skillPath, content: skillContent }), { stopReason: "toolUse" });
 		}, fauxAssistantMessage("Created the skill.")]);

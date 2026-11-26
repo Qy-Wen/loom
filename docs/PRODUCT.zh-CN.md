@@ -98,7 +98,7 @@ Loom 写到系统临时目录的内容都放在同一个根下，不进素材库
 路径只由 `core/src/temp.ts` 构造，不写死 `/tmp`（进程沙盒只能写素材库和 `os.tmpdir()`）。应用启动时清掉超过 24 小时的残留。 调色预览使用内存中的无损解码帧缓存（最多四帧、96 MiB 像素数据），源文件变更或素材库关闭时失效。FFmpeg 通过管道直接返回 JPEG，预览 IPC 传递二进制数据。
 
 - 素材放在哪、如何嵌套、叫什么名字，都由用户决定。
-- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存，只有可随时删除的 `.loom/thumbnails/` 例外：标签、收藏、属性、关系、聊天会话、记忆和技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
+- **Portable workspace**：用户将库目录整体拷贝到另一台机器（`.loom/` 随之携带），`Open Asset Library` 即可完整恢复。`.loom/` 是用户数据，不是缓存，只有可随时删除的 `.loom/thumbnails/` 例外：标签、收藏、属性、关系、聊天会话、记忆和库内技能只存在那里，没有备份和导出，每个素材的 id 也记在其中。跨库技能在 `~/.loom/skills/`，不随素材库拷贝。若 `.loom/` 丢失或损坏，搜索索引和描述可以重建，其余内容丢失，素材本体不受影响。符合 Local-first 理念。Chat / embedding / rerank / VLM 的端点在应用设置里，不进 `.loom/`，见 [SETTINGS.md](./SETTINGS.zh-CN.md)。
 
 ### 3.2 SQLite — Metadata Store + Hybrid Search
 
@@ -357,7 +357,7 @@ Local Core
 
 ## 10. 已具备的技术要点
 
-- **Skills：** 从 `<library>/.loom/agents/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./agent/AGENT.zh-CN.md)。
+- **Skills：** 从 `<library>/.loom/agents/skills/` 和 `~/.loom/skills/` 把 Agent Skills（`SKILL.md`）接到创作 Agent。同名时库内技能覆盖主目录技能。不 vendor pi 的 coding-agent 外壳。见 [AGENT](./agent/AGENT.zh-CN.md)。
 - **多 Agent**：主对话加上检索和生成专职。同一轮里互不依赖的调用一起跑。见 [AGENT](./agent/AGENT.zh-CN.md)。
 - **沙箱**：bash 和 FFmpeg 在沙箱内。生成任务走 MCP，不套这层。见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。
 - **MCP 设置页**：设置 → MCP tab。

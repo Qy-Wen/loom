@@ -5,7 +5,7 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * Stable ID of this app installation, created on first use. Some login flows (OpenAI's "Sign in with
- * ChatGPT") send it to identify the agent host. It lives in app user data, never in a library, because
+ * ChatGPT") send it to identify the agent host. It lives in ~/.loom, never in a library, because
  * a library can be copied to another computer and the ID must stay with the installation.
  */
 export class DeviceIdStore {

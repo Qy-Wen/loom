@@ -378,7 +378,7 @@ test("chat lists and invokes library skills by slash name", async ({ loomPage, e
 
 		const firstMessages = requests[0]!;
 		const userMessage = JSON.stringify(firstMessages.findLast(({ role }) => role === "user")?.content);
-		expect(userMessage).toContain("Use the library skill");
+		expect(userMessage).toContain("Use the skill");
 		expect(userMessage).toContain("/.loom/agents/skills/review-copy/SKILL.md");
 		expect(userMessage).toContain("/.loom/agents/skills/brand-voice/SKILL.md");
 		expect(userMessage).toContain(submitted);
@@ -392,7 +392,7 @@ test("chat lists and invokes library skills by slash name", async ({ loomPage, e
 		await editor.press("Enter");
 		await expect.poll(() => requests.length).toBe(3);
 		const direct = JSON.stringify(requests[2]!.findLast(({ role }) => role === "user")?.content);
-		expect(direct).toContain('Use the library skill \\"brand-voice\\"');
+		expect(direct).toContain('Use the skill \\"brand-voice\\"');
 		expect(direct).toContain("/.loom/agents/skills/brand-voice/SKILL.md");
 	} finally {
 		server.closeAllConnections();

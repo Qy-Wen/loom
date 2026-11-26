@@ -25,13 +25,42 @@ const posix = (path: string) => path.replaceAll("\\", "/").replace(/\/+$/, "");
 const escapeXml = (text: string) => text.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
 
 /** Environment-only discovery. Bodies remain on disk; the model reads a selected SKILL.md with read. */
-export async function loadLibrarySkills(env: ExecutionEnv, libraryRoot: string, context: Context): Promise<{ skills: Skill[]; diagnostics: SkillDiagnostic[] }> {
+export async function loadLibrarySkills(env: ExecutionEnv, libraryRoot: string, context: Context, userRoot?: string): Promise<{ skills: Skill[]; diagnostics: SkillDiagnostic[] }> {
+	const joined = await env.joinPath([libraryRoot, LIBRARY_SKILLS_DIR], context);
+	if (!joined.ok) throw joined.error;
+	const library = await loadSkillsDirectory(env, joined.value, context);
+	const appRoot = userRoot?.trim();
+	if (!appRoot) return library;
+	const app = await loadSkillsDirectory(env, appRoot, context);
+	return mergeSkillCatalogs(app, library);
+}
+
+/** App skills first. A library skill with the same name replaces the app skill. */
+function mergeSkillCatalogs(
+	app: { skills: Skill[]; diagnostics: SkillDiagnostic[] },
+	library: { skills: Skill[]; diagnostics: SkillDiagnostic[] },
+): { skills: Skill[]; diagnostics: SkillDiagnostic[] } {
+	const skills = [...app.skills];
+	const diagnostics = [...app.diagnostics];
+	const index = new Map(skills.map((skill, position) => [skill.name, position]));
+	for (const skill of library.skills) {
+		const at = index.get(skill.name);
+		if (at === undefined) {
+			index.set(skill.name, skills.length);
+			skills.push(skill);
+		} else {
+			skills[at] = skill;
+			diagnostics.push({ type: "warning", path: skill.filePath, message: `Library skill overrides the app skill: ${skill.name}` });
+		}
+	}
+	diagnostics.push(...library.diagnostics);
+	return { skills, diagnostics };
+}
+
+async function loadSkillsDirectory(env: ExecutionEnv, root: string, context: Context): Promise<{ skills: Skill[]; diagnostics: SkillDiagnostic[] }> {
 	const skills: Skill[] = [];
 	const diagnostics: SkillDiagnostic[] = [];
 	const warn = (path: string, message: string) => diagnostics.push({ type: "warning", path, message });
-	const joined = await env.joinPath([libraryRoot, LIBRARY_SKILLS_DIR], context);
-	if (!joined.ok) throw joined.error;
-	const root = joined.value;
 	const canonical = await env.canonicalPath(root, context);
 	if (!canonical.ok) {
 		if (canonical.error.code === "aborted") throw canonical.error;
@@ -92,7 +121,7 @@ export async function loadLibrarySkills(env: ExecutionEnv, libraryRoot: string, 
 		if (skill) { await load(skill.path, directoryName, true); return; }
 		for (const entry of entries) {
 			if (entry.name.startsWith(".") || entry.name === "node_modules") continue;
-			// Do not follow symlinks: avoid cycles and cataloguing files outside this library.
+			// Do not follow symlinks: avoid cycles and cataloguing files outside this skills directory.
 			if (matcher.ignores(`${relative(entry.path)}${entry.kind === "directory" ? "/" : ""}`)) continue;
 			if (entry.kind === "directory") await visit(entry.path, false, localRules);
 			else if (entry.kind === "file" && rootFiles && entry.name.endsWith(".md")) await load(entry.path, directoryName, false);
