@@ -78,6 +78,7 @@ git merge vendor-clean
 - 每次 specialist 调用创建一个归属工具任务的前台 conversation。独立调用并行；子代理只见任务和专职 prompt，不能再派生 specialist。父代理只收到摘要，不收到子 transcript。Stop 沿 ownership 取消；request ID 让安全重放复用子会话和 submission。
 - `createLibraryExtension()` 装配工具及 preamble/skills/memory sections。用户指令使用原生 `agent.instructions`。
 - Skills 在准备请求时通过 durable `ExecutionEnv` 扫描 `.loom/agents/skills/`；遵循作用域 ignore、诊断非法/重复元数据，跳过符号链接。目录只含名称/说明/位置，不含正文；模型按需 `read`。`disable-model-invocation` 从目录中隐藏技能。
+- 即使素材库还没有技能，系统提示也会告诉 Agent 将新技能写入 `.loom/agents/skills/<skill-name>/SKILL.md`。
 - Memory 使用创建时的 `LoomMemoryDoc` 快照，fork/重开保留。`auto_memory` 立即写 `.loom/agents/memory/MEMORY.md`，只影响以后新会话的 prompt。specialist 不选这个 extension。见 [MEMORY](./MEMORY.zh-CN.md)。
 - `ToolApprovals` 管理共用策略与可取消的审批等待；内置 Agent 的 `ToolGate` 通过 `ToolTask.beforeTool` 和 `LoomApprovalsDoc` 适配，app 观察 pending rows，不重复审批。记住命令与沙箱策略见 [PERMISSION](./PERMISSION.zh-CN.md)。
 

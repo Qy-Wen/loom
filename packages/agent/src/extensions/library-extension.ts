@@ -11,9 +11,14 @@ import {
 	readLibraryAutoMemory,
 } from "./library-auto-memory.ts";
 import { createWorkspaceTools, toDurableTool, type WorkspaceToolOptions } from "../tools/pi-tools.ts";
-import { formatSkillsForSystemPrompt, loadLibrarySkills } from "./library-skills.ts";
+import { formatSkillsForSystemPrompt, LIBRARY_SKILLS_DIR, loadLibrarySkills } from "./library-skills.ts";
 import { markdownAuthoringSection } from "./markdown-authoring.ts";
 import type { LoomTool } from "../types.ts";
+
+const SKILL_AUTHORING_GUIDE =
+	`When asked to create a library skill, use write to create ${LIBRARY_SKILLS_DIR}/<skill-name>/SKILL.md relative to the library root. ` +
+	"Use a lowercase name with hyphens between words. Include YAML frontmatter with name matching the directory and description explaining when to use the skill. " +
+	"Keep supporting files in the skill directory and reference them by relative path.";
 
 /** Memory stays frozen per conversation. Forks retain the source snapshot, not the current file. */
 export const LoomMemoryDoc = defineDoc<{ snapshot: string }>({
@@ -61,7 +66,8 @@ export async function createLibraryExtension(root: string, options: LibraryExten
 			...(options.skills !== false ? [section("skills", async (input, context) => {
 				if (!input.env) return undefined;
 				const { skills } = await loadLibrarySkills(input.env, root, context);
-				return formatSkillsForSystemPrompt(skills) || undefined;
+				const catalog = formatSkillsForSystemPrompt(skills);
+				return catalog ? `${SKILL_AUTHORING_GUIDE}\n\n${catalog}` : SKILL_AUTHORING_GUIDE;
 			}, { tag: false })] : []),
 			...(memory ? [section("auto_memory", async (input, context) => {
 				const saved = await input.read.snapshot(LoomMemoryDoc, input.conversationId, context);

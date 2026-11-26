@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm, writeFile, symlink } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, rm, writeFile, symlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryRuntime, createModels } from "../src/durable.ts";
-import { fauxAssistantMessage, fauxProvider } from "@earendil-works/pi-ai/providers/faux";
+import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
 import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/extensions/library-skills.ts";
 
 const BODY = "SECRET_BODY_MUST_STAY_OUT_OF_THE_CATALOG";
@@ -101,24 +101,37 @@ test("skills honor scoped ignores, stop at a skill root, diagnose malformed/dupl
 	} finally { await rm(root, { recursive: true, force: true }); }
 });
 
-test("library skills section reloads the catalog on a later request without injecting bodies", async () => {
+test("the skills prompt guides creation in an empty library and refreshes the catalog", async () => {
 	const root = await mkdtemp(join(tmpdir(), "loom-skills-section-"));
 	let owner: LibraryRuntime | undefined;
 	try {
-		await writeSkill(root, "brand-voice", "A & B < C", BODY);
 		const faux = fauxProvider(); const models = createModels(); models.setProvider(faux.provider);
 		const assembly = await createLibraryExtension(root, { autoMemory: false, workspace: { images: false } });
 		owner = await LibraryRuntime.open(root, { models, extensions: [assembly.extension], agent: { model: { provider: faux.models[0].provider, modelId: faux.models[0].id } } }, BACKGROUND_CONTEXT);
 		const conversation = await owner.createConversation({}, BACKGROUND_CONTEXT);
+		const submit = async (content: string) => {
+			const result = await (await conversation.submit({ type: "input", content }, BACKGROUND_CONTEXT)).wait(BACKGROUND_CONTEXT);
+			assert.equal(result.status, "done", JSON.stringify(result));
+		};
+		const skillPath = `${LIBRARY_SKILLS_DIR}/brand-voice/SKILL.md`;
+		const skillContent = `---\nname: brand-voice\ndescription: A & B < C\n---\n\n${BODY}\n`;
+		faux.setResponses([(request) => {
+			const prompt = JSON.stringify(request.messages.findLast((message) => message.role === "system"));
+			assert.ok(prompt.includes(`${LIBRARY_SKILLS_DIR}/<skill-name>/SKILL.md`), prompt);
+			assert.doesNotMatch(prompt, /<available_skills>/);
+			return fauxAssistantMessage(fauxToolCall("write", { path: skillPath, content: skillContent }), { stopReason: "toolUse" });
+		}, fauxAssistantMessage("Created the skill.")]);
+		await submit("Create a brand-voice skill.");
+		assert.equal(await readFile(join(root, skillPath), "utf8"), skillContent);
+
 		for (const description of ["A &amp; B &lt; C", "New description"]) {
 			faux.setResponses([(request) => {
-				const system = request.messages.findLast((message) => message.role === "system");
-				assert.ok(JSON.stringify(system).includes(description), JSON.stringify(request));
-				assert.doesNotMatch(JSON.stringify(request), new RegExp(BODY));
+				const prompt = JSON.stringify(request.messages.findLast((message) => message.role === "system"));
+				assert.ok(prompt.includes(description), prompt);
+				assert.doesNotMatch(prompt, new RegExp(BODY));
 				return fauxAssistantMessage("done");
 			}]);
-			const result = await (await conversation.submit({ type: "input", content: "hello" }, BACKGROUND_CONTEXT)).wait(BACKGROUND_CONTEXT);
-			assert.equal(result.status, "done", JSON.stringify(result));
+			await submit("What skills are available?");
 			await writeSkill(root, "brand-voice", "New description", BODY);
 		}
 	} finally { await owner?.close(BACKGROUND_CONTEXT); await rm(root, { recursive: true, force: true }); }
