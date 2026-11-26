@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { access, mkdtemp, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
+import { access, mkdtemp, mkdir, readdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { test } from "node:test";
@@ -552,6 +552,29 @@ test("Library tags are shared by name and stay with the asset id", async () => {
 		assert.deepEqual(again.assetTags, []);
 	} finally {
 		await Promise.all([core.close(), reopened?.close()]);
+		await rm(root, { recursive: true, force: true });
+	}
+});
+
+test("Renaming only a folder's capitalization updates the disk and keeps its indexed assets", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-folder-capitalization-"));
+	const core = new LocalCore();
+	try {
+		const parent = join(root, "Harness");
+		await mkdir(join(parent, "extensions", "nested"), { recursive: true });
+		await writeFile(join(parent, "extensions", "nested", "note.md"), "# Note");
+		const original = await core.openLibrary(root);
+		const [note] = original.assets;
+		assert.ok(note);
+
+		assert.equal(await core.renameFolder("Harness/extensions", "Extensions"), "Harness/Extensions");
+		assert.deepEqual(await readdir(parent), ["Extensions"]);
+		assert.equal(await readFile(join(parent, "Extensions", "nested", "note.md"), "utf8"), "# Note");
+		const renamed = await core.getLibrarySnapshot();
+		assert.deepEqual(renamed.folders, ["Harness", "Harness/Extensions", "Harness/Extensions/nested"]);
+		assert.deepEqual(renamed.assets.map((asset) => [asset.assetId, asset.relativePath]), [[note.assetId, "Harness/Extensions/nested/note.md"]]);
+	} finally {
+		await core.close();
 		await rm(root, { recursive: true, force: true });
 	}
 });

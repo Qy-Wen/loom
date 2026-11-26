@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { copyFile, cp, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, cp, lstat, mkdir, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import {
 	assetTypeFromPath,
@@ -276,13 +276,24 @@ export class Library {
 		const parent = parentRelative(relativePath);
 		const nextPath = joinRelative(parent, name);
 		if (nextPath === relativePath) return relativePath;
-		if (await this.pathExists(nextPath)) {
-			throw new Error(`A folder named “${name}” already exists`);
-		}
 
 		const watching = await this.pauseWatcher();
 		try {
-			await renameRetry(this.folderAbsolute(relativePath), this.folderAbsolute(nextPath));
+			const source = this.folderAbsolute(relativePath);
+			const destination = this.folderAbsolute(nextPath);
+			const target = await lstat(destination, { bigint: true }).catch((error: NodeJS.ErrnoException) => {
+				if (error.code === "ENOENT") return null;
+				throw error;
+			});
+			if (target) {
+				// A case-insensitive filesystem can resolve the new spelling to the indexed source folder.
+				const caseChange = this.folders.has(relativePath) && posixBasename(relativePath).toLowerCase() === name.toLowerCase();
+				const original = caseChange && target.isDirectory() ? await lstat(source, { bigint: true }) : null;
+				if (!original?.isDirectory() || target.ino === 0n || original.ino !== target.ino || original.dev !== target.dev) {
+					throw new Error(`A folder named “${name}” already exists`);
+				}
+			}
+			await renameRetry(source, destination);
 			await this.rewriteFolderPrefix(relativePath, nextPath);
 			return nextPath;
 		} finally {
