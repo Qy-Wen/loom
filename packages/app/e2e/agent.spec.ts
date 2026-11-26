@@ -183,6 +183,7 @@ test("Electron reconnects to an owned specialist approval, restores history, and
 
 test("chat offers only /compact and keeps the full transcript", async ({ loomPage, electronApp }) => {
 	test.skip(!electronApp, "isolated user data and library required");
+	const finishSummary = Promise.withResolvers<void>();
 	const turns: unknown[] = [];
 	let summaries = 0;
 	const server = createServer((request, response) => {
@@ -197,7 +198,9 @@ test("chat offers only /compact and keeps the full transcript", async ({ loomPag
 			const content = summary ? "Earlier chat summarized." : turns.length === 1 ? "history ".repeat(16_000) : "Recent reply.";
 			const chunk = (delta: object, finish_reason: string | null) => `data: ${JSON.stringify({ id: "slash", object: "chat.completion.chunk", model: "demo", choices: [{ index: 0, delta, finish_reason }] })}\n\n`;
 			response.writeHead(200, { "content-type": "text/event-stream" });
-			response.end(chunk({ content }, null) + chunk({}, "stop") + "data: [DONE]\n\n");
+			const finish = () => response.end(chunk({ content }, null) + chunk({}, "stop") + "data: [DONE]\n\n");
+			if (summary) void finishSummary.promise.then(finish);
+			else finish();
 		});
 	});
 	await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
@@ -249,8 +252,13 @@ test("chat offers only /compact and keeps the full transcript", async ({ loomPag
 		expect(JSON.stringify(turns.at(-1))).toContain("/new");
 		expect(await list()).toHaveLength(before.length + 1);
 		const original = await record();
+		const tab = loomPage.getByRole("tab", { selected: true });
+		await expect(tab).toHaveAttribute("aria-description", "Idle");
 		await submit("/compact");
+		await expect(tab).toHaveAttribute("aria-description", "Busy");
+		finishSummary.resolve();
 		await expect(loomPage.getByText("Context compacted.")).toBeVisible();
+		await expect(tab).toHaveAttribute("aria-description", "Idle");
 		const compacted = await record();
 		expect(summaries).toBe(1);
 		expect(turns).toHaveLength(2);
@@ -258,6 +266,7 @@ test("chat offers only /compact and keeps the full transcript", async ({ loomPag
 		expect(compacted.context!.tokens).toBeLessThan(original.context!.tokens!);
 		await expect(loomPage.getByTestId("chat-message-list").getByText("First question", { exact: true })).toBeVisible();
 	} finally {
+		finishSummary.resolve();
 		server.closeAllConnections();
 		await new Promise<void>((resolve) => server.close(() => resolve()));
 	}

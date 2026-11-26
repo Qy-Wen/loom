@@ -16,6 +16,7 @@ export function useSessions(libraryRoot: string | null) {
 	library.current = libraryRoot;
 	const recordLibrary = useRef(libraryRoot);
 	const generation = useRef(0);
+	const listRevision = useRef(0);
 	const refreshing = useRef(false);
 	const refreshPending = useRef(false);
 
@@ -28,8 +29,9 @@ export function useSessions(libraryRoot: string | null) {
 	}, [libraryRoot]);
 
 	const refreshSessions = useCallback(async () => {
+		const revision = ++listRevision.current;
 		const list = await window.loom.listSessions();
-		if (library.current === libraryRoot) setSessions(list);
+		if (library.current === libraryRoot && revision === listRevision.current) setSessions(list);
 		return list;
 	}, [libraryRoot]);
 
@@ -62,6 +64,7 @@ export function useSessions(libraryRoot: string | null) {
 
 	useEffect(() => {
 		const version = ++generation.current;
+		listRevision.current++;
 		let active = true;
 		current.current = null;
 		setRecord(null);
@@ -88,6 +91,7 @@ export function useSessions(libraryRoot: string | null) {
 		})();
 		const stop = window.loom.onSessionsChanged((list) => {
 			if (!active) return;
+			listRevision.current++;
 			setSessions(list);
 			if (current.current && list.some((session) => session.id === current.current?.id)) void refreshCurrent();
 		});

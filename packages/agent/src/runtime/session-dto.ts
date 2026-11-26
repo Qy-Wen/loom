@@ -3,6 +3,7 @@ export interface LoomSessionSummary {
 	id: string;
 	title: string;
 	status: "open" | "archived";
+	busy: boolean;
 	createdAt: number;
 	updatedAt: number;
 }

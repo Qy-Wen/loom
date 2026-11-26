@@ -94,9 +94,13 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		}, { topology, baseUrl });
 		const ids = {} as Record<Lane, string>;
 		const record = (lane: Lane) => page.evaluate((id) => window.loom.getSession(id), ids[lane]);
+		const tab = async (lane: Lane) => page.getByRole("tab", { name: (await record(lane)).title, exact: true });
+		const expectActivity = async (lane: Lane, activity: "Busy" | "Idle") => {
+			await expect(await tab(lane)).toHaveAttribute("aria-description", activity);
+		};
 		const picker = () => page.getByRole("button", { name: "Conversation model", exact: true });
 		const activate = async (lane: Lane) => {
-			await page.getByRole("tab", { name: (await record(lane)).title, exact: true }).click();
+			await (await tab(lane)).click();
 			await expect(picker()).toHaveText(`${model(lane, lane === "ALPHA" && switched)} (${provider(lane)})`);
 		};
 		const send = async (lane: Lane, turn: number) => {
@@ -115,16 +119,21 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 			ids[lane] = (await page.evaluate(() => window.loom.listSessions())).find((row) => !before.some((old) => old.id === row.id))!.id;
 			await picker().click();
 			await page.getByRole("menuitemradio", { name: `${model(lane)} (${provider(lane)})`, exact: true }).click();
+			await expect(page.getByRole("tab", { selected: true })).toHaveAttribute("aria-description", "Idle");
 			await send(lane, 1);
+			await expectActivity(lane, "Busy");
 		}
 		expect(held).toHaveLength(2);
 		expect(held.every((entry) => !entry.response.writableEnded && !entry.response.destroyed)).toBe(true);
+		await expectActivity("ALPHA", "Busy");
 		await page.reload();
 		await activate("ALPHA");
+		await expectActivity("BETA", "Busy");
 		await expect(page.getByText("ALPHA_TURN_1_PARTIAL", { exact: true })).toBeVisible();
 		await expect(page.getByText("BETA_TURN_1_PARTIAL", { exact: true })).toHaveCount(0);
 		await expect(picker()).toBeDisabled();
 		finish("ALPHA", 1); await done("ALPHA", 1);
+		await expectActivity("ALPHA", "Idle");
 		await expect(picker()).toBeEnabled();
 		await picker().click();
 		await page.getByRole("menuitemradio", { name: `alpha-next (${provider("ALPHA")})`, exact: true }).click();
@@ -150,13 +159,17 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		await expect(stop).toHaveAccessibleName("Stop");
 		await stop.click();
 		await expect.poll(async () => (await record("ALPHA")).messages.filter((row) => row.role === "assistant").at(-1)?.stopReason).toBe("aborted");
+		await expectActivity("ALPHA", "Idle");
+		await expectActivity("BETA", "Busy");
 		await expect.poll(() => held.find((entry) => entry.lane === "ALPHA" && entry.turn === 3)!.response.destroyed).toBe(true);
 		expect(held.find((entry) => entry.lane === "BETA" && entry.turn === 2)!.response.destroyed).toBe(false);
 		finish("BETA", 2); await done("BETA", 2);
+		await expectActivity("BETA", "Idle");
 		// A terminal provider error must not stop the other conversation either.
 		await activate("BETA"); await send("BETA", 3);
 		await activate("ALPHA"); await send("ALPHA", 4);
 		await expect.poll(async () => (await record("ALPHA")).messages.filter((row) => row.role === "assistant").at(-1)?.stopReason).toBe("error");
+		await expectActivity("ALPHA", "Idle");
 		expect(held.find((entry) => entry.lane === "BETA" && entry.turn === 3)!.response.destroyed).toBe(false);
 		finish("BETA", 3); await done("BETA", 3);
 		const saved = { ALPHA: await record("ALPHA"), BETA: await record("BETA") };

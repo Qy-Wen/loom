@@ -57,14 +57,49 @@
 
 .session-tab > button[role="tab"] {
 	position: relative;
+	display: flex;
+	align-items: center;
+	gap: var(--lm-space-2);
 	min-width: 0;
 	flex: 1;
-	overflow: hidden;
 	padding: 0 var(--lm-space-2) 0 var(--lm-space-5);
 	text-align: left;
+}
+
+.session-tab-title {
+	min-width: 0;
+	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
 }
+
+.session-tab-status {
+	box-sizing: border-box;
+	flex: 0 0 auto;
+	inline-size: 10px;
+	block-size: 10px;
+	color: var(--lm-graphic);
+}
+
+.session-tab-spinner {
+	border: 2px solid var(--lm-text-accent);
+	border-inline-end-color: transparent;
+	border-radius: 50%;
+}
+
+@media (forced-colors: active) {
+	.session-tab-spinner {
+		forced-color-adjust: none;
+		border-color: ButtonText;
+		border-inline-end-color: transparent;
+	}
+}
+
+@media (prefers-reduced-motion: no-preference) {
+	.session-tab-spinner { animation: session-tab-spin 1s linear infinite; }
+}
+
+@keyframes session-tab-spin { to { transform: rotate(1turn); } }
 
 .session-tab > button[role="tab"]:last-child {
 	padding-right: var(--lm-space-5);

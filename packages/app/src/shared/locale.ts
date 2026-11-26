@@ -495,6 +495,8 @@ export const messages = defineLocale(
 		},
 		sessions: {
 			label: "Sessions",
+			busy: "Busy",
+			idle: "Idle",
 			close: (title: string) => `Close ${title}`,
 			new: "New session",
 			/** Stored default title for a session nobody has named; shown translated, never rewritten. */
@@ -1338,6 +1340,8 @@ export const messages = defineLocale(
 		},
 		sessions: {
 			label: "会话",
+			busy: "忙碌",
+			idle: "空闲",
 			close: (title) => `关闭 ${title}`,
 			new: "新会话",
 			untitled: "新会话",

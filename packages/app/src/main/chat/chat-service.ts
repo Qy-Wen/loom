@@ -37,6 +37,10 @@ const idOf = <T extends ConversationId | EntryId>(id: string): T => {
 	return parsed as T;
 };
 
+function isSessionBusy(live: LiveState | undefined): boolean {
+	return Boolean(live?.run || live?.compactions?.length);
+}
+
 /** App-scoped chat rules and lifecycle; LibraryRuntime and durable own execution and recovery. */
 export class ChatService {
 	runtime: LibraryRuntime | undefined;
@@ -46,6 +50,8 @@ export class ChatService {
 	readonly #agentDefaults: { -readonly [Key in keyof AgentChange]: AgentChange[Key] } = {};
 	#observation: CommitObservation | undefined;
 	readonly #toolStarts = new Map<ConversationId, Map<string, number>>();
+	/** Only transitions in the live document should publish a fresh list. */
+	readonly #observedBusy = new Map<ConversationId, boolean>();
 	readonly #listeners = new Set<(rows: LoomSessionSummary[]) => void>();
 	#revision = 0;
 	readonly #onUsage?: (usage: { input: number; output: number; cacheRead: number; cacheWrite: number }) => void;
@@ -171,13 +177,23 @@ export class ChatService {
 		const baseline = await this.runtime.harness.usage(context);
 		for (const row of Object.values(baseline.models)) for (const key of ["input", "output", "cacheRead", "cacheWrite"] as const) this.#usage[key] += row[key];
 		this.#observation = this.runtime.harness.observeCommits({ advance: (publication) => {
+			let busyChanged = false;
 			for (const change of publication.changes) {
 				if (change.type !== "document" || change.record.kind !== LiveDoc.definition.kind || change.conversationId === undefined) continue;
-				if (change.kind === "change") this.trackToolStarts(change.conversationId, change.value as LiveState);
-				else this.#toolStarts.delete(change.conversationId);
+				const id = change.conversationId;
+				const live = change.kind === "change" ? change.value as LiveState : undefined;
+				const busy = isSessionBusy(live);
+				if (this.#observedBusy.get(id) !== busy) busyChanged = true;
+				if (live) {
+					this.#observedBusy.set(id, busy);
+					this.trackToolStarts(id, live);
+				} else {
+					this.#observedBusy.delete(id);
+					this.#toolStarts.delete(id);
+				}
 			}
 			if (publication.changes.some((change) => change.type === "document" && change.record.kind === "pi.usage")) void this.recordUsage();
-			if (publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
+			if (busyChanged || publication.changes.some((change) => change.type === "conversation" || change.type === "entry" || (change.type === "document" && (change.record.kind === LoomConversationDoc.definition.kind || change.record.kind === AgentDoc.definition.kind)))) void this.publish();
 		}, end: () => {} });
 		this.runtime.harness.resume();
 		await this.publish();
@@ -186,6 +202,7 @@ export class ChatService {
 		const runtime = this.runtime;
 		this.#observation?.detach(); this.#observation = undefined;
 		this.#toolStarts.clear();
+		this.#observedBusy.clear();
 		try { if (runtime) await runtime.close(context); }
 		finally { this.#trace?.stop(); this.#trace = undefined; this.#tracePublisher?.(null); }
 		if (this.runtime === runtime) this.runtime = undefined;
@@ -281,6 +298,7 @@ export class ChatService {
 		return Promise.all((await listLoomConversations(runtime.harness, {}, context)).map(async (row) => ({
 			id: String(row.id), title: row.title, status: row.archived ? "archived" as const : "open" as const, createdAt: row.createdAt,
 			updatedAt: await this.lastMessageTimestamp((await runtime.harness.conversation(row.id, context))!) ?? row.createdAt,
+			busy: isSessionBusy(await runtime.harness.snapshot(LiveDoc, row.id, context)),
 		})));
 	}
 	async createSession() {
@@ -337,7 +355,8 @@ export class ChatService {
 		const ref = agent.model;
 		const model = ref && this.#models?.getModel(ref.provider, ref.modelId);
 		const usage = ref && model && model.contextWindow > 0 ? contextUsage(await conversation.context(context), ref, model.contextWindow) : undefined;
-		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage,
+		const busy = isSessionBusy(await runtime.harness.snapshot(LiveDoc, conversation.id, context));
+		return { id, title: metadata?.title ?? "New session", status: metadata?.archived ? "archived" : "open", busy, createdAt: metadata?.createdAt ?? 0, updatedAt: afterEntryId ? await this.lastMessageTimestamp(conversation) ?? metadata?.createdAt ?? 0 : messages.at(-1)?.timestamp ?? metadata?.createdAt ?? 0, messages, context: usage,
 			model: ref ? { provider: ref.provider, modelId: ref.modelId, ...(agent.thinkingLevel ? { thinkingLevel: agent.thinkingLevel } : {}) } : undefined };
 	}
 	async setSessionName(id: string, title: string) { await setConversationTitle(this.requireRuntime().harness, idOf(id), title, context); }
