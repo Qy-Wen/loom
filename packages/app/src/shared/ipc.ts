@@ -36,7 +36,6 @@ import type {
 	LoomSessionSummary as SessionSummary,
 	ToolGateDecision,
 } from "@loom/agent";
-import type { AgentStatsView } from "./agent-stats.ts";
 import type { McpServerDraft, McpServerStatus, McpSettingsView, McpSettingsPatch } from "./mcp-settings.ts";
 import type { GeneralSettings } from "./general-settings.ts";
 import type { ModelProbeDraft, ModelSettingsPatch, ModelSettingsView, ProbeResult } from "./model-settings.ts";
@@ -277,8 +276,6 @@ export const IPC = {
 	saveGeneralSettings: "loom:saveGeneralSettings",
 	getAgentSandbox: "loom:getAgentSandbox",
 	saveAgentSandbox: "loom:saveAgentSandbox",
-	getAgentStats: "loom:getAgentStats",
-	resetAgentStats: "loom:resetAgentStats",
 	setUiSelection: "loom:setUiSelection",
 	getAgentPermission: "loom:getAgentPermission",
 	setAgentPermission: "loom:setAgentPermission",
@@ -451,8 +448,6 @@ export interface LoomApi {
 	saveGeneralSettings: (settings: Partial<GeneralSettings>) => Promise<GeneralSettings>;
 	getAgentSandbox: () => Promise<boolean>;
 	saveAgentSandbox: (enabled: boolean) => Promise<boolean>;
-	getAgentStats: () => Promise<AgentStatsView>;
-	resetAgentStats: () => Promise<AgentStatsView>;
 	setUiSelection: (selection: UiSelectionDraft | null) => Promise<void>;
 	getAgentPermission: () => Promise<AgentPermissionLevel>;
 	setAgentPermission: (level: AgentPermissionLevel) => Promise<AgentPermissionLevel>;

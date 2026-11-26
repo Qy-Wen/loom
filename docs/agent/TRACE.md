@@ -2,7 +2,7 @@
 
 # Local Agent Traces
 
-Loom (all builds, including release) records traces and metrics in `<library>/.loom/agents/traces/telemetry.sqlite`. Traces expire 30 days after their last update; metric intervals expire 30 days after their start. Cleanup runs on open and every minute. The viewer pages the latest 40 conversations and loads 40 traces per conversation at a time; both lists can load earlier history. Its Metrics tab shows the latest 200 metric rows and refreshes every second while open. Switching libraries resets both views. Production builds do not record or include the trace window. No data is uploaded.
+Loom (all builds, including release) records traces and metrics in `<library>/.loom/agents/traces/telemetry.sqlite`. Traces expire 30 days after their last update; metric intervals expire 30 days after their start. Cleanup runs on open and every minute. The viewer pages the latest 40 conversations and loads 40 traces per conversation at a time; both lists can load earlier history. Its Metrics tab shows the latest 200 metric rows and refreshes every second while open. Its Stats tab shows this app's lifetime Chat usage from `~/.loom/agent-stats.json`. Switching libraries resets the trace and metrics views; stats stay with the app. Production builds do not record or include the trace window. No data is uploaded.
 
 The old `traces.sqlite` is left untouched and is not read or migrated.
 

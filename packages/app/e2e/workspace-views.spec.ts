@@ -302,6 +302,8 @@ test("Loom and the sidebar actions stay aligned at the bottom while files scroll
 	await traces.press("Enter");
 	const trace = await opened;
 	await expect(trace.getByRole("tab", { name: "Traces", exact: true })).toBeVisible();
+	await trace.getByRole("tab", { name: "Stats", exact: true }).click();
+	await expect(trace.getByText("Prompt-cache hit rate", { exact: true })).toBeVisible();
 	await trace.close();
 });
 

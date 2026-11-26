@@ -613,59 +613,6 @@
 .settings-status-ok { color: var(--lm-text-success); }
 .settings-status-error { color: var(--lm-text-danger); }
 
-.settings-stat-hero {
-	padding: 14px var(--lm-space-7);
-	border: 1px solid var(--lm-border-default);
-	border-radius: var(--lm-radius-md);
-	background: var(--lm-surface-raised);
-}
-
-.settings-stat-hero span {
-	color: var(--lm-text-secondary);
-	font-size: var(--lm-text-size-xs);
-}
-
-.settings-stat-hero strong {
-	display: block;
-	margin: var(--lm-space-2) 0 var(--lm-space-3);
-	font-size: var(--lm-text-size-3xl);
-	font-weight: var(--lm-weight-semibold);
-	letter-spacing: -0.03em;
-}
-
-.settings-stat-hero p {
-	margin: 0;
-	color: var(--lm-text-muted);
-	font-size: var(--lm-text-size-xs);
-	line-height: 1.45;
-}
-
-.settings-stat-grid {
-	display: grid;
-	grid-template-columns: repeat(3, minmax(0, 1fr));
-	gap: var(--lm-space-4);
-	margin: 0;
-}
-
-.settings-stat-grid div {
-	padding: var(--lm-space-5) var(--lm-space-6);
-	border: 1px solid var(--lm-border-default);
-	border-radius: var(--lm-radius-md);
-	background: var(--lm-surface-raised);
-}
-
-.settings-stat-grid dt {
-	margin: 0 0 var(--lm-space-2);
-	color: var(--lm-text-muted);
-	font-size: var(--lm-text-size-xs);
-}
-
-.settings-stat-grid dd {
-	margin: 0;
-	font-size: var(--lm-text-size-xl);
-	font-weight: var(--lm-weight-semibold);
-}
-
 .settings-actions {
 	display: flex;
 	justify-content: flex-end;

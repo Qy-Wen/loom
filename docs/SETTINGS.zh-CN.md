@@ -90,14 +90,14 @@ LM Studio 和常见本地 OpenAI 兼容服务的 `/v1/chat/completions` 只收 `
 
 ## 界面
 
-- 一个设置窗口，五个 tab：**通用**、**模型**、**MCP**、**Agent**、**统计**。不再提供页级保存/取消按钮，关闭不会撤销已保存的改动。写入串行执行，失败保留输入及上一份有效配置。
+- 一个设置窗口，分页为：**通用**、**模型**、**云备份**、**MCP**、**外部访问**、**Agent**。不再提供页级保存/取消按钮，关闭不会撤销已保存的改动。写入串行执行，失败保留输入及上一份有效配置。
 - 主进程串行处理 UI/工具修改及其运行时应用。模型和通用设置只合并变更字段，Chat/MCP 按服务商或服务器提交；共用文件锁保护跨实例读改写，临时文件原子替换已保存文件，并处理 Windows 占用重试。MCP 环境变量引用原样留在磁盘。
 - 通用：界面语言（跟随系统、English、简体中文），外观（跟随系统、浅色、深色），启动时是否重新打开上次的素材库，以及联网工具开关。语言会切换应用界面，包括右键菜单。追踪窗口仍是英文。语言、外观和启动选项修改即时保存。外观默认跟随系统：主进程设置 `nativeTheme.themeSource`，它驱动每个窗口（主窗口、追踪窗口）的 `prefers-color-scheme`，并重绘原生外壳（窗口背景、Windows 标题栏按钮）。AI 的 `update_settings` 工具不暴露这个选项。存在 `~/.loom/general.json`。重新打开默认开启，和之前的启动行为一致。联网工具默认开启，且只在 DeepSeek 聊天提供方已启用并有 API Key 时生效：主 Agent 会得到 `web_search` 和 `web_fetch`，用这个 Key 调 DeepSeek 自己的 `/v1/tools/search` 和 `/v1/tools/fetch`（按成功请求计费，搜索词和 URL 会发给服务商）。没有 Key 或开关关闭时不注册这两个工具。专职拿不到。工具与服务商无关：一家服务商就是 `src/main/web/` 里的一个 `WebProvider`（搜索、可选的网页抓取、限额），并对应它所接受 Key 的聊天提供方，登记在 `WEB_PROVIDERS` 里。列表中第一个有 Key 的服务商提供这两个工具；该服务商不能抓取时，不提供 `web_fetch`。
 - Models：Chat 与四个槽位在同一页。非 Chat 的 URL/模型 ID 在失焦或 Enter 时保存，开关即时保存；已启用槽位的有效提交会检查连通性，不在每次输入时发请求。无效草稿不覆盖其他槽位。API 密钥弹窗确认即保存，自定义 Chat 保留自己的保存服务商/取消操作。
 - 改 embedding 的 `model` 会使已有文本 RAG 行作废，见 [RAG.md](./RAG/RAG.zh-CN.md#文本索引)。改 VLM 的 `model` 会使已有图 / 视频说明作废，见 [RAG.md](./RAG/RAG.zh-CN.md#图片视频音频)。改 Audio 的 `model` 会使已有音频说明作废。
 - MCP：增删服务器，配置命令/参数或 URL，Advanced 放 env/headers/cwd。保存服务器只提交该条目，其他未完成草稿保持本地。开关和移除即时保存并应用连接。启动时只连接启用的服务器。存在 `~/.loom/mcp.json`（或 `LOOM_MCP_CONFIG`）。
 - Agent：进程沙箱开关，默认开，存在 `~/.loom/agent-sandbox.json`。包住什么、Full permission 如何盖过它，见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。下面仍是自由输入的常驻说明，存在 `~/.loom/AGENTS.md`，不进素材库。下一轮会话把它接到系统提示末尾。空着就不加。已经开着的会话仍用开始时的那份。沙箱开关即时保存。常驻说明停顿 500 ms 后保存，切换 tab 或关闭时立即保存待提交文本；超过 40000 字保留输入但不持久化。检索专职和生成专职拿不到这段。跨库技能在 `~/.loom/skills/<skill-name>/SKILL.md`，每个库都能用；当前库里的同名技能覆盖它。见 [AGENT](./agent/AGENT.zh-CN.md)。
-- Stats：应用级累计的 Chat usage。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。
+- 应用级累计的 Chat usage 在追踪窗口的「统计」页，存在 `~/.loom/agent-stats.json`。Prompt-cache 命中率是 `cacheRead / (input + cacheRead + cacheWrite)`，和 agent eval 同一公式。同时展示 pi `SessionStats.usage` 的合计（input、output、cache read/write、轮次）。不展示费用；目录价格只是估算，未知价格不写成 0。
 - `get_settings` 和 `update_settings` 可读取并修改界面语言、Chat 服务商/模型、其他四个模型槽位、MCP、沙箱与常驻说明。读取不返回密钥、秘密 headers/env。Basic 和 Standard 写入前需确认，界面自动同步；常驻说明从下一条消息生效。启动偏好、权限、统计、OAuth 登录及会话模型/Thinking 选择不纳入这些工具。见 [PERMISSION](./agent/PERMISSION.zh-CN.md)。
 - 语言使用 `language: "system" | "en" | "zh-CN"`。Chat 使用 `chat.upsert` / `chat.remove` 和服务商 ID，可选 `chat.refresh`。`get_settings({chatProvider: "openai"})` 返回该服务商的模型目录。自定义服务商提供 `kind: "custom"`、`models`（ID、reasoning、input、contextWindow、maxTokens），以及完整 `requestUrl` 或原生 `baseUrl` + `api`。模型列表整体替换，`modelEnabled` 开关按 ID 合并。已有会话保持原选择，不自动替换模型。
 - Chat 条目可设置 `apiKey` 或 `clearApiKey: true`。Chat 密钥加密保存；清除不删除 OAuth/header 秘密，也无法移除环境变量密钥。另外四个槽位的密钥同样加密保存（见上）。工具参数中的密钥会留在对话历史中，建议优先使用设置里的密钥弹窗。

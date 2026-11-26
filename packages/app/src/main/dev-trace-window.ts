@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain } from "electron";
 import { windowColors } from "./appearance.ts";
 import { dirname, join } from "node:path";
+import { emptyUsageTotals, statsView, type AgentStatsView } from "../shared/agent-stats.ts";
 import { DEV_TRACE_IPC, type DevTraceMetric, type DevTraceRecord, type DevTraceConversation, type TraceCursor } from "../shared/dev-trace.ts";
 import type { AppLanguageChoice } from "../shared/general-settings.ts";
 import { loadAppIcon } from "./desktop/app-icon.ts";
@@ -13,10 +14,13 @@ type TraceSource = {
 	listConversations(before?: TraceCursor): Promise<DevTraceConversation[]>;
 	getConversation(id: string, before?: TraceCursor): DevTraceRecord[];
 	listMetrics(): DevTraceMetric[];
+	agentStats(): Promise<AgentStatsView>;
+	resetAgentStats(): Promise<AgentStatsView>;
 	/** The saved interface language choice; the window resolves "system" itself, as the main window does. */
 	language(): Promise<AppLanguageChoice>;
 };
-let source: TraceSource = { listTraces: () => [], getTrace: () => undefined, listConversations: async () => [], getConversation: () => [], listMetrics: () => [], language: async () => "system" };
+const emptyStats = () => Promise.resolve(statsView(emptyUsageTotals()));
+let source: TraceSource = { listTraces: () => [], getTrace: () => undefined, listConversations: async () => [], getConversation: () => [], listMetrics: () => [], agentStats: emptyStats, resetAgentStats: emptyStats, language: async () => "system" };
 function validateCursor(before?: TraceCursor): void {
 	if (before && (!Number.isFinite(before.at) || typeof before.id !== "string" || before.id.length > 240)) throw new Error("Invalid trace cursor");
 }
@@ -55,6 +59,8 @@ export function registerDevTraceIpc(preload: string, queries: TraceSource): void
 	ipcMain.handle(DEV_TRACE_IPC.getConversations, (_event, before?: TraceCursor) => { validateCursor(before); return source.listConversations(before); });
 	ipcMain.handle(DEV_TRACE_IPC.getConversation, (_event, id: string, before?: TraceCursor) => { validateId(id); validateCursor(before); return source.getConversation(id, before); });
 	ipcMain.handle(DEV_TRACE_IPC.getMetrics, (): DevTraceMetric[] => source.listMetrics());
+	ipcMain.handle(DEV_TRACE_IPC.getAgentStats, () => source.agentStats());
+	ipcMain.handle(DEV_TRACE_IPC.resetAgentStats, () => source.resetAgentStats());
 	ipcMain.handle(DEV_TRACE_IPC.getLanguage, () => source.language());
 }
 

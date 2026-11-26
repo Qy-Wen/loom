@@ -38,32 +38,39 @@ export function MetricsView({ openTrace }: { openTrace: (example: Exemplar) => P
 			{metrics === null ? <p className="trace-empty">{tm.loading}</p> : metrics.length === 0 ? <p className="trace-empty">{tm.empty}</p> : (
 				<table>
 					<thead><tr><th>{tm.columns.interval}</th><th>{tm.columns.metric}</th><th>{tm.columns.count}</th><th>{tm.columns.sum}</th><th>{tm.columns.mean}</th><th>{tm.columns.min}</th><th>{tm.columns.max}</th></tr></thead>
-					<tbody>{metrics.map((metric) => (
-						<tr key={metricRowKey(metric)}>
-							<td>{new Date(metric.intervalMs).toLocaleString()}</td>
-							<td>
-								<strong>{metric.name}</strong>
-								<div className="trace-metric-kind">{metric.kind}{metric.unit ? ` · ${metric.unit}` : ""}</div>
-								<code>{JSON.stringify(metric.attributes)}</code>
-								<details>
-									<summary>{tm.details}</summary>
-									{metric.description ? <p>{metric.description}</p> : null}
-									{metricBuckets(metric).map((bucket) => <div key={bucket.label}><code>{bucket.label}</code>: {bucket.count}</div>)}
-									{metric.exemplars?.map((example, i) => (
-										<button type="button" key={i} data-tooltip={`${example.traceId} / ${example.spanId}`} onClick={() => {
-											setNavigationError("");
-											void openTrace(example).catch(() => { if (alive.current) setNavigationError(t.referenceUnavailable); });
-										}}>{tm.exemplar(new Date(example.at).toLocaleTimeString(), formatMetricValue(example.value))}</button>
-									))}
-								</details>
-							</td>
-							<td>{formatMetricValue(metric.count)}</td>
-							<td>{formatMetricValue(metric.sum)}</td>
-							<td>{metric.kind === "histogram" && metric.count > 0 ? formatMetricValue(metric.sum / metric.count) : "—"}</td>
-							<td>{formatMetricValue(metric.min)}</td>
-							<td>{formatMetricValue(metric.max)}</td>
-						</tr>
-					))}</tbody>
+					<tbody>{metrics.map((metric) => {
+						const buckets = metricBuckets(metric);
+						const exemplars = metric.exemplars ?? [];
+						return (
+							<tr key={metricRowKey(metric)}>
+								<td>{new Date(metric.intervalMs).toLocaleString()}</td>
+								<td>
+									<div className="trace-metric-title">
+										<strong>{metric.name}</strong>
+										{metric.unit ? <span className="trace-metric-kind">({metric.unit})</span> : null}
+									</div>
+									{metric.description ? <p className="trace-metric-description">{metric.description}</p> : null}
+									<code>{JSON.stringify(metric.attributes)}</code>
+									{buckets.length > 0 || exemplars.length > 0 ? (
+										<div className="trace-metric-extra">
+											{buckets.map((bucket) => <div key={bucket.label}><code>{bucket.label}</code>: {bucket.count}</div>)}
+											{exemplars.map((example, i) => (
+												<button type="button" key={i} data-tooltip={`${example.traceId} / ${example.spanId}`} onClick={() => {
+													setNavigationError("");
+													void openTrace(example).catch(() => { if (alive.current) setNavigationError(t.referenceUnavailable); });
+												}}>{tm.exemplar(new Date(example.at).toLocaleTimeString(), formatMetricValue(example.value))}</button>
+											))}
+										</div>
+									) : null}
+								</td>
+								<td>{formatMetricValue(metric.count)}</td>
+								<td>{formatMetricValue(metric.sum)}</td>
+								<td>{metric.kind === "histogram" && metric.count > 0 ? formatMetricValue(metric.sum / metric.count) : "—"}</td>
+								<td>{formatMetricValue(metric.min)}</td>
+								<td>{formatMetricValue(metric.max)}</td>
+							</tr>
+						);
+					})}</tbody>
 				</table>
 			)}
 		</div>

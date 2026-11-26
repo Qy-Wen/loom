@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import type { AgentStatsView } from "../shared/agent-stats.ts";
 import { DEV_TRACE_IPC, type DevTraceMetric, type DevTraceRecord, type DevTraceConversation, type TraceCursor } from "../shared/dev-trace.ts";
 import type { AppLanguageChoice } from "../shared/general-settings.ts";
 
@@ -8,6 +9,8 @@ const api = {
 	getConversations: (before?: TraceCursor): Promise<DevTraceConversation[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getConversations, before),
 	getConversation: (id: string, before?: TraceCursor): Promise<DevTraceRecord[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getConversation, id, before),
 	getMetrics: (): Promise<DevTraceMetric[]> => ipcRenderer.invoke(DEV_TRACE_IPC.getMetrics),
+	getAgentStats: (): Promise<AgentStatsView> => ipcRenderer.invoke(DEV_TRACE_IPC.getAgentStats),
+	resetAgentStats: (): Promise<AgentStatsView> => ipcRenderer.invoke(DEV_TRACE_IPC.resetAgentStats),
 	getLanguage: (): Promise<AppLanguageChoice> => ipcRenderer.invoke(DEV_TRACE_IPC.getLanguage),
 	onLanguageChanged: (listener: () => void): (() => void) => {
 		const handler = () => listener();

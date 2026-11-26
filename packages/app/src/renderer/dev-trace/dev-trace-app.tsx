@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DevTraceConversation, DevTraceRecord, TraceCursor } from "../../shared/dev-trace.ts";
 import { MetricsView } from "./metrics-view.tsx";
+import { StatsView } from "./stats-view.tsx";
 import { TraceSplit } from "./trace-split.tsx";
 import { TraceView, type TraceDetailTab } from "./trace-view.tsx";
 import { conversationId } from "./trace-events.ts";
@@ -24,7 +25,8 @@ export function DevTraceApp(): React.JSX.Element {
 	const [selectedSpan, setSelectedSpan] = useState<string | null>(null);
 	const [navigationKey, setNavigationKey] = useState(0);
 	const listVersion = useRef(0);
-	const [tab, setTab] = useState<"traces" | "metrics">("traces");
+	const [tab, setTab] = useState<"traces" | "metrics" | "stats">("traces");
+	useEffect(() => { document.getElementById(`${tab}-tab`)?.scrollIntoView({ block: "nearest", inline: "nearest", container: "nearest" } as ScrollIntoViewOptions); }, [tab]);
 	// A viewer preference, independent of event/conversation remounts and content folds.
 	const [detailTab, setDetailTab] = useState<TraceDetailTab>("preview");
 	const [sourceKey, setSourceKey] = useState(0);
@@ -131,8 +133,10 @@ export function DevTraceApp(): React.JSX.Element {
 		<nav className="trace-tabs" role="tablist" aria-label={t.tabs.label}>
 			<button role="tab" id="traces-tab" aria-controls="traces-panel" aria-selected={tab === "traces"} onClick={() => setTab("traces")}>{t.tabs.traces}</button>
 			<button role="tab" id="metrics-tab" aria-controls="metrics-panel" aria-selected={tab === "metrics"} onClick={() => setTab("metrics")}>{t.tabs.metrics}</button>
+			<button role="tab" id="stats-tab" aria-controls="stats-panel" aria-selected={tab === "stats"} onClick={() => setTab("stats")}>{t.tabs.stats}</button>
 		</nav>
 		{tab === "metrics" ? <MetricsView key={sourceKey} openTrace={(example) => openTrace(example.traceId, example.spanId)} /> : null}
+		{tab === "stats" ? <StatsView /> : null}
 		<div className="trace-app" hidden={tab !== "traces"} role="tabpanel" id="traces-panel" aria-labelledby="traces-tab">
 			<TraceSplit label={t.app.resizeList} storageKey="loom.devTrace.listWidth" defaultSize={220} minFirst={150} minSecond={440}>
 				<aside className="trace-list" aria-label={t.app.listLabel}>

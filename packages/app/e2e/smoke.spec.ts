@@ -123,21 +123,19 @@ test("creates a durable conversation and discards the unused tab on close",  asy
 	expect((await loomPage.evaluate(() => window.loom.listSessions())).filter((row) => row.status === "archived").map((row) => row.id)).toEqual(archivedIds);
 });
 
-test("settings has Models, MCP, and Stats tabs", async ({ loomPage }) => {
+test("settings has Models, MCP, and Agent tabs", async ({ loomPage }) => {
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const dialog = loomPage.getByRole("dialog", { name: "Settings" });
 	await expect(dialog).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "Models" })).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "MCP" })).toBeVisible();
 	await expect(dialog.getByRole("tab", { name: "Agent" })).toBeVisible();
-	await expect(dialog.getByRole("tab", { name: "Stats" })).toBeVisible();
+	await expect(dialog.getByRole("tab", { name: "Stats" })).toHaveCount(0);
 	await dialog.getByRole("tab", { name: "Agent" }).click();
 	await expect(dialog.getByRole("switch", { name: "Process sandbox" })).toBeChecked();
 	await expect(dialog.getByRole("textbox", { name: "Agent instructions" })).toBeVisible();
 	await dialog.getByRole("tab", { name: "MCP" }).click();
 	await expect(dialog.getByRole("button", { name: "Add server" })).toBeVisible();
-	await dialog.getByRole("tab", { name: "Stats" }).click();
-	await expect(dialog.getByText("Prompt-cache hit rate", { exact: true })).toBeVisible();
 	await dialog.getByRole("button", { name: "Close settings" }).click();
 	await expect(dialog).toBeHidden();
 });

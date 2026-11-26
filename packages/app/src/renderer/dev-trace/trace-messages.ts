@@ -7,7 +7,7 @@ import type { AppLanguage } from "../../shared/general-settings.ts";
 type Shape<T> = { [K in keyof T]: T[K] extends (...args: infer A) => string ? (...args: A) => string : T[K] extends string ? string : Shape<T[K]> };
 
 const en = {
-	tabs: { label: "Trace views", traces: "Traces", metrics: "Metrics" },
+	tabs: { label: "Trace views", traces: "Traces", metrics: "Metrics", stats: "Stats" },
 	kinds: { system: "System", user: "User", context: "Context", assistant: "Assistant", tool: "Tool", approval: "Approval", phase: "Native" },
 	statuses: { running: "running", completed: "completed", error: "error", interrupted: "interrupted", aborted: "aborted" } as Record<string, string>,
 	notRecorded: "Not recorded",
@@ -122,13 +122,27 @@ const en = {
 			compaction: "Context compaction",
 		},
 	},
+	stats: {
+		unavailable: "Stats unavailable.",
+		note: "Lifetime Chat usage for this app. Prompt-cache hit rate is the number that matters for prefix stability.",
+		loading: "Loading stats…",
+		hitRate: "Prompt-cache hit rate",
+		hitNote: "cacheRead / (input + cacheRead + cacheWrite)",
+		promptTokens: "Prompt tokens",
+		cacheRead: "Cache read",
+		uncached: "Uncached input",
+		cacheWrite: "Cache write",
+		output: "Output",
+		turns: "Usage turns",
+		resetting: "Resetting…",
+		reset: "Reset stats",
+	},
 	metrics: {
 		unavailable: "Metrics unavailable.",
 		note: "Latest 200 metric rows · ten-second intervals · current library · refreshes every second. Active-task values are deltas, not a current-task total.",
 		loading: "Loading metrics…",
 		empty: "No metrics yet.",
 		columns: { interval: "Interval", metric: "Metric", count: "Count", sum: "Sum", mean: "Mean", min: "Min", max: "Max" },
-		details: "Metadata, buckets and exemplars",
 		exemplar: (time: string, value: string) => `Trace · ${time} · ${value}`,
 	},
 	json: {
@@ -144,7 +158,7 @@ const en = {
 export type TraceMessages = typeof en;
 
 const zh: Shape<TraceMessages> = {
-	tabs: { label: "轨迹视图", traces: "轨迹", metrics: "指标" },
+	tabs: { label: "轨迹视图", traces: "轨迹", metrics: "指标", stats: "统计" },
 	kinds: { system: "系统", user: "用户", context: "上下文", assistant: "助手", tool: "工具", approval: "审批", phase: "底层记录" },
 	statuses: { running: "运行中", completed: "已完成", error: "出错", interrupted: "已中断", aborted: "已取消" },
 	notRecorded: "未采集",
@@ -259,13 +273,27 @@ const zh: Shape<TraceMessages> = {
 			compaction: "上下文压缩",
 		},
 	},
+	stats: {
+		unavailable: "统计不可用。",
+		note: "这个应用累计的 Chat 用量。要看的是 prompt cache 命中率。",
+		loading: "正在加载统计…",
+		hitRate: "Prompt cache 命中率",
+		hitNote: "cacheRead / (input + cacheRead + cacheWrite)",
+		promptTokens: "Prompt tokens",
+		cacheRead: "缓存读取",
+		uncached: "未缓存输入",
+		cacheWrite: "缓存写入",
+		output: "输出",
+		turns: "用量轮次",
+		resetting: "正在重置…",
+		reset: "重置统计",
+	},
 	metrics: {
 		unavailable: "指标不可用。",
 		note: "最近 200 行指标 · 十秒一档 · 当前素材库 · 每秒刷新。活动任务的数值是增量，不是当前任务的总数。",
 		loading: "正在加载指标…",
 		empty: "暂无指标。",
 		columns: { interval: "时间段", metric: "指标", count: "次数", sum: "合计", mean: "均值", min: "最小", max: "最大" },
-		details: "元数据、分桶与示例",
 		exemplar: (time, value) => `轨迹 · ${time} · ${value}`,
 	},
 	json: {

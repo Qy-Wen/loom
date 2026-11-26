@@ -13,6 +13,8 @@ export const DEV_TRACE_IPC = {
 	getConversations: "loom:getDevTraceConversations",
 	getConversation: "loom:getDevTraceConversation",
 	getMetrics: "loom:getDevTraceMetrics",
+	getAgentStats: "loom:getDevTraceAgentStats",
+	resetAgentStats: "loom:resetDevTraceAgentStats",
 	getLanguage: "loom:getDevTraceLanguage",
 	language: "loom:devTraceLanguage",
 	trace: "loom:devTrace",

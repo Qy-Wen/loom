@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from "react";
-import type { AgentStatsView } from "../../shared/agent-stats.ts";
 import { emptyMcpServerDraft, type McpServerDraft, type McpServerStatus, type McpSettingsView } from "../../shared/mcp-settings.ts";
 import type { ModelSettingsDraft, ModelSettingsPatch, ModelSlotId } from "../../shared/model-settings.ts";
 import { changedFields } from "../../shared/settings-changes.ts";
@@ -14,23 +13,20 @@ import { SettingsMcp } from "./settings-mcp.tsx";
 import { SettingsAccess } from "./settings-access.tsx";
 import { SettingsCloud } from "./settings-cloud.tsx";
 import { SettingsModelsPane } from "./settings-models.tsx";
-import { SettingsStats } from "./settings-stats.tsx";
 import { SettingsSaveQueue } from "./settings-save-queue.ts";
 
-type SettingsTab = "general" | "models" | "cloud" | "mcp" | "access" | "agent" | "stats";
-const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "agent", "stats"];
+type SettingsTab = "general" | "models" | "cloud" | "mcp" | "access" | "agent";
+const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "agent"];
 
 export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.Element {
 	const { t, commitLanguage } = useLocale();
 	const [tab, setTab] = useState<SettingsTab>("models");
 	const [draft, setDraft] = useState<ModelSettingsDraft | null>();
 	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
-	const [stats, setStats] = useState<AgentStatsView | null>(null);
 	const [instructions, setInstructions] = useState<string | null>(null);
 	const [sandboxEnabled, setSandboxEnabled] = useState<boolean | null>(null);
 	const [general, setGeneral] = useState<GeneralSettings | null>(null);
 	const [error, setError] = useState<string | null>(null);
-	const [resetting, setResetting] = useState(false);
 	const queue = useRef(new SettingsSaveQueue());
 	const modelDraft = useRef<ModelSettingsDraft | null>(null);
 	const savedModels = useRef<ModelSettingsDraft | null>(null);
@@ -100,8 +96,8 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		let cancelled = false;
 		const load = async () => {
 			try {
-				const [models, mcpView, statsView, instructionsText, sandbox, generalView] = await Promise.all([
-					window.loom.getModelSettings(), window.loom.getMcpSettings(), window.loom.getAgentStats(),
+				const [models, mcpView, instructionsText, sandbox, generalView] = await Promise.all([
+					window.loom.getModelSettings(), window.loom.getMcpSettings(),
 					window.loom.getAgentInstructions(), window.loom.getAgentSandbox(), window.loom.getGeneralSettings(),
 				]);
 				if (cancelled) return;
@@ -116,7 +112,6 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 					mcpIdentities.current = mcpView.servers.map((row) => row.id);
 					setMcp(mcpView);
 				} else setMcp((current) => current ? { ...current, status: mcpView.status } : mcpView);
-				setStats(statsView);
 				if (!dirtyInstructions.current) setInstructions(instructionsText);
 				setSandboxEnabled(sandbox);
 				generalDraft.current = generalView; setGeneral(generalView);
@@ -131,10 +126,6 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		const unsubscribe = window.loom.onSettingsChanged(() => { void queue.current.flush().then(load); });
 		return () => { cancelled = true; unsubscribe(); clearTimeout(instructionTimer.current); };
 	}, [commitLanguage]);
-
-	useEffect(() => {
-		if (tab === "stats") void window.loom.getAgentStats().then(setStats).catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
-	}, [tab]);
 
 	function patchModel(id: ModelSlotId, patch: Partial<ModelSettingsDraft[ModelSlotId]>): void {
 		if (!modelDraft.current) return;
@@ -237,13 +228,6 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 		void persist(() => window.loom.saveAgentSandbox(enabled));
 	}
 
-	async function resetStats(): Promise<void> {
-		setResetting(true);
-		const saved = await persist(() => window.loom.resetAgentStats());
-		if (saved) setStats(saved);
-		setResetting(false);
-	}
-
 	return (
 		<div className="settings-overlay" role="presentation" onPointerDown={(event) => {
 			closeOnBackdrop.current = event.target === event.currentTarget;
@@ -281,7 +265,6 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 								{tab === "models" && <SettingsModelsPane draft={draft} onChange={patchModel} onCommit={commitModel} />}
 								{tab === "mcp" && (mcp ? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} onSave={commitMcp} onRemove={removeMcp} /> : <div className="empty">{t.common.loading}</div>)}
 								{tab === "agent" && (instructions !== null && sandboxEnabled !== null ? <SettingsAgent sandboxEnabled={sandboxEnabled} instructions={instructions} onSandboxChange={patchSandbox} onInstructionsChange={patchInstructions} /> : <div className="empty">{t.common.loading}</div>)}
-								{tab === "stats" && (stats ? <SettingsStats stats={stats} resetting={resetting} onReset={() => void resetStats()} /> : <div className="empty">{t.common.loading}</div>)}
 							</div>
 							{tab === "mcp" && <div className="settings-actions settings-dialog-actions">
 								<button type="button" onClick={() => { mcpIdentities.current.push(undefined); mcpBaselines.current.push(emptyMcpServerDraft()); patchMcp([...mcpDraft.current, emptyMcpServerDraft()]); }}>{t.settings.addServer}</button>

@@ -1159,15 +1159,6 @@ function registerIpc(): void {
 		await applyProcessSandbox();
 		return saved;
 	}));
-	ipcMain.handle(IPC.getAgentStats, async () => {
-		if (!agentStats) throw new Error("Settings store not started");
-		return agentStats.view();
-	});
-	ipcMain.handle(IPC.resetAgentStats, async () => {
-		if (!agentStats) throw new Error("Settings store not started");
-		return agentStats.reset();
-	});
-
 	ipcMain.handle(IPC.setUiSelection, (_event, raw: unknown) => {
 		setUiSelection(parseUiSelectionDraft(raw));
 	});
@@ -1471,6 +1462,14 @@ app
 			listConversations: (before) => requireChat().listTraceConversations(before),
 			getConversation: (id, before) => requireChat().getTraceConversation(id, before),
 			listMetrics: () => requireChat().listTraceMetrics(),
+			agentStats: async () => {
+				if (!agentStats) throw new Error("Settings store not started");
+				return agentStats.view();
+			},
+			resetAgentStats: async () => {
+				if (!agentStats) throw new Error("Settings store not started");
+				return agentStats.reset();
+			},
 			language: async () => generalSettings ? (await generalSettings.load()).language : "system",
 		});
 		agentServer = await startAgentServer(requireChat(), process.env.ELECTRON_RENDERER_URL);
