@@ -146,19 +146,9 @@
 .session-tab-find,
 .session-archived > button {
 	flex: 0 0 auto;
-	padding: 0 var(--lm-space-4);
-}
-
-.session-tab-new {
-	font-size: var(--lm-text-size-xl);
-	line-height: 1;
-}
-
-.session-tab-find,
-.session-archived > button {
 	display: grid;
 	place-items: center;
-	padding-inline: var(--lm-space-3);
+	padding: 0 var(--lm-space-3);
 }
 
 .session-archived {

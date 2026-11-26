@@ -113,7 +113,9 @@ export function SessionBar({
 				data-tooltip={t.sessions.new}
 				onClick={onCreate}
 			>
-				+
+				<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" aria-hidden="true">
+					<path d="M12 4.25v15.5M4.25 12h15.5" />
+				</svg>
 			</button>
 			{onFind && <button
 				type="button"
