@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+## [v0.2.1]
+
+- Type / in chat to run a command or insert a skill. Each skill stays on its own line.
+- App settings and skills are stored in ~/.loom. A skill in the open library still overrides one with the same name.
+- Double-click a session tab to rename it, drag tabs to reorder them, and see which session is working. Search the current conversation and archived sessions.
+- Reopening a library restores the last view and the tabs that were open.
+- Tool cards stay collapsed until opened and show how long a tool ran. A waiting tool expands so you can watch its output and still allow or skip it. Chat will not send while the context is being compacted.
+- Press Ctrl+Enter or Command+Enter to add a line in the composer.
+- Rename a folder when only the letter case changes.
+- Copy a Markdown code block from the block itself. Longer conversations appear as you scroll.
+- The traces window shows lifetime usage with units and descriptions.
+
 ## [v0.2.0]
 
 - Embed a canvas board in a Markdown note and preview its cards and connections. Scrolling past the preview stays steady.
