@@ -20,7 +20,7 @@ const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "
 
 export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.Element {
 	const { t, commitLanguage } = useLocale();
-	const [tab, setTab] = useState<SettingsTab>("models");
+	const [tab, setTab] = useState<SettingsTab>("general");
 	const [draft, setDraft] = useState<ModelSettingsDraft | null>();
 	const [mcp, setMcp] = useState<McpSettingsView | null>(null);
 	const [instructions, setInstructions] = useState<string | null>(null);

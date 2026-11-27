@@ -3,6 +3,7 @@ import { expect, test } from "./loom.ts";
 test("non-Chat API keys save on confirmation, with masked values, cancel and clearing", async ({ loomPage }) => {
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	const rows = [
 		{ id: "embedding", title: "Text embedding" }, { id: "rerank", title: "Rerank" },
 		{ id: "vlm", title: "VLM" }, { id: "audio", title: "Audio" },
@@ -47,6 +48,7 @@ test("non-Chat API keys save on confirmation, with masked values, cancel and cle
 	}
 	await settings.getByRole("button", { name: "Close settings", exact: true }).click();
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	await settings.getByRole("group", { name: "Text embedding", exact: true }).getByRole("button", { name: "Text embedding API key", exact: true }).click();
 	const dialog = loomPage.getByRole("dialog", { name: "Text embedding API key", exact: true });
 	const input = dialog.getByLabel("Text embedding API key", { exact: true });

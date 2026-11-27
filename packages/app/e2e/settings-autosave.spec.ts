@@ -10,6 +10,7 @@ test("Models shows one loading state until both sections are ready", async ({ lo
 		ipcMain.handle("loom:getChatSettings", async () => { await ready; return view; });
 	}, chat);
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+	await loomPage.getByRole("tab", { name: "Models", exact: true }).click();
 	const panel = loomPage.getByRole("tabpanel", { name: "Models", exact: true });
 	const loading = panel.getByRole("status");
 	await expect(loading).toHaveText("Loading…");
@@ -83,6 +84,7 @@ test("model text saves on Enter or blur; invalid sibling drafts do not block oth
 	try {
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 		const settings = loomPage.locator(".settings-dialog");
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		const slot = settings.getByRole("group", { name: "Text embedding", exact: true });
 		const toggle = slot.getByRole("switch", { name: "Enable Text embedding", exact: true });
 		if (await toggle.isChecked()) await toggle.locator("..").click();
@@ -160,6 +162,7 @@ test("a stale settings form preserves independent model and MCP changes from Mai
 		});
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 		const settings = loomPage.locator(".settings-dialog");
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		const slot = settings.getByRole("group", { name: "Text embedding", exact: true });
 		const model = slot.getByRole("textbox", { name: "Model", exact: true });
 		await model.fill("from-ui");
@@ -211,6 +214,7 @@ test("editing an open custom provider preserves independent external changes", a
 	try {
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 		const settings = loomPage.locator(".settings-dialog");
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		const provider = settings.locator(".settings-chat-provider").filter({ hasText: "Before concurrent edit" });
 		await provider.getByRole("button", { name: "Edit", exact: true }).click();
 		const editor = provider.getByRole("group", { name: "Edit custom provider", exact: true });

@@ -27,6 +27,7 @@ test("custom provider can be created, authenticated, edited and used for streami
 		const before = await loomPage.evaluate(async () => (await window.loom.getChatSettings()).config.providers.length);
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 		const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		await expect(settings.getByRole("button", { name: "Custom provider", exact: true })).toHaveCount(0);
 		await settings.getByRole("combobox", { name: "Add provider", exact: true }).selectOption("__custom__");
 		const editor = settings.getByRole("group", { name: "Add custom provider", exact: true });
@@ -180,6 +181,7 @@ test("custom provider can be created, authenticated, edited and used for streami
 		expect(requests).toEqual([{ model: "first", authorization: `Bearer ${key}`, url: "/v1/edited/chat/completions" }]);
 		await loomPage.reload();
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		await expect(provider.locator(".settings-probe.is-ok")).toBeVisible();
 		await provider.locator(".settings-chat-provider-actions").getByRole("button", { name: "Edit", exact: true }).click();
 		await expect(edit.getByRole("textbox", { name: "Request URL", exact: true })).toHaveValue(baseUrl + "/edited/chat/completions");

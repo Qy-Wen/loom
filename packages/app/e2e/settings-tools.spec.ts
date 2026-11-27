@@ -62,6 +62,7 @@ test("Agent settings tools confirm language/Chat/key writes and synchronize the 
 		});
 		await expect(loomPage.locator("html")).toHaveAttribute("lang", "en");
 		const settings = loomPage.locator(".settings-dialog");
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		const provider = settings.locator(".settings-chat-provider").filter({ hasText: "Agent-configured" });
 		await expect(provider.locator(".settings-probe.is-ok")).toBeVisible();
 		await expect(provider.getByRole("switch", { name: "Enable tool-model", exact: true })).toBeChecked();
@@ -73,6 +74,7 @@ test("Agent settings tools confirm language/Chat/key writes and synchronize the 
 		expect(toolResults.at(-1)).toContain('"hasApiKey": true'); expect(toolResults.at(-1)).not.toContain(key);
 		await send("update_settings", { chat: { upsert: [{ id: "agent-configured", clearApiKey: true, modelEnabled: { "tool-model": false } }] } });
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		await expect(provider.getByRole("switch", { name: "Enable tool-model", exact: true })).not.toBeChecked();
 		await expect(provider.locator(".settings-probe.is-error")).toBeVisible();
 		await settings.getByRole("button", { name: "Close settings", exact: true }).click();

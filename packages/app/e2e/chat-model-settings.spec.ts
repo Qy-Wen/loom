@@ -28,6 +28,7 @@ test("sessions automatically select available models and prefer remembered choic
 	await expect(picker).toHaveText("demo (e2e-chat)");
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	const chat = settings.getByRole("group", { name: "Chat models", exact: true });
 	await expect(chat.getByRole("columnheader", { name: "Default", exact: true })).toHaveCount(0);
 	await expect(chat.getByRole("columnheader", { name: "Thinking", exact: true })).toHaveCount(0);
@@ -52,6 +53,7 @@ test("sessions automatically select available models and prefer remembered choic
 	await expect(picker).toHaveText("second-model (e2e-chat)");
 
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	await expect(demo).not.toBeChecked();
 	await settings.getByRole("button", { name: "Close settings" }).click();
 });
@@ -226,6 +228,7 @@ test("Chat provider status uses green/red dots and shares the MCP error tooltip"
 	});
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	const chat = settings.getByRole("group", { name: "Chat models", exact: true });
 	const ready = chat.locator(".settings-chat-provider").filter({ has: loomPage.getByText("e2e-chat", { exact: true }) });
 	const missing = chat.locator(".settings-chat-provider").filter({ has: loomPage.getByText("Missing credentials", { exact: true }) });

@@ -233,6 +233,7 @@ test("sign-out confirmation sits above Settings and Escape closes only the confi
 	}, view);
 	await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
 	const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
+	await settings.getByRole("tab", { name: "Models", exact: true }).click();
 	const trigger = settings.getByRole("button", { name: "Sign out", exact: true });
 	await trigger.click();
 	const dialog = loomPage.getByRole("dialog", { name: "Sign out of Fixture Provider?", exact: true });

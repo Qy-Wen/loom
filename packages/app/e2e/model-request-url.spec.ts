@@ -27,6 +27,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 	const settings = loomPage.getByRole("dialog", { name: "Settings", exact: true });
 	try {
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		for (const row of rows) {
 			const slot = settings.getByRole("group", { name: row.title, exact: true });
 			const toggle = slot.getByRole("switch", { name: `Enable ${row.title}`, exact: true });
@@ -48,6 +49,7 @@ test("non-Chat slots probe and persist complete request URLs without rewriting",
 			]);
 		}
 		await loomPage.getByRole("button", { name: "Settings", exact: true }).click();
+		await settings.getByRole("tab", { name: "Models", exact: true }).click();
 		for (const row of rows) {
 			await expect(settings.getByRole("group", { name: row.title, exact: true }).getByRole("textbox", { name: "Request URL", exact: true })).toHaveValue(origin + row.path);
 		}
