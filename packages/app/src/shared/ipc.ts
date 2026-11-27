@@ -38,6 +38,13 @@ import type {
 } from "@loom/agent";
 import type { McpServerDraft, McpServerStatus, McpSettingsView, McpSettingsPatch } from "./mcp-settings.ts";
 import type { GeneralSettings } from "./general-settings.ts";
+import type {
+	CreateSkillInput,
+	SkillDetail,
+	SkillScope,
+	SkillsSettingsView,
+	UpdateSkillInput,
+} from "./skills-settings.ts";
 import type { ModelProbeDraft, ModelSettingsPatch, ModelSettingsView, ProbeResult } from "./model-settings.ts";
 import type { ChatModelsConfig } from "@loom/agent/chat-models";
 import type { ChatAuthStatus, ChatModelView } from "./chat-models.ts";
@@ -270,6 +277,13 @@ export const IPC = {
 	cancelExternalTool: "loom:cancelExternalTool",
 	saveMcpSettings: "loom:saveMcpSettings",
 	setMcpServerLive: "loom:setMcpServerLive",
+	getSkillsSettings: "loom:getSkillsSettings",
+	readSkill: "loom:readSkill",
+	createSkill: "loom:createSkill",
+	saveSkill: "loom:saveSkill",
+	setSkillEnabled: "loom:setSkillEnabled",
+	deleteSkill: "loom:deleteSkill",
+	openSkillsFolder: "loom:openSkillsFolder",
 	getAgentInstructions: "loom:getAgentInstructions",
 	saveAgentInstructions: "loom:saveAgentInstructions",
 	getGeneralSettings: "loom:getGeneralSettings",
@@ -442,6 +456,13 @@ export interface LoomApi {
 	cancelExternalTool: (id: string) => Promise<boolean>;
 	saveMcpSettings: (patch: McpSettingsPatch) => Promise<McpSettingsView>;
 	setMcpServerLive: (server: McpServerDraft) => Promise<McpServerStatus>;
+	getSkillsSettings: () => Promise<SkillsSettingsView>;
+	readSkill: (scope: SkillScope, id: string) => Promise<SkillDetail>;
+	createSkill: (input: CreateSkillInput) => Promise<SkillDetail>;
+	saveSkill: (input: UpdateSkillInput) => Promise<SkillDetail>;
+	setSkillEnabled: (scope: SkillScope, name: string, enabled: boolean) => Promise<SkillsSettingsView>;
+	deleteSkill: (scope: SkillScope, id: string) => Promise<SkillsSettingsView>;
+	openSkillsFolder: (scope: SkillScope, targetPath?: string) => Promise<void>;
 	getAgentInstructions: () => Promise<string>;
 	saveAgentInstructions: (text: string) => Promise<string>;
 	getGeneralSettings: () => Promise<GeneralSettings>;

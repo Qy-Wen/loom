@@ -107,6 +107,8 @@ import { TEXT_FILE_EDIT_LIMIT_BYTES } from "../shared/text-file.ts";
 import { ChatModelService } from "./models/chat-model-service.ts";
 import { applyChatSettingsPatch, parseChatSettingsPatch, publicChatSettings } from "./tools/chat-settings-tools.ts";
 import { builtinProviders } from "@earendil-works/pi-ai/providers/all";
+import { SkillsService } from "./skills/skills-service.ts";
+import { registerSkillsIpc } from "./skills/skills-ipc.ts";
 
 const ASSET_SCHEME = "loom-asset";
 const DEFAULT_CDP_PORT = "9344";
@@ -291,6 +293,7 @@ let agentSandbox: AgentSandboxStore | null = null;
 let agentStats: AgentStatsStore | null = null;
 let mcpHost: McpHost | null = null;
 let mcpService: McpServiceController | null = null;
+let skillsService: SkillsService | null = null;
 let agentServer: AgentServer | null = null;
 let shutdownStarted = false;
 let gradePreview: AbortController | null = null;
@@ -1021,6 +1024,10 @@ function registerIpc(): void {
 	ipcMain.handle(IPC.describeAudio, (_event, assetId: string) => describeAudioWithSettings(assetId, undefined, { force: true }));
 	ipcMain.handle(IPC.listSessions, () => requireChat().listSessions());
 	ipcMain.handle(IPC.listLibrarySkills, () => requireChat().listLibrarySkills());
+	registerSkillsIpc(() => {
+		if (!skillsService) throw new Error("Skills service is not initialized");
+		return skillsService;
+	});
 	ipcMain.handle(IPC.createSession, async () => {
 		return chatRecord(await requireChat().createSession());
 	});
@@ -1362,6 +1369,13 @@ app
 			takeImages: takeComposerImages,
 			takeAssets: takeLiveComposerAssets,
 		} }, (usage) => { void agentStats?.record(usage); });
+		skillsService = new SkillsService({
+			userSkillsDir: configFile("skills"),
+			getLibraryRoot: () => localCore.getLibraryRoot(),
+			trashItem: (targetPath) => shell.trashItem(targetPath),
+			openPath: (targetPath) => shell.openPath(targetPath),
+			showItemInFolder: (targetPath) => shell.showItemInFolder(targetPath),
+		});
 		await chatModels.initialize(process.env);
 		chatModels.onSecrets((values) => requireChat().setChatSecrets(values));
 		agentStats = new AgentStatsStore(configFile("agent-stats.json"));

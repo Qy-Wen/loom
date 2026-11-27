@@ -10,13 +10,14 @@ import { useLocale } from "../locale.tsx";
 import { SettingsAgent } from "./settings-agent.tsx";
 import { SettingsGeneral } from "./settings-general.tsx";
 import { SettingsMcp } from "./settings-mcp.tsx";
+import { SettingsSkills } from "./settings-skills.tsx";
 import { SettingsAccess } from "./settings-access.tsx";
 import { SettingsCloud } from "./settings-cloud.tsx";
 import { SettingsModelsPane } from "./settings-models.tsx";
 import { SettingsSaveQueue } from "./settings-save-queue.ts";
 
-type SettingsTab = "general" | "models" | "cloud" | "mcp" | "access" | "agent";
-const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "access", "agent"];
+type SettingsTab = "general" | "models" | "cloud" | "mcp" | "skills" | "access" | "agent";
+const TAB_IDS: SettingsTab[] = ["general", "models", "cloud", "mcp", "skills", "access", "agent"];
 
 export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.Element {
 	const { t, commitLanguage } = useLocale();
@@ -264,6 +265,7 @@ export function SettingsPage({ onClose }: { onClose: () => void }): React.JSX.El
 								{tab === "general" && (general ? <SettingsGeneral value={general} onChange={patchGeneral} /> : <div className="empty">{t.common.loading}</div>)}
 								{tab === "models" && <SettingsModelsPane draft={draft} onChange={patchModel} onCommit={commitModel} />}
 								{tab === "mcp" && (mcp ? <SettingsMcp view={mcp} onChange={patchMcp} onStatus={patchMcpStatus} onSave={commitMcp} onRemove={removeMcp} /> : <div className="empty">{t.common.loading}</div>)}
+								{tab === "skills" && <SettingsSkills />}
 								{tab === "agent" && (instructions !== null && sandboxEnabled !== null ? <SettingsAgent sandboxEnabled={sandboxEnabled} instructions={instructions} onSandboxChange={patchSandbox} onInstructionsChange={patchInstructions} /> : <div className="empty">{t.common.loading}</div>)}
 							</div>
 							{tab === "mcp" && <div className="settings-actions settings-dialog-actions">

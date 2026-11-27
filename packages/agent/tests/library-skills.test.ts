@@ -5,7 +5,14 @@ import { join } from "node:path";
 import { test } from "node:test";
 import { BACKGROUND_CONTEXT, NodeExecutionEnv, createLibraryExtension, LibraryRuntime, createModels } from "../src/durable.ts";
 import { fauxAssistantMessage, fauxProvider, fauxToolCall } from "@earendil-works/pi-ai/providers/faux";
-import { LIBRARY_SKILLS_DIR, loadLibrarySkills, formatSkillsForSystemPrompt } from "../src/extensions/library-skills.ts";
+import {
+	LIBRARY_SKILLS_DIR,
+	SKILLS_STATE_FILE,
+	formatSkillDocument,
+	formatSkillsForSystemPrompt,
+	inspectLibrarySkills,
+	loadLibrarySkills,
+} from "../src/extensions/library-skills.ts";
 
 const BODY = "SECRET_BODY_MUST_STAY_OUT_OF_THE_CATALOG";
 
@@ -188,4 +195,68 @@ test("the skills prompt guides creation in an empty library and refreshes the ca
 			await writeSkill(root, "brand-voice", "New description", BODY);
 		}
 	} finally { await owner?.close(BACKGROUND_CONTEXT); await rm(root, { recursive: true, force: true }); }
+});
+
+test("disabled skills in .loom-skills.json are excluded and library disable falls back to user skill", async () => {
+	const root = await mkdtemp(join(tmpdir(), "loom-skills-disabled-lib-"));
+	const user = await mkdtemp(join(tmpdir(), "loom-skills-disabled-user-"));
+	try {
+		await writeSkillAt(user, "shared", "App shared", BODY);
+		await writeSkillAt(user, "hidden", "App hidden", BODY);
+		await writeSkill(root, "shared", "Library shared", BODY);
+		await writeFile(join(user, SKILLS_STATE_FILE), JSON.stringify({ disabled: ["hidden"] }));
+		await writeFile(join(root, LIBRARY_SKILLS_DIR, SKILLS_STATE_FILE), JSON.stringify({ disabled: ["shared"] }));
+
+		const loaded = await loadLibrarySkills(new NodeExecutionEnv({ cwd: root }), root, BACKGROUND_CONTEXT, user);
+		assert.deepEqual(loaded.skills.map((s) => [s.name, s.description]), [["shared", "App shared"]]);
+		assert.equal(loaded.diagnostics.length, 0);
+
+		const inspected = await inspectLibrarySkills(new NodeExecutionEnv({ cwd: root }), { libraryRoot: root, userRoot: user }, BACKGROUND_CONTEXT);
+		assert.equal(inspected.user.find((s) => s.name === "hidden")?.enabled, false);
+		assert.equal(inspected.user.find((s) => s.name === "shared")?.enabled, true);
+		assert.equal(inspected.user.find((s) => s.name === "shared")?.overriddenByLibrary, false);
+		assert.equal(inspected.library.find((s) => s.name === "shared")?.enabled, false);
+		assert.equal(inspected.library.find((s) => s.name === "shared")?.overridesUser, false);
+
+		// Re-enabling library override restores override flags on both scopes.
+		await writeFile(join(root, LIBRARY_SKILLS_DIR, SKILLS_STATE_FILE), JSON.stringify({ disabled: [] }));
+		const active = await inspectLibrarySkills(new NodeExecutionEnv({ cwd: root }), { libraryRoot: root, userRoot: user }, BACKGROUND_CONTEXT);
+		assert.equal(active.user.find((s) => s.name === "shared")?.overriddenByLibrary, true);
+		assert.equal(active.library.find((s) => s.name === "shared")?.overridesUser, true);
+
+		// Works without an open library.
+		const userOnly = await inspectLibrarySkills(new NodeExecutionEnv({ cwd: user }), { userRoot: user }, BACKGROUND_CONTEXT);
+		assert.equal(userOnly.library.length, 0);
+		assert.equal(userOnly.user.length, 2);
+
+		// Corrupt state file emits a warning without dropping skills.
+		await writeFile(join(user, SKILLS_STATE_FILE), "{bad json");
+		const corrupt = await inspectLibrarySkills(new NodeExecutionEnv({ cwd: user }), { userRoot: user }, BACKGROUND_CONTEXT);
+		assert.equal(corrupt.user.length, 2);
+		assert.ok(corrupt.diagnostics.some((d) => d.scope === "user" && d.path.endsWith(SKILLS_STATE_FILE)));
+	} finally {
+		await rm(root, { recursive: true, force: true });
+		await rm(user, { recursive: true, force: true });
+	}
+});
+
+test("formatSkillDocument preserves unknown frontmatter fields and manages disable-model-invocation", () => {
+	const existing = "---\nname: demo\ndescription: Old\ncustom-key: keep-me\ntags:\n  - a\n  - b\n---\n\nOld body\n";
+	const updated = formatSkillDocument(existing, {
+		description: "New description",
+		disableModelInvocation: true,
+		content: "Updated body",
+	});
+	assert.match(updated, /custom-key: keep-me/);
+	assert.match(updated, /disable-model-invocation: true/);
+	assert.match(updated, /description: New description/);
+	assert.match(updated, /Updated body\n$/);
+
+	const cleared = formatSkillDocument(updated, {
+		description: "New description",
+		disableModelInvocation: false,
+		content: "Updated body",
+	});
+	assert.doesNotMatch(cleared, /disable-model-invocation/);
+	assert.match(cleared, /custom-key: keep-me/);
 });

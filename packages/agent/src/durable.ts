@@ -10,8 +10,29 @@ export { createToolResultStorage } from "./tools/tool-result-storage.ts";
 export { createLibraryExtension, LoomMemoryDoc, type LibraryExtensionOptions } from "./extensions/library-extension.ts";
 export { createChatExtensions } from "./extensions/chat-extensions.ts";
 export { createSpecialistExtension, partitionLibraryTools } from "./extensions/specialist.ts";
-export { loadLibrarySkills, formatSkillsForSystemPrompt, isSkillName, LIBRARY_SKILLS_DIR } from "./extensions/library-skills.ts";
-export type { Skill, SkillDiagnostic } from "./extensions/library-skills.ts";
+export {
+	loadLibrarySkills,
+	inspectLibrarySkills,
+	formatSkillsForSystemPrompt,
+	formatSkillDocument,
+	parseSkillMarkdown,
+	parseSkillsState,
+	isSkillName,
+	LIBRARY_SKILLS_DIR,
+	SKILLS_STATE_FILE,
+	SKILL_DESCRIPTION_MAX_LENGTH,
+} from "./extensions/library-skills.ts";
+export type {
+	Skill,
+	SkillScope,
+	SkillKind,
+	InspectedSkill,
+	SkillDiagnostic,
+	ScopedSkillDiagnostic,
+	InspectedSkillsCatalog,
+	SkillsState,
+	ParsedSkillMarkdown,
+} from "./extensions/library-skills.ts";
 export { createAutoMemoryTool } from "./extensions/library-auto-memory.ts";
 export { ToolGate, LoomApprovalsDoc, clearPendingApprovals, toolEventId, type PendingToolApproval } from "./tools/tool-gate.ts";
 export type { LoomSessionSummary, LoomSessionRecord, LoomContextUsage, LoomSessionModel } from "./runtime/session-dto.ts";
