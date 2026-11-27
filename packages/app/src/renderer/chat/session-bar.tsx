@@ -7,6 +7,7 @@ import { moveTabBefore } from "../components/tab-order.ts";
 import { writeWorkspacePreference } from "../library/workspace-storage.ts";
 import { SessionHistory } from "./session-history.tsx";
 import { orderedOpenSessions, readSessionTabOrder } from "./session-tab-order.ts";
+import { emptySessionTabUnreadState, reconcileSessionTabUnread } from "./session-tab-unread.ts";
 import { sessionTitle } from "./session-title.ts";
 
 const SESSION_TAB_DRAG = "application/x-loom-session-tab";
@@ -62,6 +63,16 @@ export function SessionBar({
 		? drag?.beforeId : undefined;
 	const statusRef = useRef<HTMLSpanElement>(null);
 	const movedTab = useRef<{ button: HTMLButtonElement; focused: boolean; announcement: string } | null>(null);
+	const [unread, setUnread] = useState(() => ({
+		sessions,
+		currentId,
+		state: reconcileSessionTabUnread(emptySessionTabUnreadState, sessions, currentId),
+	}));
+	let unreadState = unread.state;
+	if (unread.sessions !== sessions || unread.currentId !== currentId) {
+		unreadState = reconcileSessionTabUnread(unread.state, sessions, currentId);
+		setUnread({ sessions, currentId, state: unreadState });
+	}
 
 	useLayoutEffect(() => {
 		const move = movedTab.current;
@@ -142,8 +153,9 @@ export function SessionBar({
 				{open.map((session, index) => {
 					const selected = session.id === currentId;
 					const title = titleOf(session);
-					const activity = session.busy ? t.sessions.busy : t.sessions.idle;
-				const editing = rename?.id === session.id ? rename : null;
+					const completed = !session.busy && unreadState.unreadIds.has(session.id);
+					const activity = session.busy ? t.sessions.busy : completed ? t.sessions.completed : t.sessions.idle;
+					const editing = rename?.id === session.id ? rename : null;
 					const startRename = (tab: HTMLButtonElement) => setRename({ id: session.id, title, tab });
 					const marker = dropMarker === session.id ? " drop-before" : dropMarker === null && index === open.length - 1 ? " drop-after" : "";
 					return (
@@ -186,7 +198,9 @@ export function SessionBar({
 									if (event.key === "ArrowRight" && index < open.length - 1) moveTab(session.id, open[index + 2]?.id ?? null, event.currentTarget);
 							}}
 							>
-								{session.busy ? <span className="session-tab-status session-tab-spinner" aria-hidden="true" /> : (
+								{session.busy ? <span className="session-tab-status session-tab-spinner" aria-hidden="true" /> : completed ? (
+									<span className="session-tab-status session-tab-completed" aria-hidden="true" />
+								) : (
 									<svg className="session-tab-status" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinejoin="round" aria-hidden="true">
 										<path d="M3 2h6a2 2 0 0 1 2 2v2.5a2 2 0 0 1-2 2H6L3.5 11V8.5H3a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2Z" />
 									</svg>

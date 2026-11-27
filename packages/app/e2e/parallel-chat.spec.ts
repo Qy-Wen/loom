@@ -95,7 +95,7 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		const ids = {} as Record<Lane, string>;
 		const record = (lane: Lane) => page.evaluate((id) => window.loom.getSession(id), ids[lane]);
 		const tab = async (lane: Lane) => page.getByRole("tab", { name: (await record(lane)).title, exact: true });
-		const expectActivity = async (lane: Lane, activity: "Busy" | "Idle") => {
+		const expectActivity = async (lane: Lane, activity: "Busy" | "Completed" | "Idle") => {
 			await expect(await tab(lane)).toHaveAttribute("aria-description", activity);
 		};
 		const picker = () => page.getByRole("button", { name: "Conversation model", exact: true });
@@ -164,9 +164,13 @@ for (const topology of ["same-provider", "different-providers"] as const) test(`
 		await expect.poll(() => held.find((entry) => entry.lane === "ALPHA" && entry.turn === 3)!.response.destroyed).toBe(true);
 		expect(held.find((entry) => entry.lane === "BETA" && entry.turn === 2)!.response.destroyed).toBe(false);
 		finish("BETA", 2); await done("BETA", 2);
-		await expectActivity("BETA", "Idle");
+		await expectActivity("BETA", "Completed");
+		await expect((await tab("BETA")).locator(".session-tab-completed")).toBeVisible();
 		// A terminal provider error must not stop the other conversation either.
-		await activate("BETA"); await send("BETA", 3);
+		await activate("BETA");
+		await expectActivity("BETA", "Idle");
+		await expect((await tab("BETA")).locator(".session-tab-completed")).toHaveCount(0);
+		await send("BETA", 3);
 		await activate("ALPHA"); await send("ALPHA", 4);
 		await expect.poll(async () => (await record("ALPHA")).messages.filter((row) => row.role === "assistant").at(-1)?.stopReason).toBe("error");
 		await expectActivity("ALPHA", "Idle");

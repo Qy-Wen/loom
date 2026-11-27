@@ -148,11 +148,29 @@
 	border-radius: 50%;
 }
 
+.session-tab-completed {
+	display: grid;
+	place-items: center;
+}
+
+.session-tab-completed::before {
+	inline-size: 6px;
+	block-size: 6px;
+	border-radius: 50%;
+	background: var(--lm-accent-solid);
+	content: "";
+}
+
 @media (forced-colors: active) {
 	.session-tab-spinner {
 		forced-color-adjust: none;
 		border-color: ButtonText;
 		border-inline-end-color: transparent;
+	}
+
+	.session-tab-completed::before {
+		forced-color-adjust: none;
+		background: Highlight;
 	}
 }
 
