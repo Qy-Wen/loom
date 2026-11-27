@@ -80,6 +80,7 @@ export function PanelsToggle({ collapsed, onToggle }: { collapsed: boolean; onTo
 	const label = collapsed ? t.app.expandPanels : t.app.collapsePanels;
 	return <button className="panel-collapse" type="button" aria-label={label} aria-expanded={!collapsed} data-tooltip={label} onClick={onToggle}>
 		<svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true">
+			{collapsed && <path className="panel-collapse-panel" d="M10.3 2.8H12.2a1.6 1.6 0 0 1 1.6 1.6v7.2a1.6 1.6 0 0 1-1.6 1.6h-1.9Z" />}
 			<rect x="2.2" y="2.8" width="11.6" height="10.4" rx="1.6" fill="none" stroke="currentColor" strokeWidth="1.4" />
 			<path d="M10.3 2.8v10.4" fill="none" stroke="currentColor" strokeWidth="1.4" />
 		</svg>

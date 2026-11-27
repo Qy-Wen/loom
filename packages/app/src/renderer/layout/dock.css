@@ -126,6 +126,8 @@ body.resizing-panel, body.resizing-rows { user-select: none; }
 
 .panel-collapse { position: absolute; z-index: var(--lm-z-top); top: 5px; right: 6px; display: grid; place-items: center; width: var(--lm-size-lg); height: var(--lm-size-lg); padding: 0; border: 0; border-radius: var(--lm-radius-sm); color: var(--lm-text-secondary); background: transparent; cursor: pointer; -webkit-app-region: no-drag; }
 .panel-collapse:hover { background: var(--lm-surface-hover); }
+.panel-collapse:focus-visible { outline: 2px solid var(--lm-focus-ring); outline-offset: 1px; }
+.panel-collapse-panel { fill: color-mix(in srgb, currentColor 32%, transparent); }
 .shell.panel-collapse-bottom > .panel-collapse { top: calc(100% - var(--bottom-height) + 5px); }
 .shell.panel-collapse-above > .panel-collapse { top: calc(100% - var(--above-height) + 5px); }
 .shell:not(.side-hidden):not(.panels-collapsed) .panel-region.dock-band .work-panel-title,
